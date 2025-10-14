@@ -55,11 +55,7 @@ use futures_util::{
     TryFutureExt,
 };
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::{request::Parts, Request, StatusCode};
 
@@ -71,8 +67,8 @@ use crate::{
 
 pub mod connect_info;
 pub mod extension;
-#[cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))))]
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub mod lambda;
 #[cfg(feature = "request-id")]
 #[cfg_attr(docsrs, doc(cfg(feature = "request-id")))]

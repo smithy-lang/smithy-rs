@@ -8,11 +8,7 @@ use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::StatusCode;
 

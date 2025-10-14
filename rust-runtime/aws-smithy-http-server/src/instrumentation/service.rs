@@ -15,11 +15,7 @@ use futures_util::{ready, TryFuture};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::{HeaderMap, Request, Response, StatusCode, Uri};
 

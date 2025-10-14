@@ -27,11 +27,7 @@ use futures_util::TryFuture;
 use thiserror::Error;
 use tower::Service;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use crate::operation::OperationShape;
 use crate::plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack};

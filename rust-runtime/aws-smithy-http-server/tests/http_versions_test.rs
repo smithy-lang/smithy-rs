@@ -1,6 +1,6 @@
 //! Tests for HTTP version compatibility
 //!
-//! These tests should pass with both HTTP 0.x (default) and HTTP 1.x (--features http-1x)
+//! These tests verify HTTP 1.x functionality
 
 use aws_smithy_http_server::body::{boxed, collect_bytes, empty, from_bytes, to_boxed, BoxBody};
 use bytes::Bytes;
@@ -46,40 +46,19 @@ async fn test_to_boxed_bytes() {
 
 #[tokio::test]
 async fn test_boxed_body() {
-    #[cfg(not(feature = "http-1x"))]
-    {
-        let hyper_body = hyper_014::Body::from("test");
-        let boxed: BoxBody = boxed(hyper_body);
-        let collected = collect_bytes(boxed).await.unwrap();
-        assert_eq!(collected, Bytes::from("test"));
-    }
-
-    #[cfg(feature = "http-1x")]
-    {
-        use http_body_util::Full;
-        let full_body = Full::new(Bytes::from("test"));
-        let boxed: BoxBody = boxed(full_body);
-        let collected = collect_bytes(boxed).await.unwrap();
-        assert_eq!(collected, Bytes::from("test"));
-    }
+    use http_body_util::Full;
+    let full_body = Full::new(Bytes::from("test"));
+    let boxed: BoxBody = boxed(full_body);
+    let collected = collect_bytes(boxed).await.unwrap();
+    assert_eq!(collected, Bytes::from("test"));
 }
 
 #[test]
 fn test_feature_flag_selection() {
     // This test verifies which HTTP version is selected
-    #[cfg(not(feature = "http-1x"))]
-    {
-        println!("Running with HTTP 0.x");
-        // Verify we can use HTTP 0.x types
-        let _version: &str = "0.2.12";
-    }
-
-    #[cfg(feature = "http-1x")]
-    {
-        println!("Running with HTTP 1.x");
-        // Verify we can use HTTP 1.x types
-        let _version: &str = "1.x";
-    }
+    println!("Running with HTTP 1.x");
+    // Verify we can use HTTP 1.x types
+    let _version: &str = "1.x";
 }
 
 /// Test that BoxBody can be used in async contexts

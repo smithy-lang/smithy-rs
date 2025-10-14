@@ -8,11 +8,7 @@ use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_R
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2_cbor::RpcV2Cbor};
 use bytes::Bytes;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::StatusCode;
 

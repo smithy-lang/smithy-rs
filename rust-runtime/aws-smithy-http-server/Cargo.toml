@@ -13,44 +13,16 @@ Server runtime for Smithy Rust Server Framework.
 publish = true
 
 [features]
-default = [
-    "dep:aws-smithy-http",
-    "dep:aws-smithy-json-02x",
-    "dep:http-02x",
-    "dep:http-body-04x",
-    "dep:hyper-014",
-    "aws-smithy-types/http-body-0-4-x",
-    "aws-smithy-types/hyper-0-14-x",
-    "aws-smithy-runtime-api/http-02x",
-]
-aws-lambda = ["dep:lambda_http-02x"]
+default = []
 unredacted-logging = []
 request-id = ["dep:uuid"]
-http-1x = [
-    "dep:aws-smithy-http-1x",
-    "dep:aws-smithy-json-1x",
-    "dep:http-1x",
-    "dep:http-body-1x",
-    "dep:hyper-1x",
-    "dep:hyper-util",
-    "dep:http-body-util",
-    "aws-smithy-types/http-body-1-x",
-    "aws-smithy-runtime-api/http-1x",
-]
-aws-lambda-http-1x = ["dep:lambda_http-1x", "http-1x"]
+aws-lambda = ["dep:lambda_http-1x"]
 
 [dependencies]
-# For HTTP 0.x: use aws-smithy-http 0.62.3 from crates.io (supports HTTP 0.2)
 # For HTTP 1.x: use local aws-smithy-http (migrated to HTTP 1.x)
-aws-smithy-http = { version = "0.62.3", features = ["rt-tokio"], optional = true }
-aws-smithy-http-1x = { package = "aws-smithy-http", path = "../aws-smithy-http", features = ["rt-tokio"], optional = true }
+aws-smithy-http-1x = { package = "aws-smithy-http", path = "../aws-smithy-http", features = ["rt-tokio"] }
 
-# For HTTP 0.x: use aws-smithy-json from crates.io (supports HTTP 0.2)
-# For HTTP 1.x: use local aws-smithy-json (HTTP 1.x only)
-# Note: Even though aws-smithy-json's public API doesn't expose HTTP types,
-# it depends on aws-smithy-types with http-body-1-x, creating version conflicts
-aws-smithy-json-02x = { package = "aws-smithy-json", version = "0.61.5", optional = true }
-aws-smithy-json-1x = { package = "aws-smithy-json", path = "../aws-smithy-json", optional = true }
+aws-smithy-json-1x = { package = "aws-smithy-json", path = "../aws-smithy-json" }
 
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types" }
@@ -59,22 +31,15 @@ aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
 
-# HTTP 0.x dependencies (enabled by default feature)
-http-02x = { package = "http", version = "0.2.12", optional = true }
-http-body-04x = { package = "http-body", version = "0.4.6", optional = true }
-hyper-014 = { package = "hyper", version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"], optional = true }
+http = "1"
+http-body = "1.0"
+hyper = { version = "1", features = ["server", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto"] }
+http-body-util = "0.1"
 
-# HTTP 1.x dependencies (optional, enabled by http-1x feature)
-http-1x = { package = "http", version = "1", optional = true }
-http-body-1x = { package = "http-body", version = "1.0", optional = true }
-hyper-1x = { package = "hyper", version = "1", optional = true, features = ["server", "http1"] }
-hyper-util = { version = "0.1", optional = true, features = ["tokio", "server", "server-auto"] }
-http-body-util = { version = "0.1", optional = true }
-
-# HTTP 0.x lambda support
-lambda_http-02x = { package = "lambda_http", version = "0.8.3", optional = true }
 # HTTP 1.x lambda support
 lambda_http-1x = { package = "lambda_http", version = "0.13", optional = true }
+
 mime = "0.3.17"
 nom = "7.1.3"
 pin-project-lite = "0.2.14"

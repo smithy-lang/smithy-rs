@@ -9,8 +9,8 @@
 
 mod into_make_service;
 mod into_make_service_with_connect_info;
-#[cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))))]
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
 
 #[doc(hidden)]
@@ -36,19 +36,8 @@ use futures_util::{
 };
 use tower::{util::Oneshot, Service, ServiceExt};
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-
-#[cfg(feature = "http-1x")]
-use http_1x as http;
-
-// Import version-appropriate body trait
-#[cfg(not(feature = "http-1x"))]
-use http_body_04x::Body as HttpBody;
-
-#[cfg(feature = "http-1x")]
-use http_body_1x::Body as HttpBody;
+use http;
+use http_body::Body as HttpBody;
 
 use http::Response;
 
@@ -58,8 +47,8 @@ use crate::{
     response::IntoResponse,
 };
 
-#[cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "aws-lambda", feature = "aws-lambda-http-1x"))))]
+#[cfg(feature = "aws-lambda")]
+#[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 pub use self::lambda_handler::LambdaHandler;
 
 #[allow(deprecated)]

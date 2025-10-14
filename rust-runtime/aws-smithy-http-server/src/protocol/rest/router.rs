@@ -15,11 +15,7 @@ use tower::Service;
 
 use thiserror::Error;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 /// An AWS REST routing error.
 #[derive(Debug, Error, PartialEq)]
@@ -117,11 +113,7 @@ mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
 
-    // Import version-appropriate HTTP types
-    #[cfg(not(feature = "http-1x"))]
-    use http_02x as http;
-    #[cfg(feature = "http-1x")]
-    use http_1x as http;
+    use http;
 
     use http::Method;
 

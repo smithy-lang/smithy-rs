@@ -7,11 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 use http::{header::HeaderName, HeaderMap};
 

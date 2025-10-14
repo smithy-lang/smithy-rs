@@ -9,11 +9,7 @@ use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
 
-// Import version-appropriate HTTP types
-#[cfg(not(feature = "http-1x"))]
-use http_02x as http;
-#[cfg(feature = "http-1x")]
-use http_1x as http;
+use http;
 
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
@@ -58,9 +54,6 @@ impl From<crate::Error> for RequestRejection {
     }
 }
 
-#[cfg(not(feature = "http-1x"))]
-convert_to_request_rejection!(hyper_014::Error, BufferHttpBodyBytes);
-#[cfg(feature = "http-1x")]
-convert_to_request_rejection!(hyper_1x::Error, BufferHttpBodyBytes);
+convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
 
 convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);
