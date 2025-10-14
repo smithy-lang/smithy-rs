@@ -9,24 +9,14 @@
 //! underlying HTTP version. The implementation uses conditional compilation
 //! to select the appropriate types and functions based on the `http-1x` feature.
 
+use crate::error::{BoxError, Error};
 use bytes::Bytes;
 
-use crate::error::{BoxError, Error};
-
-// ============================================================================
-// Version-Specific Imports
-// ============================================================================
-
-mod imports {
-    pub use http_body_util::{BodyExt, Empty, Full};
-}
+pub(crate) use http_body_util::{BodyExt, Empty, Full};
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
 pub use http_body::Body as HttpBody;
-
-// For http-1x, hyper::Body doesn't exist. We use hyper::body::Incoming as the default body type.
-pub use hyper::body::Incoming as Body;
 
 // ============================================================================
 // BoxBody - Type-Erased Body
@@ -49,7 +39,6 @@ where
     B: http_body::Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxError>,
 {
-    use imports::BodyExt;
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
 
@@ -69,7 +58,6 @@ where
 
 /// Create an empty body.
 pub fn empty() -> BoxBody {
-    use imports::Empty;
     boxed(Empty::<Bytes>::new())
 }
 
@@ -79,7 +67,6 @@ pub fn to_boxed<B>(body: B) -> BoxBody
 where
     B: Into<Bytes>,
 {
-    use imports::Full;
     boxed(Full::new(body.into()))
 }
 
@@ -105,7 +92,6 @@ where
 
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
-    use imports::Full;
     boxed(Full::new(bytes))
 }
 
