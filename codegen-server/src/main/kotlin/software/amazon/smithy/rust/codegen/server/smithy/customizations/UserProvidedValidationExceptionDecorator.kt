@@ -84,13 +84,10 @@ class UserProvidedValidationExceptionConversionGenerator(
     private val maybeValidationField = customValidationField()
 
     private val codegenCtx =
-        arrayOf(
-            "CustomValidationExceptionField" to (
-                maybeValidationField?.let {
-                    codegenContext.symbolProvider.toSymbol(it)
-                } ?: writable {}
-            ),
-        )
+        listOfNotNull(maybeValidationField)
+            .map {
+                "CustomValidationExceptionField" to codegenContext.symbolProvider.toSymbol(it)
+            }.toTypedArray()
 
     companion object {
         val SHAPE_ID: ShapeId = ShapeId.from("smithy.framework#CustomValidationException")
