@@ -55,6 +55,24 @@ macro_rules! interceptor_trait_fn {
     };
 }
 
+/// A type representing the order in which interceptors are executed
+///
+/// Lower values are executed first.  By default, client interceptors run before operation interceptors.
+/// However, this order is global: a client interceptor with a higher order value may execute later,
+/// and an operation interceptor with a lower order value may execute earlier.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InterceptorOrder {
+    inner: i64,
+}
+
+impl From<i64> for InterceptorOrder {
+    fn from(value: i64) -> Self {
+        Self {
+            inner: value as i64,
+        }
+    }
+}
+
 /// An interceptor allows injecting code into the SDK ’s request execution pipeline.
 ///
 /// ## Terminology:
@@ -68,6 +86,11 @@ macro_rules! interceptor_trait_fn {
 pub trait Intercept: fmt::Debug + Send + Sync {
     /// The name of this interceptor, used in error messages for debugging.
     fn name(&self) -> &'static str;
+
+    /// The order in which this interceptor should be executed relative to other interceptors.
+    fn order(&self) -> InterceptorOrder {
+        InterceptorOrder::default()
+    }
 
     /// A hook called at the start of an execution, before the SDK
     /// does anything else.
@@ -626,6 +649,10 @@ impl Intercept for SharedInterceptor {
         self.interceptor.name()
     }
 
+    fn order(&self) -> InterceptorOrder {
+        self.interceptor.order()
+    }
+
     fn modify_before_attempt_completion(
         &self,
         context: &mut FinalizerInterceptorContextMut<'_>,
@@ -840,5 +867,94 @@ pub fn disable_interceptor<T: Intercept>(cause: &'static str) -> DisableIntercep
     DisableInterceptor {
         _t: PhantomData,
         cause,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug)]
+    struct TestInterceptor;
+
+    impl Intercept for TestInterceptor {
+        fn name(&self) -> &'static str {
+            "TestInterceptor"
+        }
+    }
+
+    #[test]
+    fn test_default_order() {
+        let interceptor = TestInterceptor;
+        assert_eq!(InterceptorOrder::from(0), interceptor.order());
+    }
+
+    #[test]
+    fn test_custom_order() {
+        #[derive(Debug)]
+        struct CustomOrderInterceptor;
+
+        impl Intercept for CustomOrderInterceptor {
+            fn name(&self) -> &'static str {
+                "CustomOrderInterceptor"
+            }
+
+            fn order(&self) -> InterceptorOrder {
+                InterceptorOrder::from(100)
+            }
+        }
+
+        let interceptor = CustomOrderInterceptor;
+        assert_eq!(InterceptorOrder::from(100), interceptor.order());
+    }
+
+    #[test]
+    fn test_interceptor_sorting_with_stable_order() {
+        #[derive(Debug)]
+        struct OrderedInterceptor {
+            name: &'static str,
+            order: i64,
+        }
+
+        impl Intercept for OrderedInterceptor {
+            fn name(&self) -> &'static str {
+                self.name
+            }
+
+            fn order(&self) -> InterceptorOrder {
+                InterceptorOrder::from(self.order)
+            }
+        }
+
+        let mut interceptors = vec![
+            OrderedInterceptor {
+                name: "Third",
+                order: 30,
+            },
+            OrderedInterceptor {
+                name: "First_A",
+                order: 10,
+            },
+            OrderedInterceptor {
+                name: "Second",
+                order: 20,
+            },
+            OrderedInterceptor {
+                name: "First_B",
+                order: 10,
+            }, // Same order as First_A
+            OrderedInterceptor {
+                name: "Fourth",
+                order: 40,
+            },
+        ];
+
+        interceptors.sort_by_key(|i| i.order());
+
+        let names: Vec<&str> = interceptors.iter().map(|i| i.name()).collect();
+        assert_eq!(
+            vec!["First_A", "First_B", "Second", "Third", "Fourth"],
+            names
+        );
     }
 }

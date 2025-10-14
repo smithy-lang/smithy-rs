@@ -17,6 +17,7 @@ use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnec
 use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output, RewindResult,
 };
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, LoadedRequestBody, OrchestratorError,
 };
@@ -186,16 +187,22 @@ fn apply_configuration(
     runtime_plugins: &RuntimePlugins,
 ) -> Result<RuntimeComponents, BoxError> {
     let client_rc_builder = runtime_plugins.apply_client_configuration(cfg)?;
-    continue_on_err!([ctx] => Interceptors::new(client_rc_builder.interceptors()).read_before_execution(false, ctx, cfg));
-
     let operation_rc_builder = runtime_plugins.apply_operation_configuration(cfg)?;
-    continue_on_err!([ctx] => Interceptors::new(operation_rc_builder.interceptors()).read_before_execution(true, ctx, cfg));
+    let mut combined_interceptors = client_rc_builder
+        .interceptors()
+        .chain(operation_rc_builder.interceptors())
+        .collect::<Vec<_>>();
+    // By default, interceptors have an order of 0. Stable sorting them won't change their positions.
+    combined_interceptors.sort_by_key(|i| i.order());
+
+    continue_on_err!([ctx] => Interceptors::new(combined_interceptors.clone().into_iter()).read_before_execution(ctx, cfg));
 
     // The order below is important. Client interceptors must run before operation interceptors.
-    let components = RuntimeComponents::builder("merged orchestrator components")
+    let mut components = RuntimeComponents::builder("merged orchestrator components")
         .merge_from(&client_rc_builder)
-        .merge_from(&operation_rc_builder)
-        .build()?;
+        .merge_from(&operation_rc_builder);
+    components.set_interceptors(combined_interceptors.into_iter());
+    let components = components.build()?;
 
     // In an ideal world, we'd simply update `cfg.load` to behave this way. Unfortunately, we can't
     // do that without a breaking change. By overwriting the value in the config bag with a merged

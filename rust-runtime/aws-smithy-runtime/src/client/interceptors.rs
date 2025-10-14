@@ -112,14 +112,9 @@ where
 
     pub(crate) fn read_before_execution(
         self,
-        operation: bool,
         ctx: &InterceptorContext<Input, Output, Error>,
         cfg: &mut ConfigBag,
     ) -> Result<(), InterceptorError> {
-        tracing::trace!(
-            "running {} `read_before_execution` interceptors",
-            if operation { "operation" } else { "client" }
-        );
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let ctx: BeforeSerializationInterceptorContextRef<'_> = ctx.into();
         for interceptor in self.into_iter() {
