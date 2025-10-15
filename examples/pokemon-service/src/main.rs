@@ -9,6 +9,7 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use clap::Parser;
+use hyper_util::service::TowerToHyperService;
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
@@ -18,7 +19,7 @@ use pokemon_service_server_sdk::server::{
     AddExtensionLayer,
 };
 
-use hyper::StatusCode;
+use hyper::{server::conn::http1, StatusCode};
 use plugin::PrintExt;
 
 use pokemon_service::{
@@ -29,6 +30,8 @@ use pokemon_service_common::{
     stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
+use tokio::net::TcpListener;
+use tower::ServiceExt;
 
 use crate::authz::AuthorizationPlugin;
 
@@ -106,10 +109,37 @@ pub async fn main() {
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).serve(make_app);
+    let listener = TcpListener::bind(bind)
+        .await
+        .expect("failed to bind to address");
 
-    // Run forever-ish...
-    if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+    loop {
+        let (stream, remote_addr) = listener
+            .accept()
+            .await
+            .expect("failed to accept connection");
+        let io = hyper_util::rt::TokioIo::new(stream);
+
+        // Clone the make_service for each connection
+        let make_app_clone = make_app.clone();
+
+        // Spawn a task to handle the connection
+        tokio::task::spawn(async move {
+            // Create a service for this specific connection
+            let service = make_app_clone
+                .oneshot(remote_addr)
+                .await
+                .expect("failed to create service");
+
+            // Wrap the tower service to make it compatible with hyper
+            let hyper_service = TowerToHyperService::new(service);
+
+            if let Err(err) = http1::Builder::new()
+                .serve_connection(io, hyper_service)
+                .await
+            {
+                eprintln!("error serving connection: {:?}", err);
+            }
+        });
     }
 }
