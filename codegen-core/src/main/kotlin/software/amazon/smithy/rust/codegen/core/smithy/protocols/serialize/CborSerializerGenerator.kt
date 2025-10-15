@@ -70,7 +70,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
     ) : CborSerializerSection("BeforeSerializingStructureMembers")
 
     /** Manipulate the serializer context for a map prior to it being serialized. **/
-    data class BeforeIteratingOverMapOrCollection(val shape: Shape, val context: CborSerializerGenerator.Context<Shape>) :
+    data class BeforeIteratingOverMapOrCollection(
+        val shape: Shape,
+        val context: CborSerializerGenerator.Context<Shape>,
+    ) :
         CborSerializerSection("BeforeIteratingOverMapOrCollection")
 
     /** Manipulate the serializer context for a non-null member prior to it being serialized. **/
@@ -82,7 +85,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * This customization point enables extending the serializer's interface with supplementary parameters
      * needed for specialized serialization behaviors.
      */
-    data class AdditionalSerializingParameters(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
+    data class AdditionalSerializingParameters(
+        val structContext: CborSerializerGenerator.StructContext,
+        val codegenContext: CodegenContext,
+    ) :
         CborSerializerSection("AdditionalSerializingParameters")
 
     /**
@@ -90,7 +96,10 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * This customization point allows for passing through context-specific information needed during
      * the serialization process.
      */
-    data class AdditionalSerializingArguments(val structContext: CborSerializerGenerator.StructContext, val codegenContext: CodegenContext) :
+    data class AdditionalSerializingArguments(
+        val structContext: CborSerializerGenerator.StructContext,
+        val codegenContext: CodegenContext,
+    ) :
         CborSerializerSection("AdditionalSerializingArguments")
 
     /**
@@ -98,7 +107,11 @@ sealed class CborSerializerSection(name: String) : Section(name) {
      * This section allows for specialized handling of union variant identification
      * during serialization.
      */
-    data class CustomizeUnionMemberKeyEncode(val context: CborSerializerGenerator.MemberContext, val encoderBindingName: String, val codegenContext: CodegenContext) :
+    data class CustomizeUnionMemberKeyEncode(
+        val context: CborSerializerGenerator.MemberContext,
+        val encoderBindingName: String,
+        val codegenContext: CodegenContext,
+    ) :
         CborSerializerSection("CustomizeUnionMemberKeyEncode")
 
     /**
@@ -267,7 +280,16 @@ class CborSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        UNREACHABLE("Only clients use this method when serializing an `@httpPayload`. No protocol using CBOR supports this trait, so we don't need to implement this")
+        ProtocolFunctions.crossOperationFn("cbor_json_unset_struct_payload") { fnName ->
+            rustTemplate(
+                """
+                pub fn $fnName() -> #{ByteSlab} {
+                    #{ByteSlab}::from(vec![0xbf, 0xff]) // Empty CBOR map
+                }
+                """,
+                *codegenScope,
+            )
+        }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
         UNREACHABLE("Only clients use this method when serializing an `@httpPayload`. No protocol using CBOR supports this trait, so we don't need to implement this")
@@ -499,7 +521,12 @@ class CborSerializerGenerator(
 
     private fun RustWriter.serializeCollection(context: Context<CollectionShape>) {
         for (customization in customizations) {
-            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+            customization.section(
+                CborSerializerSection.BeforeIteratingOverMapOrCollection(
+                    context.shape,
+                    context,
+                ),
+            )(this)
         }
         rust("encoder.array((${context.valueExpression.asValue()}).len());")
         val itemName = safeName("item")
@@ -512,7 +539,12 @@ class CborSerializerGenerator(
         val keyName = safeName("key")
         val valueName = safeName("value")
         for (customization in customizations) {
-            customization.section(CborSerializerSection.BeforeIteratingOverMapOrCollection(context.shape, context))(this)
+            customization.section(
+                CborSerializerSection.BeforeIteratingOverMapOrCollection(
+                    context.shape,
+                    context,
+                ),
+            )(this)
         }
         rust("encoder.map((${context.valueExpression.asValue()}).len());")
         rustBlock("for ($keyName, $valueName) in ${context.valueExpression.asRef()}") {

@@ -1494,7 +1494,7 @@ private fun eventStreamWithInitialResponse(
             """
             {
                 use #{futures_util}::StreamExt;
-                #{initial_payload}
+                let payload = #{initial_response_payload};
                 let initial_message = #{initial_response_generator}(payload);
                 let mut buffer = #{Vec}::new();
                 #{write_message_to}(&initial_message, &mut buffer)
@@ -1506,7 +1506,7 @@ private fun eventStreamWithInitialResponse(
             """,
             *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
-            "initial_response_payload" to initialResponsePayload(protocol, params),
+            "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
             "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
             "initial_response_generator" to initialResponseGenerator,
             "write_message_to" to
@@ -1517,6 +1517,7 @@ private fun eventStreamWithInitialResponse(
 }
 
 private fun initialResponsePayload(
+    codegenContext: CodegenContext,
     protocol: ServerProtocol,
     params: EventStreamBodyParams,
 ): Writable {
@@ -1524,16 +1525,19 @@ private fun initialResponsePayload(
         val serializer = protocol.structuredDataSerializer().operationOutputSerializer(params.operationShape)!!
         writable {
             rustTemplate(
-                "let payload = #{Bytes}::from(#{serializer}(&output)?);",
+                "#{Bytes}::from(#{serializer}(&output)?)",
                 "serializer" to serializer,
                 "Bytes" to RuntimeType.Bytes,
             )
         }
     } else {
+        val outputShape = params.operationShape.outputShape(codegenContext.model)
+        val emptyPayloadFn = protocol.structuredDataSerializer().unsetStructure(outputShape)
         writable {
             rustTemplate(
-                "let payload = #{Bytes}::from(vec![0xbf, 0xff]); // Empty CBOR map",
+                "#{Bytes}::from(#{empty_payload_fn}())",
                 "Bytes" to RuntimeType.Bytes,
+                "empty_payload_fn" to emptyPayloadFn,
             )
         }
     }
