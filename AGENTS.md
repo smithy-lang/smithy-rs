@@ -48,21 +48,6 @@ operation MyOperation {
 - **`codegen-core/common-test-models/constraints.smithy`** - Constraint validation tests with restJson1
 - **`codegen-client-test/model/main.smithy`** - awsJson1_1 protocol tests
 
-### httpQueryParams Bug Investigation
-
-When investigating the `@httpQueryParams` bug (where query parameters weren't appearing in requests), the issue was in
-`RequestBindingGenerator.kt` line 173. The bug occurred when:
-
-1. An operation had ONLY `@httpQueryParams` (no regular `@httpQuery` parameters)
-2. The condition `if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty())` would skip generating
-   the `uri_query` function
-
-The fix was to ensure `mapParams.isEmpty()` was included in the condition check. The current implementation correctly
-generates query parameters for `@httpQueryParams` even when no other query parameters exist.
-
-**Testing httpQueryParams**: Create operations with only `@httpQueryParams` to ensure they generate proper query strings
-in requests.
-
 ## preludeScope: Rust Prelude Types
 
 **Always use `preludeScope` for Rust prelude types:**
@@ -166,8 +151,18 @@ gh issue comment <number> --repo smithy-lang/smithy-rs --body 'markdown content 
 
 **Client/Server Symmetry:**
 
-- Client changes often show the pattern for server-side implementation
-- Both use similar stream chaining patterns: `initial_stream.chain(actual_stream)`
+Client changes often show the pattern for server-side implementation
+
+**Configuration Debugging:**
+- Server codegen settings go under `"codegen"` not `"codegenConfig"` in smithy-build.json
+- When settings aren't working, check the generated smithy-build.json structure first
+- Settings placement matters - wrong nesting means settings are ignored silently
+- Always verify actual generated configuration matches expectations
+
+**Testing Configuration Settings:**
+- Create separate services with different settings to test configuration behavior
+- Use integration tests that verify actual generated code behavior, not just compilation
+- Test both enabled and disabled states to ensure the setting actually controls behavior
 
 ## Testing
 
