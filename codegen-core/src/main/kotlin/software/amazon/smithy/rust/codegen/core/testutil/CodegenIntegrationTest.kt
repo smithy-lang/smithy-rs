@@ -109,6 +109,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun sendEventStreamInitialResponse(enabled: Boolean = true): Builder {
+                settings.add(SendEventStreamInitialResponse(enabled))
+                return this
+            }
+
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
@@ -123,6 +128,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("addValidationExceptionToConstrainedOperations", enabled)
+                    .build()
+        }
+
+        private data class SendEventStreamInitialResponse(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("sendEventStreamInitialResponse", enabled)
                     .build()
         }
 

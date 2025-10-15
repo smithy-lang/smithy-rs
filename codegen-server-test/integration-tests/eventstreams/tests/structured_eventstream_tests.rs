@@ -43,6 +43,7 @@ impl TestServer {
         let state = Arc::new(Mutex::new(ServerState::default()));
         let handler_state = state.clone();
         let handler_state2 = state.clone();
+        let handler_state3 = state.clone();
 
         let config = RpcV2CborServiceConfig::builder().build();
         let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
@@ -53,6 +54,10 @@ impl TestServer {
             .streaming_operation_with_initial_data(move |input| {
                 let state = handler_state2.clone();
                 streaming_operation_with_initial_data_handler(input, state)
+            })
+            .streaming_operation_with_initial_response(move |input| {
+                let state = handler_state3.clone();
+                streaming_operation_with_initial_response_handler(input, state)
             })
             .build_unchecked();
 
@@ -150,6 +155,24 @@ async fn streaming_operation_with_initial_data_handler(
         .events(EventStreamSender::once(Ok(Events::A(Event {}))))
         .build()
         .unwrap())
+}
+
+async fn streaming_operation_with_initial_response_handler(
+    mut input: input::StreamingOperationWithInitialResponseInput,
+    _state: Arc<Mutex<ServerState>>,
+) -> Result<
+    output::StreamingOperationWithInitialResponseOutput,
+    error::StreamingOperationWithInitialResponseError,
+> {
+    let _ev = input.events.recv().await;
+
+    Ok(
+        output::StreamingOperationWithInitialResponseOutput::builder()
+            .response_data("test response data".to_string())
+            .events(EventStreamSender::once(Ok(Events::A(Event {}))))
+            .build()
+            .unwrap(),
+    )
 }
 
 /// TestHarness that launches a server and attaches a client
@@ -352,6 +375,59 @@ async fn test_streaming_operation_with_initial_data_missing() {
     );
 }
 
+/// Test that when sendEventStreamInitialResponse is disabled, no initial-response is sent
+#[tokio::test]
+async fn test_server_no_initial_response_when_disabled() {
+    use rpcv2cbor_extras_no_initial_response::output;
+    use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
+
+    let config = RpcV2CborServiceConfig::builder().build();
+    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
+            let _ev = input.events.recv().await;
+            Ok(output::StreamingOperationWithInitialDataOutput::builder()
+                .events(aws_smithy_http::event_stream::EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response::model::Events::A(rpcv2cbor_extras_no_initial_response::model::Event {}))))
+                .build()
+                .unwrap())
+        })
+        .build_unchecked();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        let make_service = app.into_make_service();
+        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+            .unwrap()
+            .http2_only(true)
+            .serve(make_service);
+        server.await.unwrap();
+    });
+
+    let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";
+    let mut client = ManualEventStreamClient::connect_to_service(
+        addr,
+        path,
+        vec![("Smithy-Protocol", "rpc-v2-cbor")],
+    )
+    .await
+    .unwrap();
+
+    // Send initial data and event
+    let msg = build_initial_data_message("test-data");
+    client.send(msg).await.ok();
+    let msg = build_event("A");
+    client.send(msg).await.unwrap();
+
+    // Should receive event directly (no initial-response)
+    let resp = client.recv().await.unwrap().unwrap();
+    assert_eq!(
+        get_event_type(&resp),
+        "A",
+        "Should receive event directly without initial-response"
+    );
+}
+
 /// Test that server sends initial-response for RPC protocols
 /// This test should FAIL until we implement initial-response support
 #[tokio::test]
@@ -373,4 +449,32 @@ async fn test_server_sends_initial_response() {
     // Then we should get the actual event
     let resp = harness.expect_message().await;
     assert_eq!(get_event_type(&resp), "A");
+}
+
+/// Test that server sends initial-response with actual data for operations that have non-eventstream output members
+#[tokio::test]
+async fn test_server_sends_initial_response_with_data() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialResponse").await;
+    harness.send_event("A").await;
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+
+    // Check that initial-response was received with actual data
+    assert!(harness.initial_response.is_some());
+    let initial_resp = harness.initial_response.as_ref().unwrap();
+    assert_eq!(get_event_type(initial_resp), "initial-response");
+
+    // The initial response should contain serialized responseData
+    assert!(!initial_resp.payload().is_empty());
+
+    // Parse the CBOR payload to verify the responseData field
+    let decoder = &mut aws_smithy_cbor::Decoder::new(initial_resp.payload());
+    decoder.map().unwrap(); // Start reading the map
+
+    // Read the key-value pair
+    let key = decoder.str().unwrap();
+    assert_eq!(key, "responseData");
+    let value = decoder.string().unwrap();
+    assert_eq!(value, "test response data");
 }

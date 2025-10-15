@@ -58,6 +58,12 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
         ),
         CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras_no_initial_response",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            extraConfig = """, "codegen": { "sendEventStreamInitialResponse": false } """,
+        ),
+        CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
             "constraints_without_public_constrained_types",
             imports = listOf("$commonModels/constraints.smithy"),
@@ -108,7 +114,7 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     )
 }
 // When iterating on protocol tests use this to speed up codegen:
-    .filter { it.module == "rpcv2Cbor_extras" }
+// .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

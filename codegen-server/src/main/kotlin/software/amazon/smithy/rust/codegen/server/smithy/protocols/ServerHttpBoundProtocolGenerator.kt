@@ -38,7 +38,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -133,7 +132,7 @@ class ServerHttpBoundProtocolGenerator(
         )
 
 class ServerHttpBoundProtocolPayloadGenerator(
-    private val codegenContext: CodegenContext,
+    private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
 ) :
     ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
@@ -1482,42 +1481,46 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 }
 
 private fun eventStreamWithInitialResponse(
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
     protocol: ServerProtocol,
     params: EventStreamBodyParams,
 ): Writable {
-    val initialResponseGenerator =
-        params.eventStreamMarshallerGenerator.renderInitialResponseGenerator(params.payloadContentType)
+    return if (codegenContext.settings.codegenConfig.sendEventStreamInitialResponse) {
+        val initialResponseGenerator =
+            params.eventStreamMarshallerGenerator.renderInitialResponseGenerator(params.payloadContentType)
 
-    return writable {
-        rustTemplate(
-            """
-            {
-                use #{futures_util}::StreamExt;
-                let payload = #{initial_response_payload};
-                let initial_message = #{initial_response_generator}(payload);
-                let mut buffer = #{Vec}::new();
-                #{write_message_to}(&initial_message, &mut buffer)
-                    .expect("Failed to write initial message");
-                let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
-                let adapter = #{message_stream_adaptor};
-                initial_message_stream.chain(adapter)
-            }
-            """,
-            *preludeScope,
-            "futures_util" to CargoDependency.FuturesUtil.toType(),
-            "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
-            "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
-            "initial_response_generator" to initialResponseGenerator,
-            "write_message_to" to
-                RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
-                    .resolve("frame::write_message_to"),
-        )
+        writable {
+            rustTemplate(
+                """
+                {
+                    use #{futures_util}::StreamExt;
+                    let payload = #{initial_response_payload};
+                    let initial_message = #{initial_response_generator}(payload);
+                    let mut buffer = #{Vec}::new();
+                    #{write_message_to}(&initial_message, &mut buffer)
+                        .expect("Failed to write initial message");
+                    let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
+                    let adapter = #{message_stream_adaptor};
+                    initial_message_stream.chain(adapter)
+                }
+                """,
+                *preludeScope,
+                "futures_util" to CargoDependency.FuturesUtil.toType(),
+                "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
+                "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
+                "initial_response_generator" to initialResponseGenerator,
+                "write_message_to" to
+                    RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
+                        .resolve("frame::write_message_to"),
+            )
+        }
+    } else {
+        messageStreamAdaptor(params.outerName, params.memberName)
     }
 }
 
 private fun initialResponsePayload(
-    codegenContext: CodegenContext,
+    codegenContext: ServerCodegenContext,
     protocol: ServerProtocol,
     params: EventStreamBodyParams,
 ): Writable {
