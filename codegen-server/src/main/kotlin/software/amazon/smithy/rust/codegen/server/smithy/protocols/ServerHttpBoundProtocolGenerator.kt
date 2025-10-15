@@ -76,6 +76,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.logging.Logger
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 
 data class StreamPayloadSerializerParams(
     val codegenContext: ServerCodegenContext,
@@ -182,6 +183,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenScope =
         arrayOf(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
+            "Bytes" to CargoDependency.Bytes.toType(),
             "Cow" to RuntimeType.Cow,
             "DateTime" to RuntimeType.dateTime(runtimeConfig),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
@@ -202,6 +204,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
             "http" to httpDeps.httpModule(),
             "Tracing" to RuntimeType.Tracing,
+            *preludeScope
         )
 
     fun generateTraitImpls(
@@ -1508,9 +1511,29 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
+            if (codegenContext.isHttp1()) {
+                // `aws-smithy-types` does not depend on hyper@1 at all so there is no
+                // From<hyper::body::Incoming> for ByteStream. For http@1 generated SDKs
+                // we allow any body as long as it can be converted using
+                // :aws_smithy_types::byte_stream::ByteStream::from_body_1_x
+                """
+                B: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + #{Send} + #{Sync} + 'static,
+                B::Error: Into<::aws_smithy_types::body::Error> + 'static,
+                """
+            }
+            else {
+                "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
+            }
         } else {
             ""
+        }
+
+    private fun streamingBodyInto() =
+        if (codegenContext.isHttp1()) {
+            "#{SmithyTypes}::byte_stream::ByteStream::from_body_1_x(body)"
+        }
+        else {
+            "body.into()"
         }
 
     private fun httpBindingGenerator(operationShape: OperationShape) =

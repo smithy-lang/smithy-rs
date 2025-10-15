@@ -102,7 +102,6 @@ open class ServerRootGenerator(
             //! use #{Tokio}::net::TcpListener;
             //! use #{Tower}::Service;
             //!
-            //! let app = app.into_make_service();
             //! let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!     .expect("unable to parse the server bind address and port");
             //! let listener = TcpListener::bind(bind).await.expect("failed to bind");
@@ -113,8 +112,7 @@ open class ServerRootGenerator(
             //!     let mut app = app.clone();
             //!
             //!     #{Tokio}::task::spawn(async move {
-            //!         let service = app.call(remote_addr).await.expect("failed to create service");
-            //!         let hyper_service = TowerToHyperService::new(service);
+            //!         let hyper_service = TowerToHyperService::new(app);
             //!
             //!         if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
             //!             .serve_connection(io, hyper_service)
@@ -256,7 +254,6 @@ open class ServerRootGenerator(
             //!    use #{Tokio}::net::TcpListener;
             //!    use #{Tower}::Service;
             //!
-            //!    let app = app.into_make_service();
             //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
             //!        .expect("unable to parse the server bind address and port");
             //!    let listener = TcpListener::bind(bind).await.expect("failed to bind");
@@ -267,8 +264,7 @@ open class ServerRootGenerator(
             //!        let mut app = app.clone();
             //!
             //!        #{Tokio}::task::spawn(async move {
-            //!            let service = app.call(remote_addr).await.expect("failed to create service");
-            //!            let hyper_service = TowerToHyperService::new(service);
+            //!            let hyper_service = TowerToHyperService::new(app);
             //!
             //!            if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
             //!                .serve_connection(io, hyper_service)

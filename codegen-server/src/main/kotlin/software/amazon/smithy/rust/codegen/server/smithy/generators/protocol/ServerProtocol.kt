@@ -310,7 +310,7 @@ class ServerRestXmlProtocol(
             codegenContext,
             binding,
             requestRejection(runtimeConfig),
-            RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+            httpDeps.smithyXmlModule().resolve("decode::XmlDecodeError"),
         )
 }
 
@@ -333,7 +333,7 @@ class ServerRpcV2CborProtocol(
                         """,
                         *RuntimeType.preludeScope,
                         "Error" to
-                            CargoDependency.smithyCbor(runtimeConfig).toType()
+                            httpDeps.smithyCborModule()
                                 .resolve("decode::DeserializeError"),
                     )
                 }
@@ -390,7 +390,7 @@ class ServerRpcV2CborProtocol(
             codegenContext,
             binding,
             requestRejection(runtimeConfig),
-            RuntimeType.smithyCbor(codegenContext.runtimeConfig).resolve("decode::DeserializeError"),
+            httpDeps.smithyCborModule().resolve("decode::DeserializeError"),
         )
 }
 
