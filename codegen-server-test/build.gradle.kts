@@ -107,6 +107,8 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         ),
     )
 }
+// When iterating on protocol tests use this to speed up codegen:
+    .filter { it.module == "rpcv2Cbor_extras" }
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

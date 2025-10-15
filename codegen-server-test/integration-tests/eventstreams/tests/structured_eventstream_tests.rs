@@ -158,6 +158,7 @@ async fn streaming_operation_with_initial_data_handler(
 struct TestHarness {
     server: TestServer,
     client: ManualEventStreamClient,
+    initial_response: Option<Message>,
 }
 
 impl TestHarness {
@@ -172,7 +173,11 @@ impl TestHarness {
         .await
         .unwrap();
 
-        Self { server, client }
+        Self {
+            server,
+            client,
+            initial_response: None,
+        }
     }
 
     async fn send_initial_request(&mut self) {
@@ -191,7 +196,15 @@ impl TestHarness {
     }
 
     async fn expect_message(&mut self) -> Message {
-        self.client.recv().await.unwrap().unwrap()
+        let msg = self.client.recv().await.unwrap().unwrap();
+
+        // If this is an initial-response, store it and get the next message
+        if get_event_type(&msg) == "initial-response" {
+            self.initial_response = Some(msg);
+            self.client.recv().await.unwrap().unwrap()
+        } else {
+            msg
+        }
     }
 
     async fn recv(&mut self) -> Option<Result<Message, RecvError>> {
@@ -269,6 +282,14 @@ async fn test_streaming_operation_with_initial_request() {
 
     let resp = harness.expect_message().await;
     assert_eq!(get_event_type(&resp), "A");
+
+    // Check that initial-response was received
+    assert!(harness.initial_response.is_some());
+    assert_eq!(
+        get_event_type(harness.initial_response.as_ref().unwrap()),
+        "initial-response"
+    );
+
     assert_eq!(
         harness.server.streaming_operation_events(),
         vec![Events::A(Event {})]
@@ -329,4 +350,27 @@ async fn test_streaming_operation_with_initial_data_missing() {
             .streaming_operation_with_initial_data_events(),
         vec![]
     );
+}
+
+/// Test that server sends initial-response for RPC protocols
+/// This test should FAIL until we implement initial-response support
+#[tokio::test]
+async fn test_server_sends_initial_response() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
+    harness.send_initial_data("test-data").await;
+    harness.send_event("A").await;
+
+    // Server should send initial-response before any events
+    let initial_response = harness.client.try_recv_initial_response().await;
+    assert!(
+        initial_response.is_some(),
+        "Server should send initial-response message"
+    );
+
+    let initial_msg = initial_response.unwrap().unwrap();
+    assert_eq!(get_event_type(&initial_msg), "initial-response");
+
+    // Then we should get the actual event
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
 }

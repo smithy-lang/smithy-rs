@@ -80,7 +80,7 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    fun renderInitialMessageGenerator(contentType: String): RuntimeType {
+    fun renderInitialRequestGenerator(contentType: String): RuntimeType {
         return RuntimeType.forInlineFun("initial_message_from_body", eventStreamSerdeModule) {
             rustBlockTemplate(
                 """
@@ -105,6 +105,25 @@ open class EventStreamMarshallerGenerator(
                     """,
                     *codegenScope,
                 )
+            }
+        }
+    }
+
+    fun renderInitialResponseGenerator(contentType: String): RuntimeType {
+        return RuntimeType.forInlineFun("initial_response_from_payload", eventStreamSerdeModule) {
+            rustBlockTemplate(
+                """
+                pub(crate) fn initial_response_from_payload(
+                    payload: #{Bytes}
+                ) -> #{Message}
+                """,
+                *codegenScope,
+            ) {
+                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
+                addStringHeader(":message-type", "\"event\".into()")
+                addStringHeader(":event-type", "\"initial-response\".into()")
+                addStringHeader(":content-type", "${contentType.dq()}.into()")
+                rustTemplate("#{Message}::new_from_parts(headers, payload)", *codegenScope)
             }
         }
     }
