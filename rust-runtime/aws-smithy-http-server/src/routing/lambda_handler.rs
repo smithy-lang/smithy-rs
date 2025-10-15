@@ -12,9 +12,9 @@ use tower::Service;
 use http;
 use lambda_http::{Request, RequestExt};
 
-use crate::body::BoxBody;
+use crate::body::BoxBodySync;
 
-type ServiceRequest = http::Request<BoxBody>;
+type ServiceRequest = http::Request<BoxBodySync>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
 /// it to `http::Request<BoxBody>`.
@@ -55,7 +55,7 @@ where
     }
 }
 
-/// Converts a `lambda_http::Request` into a `http::Request<BoxBody>`
+/// Converts a `lambda_http::Request` into a `http::Request<BoxBodySync>`
 /// Issue: <https://github.com/smithy-lang/smithy-rs/issues/1125>
 ///
 /// While converting the event the [API Gateway Stage] portion of the URI
@@ -93,9 +93,9 @@ fn convert_event(request: Request) -> ServiceRequest {
     };
 
     let body = match body {
-        lambda_http::Body::Empty => crate::body::empty(),
-        lambda_http::Body::Text(s) => crate::body::to_boxed(s),
-        lambda_http::Body::Binary(v) => crate::body::to_boxed(v),
+        lambda_http::Body::Empty => crate::body::empty_sync(),
+        lambda_http::Body::Text(s) => crate::body::to_boxed_sync(s),
+        lambda_http::Body::Binary(v) => crate::body::to_boxed_sync(v),
     };
 
     http::Request::from_parts(parts, body)
