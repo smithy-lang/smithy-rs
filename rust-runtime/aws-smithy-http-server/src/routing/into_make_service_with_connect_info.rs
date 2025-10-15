@@ -39,6 +39,7 @@ use std::{
     fmt,
     future::ready,
     marker::PhantomData,
+    net::SocketAddr,
     task::{Context, Poll},
 };
 
@@ -97,6 +98,12 @@ where
 pub trait Connected<T>: Clone {
     /// Create type holding information about the connection.
     fn connect_info(target: T) -> Self;
+}
+
+impl Connected<SocketAddr> for SocketAddr {
+    fn connect_info(target: SocketAddr) -> Self {
+        target
+    }
 }
 
 impl<S, C, T> Service<T> for IntoMakeServiceWithConnectInfo<S, C>

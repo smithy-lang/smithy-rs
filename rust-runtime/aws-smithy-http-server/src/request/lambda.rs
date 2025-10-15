@@ -7,7 +7,6 @@
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
 use http;
-use lambda_http_1x as lambda_http;
 
 use lambda_http::request::RequestContext;
 #[doc(inline)]
