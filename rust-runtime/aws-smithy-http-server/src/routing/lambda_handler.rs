@@ -10,8 +10,6 @@ use std::{
 use tower::Service;
 
 use http;
-use lambda_http_1x as lambda_http;
-
 use lambda_http::{Request, RequestExt};
 
 use crate::body::BoxBody;
@@ -179,8 +177,8 @@ mod tests {
             .body(())
             .expect("unable to build Request");
         let (parts, _) = event.into_parts();
-        let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Empty)
-            .with_raw_http_path("/resources/1");
+        let event =
+            lambda_http::Request::from_parts(parts, lambda_http::Body::Empty).with_raw_http_path("/resources/1");
         let request = convert_event(event);
 
         assert_eq!(request.uri().path(), "/resources/1");
@@ -213,14 +211,8 @@ mod tests {
         let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Empty);
         let request = convert_event(event);
 
-        assert_eq!(
-            request.headers().get("content-type").unwrap(),
-            "application/json"
-        );
-        assert_eq!(
-            request.headers().get("x-custom-header").unwrap(),
-            "custom-value"
-        );
+        assert_eq!(request.headers().get("content-type").unwrap(), "application/json");
+        assert_eq!(request.headers().get("x-custom-header").unwrap(), "custom-value");
     }
 
     #[test]
@@ -280,8 +272,7 @@ mod tests {
             .body(())
             .expect("unable to build Request");
         let (parts, _) = event.into_parts();
-        let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Empty)
-            .with_raw_http_path("/test/path");
+        let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Empty).with_raw_http_path("/test/path");
 
         // Call the service
         let response = lambda_handler.ready().await.unwrap().call(event).await.unwrap();
@@ -320,10 +311,7 @@ mod tests {
             .body(())
             .expect("unable to build Request");
         let (parts, _) = event.into_parts();
-        let event = lambda_http::Request::from_parts(
-            parts,
-            lambda_http::Body::Text(r#"{"key":"value"}"#.to_string())
-        );
+        let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Text(r#"{"key":"value"}"#.to_string()));
 
         // Call the service
         let response = lambda_handler.ready().await.unwrap().call(event).await.unwrap();
