@@ -22,14 +22,21 @@
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
 // flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
-use std::{fs::File, future, io::BufReader, net::SocketAddr, sync::Arc};
+use std::{fs::File, io::BufReader, net::SocketAddr, sync::Arc};
 
 use clap::Parser;
-use futures_util::stream::StreamExt;
+use hyper::server::conn::http1;
+use hyper_util::service::TowerToHyperService;
+use tls_listener::TlsListener;
+use tokio::net::TcpListener;
 use tokio_rustls::{
-    rustls::{Certificate, PrivateKey, ServerConfig},
+    rustls::{
+        pki_types::{CertificateDer, PrivateKeyDer},
+        ServerConfig,
+    },
     TlsAcceptor,
 };
+use tower::Service;
 
 use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, get_storage,
@@ -66,23 +73,27 @@ pub struct TlsConnectInfo {
     pub socket_addr: SocketAddr,
 
     /// The set of TLS certificates presented by the peer in this connection.
-    pub certs: Option<Arc<Vec<Certificate>>>,
+    pub certs: Option<Arc<Vec<CertificateDer<'static>>>>,
 }
 
-impl Connected<&tokio_rustls::server::TlsStream<hyper::server::conn::AddrStream>>
-    for TlsConnectInfo
-{
-    fn connect_info(
-        target: &tokio_rustls::server::TlsStream<hyper::server::conn::AddrStream>,
-    ) -> Self {
-        let (addr_stream, session) = target.get_ref();
-        let socket_addr = addr_stream.remote_addr();
+/// Wrapper struct for TLS connection data used in Connected trait
+pub struct TlsConnectionData<'a> {
+    pub remote_addr: SocketAddr,
+    pub tls_stream: &'a tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
+}
+
+impl Connected<TlsConnectionData<'_>> for TlsConnectInfo {
+    fn connect_info(data: TlsConnectionData<'_>) -> Self {
+        let (_tcp_stream, session) = data.tls_stream.get_ref();
 
         let certs = session
             .peer_certificates()
             .map(|certs| Arc::new(certs.to_vec()));
 
-        TlsConnectInfo { socket_addr, certs }
+        TlsConnectInfo {
+            socket_addr: data.remote_addr,
+            certs,
+        }
     }
 }
 
@@ -126,27 +137,58 @@ pub async fn main() {
         .parse()
         .expect("unable to parse the server bind address and port");
 
-    let acceptor = acceptor(&args.tls_cert_path, &args.tls_key_path);
-    let listener = tls_listener::TlsListener::new(
-        acceptor,
-        hyper::server::conn::AddrIncoming::bind(&addr).expect("could not bind"),
-    )
-    .connections()
-    .filter(|conn| {
-        if let Err(err) = conn {
-            eprintln!("connection error: {:?}", err);
-            future::ready(false)
-        } else {
-            future::ready(true)
-        }
-    });
+    let tls_acceptor = acceptor(&args.tls_cert_path, &args.tls_key_path);
+
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `TlsConnectInfo`
     // connection info.
     let make_app = app.into_make_service_with_connect_info::<TlsConnectInfo>();
-    let server =
-        hyper::Server::builder(hyper::server::accept::from_stream(listener)).serve(make_app);
-    if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+
+    // Bind the application to a socket and wrap with TLS listener
+    let tcp_listener = TcpListener::bind(addr)
+        .await
+        .expect("failed to bind to address");
+
+    let mut tls_listener = TlsListener::new(tls_acceptor, tcp_listener);
+
+    // Accept connections using tls-listener 0.11 API
+    loop {
+        match tls_listener.accept().await {
+            Ok((tls_stream, remote_addr)) => {
+                let make_app_clone = make_app.clone();
+
+                // Spawn a task to handle the connection
+                tokio::task::spawn(async move {
+                    // Create a service for this specific connection using the TLS connection data
+                    let mut make_service = make_app_clone;
+                    let connection_data = TlsConnectionData {
+                        remote_addr,
+                        tls_stream: &tls_stream,
+                    };
+                    let service = match make_service.call(connection_data).await {
+                        Ok(service) => service,
+                        Err(err) => {
+                            eprintln!("failed to create service: {:?}", err);
+                            return;
+                        }
+                    };
+
+                    let io = hyper_util::rt::TokioIo::new(tls_stream);
+
+                    // Wrap the tower service to make it compatible with hyper
+                    let hyper_service = TowerToHyperService::new(service);
+
+                    if let Err(err) = http1::Builder::new()
+                        .serve_connection(io, hyper_service)
+                        .await
+                    {
+                        eprintln!("error serving connection: {:?}", err);
+                    }
+                });
+            }
+            Err(err) => {
+                eprintln!("TLS connection error: {:?}", err);
+            }
+        }
     }
 }
 
@@ -156,7 +198,6 @@ pub fn acceptor(cert_path: &str, key_path: &str) -> TlsAcceptor {
     let certs = load_certs(cert_path);
     let key = load_key(key_path);
     let mut server_config = ServerConfig::builder()
-        .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .expect("could not create server config");
@@ -167,22 +208,22 @@ pub fn acceptor(cert_path: &str, key_path: &str) -> TlsAcceptor {
     TlsAcceptor::from(Arc::new(server_config))
 }
 
-fn load_certs(path: &str) -> Vec<Certificate> {
+fn load_certs(path: &str) -> Vec<CertificateDer<'static>> {
     let mut reader = BufReader::new(File::open(path).expect("could not open certificate"));
     rustls_pemfile::certs(&mut reader)
         .expect("could not parse certificate")
         .into_iter()
-        .map(Certificate)
+        .map(|cert| cert.to_owned().into())
         .collect()
 }
 
-fn load_key(path: &str) -> PrivateKey {
+fn load_key(path: &str) -> PrivateKeyDer<'static> {
     let mut reader = BufReader::new(File::open(path).expect("could not open private key"));
     loop {
         match rustls_pemfile::read_one(&mut reader).expect("could not parse private key") {
-            Some(rustls_pemfile::Item::RSAKey(key)) => return PrivateKey(key),
-            Some(rustls_pemfile::Item::PKCS8Key(key)) => return PrivateKey(key),
-            Some(rustls_pemfile::Item::ECKey(key)) => return PrivateKey(key),
+            Some(rustls_pemfile::Item::RSAKey(key)) => return PrivateKeyDer::Pkcs1(key.into()),
+            Some(rustls_pemfile::Item::PKCS8Key(key)) => return PrivateKeyDer::Pkcs8(key.into()),
+            Some(rustls_pemfile::Item::ECKey(key)) => return PrivateKeyDer::Sec1(key.into()),
             None => break,
             _ => {}
         }
