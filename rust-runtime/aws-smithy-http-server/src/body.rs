@@ -28,6 +28,12 @@ pub use http_body::Body as HttpBody;
 /// Internally it uses `UnsyncBoxBody` from the appropriate http-body version.
 pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 
+/// A thread-safe [`Body`] for operations that require `Sync`.
+///
+/// This is used specifically for event streaming operations and lambda handlers
+/// that need thread safety guarantees.
+pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
+
 // ============================================================================
 // Body Construction Functions
 // ============================================================================
@@ -40,6 +46,16 @@ where
     B::Error: Into<BoxError>,
 {
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
+}
+
+/// Convert an HTTP body implementing [`http_body::Body`](http_body::Body) into a [`BoxBodySync`].
+pub fn boxed_sync<B>(body: B) -> BoxBodySync
+where
+    B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+    B::Error: Into<BoxError>,
+{
+    use http_body_util::BodyExt;
+    body.map_err(Error::new).boxed()
 }
 
 #[doc(hidden)]
@@ -61,6 +77,11 @@ pub fn empty() -> BoxBody {
     boxed(Empty::<Bytes>::new())
 }
 
+/// Create an empty sync body.
+pub fn empty_sync() -> BoxBodySync {
+    boxed_sync(Empty::<Bytes>::new())
+}
+
 /// Convert bytes or similar types into a [`BoxBody`] for HTTP 1.x.
 #[doc(hidden)]
 pub fn to_boxed<B>(body: B) -> BoxBody
@@ -68,6 +89,15 @@ where
     B: Into<Bytes>,
 {
     boxed(Full::new(body.into()))
+}
+
+/// Convert bytes or similar types into a [`BoxBodySync`] for HTTP 1.x.
+#[doc(hidden)]
+pub fn to_boxed_sync<B>(body: B) -> BoxBodySync
+where
+    B: Into<Bytes>,
+{
+    boxed_sync(Full::new(body.into()))
 }
 
 // ============================================================================
