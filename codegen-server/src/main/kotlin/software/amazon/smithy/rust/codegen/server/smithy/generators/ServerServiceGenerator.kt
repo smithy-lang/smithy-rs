@@ -589,12 +589,6 @@ class ServerServiceGenerator(
                 }
 
                 impl<S> $serviceName<S> {
-                    /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
-                    pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
-                        #{SmithyHttpServer}::routing::IntoMakeService::new(self)
-                    }
-
-
                     /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
                     pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
                         #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
