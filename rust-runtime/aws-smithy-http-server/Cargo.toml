@@ -35,7 +35,7 @@ hyper = { version = "1", features = ["server", "http1"] }
 hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto"] }
 http-body-util = "0.1"
 
-lambda_http = { package = "lambda_http", version = "0.13", optional = true }
+lambda_http = { version = "0.17", optional = true }
 
 mime = "0.3.17"
 nom = "7.1.3"
