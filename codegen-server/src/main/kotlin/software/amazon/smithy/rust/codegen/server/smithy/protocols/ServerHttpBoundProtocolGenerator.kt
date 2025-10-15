@@ -1512,10 +1512,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
             if (codegenContext.isHttp1()) {
-                // `aws-smithy-types` does not depend on hyper@1 at all so there is no
-                // From<hyper::body::Incoming> for ByteStream. For http@1 generated SDKs
-                // we allow any body as long as it can be converted using
-                // :aws_smithy_types::byte_stream::ByteStream::from_body_1_x
+                // HTTP/1: No Into<ByteStream> available, must use ByteStream::from_body_1_x() which requires Send + Sync.
+                // HTTP/0.4: Uses Into<ByteStream> conversion without these bounds.
                 """
                 B: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + #{Send} + #{Sync} + 'static,
                 B::Error: Into<::aws_smithy_types::body::Error> + 'static,

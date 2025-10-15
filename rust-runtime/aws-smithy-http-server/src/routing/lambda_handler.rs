@@ -12,7 +12,7 @@ use tower::Service;
 use http;
 use lambda_http::{Request, RequestExt};
 
-use crate::body::BoxBodySync;
+use crate::body::{self, BoxBodySync};
 
 type ServiceRequest = http::Request<BoxBodySync>;
 
@@ -93,9 +93,9 @@ fn convert_event(request: Request) -> ServiceRequest {
     };
 
     let body = match body {
-        lambda_http::Body::Empty => crate::body::empty_sync(),
-        lambda_http::Body::Text(s) => crate::body::to_boxed_sync(s),
-        lambda_http::Body::Binary(v) => crate::body::to_boxed_sync(v),
+        lambda_http::Body::Empty => body::empty_sync(),
+        lambda_http::Body::Text(s) => body::to_boxed_sync(s),
+        lambda_http::Body::Binary(v) => body::to_boxed_sync(v),
     };
 
     http::Request::from_parts(parts, body)
