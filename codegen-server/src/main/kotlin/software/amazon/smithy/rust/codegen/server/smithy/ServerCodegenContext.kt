@@ -58,9 +58,9 @@ data class ServerCodegenContext(
         if (settings.codegenConfig.http1x) {
             println("[ServerCodegenContext.httpDependencies] Returning HTTP 1.x dependencies")
             HttpDependencies(
-                http = CargoDependency("http", CratesIo("1")),
-                httpBody = CargoDependency("http-body", CratesIo("1")),
-                httpBodyUtil = CargoDependency("http-body-util", CratesIo("0.1")),
+                http = CargoDependency.Http1x,
+                httpBody = CargoDependency.HttpBody1x,
+                httpBodyUtil = CargoDependency.HttpBodyUtil01x,
                 hyper = CargoDependency("hyper", CratesIo("1")),
                 hyperDev = CargoDependency("hyper", CratesIo("1"), scope = DependencyScope.Dev),
                 smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
