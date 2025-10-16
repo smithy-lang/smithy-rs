@@ -11,7 +11,6 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
@@ -20,7 +19,7 @@ import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
-internal class CustomValidationExceptionDecoratorTest {
+internal class UserProvidedValidationExceptionDecoratorTest {
     private val modelWithCustomValidation =
         """
         namespace com.example
@@ -81,7 +80,7 @@ internal class CustomValidationExceptionDecoratorTest {
     private fun mockValidationException(model: Model): StructureShape {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
-        return decorator.customValidationException(codegenContext)!!
+        return decorator.userProvidedValidationException(codegenContext)!!
     }
 
     @Test
@@ -112,7 +111,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
 
-        val result = decorator.customValidationException(codegenContext)
+        val result = decorator.userProvidedValidationException(codegenContext)
 
         result shouldBe null
     }
@@ -124,7 +123,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.customValidationMessage()
+        val result = generator.userProvidedValidationMessage()
 
         result shouldNotBe null
         result.memberName shouldBe "customMessage"
@@ -138,7 +137,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.customValidationFieldList()
+        val result = generator.userProvidedValidationFieldList()
 
         result shouldNotBe null
         result!!.memberName shouldBe "customFieldList"
@@ -152,7 +151,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.customValidationFieldList()
+        val result = generator.userProvidedValidationFieldList()
 
         result shouldBe null
     }
@@ -164,7 +163,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.customValidationField()
+        val result = generator.userProvidedValidationField()
 
         result shouldNotBe null
         result!!.id shouldBe ShapeId.from("com.example#ValidationExceptionField")
@@ -178,7 +177,7 @@ internal class CustomValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.customValidationField()
+        val result = generator.userProvidedValidationField()
 
         result shouldBe null
     }
