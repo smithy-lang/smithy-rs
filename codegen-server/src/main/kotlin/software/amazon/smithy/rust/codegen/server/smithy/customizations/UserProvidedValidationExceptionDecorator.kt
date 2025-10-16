@@ -82,7 +82,7 @@ class UserProvidedValidationExceptionConversionGenerator(
     private val codegenContext: ServerCodegenContext,
     private val validationException: StructureShape,
 ) : ValidationExceptionConversionGenerator {
-    private val maybeValidationField = userProvidedValidationField()
+    private val maybeValidationField = userProvidedValidationFieldStructure()
 
     private val codegenScope =
         listOfNotNull(maybeValidationField)
@@ -96,19 +96,19 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    internal fun userProvidedValidationMessage(): MemberShape =
+    internal fun userProvidedValidationMessageMember(): MemberShape =
         validationException
             .members()
             .firstOrNull { it.isValidationMessage() }
             ?: throw CodegenException("Expected `$validationException` to contain a member with `ValidationMessageTrait`")
 
-    internal fun userProvidedValidationFieldList(): MemberShape? =
+    internal fun userProvidedValidationFieldListMember(): MemberShape? =
         validationException
             .members()
             .firstOrNull { it.hasTrait(ValidationFieldListTrait.ID) }
 
-    internal fun userProvidedValidationField(): StructureShape? {
-        val validationFieldListMember = userProvidedValidationFieldList() ?: return null
+    internal fun userProvidedValidationFieldStructure(): StructureShape? {
+        val validationFieldListMember = userProvidedValidationFieldListMember() ?: return null
 
         // get target of member of the user provided validation field list that represents the structure for the
         // validation field shape, otherwise, we return null as field list is optional
@@ -133,22 +133,22 @@ class UserProvidedValidationExceptionConversionGenerator(
         return validationFieldShape
     }
 
-    internal fun userProvidedValidationFieldMessage(): MemberShape? {
-        val validationField = userProvidedValidationField() ?: return null
+    internal fun userProvidedValidationFieldMessageMember(): MemberShape? {
+        val validationField = userProvidedValidationFieldStructure() ?: return null
 
         return validationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
     }
 
-    internal fun userProvidedValidationAdditionalFields(): List<MemberShape> =
+    internal fun userProvidedValidationAdditionalFieldMembers(): List<MemberShape> =
         validationException.members().filter { member ->
             !member.isValidationMessage() && !member.hasTrait(ValidationFieldListTrait.ID)
         }
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
-        val validationMessage = userProvidedValidationMessage()
-        val validationFieldList = userProvidedValidationFieldList()
-        val validationFieldMessage = userProvidedValidationFieldMessage()
-        val additionalFields = userProvidedValidationAdditionalFields()
+        val validationMessage = userProvidedValidationMessageMember()
+        val validationFieldList = userProvidedValidationFieldListMember()
+        val validationFieldMessage = userProvidedValidationFieldMessageMember()
+        val additionalFields = userProvidedValidationAdditionalFieldMembers()
 
         return writable {
             val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessage)!!

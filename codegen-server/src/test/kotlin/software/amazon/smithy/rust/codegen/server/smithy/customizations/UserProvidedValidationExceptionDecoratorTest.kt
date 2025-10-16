@@ -123,7 +123,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.userProvidedValidationMessage()
+        val result = generator.userProvidedValidationMessageMember()
 
         result shouldNotBe null
         result.memberName shouldBe "customMessage"
@@ -137,7 +137,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.userProvidedValidationFieldList()
+        val result = generator.userProvidedValidationFieldListMember()
 
         result shouldNotBe null
         result!!.memberName shouldBe "customFieldList"
@@ -151,7 +151,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.userProvidedValidationFieldList()
+        val result = generator.userProvidedValidationFieldListMember()
 
         result shouldBe null
     }
@@ -163,7 +163,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.userProvidedValidationField()
+        val result = generator.userProvidedValidationFieldStructure()
 
         result shouldNotBe null
         result!!.id shouldBe ShapeId.from("com.example#ValidationExceptionField")
@@ -177,7 +177,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val generator =
             UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
 
-        val result = generator.userProvidedValidationField()
+        val result = generator.userProvidedValidationFieldStructure()
 
         result shouldBe null
     }
