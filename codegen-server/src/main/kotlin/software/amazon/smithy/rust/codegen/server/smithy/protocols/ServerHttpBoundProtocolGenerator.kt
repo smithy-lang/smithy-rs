@@ -23,7 +23,6 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -1505,7 +1504,7 @@ private fun eventStreamWithInitialResponse(
                 }
                 """,
                 *preludeScope,
-                "futures_util" to CargoDependency.FuturesUtil.toType(),
+                "futures_util" to ServerCargoDependency.FuturesUtil.toType(),
                 "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
                 "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
                 "initial_response_generator" to initialResponseGenerator,

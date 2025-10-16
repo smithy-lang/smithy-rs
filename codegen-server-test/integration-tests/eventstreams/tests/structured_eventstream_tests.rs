@@ -429,7 +429,6 @@ async fn test_server_no_initial_response_when_disabled() {
 }
 
 /// Test that server sends initial-response for RPC protocols
-/// This test should FAIL until we implement initial-response support
 #[tokio::test]
 async fn test_server_sends_initial_response() {
     let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;

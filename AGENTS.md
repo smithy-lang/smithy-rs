@@ -133,6 +133,10 @@ gh pr diff <number> --repo smithy-lang/smithy-rs
 gh issue comment <number> --repo smithy-lang/smithy-rs --body 'markdown content with `backticks` and special chars'
 ```
 
+**Comment Guidelines:**
+- Always ask for confirmation before posting comments
+- Always start comments with `*Comment from Claude*` in italics
+
 ## Investigation Patterns
 
 **Before implementing changes:**
