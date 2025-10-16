@@ -61,7 +61,9 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     override val order: Byte
         get() = 68
 
-    internal fun userProvidedValidationException(codegenContext: ServerCodegenContext): StructureShape? =
+    internal fun firstStructureShapeWithValidationExceptionTrait(
+        codegenContext: ServerCodegenContext,
+    ): StructureShape? =
         codegenContext.model
             .shapes(StructureShape::class.java)
             .toList()
@@ -71,7 +73,7 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
     ): ValidationExceptionConversionGenerator? =
-        userProvidedValidationException(codegenContext)?.let {
+        firstStructureShapeWithValidationExceptionTrait(codegenContext)?.let {
             UserProvidedValidationExceptionConversionGenerator(codegenContext, it)
         }
 }

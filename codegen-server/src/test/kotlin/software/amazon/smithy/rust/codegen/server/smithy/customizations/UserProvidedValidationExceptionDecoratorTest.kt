@@ -80,7 +80,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     private fun mockValidationException(model: Model): StructureShape {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
-        return decorator.userProvidedValidationException(codegenContext)!!
+        return decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext)!!
     }
 
     @Test
@@ -111,7 +111,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
 
-        val result = decorator.userProvidedValidationException(codegenContext)
+        val result = decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext)
 
         result shouldBe null
     }
