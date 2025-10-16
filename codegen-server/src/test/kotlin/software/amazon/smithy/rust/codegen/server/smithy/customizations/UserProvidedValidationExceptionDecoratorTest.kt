@@ -84,7 +84,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationException returns correct shape`() {
+    fun `firstStructureShapeWithValidationExceptionTrait returns correct shape`() {
         val result = mockValidationException(modelWithCustomValidation)
 
         result shouldNotBe null
@@ -93,7 +93,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationException returns null when no validation exception exists`() {
+    fun `firstStructureShapeWithValidationExceptionTrait returns null when no validation exception exists`() {
         val model =
             """
             namespace com.example
@@ -117,7 +117,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationMessage returns correct member shape`() {
+    fun `userProvidedValidationMessage returns correct member shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
         val generator =
@@ -131,7 +131,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationFieldList returns correct member shape`() {
+    fun `userProvidedValidationFieldList returns correct member shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
         val generator =
@@ -145,7 +145,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationFieldList returns null when no field list exists`() {
+    fun `userProvidedValidationFieldList returns null when no field list exists`() {
         val model = modelWithoutFieldList
         val codegenContext = serverTestCodegenContext(model)
         val generator =
@@ -157,7 +157,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationExceptionField returns correct structure shape`() {
+    fun `userProvidedValidationField returns correct structure shape`() {
         val model = modelWithCustomValidation
         val codegenContext = serverTestCodegenContext(model)
         val generator =
@@ -171,7 +171,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `customValidationExceptionField returns null when no field list exists`() {
+    fun `userProvidedValidationField returns null when no field list exists`() {
         val model = modelWithoutFieldList
         val codegenContext = serverTestCodegenContext(model)
         val generator =
