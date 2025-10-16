@@ -84,7 +84,7 @@ class UserProvidedValidationExceptionConversionGenerator(
 ) : ValidationExceptionConversionGenerator {
     private val maybeValidationField = userProvidedValidationField()
 
-    private val codegenCtx =
+    private val codegenScope =
         listOfNotNull(maybeValidationField)
             .map {
                 "UserProvidedValidationExceptionField" to codegenContext.symbolProvider.toSymbol(it)
@@ -243,7 +243,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
                 "ValidationExceptionFields" to
                     writable {
                         stringConstraintsInfo.forEach { stringTraitInfo ->
@@ -260,7 +260,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             #{FieldAssignments}
                                         },
                                         """,
-                                        *codegenCtx,
+                                        *codegenScope,
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
@@ -283,7 +283,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             #{FieldAssignments}
                                         },
                                         """,
-                                        *codegenCtx,
+                                        *codegenScope,
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
@@ -313,7 +313,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
                 "ValidationExceptionFields" to
                     writable {
                         val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
@@ -324,7 +324,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     #{FieldAssignments}
                                 },
                                 """,
-                                *codegenCtx,
+                                *codegenScope,
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         "path.clone()",
@@ -354,7 +354,7 @@ class UserProvidedValidationExceptionConversionGenerator(
             rustBlockTemplate(
                 "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
             ) {
                 rustBlock("match self") {
                     shape.getTrait<LengthTrait>()?.also {
@@ -363,7 +363,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                             Self::Length(length) => #{UserProvidedValidationExceptionField} {
                                 #{FieldAssignments}
                             },""",
-                            *codegenCtx,
+                            *codegenScope,
                             "FieldAssignments" to
                                 fieldAssignments(
                                     "path.clone()",
@@ -398,7 +398,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
                 "FieldAssignments" to fieldAssignments("path.clone()", """format!(r##"$message"##, &path)"""),
             )
         }
@@ -421,7 +421,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
                 "FieldAssignments" to
                     fieldAssignments(
                         "path.clone()",
@@ -440,7 +440,7 @@ class UserProvidedValidationExceptionConversionGenerator(
             rustBlockTemplate(
                 "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
             ) {
                 rustBlock("match self") {
                     constraintViolations.forEach {
@@ -453,7 +453,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     #{FieldAssignments}
                                 },
                                 """.trimIndent(),
-                                *codegenCtx,
+                                *codegenScope,
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         """path.clone() + "/${it.forMember.memberName}"""",
@@ -485,7 +485,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
                 "ValidationExceptionFields" to
                     writable {
                         collectionConstraintsInfo.forEach { collectionTraitInfo ->
@@ -497,7 +497,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             #{FieldAssignments}
                                         },
                                         """,
-                                        *codegenCtx,
+                                        *codegenScope,
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
@@ -516,7 +516,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             #{FieldAssignments}
                                         },
                                         """,
-                                        *codegenCtx,
+                                        *codegenScope,
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
@@ -551,7 +551,7 @@ class UserProvidedValidationExceptionConversionGenerator(
             rustBlockTemplate(
                 "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
                 *preludeScope,
-                *codegenCtx,
+                *codegenScope,
             ) {
                 withBlock("match self {", "}") {
                     for (constraintViolation in unionConstraintTraitInfo) {
