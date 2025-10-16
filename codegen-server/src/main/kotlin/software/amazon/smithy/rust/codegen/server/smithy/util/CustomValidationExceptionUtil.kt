@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.util
 
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 /**
@@ -14,4 +15,8 @@ import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
  */
 fun MemberShape.isValidationMessage(): Boolean {
     return this.hasTrait(ValidationMessageTrait.ID) || this.memberName == "message"
+}
+
+fun MemberShape.isValidationFieldName(): Boolean {
+    return this.hasTrait(ValidationFieldNameTrait.ID) || this.memberName == "name"
 }

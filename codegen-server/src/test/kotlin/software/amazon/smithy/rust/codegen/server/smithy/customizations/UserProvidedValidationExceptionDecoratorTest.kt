@@ -80,7 +80,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     private fun mockValidationException(model: Model): StructureShape {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
-        return decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext)!!
+        return decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext.model)!!
     }
 
     @Test
@@ -111,19 +111,17 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         val codegenContext = serverTestCodegenContext(model)
         val decorator = UserProvidedValidationExceptionDecorator()
 
-        val result = decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext)
+        val result = decorator.firstStructureShapeWithValidationExceptionTrait(codegenContext.model)
 
         result shouldBe null
     }
 
     @Test
-    fun `userProvidedValidationMessage returns correct member shape`() {
+    fun `validationMessageMember returns correct member shape`() {
         val model = modelWithCustomValidation
-        val codegenContext = serverTestCodegenContext(model)
-        val generator =
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val validationExceptionStructure = mockValidationException(model)
 
-        val result = generator.userProvidedValidationMessageMember()
+        val result = UserProvidedValidationExceptionDecorator().validationMessageMember(validationExceptionStructure)
 
         result shouldNotBe null
         result.memberName shouldBe "customMessage"
@@ -131,55 +129,48 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     }
 
     @Test
-    fun `userProvidedValidationFieldList returns correct member shape`() {
+    fun `validationFieldListMember returns correct member shape`() {
         val model = modelWithCustomValidation
-        val codegenContext = serverTestCodegenContext(model)
-        val generator =
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
-
-        val result = generator.userProvidedValidationFieldListMember()
+        val validationExceptionStructure = mockValidationException(model)
+        val result =
+            UserProvidedValidationExceptionDecorator().maybeValidationFieldList(
+                model,
+                validationExceptionStructure,
+            )!!.validationFieldListMember
 
         result shouldNotBe null
-        result!!.memberName shouldBe "customFieldList"
+        result.memberName shouldBe "customFieldList"
         result.hasTrait(ValidationFieldListTrait.ID) shouldBe true
     }
 
     @Test
-    fun `userProvidedValidationFieldList returns null when no field list exists`() {
+    fun `maybeValidationFieldList returns null when no field list exists`() {
         val model = modelWithoutFieldList
-        val codegenContext = serverTestCodegenContext(model)
-        val generator =
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val validationExceptionStructure = mockValidationException(model)
 
-        val result = generator.userProvidedValidationFieldListMember()
+        val result =
+            UserProvidedValidationExceptionDecorator().maybeValidationFieldList(
+                model,
+                validationExceptionStructure,
+            )
 
         result shouldBe null
     }
 
     @Test
-    fun `userProvidedValidationField returns correct structure shape`() {
+    fun `validationFieldStructure returns correct structure shape`() {
         val model = modelWithCustomValidation
-        val codegenContext = serverTestCodegenContext(model)
-        val generator =
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
+        val validationExceptionStructure = mockValidationException(model)
 
-        val result = generator.userProvidedValidationFieldStructure()
+        val result =
+            UserProvidedValidationExceptionDecorator().maybeValidationFieldList(
+                model,
+                validationExceptionStructure,
+            )!!.validationFieldStructure
 
         result shouldNotBe null
-        result!!.id shouldBe ShapeId.from("com.example#ValidationExceptionField")
+        result.id shouldBe ShapeId.from("com.example#ValidationExceptionField")
         result.members().any { it.hasTrait(ValidationFieldNameTrait.ID) } shouldBe true
-    }
-
-    @Test
-    fun `userProvidedValidationField returns null when no field list exists`() {
-        val model = modelWithoutFieldList
-        val codegenContext = serverTestCodegenContext(model)
-        val generator =
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, mockValidationException(model))
-
-        val result = generator.userProvidedValidationFieldStructure()
-
-        result shouldBe null
     }
 
     @Test

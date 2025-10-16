@@ -7,8 +7,10 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
+import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
@@ -28,9 +30,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.targetShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
@@ -42,12 +46,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationFieldName
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationFieldMessageTrait
 import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
+import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 /**
  * Decorator for user provided validation exception codegen
@@ -61,33 +67,149 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     override val order: Byte
         get() = 68
 
-    internal fun firstStructureShapeWithValidationExceptionTrait(
+    override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
-    ): StructureShape? =
-        codegenContext.model
+    ): ValidationExceptionConversionGenerator? =
+        firstStructureShapeWithValidationExceptionTrait(codegenContext.model)?.let {
+            UserProvidedValidationExceptionConversionGenerator(
+                codegenContext,
+                it,
+                validationMessageMember(it),
+                maybeValidationFieldList(codegenContext.model, it),
+                additionalFieldMembers(it),
+            )
+        }
+
+    internal fun firstStructureShapeWithValidationExceptionTrait(model: Model): StructureShape? =
+        model
             .shapes(StructureShape::class.java)
             .toList()
             // Defining multiple validation exceptions is unsupported. See `ValidateUnsupportedConstraints`
             .firstOrNull({ it.hasTrait(ValidationExceptionTrait.ID) })
 
-    override fun validationExceptionConversion(
-        codegenContext: ServerCodegenContext,
-    ): ValidationExceptionConversionGenerator? =
-        firstStructureShapeWithValidationExceptionTrait(codegenContext)?.let {
-            UserProvidedValidationExceptionConversionGenerator(codegenContext, it)
+    internal fun validationMessageMember(validationExceptionStructure: StructureShape): MemberShape =
+        validationExceptionStructure
+            .members()
+            .firstOrNull { it.isValidationMessage() }
+            ?: throw CodegenException("Expected `$validationExceptionStructure` to contain a member named `message` or annotated with the `@validationMessageTrait`")
+
+    internal fun additionalFieldMembers(validationExceptionStructure: StructureShape): List<MemberShape> =
+        validationExceptionStructure.members().filter { member ->
+            !member.isValidationMessage() &&
+                !member.hasTrait(
+                    ValidationFieldListTrait.ID,
+                )
         }
+
+    /**
+     * Returns a [ValidationFieldList] if the following exist:
+     * - A structure type representing the field
+     * - A list type representing the field list with a single member targeting the field type
+     * - A member in the validation exception structure annotated with `@validationFieldList` targeting the list type
+     *
+     * Returns null if there is no member annotated with the `@validationFieldList` trait in the given validation exception structure
+     * Otherwise, throws a [CodegenException] if it exists, but is misconfigured
+     */
+    internal fun maybeValidationFieldList(
+        model: Model,
+        validationExceptionStructure: StructureShape,
+    ): ValidationFieldList? {
+        val validationFieldListMember =
+            validationExceptionStructure
+                .members()
+                .firstOrNull { it.hasTrait(ValidationFieldListTrait.ID) }
+                ?: return null
+
+        val validationFieldListShape =
+            validationFieldListMember
+                .targetShape(model)
+                .asListShape()
+                .orElseThrow {
+                    CodegenException("Expected `$validationFieldListMember` to target a list type")
+                }
+
+        val validationFieldListShapeMember =
+            validationFieldListShape.members().singleOrNull()
+                ?: throw CodegenException("Expected `$validationFieldListShape` to have a single member")
+
+        val validationFieldStructure =
+            validationFieldListShapeMember
+                .targetShape(model)
+                .asStructureShape()
+                .orElseThrow {
+                    CodegenException("Expected $validationFieldListShapeMember to target a structure type")
+                }
+
+        // It is required that a member of the user provided validation field structure has @validationFieldName
+        val validationFieldNameMember =
+            validationFieldStructure
+                .members()
+                .firstOrNull { it.isValidationFieldName() }
+                ?: throw CodegenException("Expected `$validationFieldStructure` to contain a member with the `@validationFieldName` trait")
+
+        val maybeValidationFieldMessageMember =
+            validationFieldStructure
+                .members()
+                .firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
+
+        return ValidationFieldList(
+            validationFieldListMember,
+            validationFieldStructure,
+            validationFieldNameMember,
+            maybeValidationFieldMessageMember,
+        )
+    }
+
+    override fun transformModel(
+        service: ServiceShape,
+        model: Model,
+        settings: ServerRustSettings,
+    ): Model {
+        val validationExceptionStructure = firstStructureShapeWithValidationExceptionTrait(model) ?: return model
+        annotateValidationMessageMember(validationExceptionStructure)
+        maybeValidationFieldList(model, validationExceptionStructure)?.let {
+            annotateValidationFieldName(it)
+        }
+
+        return model
+    }
+
+    /**
+     * Annotates the "message" member of the validation exception structure with @validationMessage when there is no
+     * explicitly annotated member
+     */
+    internal fun annotateValidationMessageMember(validationExceptionStructure: StructureShape) {
+        val member = validationMessageMember(validationExceptionStructure)
+        if (!member.hasTrait(ValidationMessageTrait.ID)) {
+            // When there is no field annotated with the @validationMessage trait, we will annotate the field named "message"
+            member.toBuilder().addTrait(ValidationMessageTrait(SourceLocation.none()))
+        }
+    }
+
+    /**
+     * Annotates the "name" member of the validation field structure with @validationFieldName when there is no
+     * explicitly annotated member
+     */
+    internal fun annotateValidationFieldName(validationFieldList: ValidationFieldList) {
+        val member = validationFieldList.validationFieldNameMember
+        if (!member.hasTrait(ValidationFieldNameTrait.ID)) {
+            // When there is no field annotated with the @validationMessage trait, we will annotate the field named "name"
+            member.toBuilder().addTrait(ValidationFieldNameTrait(SourceLocation.none()))
+        }
+    }
 }
 
 class UserProvidedValidationExceptionConversionGenerator(
     private val codegenContext: ServerCodegenContext,
-    private val validationException: StructureShape,
+    private val validationExceptionStructure: StructureShape,
+    private val validationMessageMember: MemberShape,
+    private val maybeValidationFieldList: ValidationFieldList?,
+    private val additionalFieldMembers: List<MemberShape>,
 ) : ValidationExceptionConversionGenerator {
-    private val maybeValidationField = userProvidedValidationFieldStructure()
-
     private val codegenScope =
-        listOfNotNull(maybeValidationField)
+        listOfNotNull(maybeValidationFieldList?.validationFieldStructure)
             .map {
-                "UserProvidedValidationExceptionField" to codegenContext.symbolProvider.toSymbol(it)
+                "ValidationExceptionField" to codegenContext.symbolProvider.toSymbol(it)
             }.toTypedArray()
 
     companion object {
@@ -96,73 +218,20 @@ class UserProvidedValidationExceptionConversionGenerator(
 
     override val shapeId: ShapeId = SHAPE_ID
 
-    internal fun userProvidedValidationMessageMember(): MemberShape =
-        validationException
-            .members()
-            .firstOrNull { it.isValidationMessage() }
-            ?: throw CodegenException("Expected `$validationException` to contain a member with `ValidationMessageTrait`")
-
-    internal fun userProvidedValidationFieldListMember(): MemberShape? =
-        validationException
-            .members()
-            .firstOrNull { it.hasTrait(ValidationFieldListTrait.ID) }
-
-    internal fun userProvidedValidationFieldStructure(): StructureShape? {
-        val validationFieldListMember = userProvidedValidationFieldListMember() ?: return null
-
-        // get target of member of the user provided validation field list that represents the structure for the
-        // validation field shape, otherwise, we return null as field list is optional
-        val validationFieldShape =
-            validationFieldListMember
-                .targetShape(codegenContext.model)
-                .members()
-                .firstOrNull { it.targetShape(codegenContext.model).isStructureShape }
-                ?.targetShape(codegenContext.model)
-                ?.asStructureShape()
-                ?.orElse(null)
-                ?: return null
-
-        // It is required that a member of the user provided validation field structure has @validationFieldName
-        if (validationFieldShape
-                .members()
-                .none { it.hasTrait(ValidationFieldNameTrait.ID) }
-        ) {
-            throw CodegenException("Expected `$validationFieldShape` to contain a member with `ValidationFieldNameTrait`")
-        }
-
-        return validationFieldShape
-    }
-
-    internal fun userProvidedValidationFieldMessageMember(): MemberShape? {
-        val validationField = userProvidedValidationFieldStructure() ?: return null
-
-        return validationField.members().firstOrNull { it.hasTrait(ValidationFieldMessageTrait.ID) }
-    }
-
-    internal fun userProvidedValidationAdditionalFieldMembers(): List<MemberShape> =
-        validationException.members().filter { member ->
-            !member.isValidationMessage() && !member.hasTrait(ValidationFieldListTrait.ID)
-        }
-
-    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable {
-        val validationMessage = userProvidedValidationMessageMember()
-        val validationFieldList = userProvidedValidationFieldListMember()
-        val validationFieldMessage = userProvidedValidationFieldMessageMember()
-        val additionalFields = userProvidedValidationAdditionalFieldMembers()
-
-        return writable {
-            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessage)!!
+    override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
+        writable {
+            val validationMessageName = codegenContext.symbolProvider.toMemberName(validationMessageMember)
             // Generate the correct shape module name for the user provided validation exception
             val shapeModuleName =
-                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationException)
-            val shapeFunctionName = validationException.id.name.toSnakeCase()
+                codegenContext.symbolProvider.shapeModuleName(codegenContext.serviceShape, validationExceptionStructure)
+            val shapeFunctionName = validationExceptionStructure.id.name.toSnakeCase()
 
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
                     fn from(constraint_violation: ConstraintViolation) -> Self {
                         #{FieldCreation}
-                        let validation_exception = #{UserProvidedValidationException} {
+                        let validation_exception = #{ValidationException} {
                             $validationMessageName: #{ValidationMessage},
                             #{FieldListAssignment}
                             #{AdditionalFieldAssignments}
@@ -176,28 +245,26 @@ class UserProvidedValidationExceptionConversionGenerator(
                 """,
                 *preludeScope,
                 "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
-                "UserProvidedValidationException" to codegenContext.symbolProvider.toSymbol(validationException),
+                "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {
-                        if (validationFieldList != null) {
+                        if (maybeValidationFieldList?.maybeValidationFieldMessageMember != null) {
                             rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
                         }
                     },
                 "ValidationMessage" to
                     writable {
                         val message =
-                            if (validationFieldList != null && validationFieldMessage != null) {
+                            maybeValidationFieldList?.maybeValidationFieldMessageMember?.let {
                                 val validationFieldMessageName =
-                                    codegenContext.symbolProvider.toMemberName(validationFieldMessage)!!
-                                if (validationFieldMessage.isOptional) {
+                                    codegenContext.symbolProvider.toMemberName(it)
+                                if (it.isOptional) {
                                     """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName.clone().unwrap_or_default())"""
                                 } else {
                                     """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName)"""
                                 }
-                            } else {
-                                """format!("validation error detected")"""
-                            }
-                        if (validationMessage.isOptional) {
+                            } ?: """format!("validation error detected")"""
+                        if (validationMessageMember.isOptional) {
                             rust("Some($message)")
                         } else {
                             rust(message)
@@ -205,10 +272,11 @@ class UserProvidedValidationExceptionConversionGenerator(
                     },
                 "FieldListAssignment" to
                     writable {
-                        if (validationFieldList != null) {
-                            val fieldName = codegenContext.symbolProvider.toMemberName(validationFieldList)!!
+                        maybeValidationFieldList?.validationFieldListMember?.let {
+                            val fieldName =
+                                codegenContext.symbolProvider.toMemberName(it)
                             val value = "vec![first_validation_exception_field]"
-                            if (validationFieldList.isOptional) {
+                            if (it.isOptional) {
                                 rust("$fieldName: Some($value),")
                             } else {
                                 rust("$fieldName: $value,")
@@ -218,7 +286,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "AdditionalFieldAssignments" to
                     writable {
                         rust(
-                            additionalFields.joinToString { member ->
+                            additionalFieldMembers.joinToString { member ->
                                 val memberName = codegenContext.symbolProvider.toMemberName(member)!!
                                 "$memberName: ${defaultFieldAssignment(member)}"
                             },
@@ -226,17 +294,16 @@ class UserProvidedValidationExceptionConversionGenerator(
                     },
             )
         }
-    }
 
     override fun stringShapeConstraintViolationImplBlock(stringConstraintsInfo: Collection<StringTraitInfo>): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
 
             rustTemplate(
                 """
-                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField} {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField} {
                     match self {
                         #{ValidationExceptionFields}
                     }
@@ -256,7 +323,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             .get(stringTraitInfo) as LengthTrait
                                     rustTemplate(
                                         """
-                                        Self::Length(length) => #{UserProvidedValidationExceptionField} {
+                                        Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
                                         """,
@@ -279,7 +346,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             .get(stringTraitInfo) as PatternTrait
                                     rustTemplate(
                                         """
-                                        Self::Pattern(_) => #{UserProvidedValidationExceptionField} {
+                                        Self::Pattern(_) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
                                         """,
@@ -301,12 +368,12 @@ class UserProvidedValidationExceptionConversionGenerator(
     }
 
     override fun blobShapeConstraintViolationImplBlock(blobConstraintsInfo: Collection<BlobLength>): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
             rustTemplate(
                 """
-                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField} {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField} {
                     match self {
                         #{ValidationExceptionFields}
                     }
@@ -316,11 +383,12 @@ class UserProvidedValidationExceptionConversionGenerator(
                 *codegenScope,
                 "ValidationExceptionFields" to
                     writable {
-                        val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+                        val fieldAssignments =
+                            generateUserProvidedValidationFieldAssignments(validationFieldList)
                         blobConstraintsInfo.forEach { blobLength ->
                             rustTemplate(
                                 """
-                                Self::Length(length) => #{UserProvidedValidationExceptionField} {
+                                Self::Length(length) => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
                                 """,
@@ -346,13 +414,13 @@ class UserProvidedValidationExceptionConversionGenerator(
         symbolProvider: RustSymbolProvider,
         model: Model,
     ): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
 
             rustBlockTemplate(
-                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
+                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField}",
                 *preludeScope,
                 *codegenScope,
             ) {
@@ -360,7 +428,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                     shape.getTrait<LengthTrait>()?.also {
                         rustTemplate(
                             """
-                            Self::Length(length) => #{UserProvidedValidationExceptionField} {
+                            Self::Length(length) => #{ValidationExceptionField} {
                                 #{FieldAssignments}
                             },""",
                             *codegenScope,
@@ -383,16 +451,16 @@ class UserProvidedValidationExceptionConversionGenerator(
     }
 
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
             val message = enumTrait.validationErrorMessage()
 
             rustTemplate(
                 """
-                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField} {
-                    #{UserProvidedValidationExceptionField} {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField} {
+                    #{ValidationExceptionField} {
                         #{FieldAssignments}
                     }
                 }
@@ -405,16 +473,16 @@ class UserProvidedValidationExceptionConversionGenerator(
     }
 
     override fun numberShapeConstraintViolationImplBlock(rangeInfo: Range): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
 
             rustTemplate(
                 """
-                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField} {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField} {
                     match self {
-                        Self::Range(_) => #{UserProvidedValidationExceptionField} {
+                        Self::Range(_) => #{ValidationExceptionField} {
                             #{FieldAssignments}
                         },
                     }
@@ -432,13 +500,13 @@ class UserProvidedValidationExceptionConversionGenerator(
     }
 
     override fun builderConstraintViolationFn(constraintViolations: Collection<ConstraintViolation>): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
 
             rustBlockTemplate(
-                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
+                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField}",
                 *preludeScope,
                 *codegenScope,
             ) {
@@ -449,7 +517,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                         } else {
                             rustTemplate(
                                 """
-                                ConstraintViolation::${it.name()} => #{UserProvidedValidationExceptionField} {
+                                ConstraintViolation::${it.name()} => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
                                 """.trimIndent(),
@@ -471,14 +539,14 @@ class UserProvidedValidationExceptionConversionGenerator(
         collectionConstraintsInfo: Collection<CollectionTraitInfo>,
         isMemberConstrained: Boolean,
     ): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        val validationFieldList = maybeValidationFieldList ?: return writable { }
 
         return writable {
-            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationField)
+            val fieldAssignments = generateUserProvidedValidationFieldAssignments(validationFieldList)
 
             rustTemplate(
                 """
-                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField} {
+                pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField} {
                     match self {
                         #{ValidationExceptionFields}
                     }
@@ -493,7 +561,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 is CollectionTraitInfo.Length -> {
                                     rustTemplate(
                                         """
-                                        Self::Length(length) => #{UserProvidedValidationExceptionField} {
+                                        Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
                                         """,
@@ -512,7 +580,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 is CollectionTraitInfo.UniqueItems -> {
                                     rustTemplate(
                                         """
-                                        Self::UniqueItems { duplicate_indices, .. } => #{UserProvidedValidationExceptionField} {
+                                        Self::UniqueItems { duplicate_indices, .. } => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
                                         """,
@@ -545,11 +613,11 @@ class UserProvidedValidationExceptionConversionGenerator(
     override fun unionShapeConstraintViolationImplBlock(
         unionConstraintTraitInfo: Collection<UnionConstraintTraitInfo>,
     ): Writable {
-        val validationField = maybeValidationField ?: return writable { }
+        maybeValidationFieldList ?: return writable { }
 
         return writable {
             rustBlockTemplate(
-                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{UserProvidedValidationExceptionField}",
+                "pub(crate) fn as_validation_exception_field(self, path: #{String}) -> #{ValidationExceptionField}",
                 *preludeScope,
                 *codegenScope,
             ) {
@@ -566,12 +634,12 @@ class UserProvidedValidationExceptionConversionGenerator(
      * Helper function to generate field assignments for user provided validation exception fields
      */
     private fun generateUserProvidedValidationFieldAssignments(
-        userProvidedValidationExceptionField: StructureShape,
+        validationFieldList: ValidationFieldList,
     ): (String, String) -> Writable =
         { rawPathExpression: String, rawMessageExpression: String ->
             writable {
                 rustTemplate(
-                    userProvidedValidationExceptionField.members().joinToString(",") { member ->
+                    validationFieldList.validationFieldStructure.members().joinToString(",") { member ->
                         val memberName = codegenContext.symbolProvider.toMemberName(member)
                         val pathExpression =
                             if (member.isOptional) "Some($rawPathExpression)" else rawPathExpression
@@ -619,3 +687,13 @@ class UserProvidedValidationExceptionConversionGenerator(
         } ?: "Default::default()"
     }
 }
+
+/**
+ * Class for encapsulating data related to validation field list
+ */
+class ValidationFieldList(
+    val validationFieldListMember: MemberShape,
+    val validationFieldStructure: StructureShape,
+    val validationFieldNameMember: MemberShape,
+    val maybeValidationFieldMessageMember: MemberShape?,
+)
