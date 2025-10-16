@@ -100,7 +100,7 @@ class UserProvidedValidationExceptionConversionGenerator(
         validationException
             .members()
             .firstOrNull { it.isValidationMessage() }
-            ?: throw CodegenException("Expected $validationException to contain a member with ValidationMessageTrait")
+            ?: throw CodegenException("Expected `$validationException` to contain a member with `ValidationMessageTrait`")
 
     internal fun userProvidedValidationFieldList(): MemberShape? =
         validationException
@@ -127,7 +127,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 .members()
                 .none { it.hasTrait(ValidationFieldNameTrait.ID) }
         ) {
-            throw CodegenException("Expected $validationFieldShape to contain a member with ValidationFieldNameTrait")
+            throw CodegenException("Expected `$validationFieldShape` to contain a member with `ValidationFieldNameTrait`")
         }
 
         return validationFieldShape
