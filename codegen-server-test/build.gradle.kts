@@ -56,14 +56,14 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
-            extraConfig = """, "codegen": { "sendEventStreamInitialResponse": true } """,
+            extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": true } """,
         ),
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras_no_initial_response",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
             // This is the default behavior
-            // extraConfig = """, "codegen": { "sendEventStreamInitialResponse": false } """,
+            // extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": false } """,
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",

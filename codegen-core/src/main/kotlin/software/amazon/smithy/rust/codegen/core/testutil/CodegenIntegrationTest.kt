@@ -49,38 +49,39 @@ data class IntegrationTestParams(
 sealed class AdditionalSettings {
     abstract fun toObjectNode(): ObjectNode
 
-    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) : AdditionalSettings() {
-        override fun toObjectNode(): ObjectNode {
-            val merged =
-                settings.map { it.toObjectNode() }
-                    .reduce { acc, next -> acc.merge(next) }
+    abstract class CoreAdditionalSettings protected constructor(val settings: List<AdditionalSettings>) :
+        AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode {
+                val merged =
+                    settings.map { it.toObjectNode() }
+                        .reduce { acc, next -> acc.merge(next) }
 
-            return ObjectNode.builder()
-                .withMember("codegen", merged)
-                .build()
-        }
-
-        abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
-            protected val settings = mutableListOf<AdditionalSettings>()
-
-            fun generateCodegenComments(debugMode: Boolean = true): Builder<T> {
-                settings.add(GenerateCodegenComments(debugMode))
-                return this
+                return ObjectNode.builder()
+                    .withMember("codegen", merged)
+                    .build()
             }
 
-            abstract fun build(): T
+            abstract class Builder<T : CoreAdditionalSettings> : AdditionalSettings() {
+                protected val settings = mutableListOf<AdditionalSettings>()
 
-            override fun toObjectNode(): ObjectNode = build().toObjectNode()
-        }
+                fun generateCodegenComments(debugMode: Boolean = true): Builder<T> {
+                    settings.add(GenerateCodegenComments(debugMode))
+                    return this
+                }
 
-        // Core settings that are common to both Servers and Clients should be defined here.
-        data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
-            override fun toObjectNode(): ObjectNode =
-                ObjectNode.builder()
-                    .withMember("debugMode", debugMode)
-                    .build()
+                abstract fun build(): T
+
+                override fun toObjectNode(): ObjectNode = build().toObjectNode()
+            }
+
+            // Core settings that are common to both Servers and Clients should be defined here.
+            data class GenerateCodegenComments(val debugMode: Boolean) : AdditionalSettings() {
+                override fun toObjectNode(): ObjectNode =
+                    ObjectNode.builder()
+                        .withMember("debugMode", debugMode)
+                        .build()
+            }
         }
-    }
 }
 
 class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
@@ -109,8 +110,8 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
-            fun sendEventStreamInitialResponse(enabled: Boolean = true): Builder {
-                settings.add(SendEventStreamInitialResponse(enabled))
+            fun alwaysSendEventStreamInitialResponse(enabled: Boolean = true): Builder {
+                settings.add(AlwaysSendEventStreamInitialResponse(enabled))
                 return this
             }
 
@@ -131,10 +132,10 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                     .build()
         }
 
-        private data class SendEventStreamInitialResponse(val enabled: Boolean) : AdditionalSettings() {
+        private data class AlwaysSendEventStreamInitialResponse(val enabled: Boolean) : AdditionalSettings() {
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
-                    .withMember("sendEventStreamInitialResponse", enabled)
+                    .withMember("alwaysSendEventStreamInitialResponse", enabled)
                     .build()
         }
 
@@ -167,7 +168,11 @@ fun codegenIntegrationTest(
     invokePlugin(ctx)
     ctx.fileManifest.printGeneratedFiles()
     val logger = Logger.getLogger("CodegenIntegrationTest")
-    val out = params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(testDir, environment = environment)
+    val out =
+        params.command?.invoke(testDir) ?: (params.cargoCommand ?: "cargo test --lib --tests").runCommand(
+            testDir,
+            environment = environment,
+        )
     logger.fine(out.toString())
     return testDir
 }

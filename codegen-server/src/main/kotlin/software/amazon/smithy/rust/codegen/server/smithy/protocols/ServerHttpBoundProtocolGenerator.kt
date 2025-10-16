@@ -1484,7 +1484,7 @@ private fun eventStreamWithInitialResponse(
     protocol: ServerProtocol,
     params: EventStreamBodyParams,
 ): Writable {
-    return if (codegenContext.settings.codegenConfig.sendEventStreamInitialResponse) {
+    return if (codegenContext.settings.codegenConfig.alwaysSendEventStreamInitialResponse) {
         val initialResponseGenerator =
             params.eventStreamMarshallerGenerator.renderInitialResponseGenerator(params.payloadContentType)
 

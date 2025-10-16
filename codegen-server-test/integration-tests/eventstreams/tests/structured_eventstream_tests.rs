@@ -375,7 +375,7 @@ async fn test_streaming_operation_with_initial_data_missing() {
     );
 }
 
-/// Test that when sendEventStreamInitialResponse is disabled, no initial-response is sent
+/// Test that when alwaysSendEventStreamInitialResponse is disabled, no initial-response is sent
 #[tokio::test]
 async fn test_server_no_initial_response_when_disabled() {
     use rpcv2cbor_extras_no_initial_response::output;

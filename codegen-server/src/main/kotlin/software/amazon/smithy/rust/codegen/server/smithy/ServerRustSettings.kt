@@ -97,7 +97,7 @@ data class ServerCodegenConfig(
      */
     val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
     val addValidationExceptionToConstrainedOperations: Boolean = DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
-    val sendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
+    val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -120,7 +120,10 @@ data class ServerCodegenConfig(
                         .getBooleanMemberOrDefault("publicConstrainedTypes", DEFAULT_PUBLIC_CONSTRAINED_TYPES),
                 ignoreUnsupportedConstraints =
                     node.get()
-                        .getBooleanMemberOrDefault("ignoreUnsupportedConstraints", DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS),
+                        .getBooleanMemberOrDefault(
+                            "ignoreUnsupportedConstraints",
+                            DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS,
+                        ),
                 experimentalCustomValidationExceptionWithReasonPleaseDoNotUse =
                     node.get().getStringMemberOrDefault(
                         "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
@@ -131,9 +134,9 @@ data class ServerCodegenConfig(
                         "addValidationExceptionToConstrainedOperations",
                         DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
                     ),
-                sendEventStreamInitialResponse =
+                alwaysSendEventStreamInitialResponse =
                     node.get().getBooleanMemberOrDefault(
-                        "sendEventStreamInitialResponse",
+                        "alwaysSendEventStreamInitialResponse",
                         DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
                     ),
             )
