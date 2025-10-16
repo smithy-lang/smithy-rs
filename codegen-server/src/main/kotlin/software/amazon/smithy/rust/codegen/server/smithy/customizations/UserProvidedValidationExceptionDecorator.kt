@@ -6,6 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.framework.rust.ValidationExceptionTrait
+import software.amazon.smithy.framework.rust.ValidationFieldListTrait
+import software.amazon.smithy.framework.rust.ValidationFieldMessageTrait
+import software.amazon.smithy.framework.rust.ValidationFieldNameTrait
+import software.amazon.smithy.framework.rust.ValidationMessageTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.shapes.MapShape
@@ -30,7 +35,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.targetShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -49,11 +53,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationFieldName
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
-import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldMessageTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 /**
  * Decorator for user provided validation exception codegen
@@ -332,7 +331,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    lengthTrait.validationErrorMessage().dq()
+                                                lengthTrait.validationErrorMessage().dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -355,7 +354,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    patternTrait.validationErrorMessage().dq()
+                                                patternTrait.validationErrorMessage().dq()
                                                 }, &path, ${patternTrait.pattern.toString().dq()})""",
                                             ),
                                     )
@@ -397,7 +396,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     fieldAssignments(
                                         "path.clone()",
                                         """format!(${
-                                            blobLength.lengthTrait.validationErrorMessage().dq()
+                                        blobLength.lengthTrait.validationErrorMessage().dq()
                                         }, length, &path)""",
                                     ),
                             )
@@ -570,8 +569,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    collectionTraitInfo.lengthTrait.validationErrorMessage()
-                                                        .dq()
+                                                collectionTraitInfo.lengthTrait.validationErrorMessage()
+                                                    .dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -589,8 +588,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
-                                                        .dq()
+                                                collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
+                                                    .dq()
                                                 }, &duplicate_indices, &path)""",
                                             ),
                                     )

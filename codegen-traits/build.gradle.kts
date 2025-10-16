@@ -10,7 +10,7 @@ plugins {
 
 description = "Smithy traits for Rust code generation"
 extra["displayName"] = "Smithy :: Rust :: Codegen :: Traits"
-extra["moduleName"] = "software.amazon.smithy.rust.codegen.traits"
+extra["moduleName"] = "software.amazon.smithy.framework.rust"
 
 dependencies {
     implementation(libs.smithy.model)

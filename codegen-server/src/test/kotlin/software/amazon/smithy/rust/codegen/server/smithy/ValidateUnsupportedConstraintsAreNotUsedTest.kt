@@ -89,8 +89,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             $version
             namespace test
 
-            use smithy.rust.codegen.traits#validationException
-            use smithy.rust.codegen.traits#validationMessage
+            use smithy.framework.rust#validationException
+            use smithy.framework.rust#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -378,8 +378,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """
             namespace test
 
-            use smithy.rust.codegen.traits#validationException
-            use smithy.rust.codegen.traits#validationMessage
+            use smithy.framework.rust#validationException
+            use smithy.framework.rust#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -423,8 +423,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             """
             namespace test
 
-            use smithy.rust.codegen.traits#validationException
-            use smithy.rust.codegen.traits#validationMessage
+            use smithy.framework.rust#validationException
+            use smithy.framework.rust#validationMessage
 
             service TestService {
                 operations: [TestOperation]
@@ -461,8 +461,8 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
             namespace test
 
             use smithy.framework#ValidationException
-            use smithy.rust.codegen.traits#validationException
-            use smithy.rust.codegen.traits#validationMessage
+            use smithy.framework.rust#validationException
+            use smithy.framework.rust#validationMessage
 
             service TestService {
                 operations: [TestOperation]

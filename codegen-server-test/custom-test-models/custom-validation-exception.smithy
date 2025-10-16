@@ -3,11 +3,11 @@ $version: "2.0"
 namespace com.aws.example
 
 use aws.protocols#restJson1
-use smithy.rust.codegen.traits#validationException
-use smithy.rust.codegen.traits#validationFieldList
-use smithy.rust.codegen.traits#validationFieldMessage
-use smithy.rust.codegen.traits#validationFieldName
-use smithy.rust.codegen.traits#validationMessage
+use smithy.framework.rust#validationException
+use smithy.framework.rust#validationFieldList
+use smithy.framework.rust#validationFieldMessage
+use smithy.framework.rust#validationFieldName
+use smithy.framework.rust#validationMessage
 
 @restJson1
 service CustomValidationExample {

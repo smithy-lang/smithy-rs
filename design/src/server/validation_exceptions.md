@@ -147,7 +147,7 @@ structure CustomValidationException {
 
 The custom validation exception **must** have **exactly one** String member marked with the `@validationMessage` trait to serve as the primary error message.
 ```smithy
-use smithy.rust.codegen.traits#validationException
+use smithy.framework.rust#validationException
 
 @validationException
 @error("client")

@@ -8,16 +8,16 @@ package software.amazon.smithy.rust.codegen.server.smithy.customizations
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.framework.rust.ValidationExceptionTrait
+import software.amazon.smithy.framework.rust.ValidationFieldListTrait
+import software.amazon.smithy.framework.rust.ValidationFieldNameTrait
+import software.amazon.smithy.framework.rust.ValidationMessageTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
-import software.amazon.smithy.rust.codegen.traits.ValidationExceptionTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldListTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 internal class UserProvidedValidationExceptionDecoratorTest {
     private val modelWithCustomValidation =
@@ -25,10 +25,10 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         namespace com.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationMessage
-        use smithy.rust.codegen.traits#validationFieldList
-        use smithy.rust.codegen.traits#validationFieldName
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationMessage
+        use smithy.framework.rust#validationFieldList
+        use smithy.framework.rust#validationFieldName
 
         @restJson1
         service TestService {
@@ -61,8 +61,8 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         namespace com.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationMessage
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationMessage
 
         @restJson1
         service TestService {
@@ -202,11 +202,11 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         namespace com.aws.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationFieldList
-        use smithy.rust.codegen.traits#validationFieldMessage
-        use smithy.rust.codegen.traits#validationFieldName
-        use smithy.rust.codegen.traits#validationMessage
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationFieldList
+        use smithy.framework.rust#validationFieldMessage
+        use smithy.framework.rust#validationFieldName
+        use smithy.framework.rust#validationMessage
 
         @restJson1
         service CustomValidationExample {
@@ -279,11 +279,11 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         namespace com.aws.example
 
         use aws.protocols#restJson1
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationFieldList
-        use smithy.rust.codegen.traits#validationFieldMessage
-        use smithy.rust.codegen.traits#validationFieldName
-        use smithy.rust.codegen.traits#validationMessage
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationFieldList
+        use smithy.framework.rust#validationFieldMessage
+        use smithy.framework.rust#validationFieldName
+        use smithy.framework.rust#validationMessage
 
         @restJson1
         service CustomValidationExample {

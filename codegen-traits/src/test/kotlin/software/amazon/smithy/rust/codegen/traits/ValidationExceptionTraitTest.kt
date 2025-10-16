@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.traits
+package software.amazon.smithy.framework.rust
 
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
@@ -14,10 +14,10 @@ class ValidationExceptionTraitTest {
     @Test
     fun testValidationExceptionTrait() {
         val trait = ValidationExceptionTrait(SourceLocation.NONE)
-        assertEquals(ShapeId.from("smithy.rust.codegen.traits#validationException"), trait.toShapeId())
+        assertEquals(ShapeId.from("smithy.framework.rust#validationException"), trait.toShapeId())
 
         // Test the Provider
         val provider = ValidationExceptionTrait.Provider()
-        assertEquals(ShapeId.from("smithy.rust.codegen.traits#validationException"), provider.shapeId)
+        assertEquals(ShapeId.from("smithy.framework.rust#validationException"), provider.shapeId)
     }
 }

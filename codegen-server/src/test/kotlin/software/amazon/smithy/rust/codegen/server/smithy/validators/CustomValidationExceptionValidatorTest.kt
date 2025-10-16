@@ -21,8 +21,8 @@ class CustomValidationExceptionValidatorTest {
             shouldThrow<ValidatedResultException> {
                 """
                 namespace test
-                use smithy.rust.codegen.traits#validationException
-                use smithy.rust.codegen.traits#validationMessage
+                use smithy.framework.rust#validationException
+                use smithy.framework.rust#validationMessage
 
                 @validationException
                 structure ValidationError {
@@ -44,7 +44,7 @@ class CustomValidationExceptionValidatorTest {
             shouldThrow<ValidatedResultException> {
                 """
                 namespace test
-                use smithy.rust.codegen.traits#validationException
+                use smithy.framework.rust#validationException
 
                 @validationException
                 @error("client")
@@ -66,8 +66,8 @@ class CustomValidationExceptionValidatorTest {
             shouldThrow<ValidatedResultException> {
                 """
                 namespace test
-                use smithy.rust.codegen.traits#validationException
-                use smithy.rust.codegen.traits#validationMessage
+                use smithy.framework.rust#validationException
+                use smithy.framework.rust#validationMessage
 
                 @validationException
                 @error("client")
@@ -92,8 +92,8 @@ class CustomValidationExceptionValidatorTest {
             shouldThrow<ValidatedResultException> {
                 """
                 namespace test
-                use smithy.rust.codegen.traits#validationException
-                use smithy.rust.codegen.traits#validationMessage
+                use smithy.framework.rust#validationException
+                use smithy.framework.rust#validationMessage
 
                 @validationException
                 @error("client")
@@ -117,8 +117,8 @@ class CustomValidationExceptionValidatorTest {
             shouldThrow<ValidatedResultException> {
                 """
                 namespace test
-                use smithy.rust.codegen.traits#validationException
-                use smithy.rust.codegen.traits#validationMessage
+                use smithy.framework.rust#validationException
+                use smithy.framework.rust#validationMessage
 
                 @validationException
                 @error("client")
@@ -142,8 +142,8 @@ class CustomValidationExceptionValidatorTest {
     fun `should pass validation for properly configured validationException`() {
         """
         namespace test
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationMessage
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationMessage
 
         @validationException
         @error("client")
@@ -158,8 +158,8 @@ class CustomValidationExceptionValidatorTest {
     fun `should pass validation for validationException with constrained shape having default`() {
         """
         namespace test
-        use smithy.rust.codegen.traits#validationException
-        use smithy.rust.codegen.traits#validationMessage
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationMessage
 
         @validationException
         @error("client")

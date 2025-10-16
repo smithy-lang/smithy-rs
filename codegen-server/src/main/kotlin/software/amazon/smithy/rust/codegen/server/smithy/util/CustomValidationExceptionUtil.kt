@@ -5,9 +5,9 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.util
 
+import software.amazon.smithy.framework.rust.ValidationFieldNameTrait
+import software.amazon.smithy.framework.rust.ValidationMessageTrait
 import software.amazon.smithy.model.shapes.MemberShape
-import software.amazon.smithy.rust.codegen.traits.ValidationFieldNameTrait
-import software.amazon.smithy.rust.codegen.traits.ValidationMessageTrait
 
 /**
  * Helper function to determine if this [MemberShape] is a validation message either explicitly with the

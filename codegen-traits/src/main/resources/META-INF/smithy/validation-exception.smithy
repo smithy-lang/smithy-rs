@@ -1,6 +1,6 @@
 $version: "2.0"
 
-namespace smithy.rust.codegen.traits
+namespace smithy.framework.rust
 
 /// Marks a structure as a custom validation exception that can replace
 /// smithy.framework#ValidationException in operation error lists.
@@ -9,11 +9,11 @@ structure validationException {}
 
 /// Marks a String member as the primary message field for a validation exception.
 /// Exactly one member in a @validationException structure must have this trait.
-@trait(selector: "structure[trait|smithy.rust.codegen.traits#validationException] > member")
+@trait(selector: "structure[trait|smithy.framework.rust#validationException] > member")
 structure validationMessage {}
 
 /// Marks a member as containing the list of field-level validation errors.
-/// The target shape must be a String, List<String>, or List<Structure> where
+/// The target shape must be a List<Structure> where
 /// the structure contains validation field information.
 @trait(selector: "structure > member")
 structure validationFieldList {}
