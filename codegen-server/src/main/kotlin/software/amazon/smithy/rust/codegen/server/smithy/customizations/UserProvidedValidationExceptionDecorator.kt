@@ -64,9 +64,9 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     internal fun userProvidedValidationException(codegenContext: ServerCodegenContext): StructureShape? =
         codegenContext.model
             .shapes(StructureShape::class.java)
-            .filter { it.hasTrait(ValidationExceptionTrait.ID) }
-            .findFirst()
-            .orElse(null)
+            .toList()
+            // Defining multiple validation exceptions is unsupported. See `ValidateUnsupportedConstraints`
+            .firstOrNull({ it.hasTrait(ValidationExceptionTrait.ID) })
 
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
