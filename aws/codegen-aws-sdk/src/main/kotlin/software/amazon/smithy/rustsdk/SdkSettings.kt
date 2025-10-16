@@ -90,7 +90,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
         get() = awsSdkBuild && !(awsSdk?.getBooleanMember("suppressReadme")?.orNull()?.value ?: false)
 
     val requireEndpointResolver: Boolean
-        get() = awsSdkBuild
+        get() = awsSdk?.getBooleanMember("requireEndpointResolver")?.orNull()?.value ?: false
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)
