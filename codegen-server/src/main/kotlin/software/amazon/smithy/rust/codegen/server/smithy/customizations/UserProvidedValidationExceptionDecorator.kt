@@ -70,11 +70,10 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
 
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
-    ): ValidationExceptionConversionGenerator? {
-        val validationException = userProvidedValidationException(codegenContext) ?: return null
-
-        return UserProvidedValidationExceptionConversionGenerator(codegenContext, validationException)
-    }
+    ): ValidationExceptionConversionGenerator? =
+        userProvidedValidationException(codegenContext)?.let {
+            UserProvidedValidationExceptionConversionGenerator(codegenContext, it)
+        }
 }
 
 class UserProvidedValidationExceptionConversionGenerator(
