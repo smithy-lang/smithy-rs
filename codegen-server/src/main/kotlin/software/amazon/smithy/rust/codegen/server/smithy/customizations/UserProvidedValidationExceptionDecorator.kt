@@ -28,7 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.shapeModuleName
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
-import software.amazon.smithy.rust.codegen.core.util.targetOrSelf
+import software.amazon.smithy.rust.codegen.core.util.targetShape
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -114,10 +114,10 @@ class UserProvidedValidationExceptionConversionGenerator(
         // validation field shape, otherwise, we return null as field list is optional
         val validationFieldShape =
             validationFieldListMember
-                .targetOrSelf(codegenContext.model)
+                .targetShape(codegenContext.model)
                 .members()
-                .firstOrNull { it.targetOrSelf(codegenContext.model).isStructureShape }
-                ?.targetOrSelf(codegenContext.model)
+                .firstOrNull { it.targetShape(codegenContext.model).isStructureShape }
+                ?.targetShape(codegenContext.model)
                 ?.asStructureShape()
                 ?.orElse(null)
                 ?: return null
@@ -594,7 +594,7 @@ class UserProvidedValidationExceptionConversionGenerator(
         }
 
     private fun defaultFieldAssignment(member: MemberShape): String {
-        val targetShape = member.targetOrSelf(codegenContext.model)
+        val targetShape = member.targetShape(codegenContext.model)
         return member.getTrait<software.amazon.smithy.model.traits.DefaultTrait>()?.toNode()?.let { node ->
             when {
                 targetShape.isEnumShape && node.isStringNode -> {
