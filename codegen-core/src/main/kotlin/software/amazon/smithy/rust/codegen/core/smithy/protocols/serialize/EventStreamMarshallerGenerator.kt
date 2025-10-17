@@ -90,7 +90,7 @@ open class EventStreamMarshallerGenerator(
                 """,
                 *codegenScope,
             ) {
-                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
+                rustTemplate("let mut headers = #{Vec}::with_capacity(3);", *codegenScope)
                 addStringHeader(":message-type", "\"event\".into()")
                 addStringHeader(":event-type", "\"initial-request\".into()")
                 addStringHeader(":content-type", "${contentType.dq()}.into()")
@@ -119,7 +119,7 @@ open class EventStreamMarshallerGenerator(
                 """,
                 *codegenScope,
             ) {
-                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
+                rustTemplate("let mut headers = #{Vec}::with_capacity(3);", *codegenScope)
                 addStringHeader(":message-type", "\"event\".into()")
                 addStringHeader(":event-type", "\"initial-response\".into()")
                 addStringHeader(":content-type", "${contentType.dq()}.into()")
