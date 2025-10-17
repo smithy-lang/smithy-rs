@@ -263,23 +263,15 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     """format!("validation error detected. {}", &first_validation_exception_field.$validationFieldMessageName)"""
                                 }
                             } ?: """format!("validation error detected")"""
-                        if (validationMessageMember.isOptional) {
-                            rust("Some($message)")
-                        } else {
-                            rust(message)
-                        }
+                        rust(validationMessageMember.wrapValueIfOptional(message))
                     },
                 "FieldListAssignment" to
                     writable {
                         maybeValidationFieldList?.validationFieldListMember?.let {
                             val fieldName =
                                 codegenContext.symbolProvider.toMemberName(it)
-                            val value = "vec![first_validation_exception_field]"
-                            if (it.isOptional) {
-                                rust("$fieldName: Some($value),")
-                            } else {
-                                rust("$fieldName: $value,")
-                            }
+                            val value = it.wrapValueIfOptional("vec![first_validation_exception_field]")
+                            rust("$fieldName: $value,")
                         }
                     },
                 "AdditionalFieldAssignments" to
@@ -640,10 +632,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                 rustTemplate(
                     validationFieldList.validationFieldStructure.members().joinToString(",") { member ->
                         val memberName = codegenContext.symbolProvider.toMemberName(member)
-                        val pathExpression =
-                            if (member.isOptional) "Some($rawPathExpression)" else rawPathExpression
-                        val messageExpression =
-                            if (member.isOptional) "Some($rawMessageExpression)" else rawMessageExpression
+                        val pathExpression = member.wrapValueIfOptional(rawPathExpression)
+                        val messageExpression = member.wrapValueIfOptional(rawMessageExpression)
                         when {
                             member.hasTrait(ValidationFieldNameTrait.ID) ->
                                 "$memberName: $pathExpression"
@@ -685,6 +675,13 @@ class UserProvidedValidationExceptionConversionGenerator(
             }
         } ?: "Default::default()"
     }
+
+    private fun MemberShape.wrapValueIfOptional(valueExpression: String): String =
+        if (this.isOptional) {
+            "Some($valueExpression)"
+        } else {
+            valueExpression
+        }
 }
 
 /**
