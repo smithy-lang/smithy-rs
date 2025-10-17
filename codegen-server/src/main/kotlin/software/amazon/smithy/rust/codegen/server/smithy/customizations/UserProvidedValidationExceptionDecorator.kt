@@ -43,6 +43,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegen
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstraintViolation
+import software.amazon.smithy.rust.codegen.server.smithy.generators.Length
+import software.amazon.smithy.rust.codegen.server.smithy.generators.Pattern
 import software.amazon.smithy.rust.codegen.server.smithy.generators.Range
 import software.amazon.smithy.rust.codegen.server.smithy.generators.StringTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnionConstraintTraitInfo
@@ -304,13 +306,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "ValidationExceptionFields" to
                     writable {
                         stringConstraintsInfo.forEach { stringTraitInfo ->
-                            when (stringTraitInfo::class.simpleName) {
-                                "Length" -> {
-                                    val lengthTrait =
-                                        stringTraitInfo::class.java
-                                            .getDeclaredField("lengthTrait")
-                                            .apply { isAccessible = true }
-                                            .get(stringTraitInfo) as LengthTrait
+                            when (stringTraitInfo) {
+                                is Length -> {
                                     rustTemplate(
                                         """
                                         Self::Length(length) => #{ValidationExceptionField} {
@@ -322,18 +319,13 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                lengthTrait.validationErrorMessage().dq()
+                                                stringTraitInfo.lengthTrait.validationErrorMessage().dq()
                                                 }, length, &path)""",
                                             ),
                                     )
                                 }
 
-                                "Pattern" -> {
-                                    val patternTrait =
-                                        stringTraitInfo::class.java
-                                            .getDeclaredField("patternTrait")
-                                            .apply { isAccessible = true }
-                                            .get(stringTraitInfo) as PatternTrait
+                                is Pattern -> {
                                     rustTemplate(
                                         """
                                         Self::Pattern(_) => #{ValidationExceptionField} {
@@ -345,8 +337,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                patternTrait.validationErrorMessage().dq()
-                                                }, &path, ${patternTrait.pattern.toString().dq()})""",
+                                                stringTraitInfo.patternTrait.validationErrorMessage().dq()
+                                                }, &path, ${stringTraitInfo.patternTrait.pattern.toString().dq()})""",
                                             ),
                                     )
                                 }
