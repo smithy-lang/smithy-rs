@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.KnowledgeIndex
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.rulesengine.language.EndpointRuleSet
+import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rulesengine.traits.EndpointRuleSetTrait
 import software.amazon.smithy.rulesengine.traits.EndpointTestsTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
@@ -27,6 +28,11 @@ class EndpointRulesetIndex : KnowledgeIndex {
             serviceShape.getTrait<EndpointRuleSetTrait>()?.ruleSet?.let { EndpointRuleSet.fromNode(it) }
                 ?.also { it.typeCheck() }
         }
+
+    fun hasEndpointBddTrait(serviceShape: ServiceShape): Boolean = serviceShape.hasTrait(EndpointBddTrait::class.java)
+
+    fun getEndpointBddTrait(serviceShape: ServiceShape): EndpointBddTrait? =
+        serviceShape.getTrait(EndpointBddTrait::class.java).orElse(null)
 
     fun endpointTests(serviceShape: ServiceShape) =
         serviceShape.getTrait<EndpointTestsTrait>()?.testCases ?: emptyList()

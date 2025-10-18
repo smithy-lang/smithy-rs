@@ -60,3 +60,6 @@ target/
 
 # python
 __pycache__
+
+# Agent configs
+.amazonq/

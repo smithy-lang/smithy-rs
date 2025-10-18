@@ -192,6 +192,16 @@ class EndpointsDecorator : ClientCodegenDecorator {
  * If no endpoint rules are provided, `null` will be returned.
  */
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
+    val index = EndpointRulesetIndex.of(this.model)
+
+    // Check for BDD trait first (preferred)
+    if (index.hasEndpointBddTrait(this.serviceShape)) {
+        // TODO: Implement BDD resolver generation
+        // For now, return null to indicate BDD generation not yet implemented
+        return null
+    }
+
+    // Fall back to rule-based generation
     val generator = EndpointTypesGenerator.fromContext(this)
     val defaultResolver = generator.defaultResolver() ?: return null
     val ctx =

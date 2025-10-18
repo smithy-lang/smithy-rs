@@ -36,6 +36,12 @@ class EndpointTypesGenerator(
     companion object {
         fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
             val index = EndpointRulesetIndex.of(codegenContext.model)
+
+            // If service has BDD trait, don't use rule-based generation
+            if (index.hasEndpointBddTrait(codegenContext.serviceShape)) {
+                return EndpointTypesGenerator(codegenContext, null, index.endpointTests(codegenContext.serviceShape))
+            }
+
             val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
             return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape))
         }
