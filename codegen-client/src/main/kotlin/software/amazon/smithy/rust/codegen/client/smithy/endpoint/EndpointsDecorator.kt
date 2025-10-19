@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointBddGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificEndpointResolver
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
@@ -196,9 +197,20 @@ private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
 
     // Check for BDD trait first (preferred)
     if (index.hasEndpointBddTrait(this.serviceShape)) {
-        // TODO: Implement BDD resolver generation
-        // For now, return null to indicate BDD generation not yet implemented
-        return null
+        val bddTrait = index.getEndpointBddTrait(this.serviceShape) ?: return null
+        val bddGenerator = EndpointBddGenerator(this, bddTrait)
+        val bddResolver = bddGenerator.generateBddResolver()
+
+        return writable {
+            rustTemplate(
+                """{
+                use #{ServiceSpecificResolver};
+                #{BddResolver}::new().into_shared_resolver()
+                }""",
+                "ServiceSpecificResolver" to serviceSpecificEndpointResolver(),
+                "BddResolver" to bddResolver,
+            )
+        }
     }
 
     // Fall back to rule-based generation
