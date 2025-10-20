@@ -310,7 +310,9 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
 }
 
 private fun Shape.isReachableFromOperationErrors(model: Model): Boolean =
-    model.operationShapes.any { it.errorsSet.contains(this.id) }
+    model.serviceShapes.any {
+        it.errorsSet.contains(this.id)
+    } || model.operationShapes.any { it.errorsSet.contains(this.id) }
 
 /**
  * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom

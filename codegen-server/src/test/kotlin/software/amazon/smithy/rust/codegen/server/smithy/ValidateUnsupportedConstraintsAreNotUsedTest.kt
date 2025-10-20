@@ -383,6 +383,10 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
 
             service TestService {
                 operations: [TestOperation]
+                errors: [
+                    CustomValidationException
+                    AnotherValidationException
+                ]
             }
 
             operation TestOperation {
@@ -473,6 +477,7 @@ internal class ValidateUnsupportedConstraintsAreNotUsedTest {
                 output: TestInputOutput,
                 errors: [
                     ValidationException
+                    CustomValidationException
                 ]
             }
 
