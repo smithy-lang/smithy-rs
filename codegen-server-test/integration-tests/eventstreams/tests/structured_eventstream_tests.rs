@@ -28,9 +28,18 @@ struct StreamingOperationWithInitialDataState {
 }
 
 #[derive(Debug, Default, Clone)]
+struct StreamingOperationWithOptionalDataState {
+    optional_data: Option<String>,
+    events: Vec<Events>,
+    #[allow(dead_code)]
+    num_calls: usize,
+}
+
+#[derive(Debug, Default, Clone)]
 struct ServerState {
     streaming_operation: StreamingOperationState,
     streaming_operation_with_initial_data: StreamingOperationWithInitialDataState,
+    streaming_operation_with_optional_data: StreamingOperationWithOptionalDataState,
 }
 
 struct TestServer {
@@ -44,6 +53,7 @@ impl TestServer {
         let handler_state = state.clone();
         let handler_state2 = state.clone();
         let handler_state3 = state.clone();
+        let handler_state4 = state.clone();
 
         let config = RpcV2CborServiceConfig::builder().build();
         let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
@@ -58,6 +68,10 @@ impl TestServer {
             .streaming_operation_with_initial_response(move |input| {
                 let state = handler_state3.clone();
                 streaming_operation_with_initial_response_handler(input, state)
+            })
+            .streaming_operation_with_optional_data(move |input| {
+                let state = handler_state4.clone();
+                streaming_operation_with_optional_data_handler(input, state)
             })
             .build_unchecked();
 
@@ -100,6 +114,24 @@ impl TestServer {
             .unwrap()
             .streaming_operation_with_initial_data
             .initial_data
+            .clone()
+    }
+
+    fn streaming_operation_with_optional_data_events(&self) -> Vec<Events> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .events
+            .clone()
+    }
+
+    fn optional_data(&self) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .optional_data
             .clone()
     }
 }
@@ -173,6 +205,38 @@ async fn streaming_operation_with_initial_response_handler(
             .build()
             .unwrap(),
     )
+}
+
+async fn streaming_operation_with_optional_data_handler(
+    mut input: input::StreamingOperationWithOptionalDataInput,
+    state: Arc<Mutex<ServerState>>,
+) -> Result<
+    output::StreamingOperationWithOptionalDataOutput,
+    error::StreamingOperationWithOptionalDataError,
+> {
+    state.lock().unwrap().streaming_operation.num_calls += 1;
+    state
+        .lock()
+        .unwrap()
+        .streaming_operation_with_optional_data
+        .optional_data = input.optional_data;
+
+    let ev = input.events.recv().await;
+
+    if let Ok(Some(event)) = &ev {
+        state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .events
+            .push(event.clone());
+    }
+
+    Ok(output::StreamingOperationWithOptionalDataOutput::builder()
+        .optional_response_data(Some("optional response".to_string()))
+        .events(EventStreamSender::once(Ok(Events::A(Event {}))))
+        .build()
+        .unwrap())
 }
 
 /// TestHarness that launches a server and attaches a client
@@ -476,4 +540,26 @@ async fn test_server_sends_initial_response_with_data() {
     assert_eq!(key, "responseData");
     let value = decoder.string().unwrap();
     assert_eq!(value, "test response data");
+}
+
+/// Test streaming operation with optional data - verifies Smithy spec requirement:
+/// "Clients and servers MUST NOT fail if an initial-request or initial-response
+/// is not received for an initial message that contains only optional members."
+#[tokio::test]
+async fn test_streaming_operation_with_optional_data() {
+    let mut harness = TestHarness::new("StreamingOperationWithOptionalData").await;
+
+    // Send event without providing optional data - should work
+    harness.send_event("A").await;
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+    assert_eq!(
+        harness
+            .server
+            .streaming_operation_with_optional_data_events(),
+        vec![Events::A(Event {})]
+    );
+    // Verify optional data was not provided
+    assert_eq!(harness.server.optional_data(), None);
 }

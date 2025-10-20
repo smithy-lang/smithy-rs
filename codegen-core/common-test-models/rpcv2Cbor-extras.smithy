@@ -19,6 +19,7 @@ service RpcV2CborService {
         StreamingOperation
         StreamingOperationWithInitialData
         StreamingOperationWithInitialResponse
+        StreamingOperationWithOptionalData
     ]
 }
 
@@ -65,6 +66,22 @@ structure StreamingOperationWithInitialResponseInput {
 structure StreamingOperationWithInitialResponseOutput {
     @required
     responseData: String
+    events: Events
+}
+
+operation StreamingOperationWithOptionalData {
+    input: StreamingOperationWithOptionalDataInput,
+    output: StreamingOperationWithOptionalDataOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationWithOptionalDataInput {
+    optionalData: String
+    events: Events
+}
+
+structure StreamingOperationWithOptionalDataOutput {
+    optionalResponseData: String
     events: Events
 }
 
