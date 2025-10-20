@@ -43,6 +43,8 @@ import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegen
 import software.amazon.smithy.rust.codegen.server.smithy.generators.BlobLength
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstraintViolation
+import software.amazon.smithy.rust.codegen.server.smithy.generators.Length
+import software.amazon.smithy.rust.codegen.server.smithy.generators.Pattern
 import software.amazon.smithy.rust.codegen.server.smithy.generators.Range
 import software.amazon.smithy.rust.codegen.server.smithy.generators.StringTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnionConstraintTraitInfo
@@ -305,8 +307,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "ValidationExceptionFields" to
                     writable {
                         stringConstraintsInfo.forEach { stringTraitInfo ->
-                            when (stringTraitInfo::class.simpleName) {
-                                "Length" -> {
+                            when (stringTraitInfo) {
+                                is Length -> {
                                     val lengthTrait =
                                         stringTraitInfo::class.java
                                             .getDeclaredField("lengthTrait")
@@ -329,7 +331,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     )
                                 }
 
-                                "Pattern" -> {
+                                is Pattern -> {
                                     val patternTrait =
                                         stringTraitInfo::class.java
                                             .getDeclaredField("patternTrait")
