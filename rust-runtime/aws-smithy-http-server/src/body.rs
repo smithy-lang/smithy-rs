@@ -151,7 +151,6 @@ where
         .map_ok(|chunk| http_body::Frame::data(chunk.into()))
         .map_err(|e| Error::new(e.into()));
 
-    // Wrap in StreamBody and then box it
     boxed(StreamBody::new(frame_stream))
 }
 
