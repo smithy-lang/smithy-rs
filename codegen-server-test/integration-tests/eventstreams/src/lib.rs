@@ -138,6 +138,32 @@ impl ManualEventStreamClient {
     pub async fn recv(&mut self) -> Option<Result<Message, RecvError>> {
         self.response_receiver.recv().await
     }
+
+    /// Tries to receive an initial-response message, returns None if the next message isn't initial-response
+    pub async fn try_recv_initial_response(&mut self) -> Option<Result<Message, RecvError>> {
+        if let Some(result) = self.recv().await {
+            match &result {
+                Ok(message) => {
+                    if let Some(event_type) = message
+                        .headers()
+                        .iter()
+                        .find(|h| h.name().as_str() == ":event-type")
+                        .and_then(|h| h.value().as_string().ok())
+                    {
+                        if event_type.as_str() == "initial-response" {
+                            return Some(result);
+                        }
+                    }
+                    // Not an initial-response, we need to buffer this message
+                    // For now, just return None to indicate no initial-response
+                    None
+                }
+                Err(_) => Some(result),
+            }
+        } else {
+            None
+        }
+    }
 }
 
 /// Builder for creating event stream messages with signing support.

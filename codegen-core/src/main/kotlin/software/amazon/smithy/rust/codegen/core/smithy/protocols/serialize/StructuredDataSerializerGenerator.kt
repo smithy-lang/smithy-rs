@@ -32,8 +32,6 @@ interface StructuredDataSerializerGenerator {
      *     ...
      * }
      * ```
-     *
-     * This method is only invoked when serializing an `@httpPayload`.
      */
     fun unsetStructure(structure: StructureShape): RuntimeType
 

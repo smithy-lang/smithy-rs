@@ -80,7 +80,7 @@ private fun eventStreamWithInitialRequest(
             """,
             *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
-            "initial_message" to params.eventStreamMarshallerGenerator.renderInitialMessageGenerator(params.payloadContentType),
+            "initial_message" to params.eventStreamMarshallerGenerator.renderInitialRequestGenerator(params.payloadContentType),
             "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
             "parser" to parser,
             "write_message_to" to
