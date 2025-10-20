@@ -146,7 +146,10 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
             validationFieldStructure
                 .members()
                 .firstOrNull { it.isValidationFieldName() }
-                ?: throw CodegenException("Expected `$validationFieldStructure` to contain a member with the `@validationFieldName` trait")
+                ?: throw CodegenException(
+                    "Expected `$validationFieldStructure` to contain a member explicitly" +
+                        " annotated with the `@validationFieldName` trait, or with the name \"name\"",
+                )
 
         val maybeValidationFieldMessageMember =
             validationFieldStructure

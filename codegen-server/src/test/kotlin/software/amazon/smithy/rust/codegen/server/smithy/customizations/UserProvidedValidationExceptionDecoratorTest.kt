@@ -213,6 +213,8 @@ internal class UserProvidedValidationExceptionDecoratorTest {
             version: "1.0.0"
             operations: [
                 TestOperation
+                StreamingOperation
+                PublishMessages
             ]
             errors: [
                 MyCustomValidationException
@@ -223,6 +225,42 @@ internal class UserProvidedValidationExceptionDecoratorTest {
         operation TestOperation {
             input: TestInput
         }
+
+        @http(method: "GET", uri: "/streaming-operation")
+        @readonly
+        operation StreamingOperation {
+            input := {}
+            output := {
+                @httpPayload
+                output: StreamingBlob = ""
+            }
+        }
+
+        @streaming
+        blob StreamingBlob
+
+        @http(method: "POST", uri: "/publish")
+        operation PublishMessages {
+            input: PublishMessagesInput
+        }
+
+        @input
+        structure PublishMessagesInput {
+            @httpPayload
+            messages: PublishEvents
+        }
+
+        @streaming
+        union PublishEvents {
+            message: Message
+            leave: LeaveEvent
+        }
+
+        structure Message {
+            message: String
+        }
+
+        structure LeaveEvent {}
 
         structure TestInput {
             @required
