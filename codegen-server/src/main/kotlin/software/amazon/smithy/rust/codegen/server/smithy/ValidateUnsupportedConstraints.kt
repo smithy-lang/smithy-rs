@@ -33,7 +33,6 @@ import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import java.util.logging.Level
 
 private sealed class UnsupportedConstraintMessageKind {
@@ -310,6 +309,9 @@ fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
 
+private fun Shape.isReachableFromOperationErrors(model: Model): Boolean =
+    model.operationShapes.any { it.errorsSet.contains(this.id) }
+
 /**
  * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom
  * validation exception is defined
@@ -322,12 +324,8 @@ fun validateModelHasAtMostOneValidationException(
     val customValidationExceptionShapes =
         model
             .shapes()
-            .filter {
-                it.hasTrait(ValidationExceptionTrait.ID) && it
-                    .asStructureShape()
-                    .orNull()
-                    ?.isReachableFromOperationInput() == true
-            }.toList()
+            .filter { it.hasTrait(ValidationExceptionTrait.ID) && it.isReachableFromOperationErrors(model) }
+            .toList()
 
     val messages = mutableListOf<LogMessage>()
 
