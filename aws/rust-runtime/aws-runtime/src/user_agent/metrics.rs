@@ -258,6 +258,7 @@ impl ProvideBusinessMetric for AwsCredentialFeature {
             CredentialsHttp => Some(BusinessMetric::CredentialsHttp),
             CredentialsImds => Some(BusinessMetric::CredentialsImds),
             BearerServiceEnvVars => Some(BusinessMetric::BearerServiceEnvVars),
+            S3ExpressBucket => Some(BusinessMetric::S3ExpressBucket),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
                 // while continuing to use an outdated version of an SDK crate or the `aws-credential-types`
@@ -324,8 +325,8 @@ impl fmt::Display for BusinessMetrics {
 #[cfg(test)]
 mod tests {
     use crate::user_agent::metrics::{
-        drop_unfinished_metrics_to_fit, Base64Iterator, FEATURE_ID_TO_METRIC_VALUE,
-        MAX_METRICS_ID_NUMBER,
+        drop_unfinished_metrics_to_fit, Base64Iterator, BusinessMetrics, ProvideBusinessMetric,
+        FEATURE_ID_TO_METRIC_VALUE, MAX_METRICS_ID_NUMBER,
     };
     use crate::user_agent::BusinessMetric;
     use convert_case::{Boundary, Case, Casing};
@@ -398,5 +399,40 @@ mod tests {
 
         let csv = "A,B";
         assert_eq!("A,B", drop_unfinished_metrics_to_fit(csv, 5));
+    }
+
+    #[test]
+    fn s3_express_bucket_provides_business_metric() {
+        use aws_credential_types::credential_feature::AwsCredentialFeature;
+
+        let feature = AwsCredentialFeature::S3ExpressBucket;
+        let metric = feature.provide_business_metric();
+        
+        assert_eq!(metric, Some(BusinessMetric::S3ExpressBucket));
+    }
+
+    #[test]
+    fn s3_express_bucket_encodes_to_j() {
+        // Verify that S3ExpressBucket maps to "J" in the encoding
+        let metric_value = FEATURE_ID_TO_METRIC_VALUE
+            .get(&BusinessMetric::S3ExpressBucket)
+            .expect("S3ExpressBucket should have a metric value");
+        
+        assert_eq!(metric_value.as_ref(), "J");
+    }
+
+    #[test]
+    fn s3_express_bucket_in_business_metrics() {
+        use aws_credential_types::credential_feature::AwsCredentialFeature;
+
+        let mut metrics = BusinessMetrics::default();
+        let feature = AwsCredentialFeature::S3ExpressBucket;
+        
+        if let Some(metric) = feature.provide_business_metric() {
+            metrics.push(metric);
+        }
+        
+        let display = format!("{}", metrics);
+        assert_eq!(display, "m/J");
     }
 }

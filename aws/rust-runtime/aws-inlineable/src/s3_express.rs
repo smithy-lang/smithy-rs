@@ -446,7 +446,7 @@ pub(crate) mod identity_provider {
     use crate::s3_express::identity_cache::S3ExpressIdentityCache;
     use crate::types::SessionCredentials;
     use aws_credential_types::provider::error::CredentialsError;
-    use aws_credential_types::Credentials;
+    use aws_credential_types::{AwsCredentialFeature, Credentials};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
@@ -516,7 +516,12 @@ pub(crate) mod identity_provider {
                     let creds = self
                         .express_session_credentials(bucket_name, runtime_components, config_bag)
                         .await?;
-                    let data = Credentials::try_from(creds)?;
+                    let mut data = Credentials::try_from(creds)?;
+
+                    // Track S3 Express bucket usage
+                    data.get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                        .push(AwsCredentialFeature::S3ExpressBucket);
+
                     Ok((
                         Identity::new(data.clone(), data.expiry()),
                         data.expiry().unwrap(),
@@ -626,6 +631,43 @@ pub(crate) mod identity_provider {
 
         fn cache_location(&self) -> IdentityCacheLocation {
             IdentityCacheLocation::IdentityResolver
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use aws_credential_types::{AwsCredentialFeature, Credentials};
+
+        #[test]
+        fn test_s3express_credentials_contain_feature() {
+            // Create test SessionCredentials
+            let session_creds = SessionCredentials::builder()
+                .access_key_id("test_access_key")
+                .secret_access_key("test_secret_key")
+                .session_token("test_session_token")
+                .expiration(aws_smithy_types::DateTime::from_secs(1000))
+                .build()
+                .expect("valid session credentials");
+
+            // Convert to Credentials (simulating what happens in the identity provider)
+            let mut credentials = Credentials::try_from(session_creds).expect("conversion should succeed");
+
+            // Embed the S3ExpressBucket feature (this is what the identity provider does)
+            credentials
+                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+                .push(AwsCredentialFeature::S3ExpressBucket);
+
+            // Verify the feature is present in the credentials
+            let features = credentials
+                .get_property::<Vec<AwsCredentialFeature>>()
+                .expect("features should be present");
+
+            assert_eq!(features.len(), 1, "should have exactly one feature");
+            assert!(
+                matches!(features[0], AwsCredentialFeature::S3ExpressBucket),
+                "feature should be S3ExpressBucket"
+            );
         }
     }
 }

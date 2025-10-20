@@ -21,7 +21,7 @@
 )]
 
 pub mod attributes;
-#[doc(hidden)]
+/// Credential feature tracking for business metrics
 pub mod credential_feature;
 pub mod credential_fn;
 mod credentials_impl;
@@ -29,6 +29,7 @@ pub mod provider;
 pub mod token_fn;
 
 pub use credentials_impl::{Credentials, CredentialsBuilder};
+pub use credential_feature::AwsCredentialFeature;
 
 /// AWS Access Token
 ///
