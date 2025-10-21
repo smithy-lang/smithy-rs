@@ -21,6 +21,7 @@
 )]
 
 pub mod attributes;
+#[doc(hidden)]
 /// Credential feature tracking for business metrics
 pub mod credential_feature;
 pub mod credential_fn;

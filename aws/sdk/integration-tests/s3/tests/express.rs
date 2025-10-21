@@ -58,7 +58,9 @@ async fn create_session_request_should_not_include_x_amz_s3session_token() {
 
 #[tokio::test]
 async fn mixed_auths() {
-    use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
+    use aws_runtime::user_agent::test_util::{
+        assert_ua_contains_metric_values, assert_ua_does_not_contain_metric_values,
+    };
 
     let _logs = capture_test_logs();
 
@@ -103,11 +105,7 @@ async fn mixed_auths() {
         .headers()
         .get("x-amz-user-agent")
         .expect("User-Agent should be present");
-    // Assert that "J" is not in the user agent for regular buckets
-    assert!(
-        !ua.to_str().unwrap().contains("J"),
-        "Regular S3 bucket should not have metric J in User-Agent"
-    );
+    assert_ua_does_not_contain_metric_values(ua.to_str().unwrap(), &["J"]);
 
     // A call to another S3 Express bucket where we should again see two request/response pairs,
     // one for the `create_session` API and the other for `list_objects_v2` in S3 Express bucket.

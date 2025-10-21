@@ -517,8 +517,6 @@ pub(crate) mod identity_provider {
                         .express_session_credentials(bucket_name, runtime_components, config_bag)
                         .await?;
                     let mut data = Credentials::try_from(creds)?;
-
-                    // Track S3 Express bucket usage
                     data.get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                         .push(AwsCredentialFeature::S3ExpressBucket);
 
