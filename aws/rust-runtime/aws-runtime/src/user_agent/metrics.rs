@@ -407,7 +407,7 @@ mod tests {
 
         let feature = AwsCredentialFeature::S3ExpressBucket;
         let metric = feature.provide_business_metric();
-        
+
         assert_eq!(metric, Some(BusinessMetric::S3ExpressBucket));
     }
 
@@ -417,7 +417,7 @@ mod tests {
         let metric_value = FEATURE_ID_TO_METRIC_VALUE
             .get(&BusinessMetric::S3ExpressBucket)
             .expect("S3ExpressBucket should have a metric value");
-        
+
         assert_eq!(metric_value.as_ref(), "J");
     }
 
@@ -427,11 +427,11 @@ mod tests {
 
         let mut metrics = BusinessMetrics::default();
         let feature = AwsCredentialFeature::S3ExpressBucket;
-        
+
         if let Some(metric) = feature.provide_business_metric() {
             metrics.push(metric);
         }
-        
+
         let display = format!("{}", metrics);
         assert_eq!(display, "m/J");
     }
