@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.hasDateTim
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.hasStreamingOperations
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.HttpDependencies
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -50,6 +51,9 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
 
         // Determine the correct http-body feature based on http-1x configuration
         val httpBodyFeature = if (codegenContext.isHttp1()) "http-body-1-x" else "http-body-0-4-x"
+        
+        println("[ServerRequiredCustomizations] http1x=${codegenContext.isHttp1()}, httpBodyFeature=$httpBodyFeature")
+        println("[ServerRequiredCustomizations] smithyTypes features: ${httpDeps.smithyTypes.features}")
 
         // Add rt-tokio feature for `ByteStream::from_path`
         // Note: pubUseSmithyPrimitives may also add this feature with http-body-1-x hardcoded,
@@ -61,6 +65,8 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
                 listOf("aws-smithy-types/rt-tokio", "aws-smithy-types/$httpBodyFeature"),
             ),
         )
+        
+        println("[ServerRequiredCustomizations] Added rt-tokio feature with: aws-smithy-types/$httpBodyFeature")
 
         rustCrate.mergeFeature(
             Feature(
@@ -80,8 +86,10 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
 
         rustCrate.withModule(ServerRustModule.Types) {
             if (codegenContext.isHttp1()) {
+                println("[ServerRequiredCustomizations] Using pubUseSmithyPrimitives (HTTP 1.x)")
                 pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
             } else {
+                println("[ServerRequiredCustomizations] Using pubUseSmithyPrimitivesHttp0x (HTTP 0.x)")
                 pubUseSmithyPrimitivesHttp0x(codegenContext, codegenContext.model, rustCrate)(this)
             }
 
@@ -104,14 +112,14 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
     it uses http0x crates in case http-1x flag is false.
      */
     fun pubUseSmithyPrimitivesHttp0x(
-        codegenContext: CodegenContext,
+        codegenContext: ServerCodegenContext,
         model: Model,
         rustCrate: RustCrate,
     ): Writable =
         writable {
-            val rc = codegenContext.runtimeConfig
+            val httpDeps = codegenContext.httpDependencies()
             if (hasBlobs(model)) {
-                rustTemplate("pub use #{Blob};", "Blob" to RuntimeType.blob(rc))
+                rustTemplate("pub use #{Blob};", "Blob" to httpDeps.smithyTypesModule().resolve("Blob"))
             }
             if (hasDateTimes(model)) {
                 rustTemplate(
@@ -119,16 +127,17 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
                 pub use #{DateTime};
                 pub use #{Format} as DateTimeFormat;
                 """,
-                    "DateTime" to RuntimeType.dateTime(rc),
-                    "Format" to RuntimeType.format(rc),
+                    "DateTime" to httpDeps.smithyTypesModule().resolve("DateTime"),
+                    "Format" to httpDeps.smithyTypesModule().resolve("date_time::Format"),
                 )
             }
             if (hasStreamingOperations(model, codegenContext.serviceShape)) {
+                println("[ServerRequiredCustomizations.pubUseSmithyPrimitivesHttp0x] Adding rt-tokio with http-body-0-4-x")
                 rustCrate.mergeFeature(
                     Feature(
                         "rt-tokio",
                         true,
-                        listOf("aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-0-x"),
+                        listOf("aws-smithy-types/rt-tokio", "aws-smithy-types/http-body-0-4-x"),
                     ),
                 )
                 rustTemplate(
@@ -142,12 +151,12 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
                 pub use #{Length};
                 pub use #{SdkBody};
                 """,
-                    "ByteStream" to RuntimeType.smithyTypes(rc).resolve("byte_stream::ByteStream"),
-                    "AggregatedBytes" to RuntimeType.smithyTypes(rc).resolve("byte_stream::AggregatedBytes"),
-                    "Error" to RuntimeType.smithyTypes(rc).resolve("byte_stream::error::Error"),
-                    "FsBuilder" to RuntimeType.smithyTypes(rc).resolve("byte_stream::FsBuilder"),
-                    "Length" to RuntimeType.smithyTypes(rc).resolve("byte_stream::Length"),
-                    "SdkBody" to RuntimeType.smithyTypes(rc).resolve("body::SdkBody"),
+                    "ByteStream" to httpDeps.smithyTypesModule().resolve("byte_stream::ByteStream"),
+                    "AggregatedBytes" to httpDeps.smithyTypesModule().resolve("byte_stream::AggregatedBytes"),
+                    "Error" to httpDeps.smithyTypesModule().resolve("byte_stream::error::Error"),
+                    "FsBuilder" to httpDeps.smithyTypesModule().resolve("byte_stream::FsBuilder"),
+                    "Length" to httpDeps.smithyTypesModule().resolve("byte_stream::Length"),
+                    "SdkBody" to httpDeps.smithyTypesModule().resolve("body::SdkBody"),
                 )
             }
         }
