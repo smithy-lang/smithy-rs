@@ -10,13 +10,11 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.AwsJson
@@ -28,7 +26,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestJson
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RestXml
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.RpcV2Cbor
-import software.amazon.smithy.rust.codegen.server.smithy.HttpDependencies
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.awsJsonFieldName
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.CborParserGenerator
@@ -42,9 +39,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldNa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
+import software.amazon.smithy.rust.codegen.server.smithy.HttpDependencies
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.AddTypeFieldToServerErrorsCborCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeEncodingMapOrCollectionCborCustomization
@@ -175,8 +171,8 @@ class ServerAwsJsonProtocol(
 
     override fun markerStruct(): RuntimeType {
         return when (version) {
-            is AwsJsonVersion.Json10 -> httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::AwsJson1_0")
-            is AwsJsonVersion.Json11 -> httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::AwsJson1_1")
+            is AwsJsonVersion.Json10 -> httpDeps.smithyHttpServer.toType().resolve("protocol::$protocolModulePath::AwsJson1_0")
+            is AwsJsonVersion.Json11 -> httpDeps.smithyHttpServer.toType().resolve("protocol::$protocolModulePath::AwsJson1_1")
         }
     }
 
@@ -251,7 +247,7 @@ class ServerRestJsonProtocol(
     override fun structuredDataSerializer(): StructuredDataSerializerGenerator =
         ServerRestJsonSerializerGenerator(serverCodegenContext, httpBindingResolver)
 
-    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::RestJson1")
+    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::$protocolModulePath::RestJson1")
 
     override fun routerType() = httpDeps.smithyHttpServer.toType().resolve("protocol::rest::router::RestRouter")
 
@@ -260,7 +256,8 @@ class ServerRestJsonProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
+    ): Writable =
+        RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")
@@ -288,7 +285,7 @@ class ServerRestXmlProtocol(
 
     override val protocolModulePath = "rest_xml"
 
-    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::${protocolModulePath}::RestXml")
+    override fun markerStruct() = httpDeps.smithyHttpServer.toType().resolve("protocol::$protocolModulePath::RestXml")
 
     override fun routerType() = httpDeps.smithyHttpServer.toType().resolve("protocol::rest::router::RestRouter")
 
@@ -297,7 +294,8 @@ class ServerRestXmlProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
+    ): Writable =
+        RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, httpDeps.httpModule()).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")

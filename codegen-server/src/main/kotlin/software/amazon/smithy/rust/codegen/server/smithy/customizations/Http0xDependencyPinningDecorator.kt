@@ -43,6 +43,12 @@ class Http0xDependencyPinningDecorator : ServerCodegenDecorator {
         // Get dependencies to pin from HttpDependencies
         val dependenciesToPin = codegenContext.httpDependencies().dependenciesToPin().toMutableMap()
 
+        // Explicitly add aws-smithy-types with only the correct http-body feature
+        // This ensures that even if core codegen adds it without features or with http-body-1-x,
+        // our explicit version with http-body-0-4-x will take precedence
+        val smithyTypes = codegenContext.httpDependencies().smithyTypes
+        dependenciesToPin["aws-smithy-types"] = smithyTypes
+
         // Check if the service has event stream operations to enable `event-stream` feature.
         val serviceShape = codegenContext.serviceShape
         val hasEventStreams = serviceShape.hasEventStreamOperations(codegenContext.model)

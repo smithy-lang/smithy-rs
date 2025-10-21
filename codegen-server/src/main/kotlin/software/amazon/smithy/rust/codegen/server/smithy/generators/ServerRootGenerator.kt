@@ -97,38 +97,38 @@ open class ServerRootGenerator(
             //! ## ).build_unchecked();
             ${if (codegenContext.settings.codegenConfig.http1x) {
                 """
-            //! use #{HyperUtil}::rt::TokioIo;
-            //! use #{HyperUtil}::service::TowerToHyperService;
-            //! use #{Tokio}::net::TcpListener;
-            //! use #{Tower}::Service;
-            //!
-            //! let bind: SocketAddr = "127.0.0.1:6969".parse()
-            //!     .expect("unable to parse the server bind address and port");
-            //! let listener = TcpListener::bind(bind).await.expect("failed to bind");
-            //!
-            //! loop {
-            //!     let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
-            //!     let io = TokioIo::new(stream);
-            //!     let mut app = app.clone();
-            //!
-            //!     #{Tokio}::task::spawn(async move {
-            //!         let hyper_service = TowerToHyperService::new(app);
-            //!
-            //!         if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
-            //!             .serve_connection(io, hyper_service)
-            //!             .await
-            //!         {
-            //!             eprintln!("Error serving connection: {:?}", err);
-            //!         }
-            //!     });
-            //! }
+                //! use #{HyperUtil}::rt::TokioIo;
+                //! use #{HyperUtil}::service::TowerToHyperService;
+                //! use #{Tokio}::net::TcpListener;
+                //! use #{Tower}::Service;
+                //!
+                //! let bind: SocketAddr = "127.0.0.1:6969".parse()
+                //!     .expect("unable to parse the server bind address and port");
+                //! let listener = TcpListener::bind(bind).await.expect("failed to bind");
+                //!
+                //! loop {
+                //!     let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
+                //!     let io = TokioIo::new(stream);
+                //!     let mut app = app.clone();
+                //!
+                //!     #{Tokio}::task::spawn(async move {
+                //!         let hyper_service = TowerToHyperService::new(app);
+                //!
+                //!         if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
+                //!             .serve_connection(io, hyper_service)
+                //!             .await
+                //!         {
+                //!             eprintln!("Error serving connection: {:?}", err);
+                //!         }
+                //!     });
+                //! }
                 """.trimIndent()
             } else {
                 """
-            //! let server = app.into_make_service();
-            //! let bind: SocketAddr = "127.0.0.1:6969".parse()
-            //!     .expect("unable to parse the server bind address and port");
-            //! #{Hyper}::Server::bind(&bind).serve(server).await.unwrap();
+                //! let server = app.into_make_service();
+                //! let bind: SocketAddr = "127.0.0.1:6969".parse()
+                //!     .expect("unable to parse the server bind address and port");
+                //! #{Hyper}::Server::bind(&bind).serve(server).await.unwrap();
                 """.trimIndent()
             }}
             //! ## }
@@ -249,43 +249,43 @@ open class ServerRootGenerator(
             //!
             ${if (codegenContext.settings.codegenConfig.http1x) {
                 """
-            //!    use #{HyperUtil}::rt::TokioIo;
-            //!    use #{HyperUtil}::service::TowerToHyperService;
-            //!    use #{Tokio}::net::TcpListener;
-            //!    use #{Tower}::Service;
-            //!
-            //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
-            //!        .expect("unable to parse the server bind address and port");
-            //!    let listener = TcpListener::bind(bind).await.expect("failed to bind");
-            //!
-            //!    loop {
-            //!        let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
-            //!        let io = TokioIo::new(stream);
-            //!        let mut app = app.clone();
-            //!
-            //!        #{Tokio}::task::spawn(async move {
-            //!            let hyper_service = TowerToHyperService::new(app);
-            //!
-            //!            if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
-            //!                .serve_connection(io, hyper_service)
-            //!                .await
-            //!            {
-            //!                eprintln!("Error serving connection: {:?}", err);
-            //!            }
-            //!        });
-            //!    }
+                //!    use #{HyperUtil}::rt::TokioIo;
+                //!    use #{HyperUtil}::service::TowerToHyperService;
+                //!    use #{Tokio}::net::TcpListener;
+                //!    use #{Tower}::Service;
+                //!
+                //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
+                //!        .expect("unable to parse the server bind address and port");
+                //!    let listener = TcpListener::bind(bind).await.expect("failed to bind");
+                //!
+                //!    loop {
+                //!        let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
+                //!        let io = TokioIo::new(stream);
+                //!        let mut app = app.clone();
+                //!
+                //!        #{Tokio}::task::spawn(async move {
+                //!            let hyper_service = TowerToHyperService::new(app);
+                //!
+                //!            if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
+                //!                .serve_connection(io, hyper_service)
+                //!                .await
+                //!            {
+                //!                eprintln!("Error serving connection: {:?}", err);
+                //!            }
+                //!        });
+                //!    }
                 """.trimIndent()
             } else {
                 """
-            //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
-            //!        .expect("unable to parse the server bind address and port");
-            //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
-            //!    ## let server = async { Ok::<_, ()>(()) };
-            //!
-            //!    // Run your service!
-            //!    if let Err(err) = server.await {
-            //!        eprintln!("server error: {:?}", err);
-            //!    }
+                //!    let bind: SocketAddr = "127.0.0.1:6969".parse()
+                //!        .expect("unable to parse the server bind address and port");
+                //!    let server = #{Hyper}::Server::bind(&bind).serve(app.into_make_service());
+                //!    ## let server = async { Ok::<_, ()>(()) };
+                //!
+                //!    // Run your service!
+                //!    if let Err(err) = server.await {
+                //!        eprintln!("server error: {:?}", err);
+                //!    }
                 """.trimIndent()
             }}
             //! }

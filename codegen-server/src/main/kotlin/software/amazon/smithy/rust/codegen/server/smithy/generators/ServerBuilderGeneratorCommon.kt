@@ -46,7 +46,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.hasPublicConstrainedWrapperTupleType
 
 /*
@@ -83,8 +82,9 @@ fun generateFallbackCodeToDefaultValue(
     runtimeConfig: RuntimeConfig,
     symbolProvider: RustSymbolProvider,
     publicConstrainedTypes: Boolean,
+    smithyTypes: RuntimeType,
 ) {
-    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
+    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member, smithyTypes)
     val targetShape = model.expectShape(member.target)
     val targetSymbol = symbolProvider.toSymbol(targetShape)
     // We need an .into() conversion to create defaults for the server types. A larger scale refactoring could store this information in the
@@ -134,9 +134,9 @@ private fun defaultValue(
     runtimeConfig: RuntimeConfig,
     symbolProvider: RustSymbolProvider,
     member: MemberShape,
+    smithyTypes: RuntimeType,
 ) = writable {
     val node = member.expectTrait<DefaultTrait>().toNode()!!
-    val types = ServerCargoDependency.smithyTypes(runtimeConfig).toType()
     // Define the exception once for DRYness.
     val unsupportedDefaultValueException =
         CodegenException("Default value $node for member shape ${member.id} is unsupported or cannot exist; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
@@ -161,7 +161,7 @@ private fun defaultValue(
                         #{SmithyTypes}::DateTime::from_str("$value", #{SmithyTypes}::date_time::Format::DateTime)
                                 .expect("default value `$value` cannot be parsed into a valid date time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         """,
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
                 }
                 else -> throw unsupportedDefaultValueException
@@ -181,20 +181,20 @@ private fun defaultValue(
                 is NullNode ->
                     rustTemplate(
                         "#{SmithyTypes}::Document::Null",
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
 
                 is BooleanNode ->
                     rustTemplate(
                         """#{SmithyTypes}::Document::Bool(${node.value})""",
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
 
                 is StringNode ->
                     rustTemplate(
                         "#{SmithyTypes}::Document::String(#{String}::from(${node.value.dq()}))",
                         *preludeScope,
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
 
                 is NumberNode -> {
@@ -206,7 +206,7 @@ private fun defaultValue(
                         }
                     rustTemplate(
                         "#{SmithyTypes}::Document::Number(#{SmithyTypes}::Number::$variant($value))",
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
                 }
 
@@ -215,7 +215,7 @@ private fun defaultValue(
                     rustTemplate(
                         """#{SmithyTypes}::Document::Array(#{Vec}::new())""",
                         *preludeScope,
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                     )
                 }
 
@@ -223,7 +223,7 @@ private fun defaultValue(
                     check(node.isEmpty)
                     rustTemplate(
                         "#{SmithyTypes}::Document::Object(#{HashMap}::new())",
-                        "SmithyTypes" to types,
+                        "SmithyTypes" to smithyTypes,
                         "HashMap" to RuntimeType.HashMap,
                     )
                 }

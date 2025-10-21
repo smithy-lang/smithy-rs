@@ -111,15 +111,16 @@ data class ServerCodegenConfig(
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         private const val DEFAULT_HTTP_1X = false
 
-        private val KNOWN_CONFIG_KEYS = setOf(
-            "formatTimeoutSeconds",
-            "debugMode",
-            "publicConstrainedTypes",
-            "ignoreUnsupportedConstraints",
-            "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
-            "addValidationExceptionToConstrainedOperations",
-            "http-1x",
-        )
+        private val KNOWN_CONFIG_KEYS =
+            setOf(
+                "formatTimeoutSeconds",
+                "debugMode",
+                "publicConstrainedTypes",
+                "ignoreUnsupportedConstraints",
+                "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
+                "addValidationExceptionToConstrainedOperations",
+                "http-1x",
+            )
 
         fun fromCodegenConfigAndNode(
             coreCodegenConfig: CoreCodegenConfig,
@@ -131,7 +132,7 @@ data class ServerCodegenConfig(
             if (unknownKeys.isNotEmpty()) {
                 throw IllegalArgumentException(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
-                    "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. "
+                        "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. ",
                 )
             }
 
