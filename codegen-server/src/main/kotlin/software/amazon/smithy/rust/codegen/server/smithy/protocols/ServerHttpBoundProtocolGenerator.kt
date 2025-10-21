@@ -37,7 +37,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -49,10 +48,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Proto
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.EventStreamBodyParams
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingDescriptor
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBoundProtocolPayloadGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
-import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.OperationNormalizer
@@ -132,8 +131,8 @@ class ServerHttpBoundProtocolGenerator(
         )
 
 class ServerHttpBoundProtocolPayloadGenerator(
-    codegenContext: CodegenContext,
-    protocol: Protocol,
+    private val codegenContext: ServerCodegenContext,
+    private val protocol: ServerProtocol,
 ) :
     ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
             codegenContext,
@@ -146,9 +145,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
                         let error_marshaller = #{errorMarshallerConstructorFn}();
                         let marshaller = #{marshallerConstructorFn}();
                         let signer = #{NoOpSigner}{};
-                        let adapter: #{aws_smithy_http}::event_stream::MessageStreamAdapter<_, _> =
-                            ${params.outerName}.${params.memberName}.into_body_stream(marshaller, error_marshaller, signer);
-                        adapter
+                        #{event_stream}
                     }
                     """,
                     "aws_smithy_http" to
@@ -159,6 +156,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
                     "marshallerConstructorFn" to
                         params.eventStreamMarshallerGenerator.render(),
                     "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+                    "event_stream" to eventStreamWithInitialResponse(codegenContext, protocol, params),
                 )
             },
         )
@@ -1479,4 +1477,77 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun httpBindingGenerator(operationShape: OperationShape) =
         ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)
+}
+
+private fun eventStreamWithInitialResponse(
+    codegenContext: ServerCodegenContext,
+    protocol: ServerProtocol,
+    params: EventStreamBodyParams,
+): Writable {
+    return if (codegenContext.settings.codegenConfig.alwaysSendEventStreamInitialResponse) {
+        val initialResponseGenerator =
+            params.eventStreamMarshallerGenerator.renderInitialResponseGenerator(params.payloadContentType)
+
+        writable {
+            rustTemplate(
+                """
+                {
+                    use #{futures_util}::StreamExt;
+                    let payload = #{initial_response_payload};
+                    let initial_message = #{initial_response_generator}(payload);
+                    let mut buffer = #{Vec}::new();
+                    #{write_message_to}(&initial_message, &mut buffer)
+                        .expect("Failed to write initial message");
+                    let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
+                    let adapter = #{message_stream_adaptor};
+                    initial_message_stream.chain(adapter)
+                }
+                """,
+                *preludeScope,
+                "futures_util" to ServerCargoDependency.FuturesUtil.toType(),
+                "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
+                "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
+                "initial_response_generator" to initialResponseGenerator,
+                "write_message_to" to
+                    RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
+                        .resolve("frame::write_message_to"),
+            )
+        }
+    } else {
+        messageStreamAdaptor(params.outerName, params.memberName)
+    }
+}
+
+private fun initialResponsePayload(
+    codegenContext: ServerCodegenContext,
+    protocol: ServerProtocol,
+    params: EventStreamBodyParams,
+): Writable {
+    return if (protocol.httpBindingResolver.handlesEventStreamInitialResponse(params.operationShape)) {
+        val serializer = protocol.structuredDataSerializer().operationOutputSerializer(params.operationShape)!!
+        writable {
+            rustTemplate(
+                "#{Bytes}::from(#{serializer}(&output)?)",
+                "serializer" to serializer,
+                "Bytes" to RuntimeType.Bytes,
+            )
+        }
+    } else {
+        val outputShape = params.operationShape.outputShape(codegenContext.model)
+        val emptyPayloadFn = protocol.structuredDataSerializer().unsetStructure(outputShape)
+        writable {
+            rustTemplate(
+                "#{Bytes}::from(#{empty_payload_fn}())",
+                "Bytes" to RuntimeType.Bytes,
+                "empty_payload_fn" to emptyPayloadFn,
+            )
+        }
+    }
+}
+
+private fun messageStreamAdaptor(
+    outerName: String,
+    memberName: String,
+) = writable {
+    rust("$outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer)")
 }

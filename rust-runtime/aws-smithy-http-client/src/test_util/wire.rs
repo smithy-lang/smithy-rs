@@ -338,7 +338,7 @@ impl WireMockServer {
     /// **Note**: This must be used in tandem with [`Self::dns_resolver`]
     pub fn http_client(&self) -> SharedHttpClient {
         let resolver = self.dns_resolver();
-        crate::client::build_with_tcp_conn_fn(None, move || {
+        crate::client::build_with_tcp_conn_fn(None, None, move || {
             hyper_util::client::legacy::connect::HttpConnector::new_with_resolver(
                 resolver.clone().0,
             )

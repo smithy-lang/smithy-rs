@@ -50,6 +50,7 @@ class CargoTomlGenerator(
     private val moduleLicense: String?,
     private val moduleRepository: String?,
     private val minimumSupportedRustVersion: String?,
+    private val protocolId: String?,
     private val writer: RustWriter,
     private val manifestCustomizations: ManifestCustomizations = emptyMap(),
     private val dependencies: List<CargoDependency> = emptyList(),
@@ -57,6 +58,7 @@ class CargoTomlGenerator(
 ) {
     constructor(
         settings: CoreRustSettings,
+        protocolId: String?,
         writer: RustWriter,
         manifestCustomizations: ManifestCustomizations,
         dependencies: List<CargoDependency>,
@@ -69,6 +71,7 @@ class CargoTomlGenerator(
         settings.license,
         settings.moduleRepository,
         settings.minimumSupportedRustVersion,
+        protocolId,
         writer,
         manifestCustomizations,
         dependencies,
@@ -98,6 +101,7 @@ class CargoTomlGenerator(
                                 "smithy" to
                                     listOfNotNull(
                                         "codegen-version" to Version.fromDefaultResource().gitHash,
+                                        "protocol" to protocolId,
                                     ).toMap(),
                             ).toMap(),
                     ).toMap(),

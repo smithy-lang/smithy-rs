@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.SymbolProvider
 import software.amazon.smithy.codegen.core.WriterDelegator
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.DEV_ONLY_FEATURES
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
@@ -141,6 +142,7 @@ open class RustCrate(
         manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>,
         requireDocs: Boolean = true,
+        protocolId: ShapeId? = null,
     ) {
         injectInlineDependencies()
         inner.finalize(
@@ -150,6 +152,7 @@ open class RustCrate(
             libRsCustomizations,
             this.features.toList(),
             requireDocs,
+            protocolId,
         )
     }
 
@@ -274,6 +277,7 @@ fun WriterDelegator<RustWriter>.finalize(
     libRsCustomizations: List<LibRsCustomization>,
     features: List<Feature>,
     requireDocs: Boolean,
+    protocolId: ShapeId? = null,
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") {
         LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
@@ -288,6 +292,7 @@ fun WriterDelegator<RustWriter>.finalize(
         val cargoToml =
             CargoTomlGenerator(
                 settings,
+                protocolId.toString(),
                 it,
                 manifestCustomizations,
                 cargoDependencies,

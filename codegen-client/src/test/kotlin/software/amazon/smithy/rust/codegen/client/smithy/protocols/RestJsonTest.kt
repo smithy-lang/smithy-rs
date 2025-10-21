@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import kotlin.io.path.readText
 
 internal class RestJsonTest {
     val model =
@@ -78,7 +79,12 @@ internal class RestJsonTest {
 
     @Test
     fun `generate a rest json service that compiles`() {
-        clientIntegrationTest(model) { _, _ -> }
+        val testDir = clientIntegrationTest(model) { _, _ -> }
+
+        // test the generated metadata
+        val cargoToml = testDir.resolve("Cargo.toml").readText()
+        assert(cargoToml.contains("codegen-version =")) { cargoToml }
+        assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
     }
 
     @Test

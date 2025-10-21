@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 rpcv2cbor_extras = { workspace = true }
+rpcv2cbor_extras_no_initial_response = { workspace = true }
 tokio = { version = "1", features = ["full"] }
 aws-smithy-eventstream = { workspace = true }
 aws-smithy-http = { workspace = true }
