@@ -15,7 +15,7 @@ pub struct BddNode {
 //TODO(bdd): Should probably make P, C, and R statically typed, but need to write those types first
 /// Evaluates a BDD to resolve an endpoint result
 ///
-/// # Arguments
+/// Arguments
 /// * `nodes` - Array of BDD nodes
 /// * `root_ref` - Root reference to start evaluation
 /// * `params` - Parameters for condition evaluation
@@ -23,7 +23,7 @@ pub struct BddNode {
 /// * `results` - Array of possible results
 /// * `condition_evaluator` - Function to evaluate conditions
 ///
-/// # Returns
+/// Returns
 /// * `Some(&R)` - Result if evaluation succeeds
 /// * `None` - No match found (terminal reached)
 pub fn evaluate_bdd<P, C, R: Clone>(

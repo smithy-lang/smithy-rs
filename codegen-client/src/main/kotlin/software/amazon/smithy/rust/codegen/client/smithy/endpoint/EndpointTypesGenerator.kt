@@ -25,8 +25,9 @@ class EndpointTypesGenerator(
     private val codegenContext: ClientCodegenContext,
     private val rules: EndpointRuleSet?,
     val tests: List<EndpointTestCase>,
+    private val bddParameters: Parameters?,
 ) {
-    val params: Parameters = rules?.parameters ?: Parameters.builder().build()
+    val params: Parameters = bddParameters ?: rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val stdlib =
@@ -37,13 +38,19 @@ class EndpointTypesGenerator(
         fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
             val index = EndpointRulesetIndex.of(codegenContext.model)
 
-            // If service has BDD trait, don't use rule-based generation
-            if (index.hasEndpointBddTrait(codegenContext.serviceShape)) {
-                return EndpointTypesGenerator(codegenContext, null, index.endpointTests(codegenContext.serviceShape))
+            // If service has BDD trait, extract parameters from it
+            val bddTrait = index.getEndpointBddTrait(codegenContext.serviceShape)
+            if (bddTrait != null) {
+                return EndpointTypesGenerator(
+                    codegenContext,
+                    null,
+                    index.endpointTests(codegenContext.serviceShape),
+                    bddTrait.parameters,
+                )
             }
 
             val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
-            return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape))
+            return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape), null)
         }
     }
 
