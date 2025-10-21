@@ -120,6 +120,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun ignoreUnsupportedConstraints(enabled: Boolean = true): Builder {
+                settings.add(IgnoreUnsupportedConstraints(enabled))
+                return this
+            }
+
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
@@ -146,6 +151,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("http-1x", enabled)
+                    .build()
+        }
+
+        private data class IgnoreUnsupportedConstraints(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("ignoreUnsupportedConstraints", enabled)
                     .build()
         }
 
