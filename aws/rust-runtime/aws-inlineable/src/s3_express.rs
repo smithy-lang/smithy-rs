@@ -521,7 +521,7 @@ pub(crate) mod identity_provider {
                         .push(AwsCredentialFeature::S3ExpressBucket);
 
                     Ok((
-                        Identity::new(data.clone(), data.expiry()),
+                        Identity::from(data.clone()),
                         data.expiry().unwrap(),
                     ))
                 })
@@ -637,9 +637,21 @@ pub(crate) mod identity_provider {
         use super::*;
         use aws_credential_types::{AwsCredentialFeature, Credentials};
 
+        // NOTE: The S3ExpressBucket feature embedding is tested through integration tests
+        // in aws/sdk/integration-tests/s3/tests/express.rs which call the full identity
+        // provider flow including DefaultS3ExpressIdentityProvider::identity().
+        // 
+        // A unit test calling identity() directly would require extensive mocking of:
+        // - RuntimeComponents with identity resolvers and caches
+        // - ConfigBag with endpoint params
+        // - The CreateSession API call
+        //
+        // The integration tests provide better coverage of the actual feature embedding
+        // behavior in realistic scenarios.
+
         #[test]
-        fn test_s3express_credentials_contain_feature() {
-            // Create test SessionCredentials
+        fn test_session_credentials_conversion() {
+            // Verify SessionCredentials can be converted to Credentials
             let session_creds = SessionCredentials::builder()
                 .access_key_id("test_access_key")
                 .secret_access_key("test_secret_key")
@@ -648,61 +660,12 @@ pub(crate) mod identity_provider {
                 .build()
                 .expect("valid session credentials");
 
-            // Convert to Credentials (simulating what happens in the identity provider)
-            let mut credentials = Credentials::try_from(session_creds).expect("conversion should succeed");
+            let credentials =
+                Credentials::try_from(session_creds).expect("conversion should succeed");
 
-            // Embed the S3ExpressBucket feature (this is what the identity provider does)
-            credentials
-                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
-                .push(AwsCredentialFeature::S3ExpressBucket);
-
-            // Verify the feature is present in the credentials
-            let features = credentials
-                .get_property::<Vec<AwsCredentialFeature>>()
-                .expect("features should be present");
-
-            assert_eq!(features.len(), 1, "should have exactly one feature");
-            assert!(
-                matches!(features[0], AwsCredentialFeature::S3ExpressBucket),
-                "feature should be S3ExpressBucket"
-            );
-        }
-
-        #[test]
-        fn test_s3express_credentials_feature_in_property_vector() {
-            // Create test SessionCredentials
-            let session_creds = SessionCredentials::builder()
-                .access_key_id("test_key")
-                .secret_access_key("test_secret")
-                .session_token("test_token")
-                .expiration(aws_smithy_types::DateTime::from_secs(2000))
-                .build()
-                .expect("valid session credentials");
-
-            // Convert to Credentials
-            let mut credentials = Credentials::try_from(session_creds).expect("conversion should succeed");
-
-            // Initially, there should be no features
-            assert!(
-                credentials.get_property::<Vec<AwsCredentialFeature>>().is_none(),
-                "credentials should not have features initially"
-            );
-
-            // Embed the S3ExpressBucket feature
-            credentials
-                .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
-                .push(AwsCredentialFeature::S3ExpressBucket);
-
-            // Verify the feature vector exists and contains the feature
-            let features = credentials
-                .get_property::<Vec<AwsCredentialFeature>>()
-                .expect("features vector should exist after embedding");
-
-            assert_eq!(features.len(), 1, "should have exactly one feature");
-            assert!(
-                matches!(features[0], AwsCredentialFeature::S3ExpressBucket),
-                "feature should be S3ExpressBucket"
-            );
+            assert_eq!(credentials.access_key_id(), "test_access_key");
+            assert_eq!(credentials.secret_access_key(), "test_secret_key");
+            assert_eq!(credentials.session_token(), Some("test_session_token"));
         }
     }
 }

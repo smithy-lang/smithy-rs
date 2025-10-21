@@ -37,6 +37,7 @@ async fn create_session_request_should_not_include_x_amz_s3session_token() {
     let conf = Config::builder()
         .http_client(http_client)
         .region(Region::new("us-west-2"))
+        .with_test_defaults()
         .credentials_provider(::aws_credential_types::Credentials::for_tests_with_session_token())
         .build();
     let client = Client::from_conf(conf);
@@ -76,24 +77,6 @@ async fn mixed_auths() {
         .await;
     dbg!(result).expect("success");
 
-    // Verify metric "J" is tracked for S3 Express bucket operations
-    let requests = http_client.take_requests();
-    let express_request = requests
-        .iter()
-        .find(|req| {
-            req.uri()
-                .path()
-                .contains("s3express-test-bucket--usw2-az1--x-s3")
-        })
-        .expect("should have S3 Express request");
-    let ua = express_request
-        .headers()
-        .get("x-amz-user-agent")
-        .expect("User-Agent should be present")
-        .to_str()
-        .unwrap();
-    assert_ua_contains_metric_values(ua, &["J"]);
-
     // A call to a regular bucket, and request headers should not contain `x-amz-s3session-token`.
     let result = client
         .list_objects_v2()
@@ -101,19 +84,6 @@ async fn mixed_auths() {
         .send()
         .await;
     dbg!(result).expect("success");
-
-    // Verify metric "J" is NOT tracked for regular S3 bucket operations
-    let regular_request = requests
-        .iter()
-        .find(|req| req.uri().path().contains("regular-test-bucket"))
-        .expect("should have regular S3 request");
-    let ua = regular_request
-        .headers()
-        .get("x-amz-user-agent")
-        .expect("User-Agent should be present")
-        .to_str()
-        .unwrap();
-    assert_ua_does_not_contain_metric_values(ua, &["J"]);
 
     // A call to another S3 Express bucket where we should again see two request/response pairs,
     // one for the `create_session` API and the other for `list_objects_v2` in S3 Express bucket.
@@ -133,10 +103,16 @@ async fn mixed_auths() {
         .await;
     dbg!(result).expect("success");
 
+    // Validate headers and body, then verify User-Agent metrics
     http_client
         .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
         .await
         .unwrap();
+    
+    // Note: After validate_body_and_headers, we can't access http_client anymore
+    // The User-Agent metric verification was moved to separate dedicated tests:
+    // - test_s3express_bucket_includes_metric_j
+    // - test_regular_bucket_excludes_metric_j
 }
 
 fn create_session_request() -> http_1x::Request<SdkBody> {
@@ -301,7 +277,7 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
         .await;
 
     let checksum_headers: Vec<_> = http_client
-        .take_requests()
+        .actual_requests()
         .last()
         .unwrap()
         .headers()
@@ -341,12 +317,77 @@ async fn default_checksum_should_be_none() {
         .chain(std::iter::once("content-md5".to_string()));
 
     assert!(!all_checksums.any(|checksum| http_client
-        .take_requests()
+        .actual_requests()
         .any(|req| req.headers().iter().any(|(key, _)| key == checksum))));
 }
 
 #[tokio::test]
-async fn disable_s3_express_session_auth_at_service_client_level() {
+async fn test_s3express_bucket_includes_metric_j() {
+    use aws_runtime::user_agent::test_util::assert_ua_contains_metric_values;
+
+    let http_client = ReplayingClient::from_file("tests/data/express/mixed-auths.json").unwrap();
+    let client = test_client(|b| b.http_client(http_client.clone())).await;
+
+    // Make a ListObjectsV2 call to an S3 Express bucket
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await;
+
+    // Capture the request and verify metric "J" is present in User-Agent
+    let requests = http_client.take_requests().await;
+    // Find the ListObjectsV2 request (not the CreateSession request)
+    let express_request = requests
+        .iter()
+        .find(|req| {
+            let uri = req.uri().to_string();
+            uri.contains("s3express-test-bucket--usw2-az1--x-s3") && uri.contains("list-type=2")
+        })
+        .expect("should have S3 Express ListObjectsV2 request");
+    
+    let ua = express_request
+        .headers()
+        .get("x-amz-user-agent")
+        .expect("User-Agent should be present")
+        .to_str()
+        .unwrap();
+    
+    assert_ua_contains_metric_values(ua, &["J"]);
+}
+
+#[tokio::test]
+async fn test_regular_bucket_excludes_metric_j() {
+    use aws_runtime::user_agent::test_util::assert_ua_does_not_contain_metric_values;
+
+    let (http_client, request) = capture_request(None);
+    let conf = Config::builder()
+        .http_client(http_client)
+        .region(Region::new("us-west-2"))
+        .with_test_defaults()
+        .build();
+    let client = Client::from_conf(conf);
+
+    // Make a GetObject call to a regular S3 bucket
+    let _ = client
+        .get_object()
+        .bucket("my-bucket")
+        .key("test-key")
+        .send()
+        .await;
+
+    // Capture the request and verify metric "J" is NOT present in User-Agent
+    let req = request.expect_request();
+    let ua = req
+        .headers()
+        .get("x-amz-user-agent")
+        .expect("User-Agent should be present");
+    
+    assert_ua_does_not_contain_metric_values(ua, &["J"]);
+}
+
+#[tokio::test]
+async fn test_disabled_session_auth_excludes_metric_j() {
     use aws_runtime::user_agent::test_util::assert_ua_does_not_contain_metric_values;
 
     let (http_client, request) = capture_request(None);
@@ -374,10 +415,32 @@ async fn disable_s3_express_session_auth_at_service_client_level() {
     let ua = req
         .headers()
         .get("x-amz-user-agent")
-        .expect("User-Agent should be present")
-        .to_str()
-        .unwrap();
+        .expect("User-Agent should be present");
     assert_ua_does_not_contain_metric_values(ua, &["J"]);
+}
+
+#[tokio::test]
+async fn disable_s3_express_session_auth_at_service_client_level() {
+    let (http_client, request) = capture_request(None);
+    let conf = Config::builder()
+        .http_client(http_client)
+        .region(Region::new("us-west-2"))
+        .with_test_defaults()
+        .disable_s3_express_session_auth(true)
+        .build();
+    let client = Client::from_conf(conf);
+
+    let _ = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await;
+
+    let req = request.expect_request();
+    assert!(
+        req.headers().get("x-amz-create-session-mode").is_none(),
+        "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
+    );
 }
 
 #[tokio::test]
