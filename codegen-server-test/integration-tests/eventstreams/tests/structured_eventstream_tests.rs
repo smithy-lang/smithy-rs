@@ -233,7 +233,7 @@ async fn streaming_operation_with_optional_data_handler(
             .unwrap()
             .streaming_operation_with_optional_data
             .events
-            .push(event.clone());
+            .push(event.message.clone());
     }
 
     Ok(output::StreamingOperationWithOptionalDataOutput::builder()
