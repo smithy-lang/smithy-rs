@@ -185,7 +185,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
             "Bytes" to CargoDependency.Bytes.toType(),
             "Cow" to RuntimeType.Cow,
-            "DateTime" to RuntimeType.dateTime(runtimeConfig),
+            "DateTime" to httpDeps.smithyTypesModule().resolve("DateTime"),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
             "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
             "HttpBody" to httpDeps.httpBodyModule(),
