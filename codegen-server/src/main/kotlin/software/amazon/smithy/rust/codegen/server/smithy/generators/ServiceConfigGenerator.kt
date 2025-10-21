@@ -151,7 +151,7 @@ class ServiceConfigGenerator(
     private val configMethods: List<ConfigMethod>,
 ) {
     private val crateName = codegenContext.moduleUseName()
-    private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
+    private val smithyHttpServer = codegenContext.httpDependencies().smithyHttpServer.toType()
     private val codegenScope =
         arrayOf(
             *preludeScope,

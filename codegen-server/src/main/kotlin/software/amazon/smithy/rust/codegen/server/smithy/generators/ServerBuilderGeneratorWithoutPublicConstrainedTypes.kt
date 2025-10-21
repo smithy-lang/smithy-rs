@@ -92,7 +92,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private val codegenScope =
         arrayOf(
-            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "RequestRejection" to protocol.requestRejection(codegenContext.httpDependencies()),
             "Structure" to structureSymbol,
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
