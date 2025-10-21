@@ -23,7 +23,7 @@ class ClientBuilderKindBehavior(val codegenContext: CodegenContext) : Instantiat
     override fun hasFallibleBuilder(shape: StructureShape): Boolean =
         BuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
-    override fun setterName(memberShape: MemberShape): String = memberShape.setterName()
+    override fun setterName(memberShape: MemberShape): String = memberShape.setterName(codegenContext.symbolProvider)
 
     override fun doesSetterTakeInOption(memberShape: MemberShape): Boolean = true
 }

@@ -138,4 +138,60 @@ class FluentClientGeneratorTest {
 
         clientIntegrationTest(model)
     }
+
+    @Test
+    fun `meta field gets renamed to meta_value with correct setter`() {
+        val model =
+            """
+            namespace com.example
+            use aws.protocols#awsJson1_0
+
+            @awsJson1_0
+            service TestService {
+                operations: [TestOperation],
+                version: "1"
+            }
+
+            operation TestOperation { input: TestInput }
+            structure TestInput {
+               meta: String,
+               other: String
+            }
+            """.asSmithyModel()
+
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
+            rustCrate.integrationTest("meta_field_renamed") {
+                val moduleName = codegenContext.moduleUseName()
+                rustTemplate(
+                    """
+                    ##[test]
+                    fn test_meta_field_accessors() {
+                        let config = $moduleName::Config::builder()
+                            .endpoint_url("http://localhost:1234")
+                            .http_client(#{NeverClient}::new())
+                            .build();
+                        let client = $moduleName::Client::from_conf(config);
+
+                        // Test the renamed field and setter
+                        let builder = client.test_operation()
+                            .meta_value("test_meta")
+                            .set_meta_value(Some("test_meta_2".to_string()))
+                            .other("other_value");
+
+                        // Verify getter returns correct value
+                        assert_eq!(*builder.get_meta_value(), Some("test_meta_2".to_string()));
+                        assert_eq!(*builder.get_other(), Some("other_value".to_string()));
+
+                        // Build the input and verify field is accessible
+                        let input = builder.as_input();
+                        assert_eq!(*input.get_meta_value(), Some("test_meta_2".to_string()));
+                    }
+                    """,
+                    "NeverClient" to
+                        CargoDependency.smithyHttpClientTestUtil(codegenContext.runtimeConfig).toType()
+                            .resolve("test_util::NeverClient"),
+                )
+            }
+        }
+    }
 }
