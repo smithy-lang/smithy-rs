@@ -237,8 +237,11 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
         operationShapesThatMustHaveValidationException(model, service)
             .filter {
-                !it.errors.contains(defaultValidationExceptionShapeId) &&
-                    it.errors.none { error ->
+                val errors = it.getErrors(service)
+                !errors.contains(defaultValidationExceptionShapeId) &&
+                    !errors
+                        .contains(validationExceptionShapeId) &&
+                    errors.none { error ->
                         model
                             .expectShape(error)
                             .hasTrait(ValidationExceptionTrait.ID)
