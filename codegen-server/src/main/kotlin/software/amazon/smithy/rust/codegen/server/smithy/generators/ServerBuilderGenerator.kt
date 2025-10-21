@@ -153,6 +153,7 @@ class ServerBuilderGenerator(
     private val serverBuilderConstraintViolations =
         ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
+    private val smithyTypes = codegenContext.httpDependencies().smithyTypesModule()
 
     private val codegenScope =
         arrayOf(
@@ -545,6 +546,7 @@ class ServerBuilderGenerator(
                             runtimeConfig,
                             symbolProvider,
                             publicConstrainedTypes,
+                            smithyTypes,
                         )
                     } else {
                         // 2b. If the member is `@required` and has no `@default` value, the user must set a value;

@@ -22,9 +22,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestSymbolProvider
 
 class ServerHttpSensitivityGeneratorTest {
+    private val smithyHttpServerType = ServerCargoDependency.smithyHttpServer(TestRuntimeConfig).toType()
     private val codegenScope =
         arrayOf(
-            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(TestRuntimeConfig).toType(),
+            "SmithyHttpServer" to smithyHttpServerType,
             "Http" to CargoDependency.Http.toType(),
         )
 
@@ -52,7 +53,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
@@ -100,7 +101,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
@@ -150,7 +151,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
@@ -199,7 +200,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
@@ -245,7 +246,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val querySensitivity = generator.findQuerySensitivity(input)
@@ -278,7 +279,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
@@ -328,7 +329,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
@@ -378,7 +379,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
@@ -411,7 +412,7 @@ class ServerHttpSensitivityGeneratorTest {
 
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
@@ -465,7 +466,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val inputShape = operation.inputShape(model)
         val headerData = generator.findHeaderSensitivity(inputShape)
@@ -519,7 +520,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val uri = operation.getTrait<HttpTrait>()!!.uri
@@ -569,7 +570,7 @@ class ServerHttpSensitivityGeneratorTest {
             }
             """.asSmithyModel()
         val operation = model.operationShapes.toList()[0]
-        val generator = ServerHttpSensitivityGenerator(model, operation, TestRuntimeConfig)
+        val generator = ServerHttpSensitivityGenerator(model, operation, smithyHttpServerType)
 
         val input = generator.input()!!
         val uri = operation.getTrait<HttpTrait>()!!.uri

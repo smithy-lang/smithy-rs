@@ -47,7 +47,7 @@ internal class ServerHttp1xConfigTest {
     fun `http1x defaults to false when not specified`() {
         serverIntegrationTest(
             baseModel,
-            IntegrationTestParams(command = {}), // Skip cargo compilation
+            IntegrationTestParams(command = {}),
         ) { codegenContext, _ ->
             assertFalse(codegenContext.settings.codegenConfig.http1x)
         }
@@ -66,7 +66,7 @@ internal class ServerHttp1xConfigTest {
                                 .withMember("http-1x", true)
                                 .build(),
                         ).build(),
-                command = {}, // Skip cargo compilation
+                command = {},
             ),
         ) { codegenContext, _ ->
             assertTrue(codegenContext.settings.codegenConfig.http1x)
@@ -86,7 +86,7 @@ internal class ServerHttp1xConfigTest {
                                 .withMember("http-1x", false)
                                 .build(),
                         ).build(),
-                command = {}, // Skip cargo compilation
+                command = {},
             ),
         ) { codegenContext, _ ->
             assertFalse(codegenContext.settings.codegenConfig.http1x)
@@ -97,7 +97,7 @@ internal class ServerHttp1xConfigTest {
     fun `httpDependencies returns correct dependencies when http1x is disabled`() {
         serverIntegrationTest(
             baseModel,
-            IntegrationTestParams(command = {}), // Skip cargo compilation
+            IntegrationTestParams(command = {}),
         ) { codegenContext, _ ->
             val httpDeps = codegenContext.httpDependencies()
 
@@ -122,7 +122,7 @@ internal class ServerHttp1xConfigTest {
                                 .withMember("http-1x", true)
                                 .build(),
                         ).build(),
-                command = {}, // Skip cargo compilation
+                command = {},
             ),
         ) { codegenContext, _ ->
             val httpDeps = codegenContext.httpDependencies()
@@ -141,7 +141,7 @@ internal class ServerHttp1xConfigTest {
     fun `httpDependencies helper methods return correct RuntimeTypes`() {
         serverIntegrationTest(
             baseModel,
-            IntegrationTestParams(command = {}), // Skip cargo compilation
+            IntegrationTestParams(command = {}),
         ) { codegenContext, _ ->
             val httpDeps = codegenContext.httpDependencies()
 
@@ -160,7 +160,7 @@ internal class ServerHttp1xConfigTest {
         val testDir =
             serverIntegrationTest(
                 baseModel,
-                IntegrationTestParams(command = {}), // Skip cargo compilation
+                IntegrationTestParams(command = {}),
             )
 
         val cargoToml = testDir.resolve("Cargo.toml").toFile()
@@ -201,7 +201,7 @@ internal class ServerHttp1xConfigTest {
                                     .withMember("http-1x", true)
                                     .build(),
                             ).build(),
-                    command = {}, // Skip cargo compilation
+                    command = {},
                 ),
             )
 

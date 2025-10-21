@@ -33,7 +33,9 @@ object ServerCargoDependency {
         CargoDependency("hyper", CratesIo("0.14.12"), scope = DependencyScope.Dev)
 
     fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
-    fun smithyHttpLegacyServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-legacy-server")
+
+    fun smithyHttpLegacyServer(runtimeConfig: RuntimeConfig) =
+        runtimeConfig.smithyRuntimeCrate("smithy-http-legacy-server")
 
     fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
 }

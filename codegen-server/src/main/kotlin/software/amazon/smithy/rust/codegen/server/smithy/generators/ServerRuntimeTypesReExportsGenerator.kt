@@ -8,7 +8,6 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
-import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 
 class ServerRuntimeTypesReExportsGenerator(
     codegenContext: CodegenContext,

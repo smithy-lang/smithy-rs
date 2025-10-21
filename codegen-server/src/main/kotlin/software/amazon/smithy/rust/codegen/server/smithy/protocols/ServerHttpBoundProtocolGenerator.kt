@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -76,7 +77,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.logging.Logger
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 
 data class StreamPayloadSerializerParams(
     val codegenContext: ServerCodegenContext,
@@ -205,7 +205,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
             "http" to httpDeps.httpModule(),
             "Tracing" to RuntimeType.Tracing,
-            *preludeScope
+            *preludeScope,
         )
 
     fun generateTraitImpls(
@@ -552,11 +552,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
             // For HTTP 1.x, use the wrap_stream function instead of Body::wrap_stream method
             // since Body is just a type alias for hyper::body::Incoming
-            val wrapStreamCall = if (codegenContext.settings.codegenConfig.http1x) {
-                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
-            } else {
-                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
-            }
+            val wrapStreamCall =
+                if (codegenContext.settings.codegenConfig.http1x) {
+                    "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
+                } else {
+                    "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
+                }
 
             withBlockTemplate(
                 wrapStreamCall,
@@ -1465,8 +1466,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 B: #{HttpBody}::Body<Data = #{Bytes}::Bytes> + #{Send} + #{Sync} + 'static,
                 B::Error: Into<::aws_smithy_types::body::Error> + 'static,
                 """
-            }
-            else {
+            } else {
                 "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
             }
         } else {
@@ -1476,8 +1476,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private fun streamingBodyInto() =
         if (codegenContext.isHttp1()) {
             "#{SmithyTypes}::byte_stream::ByteStream::from_body_1_x(body)"
-        }
-        else {
+        } else {
             "body.into()"
         }
 
