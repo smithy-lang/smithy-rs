@@ -49,7 +49,7 @@ class ServerOperationGenerator(
     fun render(writer: RustWriter) {
         writer.documentShape(operation, model)
 
-        val generator = ServerHttpSensitivityGenerator(model, operation, runtimeConfig, httpDeps.httpModule())
+        val generator = ServerHttpSensitivityGenerator(model, operation, httpDeps.smithyHttpServer.toType(), httpDeps.httpModule())
         val requestFmt = generator.requestFmt()
         val responseFmt = generator.responseFmt()
 

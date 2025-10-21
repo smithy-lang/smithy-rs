@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
@@ -14,14 +13,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  * For a runtime type that is used in the client, or in both the client and the server, use [RuntimeType] directly.
  */
 object ServerRuntimeType {
-    fun router(runtimeConfig: RuntimeConfig) =
-        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("routing::Router")
+    fun router(httpDependencies: HttpDependencies) =
+        httpDependencies.smithyHttpServer.toType().resolve("routing::Router")
 
     fun protocol(
         name: String,
         path: String,
-        runtimeConfig: RuntimeConfig,
-    ) = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType().resolve("protocol::$path::$name")
+        httpDependencies: HttpDependencies,
+    ) = httpDependencies.smithyHttpServer.toType().resolve("protocol::$path::$name")
 
-    fun protocol(runtimeConfig: RuntimeConfig) = protocol("Protocol", "", runtimeConfig)
+    fun protocol(httpDependencies: HttpDependencies) = protocol("Protocol", "", httpDependencies)
 }

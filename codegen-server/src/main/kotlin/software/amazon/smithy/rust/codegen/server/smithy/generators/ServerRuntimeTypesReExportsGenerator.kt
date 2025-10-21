@@ -13,10 +13,10 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 class ServerRuntimeTypesReExportsGenerator(
     codegenContext: CodegenContext,
 ) {
-    private val runtimeConfig = codegenContext.runtimeConfig
+    private val serverCodegenContext = codegenContext as software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
     private val codegenScope =
         arrayOf(
-            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+            "SmithyHttpServer" to serverCodegenContext.httpDependencies().smithyHttpServer.toType(),
         )
 
     fun render(writer: RustWriter) {

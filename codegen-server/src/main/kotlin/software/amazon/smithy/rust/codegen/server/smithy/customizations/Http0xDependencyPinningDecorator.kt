@@ -43,7 +43,7 @@ class Http0xDependencyPinningDecorator : ServerCodegenDecorator {
         // Get dependencies to pin from HttpDependencies
         val dependenciesToPin = codegenContext.httpDependencies().dependenciesToPin().toMutableMap()
 
-        // Check if the service has event stream operations
+        // Check if the service has event stream operations to enable `event-stream` feature.
         val serviceShape = codegenContext.serviceShape
         val hasEventStreams = serviceShape.hasEventStreamOperations(codegenContext.model)
 

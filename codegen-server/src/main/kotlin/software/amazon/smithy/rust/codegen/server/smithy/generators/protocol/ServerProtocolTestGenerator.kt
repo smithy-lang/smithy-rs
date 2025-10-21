@@ -293,7 +293,7 @@ class ServerProtocolTestGenerator(
             "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
-            "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
+            "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
             "decode_body_data" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "decode_body_data"),
         )
 
