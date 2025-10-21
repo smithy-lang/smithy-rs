@@ -341,6 +341,8 @@ async fn default_checksum_should_be_none() {
 
 #[tokio::test]
 async fn disable_s3_express_session_auth_at_service_client_level() {
+    use aws_runtime::user_agent::test_util::assert_ua_does_not_contain_metric_values;
+
     let (http_client, request) = capture_request(None);
     let conf = Config::builder()
         .http_client(http_client)
@@ -367,10 +369,7 @@ async fn disable_s3_express_session_auth_at_service_client_level() {
         .headers()
         .get("x-amz-user-agent")
         .expect("User-Agent should be present");
-    assert!(
-        !ua.to_str().unwrap().contains("J"),
-        "S3 Express bucket with session auth disabled should not have metric J in User-Agent"
-    );
+    assert_ua_does_not_contain_metric_values(ua.to_str().unwrap(), &["J"]);
 }
 
 #[tokio::test]
