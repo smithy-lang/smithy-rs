@@ -137,7 +137,7 @@ pub(crate) fn parse_json_credentials(
              "Type": "AWS-HMAC",
              "AccessKeyId" : "accessKey",
              "SecretAccessKey" : "secret",
-             "Token" : "token",
+             "Token | SessionToken" : "token",
              "AccountId" : "111122223333",
              "Expiration" : "....",
              "LastUpdated" : "2009-11-23T00:00:00Z"
@@ -153,7 +153,10 @@ pub(crate) fn parse_json_credentials(
             {
                 secret_access_key = Some(value.to_unescaped()?);
             }
-            (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("Token") => {
+            (key, Token::ValueString { value, .. })
+                if key.eq_ignore_ascii_case("Token")
+                    || key.eq_ignore_ascii_case("SessionToken") =>
+            {
                 session_token = Some(value.to_unescaped()?);
             }
             (key, Token::ValueString { value, .. }) if key.eq_ignore_ascii_case("AccountId") => {
