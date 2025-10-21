@@ -48,11 +48,14 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
             ),
         )
 
+        val httpDeps = codegenContext.httpDependencies()
+        val smithyHttpServerCrate = httpDeps.smithyHttpServer.name
+
         rustCrate.mergeFeature(
             Feature(
                 "aws-lambda",
                 false,
-                listOf("aws-smithy-http-server/aws-lambda"),
+                listOf("$smithyHttpServerCrate/aws-lambda"),
             ),
         )
 
@@ -60,13 +63,12 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
             Feature(
                 "request-id",
                 true,
-                listOf("aws-smithy-http-server/request-id"),
+                listOf("$smithyHttpServerCrate/request-id"),
             ),
         )
 
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
-            val httpDeps = codegenContext.httpDependencies()
             rustTemplate(
                 """
                 pub use #{DisplayErrorContext};
