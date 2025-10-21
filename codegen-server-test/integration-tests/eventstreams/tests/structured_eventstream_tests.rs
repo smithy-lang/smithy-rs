@@ -28,9 +28,18 @@ struct StreamingOperationWithInitialDataState {
 }
 
 #[derive(Debug, Default, Clone)]
+struct StreamingOperationWithOptionalDataState {
+    optional_data: Option<String>,
+    events: Vec<Events>,
+    #[allow(dead_code)]
+    num_calls: usize,
+}
+
+#[derive(Debug, Default, Clone)]
 struct ServerState {
     streaming_operation: StreamingOperationState,
     streaming_operation_with_initial_data: StreamingOperationWithInitialDataState,
+    streaming_operation_with_optional_data: StreamingOperationWithOptionalDataState,
 }
 
 struct TestServer {
@@ -43,6 +52,8 @@ impl TestServer {
         let state = Arc::new(Mutex::new(ServerState::default()));
         let handler_state = state.clone();
         let handler_state2 = state.clone();
+        let handler_state3 = state.clone();
+        let handler_state4 = state.clone();
 
         let config = RpcV2CborServiceConfig::builder().build();
         let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
@@ -53,6 +64,14 @@ impl TestServer {
             .streaming_operation_with_initial_data(move |input| {
                 let state = handler_state2.clone();
                 streaming_operation_with_initial_data_handler(input, state)
+            })
+            .streaming_operation_with_initial_response(move |input| {
+                let state = handler_state3.clone();
+                streaming_operation_with_initial_response_handler(input, state)
+            })
+            .streaming_operation_with_optional_data(move |input| {
+                let state = handler_state4.clone();
+                streaming_operation_with_optional_data_handler(input, state)
             })
             .build_unchecked();
 
@@ -95,6 +114,24 @@ impl TestServer {
             .unwrap()
             .streaming_operation_with_initial_data
             .initial_data
+            .clone()
+    }
+
+    fn streaming_operation_with_optional_data_events(&self) -> Vec<Events> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .events
+            .clone()
+    }
+
+    fn optional_data(&self) -> Option<String> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .optional_data
             .clone()
     }
 }
@@ -152,12 +189,63 @@ async fn streaming_operation_with_initial_data_handler(
         .unwrap())
 }
 
+async fn streaming_operation_with_initial_response_handler(
+    mut input: input::StreamingOperationWithInitialResponseInput,
+    _state: Arc<Mutex<ServerState>>,
+) -> Result<
+    output::StreamingOperationWithInitialResponseOutput,
+    error::StreamingOperationWithInitialResponseError,
+> {
+    let _ev = input.events.recv().await;
+
+    Ok(
+        output::StreamingOperationWithInitialResponseOutput::builder()
+            .response_data("test response data".to_string())
+            .events(EventStreamSender::once(Ok(Events::A(Event {}))))
+            .build()
+            .unwrap(),
+    )
+}
+
+async fn streaming_operation_with_optional_data_handler(
+    mut input: input::StreamingOperationWithOptionalDataInput,
+    state: Arc<Mutex<ServerState>>,
+) -> Result<
+    output::StreamingOperationWithOptionalDataOutput,
+    error::StreamingOperationWithOptionalDataError,
+> {
+    state.lock().unwrap().streaming_operation.num_calls += 1;
+    state
+        .lock()
+        .unwrap()
+        .streaming_operation_with_optional_data
+        .optional_data = input.optional_data;
+
+    let ev = input.events.recv().await;
+
+    if let Ok(Some(event)) = &ev {
+        state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_optional_data
+            .events
+            .push(event.clone());
+    }
+
+    Ok(output::StreamingOperationWithOptionalDataOutput::builder()
+        .optional_response_data(Some("optional response".to_string()))
+        .events(EventStreamSender::once(Ok(Events::A(Event {}))))
+        .build()
+        .unwrap())
+}
+
 /// TestHarness that launches a server and attaches a client
 ///
 /// It allows sending event stream messages and reading the results.
 struct TestHarness {
     server: TestServer,
     client: ManualEventStreamClient,
+    initial_response: Option<Message>,
 }
 
 impl TestHarness {
@@ -172,7 +260,11 @@ impl TestHarness {
         .await
         .unwrap();
 
-        Self { server, client }
+        Self {
+            server,
+            client,
+            initial_response: None,
+        }
     }
 
     async fn send_initial_request(&mut self) {
@@ -191,7 +283,15 @@ impl TestHarness {
     }
 
     async fn expect_message(&mut self) -> Message {
-        self.client.recv().await.unwrap().unwrap()
+        let msg = self.client.recv().await.unwrap().unwrap();
+
+        // If this is an initial-response, store it and get the next message
+        if get_event_type(&msg) == "initial-response" {
+            self.initial_response = Some(msg);
+            self.client.recv().await.unwrap().unwrap()
+        } else {
+            msg
+        }
     }
 
     async fn recv(&mut self) -> Option<Result<Message, RecvError>> {
@@ -269,6 +369,14 @@ async fn test_streaming_operation_with_initial_request() {
 
     let resp = harness.expect_message().await;
     assert_eq!(get_event_type(&resp), "A");
+
+    // Check that initial-response was received
+    assert!(harness.initial_response.is_some());
+    assert_eq!(
+        get_event_type(harness.initial_response.as_ref().unwrap()),
+        "initial-response"
+    );
+
     assert_eq!(
         harness.server.streaming_operation_events(),
         vec![Events::A(Event {})]
@@ -329,4 +437,129 @@ async fn test_streaming_operation_with_initial_data_missing() {
             .streaming_operation_with_initial_data_events(),
         vec![]
     );
+}
+
+/// Test that when alwaysSendEventStreamInitialResponse is disabled, no initial-response is sent
+#[tokio::test]
+async fn test_server_no_initial_response_when_disabled() {
+    use rpcv2cbor_extras_no_initial_response::output;
+    use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
+
+    let config = RpcV2CborServiceConfig::builder().build();
+    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
+            let _ev = input.events.recv().await;
+            Ok(output::StreamingOperationWithInitialDataOutput::builder()
+                .events(aws_smithy_http::event_stream::EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response::model::Events::A(rpcv2cbor_extras_no_initial_response::model::Event {}))))
+                .build()
+                .unwrap())
+        })
+        .build_unchecked();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        let make_service = app.into_make_service();
+        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+            .unwrap()
+            .http2_only(true)
+            .serve(make_service);
+        server.await.unwrap();
+    });
+
+    let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";
+    let mut client = ManualEventStreamClient::connect_to_service(
+        addr,
+        path,
+        vec![("Smithy-Protocol", "rpc-v2-cbor")],
+    )
+    .await
+    .unwrap();
+
+    // Send initial data and event
+    let msg = build_initial_data_message("test-data");
+    client.send(msg).await.ok();
+    let msg = build_event("A");
+    client.send(msg).await.unwrap();
+
+    // Should receive event directly (no initial-response)
+    let resp = client.recv().await.unwrap().unwrap();
+    assert_eq!(
+        get_event_type(&resp),
+        "A",
+        "Should receive event directly without initial-response"
+    );
+}
+
+/// Test that server sends initial-response for RPC protocols
+#[tokio::test]
+async fn test_server_sends_initial_response() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
+    harness.send_initial_data("test-data").await;
+    harness.send_event("A").await;
+
+    // Server should send initial-response before any events
+    let initial_response = harness.client.try_recv_initial_response().await;
+    assert!(
+        initial_response.is_some(),
+        "Server should send initial-response message"
+    );
+
+    let initial_msg = initial_response.unwrap().unwrap();
+    assert_eq!(get_event_type(&initial_msg), "initial-response");
+
+    // Then we should get the actual event
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+}
+
+/// Test that server sends initial-response with actual data for operations that have non-eventstream output members
+#[tokio::test]
+async fn test_server_sends_initial_response_with_data() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialResponse").await;
+    harness.send_event("A").await;
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+
+    // Check that initial-response was received with actual data
+    assert!(harness.initial_response.is_some());
+    let initial_resp = harness.initial_response.as_ref().unwrap();
+    assert_eq!(get_event_type(initial_resp), "initial-response");
+
+    // The initial response should contain serialized responseData
+    assert!(!initial_resp.payload().is_empty());
+
+    // Parse the CBOR payload to verify the responseData field
+    let decoder = &mut aws_smithy_cbor::Decoder::new(initial_resp.payload());
+    decoder.map().unwrap(); // Start reading the map
+
+    // Read the key-value pair
+    let key = decoder.str().unwrap();
+    assert_eq!(key, "responseData");
+    let value = decoder.string().unwrap();
+    assert_eq!(value, "test response data");
+}
+
+/// Test streaming operation with optional data - verifies Smithy spec requirement:
+/// "Clients and servers MUST NOT fail if an initial-request or initial-response
+/// is not received for an initial message that contains only optional members."
+#[tokio::test]
+async fn test_streaming_operation_with_optional_data() {
+    let mut harness = TestHarness::new("StreamingOperationWithOptionalData").await;
+
+    // Send event without providing optional data - should work
+    harness.send_event("A").await;
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+    assert_eq!(
+        harness
+            .server
+            .streaming_operation_with_optional_data_events(),
+        vec![Events::A(Event {})]
+    );
+    // Verify optional data was not provided
+    assert_eq!(harness.server.optional_data(), None);
 }

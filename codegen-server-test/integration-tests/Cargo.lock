@@ -449,6 +449,7 @@ dependencies = [
  "hyper 1.7.0",
  "hyper-util",
  "rpcv2cbor_extras",
+ "rpcv2cbor_extras_no_initial_response",
  "tokio",
  "tokio-stream",
 ]
@@ -1276,6 +1277,26 @@ dependencies = [
 
 [[package]]
 name = "rpcv2cbor_extras"
+version = "0.0.1"
+dependencies = [
+ "aws-smithy-cbor",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-http-server",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "bytes",
+ "futures-util",
+ "http 0.2.12",
+ "hyper 0.14.32",
+ "mime",
+ "pin-project-lite",
+ "tower",
+ "tracing",
+]
+
+[[package]]
+name = "rpcv2cbor_extras_no_initial_response"
 version = "0.0.1"
 dependencies = [
  "aws-smithy-cbor",
