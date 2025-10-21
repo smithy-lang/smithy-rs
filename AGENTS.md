@@ -137,6 +137,21 @@ gh issue comment <number> --repo smithy-lang/smithy-rs --body 'markdown content 
 - Always ask for confirmation before posting comments
 - Always start comments with `*Comment from Claude*` in italics
 
+**Run PR Bot and Canary workflows:**
+
+```bash
+# Get PR info first
+gh pr view <PR_NUMBER> --repo smithy-lang/smithy-rs --json headRefOid,number
+
+# Run PR Bot (generates codegen diff and doc preview)
+gh workflow run "Invoke PR Bot as Maintainer" --repo smithy-lang/smithy-rs \
+  -f pull_number=<PR_NUMBER> -f commit_sha=<HEAD_SHA>
+
+# Run Canary (tests SDK generation and integration)
+gh workflow run "Invoke Canary as Maintainer" --repo smithy-lang/smithy-rs \
+  -f pull_request_number=<PR_NUMBER> -f commit_sha=<HEAD_SHA>
+```
+
 ## Investigation Patterns
 
 **Before implementing changes:**
