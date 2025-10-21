@@ -77,16 +77,22 @@ async fn mixed_auths() {
     dbg!(result).expect("success");
 
     // Verify metric "J" is tracked for S3 Express bucket operations
-    let requests = http_client.actual_requests();
+    let requests = http_client.take_requests();
     let express_request = requests
         .iter()
-        .find(|req| req.uri().path().contains("s3express-test-bucket--usw2-az1--x-s3"))
+        .find(|req| {
+            req.uri()
+                .path()
+                .contains("s3express-test-bucket--usw2-az1--x-s3")
+        })
         .expect("should have S3 Express request");
     let ua = express_request
         .headers()
         .get("x-amz-user-agent")
-        .expect("User-Agent should be present");
-    assert_ua_contains_metric_values(ua.to_str().unwrap(), &["J"]);
+        .expect("User-Agent should be present")
+        .to_str()
+        .unwrap();
+    assert_ua_contains_metric_values(ua, &["J"]);
 
     // A call to a regular bucket, and request headers should not contain `x-amz-s3session-token`.
     let result = client
@@ -104,8 +110,10 @@ async fn mixed_auths() {
     let ua = regular_request
         .headers()
         .get("x-amz-user-agent")
-        .expect("User-Agent should be present");
-    assert_ua_does_not_contain_metric_values(ua.to_str().unwrap(), &["J"]);
+        .expect("User-Agent should be present")
+        .to_str()
+        .unwrap();
+    assert_ua_does_not_contain_metric_values(ua, &["J"]);
 
     // A call to another S3 Express bucket where we should again see two request/response pairs,
     // one for the `create_session` API and the other for `list_objects_v2` in S3 Express bucket.
@@ -293,7 +301,7 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
         .await;
 
     let checksum_headers: Vec<_> = http_client
-        .actual_requests()
+        .take_requests()
         .last()
         .unwrap()
         .headers()
@@ -333,7 +341,7 @@ async fn default_checksum_should_be_none() {
         .chain(std::iter::once("content-md5".to_string()));
 
     assert!(!all_checksums.any(|checksum| http_client
-        .actual_requests()
+        .take_requests()
         .any(|req| req.headers().iter().any(|(key, _)| key == checksum))));
 }
 
@@ -366,8 +374,10 @@ async fn disable_s3_express_session_auth_at_service_client_level() {
     let ua = req
         .headers()
         .get("x-amz-user-agent")
-        .expect("User-Agent should be present");
-    assert_ua_does_not_contain_metric_values(ua.to_str().unwrap(), &["J"]);
+        .expect("User-Agent should be present")
+        .to_str()
+        .unwrap();
+    assert_ua_does_not_contain_metric_values(ua, &["J"]);
 }
 
 #[tokio::test]
