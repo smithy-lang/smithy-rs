@@ -663,9 +663,14 @@ pub(crate) mod identity_provider {
             );
 
             let identity = Identity::from(credentials.clone());
-            assert!(identity.data::<Credentials>().is_some(), "Identity should contain Credentials");
+            assert!(
+                identity.data::<Credentials>().is_some(), 
+                "Identity should contain Credentials"
+            );
             
-            let identity_creds = identity.data::<Credentials>().expect("should have credentials");
+            let identity_creds = identity
+                .data::<Credentials>()
+                .expect("should have credentials");
             let identity_features = identity_creds
                 .get_property::<Vec<AwsCredentialFeature>>()
                 .expect("features should be present in Identity's credentials");
