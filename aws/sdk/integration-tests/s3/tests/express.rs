@@ -7,6 +7,9 @@ use std::time::{Duration, SystemTime};
 
 use aws_config::timeout::TimeoutConfig;
 use aws_config::Region;
+use aws_runtime::user_agent::test_util::{
+    assert_ua_contains_metric_values, assert_ua_does_not_contain_metric_values,
+};
 use aws_sdk_s3::config::endpoint::{EndpointFuture, Params, ResolveEndpoint};
 use aws_sdk_s3::config::{Builder, Credentials};
 use aws_sdk_s3::presigning::PresigningConfig;
@@ -54,6 +57,10 @@ async fn create_session_request_should_not_include_x_amz_s3session_token() {
     );
     assert!(req.headers().get("x-amz-security-token").is_some());
     assert!(req.headers().get("x-amz-s3session-token").is_none());
+
+    // Verify that the User-Agent contains the S3ExpressBucket metric "J"
+    let user_agent = req.headers().get("x-amz-user-agent").unwrap();
+    assert_ua_contains_metric_values(user_agent, &["J"]);
 }
 
 #[tokio::test]
@@ -332,6 +339,10 @@ async fn disable_s3_express_session_auth_at_service_client_level() {
         req.headers().get("x-amz-create-session-mode").is_none(),
         "x-amz-create-session-mode should not appear in headers when S3 Express session auth is disabled"
     );
+
+    // Verify that the User-Agent does NOT contain the S3ExpressBucket metric "J" when session auth is disabled
+    let user_agent = req.headers().get("x-amz-user-agent").unwrap();
+    assert_ua_does_not_contain_metric_values(user_agent, &["J"]);
 }
 
 #[tokio::test]
@@ -418,6 +429,10 @@ async fn support_customer_overriding_express_credentials_provider() {
         .expect("x-amz-security-token should be present");
     assert_eq!(expected_session_token, actual_session_token);
     assert!(req.headers().get("x-amz-s3session-token").is_none());
+
+    // Verify that the User-Agent does NOT contain the S3ExpressBucket metric "J" for regular buckets
+    let user_agent = req.headers().get("x-amz-user-agent").unwrap();
+    assert_ua_does_not_contain_metric_values(user_agent, &["J"]);
 }
 
 #[tokio::test]
