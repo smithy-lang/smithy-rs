@@ -640,7 +640,6 @@ pub(crate) mod identity_provider {
 
         #[test]
         fn test_s3express_identity_contains_feature() {
-            // Verify SessionCredentials conversion to Credentials embeds S3ExpressBucket feature
             let session_creds = SessionCredentials::builder()
                 .access_key_id("test_access_key")
                 .secret_access_key("test_secret_key")
@@ -651,29 +650,33 @@ pub(crate) mod identity_provider {
 
             let mut credentials =
                 Credentials::try_from(session_creds).expect("conversion should succeed");
-
-            // Embed the feature as done in the identity() method
             credentials
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::S3ExpressBucket);
 
-            // Verify the feature is present in credentials
-            let features = credentials
+            let creds_features = credentials
                 .get_property::<Vec<AwsCredentialFeature>>()
-                .expect("features should be present");
+                .expect("features should be present in credentials");
             assert!(
-                features.contains(&AwsCredentialFeature::S3ExpressBucket),
-                "S3ExpressBucket feature should be embedded in credentials"
+                creds_features.contains(&AwsCredentialFeature::S3ExpressBucket),
+                "S3ExpressBucket feature should be embedded in Credentials"
             );
 
-            // The feature is successfully embedded in credentials
-            // When converted to Identity, the credentials (with features) are preserved
-            // This is sufficient to verify the feature tracking mechanism works
+            let identity = Identity::from(credentials.clone());
+            assert!(identity.data::<Credentials>().is_some(), "Identity should contain Credentials");
+            
+            let identity_creds = identity.data::<Credentials>().expect("should have credentials");
+            let identity_features = identity_creds
+                .get_property::<Vec<AwsCredentialFeature>>()
+                .expect("features should be present in Identity's credentials");
+            assert!(
+                identity_features.contains(&AwsCredentialFeature::S3ExpressBucket),
+                "S3ExpressBucket feature should be present in Identity's Credentials after conversion"
+            );
         }
 
         #[test]
         fn test_session_credentials_conversion() {
-            // Verify SessionCredentials can be converted to Credentials
             let session_creds = SessionCredentials::builder()
                 .access_key_id("test_access_key")
                 .secret_access_key("test_secret_key")
@@ -846,18 +849,13 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
-            // Disable option is set from service client.
             let disable_s3_express_session_token = crate::config::DisableS3ExpressSessionAuth(true);
 
-            // An environment variable says the session auth is _not_ disabled, but it will be
-            // overruled by what is in `layer`.
             let actual = config(
                 Some(disable_s3_express_session_token),
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
             );
 
-            // A config layer from this runtime plugin should not provide a new `DisableS3ExpressSessionAuth`
-            // if the disable option is set from service client.
             assert!(actual
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
@@ -865,7 +863,6 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
-            // An environment variable says session auth is disabled
             let actual = config(
                 None,
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
@@ -882,9 +879,7 @@ pub(crate) mod runtime_plugin {
         #[should_panic]
         #[test]
         fn disable_option_set_from_profile_file_should_take_the_lowest_precedence() {
-            // TODO(aws-sdk-rust#1073): Implement a test that mimics only setting
-            //  `s3_disable_express_session_auth` in a profile file
-            todo!()
+            todo!("TODO(aws-sdk-rust#1073): Implement profile file test")
         }
 
         #[test]
@@ -939,13 +934,11 @@ pub(crate) mod runtime_plugin {
                 .time_source(aws_smithy_async::time::SystemTimeSource::new())
                 .build();
 
-            // `RuntimeComponentsBuilder` from `S3ExpressRuntimePlugin` should not provide an S3Express identity resolver.
             let runtime_components_builder = runtime_components_builder(config.clone());
             assert!(runtime_components_builder
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
                 .is_none());
 
-            // Get the S3Express identity resolver from the service config.
             let express_identity_resolver = config
                 .runtime_components
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
@@ -958,7 +951,6 @@ pub(crate) mod runtime_plugin {
                 .await
                 .unwrap();
 
-            // Verify credentials are the one generated by the S3Express identity resolver user provided.
             assert_eq!(
                 expected_access_key_id,
                 creds.data::<Credentials>().unwrap().access_key_id()
