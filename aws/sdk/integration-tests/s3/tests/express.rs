@@ -58,9 +58,10 @@ async fn create_session_request_should_not_include_x_amz_s3session_token() {
     assert!(req.headers().get("x-amz-security-token").is_some());
     assert!(req.headers().get("x-amz-s3session-token").is_none());
 
-    // Verify that the User-Agent contains the S3ExpressBucket metric "J"
+    // The first request uses regular SigV4 credentials (for CreateSession), not S3 Express credentials,
+    // so metric "J" should NOT be present yet. It will appear on subsequent requests that use S3 Express credentials.
     let user_agent = req.headers().get("x-amz-user-agent").unwrap();
-    assert_ua_contains_metric_values(user_agent, &["J"]);
+    assert_ua_does_not_contain_metric_values(user_agent, &["J"]);
 }
 
 #[tokio::test]
@@ -109,6 +110,19 @@ async fn mixed_auths() {
         .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
         .await
         .unwrap();
+
+    // Verify that requests using S3 Express credentials contain metric "J"
+    let requests = http_client.actual_requests();
+    let s3express_requests: Vec<_> = requests
+        .iter()
+        .filter(|req| req.headers().get("x-amz-s3session-token").is_some())
+        .collect();
+    
+    assert!(!s3express_requests.is_empty(), "Should have S3 Express requests");
+    for req in s3express_requests {
+        let user_agent = req.headers().get("x-amz-user-agent").unwrap();
+        assert_ua_contains_metric_values(user_agent, &["J"]);
+    }
 }
 
 fn create_session_request() -> http_1x::Request<SdkBody> {
