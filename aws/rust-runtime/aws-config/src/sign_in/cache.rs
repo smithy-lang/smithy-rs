@@ -100,7 +100,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
             "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
             "sessionToken": "AQoEXAMPLEH4aoAH0gNCAPyJxz4BlCFFxWNE1OPTgk5TthT+FvwqnKwRcOIfrRh3c/LTo6UDdyJwOOvEVPvLXCrrrUtdnniCEXAMPLE/IvU1dYUg2RVAJBanLiHb4IgRmpRV3zrkuWJOgQs8IZZaIv2BXIa2R4OlgkBN9bkUDNCJiBeb/AXlzBBko7b15fjrBs2+cTQtpZ3CYWFXG8C5zqx37wnOE49mRl/+OtkIKGO7fAE"
             "accountId": "012345678901",
-            "expiration": "2025-09-14T04:05:45Z",
+            "expiresAt": "2025-09-14T04:05:45Z",
           },
           "tokenType": "aws_sigv4",
           "refreshToken": "<opaque string>",
@@ -114,7 +114,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
     let mut secret_access_key = None;
     let mut session_token = None;
     let mut account_id = None;
-    let mut expiration = None;
+    let mut expires_at = None;
     let mut token_type = None;
     let mut refresh_token = None;
     let mut identity_token = None;
@@ -161,7 +161,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
                                                 secret_access_key = Some(c.secret_access_key.into_owned());
                                                 session_token = Some(c.session_token.into_owned());
                                                 account_id = c.account_id.map(|a| a.into_owned());
-                                                expiration = Some(c.expiration);
+                                                expires_at = Some(c.expiration);
                                             }
                                             crate::json_credentials::JsonCredentials::Error { code, message } => {
                                                 return Err(Error::JsonError(format!("error parsing `accessToken`: {} - {}", code, message).into()))
@@ -233,7 +233,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
     let client_id = client_id.ok_or(Error::MissingField("clientId"))?;
     let dpop_key = dpop_key.ok_or(Error::MissingField("dpopKey"))?;
     let refresh_token = refresh_token.ok_or(Error::MissingField("refreshToken"))?;
-    let expiration = expiration.ok_or(Error::MissingField("expiration"))?;
+    let expires_at = expires_at.ok_or(Error::MissingField("expiresAt"))?;
 
     let token_type = match token_type.as_deref() {
         Some(t) if t.eq_ignore_ascii_case("aws_sigv4") => SessionTokenType::AwsSigv4,
@@ -246,7 +246,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
         .session_token(session_token)
         .account_id(account_id)
         .provider_name("Sign-In")
-        .expiry(expiration)
+        .expiry(expires_at)
         .build();
 
     Ok(SignInToken {
@@ -292,7 +292,7 @@ mod tests {
                 "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
                 "sessionToken": "session-token",
                 "accountId": "012345678901",
-                "expiration": "2021-12-25T21:30:00Z"
+                "expiresAt": "2021-12-25T21:30:00Z"
             },
             "tokenType": "aws_sigv4",
             "refreshToken": "refresh-token-value",
@@ -344,7 +344,7 @@ mod tests {
                 "secretAccessKey": "SECRET",
                 "sessionToken": "TOKEN",
                 "accountId": "123456789012",
-                "expiration": "2021-12-25T21:30:00Z"
+                "expiresAt": "2021-12-25T21:30:00Z"
             },
             "tokenType": "aws_sigv4",
             "dpopKey": "key"
@@ -363,7 +363,7 @@ mod tests {
                 "secretAccessKey": "SECRET",
                 "sessionToken": "TOKEN",
                 "accountId": "123456789012",
-                "expiration": "2021-12-25T21:30:00Z"
+                "expiresAt": "2021-12-25T21:30:00Z"
             },
             "tokenType": "aws_sigv4",
             "clientId": "client"
@@ -374,6 +374,42 @@ mod tests {
             "incorrect error: {:?}",
             err
         );
+    }
+
+    #[tokio::test]
+    async fn load_token_from_cache() {
+        use std::collections::HashMap;
+        let token_json = r#"{
+            "accessToken": {
+                "accessKeyId": "AKIAIOSFODNN7EXAMPLE",
+                "secretAccessKey": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                "sessionToken": "session-token",
+                "accountId": "012345678901",
+                "expiresAt": "2021-12-25T21:30:00Z"
+            },
+            "tokenType": "aws_sigv4",
+            "refreshToken": "refresh-token-value",
+            "identityToken": "identity-token-value",
+            "clientId": "aws:signin:::cli/same-device",
+            "dpopKey": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----\n"
+        }"#;
+
+        let env = Env::from_slice(&[("HOME", "/home/user")]);
+        let fs = Fs::from_map(HashMap::from([(
+            "/home/user/.aws/login/cache/36db1d138ff460920374e4c3d8e01f53f9f73537e89c88d639f68393df0e2726.json".to_string(),
+            token_json.as_bytes().to_vec(),
+        )]));
+
+        let token = load_cached_token(&env, &fs, "arn:aws:iam::0123456789012:user/Admin")
+            .await
+            .expect("success");
+
+        assert_eq!("AKIAIOSFODNN7EXAMPLE", token.access_token.access_key_id());
+        assert_eq!(
+            "012345678901",
+            token.access_token.account_id().unwrap().as_str()
+        );
+        assert_eq!("aws:signin:::cli/same-device", token.client_id.as_str());
     }
 
     #[tokio::test]

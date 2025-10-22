@@ -7,6 +7,7 @@ use aws_credential_types::Credentials;
 use std::fmt;
 use zeroize::Zeroizing;
 
+/// A login session token created by CLI and loaded from cache
 pub(super) struct SignInToken {
     pub(super) access_token: Credentials,
     pub(super) token_type: SessionTokenType,

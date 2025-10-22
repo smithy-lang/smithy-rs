@@ -9,10 +9,11 @@ mod cache;
 mod token;
 
 use crate::provider_config::ProviderConfig;
+use crate::sign_in::cache::{load_cached_token, SignInTokenError};
+use crate::sign_in::token::SignInToken;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
 use aws_types::os_shim_internal::{Env, Fs};
-
 // TODO(sign-in): fill in additional details on this provider, examples, and links to documentation
 
 /// AWS credentials provider vended by AWS Sign-In. This provider allows users to acquire AWS
@@ -39,6 +40,11 @@ impl SignInCredentialProvider {
             session_arn: session_arn.into(),
             provider_config: None,
         }
+    }
+
+    async fn resolve_token(&self) -> Result<SignInToken, SignInTokenError> {
+        load_cached_token(&self.env, &self.fs, &self.session_arn).await
+        // todo!()
     }
 }
 
