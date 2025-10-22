@@ -7,9 +7,7 @@ use std::time::{Duration, SystemTime};
 
 use aws_config::timeout::TimeoutConfig;
 use aws_config::Region;
-use aws_runtime::user_agent::test_util::{
-    assert_ua_contains_metric_values, assert_ua_does_not_contain_metric_values,
-};
+use aws_runtime::user_agent::test_util::assert_ua_does_not_contain_metric_values;
 use aws_sdk_s3::config::endpoint::{EndpointFuture, Params, ResolveEndpoint};
 use aws_sdk_s3::config::{Builder, Credentials};
 use aws_sdk_s3::presigning::PresigningConfig;
