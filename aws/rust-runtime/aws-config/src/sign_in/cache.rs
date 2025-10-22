@@ -15,6 +15,7 @@ use sha2::Digest;
 use sha2::Sha256;
 use std::borrow::Cow;
 use std::error::Error as StdError;
+use std::fmt;
 use std::path::Path;
 use std::path::PathBuf;
 use zeroize::Zeroizing;
@@ -74,7 +75,43 @@ pub(super) enum SignInTokenError {
     JsonError(Box<dyn StdError + Send + Sync>),
     MissingField(&'static str),
     NoHomeDirectory,
-    Other(Cow<'static, str>),
+    ExpiredToken,
+    Other(Box<dyn StdError + Send + Sync>),
+}
+
+impl fmt::Display for SignInTokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToFormatDateTime { .. } => write!(f, "failed to format date time"),
+            Self::InvalidField { field, .. } => write!(
+                f,
+                "invalid value for the `{field}` field in the cached Sign-In token file"
+            ),
+            Self::IoError { what, path, .. } => write!(f, "failed to {what} `{}`", path.display()),
+            Self::JsonError(_) => write!(f, "invalid JSON in cached Sign-In token file"),
+            Self::MissingField(field) => {
+                write!(f, "missing field `{field}` in cached Sign-In token file")
+            }
+            Self::NoHomeDirectory => write!(f, "couldn't resolve a home directory"),
+            Self::ExpiredToken => write!(f, "cached Sign-In token is expired"),
+            Self::Other(_) => write!(f, "failed to load cached Sign-In token"),
+        }
+    }
+}
+
+impl StdError for SignInTokenError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            SignInTokenError::FailedToFormatDateTime { source } => Some(source.as_ref()),
+            SignInTokenError::InvalidField { source, .. } => Some(source.as_ref()),
+            SignInTokenError::IoError { source, .. } => Some(source),
+            SignInTokenError::JsonError(source) => Some(source.as_ref()),
+            SignInTokenError::MissingField(_) => None,
+            SignInTokenError::NoHomeDirectory => None,
+            SignInTokenError::ExpiredToken => None,
+            SignInTokenError::Other(source) => Some(source.as_ref()),
+        }
+    }
 }
 
 impl From<EscapeError> for SignInTokenError {

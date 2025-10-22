@@ -5,9 +5,11 @@
 
 use aws_credential_types::Credentials;
 use std::fmt;
+use std::time::SystemTime;
 use zeroize::Zeroizing;
 
 /// A login session token created by CLI and loaded from cache
+#[derive(Clone)]
 pub(super) struct SignInToken {
     pub(super) access_token: Credentials,
     pub(super) token_type: SessionTokenType,
@@ -15,6 +17,14 @@ pub(super) struct SignInToken {
     pub(super) refresh_token: Zeroizing<String>,
     pub(super) client_id: String,
     pub(super) dpop_key: Zeroizing<String>,
+}
+
+impl SignInToken {
+    pub(super) fn expires_at(&self) -> SystemTime {
+        self.access_token
+            .expiry()
+            .expect("sign-in token access token expected expiry")
+    }
 }
 
 impl fmt::Debug for SignInToken {
@@ -30,7 +40,7 @@ impl fmt::Debug for SignInToken {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) enum SessionTokenType {
     AwsSigv4,
 }
