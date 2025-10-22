@@ -42,6 +42,7 @@ class ServerRequestBindingGenerator(
                     codegenContext,
                 ),
             ) + additionalHttpBindingCustomizations,
+            httpRuntimeType = codegenContext.httpDependencies().httpType(),
         )
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =
