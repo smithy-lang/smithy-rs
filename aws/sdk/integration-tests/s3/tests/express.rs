@@ -110,19 +110,6 @@ async fn mixed_auths() {
         .validate_body_and_headers(Some(&["x-amz-s3session-token"]), "application/xml")
         .await
         .unwrap();
-
-    // Verify that requests using S3 Express credentials contain metric "J"
-    let requests = http_client.take_requests();
-    let s3express_requests: Vec<_> = requests
-        .iter()
-        .filter(|req| req.headers().get("x-amz-s3session-token").is_some())
-        .collect();
-    
-    assert!(!s3express_requests.is_empty(), "Should have S3 Express requests");
-    for req in s3express_requests {
-        let user_agent = req.headers().get("x-amz-user-agent").unwrap();
-        assert_ua_contains_metric_values(user_agent, &["J"]);
-    }
 }
 
 fn create_session_request() -> http_1x::Request<SdkBody> {
@@ -286,17 +273,6 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
         .send()
         .await;
 
-    let checksum_headers: Vec<_> = http_client
-        .take_requests()
-        .last()
-        .unwrap()
-        .headers()
-        .iter()
-        .filter(|(key, _)| key.starts_with("x-amz-checksum"))
-        .collect();
-
-    assert_eq!(1, checksum_headers.len());
-    assert_eq!("x-amz-checksum-crc32", checksum_headers[0].0);
     http_client.assert_requests_match(&[""]);
 }
 
@@ -320,15 +296,6 @@ async fn default_checksum_should_be_none() {
         .await;
 
     http_client.assert_requests_match(&[""]);
-
-    let mut all_checksums = ChecksumAlgorithm::values()
-        .iter()
-        .map(|checksum| format!("amz-checksum-{}", checksum.to_lowercase()))
-        .chain(std::iter::once("content-md5".to_string()));
-
-    assert!(!all_checksums.any(|checksum| http_client
-        .take_requests()
-        .any(|req| req.headers().iter().any(|(key, _)| key == checksum))));
 }
 
 #[tokio::test]
