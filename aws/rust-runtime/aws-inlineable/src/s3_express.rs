@@ -664,10 +664,10 @@ pub(crate) mod identity_provider {
 
             let identity = Identity::from(credentials.clone());
             assert!(
-                identity.data::<Credentials>().is_some(), 
+                identity.data::<Credentials>().is_some(),
                 "Identity should contain Credentials"
             );
-            
+
             let identity_creds = identity
                 .data::<Credentials>()
                 .expect("should have credentials");
