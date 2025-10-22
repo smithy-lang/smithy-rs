@@ -124,6 +124,7 @@ class HttpBindingGenerator(
     private val symbolProvider: SymbolProvider,
     private val operationShape: OperationShape,
     private val customizations: List<HttpBindingCustomization> = listOf(),
+    private val httpRuntimeType: RuntimeType = RuntimeType.Http1x,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
@@ -535,8 +536,8 @@ class HttpBindingGenerator(
             val codegenScope =
                 arrayOf(
                     "BuildError" to runtimeConfig.operationBuildError(),
-                    HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder1x,
-                    HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder1x,
+                    HttpMessageType.REQUEST.name to httpRuntimeType.resolve("request::Builder"),
+                    HttpMessageType.RESPONSE.name to httpRuntimeType.resolve("response::Builder"),
                     "Shape" to shapeSymbol,
                 )
             rustBlockTemplate(
@@ -712,7 +713,7 @@ class HttpBindingGenerator(
                     builder = builder.header("$headerName", header_value);
 
                     """,
-                    "HeaderValue" to RuntimeType.Http1x.resolve("HeaderValue"),
+                    "HeaderValue" to httpRuntimeType.resolve("HeaderValue"),
                     "invalid_field_error" to renderErrorMessage("header_value"),
                 )
             }
@@ -767,8 +768,8 @@ class HttpBindingGenerator(
                 }
 
                 """,
-                "HeaderValue" to RuntimeType.Http1x.resolve("HeaderValue"),
-                "HeaderName" to RuntimeType.Http1x.resolve("HeaderName"),
+                "HeaderValue" to httpRuntimeType.resolve("HeaderValue"),
+                "HeaderName" to httpRuntimeType.resolve("HeaderName"),
                 "invalid_header_name" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
                         rust("""format!("`{k}` cannot be used as a header name: {err}")""")
