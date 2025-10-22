@@ -27,10 +27,9 @@ class EndpointBddGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
-    private val moduleUseName = codegenContext.moduleUseName()
 
     fun generateBddResolver(): RuntimeType {
-        return RuntimeType.forInlineFun("${serviceName}BddResolver", ClientRustModule.Config.endpoint) {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
             generateBddResolverImpl(this)
         }
     }
@@ -97,15 +96,15 @@ class EndpointBddGenerator(
             ];
 
             ##[derive(Debug)]
-            pub struct ${serviceName}BddResolver;
+            pub struct DefaultResolver;
 
-            impl ${serviceName}BddResolver {
+            impl DefaultResolver {
                 pub fn new() -> Self {
                     Self
                 }
             }
 
-            impl #{ServiceSpecificEndpointResolver} for ${serviceName}BddResolver {
+            impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                 fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
                     let result = evaluate_bdd(
                         &NODES,
