@@ -4,16 +4,19 @@
  */
 
 use crate::sign_in::token::{SessionTokenType, SignInToken};
+use crate::sign_in::PROVIDER_NAME;
 use aws_credential_types::Credentials;
 use aws_runtime::fs_util::home_dir;
 use aws_runtime::fs_util::Os;
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::{json_token_iter, EscapeError, Token};
+use aws_smithy_json::serialize::JsonObjectWriter;
+use aws_smithy_types::date_time::Format;
+use aws_smithy_types::DateTime;
 use aws_types::os_shim_internal::Env;
 use aws_types::os_shim_internal::Fs;
 use sha2::Digest;
 use sha2::Sha256;
-use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
 use std::path::Path;
@@ -21,6 +24,17 @@ use std::path::PathBuf;
 use zeroize::Zeroizing;
 
 const LOGIN_CACHE_DIRECTORY_ENV_VAR: &str = "AWS_LOGIN_IN_CACHE_DIRECTORY";
+
+/// Get the cache directory for Sign-In tokens
+fn get_cache_dir(env: &Env) -> Result<PathBuf, SignInTokenError> {
+    match env.get(LOGIN_CACHE_DIRECTORY_ENV_VAR).ok() {
+        Some(cache_dir) => Ok(PathBuf::from(cache_dir)),
+        None => {
+            let home = home_dir(env, Os::real()).ok_or(SignInTokenError::NoHomeDirectory)?;
+            Ok(PathBuf::from(home).join(".aws/login/cache"))
+        }
+    }
+}
 
 /// Determine the cached token path for a login session identifier.
 ///
@@ -40,13 +54,7 @@ pub(super) async fn load_cached_token(
     fs: &Fs,
     identifier: &str,
 ) -> Result<SignInToken, SignInTokenError> {
-    let cache_dir = match env.get(LOGIN_CACHE_DIRECTORY_ENV_VAR).ok() {
-        Some(cache_dir) => PathBuf::from(cache_dir),
-        None => {
-            let home = home_dir(env, Os::real()).ok_or(SignInTokenError::NoHomeDirectory)?;
-            PathBuf::from(home).join(".aws/login/cache")
-        }
-    };
+    let cache_dir = get_cache_dir(env)?;
     let path = cached_token_path(&cache_dir, identifier);
     let data = Zeroizing::new(fs.read_to_end(&path).await.map_err(|source| {
         SignInTokenError::IoError {
@@ -56,6 +64,69 @@ pub(super) async fn load_cached_token(
         }
     })?);
     parse_cached_token(&data)
+}
+
+/// Save the token for `identifier` to `~/.aws/login/cache/<hashofidentifier>.json`
+///
+/// The `identifier` is the `login_session` ARN to save the token for
+pub(super) async fn save_cached_token(
+    env: &Env,
+    fs: &Fs,
+    identifier: &str,
+    token: &SignInToken,
+) -> Result<(), SignInTokenError> {
+    let cache_dir = get_cache_dir(env)?;
+    let path = cached_token_path(&cache_dir, identifier);
+
+    let expiration = DateTime::from(token.expires_at())
+        .fmt(Format::DateTime)
+        .map_err(|e| SignInTokenError::FailedToFormatDateTime { source: e.into() })?;
+
+    let mut out = Zeroizing::new(String::new());
+    let mut writer = JsonObjectWriter::new(&mut out);
+
+    // Write accessToken object
+    let mut access_token = writer.key("accessToken").start_object();
+    access_token
+        .key("accessKeyId")
+        .string(token.access_token.access_key_id());
+    access_token
+        .key("secretAccessKey")
+        .string(token.access_token.secret_access_key());
+    access_token
+        .key("sessionToken")
+        .string(token.access_token.session_token().expect("session token"));
+    access_token.key("accountId").string(
+        token
+            .access_token
+            .account_id()
+            .expect("account id")
+            .as_str(),
+    );
+    access_token.key("expiresAt").string(&expiration);
+    access_token.finish();
+
+    writer
+        .key("tokenType")
+        .string(&token.token_type.to_string());
+    writer
+        .key("refreshToken")
+        .string(token.refresh_token.as_str());
+    if let Some(identity_token) = &token.identity_token {
+        writer.key("identityToken").string(identity_token);
+    }
+    writer.key("clientId").string(&token.client_id);
+    writer.key("dpopKey").string(token.dpop_key.as_str());
+    writer.finish();
+
+    fs.write(&path, out.as_bytes())
+        .await
+        .map_err(|source| SignInTokenError::IoError {
+            what: "write",
+            path,
+            source,
+        })?;
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -76,7 +147,22 @@ pub(super) enum SignInTokenError {
     MissingField(&'static str),
     NoHomeDirectory,
     ExpiredToken,
-    Other(Box<dyn StdError + Send + Sync>),
+    Other {
+        message: String,
+        source: Option<Box<dyn StdError + Send + Sync>>,
+    },
+}
+
+impl SignInTokenError {
+    pub(super) fn other(
+        message: impl Into<String>,
+        source: Option<Box<dyn StdError + Send + Sync>>,
+    ) -> Self {
+        Self::Other {
+            message: message.into(),
+            source,
+        }
+    }
 }
 
 impl fmt::Display for SignInTokenError {
@@ -94,7 +180,9 @@ impl fmt::Display for SignInTokenError {
             }
             Self::NoHomeDirectory => write!(f, "couldn't resolve a home directory"),
             Self::ExpiredToken => write!(f, "cached Sign-In token is expired"),
-            Self::Other(_) => write!(f, "failed to load cached Sign-In token"),
+            Self::Other { message, .. } => {
+                write!(f, "failed to load cached Sign-In token: {message}")
+            }
         }
     }
 }
@@ -109,7 +197,10 @@ impl StdError for SignInTokenError {
             SignInTokenError::MissingField(_) => None,
             SignInTokenError::NoHomeDirectory => None,
             SignInTokenError::ExpiredToken => None,
-            SignInTokenError::Other(source) => Some(source.as_ref()),
+            SignInTokenError::Other { source, .. } => match source {
+                Some(err) => Some(err.as_ref()),
+                None => None,
+            },
         }
     }
 }
@@ -160,8 +251,9 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
 
     let mut tokens = json_token_iter(cached_token_file_contents).peekable();
     if !matches!(tokens.next().transpose()?, Some(Token::StartObject { .. })) {
-        return Err(Error::Other(
-            "expected a JSON document starting with `{`".into(),
+        return Err(Error::other(
+            "expected a JSON document starting with `{`",
+            None,
         ));
     }
 
@@ -256,8 +348,9 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
                 skip_value(&mut tokens)?;
             }
             other => {
-                return Err(Error::Other(
-                    format!("expected object key, found: {:?}", other).into(),
+                return Err(Error::other(
+                    format!("expected object key, found: {:?}", other),
+                    None,
                 ));
             }
         }
@@ -274,7 +367,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
 
     let token_type = match token_type.as_deref() {
         Some(t) if t.eq_ignore_ascii_case("aws_sigv4") => SessionTokenType::AwsSigv4,
-        _ => return Err(Error::Other("invalid or missing tokenType".into())),
+        _ => return Err(Error::other("invalid or missing tokenType", None)),
     };
 
     let credentials = Credentials::builder()
@@ -282,7 +375,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
         .secret_access_key(secret_access_key)
         .session_token(session_token)
         .account_id(account_id)
-        .provider_name("Sign-In")
+        .provider_name(PROVIDER_NAME)
         .expiry(expires_at)
         .build();
 
