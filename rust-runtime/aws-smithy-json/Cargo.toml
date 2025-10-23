@@ -8,7 +8,7 @@ license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 
 [dependencies]
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
 
 [dev-dependencies]
 proptest = "1"

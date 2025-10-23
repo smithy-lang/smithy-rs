@@ -20,7 +20,7 @@ features = [
 ]
 
 [dependencies]
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-types = { path = "../aws-smithy-types" }
 
 [dev-dependencies]
 criterion = "0.5.1"
