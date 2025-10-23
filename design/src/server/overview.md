@@ -7,3 +7,4 @@ Smithy Rust provides the ability to generate a server whose operations are provi
 - [Accessing Un-modelled Data](./from_parts.md)
 - [The Anatomy of a Service](./anatomy.md)
 - [Generating Common Service Code](./code_generation.md)
+- [Validation Exceptions](./validation_exceptions.md)
