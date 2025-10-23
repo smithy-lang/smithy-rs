@@ -271,6 +271,17 @@ async fn default_checksum_should_be_crc32_for_operation_requiring_checksum() {
         .send()
         .await;
 
+    let checksum_headers: Vec<_> = http_client
+        .actual_requests()
+        .last()
+        .unwrap()
+        .headers()
+        .iter()
+        .filter(|(key, _)| key.starts_with("x-amz-checksum"))
+        .collect();
+    assert_eq!(1, checksum_headers.len());
+    assert_eq!("x-amz-checksum-crc32", checksum_headers[0].0);
+
     http_client.assert_requests_match(&[""]);
 }
 
@@ -294,6 +305,14 @@ async fn default_checksum_should_be_none() {
         .await;
 
     http_client.assert_requests_match(&[""]);
+
+    let mut all_checksums = ChecksumAlgorithm::values()
+        .iter()
+        .map(|checksum| format!("amz-checksum-{}", checksum.to_lowercase()))
+        .chain(std::iter::once("content-md5".to_string()));
+    assert!(!all_checksums.any(|checksum| http_client
+        .actual_requests()
+        .any(|req| req.headers().iter().any(|(key, _)| key == checksum))));
 }
 
 #[tokio::test]
