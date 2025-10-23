@@ -33,7 +33,7 @@ smithy {
     format.set(false)
 }
 
-val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
         CodegenTest(
             "crate#Config",
@@ -117,6 +117,18 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
 }
 // When iterating on protocol tests use this to speed up codegen:
 // .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
+
+val customCodegenTests = "custom-test-models".let { customModels ->
+    listOf(
+        CodegenTest(
+            "com.aws.example#CustomValidationExample",
+            "custom-validation-exception-example",
+            imports = listOf("$customModels/custom-validation-exception.smithy"),
+        ),
+    )
+}
+
+val allCodegenTests = commonCodegenTests + customCodegenTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
