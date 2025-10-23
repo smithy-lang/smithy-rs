@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy
 
+import software.amazon.smithy.framework.rust.ValidationExceptionTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -145,13 +146,23 @@ private sealed class UnsupportedConstraintMessageKind {
     }
 }
 
-private data class OperationWithConstrainedInputWithoutValidationException(val shape: OperationShape)
+private data class OperationWithConstrainedInputWithoutValidationException(
+    val shape: OperationShape,
+)
 
-private data class UnsupportedConstraintOnMemberShape(val shape: MemberShape, val constraintTrait: Trait) :
-    UnsupportedConstraintMessageKind()
+private data class OperationWithConstrainedInputWithMultipleValidationExceptions(
+    val shape: OperationShape,
+)
 
-private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(val shape: Shape, val constraintTrait: Trait) :
-    UnsupportedConstraintMessageKind()
+private data class UnsupportedConstraintOnMemberShape(
+    val shape: MemberShape,
+    val constraintTrait: Trait,
+) : UnsupportedConstraintMessageKind()
+
+private data class UnsupportedConstraintOnShapeReachableViaAnEventStream(
+    val shape: Shape,
+    val constraintTrait: Trait,
+) : UnsupportedConstraintMessageKind()
 
 private data class UnsupportedLengthTraitOnStreamingBlobShape(
     val shape: BlobShape,
@@ -159,11 +170,15 @@ private data class UnsupportedLengthTraitOnStreamingBlobShape(
     val streamingTrait: StreamingTrait,
 ) : UnsupportedConstraintMessageKind()
 
-private data class UnsupportedRangeTraitOnShape(val shape: Shape, val rangeTrait: RangeTrait) :
-    UnsupportedConstraintMessageKind()
+private data class UnsupportedRangeTraitOnShape(
+    val shape: Shape,
+    val rangeTrait: RangeTrait,
+) : UnsupportedConstraintMessageKind()
 
-private data class UnsupportedUniqueItemsTraitOnShape(val shape: Shape, val uniqueItemsTrait: UniqueItemsTrait) :
-    UnsupportedConstraintMessageKind()
+private data class UnsupportedUniqueItemsTraitOnShape(
+    val shape: Shape,
+    val uniqueItemsTrait: UniqueItemsTrait,
+) : UnsupportedConstraintMessageKind()
 
 private data class UnsupportedMapShapeReachableFromUniqueItemsList(
     val listShape: ListShape,
@@ -171,10 +186,18 @@ private data class UnsupportedMapShapeReachableFromUniqueItemsList(
     val mapShape: MapShape,
 ) : UnsupportedConstraintMessageKind()
 
-data class LogMessage(val level: Level, val message: String)
+data class LogMessage(
+    val level: Level,
+    val message: String,
+)
 
-data class ValidationResult(val shouldAbort: Boolean, val messages: List<LogMessage>) :
-    Throwable(message = messages.joinToString("\n") { it.message })
+data class ValidationResult(
+    val shouldAbort: Boolean,
+    val messages: List<LogMessage>,
+) : Throwable(message = messages.joinToString("\n") { it.message })
+
+private const val validationExceptionDocsErrorMessage =
+    "For documentation, see https://smithy-lang.github.io/smithy-rs/design/server/validation_exceptions.html"
 
 /*
  * Returns the set of operation shapes that must have a supported validation exception shape
@@ -185,15 +208,16 @@ fun operationShapesThatMustHaveValidationException(
     service: ServiceShape,
 ): Set<OperationShape> {
     val walker = DirectedWalker(model)
-    return walker.walkShapes(service)
+    return walker
+        .walkShapes(service)
         .filterIsInstance<OperationShape>()
         .asSequence()
         .filter { operationShape ->
             // Walk the shapes reachable via this operation input.
-            walker.walkShapes(operationShape.inputShape(model))
+            walker
+                .walkShapes(operationShape.inputShape(model))
                 .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() || it.hasEventStreamMember(model) }
-        }
-        .toSet()
+        }.toSet()
 }
 
 /**
@@ -205,13 +229,24 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
     validationExceptionShapeId: ShapeId,
 ): ValidationResult {
     // Traverse the model and error out if an operation uses constrained input, but it does not have
-    // `ValidationException` attached in `errors`. https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
+    // `ValidationException` or a structure with the @validationException trait attached in `errors`.
+    // https://github.com/smithy-lang/smithy-rs/pull/1199#discussion_r809424783
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1401): This check will go away once we add support for
     //  `disableDefaultValidation` set to `true`, allowing service owners to map from constraint violations to operation errors.
+    val defaultValidationExceptionShapeId = ShapeId.from("smithy.framework#ValidationException")
     val operationsWithConstrainedInputWithoutValidationExceptionSet =
         operationShapesThatMustHaveValidationException(model, service)
-            .filter { !it.errors.contains(validationExceptionShapeId) }
-            .map { OperationWithConstrainedInputWithoutValidationException(it) }
+            .filter {
+                val errors = it.getErrors(service)
+                !errors.contains(defaultValidationExceptionShapeId) &&
+                    !errors
+                        .contains(validationExceptionShapeId) &&
+                    errors.none { error ->
+                        model
+                            .expectShape(error)
+                            .hasTrait(ValidationExceptionTrait.ID)
+                    }
+            }.map { OperationWithConstrainedInputWithoutValidationException(it) }
             .toSet()
 
     val messages =
@@ -221,21 +256,132 @@ fun validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
                 """
                 Operation ${it.shape.id} takes in input that is constrained
                 (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html), and as such can fail with a
-                validation exception. You must model this behavior in the operation shape in your model file.
+                validation exception. You must model this behavior in the operation shape in your model file using
+                the default validation exception shown below, or by defining a custom validation exception.
+                $validationExceptionDocsErrorMessage
                 """.trimIndent().replace("\n", " ") +
                     """
 
                     ```smithy
-                    use $validationExceptionShapeId
+                    use $defaultValidationExceptionShapeId
 
                     operation ${it.shape.id.name} {
                         ...
-                        errors: [..., ${validationExceptionShapeId.name}] // <-- Add this.
+                        errors: [..., ${defaultValidationExceptionShapeId.name}] // <-- Add this.
                     }
                     ```
                     """.trimIndent(),
             )
         }
+
+    return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
+}
+
+/**
+ * Validate that all constrained operations have exactly one of: the default smithy.framework#ValidationException or a
+ * custom validation exception (shape with @validationException) attached to their errors.
+ */
+fun validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
+    model: Model,
+    service: ServiceShape,
+    validationExceptionShapeId: ShapeId,
+): ValidationResult {
+    val operationsWithConstrainedInputWithMultipleValidationExceptionSet =
+        operationShapesThatMustHaveValidationException(model, service)
+            .filter {
+                it.errors.count { error ->
+                    val errorShape = model.expectShape(error)
+                    errorShape.hasTrait(ValidationExceptionTrait.ID) || errorShape.id == validationExceptionShapeId
+                } > 1
+            }.map { OperationWithConstrainedInputWithMultipleValidationExceptions(it) }
+            .toSet()
+
+    val messages =
+        operationsWithConstrainedInputWithMultipleValidationExceptionSet.map {
+            LogMessage(
+                Level.SEVERE,
+                """
+                Cannot have multiple validation exceptions defined for a constrained operation.
+                Operation ${it.shape.id} takes in input that is constrained (https://awslabs.github.io/smithy/2.0/spec/constraint-traits.html),
+                and as such can fail with a validation exception. This must be modeled with a single validation exception.
+                $validationExceptionDocsErrorMessage
+                """.trimIndent(),
+            )
+        }
+
+    return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
+}
+
+private fun Shape.isReachableFromOperationErrors(model: Model): Boolean =
+    model.serviceShapes.any {
+        it.errorsSet.contains(this.id)
+    } || model.operationShapes.any { it.errorsSet.contains(this.id) }
+
+/**
+ * Restrict custom validation exceptions to just one and ensure default validation exception is not used if a custom
+ * validation exception is defined
+ */
+fun validateModelHasAtMostOneValidationException(
+    model: Model,
+    service: ServiceShape,
+): ValidationResult {
+    // Custom validation exception shapes that are defined AND used in input
+    val customValidationExceptionShapes =
+        model
+            .shapes()
+            .filter { it.hasTrait(ValidationExceptionTrait.ID) && it.isReachableFromOperationErrors(model) }
+            .toList()
+
+    val messages = mutableListOf<LogMessage>()
+
+    if (customValidationExceptionShapes.isEmpty()) {
+        return ValidationResult(shouldAbort = false, messages)
+    }
+
+    if (customValidationExceptionShapes.size > 1) {
+        messages.add(
+            LogMessage(
+                Level.SEVERE,
+                """
+                Using multiple custom validation exceptions is unsupported.
+                Found ${customValidationExceptionShapes.size} validation exception shapes reachable from operation input:
+                ${customValidationExceptionShapes.joinToString(", ") { it.id.toString() }}
+                $validationExceptionDocsErrorMessage
+                """.trimIndent(),
+            ),
+        )
+        return ValidationResult(shouldAbort = true, messages)
+    }
+
+    // Traverse the model and error out if the default ValidationException exists in an error closure of a service or operation:
+    val walker = DirectedWalker(model)
+
+    val defaultValidationExceptionId = ShapeId.from("smithy.framework#ValidationException")
+
+    // This is guaranteed to have a single shape due to the above check
+    val customValidationExceptionId = customValidationExceptionShapes.single()!!.id
+
+    val operationsWithDefault =
+        walker
+            .walkShapes(service)
+            .asSequence()
+            .filterIsInstance<OperationShape>()
+            .filter { it.errors.contains(defaultValidationExceptionId) }
+
+    operationsWithDefault.forEach {
+        // This error will typically not be reached anyways because Smithy will error out from collisions
+        messages.add(
+            LogMessage(
+                Level.SEVERE,
+                """
+                Operation ${it.id} uses the default ValidationException, but $customValidationExceptionId is also
+                also used in another operation.
+                Remove ValidationException from the operation's errors and use the custom validation exception, or vice versa.
+                $validationExceptionDocsErrorMessage
+                """.trimIndent(),
+            ),
+        )
+    }
 
     return ValidationResult(shouldAbort = messages.any { it.level == Level.SEVERE }, messages)
 }
@@ -273,9 +419,10 @@ fun validateUnsupportedConstraints(
             .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
             .toSet()
     val eventStreamErrors =
-        eventStreamShapes.map {
-            it.expectTrait<SyntheticEventStreamUnionTrait>()
-        }.map { it.errorMembers }
+        eventStreamShapes
+            .map {
+                it.expectTrait<SyntheticEventStreamUnionTrait>()
+            }.map { it.errorMembers }
     val unsupportedConstraintErrorShapeReachableViaAnEventStreamSet =
         eventStreamErrors
             .flatMap { it }
@@ -312,8 +459,7 @@ fun validateUnsupportedConstraints(
                         mapShape,
                     )
                 }
-            }
-            .toSet()
+            }.toSet()
 
     val messages =
         (
@@ -348,5 +494,6 @@ fun validateUnsupportedConstraints(
  * The returned sequence contains one pair per shape in the input iterable that has attached a trait contained in  [traits].
  */
 private fun Sequence<Shape>.filterMapShapesToTraits(traits: Set<Class<out Trait>>): Sequence<Pair<Shape, Trait>> =
-    this.map { shape -> shape to traits.mapNotNull { shape.getTrait(it).orNull() } }
+    this
+        .map { shape -> shape to traits.mapNotNull { shape.getTrait(it).orNull() } }
         .flatMap { (shape, traits) -> traits.map { shape to it } }
