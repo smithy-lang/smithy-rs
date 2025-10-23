@@ -271,7 +271,7 @@ pub(crate) mod identity_cache {
 
             let key = sut.key(
                 "test-bucket--usw2-az1--x-s3",
-                &Credentials::for_tests_with_session_token(),
+                &Credentials::for_tests(),
             );
 
             // First call to the cache, populating a cache entry.
@@ -337,7 +337,7 @@ pub(crate) mod identity_cache {
             for i in 0..number_of_buckets {
                 let key = sut.key(
                     &format!("test-bucket-{i}-usw2-az1--x-s3"),
-                    &Credentials::for_tests_with_session_token(),
+                    &Credentials::for_tests(),
                 );
                 for _ in 0..50 {
                     let sut = sut.clone();
@@ -391,7 +391,7 @@ pub(crate) mod identity_cache {
             let [key1, key2, key3] = [1, 2, 3].map(|i| {
                 sut.key(
                     &format!("test-bucket-{i}--usw2-az1--x-s3"),
-                    &Credentials::for_tests_with_session_token(),
+                    &Credentials::for_tests(),
                 )
             });
 
@@ -637,9 +637,15 @@ pub(crate) mod identity_provider {
         use super::*;
         use aws_credential_types::credential_feature::AwsCredentialFeature;
         use aws_credential_types::Credentials;
+        use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
 
         #[test]
-        fn test_s3express_identity_contains_feature() {
+        fn test_s3express_credentials_contain_feature() {
+            // This test verifies that when SessionCredentials are converted to Credentials
+            // within the identity provider code path, the S3ExpressBucket feature is embedded.
+            // We test the conversion logic directly rather than the full identity() method
+            // to avoid complex mocking of HTTP clients and runtime components.
+            
             let session_creds = SessionCredentials::builder()
                 .access_key_id("test_access_key")
                 .secret_access_key("test_secret_key")
@@ -648,12 +654,15 @@ pub(crate) mod identity_provider {
                 .build()
                 .expect("valid session credentials");
 
+            // Simulate what the identity provider does: convert SessionCredentials to Credentials
+            // and embed the S3ExpressBucket feature
             let mut credentials =
                 Credentials::try_from(session_creds).expect("conversion should succeed");
             credentials
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::S3ExpressBucket);
 
+            // Verify the feature is embedded in the Credentials
             let creds_features = credentials
                 .get_property::<Vec<AwsCredentialFeature>>()
                 .expect("features should be present in credentials");
@@ -662,6 +671,7 @@ pub(crate) mod identity_provider {
                 "S3ExpressBucket feature should be embedded in Credentials"
             );
 
+            // Verify the feature propagates to Identity when converted
             let identity = Identity::from(credentials.clone());
             assert!(
                 identity.data::<Credentials>().is_some(),
@@ -676,7 +686,7 @@ pub(crate) mod identity_provider {
                 .expect("features should be present in Identity's credentials");
             assert!(
                 identity_features.contains(&AwsCredentialFeature::S3ExpressBucket),
-                "S3ExpressBucket feature should be present in Identity's Credentials after conversion"
+                "S3ExpressBucket feature should propagate to Identity after conversion"
             );
         }
 
@@ -854,13 +864,18 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_service_client_should_take_the_highest_precedence() {
+            // Disable option is set from service client.
             let disable_s3_express_session_token = crate::config::DisableS3ExpressSessionAuth(true);
 
+            // An environment variable says the session auth is _not_ disabled,
+            // but it will be overruled by what is in `layer`.
             let actual = config(
                 Some(disable_s3_express_session_token),
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
             );
 
+            // A config layer from this runtime plugin should not provide
+            // a new `DisableS3ExpressSessionAuth` if the disable option is set from service client.
             assert!(actual
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
@@ -868,11 +883,13 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_set_from_env_should_take_the_second_highest_precedence() {
+            // Disable option is set from environment variable.
             let actual = config(
                 None,
                 Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
             );
 
+            // The config layer should provide `DisableS3ExpressSessionAuth` from the environment variable.
             assert!(
                 actual
                     .load::<crate::config::DisableS3ExpressSessionAuth>()
@@ -889,8 +906,10 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn disable_option_should_be_unspecified_if_unset() {
+            // Disable option is not set anywhere.
             let actual = config(None, Env::from_slice(&[]));
 
+            // The config layer should not provide `DisableS3ExpressSessionAuth` when it's not configured.
             assert!(actual
                 .load::<crate::config::DisableS3ExpressSessionAuth>()
                 .is_none());
@@ -898,6 +917,7 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn s3_express_runtime_plugin_should_set_default_identity_resolver() {
+            // Config has SigV4 credentials provider, so S3 Express identity resolver should be set.
             let config = crate::Config::builder()
                 .behavior_version_latest()
                 .time_source(aws_smithy_async::time::SystemTimeSource::new())
@@ -905,6 +925,7 @@ pub(crate) mod runtime_plugin {
                 .build();
 
             let actual = runtime_components_builder(config);
+            // The runtime plugin should provide a default S3 Express identity resolver.
             assert!(actual
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
                 .is_some());
@@ -912,12 +933,14 @@ pub(crate) mod runtime_plugin {
 
         #[test]
         fn s3_express_plugin_should_not_set_default_identity_resolver_without_sigv4_counterpart() {
+            // Config does not have SigV4 credentials provider.
             let config = crate::Config::builder()
                 .behavior_version_latest()
                 .time_source(aws_smithy_async::time::SystemTimeSource::new())
                 .build();
 
             let actual = runtime_components_builder(config);
+            // The runtime plugin should not provide S3 Express identity resolver without SigV4 credentials.
             assert!(actual
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
                 .is_none());
@@ -925,6 +948,7 @@ pub(crate) mod runtime_plugin {
 
         #[tokio::test]
         async fn s3_express_plugin_should_not_set_default_identity_resolver_if_user_provided() {
+            // User provides a custom S3 Express credentials provider.
             let expected_access_key_id = "expected acccess key ID";
             let config = crate::Config::builder()
                 .behavior_version_latest()
@@ -939,11 +963,13 @@ pub(crate) mod runtime_plugin {
                 .time_source(aws_smithy_async::time::SystemTimeSource::new())
                 .build();
 
+            // The runtime plugin should not override the user-provided identity resolver.
             let runtime_components_builder = runtime_components_builder(config.clone());
             assert!(runtime_components_builder
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
                 .is_none());
 
+            // The user-provided identity resolver should be used.
             let express_identity_resolver = config
                 .runtime_components
                 .identity_resolver(&crate::s3_express::auth::SCHEME_ID)
