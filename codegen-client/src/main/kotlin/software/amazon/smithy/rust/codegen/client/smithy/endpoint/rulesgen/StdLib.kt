@@ -26,6 +26,7 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
         SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel),
         SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
         SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
+        SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce),
     )
 
 /**

@@ -53,9 +53,14 @@ class ExpressionGenerator(
         override fun visitRef(ref: Reference) =
             writable {
                 if (ownership == Ownership.Owned) {
-                    when (ref.type()) {
-                        is BooleanType -> rust("*${ref.name.rustName()}")
-                        else -> rust("${ref.name.rustName()}.to_owned()")
+                    try {
+                        when (ref.type()) {
+                            is BooleanType -> rust("*${ref.name.rustName()}")
+                            else -> rust("${ref.name.rustName()}.to_owned()")
+                        }
+                    } catch (_: RuntimeException) {
+                        // Typechecking was never invoked - default to .to_owned()
+                        rust("${ref.name.rustName()}.to_owned()")
                     }
                 } else {
                     try {
@@ -90,10 +95,17 @@ class ExpressionGenerator(
                             }
                         }
                     }
-                    if (ownership == Ownership.Owned && getAttr.type() != Type.booleanType()) {
-                        if (getAttr.type() is OptionalType) {
-                            rust(".map(|t|t.to_owned())")
-                        } else {
+                    if (ownership == Ownership.Owned) {
+                        try {
+                            if (getAttr.type() != Type.booleanType()) {
+                                if (getAttr.type() is OptionalType) {
+                                    rust(".map(|t|t.to_owned())")
+                                } else {
+                                    rust(".to_owned()")
+                                }
+                            }
+                        } catch (_: RuntimeException) {
+                            // Typechecking not available - default to .to_owned()
                             rust(".to_owned()")
                         }
                     }
@@ -133,6 +145,26 @@ class ExpressionGenerator(
             args: MutableList<Expression>,
         ): Writable =
             writable {
+                // Special handling for coalesce - inline the logic
+                if (fn.id == "coalesce") {
+                    // Use Borrowed ownership to avoid type checks
+                    val expressionGenerator = ExpressionGenerator(Ownership.Borrowed, context)
+                    val argWritables = args.map { expressionGenerator.generate(it) }
+
+                    // Generate: arg1.or(arg2).or(arg3)...
+                    if (argWritables.isEmpty()) {
+                        rust("None")
+                    } else if (argWritables.size == 1) {
+                        rust("#W", argWritables[0])
+                    } else {
+                        rust("(#W)", argWritables[0])
+                        for (i in 1 until argWritables.size) {
+                            rust(".or(#W)", argWritables[i])
+                        }
+                    }
+                    return@writable
+                }
+
                 val fnDefinition =
                     context.functionRegistry.fnFor(fn.id)
                         ?: PANIC(

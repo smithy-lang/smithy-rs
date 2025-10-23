@@ -63,6 +63,8 @@ object EndpointsLib {
         endpointsLib("uri_encode", CargoDependency.PercentEncoding)
             .toType()
             .resolve("uri_encode")
+    val coalesce =
+        endpointsLib("coalesce").toType().resolve("coalesce")
 
     val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
     val awsIsVirtualHostableS3Bucket =

@@ -198,7 +198,9 @@ private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
     // Check for BDD trait first (preferred)
     if (index.hasEndpointBddTrait(this.serviceShape)) {
         val bddTrait = index.getEndpointBddTrait(this.serviceShape) ?: return null
-        val bddGenerator = EndpointBddGenerator(this, bddTrait)
+        val customizations = this.rootDecorator.endpointCustomizations(this)
+        val stdlib = SmithyEndpointsStdLib + customizations.flatMap { it.customRuntimeFunctions(this) }
+        val bddGenerator = EndpointBddGenerator(this, bddTrait, stdlib)
         val bddResolver = bddGenerator.generateBddResolver()
 
         return writable {
