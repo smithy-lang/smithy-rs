@@ -274,6 +274,7 @@ open class ServerCodegenVisitor(
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,
+            protocolId = codegenContext.protocol,
         )
         try {
             "cargo fmt".runCommand(

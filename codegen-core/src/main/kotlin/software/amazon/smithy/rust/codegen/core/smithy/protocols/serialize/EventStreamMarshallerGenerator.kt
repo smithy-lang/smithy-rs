@@ -10,6 +10,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -79,7 +80,7 @@ open class EventStreamMarshallerGenerator(
         }
     }
 
-    fun renderInitialMessageGenerator(contentType: String): RuntimeType {
+    fun renderInitialRequestGenerator(contentType: String): RuntimeType {
         return RuntimeType.forInlineFun("initial_message_from_body", eventStreamSerdeModule) {
             rustBlockTemplate(
                 """
@@ -89,7 +90,7 @@ open class EventStreamMarshallerGenerator(
                 """,
                 *codegenScope,
             ) {
-                rustTemplate("let mut headers = #{Vec}::new();", *codegenScope)
+                rustTemplate("let mut headers = #{Vec}::with_capacity(3);", *codegenScope)
                 addStringHeader(":message-type", "\"event\".into()")
                 addStringHeader(":event-type", "\"initial-request\".into()")
                 addStringHeader(":content-type", "${contentType.dq()}.into()")
@@ -104,6 +105,25 @@ open class EventStreamMarshallerGenerator(
                     """,
                     *codegenScope,
                 )
+            }
+        }
+    }
+
+    fun renderInitialResponseGenerator(contentType: String): RuntimeType {
+        return RuntimeType.forInlineFun("initial_response_from_payload", eventStreamSerdeModule) {
+            rustBlockTemplate(
+                """
+                pub(crate) fn initial_response_from_payload(
+                    payload: #{Bytes}
+                ) -> #{Message}
+                """,
+                *codegenScope,
+            ) {
+                rustTemplate("let mut headers = #{Vec}::with_capacity(3);", *codegenScope)
+                addStringHeader(":message-type", "\"event\".into()")
+                addStringHeader(":event-type", "\"initial-response\".into()")
+                addStringHeader(":content-type", "${contentType.dq()}.into()")
+                rustTemplate("#{Message}::new_from_parts(headers, payload)", *codegenScope)
             }
         }
     }
@@ -243,6 +263,7 @@ open class EventStreamMarshallerGenerator(
             is IntegerShape -> "Int32($inputName)"
             is LongShape -> "Int64($inputName)"
             is BlobShape -> "ByteArray($inputName.into_inner().into())"
+            is EnumShape -> "String($inputName.to_string().into())"
             is StringShape -> "String($inputName.into())"
             is TimestampShape -> "Timestamp($inputName)"
             else -> throw IllegalStateException("unsupported event stream header shape type: $target")

@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
+import kotlin.io.path.readText
 
 internal class ServerServiceGeneratorTest {
     /**
@@ -20,11 +21,12 @@ internal class ServerServiceGeneratorTest {
     fun `one should be able to return a built service from a function`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        serverIntegrationTest(model) { _, rustCrate ->
-            rustCrate.testModule {
-                // No actual tests: we just want to check that this compiles.
-                rust(
-                    """
+        var testDir =
+            serverIntegrationTest(model) { _, rustCrate ->
+                rustCrate.testModule {
+                    // No actual tests: we just want to check that this compiles.
+                    rust(
+                        """
                     fn _build_service() -> crate::SimpleService {
                         let config = crate::SimpleServiceConfig::builder().build();
                         let service = crate::SimpleService::builder(config).build_unchecked();
@@ -32,8 +34,13 @@ internal class ServerServiceGeneratorTest {
                         service.boxed()
                     }
                     """,
-                )
+                    )
+                }
             }
-        }
+
+        // test the generated metadata
+        val cargoToml = testDir.resolve("Cargo.toml").readText()
+        assert(cargoToml.contains("codegen-version =")) { cargoToml }
+        assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
     }
 }

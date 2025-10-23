@@ -205,6 +205,17 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                         *codegenScope,
                     )
                 }
+                is ServiceConfig.DefaultForTestsV2 -> {
+                    // this was added later, for backwards compat we only set a default if a region hasn't already been set by user
+                    rustTemplate(
+                        """
+                        if ${section.configBuilderRef}.config.load::<#{Region}>().is_none() {
+                            self.set_region(#{Some}(#{Region}::new("us-east-1")));
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
 
                 is ServiceConfig.BuilderFromConfigBag -> {
                     rustTemplate("${section.builder}.set_region(${section.configBag}.load::<#{Region}>().cloned());", *codegenScope)

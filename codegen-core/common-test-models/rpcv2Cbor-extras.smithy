@@ -15,9 +15,87 @@ service RpcV2CborService {
         ComplexStructOperation
         EmptyStructOperation
         SingleMemberStructOperation
-        RecursiveUnionOperation
+        RecursiveUnionOperation,
+        StreamingOperation
+        StreamingOperationWithInitialData
+        StreamingOperationWithInitialResponse
+        StreamingOperationWithOptionalData
     ]
 }
+
+operation StreamingOperation {
+    input: StreamingOperationInput,
+    output: StreamingOperationOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationOutput {
+    events: Events
+}
+
+structure StreamingOperationInput {
+    events: Events
+}
+
+operation StreamingOperationWithInitialData {
+    input: StreamingOperationWithInitialDataInput,
+    output: StreamingOperationWithInitialDataOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationWithInitialDataInput {
+    @required
+    initialData: String
+    events: Events
+}
+
+structure StreamingOperationWithInitialDataOutput {
+    events: Events
+}
+
+operation StreamingOperationWithInitialResponse {
+    input: StreamingOperationWithInitialResponseInput,
+    output: StreamingOperationWithInitialResponseOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationWithInitialResponseInput {
+    events: Events
+}
+
+structure StreamingOperationWithInitialResponseOutput {
+    @required
+    responseData: String
+    events: Events
+}
+
+operation StreamingOperationWithOptionalData {
+    input: StreamingOperationWithOptionalDataInput,
+    output: StreamingOperationWithOptionalDataOutput,
+    errors: [ValidationException]
+}
+
+structure StreamingOperationWithOptionalDataInput {
+    optionalData: String
+    events: Events
+}
+
+structure StreamingOperationWithOptionalDataOutput {
+    optionalResponseData: String
+    events: Events
+}
+
+
+@streaming
+union Events {
+    A: Event,
+    B: Event,
+    C: Event,
+}
+
+structure Event {
+}
+
 
 // TODO(https://github.com/smithy-lang/smithy/issues/2326): Smithy should not
 // allow HTTP binding traits in this protocol.
@@ -84,7 +162,6 @@ apply EmptyStructOperation @httpMalformedRequestTests([
                 }
             }
         }
-
     }
 ])
 
@@ -303,35 +380,26 @@ structure ErrorSerializationOperationOutput {
 structure SimpleStruct {
     blob: Blob
     boolean: Boolean
-
     string: String
-
     byte: Byte
     short: Short
     integer: Integer
     long: Long
-
     float: Float
     double: Double
-
     timestamp: Timestamp
     enum: Suit
-
     // With `@required`.
 
     @required requiredBlob: Blob
     @required requiredBoolean: Boolean
-
     @required requiredString: String
-
     @required requiredByte: Byte
     @required requiredShort: Short
     @required requiredInteger: Integer
     @required requiredLong: Long
-
     @required requiredFloat: Float
     @required requiredDouble: Double
-
     @required requiredTimestamp: Timestamp
     // @required requiredDocument: MyDocument
     @required requiredEnum: Suit
@@ -344,16 +412,14 @@ structure ComplexStruct {
     map: SimpleMap
     union: SimpleUnion
     unitUnion: UnitUnion
-
     structureList: StructList
-
     // `@required` for good measure here.
     @required complexList: ComplexList
     @required complexMap: ComplexMap
     @required complexUnion: ComplexUnion
 }
 
-structure EmptyStruct { }
+structure EmptyStruct {}
 
 structure SingleMemberStruct {
     message: String
@@ -399,7 +465,6 @@ map ComplexMap {
 union ComplexUnion {
     // Recursive path here.
     complexStruct: ComplexStruct
-
     structure: SimpleStruct
     list: SimpleList
     map: SimpleMap
