@@ -24,6 +24,7 @@ use aws_smithy_runtime::expiring_cache::ExpiringCache;
 use aws_smithy_types::Number;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::SdkConfig;
+use p256::ecdsa::signature::digest::Digest;
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::SecretKey;
@@ -140,13 +141,14 @@ impl LoginCredentialsProvider {
         cached_token: &LoginToken,
         now: SystemTime,
     ) -> Result<LoginToken, LoginTokenError> {
-        // TODO(sign-in): get actual endpoint
+        // TODO(sign-in): this is meant to be resolved from resolver but that is impossible to determinstically resolve, hard coded for now
         let endpoint = "https://ap-northeast-1.aws-signin-testing.amazon.com";
+        let htu = "https://ap-northeast-1.aws-signin-testing.amazon.com/v1/token";
 
         let sdk_config = inner.sdk_config.to_builder().endpoint_url(endpoint).build();
 
         let client = SignInClient::new(&sdk_config);
-        let dpop = Self::calculate_dpop(&cached_token.dpop_key, endpoint, now)?;
+        let dpop = Self::calculate_dpop(&cached_token.dpop_key, htu, now)?;
         let resp = client
             .create_o_auth2_token()
             .token_input(
@@ -229,9 +231,11 @@ impl LoginCredentialsProvider {
         let payload_b64 = base64_simd::URL_SAFE.encode_to_string(payload.as_bytes());
         let message = format!("{}.{}", header_b64, payload_b64);
 
+        let message_sha256 = sha2::Sha256::digest(message.as_bytes());
+
         // Sign the message
         let signing_key = SigningKey::from(&private_key);
-        let signature: Signature = signing_key.sign(message.as_bytes());
+        let signature: Signature = signing_key.sign(message_sha256.as_slice());
         let signature_b64 = base64_simd::URL_SAFE.encode_to_string(signature.to_bytes());
 
         Ok(format!("{}.{}", message, signature_b64))
