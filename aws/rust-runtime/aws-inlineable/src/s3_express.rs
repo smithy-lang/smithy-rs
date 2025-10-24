@@ -686,15 +686,11 @@ pub(crate) mod identity_provider {
                 .unwrap()
         }
 
-        // Helper function to create config bag with S3 Express bucket endpoint parameters
+        // Helper function to create config bag with minimal S3 Express bucket parameters
         fn create_test_config_bag(bucket_name: &str) -> aws_smithy_types::config_bag::ConfigBag {
-            use aws_runtime::auth::SigV4OperationSigningConfig;
             use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
             use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
             use aws_smithy_types::config_bag::{ConfigBag, Layer};
-            use aws_smithy_types::endpoint::Endpoint;
-            use aws_types::region::{Region, SigningRegion};
-            use aws_types::SigningName;
 
             let mut config_bag = ConfigBag::base();
             let mut layer = Layer::new("test");
@@ -707,28 +703,9 @@ pub(crate) mod identity_provider {
             );
             layer.store_put(endpoint_params);
 
-            // Add a test endpoint
-            let endpoint = Endpoint::builder()
-                .url(format!(
-                    "https://{}.s3express-usw2-az1.us-west-2.amazonaws.com",
-                    bucket_name
-                ))
-                .build();
-            layer.store_put(endpoint);
-
-            // Add stalled stream protection config
             layer.store_put(StalledStreamProtectionConfig::disabled());
 
-            // Add region for the S3 client config
             layer.store_put(crate::config::Region::new("us-west-2"));
-
-            // Add SigV4 operation signing config
-            let signing_config = SigV4OperationSigningConfig {
-                region: Some(SigningRegion::from(Region::new("us-west-2"))),
-                name: Some(SigningName::from_static("s3")),
-                ..Default::default()
-            };
-            layer.store_put(signing_config);
 
             config_bag.push_layer(layer);
 
