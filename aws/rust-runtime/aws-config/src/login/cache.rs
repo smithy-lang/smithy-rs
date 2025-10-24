@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::sign_in::token::{SessionTokenType, SignInToken};
-use crate::sign_in::PROVIDER_NAME;
+use crate::login::token::{LoginToken, SignInTokenType};
+use crate::login::PROVIDER_NAME;
 use aws_credential_types::Credentials;
 use aws_runtime::fs_util::home_dir;
 use aws_runtime::fs_util::Os;
@@ -25,12 +25,12 @@ use zeroize::Zeroizing;
 
 const LOGIN_CACHE_DIRECTORY_ENV_VAR: &str = "AWS_LOGIN_IN_CACHE_DIRECTORY";
 
-/// Get the cache directory for Sign-In tokens
-fn get_cache_dir(env: &Env) -> Result<PathBuf, SignInTokenError> {
+/// Get the cache directory for Login (Sign-In) tokens
+fn get_cache_dir(env: &Env) -> Result<PathBuf, LoginTokenError> {
     match env.get(LOGIN_CACHE_DIRECTORY_ENV_VAR).ok() {
         Some(cache_dir) => Ok(PathBuf::from(cache_dir)),
         None => {
-            let home = home_dir(env, Os::real()).ok_or(SignInTokenError::NoHomeDirectory)?;
+            let home = home_dir(env, Os::real()).ok_or(LoginTokenError::NoHomeDirectory)?;
             Ok(PathBuf::from(home).join(".aws/login/cache"))
         }
     }
@@ -38,7 +38,7 @@ fn get_cache_dir(env: &Env) -> Result<PathBuf, SignInTokenError> {
 
 /// Determine the cached token path for a login session identifier.
 ///
-/// The `cache_dir` is the directory used for caching AWS SignIn tokens
+/// The `cache_dir` is the directory used for caching AWS Sign-In tokens
 fn cached_token_path(cache_dir: &Path, login_session: &str) -> PathBuf {
     let login_sesion_sha256 = hex::encode(Sha256::digest(login_session.trim().as_bytes()));
     let mut out = cache_dir.join(login_sesion_sha256);
@@ -53,16 +53,19 @@ pub(super) async fn load_cached_token(
     env: &Env,
     fs: &Fs,
     identifier: &str,
-) -> Result<SignInToken, SignInTokenError> {
+) -> Result<LoginToken, LoginTokenError> {
     let cache_dir = get_cache_dir(env)?;
     let path = cached_token_path(&cache_dir, identifier);
-    let data = Zeroizing::new(fs.read_to_end(&path).await.map_err(|source| {
-        SignInTokenError::IoError {
-            what: "read",
-            path,
-            source,
-        }
-    })?);
+    let data =
+        Zeroizing::new(
+            fs.read_to_end(&path)
+                .await
+                .map_err(|source| LoginTokenError::IoError {
+                    what: "read",
+                    path,
+                    source,
+                })?,
+        );
     parse_cached_token(&data)
 }
 
@@ -73,14 +76,14 @@ pub(super) async fn save_cached_token(
     env: &Env,
     fs: &Fs,
     identifier: &str,
-    token: &SignInToken,
-) -> Result<(), SignInTokenError> {
+    token: &LoginToken,
+) -> Result<(), LoginTokenError> {
     let cache_dir = get_cache_dir(env)?;
     let path = cached_token_path(&cache_dir, identifier);
 
     let expiration = DateTime::from(token.expires_at())
         .fmt(Format::DateTime)
-        .map_err(|e| SignInTokenError::FailedToFormatDateTime { source: e.into() })?;
+        .map_err(|e| LoginTokenError::FailedToFormatDateTime { source: e.into() })?;
 
     let mut out = Zeroizing::new(String::new());
     let mut writer = JsonObjectWriter::new(&mut out);
@@ -121,7 +124,7 @@ pub(super) async fn save_cached_token(
 
     fs.write(&path, out.as_bytes())
         .await
-        .map_err(|source| SignInTokenError::IoError {
+        .map_err(|source| LoginTokenError::IoError {
             what: "write",
             path,
             source,
@@ -130,7 +133,7 @@ pub(super) async fn save_cached_token(
 }
 
 #[derive(Debug)]
-pub(super) enum SignInTokenError {
+pub(super) enum LoginTokenError {
     FailedToFormatDateTime {
         source: Box<dyn StdError + Send + Sync>,
     },
@@ -153,7 +156,7 @@ pub(super) enum SignInTokenError {
     },
 }
 
-impl SignInTokenError {
+impl LoginTokenError {
     pub(super) fn other(
         message: impl Into<String>,
         source: Option<Box<dyn StdError + Send + Sync>>,
@@ -165,39 +168,39 @@ impl SignInTokenError {
     }
 }
 
-impl fmt::Display for SignInTokenError {
+impl fmt::Display for LoginTokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToFormatDateTime { .. } => write!(f, "failed to format date time"),
             Self::InvalidField { field, .. } => write!(
                 f,
-                "invalid value for the `{field}` field in the cached Sign-In token file"
+                "invalid value for the `{field}` field in the cached Login token file"
             ),
             Self::IoError { what, path, .. } => write!(f, "failed to {what} `{}`", path.display()),
-            Self::JsonError(_) => write!(f, "invalid JSON in cached Sign-In token file"),
+            Self::JsonError(_) => write!(f, "invalid JSON in cached Login token file"),
             Self::MissingField(field) => {
-                write!(f, "missing field `{field}` in cached Sign-In token file")
+                write!(f, "missing field `{field}` in cached Login token file")
             }
             Self::NoHomeDirectory => write!(f, "couldn't resolve a home directory"),
-            Self::ExpiredToken => write!(f, "cached Sign-In token is expired"),
+            Self::ExpiredToken => write!(f, "cached Login token is expired"),
             Self::Other { message, .. } => {
-                write!(f, "failed to load cached Sign-In token: {message}")
+                write!(f, "failed to load cached Login token: {message}")
             }
         }
     }
 }
 
-impl StdError for SignInTokenError {
+impl StdError for LoginTokenError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
-            SignInTokenError::FailedToFormatDateTime { source } => Some(source.as_ref()),
-            SignInTokenError::InvalidField { source, .. } => Some(source.as_ref()),
-            SignInTokenError::IoError { source, .. } => Some(source),
-            SignInTokenError::JsonError(source) => Some(source.as_ref()),
-            SignInTokenError::MissingField(_) => None,
-            SignInTokenError::NoHomeDirectory => None,
-            SignInTokenError::ExpiredToken => None,
-            SignInTokenError::Other { source, .. } => match source {
+            LoginTokenError::FailedToFormatDateTime { source } => Some(source.as_ref()),
+            LoginTokenError::InvalidField { source, .. } => Some(source.as_ref()),
+            LoginTokenError::IoError { source, .. } => Some(source),
+            LoginTokenError::JsonError(source) => Some(source.as_ref()),
+            LoginTokenError::MissingField(_) => None,
+            LoginTokenError::NoHomeDirectory => None,
+            LoginTokenError::ExpiredToken => None,
+            LoginTokenError::Other { source, .. } => match source {
                 Some(err) => Some(err.as_ref()),
                 None => None,
             },
@@ -205,21 +208,21 @@ impl StdError for SignInTokenError {
     }
 }
 
-impl From<EscapeError> for SignInTokenError {
+impl From<EscapeError> for LoginTokenError {
     fn from(err: EscapeError) -> Self {
         Self::JsonError(err.into())
     }
 }
 
-impl From<aws_smithy_json::deserialize::error::DeserializeError> for SignInTokenError {
+impl From<aws_smithy_json::deserialize::error::DeserializeError> for LoginTokenError {
     fn from(err: aws_smithy_json::deserialize::error::DeserializeError) -> Self {
         Self::JsonError(err.into())
     }
 }
 
 /// Parse SSO token JSON from input
-fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, SignInTokenError> {
-    use SignInTokenError as Error;
+fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, LoginTokenError> {
+    use LoginTokenError as Error;
 
     /*
         {
@@ -366,7 +369,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
     let expires_at = expires_at.ok_or(Error::MissingField("expiresAt"))?;
 
     let token_type = match token_type.as_deref() {
-        Some(t) if t.eq_ignore_ascii_case("aws_sigv4") => SessionTokenType::AwsSigv4,
+        Some(t) if t.eq_ignore_ascii_case("aws_sigv4") => SignInTokenType::AwsSigv4,
         _ => return Err(Error::other("invalid or missing tokenType", None)),
     };
 
@@ -379,7 +382,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<SignInToken, 
         .expiry(expires_at)
         .build();
 
-    Ok(SignInToken {
+    Ok(LoginToken {
         access_token: credentials,
         token_type,
         identity_token,
@@ -462,7 +465,7 @@ mod tests {
         }"#;
         let err = parse_cached_token(token).expect_err("missing accessToken");
         assert!(
-            matches!(err, SignInTokenError::MissingField("accessKeyId")),
+            matches!(err, LoginTokenError::MissingField("accessKeyId")),
             "incorrect error: {:?}",
             err
         );
@@ -481,7 +484,7 @@ mod tests {
         }"#;
         let err = parse_cached_token(token).expect_err("missing clientId");
         assert!(
-            matches!(err, SignInTokenError::MissingField("clientId")),
+            matches!(err, LoginTokenError::MissingField("clientId")),
             "incorrect error: {:?}",
             err
         );
@@ -500,7 +503,7 @@ mod tests {
         }"#;
         let err = parse_cached_token(token).expect_err("missing dpopKey");
         assert!(
-            matches!(err, SignInTokenError::MissingField("dpopKey")),
+            matches!(err, LoginTokenError::MissingField("dpopKey")),
             "incorrect error: {:?}",
             err
         );
@@ -552,7 +555,7 @@ mod tests {
         .await
         .expect_err("should fail, file is missing");
         assert!(
-            matches!(err, SignInTokenError::IoError { .. }),
+            matches!(err, LoginTokenError::IoError { .. }),
             "should be io error, got {:?}",
             err
         );

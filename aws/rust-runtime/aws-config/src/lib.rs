@@ -129,13 +129,13 @@ pub mod ecs;
 mod env_service_config;
 pub mod environment;
 pub mod imds;
+#[cfg(feature = "login")]
+pub mod login;
 pub mod meta;
 pub mod profile;
 pub mod provider_config;
 pub mod retry;
 mod sensitive_command;
-#[cfg(feature = "sign-in")]
-pub mod sign_in;
 #[cfg(feature = "sso")]
 pub mod sso;
 pub mod stalled_stream_protection;

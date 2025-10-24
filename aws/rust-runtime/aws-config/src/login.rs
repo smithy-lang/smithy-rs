@@ -8,9 +8,9 @@
 mod cache;
 mod token;
 
+use crate::login::cache::{load_cached_token, save_cached_token, LoginTokenError};
+use crate::login::token::LoginToken;
 use crate::provider_config::ProviderConfig;
-use crate::sign_in::cache::{load_cached_token, save_cached_token, SignInTokenError};
-use crate::sign_in::token::SignInToken;
 use aws_credential_types::provider;
 use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::provider::future;
@@ -34,14 +34,14 @@ use std::time::SystemTime;
 
 const REFRESH_BUFFER_TIME: Duration = Duration::from_secs(5 * 60 /* 5 minutes */);
 const MIN_TIME_BETWEEN_REFRESH: Duration = Duration::from_secs(30);
-pub(super) const PROVIDER_NAME: &str = "Sign-In";
+pub(super) const PROVIDER_NAME: &str = "Login";
 
 /// AWS credentials provider vended by AWS Sign-In. This provider allows users to acquire AWS
 /// credentials that correspond to an AWS Console session.
 #[derive(Debug)]
-pub struct SignInCredentialProvider {
+pub struct LoginCredentialsProvider {
     inner: Arc<Inner>,
-    token_cache: ExpiringCache<SignInToken, SignInTokenError>,
+    token_cache: ExpiringCache<LoginToken, LoginTokenError>,
 }
 
 #[derive(Debug)]
@@ -54,7 +54,7 @@ struct Inner {
     last_refresh_attempt: Mutex<Option<SystemTime>>,
 }
 
-impl SignInCredentialProvider {
+impl LoginCredentialsProvider {
     /// Create a new [`Builder`] for the given login session ARN.
     ///
     /// The `session_arn` argument should take the form an Amazon Resource Name (ARN) like
@@ -69,24 +69,24 @@ impl SignInCredentialProvider {
         }
     }
 
-    async fn resolve_token(&self) -> Result<SignInToken, SignInTokenError> {
+    async fn resolve_token(&self) -> Result<LoginToken, LoginTokenError> {
         let token_cache = self.token_cache.clone();
         if let Some(token) = token_cache
             .yield_or_clear_if_expired(self.inner.time_source.now())
             .await
         {
-            tracing::debug!("using cached Sign-In token");
+            tracing::debug!("using cached Login token");
             return Ok(token);
         }
 
         let inner = self.inner.clone();
         let token = token_cache
             .get_or_load(|| async move {
-                tracing::debug!("expiring cache asked for an updated Sign-In token");
+                tracing::debug!("expiring cache asked for an updated Login token");
                 let mut token =
                     load_cached_token(&inner.env, &inner.fs, &inner.session_arn).await?;
 
-                tracing::debug!("loaded cached Sign-In token");
+                tracing::debug!("loaded cached Login token");
 
                 let now = inner.time_source.now();
                 let expired = token.expires_at() <= now;
@@ -107,18 +107,18 @@ impl SignInCredentialProvider {
                     min_time_passed = ?min_time_passed,
                     refreshable = ?refreshable,
                     will_refresh = ?(expires_soon && refreshable),
-                    "cached Sign-In token refresh decision"
+                    "cached Login token refresh decision"
                 );
 
                 // Fail fast if the token has expired and we can't refresh it
                 if expired && !refreshable {
-                    tracing::debug!("cached Sign-In token is expired and cannot be refreshed");
-                    return Err(SignInTokenError::ExpiredToken);
+                    tracing::debug!("cached Login token is expired and cannot be refreshed");
+                    return Err(LoginTokenError::ExpiredToken);
                 }
 
                 // Refresh the token if it is going to expire soon
                 if expires_soon && refreshable {
-                    tracing::debug!("attempting to refresh Sign-In token");
+                    tracing::debug!("attempting to refresh Login token");
                     let refreshed_token = Self::refresh_cached_token(&inner, &token, now).await?;
                     token = refreshed_token;
                     *inner.last_refresh_attempt.lock().unwrap() = Some(now);
@@ -134,9 +134,9 @@ impl SignInCredentialProvider {
 
     async fn refresh_cached_token(
         inner: &Inner,
-        cached_token: &SignInToken,
+        cached_token: &LoginToken,
         now: SystemTime,
-    ) -> Result<SignInToken, SignInTokenError> {
+    ) -> Result<LoginToken, LoginTokenError> {
         let client = SignInClient::new(&inner.sdk_config);
         // TODO(sign-in): get actual endpoint
         let endpoint = "https://signin.aws.amazon.com/v1/token";
@@ -155,18 +155,18 @@ impl SignInCredentialProvider {
             .send()
             .await
             .map_err(|e| {
-                SignInTokenError::other(
+                LoginTokenError::other(
                     "CreateOAuth2Token - failed to refresh token",
                     Some(e.into()),
                 )
             })?;
 
         let token_output = resp.token_output.expect("valid token response");
-        let new_token = SignInToken::from_refresh(cached_token, token_output, now);
+        let new_token = LoginToken::from_refresh(cached_token, token_output, now);
 
         match save_cached_token(&inner.env, &inner.fs, &inner.session_arn, &new_token).await {
             Ok(_) => {}
-            Err(e) => tracing::warn!("failed to save refreshed Sign-In token: {e}"),
+            Err(e) => tracing::warn!("failed to save refreshed Login token: {e}"),
         }
         Ok(new_token)
     }
@@ -178,17 +178,17 @@ impl SignInCredentialProvider {
         private_key_pem: &[u8],
         endpoint: &str,
         now: SystemTime,
-    ) -> Result<String, SignInTokenError> {
+    ) -> Result<String, LoginTokenError> {
         let private_key = SecretKey::from_slice(private_key_pem)
-            .map_err(|e| SignInTokenError::other("invalid secret key", Some(e.into())))?;
+            .map_err(|e| LoginTokenError::other("invalid secret key", Some(e.into())))?;
         let public_key = private_key.public_key();
         let point = public_key.to_encoded_point(false);
         let x_bytes = point
             .x()
-            .ok_or_else(|| SignInTokenError::other("invalid private key: x coordinate", None))?;
+            .ok_or_else(|| LoginTokenError::other("invalid private key: x coordinate", None))?;
         let y_bytes = point
             .y()
-            .ok_or_else(|| SignInTokenError::other("invalid private key: y coordinate", None))?;
+            .ok_or_else(|| LoginTokenError::other("invalid private key: y coordinate", None))?;
 
         let x_b64 = base64_simd::URL_SAFE.encode_to_string(x_bytes);
         let y_b64 = base64_simd::URL_SAFE.encode_to_string(y_bytes);
@@ -208,7 +208,7 @@ impl SignInCredentialProvider {
         let jti = uuid::Uuid::new_v4().to_string();
         let iat = now
             .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(|e| SignInTokenError::other("system time before UNIX epoch", Some(e.into())))?
+            .map_err(|e| LoginTokenError::other("system time before UNIX epoch", Some(e.into())))?
             .as_secs();
 
         let mut payload = String::new();
@@ -250,7 +250,7 @@ impl SignInCredentialProvider {
     }
 }
 
-impl ProvideCredentials for SignInCredentialProvider {
+impl ProvideCredentials for LoginCredentialsProvider {
     fn provide_credentials<'a>(&'a self) -> future::ProvideCredentials<'a>
     where
         Self: 'a,
@@ -259,7 +259,7 @@ impl ProvideCredentials for SignInCredentialProvider {
     }
 }
 
-/// Builder for [`SignInCredentialProvider`]
+/// Builder for [`LoginCredentialsProvider`]
 #[derive(Debug)]
 pub struct Builder {
     session_arn: String,
@@ -273,8 +273,8 @@ impl Builder {
         self
     }
 
-    /// Construct a SignInCredentialsProvider from the builder
-    pub fn build(self) -> SignInCredentialProvider {
+    /// Construct a [`LoginCredentialsProvider`] from the builder
+    pub fn build(self) -> LoginCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
         let fs = provider_config.fs();
         let env = provider_config.env();
@@ -287,7 +287,7 @@ impl Builder {
             last_refresh_attempt: Mutex::new(None),
         });
 
-        SignInCredentialProvider {
+        LoginCredentialsProvider {
             inner,
             token_cache: ExpiringCache::new(REFRESH_BUFFER_TIME),
         }

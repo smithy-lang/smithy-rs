@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::sign_in::PROVIDER_NAME;
+use crate::login::PROVIDER_NAME;
 use aws_credential_types::Credentials;
 use aws_sdk_signin::types::CreateOAuth2TokenResponseBody;
 use std::fmt;
@@ -12,16 +12,16 @@ use zeroize::Zeroizing;
 
 /// A login session token created by CLI and loaded from cache
 #[derive(Clone)]
-pub(super) struct SignInToken {
+pub(super) struct LoginToken {
     pub(super) access_token: Credentials,
-    pub(super) token_type: SessionTokenType,
+    pub(super) token_type: SignInTokenType,
     pub(super) identity_token: Option<String>,
     pub(super) refresh_token: Zeroizing<String>,
     pub(super) client_id: String,
     pub(super) dpop_key: Zeroizing<String>,
 }
 
-impl SignInToken {
+impl LoginToken {
     pub(super) fn expires_at(&self) -> SystemTime {
         self.access_token
             .expiry()
@@ -29,7 +29,7 @@ impl SignInToken {
     }
 
     pub(super) fn from_refresh(
-        old_token: &SignInToken,
+        old_token: &LoginToken,
         resp: CreateOAuth2TokenResponseBody,
         now: SystemTime,
     ) -> Self {
@@ -57,7 +57,7 @@ impl SignInToken {
     }
 }
 
-impl fmt::Debug for SignInToken {
+impl fmt::Debug for LoginToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("CachedSsoToken")
             .field("access_token", &self.access_token)
@@ -71,14 +71,14 @@ impl fmt::Debug for SignInToken {
 }
 
 #[derive(Debug, Clone)]
-pub(super) enum SessionTokenType {
+pub(super) enum SignInTokenType {
     AwsSigv4,
 }
 
-impl fmt::Display for SessionTokenType {
+impl fmt::Display for SignInTokenType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SessionTokenType::AwsSigv4 => write!(f, "aws_sigv4"),
+            SignInTokenType::AwsSigv4 => write!(f, "aws_sigv4"),
         }
     }
 }
