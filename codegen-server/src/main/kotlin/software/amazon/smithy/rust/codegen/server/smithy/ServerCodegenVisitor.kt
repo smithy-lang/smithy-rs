@@ -124,18 +124,7 @@ open class ServerCodegenVisitor(
 
         val baseModel = baselineTransform(context.model)
         val service = settings.getService(baseModel)
-        val (protocolShape, protocolGeneratorFactory) =
-            ServerProtocolLoader(
-                codegenDecorator.protocols(
-                    service.id,
-                    ServerProtocolLoader.DefaultProtocols,
-                ),
-            )
-                .protocolFor(context.model, service)
-        this.protocolGeneratorFactory = protocolGeneratorFactory
-
         model = codegenDecorator.transformModel(service, baseModel, settings)
-
         val serverSymbolProviders =
             ServerSymbolProviders.from(
                 settings,
@@ -146,7 +135,19 @@ open class ServerCodegenVisitor(
                 codegenDecorator,
                 RustServerCodegenPlugin::baseSymbolProvider,
             )
-
+        val (protocolShape, protocolGeneratorFactory) =
+            ServerProtocolLoader(
+                codegenDecorator.protocols(
+                    service.id,
+                    ServerProtocolLoader.defaultProtocols { it ->
+                        codegenDecorator.httpCustomizations(
+                            serverSymbolProviders.symbolProvider,
+                            it,
+                        )
+                    },
+                ),
+            )
+                .protocolFor(context.model, service)
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -160,6 +161,7 @@ open class ServerCodegenVisitor(
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
             )
+        this.protocolGeneratorFactory = protocolGeneratorFactory
 
         // We can use a not-null assertion because [CombinedServerCodegenDecorator] returns a not null value.
         validationExceptionConversionGenerator = codegenDecorator.validationExceptionConversion(codegenContext)!!

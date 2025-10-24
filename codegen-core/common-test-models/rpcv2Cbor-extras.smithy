@@ -6,8 +6,10 @@ use smithy.framework#ValidationException
 use smithy.protocols#rpcv2Cbor
 use smithy.test#httpResponseTests
 use smithy.test#httpMalformedRequestTests
+use aws.auth#sigv4
 
 @rpcv2Cbor
+@sigv4(name: "rpcv2-cbor")
 service RpcV2CborService {
     operations: [
         SimpleStructOperation
