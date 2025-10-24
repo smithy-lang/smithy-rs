@@ -343,7 +343,8 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
                         (k, Token::ValueString { value, .. })
                             if k.eq_ignore_ascii_case("dpopKey") =>
                         {
-                            dpop_key = Some(Zeroizing::new(value.to_unescaped()?.into_owned()));
+                            dpop_key =
+                                Some(Zeroizing::new(value.to_unescaped()?.replace("\\n", "\n")));
                         }
                         _ => {}
                     }
