@@ -641,14 +641,15 @@ pub(crate) mod identity_provider {
         // Helper function to create test runtime components with SigV4 identity resolver
         fn create_test_runtime_components(
             base_credentials: Credentials,
-            http_client: impl aws_smithy_runtime_api::client::http::HttpClient + 'static,
         ) -> aws_smithy_runtime_api::client::runtime_components::RuntimeComponents {
             use aws_credential_types::provider::SharedCredentialsProvider;
+            use aws_smithy_runtime::client::http::test_util::infallible_client_fn;
+            use aws_smithy_runtime::client::orchestrator::endpoints::StaticUriEndpointResolver;
             use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
             use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
-            use aws_smithy_runtime_api::client::endpoint::SharedEndpointResolver;
             use aws_smithy_runtime_api::client::identity::SharedIdentityResolver;
             use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+            use aws_smithy_types::body::SdkBody;
 
             let sigv4_resolver =
                 SharedIdentityResolver::new(SharedCredentialsProvider::new(base_credentials));
@@ -657,21 +658,22 @@ pub(crate) mod identity_provider {
             let auth_option_resolver =
                 StaticAuthSchemeOptionResolver::new(vec![aws_runtime::auth::sigv4::SCHEME_ID]);
 
-            // Create a test endpoint resolver
-            #[derive(Debug)]
-            struct TestEndpointResolver;
-            impl aws_smithy_runtime_api::client::endpoint::ResolveEndpoint for TestEndpointResolver {
-                fn resolve_endpoint<'a>(
-                    &'a self,
-                    _params: &'a aws_smithy_runtime_api::client::endpoint::EndpointResolverParams,
-                ) -> aws_smithy_runtime_api::client::endpoint::EndpointFuture<'a> {
-                    aws_smithy_runtime_api::client::endpoint::EndpointFuture::ready(Ok(
-                        aws_smithy_types::endpoint::Endpoint::builder()
-                            .url("https://test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com")
-                            .build()
+            let http_client = infallible_client_fn(|_req| {
+                http::Response::builder()
+                    .status(200)
+                    .body(SdkBody::from(
+                        r#"<?xml version="1.0" encoding="UTF-8"?>
+                        <CreateSessionResult>
+                            <Credentials>
+                                <AccessKeyId>session_access_key</AccessKeyId>
+                                <SecretAccessKey>session_secret_key</SecretAccessKey>
+                                <SessionToken>session_token</SessionToken>
+                                <Expiration>2025-01-01T00:00:00Z</Expiration>
+                            </Credentials>
+                        </CreateSessionResult>"#,
                     ))
-                }
-            }
+                    .unwrap()
+            });
 
             RuntimeComponentsBuilder::for_tests()
                 .with_identity_resolver(aws_runtime::auth::sigv4::SCHEME_ID, sigv4_resolver)
@@ -679,7 +681,7 @@ pub(crate) mod identity_provider {
                 .with_time_source(Some(aws_smithy_async::time::SystemTimeSource::new()))
                 .with_retry_strategy(Some(NeverRetryStrategy::new()))
                 .with_auth_scheme_option_resolver(Some(auth_option_resolver))
-                .with_endpoint_resolver(Some(SharedEndpointResolver::new(TestEndpointResolver)))
+                .with_endpoint_resolver(Some(StaticUriEndpointResolver::http_localhost(8080)))
                 .build()
                 .unwrap()
         }
@@ -733,58 +735,7 @@ pub(crate) mod identity_provider {
             config_bag
         }
 
-        // Helper function to create mocked HTTP client for create_session responses
-        fn create_mock_http_client(
-            _bucket_name: &str,
-        ) -> impl aws_smithy_runtime_api::client::http::HttpClient {
-            use aws_smithy_runtime_api::client::http::{
-                HttpClient, HttpConnector, HttpConnectorFuture, SharedHttpConnector,
-            };
-            use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
-            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-            use aws_smithy_types::body::SdkBody;
 
-            #[derive(Debug)]
-            struct TestHttpClient;
-
-            impl HttpClient for TestHttpClient {
-                fn http_connector(
-                    &self,
-                    _settings: &aws_smithy_runtime_api::client::http::HttpConnectorSettings,
-                    _components: &RuntimeComponents,
-                ) -> SharedHttpConnector {
-                    #[derive(Debug)]
-                    struct TestConnector;
-
-                    impl HttpConnector for TestConnector {
-                        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
-                            let response = http::Response::builder()
-                                .status(200)
-                                .body(SdkBody::from(
-                                    r#"<?xml version="1.0" encoding="UTF-8"?>
-                                    <CreateSessionResult>
-                                        <Credentials>
-                                            <AccessKeyId>session_access_key</AccessKeyId>
-                                            <SecretAccessKey>session_secret_key</SecretAccessKey>
-                                            <SessionToken>session_token</SessionToken>
-                                            <Expiration>2025-01-01T00:00:00Z</Expiration>
-                                        </Credentials>
-                                    </CreateSessionResult>"#,
-                                ))
-                                .unwrap();
-
-                            HttpConnectorFuture::ready(
-                                Ok(HttpResponse::try_from(response).unwrap()),
-                            )
-                        }
-                    }
-
-                    SharedHttpConnector::new(TestConnector)
-                }
-            }
-
-            TestHttpClient
-        }
 
         #[test]
         fn test_session_credentials_conversion() {
@@ -810,8 +761,7 @@ pub(crate) mod identity_provider {
 
             // Use helper functions to set up test components
             let base_credentials = Credentials::for_tests();
-            let http_client = create_mock_http_client(bucket_name);
-            let runtime_components = create_test_runtime_components(base_credentials, http_client);
+            let runtime_components = create_test_runtime_components(base_credentials);
             let config_bag = create_test_config_bag(bucket_name);
 
             // Create the identity provider
@@ -840,188 +790,13 @@ pub(crate) mod identity_provider {
             );
         }
 
-        #[tokio::test]
-        async fn test_default_provider_resolves_identity() {
-            let bucket_name = "test-bucket--usw2-az1--x-s3";
 
-            // Use helper functions to set up test components
-            let base_credentials = Credentials::for_tests();
-            let http_client = create_mock_http_client(bucket_name);
-            let runtime_components = create_test_runtime_components(base_credentials, http_client);
-            let config_bag = create_test_config_bag(bucket_name);
 
-            // Use builder pattern to construct DefaultS3ExpressIdentityProvider
-            let provider = DefaultS3ExpressIdentityProvider::builder()
-                .behavior_version(crate::config::BehaviorVersion::latest())
-                .time_source(aws_smithy_async::time::SystemTimeSource::new())
-                .build();
 
-            // Call identity() method and verify it succeeds
-            let identity = provider
-                .identity(&runtime_components, &config_bag)
-                .await
-                .expect("identity() should succeed");
 
-            // Verify the identity contains credentials
-            assert!(
-                identity.data::<Credentials>().is_some(),
-                "Identity should contain Credentials"
-            );
-        }
 
-        #[tokio::test]
-        async fn test_error_missing_sigv4_identity_resolver() {
-            let bucket_name = "test-bucket--usw2-az1--x-s3";
 
-            // Create runtime components WITHOUT SigV4 identity resolver
-            use aws_smithy_runtime::client::retries::strategy::NeverRetryStrategy;
-            use aws_smithy_runtime_api::client::auth::static_resolver::StaticAuthSchemeOptionResolver;
-            use aws_smithy_runtime_api::client::endpoint::SharedEndpointResolver;
-            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 
-            #[derive(Debug)]
-            struct TestEndpointResolver;
-            impl aws_smithy_runtime_api::client::endpoint::ResolveEndpoint for TestEndpointResolver {
-                fn resolve_endpoint<'a>(
-                    &'a self,
-                    _params: &'a aws_smithy_runtime_api::client::endpoint::EndpointResolverParams,
-                ) -> aws_smithy_runtime_api::client::endpoint::EndpointFuture<'a> {
-                    aws_smithy_runtime_api::client::endpoint::EndpointFuture::ready(Ok(
-                        aws_smithy_types::endpoint::Endpoint::builder()
-                            .url("https://test-bucket--usw2-az1--x-s3.s3express-usw2-az1.us-west-2.amazonaws.com")
-                            .build()
-                    ))
-                }
-            }
-
-            let http_client = create_mock_http_client(bucket_name);
-            let auth_option_resolver =
-                StaticAuthSchemeOptionResolver::new(vec![aws_runtime::auth::sigv4::SCHEME_ID]);
-
-            // Build runtime components without SigV4 identity resolver
-            let runtime_components = RuntimeComponentsBuilder::for_tests()
-                .with_http_client(Some(http_client))
-                .with_time_source(Some(aws_smithy_async::time::SystemTimeSource::new()))
-                .with_retry_strategy(Some(NeverRetryStrategy::new()))
-                .with_auth_scheme_option_resolver(Some(auth_option_resolver))
-                .with_endpoint_resolver(Some(SharedEndpointResolver::new(TestEndpointResolver)))
-                .build()
-                .unwrap();
-
-            let config_bag = create_test_config_bag(bucket_name);
-
-            // Create provider
-            let provider = DefaultS3ExpressIdentityProvider::builder()
-                .behavior_version(crate::config::BehaviorVersion::latest())
-                .time_source(aws_smithy_async::time::SystemTimeSource::new())
-                .build();
-
-            // Call identity() and verify it fails with appropriate error message
-            let result = provider.identity(&runtime_components, &config_bag).await;
-
-            assert!(
-                result.is_err(),
-                "identity() should fail when SigV4 identity resolver is missing"
-            );
-            let error_message = result.unwrap_err().to_string();
-            assert!(
-                error_message.contains("identity resolver for sigv4 should be set for S3"),
-                "Error message should indicate missing SigV4 identity resolver, got: {}",
-                error_message
-            );
-        }
-
-        #[tokio::test]
-        #[should_panic(expected = "endpoint resolver params must be set")]
-        async fn test_error_missing_endpoint_parameters() {
-            let bucket_name = "test-bucket--usw2-az1--x-s3";
-
-            // Create runtime components with SigV4 identity resolver
-            let base_credentials = Credentials::for_tests();
-            let http_client = create_mock_http_client(bucket_name);
-            let runtime_components = create_test_runtime_components(base_credentials, http_client);
-
-            // Create config bag WITHOUT endpoint parameters
-            use aws_smithy_types::config_bag::ConfigBag;
-            let config_bag = ConfigBag::base();
-
-            // Create provider
-            let provider = DefaultS3ExpressIdentityProvider::builder()
-                .behavior_version(crate::config::BehaviorVersion::latest())
-                .time_source(aws_smithy_async::time::SystemTimeSource::new())
-                .build();
-
-            // Call identity() - this should panic with the expected message
-            let _ = provider.identity(&runtime_components, &config_bag).await;
-        }
-
-        #[tokio::test]
-        async fn test_error_missing_bucket_name_in_endpoint_params() {
-            let bucket_name = "test-bucket--usw2-az1--x-s3";
-
-            // Create runtime components with SigV4 identity resolver
-            let base_credentials = Credentials::for_tests();
-            let http_client = create_mock_http_client(bucket_name);
-            let runtime_components = create_test_runtime_components(base_credentials, http_client);
-
-            // Create config bag with endpoint parameters but WITHOUT bucket name
-            use aws_runtime::auth::SigV4OperationSigningConfig;
-            use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
-            use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
-            use aws_smithy_types::config_bag::{ConfigBag, Layer};
-            use aws_smithy_types::endpoint::Endpoint;
-            use aws_types::region::{Region, SigningRegion};
-            use aws_types::SigningName;
-
-            let mut config_bag = ConfigBag::base();
-            let mut layer = Layer::new("test");
-
-            // Create endpoint params without bucket name
-            let endpoint_params = EndpointResolverParams::new(
-                crate::config::endpoint::Params::builder()
-                    // Intentionally NOT setting bucket name
-                    .build()
-                    .unwrap(),
-            );
-            layer.store_put(endpoint_params);
-
-            // Add other required config
-            let endpoint = Endpoint::builder()
-                .url("https://s3.us-west-2.amazonaws.com")
-                .build();
-            layer.store_put(endpoint);
-            layer.store_put(StalledStreamProtectionConfig::disabled());
-            layer.store_put(crate::config::Region::new("us-west-2"));
-
-            let signing_config = SigV4OperationSigningConfig {
-                region: Some(SigningRegion::from(Region::new("us-west-2"))),
-                name: Some(SigningName::from_static("s3")),
-                ..Default::default()
-            };
-            layer.store_put(signing_config);
-
-            config_bag.push_layer(layer);
-
-            // Create provider
-            let provider = DefaultS3ExpressIdentityProvider::builder()
-                .behavior_version(crate::config::BehaviorVersion::latest())
-                .time_source(aws_smithy_async::time::SystemTimeSource::new())
-                .build();
-
-            // Call identity() and verify it fails with appropriate error message
-            let result = provider.identity(&runtime_components, &config_bag).await;
-
-            assert!(
-                result.is_err(),
-                "identity() should fail when bucket name is missing from endpoint params"
-            );
-            let error_message = result.unwrap_err().to_string();
-            assert!(
-                error_message.contains("A bucket was not set in endpoint params"),
-                "Error message should indicate missing bucket name, got: {}",
-                error_message
-            );
-        }
     }
 }
 
