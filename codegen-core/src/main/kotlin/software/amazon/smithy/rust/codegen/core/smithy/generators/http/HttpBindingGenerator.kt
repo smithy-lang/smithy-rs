@@ -125,12 +125,13 @@ class HttpBindingGenerator(
     private val operationShape: OperationShape,
     private val customizations: List<HttpBindingCustomization> = listOf(),
     private val httpRuntimeType: RuntimeType = RuntimeType.Http1x,
+    private val smithyHttpRuntimeType: RuntimeType = RuntimeType.smithyHttp(codegenContext.runtimeConfig),
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val codegenTarget = codegenContext.target
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
-    private val headerUtil = RuntimeType.smithyHttp(runtimeConfig).resolve("header")
+    private val headerUtil = smithyHttpRuntimeType.resolve("header")
     private val defaultTimestampFormat = TimestampFormatTrait.Format.EPOCH_SECONDS
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val serializerUtil = SerializerUtil(model, symbolProvider)
