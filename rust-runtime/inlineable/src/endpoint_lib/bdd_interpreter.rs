@@ -12,6 +12,42 @@ pub struct BddNode {
     pub low_ref: i32,
 }
 
+/// Intermediate result from a condition evaluation
+#[derive(Debug, Clone)]
+pub enum ConditionResult {
+    String(String),
+}
+
+/// Stores intermediate results from condition evaluations
+#[derive(Debug, Default)]
+pub struct ConditionContext {
+    results: Vec<Option<ConditionResult>>,
+}
+
+impl ConditionContext {
+    pub fn new(condition_count: usize) -> Self {
+        Self {
+            results: vec![None; condition_count],
+        }
+    }
+
+    pub fn store(&mut self, index: usize, result: ConditionResult) {
+        if let Some(slot) = self.results.get_mut(index) {
+            *slot = Some(result);
+        }
+    }
+
+    pub fn get(&self, index: usize) -> Option<&ConditionResult> {
+        self.results.get(index)?.as_ref()
+    }
+
+    pub fn get_string(&self, index: usize) -> Option<&str> {
+        match self.get(index)? {
+            ConditionResult::String(s) => Some(s.as_str()),
+        }
+    }
+}
+
 //TODO(bdd): Should probably make P, C, and R statically typed, but need to write those types first
 /// Evaluates a BDD to resolve an endpoint result
 ///
@@ -21,7 +57,7 @@ pub struct BddNode {
 /// * `params` - Parameters for condition evaluation
 /// * `conditions` - Array of conditions referenced by nodes
 /// * `results` - Array of possible results
-/// * `condition_evaluator` - Function to evaluate conditions
+/// * `condition_evaluator` - Function to evaluate conditions with context
 ///
 /// Returns
 /// * `Some(&R)` - Result if evaluation succeeds
@@ -32,8 +68,15 @@ pub fn evaluate_bdd<P, C, R: Clone>(
     params: &P,
     conditions: &[C],
     results: &[R],
-    condition_evaluator: impl Fn(&P, &C) -> bool,
+    diagnostic_collector: &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
+    condition_evaluator: impl Fn(
+        &P,
+        &C,
+        &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
+        &mut ConditionContext,
+    ) -> bool,
 ) -> Option<R> {
+    let mut context = ConditionContext::new(conditions.len());
     let mut current_ref = root_ref;
 
     loop {
@@ -52,7 +95,8 @@ pub fn evaluate_bdd<P, C, R: Clone>(
 
                 let node = nodes.get(node_index)?;
                 let condition = conditions.get(node.condition_index as usize)?;
-                let condition_result = condition_evaluator(params, condition);
+                let condition_result =
+                    condition_evaluator(params, condition, diagnostic_collector, &mut context);
 
                 // Handle complement edges: complement inverts the branch selection
                 current_ref = if is_complement ^ condition_result {

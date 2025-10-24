@@ -135,14 +135,14 @@ class EndpointBddGenerator(
 
             impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                 fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
-                    let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let result = evaluate_bdd(
                         &NODES,
                         ${bddTrait.bdd.rootRef},
                         params,
                         &CONDITIONS,
                         &RESULTS,
-                        |service_params, condition| condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, &mut diagnostic_collector),
+                        &mut #{DiagnosticCollector}::new(),
+                        |service_params, condition, mut diagnostic_collector, context| {condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, &mut diagnostic_collector)},
                     );
 
                     #{EndpointFuture}::ready(match result {
@@ -166,7 +166,10 @@ class EndpointBddGenerator(
             *conditionScope.toList().toTypedArray(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
             "custom_fields" to writable { fnsUsed.mapNotNull { it.structField() }.forEach { rust("#W,", it) } },
-            "custom_fields_init" to writable { fnsUsed.mapNotNull { it.structFieldInit() }.forEach { rust("#W,", it) } },
+            "custom_fields_init" to
+                writable {
+                    fnsUsed.mapNotNull { it.structFieldInit() }.forEach { rust("#W,", it) }
+                },
             "additional_args_sig_prefix" to writable { if (additionalArgsSignature.isNotEmpty()) rust(", ") },
             "additional_args_sig" to
                 writable {
