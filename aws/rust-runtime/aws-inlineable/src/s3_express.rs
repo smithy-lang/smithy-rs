@@ -735,8 +735,6 @@ pub(crate) mod identity_provider {
             config_bag
         }
 
-
-
         #[test]
         fn test_session_credentials_conversion() {
             let session_creds = SessionCredentials::builder()
@@ -789,14 +787,6 @@ pub(crate) mod identity_provider {
                 "S3ExpressBucket feature should be present in credentials returned by identity()"
             );
         }
-
-
-
-
-
-
-
-
     }
 }
 
