@@ -11,6 +11,7 @@ mod token;
 use crate::login::cache::{load_cached_token, save_cached_token, LoginTokenError};
 use crate::login::token::LoginToken;
 use crate::provider_config::ProviderConfig;
+use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider;
 use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::provider::future;
@@ -49,6 +50,7 @@ struct Inner {
     fs: Fs,
     env: Env,
     session_arn: String,
+    enabled_from_profile: bool,
     sdk_config: SdkConfig,
     time_source: SharedTimeSource,
     last_refresh_attempt: Mutex<Option<SystemTime>>,
@@ -66,6 +68,7 @@ impl LoginCredentialsProvider {
         Builder {
             session_arn: session_arn.into(),
             provider_config: None,
+            enabled_from_profile: false,
         }
     }
 
@@ -236,17 +239,19 @@ impl LoginCredentialsProvider {
         let token = self
             .resolve_token()
             .await
-            // .map(|mut creds| {
-            //     creds
-            //         .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
-            //         .push(AwsCredentialFeature::CredentialsSso);
-            //     creds
-            // })
             // TODO(sign-in): better mapping to CredentialsError
             .map_err(CredentialsError::provider_error)?;
 
-        // TODO(sign-in) add credentials properties
-        Ok(token.access_token)
+        let feat = match self.inner.enabled_from_profile {
+            true => AwsCredentialFeature::CredentialsProfileSignIn,
+            false => AwsCredentialFeature::CredentialsProfile,
+        };
+
+        let mut creds = token.access_token;
+        creds
+            .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
+            .push(feat);
+        Ok(creds)
     }
 }
 
@@ -264,12 +269,20 @@ impl ProvideCredentials for LoginCredentialsProvider {
 pub struct Builder {
     session_arn: String,
     provider_config: Option<ProviderConfig>,
+    enabled_from_profile: bool,
 }
 
 impl Builder {
     /// Override the configuration used for this provider
     pub fn configure(mut self, provider_config: &ProviderConfig) -> Self {
         self.provider_config = Some(provider_config.clone());
+        self
+    }
+
+    /// Set whether this provider was enabled via a profile.
+    /// Defaults to `false` (configured explicitly in user code).
+    pub(crate) fn enabled_from_profile(mut self, enabled: bool) -> Self {
+        self.enabled_from_profile = enabled;
         self
     }
 
@@ -282,6 +295,7 @@ impl Builder {
             fs,
             env,
             session_arn: self.session_arn,
+            enabled_from_profile: self.enabled_from_profile,
             sdk_config: provider_config.client_config(),
             time_source: provider_config.time_source(),
             last_refresh_attempt: Mutex::new(None),
