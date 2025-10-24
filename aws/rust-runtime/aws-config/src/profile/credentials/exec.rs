@@ -130,6 +130,7 @@ impl ProviderChain {
                 }
                 #[cfg(not(feature = "login"))]
                 {
+                    let _ = (login_session_arn);
                     Err(ProfileFileError::FeatureNotEnabled {
                         feature: "login".into(),
                         message: Some(

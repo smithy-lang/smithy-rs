@@ -140,9 +140,12 @@ impl LoginCredentialsProvider {
         cached_token: &LoginToken,
         now: SystemTime,
     ) -> Result<LoginToken, LoginTokenError> {
-        let client = SignInClient::new(&inner.sdk_config);
         // TODO(sign-in): get actual endpoint
-        let endpoint = "https://signin.aws.amazon.com/v1/token";
+        let endpoint = "https://ap-northeast-1.aws-signin-testing.amazon.com";
+
+        let sdk_config = inner.sdk_config.to_builder().endpoint_url(endpoint).build();
+
+        let client = SignInClient::new(&sdk_config);
         let dpop = Self::calculate_dpop(&cached_token.dpop_key, endpoint, now)?;
         let resp = client
             .create_o_auth2_token()
