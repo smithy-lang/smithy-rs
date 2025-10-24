@@ -74,6 +74,7 @@ pub fn evaluate_bdd<P, C, R: Clone>(
         &C,
         &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
         &mut ConditionContext,
+        usize,
     ) -> bool,
 ) -> Option<R> {
     let mut context = ConditionContext::new(conditions.len());
@@ -94,9 +95,15 @@ pub fn evaluate_bdd<P, C, R: Clone>(
                 let node_index = (ref_val.abs() - 2) as usize;
 
                 let node = nodes.get(node_index)?;
-                let condition = conditions.get(node.condition_index as usize)?;
-                let condition_result =
-                    condition_evaluator(params, condition, diagnostic_collector, &mut context);
+                let condition_index = node.condition_index as usize;
+                let condition = conditions.get(condition_index)?;
+                let condition_result = condition_evaluator(
+                    params,
+                    condition,
+                    diagnostic_collector,
+                    &mut context,
+                    condition_index,
+                );
 
                 // Handle complement edges: complement inverts the branch selection
                 current_ref = if is_complement ^ condition_result {

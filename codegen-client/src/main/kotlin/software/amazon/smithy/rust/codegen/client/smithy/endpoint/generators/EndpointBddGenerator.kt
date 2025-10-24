@@ -5,6 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionNode
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet
+import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -59,8 +63,15 @@ class EndpointBddGenerator(
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, condition) ->
-                "cond_$idx" to ConditionEvaluationGenerator.generateConditionEvaluation(condition, context)
+                if (condition.producesResult()) {
+                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionWithResultStorage(condition, context, idx)
+                } else {
+                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionEvaluation(condition, context, idx)
+                }
             }
+
+        // Identify which conditions produce results
+        val conditionProducesResult = bddTrait.conditions.map { it.producesResult() }
 
         // Render conditions to a dummy writer to populate the function registry
         // This is the same trick used by EndpointResolverGenerator
@@ -76,7 +87,7 @@ class EndpointBddGenerator(
 
         writer.rustTemplate(
             """
-            use #{EndpointLib}::{evaluate_bdd, BddNode};
+            use #{EndpointLib}::{evaluate_bdd, BddNode, ConditionContext, ConditionResult};
             use #{ResolveEndpointError};
 
             $nodes
@@ -87,10 +98,10 @@ class EndpointBddGenerator(
             }
 
             impl ConditionFn {
-                fn evaluate(&self, params: &Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
+                fn evaluate(&self, params: &Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}, context: &mut ConditionContext, index: usize) -> bool {
                     #{param_bindings:W}
                     match self {
-                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
+                        ${(0 until conditionCount).joinToString(",\n            ") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
                     }
                 }
             }
@@ -135,14 +146,17 @@ class EndpointBddGenerator(
 
             impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                 fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                    let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let result = evaluate_bdd(
                         &NODES,
                         ${bddTrait.bdd.rootRef},
                         params,
                         &CONDITIONS,
                         &RESULTS,
-                        &mut #{DiagnosticCollector}::new(),
-                        |service_params, condition, mut diagnostic_collector, context| {condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, &mut diagnostic_collector)},
+                        &mut diagnostic_collector,
+                        |service_params, condition, diagnostic_collector, context, index| {
+                            condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, diagnostic_collector, context, index)
+                        },
                     );
 
                     #{EndpointFuture}::ready(match result {
@@ -206,4 +220,32 @@ class EndpointBddGenerator(
 
         return "const NODES: &[BddNode] = &[\n    ${nodes.joinToString(",\n    ")}\n];"
     }
+}
+
+/**
+ * Determines if a condition produces a result that should be stored in the context.
+ * Result-producing conditions are those that:
+ * - Are wrapped in IsSet (checking if a function returned Some)
+ * - Have a non-boolean return type
+ */
+private fun Condition.producesResult(): Boolean {
+    val fn = this.function
+
+    // IsSet wraps functions that return Option<T> - these produce results
+    if (fn is IsSet) {
+        return true
+    }
+
+    // Check if the function itself returns a non-boolean type
+    if (fn is FunctionNode) {
+        try {
+            val type = fn.type()
+            return type !is BooleanType
+        } catch (_: Exception) {
+            // Type checking not available, assume it doesn't produce a result
+            return false
+        }
+    }
+
+    return false
 }

@@ -24,10 +24,15 @@ object ConditionEvaluationGenerator {
      *
      * For BDD conditions, we generate the expression directly and rely on Rust's type system.
      * The expression should evaluate to a boolean or Option<T> (which we convert to bool via is_some()).
+     *
+     * @param condition The condition to evaluate
+     * @param context The code generation context
+     * @param conditionIndex Optional index for BDD conditions to enable context-based result retrieval
      */
     fun generateConditionEvaluation(
         condition: Condition,
         context: Context,
+        conditionIndex: Int? = null,
     ): Writable {
         val fn = condition.targetFunction()
         val generator = ExpressionGenerator(Ownership.Borrowed, context)
@@ -42,6 +47,37 @@ object ConditionEvaluationGenerator {
                 // It should evaluate to a boolean
                 rustTemplate("#{target:W}", "target" to target)
             }
+        }
+    }
+
+    /**
+     * Generate code that evaluates a condition and stores its result in context.
+     * Returns a writable that evaluates to bool (true if result was Some, false otherwise).
+     */
+    fun generateConditionWithResultStorage(
+        condition: Condition,
+        context: Context,
+        conditionIndex: Int,
+    ): Writable {
+        val fn = condition.targetFunction()
+        val generator = ExpressionGenerator(Ownership.Borrowed, context)
+        val target = generator.generate(fn)
+
+        return writable {
+            rustTemplate(
+                """
+                {
+                    let result = #{target:W};
+                    if let Some(value) = result {
+                        context.store(index, ConditionResult::String(value.to_string()));
+                        true
+                    } else {
+                        false
+                    }
+                }
+                """.trimIndent(),
+                "target" to target,
+            )
         }
     }
 
