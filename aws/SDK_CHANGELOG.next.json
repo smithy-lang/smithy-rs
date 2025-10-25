@@ -6,18 +6,48 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Make [`TokenBucket`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.TokenBucket.html) and [`ClientRateLimiter`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.ClientRateLimiter.html) configurable through [`RetryPartition`](https://docs.rs/aws-smithy-runtime/latest/aws_smithy_runtime/client/retries/struct.RetryPartition.html).\n",
+      "message": "Update clients to allow `initial-response` events to be accepted on event streams, even when know modeled initial response exists.\n\nThis is required for spec compliance, backwards compatibility, and compatibility with non-smithy-rs based servers that\nMAY unconditionally send `initial-response` messages.\n",
       "meta": {
-        "bug": false,
+        "bug": true,
         "breaking": false,
         "tada": false
       },
-      "author": "ysaito1001",
+      "author": "rcoh",
       "references": [
-        "smithy-rs#4263"
+        "smithy-rs#4352",
+        "smithy-rs#4353"
       ],
-      "since-commit": "f18c70d36c40fa0f40860547394c134566704e69",
-      "age": 5
+      "since-commit": "3324dd53e7ead33bbfc7a9771b2932bb5c8f6d6c",
+      "age": 1
+    },
+    {
+      "message": "Add tags to `AssumeRoleProviderBuilder`\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "c-thiel",
+      "references": [
+        "aws-sdk-rust#1366"
+      ],
+      "since-commit": "3324dd53e7ead33bbfc7a9771b2932bb5c8f6d6c",
+      "age": 1
+    },
+    {
+      "message": "Adds new `with_test_defaults_v2()` for all clients supporting region configuration which applies `us-east-1` as default region if not set by user. This allows `aws-smithy-mocks` to work for non AWS SDK generated clients. Also clarify `test-util` feature requirement when using `aws-smithy-mocks`.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [
+        "smithy-rs#4265",
+        "smithy-rs#4189"
+      ],
+      "since-commit": "3324dd53e7ead33bbfc7a9771b2932bb5c8f6d6c",
+      "age": 1
     }
   ],
   "aws-sdk-model": []
