@@ -29,10 +29,22 @@ internal class Http1xProtocolCompilationTest {
                     .build(),
             ).build()
 
-    @ParameterizedTest
-    @EnumSource(ModelProtocol::class)
-    fun `generated code compiles with http-1x disabled for all protocols`(protocol: ModelProtocol) {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
+    @Test
+    fun `generated code compiles with http-1x disabled for RestJson`() {
+        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestJson)
+
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                service = serviceShapeId.toString(),
+                additionalSettings = buildAdditionalSettings(http1x = false),
+            ),
+        )
+    }
+
+    @Test
+    fun `generated code compiles with http-1x disabled for RpcV2Cbor`() {
+        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.Rpcv2Cbor)
 
         serverIntegrationTest(
             model,

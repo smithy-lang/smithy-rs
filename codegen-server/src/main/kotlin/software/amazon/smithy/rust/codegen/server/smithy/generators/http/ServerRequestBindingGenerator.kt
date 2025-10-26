@@ -43,6 +43,7 @@ class ServerRequestBindingGenerator(
                 ),
             ) + additionalHttpBindingCustomizations,
             httpRuntimeType = codegenContext.httpDependencies().httpType(),
+            smithyHttpRuntimeType = codegenContext.httpDependencies().smithyHttpModule(),
         )
 
     fun generateDeserializeHeaderFn(binding: HttpBindingDescriptor): RuntimeType =

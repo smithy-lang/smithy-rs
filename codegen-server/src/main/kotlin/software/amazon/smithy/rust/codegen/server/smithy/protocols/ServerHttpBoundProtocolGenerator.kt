@@ -147,7 +147,7 @@ class ServerHttpBoundProtocolPayloadGenerator(
                         #{event_stream}
                     }
                     """,
-                    "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
+                    "smithyHttpModule" to codegenContext.httpDependencies().smithyHttpModule(),
                     "NoOpSigner" to
                         RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                             .resolve("frame::NoOpSigner"),

@@ -74,18 +74,23 @@ data class ServerCodegenContext(
         } else {
             println("[ServerCodegenContext.httpDependencies] Returning HTTP 0.x dependencies")
             HttpDependencies(
-                http = CargoDependency.Http,
-                httpBody = CargoDependency.HttpBody,
+                http = CargoDependency("http-0x", CratesIo("0.2.9"), `package` = "http"),
+                httpBody =  CargoDependency("http-body-0x", CratesIo("0.4.4"), `package` = "http-body"),
                 httpBodyUtil = null,
                 hyper = CargoDependency.Hyper,
                 hyperDev = ServerCargoDependency.HyperDev,
                 smithyHttpServer = ServerCargoDependency.smithyHttpLegacyServer(runtimeConfig),
                 smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-02x"),
                 smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
-                smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(location = CratesIo("0.62")),
-                smithyJson = CargoDependency.smithyJson(runtimeConfig).copy(location = CratesIo("0.61")),
-                smithyCbor = CargoDependency.smithyCbor(runtimeConfig).copy(location = CratesIo("0.61")),
-                smithyXml = CargoDependency.smithyXml(runtimeConfig).copy(location = CratesIo("0.60")),
+                //smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(location = CratesIo("0.62")),
+                smithyHttp = ServerCargoDependency.smithyHttpLegacy(runtimeConfig),
+                smithyJson = CargoDependency.smithyJson(runtimeConfig),
+                smithyCbor = CargoDependency.smithyCbor(runtimeConfig),
+                smithyXml = CargoDependency.smithyXml(runtimeConfig),
+                // Todo: Even though these have the http-1x but they should be okay to use from the CargoDependency directly.
+//                smithyJson = CargoDependency.smithyJson(runtimeConfig).copy(location = CratesIo("0.61")),
+//                smithyCbor = CargoDependency.smithyCbor(runtimeConfig).copy(location = CratesIo("0.61")),
+//                smithyXml = CargoDependency.smithyXml(runtimeConfig).copy(location = CratesIo("0.60")),
             )
         }
     }

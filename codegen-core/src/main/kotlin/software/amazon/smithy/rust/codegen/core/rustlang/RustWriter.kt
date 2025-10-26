@@ -115,6 +115,18 @@ private fun <T : AbstractCodeWriter<T>, U> T.withTemplate(
         }
     }
     val contents = transformTemplate(template, scope, trim)
+    
+    // TEMP: http-1x debugging
+    // Debug: Check for aws_smithy_http usage
+    if (contents.contains("aws_smithy_http")) {
+        println("DEBUG: aws_smithy_http found in template:")
+        println("Template: $template")
+        println("Contents: $contents")
+        println("Stack trace:")
+        Thread.currentThread().stackTrace.take(10).forEach { println("  $it") }
+        println("---")
+    }
+    
     pushState()
     this.putContext(scope.toMap().mapKeys { (k, _) -> k.lowercase() })
     val out = f(contents)
