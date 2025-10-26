@@ -55,8 +55,23 @@ data class ServerCodegenContext(
      * is enabled, all HTTP dependencies are upgraded together to maintain compatibility.
      */
     private val httpDependencies by lazy {
-        if (settings.codegenConfig.http1x) {
-            println("[ServerCodegenContext.httpDependencies] Returning HTTP 1.x dependencies")
+        HttpDependenciesFactory.create(settings.codegenConfig.http1x, runtimeConfig)
+    }
+
+    fun httpDependencies(): HttpDependencies = httpDependencies
+}
+
+/**
+ * Factory for creating HttpDependencies based on http-1x configuration.
+ *
+ * This factory is used in multiple places:
+ * - ServerCodegenContext (lazy initialization)
+ * - RustServerCodegenPlugin (for EventStreamSymbolProvider)
+ */
+object HttpDependenciesFactory {
+    fun create(http1x: Boolean, runtimeConfig: software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig): HttpDependencies {
+        return if (http1x) {
+            println("[HttpDependenciesFactory] Creating HTTP 1.x dependencies")
             HttpDependencies(
                 http = CargoDependency.Http1x,
                 httpBody = CargoDependency.HttpBody1x,
@@ -72,28 +87,21 @@ data class ServerCodegenContext(
                 smithyXml = CargoDependency.smithyXml(runtimeConfig),
             )
         } else {
-            println("[ServerCodegenContext.httpDependencies] Returning HTTP 0.x dependencies")
+            println("[HttpDependenciesFactory] Creating HTTP 0.x dependencies")
             HttpDependencies(
                 http = CargoDependency("http-0x", CratesIo("0.2.9"), `package` = "http"),
-                httpBody =  CargoDependency("http-body-0x", CratesIo("0.4.4"), `package` = "http-body"),
+                httpBody = CargoDependency("http-body-0x", CratesIo("0.4.4"), `package` = "http-body"),
                 httpBodyUtil = null,
                 hyper = CargoDependency.Hyper,
                 hyperDev = ServerCargoDependency.HyperDev,
                 smithyHttpServer = ServerCargoDependency.smithyHttpLegacyServer(runtimeConfig),
                 smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-02x"),
                 smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
-                //smithyHttp = CargoDependency.smithyHttp(runtimeConfig).copy(location = CratesIo("0.62")),
                 smithyHttp = ServerCargoDependency.smithyHttpLegacy(runtimeConfig),
                 smithyJson = CargoDependency.smithyJson(runtimeConfig),
                 smithyCbor = CargoDependency.smithyCbor(runtimeConfig),
                 smithyXml = CargoDependency.smithyXml(runtimeConfig),
-                // Todo: Even though these have the http-1x but they should be okay to use from the CargoDependency directly.
-//                smithyJson = CargoDependency.smithyJson(runtimeConfig).copy(location = CratesIo("0.61")),
-//                smithyCbor = CargoDependency.smithyCbor(runtimeConfig).copy(location = CratesIo("0.61")),
-//                smithyXml = CargoDependency.smithyXml(runtimeConfig).copy(location = CratesIo("0.60")),
             )
         }
     }
-
-    fun httpDependencies(): HttpDependencies = httpDependencies
 }

@@ -27,6 +27,7 @@ class EventStreamSymbolProvider(
     private val runtimeConfig: RuntimeConfig,
     base: RustSymbolProvider,
     private val target: CodegenTarget,
+    private val smithyHttpDependency: CargoDependency = CargoDependency.smithyHttp(runtimeConfig),
 ) : WrappingSymbolProvider(base) {
     override fun toSymbol(shape: Shape): Symbol {
         val initial = super.toSymbol(shape)
@@ -71,7 +72,7 @@ class EventStreamSymbolProvider(
                     .name(rustType.name)
                     .rustType(rustType)
                     .addReference(initial)
-                    .addDependency(CargoDependency.smithyHttp(runtimeConfig).withFeature("event-stream"))
+                    .addDependency(smithyHttpDependency.withFeature("event-stream"))
                     .addReference(error)
                     .build()
             }
