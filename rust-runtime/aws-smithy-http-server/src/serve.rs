@@ -16,7 +16,9 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::task::{Context, Poll};
 
+use pin_project_lite::pin_project;
 use tokio::sync::watch;
 use tower::Service;
 
@@ -98,11 +100,61 @@ impl<S> Serve<S> {
     ///         .expect("failed to install Ctrl+C signal handler");
     /// }
     /// ```
-    pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<S>
+    pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<S, F>
     where
         F: Future<Output = ()> + Send + 'static,
     {
         WithGracefulShutdown::new(self.listener, self.service, signal)
+    }
+}
+
+pin_project! {
+    /// Future for [`Serve`].
+    pub struct ServeFuture<S> {
+        listener: tokio::net::TcpListener,
+        service: S,
+    }
+}
+
+impl<S> Future for ServeFuture<S>
+where
+    S: Service<http::Request<hyper::body::Incoming>, Response = http::Response<crate::body::BoxBody>, Error = Infallible>
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send,
+{
+    type Output = io::Result<()>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
+
+        loop {
+            match this.listener.poll_accept(cx) {
+                Poll::Ready(Ok((stream, _remote_addr))) => {
+                    let tower_service = this.service.clone();
+
+                    tokio::task::spawn(async move {
+                        let io = hyper_util::rt::TokioIo::new(stream);
+                        let hyper_service = hyper::service::service_fn(move |request| {
+                            tower_service.clone().call(request)
+                        });
+
+                        if let Err(err) = hyper_util::server::conn::auto::Builder::new(
+                            hyper_util::rt::TokioExecutor::new(),
+                        )
+                        .serve_connection_with_upgrades(io, hyper_service)
+                        .await
+                        {
+                            eprintln!("Error serving connection: {:?}", err);
+                        }
+                    });
+                    // Continue loop to accept more connections
+                }
+                Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                Poll::Pending => return Poll::Pending,
+            }
+        }
     }
 }
 
@@ -116,58 +168,93 @@ where
     S::Future: Send,
 {
     type Output = io::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
+    type IntoFuture = ServeFuture<S>;
 
     fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            loop {
-                let (stream, _remote_addr) = self.listener.accept().await?;
-                let tower_service = self.service.clone();
-
-                tokio::task::spawn(async move {
-                    let io = hyper_util::rt::TokioIo::new(stream);
-                    let hyper_service = hyper::service::service_fn(move |request| {
-                        tower_service.clone().call(request)
-                    });
-
-                    if let Err(err) = hyper_util::server::conn::auto::Builder::new(
-                        hyper_util::rt::TokioExecutor::new(),
-                    )
-                    .serve_connection_with_upgrades(io, hyper_service)
-                    .await
-                    {
-                        eprintln!("Error serving connection: {:?}", err);
-                    }
-                });
-            }
-        })
+        ServeFuture {
+            listener: self.listener,
+            service: self.service,
+        }
     }
 }
 
 /// A server with graceful shutdown enabled.
 ///
 /// Created by [`Serve::with_graceful_shutdown`].
-pub struct WithGracefulShutdown<S> {
+pub struct WithGracefulShutdown<S, F> {
     listener: tokio::net::TcpListener,
     service: S,
-    signal: Pin<Box<dyn Future<Output = ()> + Send>>,
+    signal: F,
 }
 
-impl<S> WithGracefulShutdown<S> {
-    fn new<F>(listener: tokio::net::TcpListener, service: S, signal: F) -> Self
+impl<S, F> WithGracefulShutdown<S, F> {
+    fn new(listener: tokio::net::TcpListener, service: S, signal: F) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
         Self {
             listener,
             service,
-            signal: Box::pin(signal),
+            signal,
         }
     }
 }
 
+pin_project! {
+    /// Future for [`WithGracefulShutdown`].
+    pub struct WithGracefulShutdownFuture<S> {
+        listener: tokio::net::TcpListener,
+        service: S,
+        signal_tx: watch::Sender<()>,
+        close_tx: Option<watch::Sender<()>>,
+        close_rx: watch::Receiver<()>,
+        state: ShutdownState,
+    }
+}
+
+enum ShutdownState {
+    /// Accepting new connections
+    Running,
+    /// Shutdown signal received, draining connections
+    Draining,
+}
+
 // Implement IntoFuture so we can await WithGracefulShutdown directly
-impl<S> std::future::IntoFuture for WithGracefulShutdown<S>
+impl<S, F> std::future::IntoFuture for WithGracefulShutdown<S, F>
+where
+    S: Service<http::Request<hyper::body::Incoming>, Response = http::Response<crate::body::BoxBody>, Error = Infallible>
+        + Clone
+        + Send
+        + 'static,
+    S::Future: Send,
+    F: Future<Output = ()> + Send + 'static,
+{
+    type Output = io::Result<()>;
+    type IntoFuture = WithGracefulShutdownFuture<S>;
+
+    fn into_future(self) -> Self::IntoFuture {
+        // Create watch channels for shutdown coordination (Axum pattern)
+        let (signal_tx, signal_rx) = watch::channel(());
+        let (close_tx, close_rx) = watch::channel(());
+
+        // Spawn the shutdown signal watcher
+        tokio::spawn(async move {
+            self.signal.await;
+            drop(signal_rx); // This triggers signal_tx.closed()
+        });
+
+        WithGracefulShutdownFuture {
+            listener: self.listener,
+            service: self.service,
+            signal_tx,
+            close_tx: Some(close_tx),
+            close_rx,
+            state: ShutdownState::Running,
+        }
+    }
+}
+
+impl<S> Future for WithGracefulShutdownFuture<S>
 where
     S: Service<http::Request<hyper::body::Incoming>, Response = http::Response<crate::body::BoxBody>, Error = Infallible>
         + Clone
@@ -176,65 +263,74 @@ where
     S::Future: Send,
 {
     type Output = io::Result<()>;
-    type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
-    fn into_future(self) -> Self::IntoFuture {
-        Box::pin(async move {
-            // Create a watch channel for the shutdown signal
-            // Based on axum's graceful shutdown implementation
-            let (signal_tx, signal_rx) = watch::channel(());
-            let (close_tx, mut close_rx) = watch::channel(());
+    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let this = self.project();
 
-            // Spawn the shutdown signal watcher
-            tokio::spawn(async move {
-                self.signal.await;
-                drop(signal_rx);
-            });
-
-            loop {
-                let (stream, _remote_addr) = tokio::select! {
-                    // Shutdown signal received - stop accepting new connections
-                    _ = signal_tx.closed() => {
-                        break;
-                    }
-                    // Accept new connection
-                    result = self.listener.accept() => {
-                        result?
-                    }
-                };
-
-                let tower_service = self.service.clone();
-                let close_tx = close_tx.clone();
-
-                tokio::task::spawn(async move {
-                    let io = hyper_util::rt::TokioIo::new(stream);
-                    let hyper_service = hyper::service::service_fn(move |request| {
-                        tower_service.clone().call(request)
-                    });
-
-                    if let Err(err) = hyper_util::server::conn::auto::Builder::new(
-                        hyper_util::rt::TokioExecutor::new(),
-                    )
-                    .serve_connection_with_upgrades(io, hyper_service)
-                    .await
-                    {
-                        eprintln!("Error serving connection: {:?}", err);
+        loop {
+            match this.state {
+                ShutdownState::Running => {
+                    // Check if shutdown signal received
+                    if this.signal_tx.is_closed() {
+                        // Stop accepting new connections, start draining
+                        *this.state = ShutdownState::Draining;
+                        // Drop the original close_tx
+                        this.close_tx.take();
+                        continue;
                     }
 
-                    // Connection is done - drop close_tx
-                    drop(close_tx);
-                });
+                    // Try to accept a new connection
+                    match this.listener.poll_accept(cx) {
+                        Poll::Ready(Ok((stream, _remote_addr))) => {
+                            let tower_service = this.service.clone();
+                            let close_tx = this.close_tx.as_ref().expect("close_tx should exist in Running state").clone();
+
+                            tokio::task::spawn(async move {
+                                let io = hyper_util::rt::TokioIo::new(stream);
+                                let hyper_service = hyper::service::service_fn(move |request| {
+                                    tower_service.clone().call(request)
+                                });
+
+                                if let Err(err) = hyper_util::server::conn::auto::Builder::new(
+                                    hyper_util::rt::TokioExecutor::new(),
+                                )
+                                .serve_connection_with_upgrades(io, hyper_service)
+                                .await
+                                {
+                                    eprintln!("Error serving connection: {:?}", err);
+                                }
+
+                                // Connection is done - drop close_tx
+                                drop(close_tx);
+                            });
+                            // Continue loop to accept more connections
+                        }
+                        Poll::Ready(Err(e)) => return Poll::Ready(Err(e)),
+                        Poll::Pending => return Poll::Pending,
+                    }
+                }
+                ShutdownState::Draining => {
+                    // Wait for all connections to complete
+                    // Pin the future on the stack
+                    let mut drain_fut = std::pin::pin!(this.close_rx.changed());
+                    match drain_fut.as_mut().poll(cx) {
+                        Poll::Ready(Ok(())) => {
+                            // Value changed (shouldn't happen, but connections might still be running)
+                            // Continue polling
+                            cx.waker().wake_by_ref();
+                            return Poll::Pending;
+                        }
+                        Poll::Ready(Err(_)) => {
+                            // Channel closed - all connection tasks dropped their senders
+                            return Poll::Ready(Ok(()));
+                        }
+                        Poll::Pending => {
+                            // Still waiting for connections to complete
+                            return Poll::Pending;
+                        }
+                    }
+                }
             }
-
-            // Dropped out of the loop - signal was received
-            // Drop the original close_tx so close_rx will notice when all connections finish
-            drop(close_tx);
-
-            // Wait for all active connections to finish
-            // When all close_tx clones are dropped, the receiver will see the channel is closed
-            let _ = close_rx.changed().await;
-
-            Ok(())
-        })
+        }
     }
 }
