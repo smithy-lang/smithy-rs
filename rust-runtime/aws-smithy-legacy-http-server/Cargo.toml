@@ -18,10 +18,10 @@ unredacted-logging = []
 request-id = ["dep:uuid"]
 
 [dependencies]
-aws-smithy-http = { version = "0.62", features = ["rt-tokio"] }
-aws-smithy-json = "0.61"
-aws-smithy-cbor = "0.61"
-aws-smithy-xml = "0.60"
+aws-smithy-legacy-http = { path = "../aws-smithy-legacy-http", features = ["rt-tokio", "event-stream"] }
+aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-cbor = { path = "../aws-smithy-cbor" }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
 bytes = "1.10.0"
