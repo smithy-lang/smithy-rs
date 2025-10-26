@@ -84,8 +84,60 @@ open class ServerRootGenerator(
             //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
             //! modules provide the types used in each operation.
             //!
-            //! ###### Running on Hyper
+            ${if (codegenContext.isHttp1()) {
+                """
+                //! ###### Quick Start - Using `serve`
+                //!
+                //! The simplest way to run your service is using the [`server::serve`] function:
+                //!
+                //! ```rust,no_run
+                //! ## use std::net::SocketAddr;
+                //! ## async fn dummy() {
+                //! use $crateName::{$serviceName, ${serviceName}Config};
+                //! use #{Tokio}::net::TcpListener;
+                //!
+                //! ## let app = $serviceName::builder(
+                //! ##     ${serviceName}Config::builder()
+                //! ##         .build()$unwrapConfigBuilder
+                //! ## ).build_unchecked();
+                //! let listener = TcpListener::bind("127.0.0.1:6969").await.expect("failed to bind");
+                //! $crateName::server::serve(listener, app).await.expect("server error");
+                //! ## }
+                //! ```
+                //!
+                //! For graceful shutdown:
+                //!
+                //! ```rust,no_run
+                //! ## use std::net::SocketAddr;
+                //! ## async fn dummy() {
+                //! use $crateName::{$serviceName, ${serviceName}Config};
+                //! use #{Tokio}::net::TcpListener;
+                //! use #{Tokio}::signal;
+                //!
+                //! ## let app = $serviceName::builder(
+                //! ##     ${serviceName}Config::builder()
+                //! ##         .build()$unwrapConfigBuilder
+                //! ## ).build_unchecked();
+                //! let listener = TcpListener::bind("127.0.0.1:6969").await.expect("failed to bind");
+                //! $crateName::server::serve(listener, app)
+                //!     .with_graceful_shutdown(async {
+                //!         signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
+                //!     })
+                //!     .await
+                //!     .expect("server error");
+                //! ## }
+                //! ```
+                //!
+                //! ###### Advanced - Using Hyper Directly
+                //!
+                //! For more control over the server (custom executors, HTTP/2 settings, etc.),
+                //! you can use hyper-util directly:
+                """.trimIndent()
+            } else {
+                ""
+            }}
             //!
+            ${if (!codegenContext.isHttp1()) "//! ###### Running on Hyper\n//!" else ""}
             //! ```rust,no_run
             //! ## use std::net::SocketAddr;
             //! ## async fn dummy() {
