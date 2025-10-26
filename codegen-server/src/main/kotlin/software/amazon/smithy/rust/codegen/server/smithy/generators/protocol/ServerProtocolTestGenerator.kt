@@ -681,7 +681,7 @@ class ServerProtocolTestGenerator(
         mediaType: String?,
     ) {
         // Generate different body collection code based on HTTP version
-        if (serverCodegenContext.settings.codegenConfig.http1x) {
+        if (serverCodegenContext.isHttp1()) {
             // For HTTP 1.x: use http-body-util's BodyExt trait
             rustWriter.rustTemplate(
                 """

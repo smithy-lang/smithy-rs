@@ -553,7 +553,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // For HTTP 1.x, use the wrap_stream function instead of Body::wrap_stream method
             // since Body is just a type alias for hyper::body::Incoming
             val wrapStreamCall =
-                if (codegenContext.settings.codegenConfig.http1x) {
+                if (codegenContext.isHttp1()) {
                     "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
                 } else {
                     "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
@@ -770,7 +770,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 httpBindingResolver.requestContentType(operationShape)!!
 
             // Generate different body collection code based on HTTP version
-            if (codegenContext.settings.codegenConfig.http1x) {
+            if (codegenContext.isHttp1()) {
                 // For HTTP 1.x: use http-body-util's BodyExt trait
                 rustTemplate(
                     """
@@ -1001,7 +1001,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     }
                             }
                         // Generate different body collection code based on HTTP version
-                        if (codegenContext.settings.codegenConfig.http1x) {
+                        if (codegenContext.isHttp1()) {
                             // For HTTP 1.x: use http-body-util's BodyExt trait
                             rustTemplate(
                                 """

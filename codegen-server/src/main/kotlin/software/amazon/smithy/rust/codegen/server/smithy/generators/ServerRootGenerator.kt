@@ -95,10 +95,10 @@ open class ServerRootGenerator(
             //! ##     ${serviceName}Config::builder()
             //! ##         .build()$unwrapConfigBuilder
             //! ## ).build_unchecked();
-            ${if (codegenContext.settings.codegenConfig.http1x) {
+            ${if (codegenContext.isHttp1()) {
                 """
                 //! use #{HyperUtil}::rt::TokioIo;
-                //! use #{HyperUtil}::service::TowerToHyperService;
+                //! use #{HyperUtil}::rt::TokioExecutor;
                 //! use #{Tokio}::net::TcpListener;
                 //! use #{Tower}::Service;
                 //!
@@ -108,14 +108,16 @@ open class ServerRootGenerator(
                 //!
                 //! loop {
                 //!     let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
-                //!     let io = TokioIo::new(stream);
-                //!     let mut app = app.clone();
+                //!     let tower_service = app.clone();
                 //!
                 //!     #{Tokio}::task::spawn(async move {
-                //!         let hyper_service = TowerToHyperService::new(app);
+                //!         let io = TokioIo::new(stream);
+                //!         let hyper_service = #{Hyper}::service::service_fn(move |request| {
+                //!             tower_service.clone().call(request)
+                //!         });
                 //!
-                //!         if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
-                //!             .serve_connection(io, hyper_service)
+                //!         if let Err(err) = #{HyperUtil}::server::conn::auto::Builder::new(TokioExecutor::new())
+                //!             .serve_connection_with_upgrades(io, hyper_service)
                 //!             .await
                 //!         {
                 //!             eprintln!("Error serving connection: {:?}", err);
@@ -163,15 +165,15 @@ open class ServerRootGenerator(
             //! ```rust,no_run
             //! ## use $crateName::server::plugin::IdentityPlugin as LoggingPlugin;
             //! ## use $crateName::server::plugin::IdentityPlugin as MetricsPlugin;
-            ${if (codegenContext.settings.codegenConfig.http1x) "//! use $crateName::server::body::BoxBody;" else "//! ## use #{Hyper}::Body;"}
+            ${if (codegenContext.isHttp1()) "//! use $crateName::server::body::BoxBody;" else "//! ## use #{Hyper}::Body;"}
             //! use $crateName::server::plugin::HttpPlugins;
-            ${if (codegenContext.settings.codegenConfig.http1x) "//! use $crateName::{$serviceName, ${serviceName}Config};" else "//! use $crateName::{$serviceName, ${serviceName}Config, $builderName};"}
+            ${if (codegenContext.isHttp1()) "//! use $crateName::{$serviceName, ${serviceName}Config};" else "//! use $crateName::{$serviceName, ${serviceName}Config, $builderName};"}
             //!
             //! let http_plugins = HttpPlugins::new()
             //!         .push(LoggingPlugin)
             //!         .push(MetricsPlugin);
             //! let config = ${serviceName}Config::builder().http_plugin(http_plugins).build()$unwrapConfigBuilder;
-            ${if (codegenContext.settings.codegenConfig.http1x) "//! let _app = $serviceName::builder::<BoxBody, _, _, _>(config).build_unchecked();" else "//! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);"}
+            ${if (codegenContext.isHttp1()) "//! let _app = $serviceName::builder::<BoxBody, _, _, _>(config).build_unchecked();" else "//! let builder: $builderName<Body, _, _, _> = $serviceName::builder(config);"}
             //! ```
             //!
             //! Check out [`crate::server::plugin`] to learn more about plugins.
@@ -247,10 +249,10 @@ open class ServerRootGenerator(
             //!        .build()
             //!        .expect("failed to build an instance of $serviceName");
             //!
-            ${if (codegenContext.settings.codegenConfig.http1x) {
+            ${if (codegenContext.isHttp1()) {
                 """
                 //!    use #{HyperUtil}::rt::TokioIo;
-                //!    use #{HyperUtil}::service::TowerToHyperService;
+                //!    use #{HyperUtil}::rt::TokioExecutor;
                 //!    use #{Tokio}::net::TcpListener;
                 //!    use #{Tower}::Service;
                 //!
@@ -260,14 +262,16 @@ open class ServerRootGenerator(
                 //!
                 //!    loop {
                 //!        let (stream, remote_addr) = listener.accept().await.expect("failed to accept connection");
-                //!        let io = TokioIo::new(stream);
-                //!        let mut app = app.clone();
+                //!        let tower_service = app.clone();
                 //!
                 //!        #{Tokio}::task::spawn(async move {
-                //!            let hyper_service = TowerToHyperService::new(app);
+                //!            let io = TokioIo::new(stream);
+                //!            let hyper_service = #{Hyper}::service::service_fn(move |request| {
+                //!                tower_service.clone().call(request)
+                //!            });
                 //!
-                //!            if let Err(err) = #{Hyper}::server::conn::http1::Builder::new()
-                //!                .serve_connection(io, hyper_service)
+                //!            if let Err(err) = #{HyperUtil}::server::conn::auto::Builder::new(TokioExecutor::new())
+                //!                .serve_connection_with_upgrades(io, hyper_service)
                 //!                .await
                 //!            {
                 //!                eprintln!("Error serving connection: {:?}", err);

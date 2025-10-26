@@ -30,10 +30,10 @@ class Http0xDependencyPinningDecorator : ServerCodegenDecorator {
 
     override fun crateManifestCustomizations(codegenContext: ServerCodegenContext): ManifestCustomizations {
         // Debug: Print HTTP version configuration
-        println("[Http0xDependencyPinning] http1x setting: ${codegenContext.settings.codegenConfig.http1x}")
+        println("[Http0xDependencyPinning] http1x setting: ${codegenContext.isHttp1()}")
 
         // Only apply customizations for HTTP 0.x
-        if (codegenContext.settings.codegenConfig.http1x) {
+        if (codegenContext.isHttp1()) {
             println("[Http0xDependencyPinning] HTTP 1.x detected, skipping customizations")
             return emptyMap()
         }

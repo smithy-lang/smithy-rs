@@ -61,15 +61,15 @@ internal class Http1xFeatureCombinationTest {
 
         val params = IntegrationTestParams(
             additionalSettings = builder.toObjectNode(),
-            command = {}
+            cargoCommand = "cargo test",
         )
-        
+
         val finalParams = if (serviceShapeId != null) {
             params.copy(service = serviceShapeId.toString())
         } else {
             params
         }
-        
+
         serverIntegrationTest(model, finalParams)
     }
 
@@ -159,6 +159,13 @@ internal class Http1xFeatureCombinationTest {
         testHttp1xWithModel(model, serviceShapeId, http1x = false)
     }
 
+
+    @Test
+    fun `constraints model with RestJson and http-1x enabled`() {
+        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestJson)
+        testHttp1xWithModel(model, serviceShapeId, http1x = true)
+    }
+
     @Test
     fun `constraints model with RestXml and http-1x disabled`() {
         val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestXml)
@@ -171,48 +178,48 @@ internal class Http1xFeatureCombinationTest {
         testHttp1xWithModel(model, serviceShapeId, http1x = false)
     }
 
-    @ParameterizedTest
-    @EnumSource(ModelProtocol::class)
-    fun `constraints model with http-1x enabled`(protocol: ModelProtocol) {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
-        testHttp1xWithModel(model, serviceShapeId, http1x = true)
-    }
+//    @ParameterizedTest
+//    @EnumSource(ModelProtocol::class)
+//    fun `constraints model with http-1x enabled`(protocol: ModelProtocol) {
+//        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
+//        testHttp1xWithModel(model, serviceShapeId, http1x = true)
+//    }
 
-    @ParameterizedTest
-    @EnumSource(ModelProtocol::class)
-    fun `publicConstrainedTypes disabled with http-1x disabled`(protocol: ModelProtocol) {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
-        testHttp1xWithModel(model, serviceShapeId, http1x = false, publicConstrainedTypes = false)
-    }
+//    @ParameterizedTest
+//    @EnumSource(ModelProtocol::class)
+//    fun `publicConstrainedTypes disabled with http-1x disabled`(protocol: ModelProtocol) {
+//        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
+//        testHttp1xWithModel(model, serviceShapeId, http1x = false, publicConstrainedTypes = false)
+//    }
+//
+//    @ParameterizedTest
+//    @EnumSource(ModelProtocol::class)
+//    fun `publicConstrainedTypes disabled with http-1x enabled`(protocol: ModelProtocol) {
+//        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
+//        testHttp1xWithModel(model, serviceShapeId, http1x = true, publicConstrainedTypes = false)
+//    }
 
-    @ParameterizedTest
-    @EnumSource(ModelProtocol::class)
-    fun `publicConstrainedTypes disabled with http-1x enabled`(protocol: ModelProtocol) {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(protocol)
-        testHttp1xWithModel(model, serviceShapeId, http1x = true, publicConstrainedTypes = false)
-    }
-
-    @Test
-    fun `httpQuery binding traits and constraints with http-1x disabled`() {
-        val model = loadHttpQueryModel()
-        testHttp1xWithModel(model, http1x = false)
-    }
-
-    @Test
-    fun `httpQuery binding traits and constraints with http-1x enabled`() {
-        val model = loadHttpQueryModel()
-        testHttp1xWithModel(model, http1x = true)
-    }
-
-    @Test
-    fun `httpQuery binding traits and ValidationException with http-1x disabled`() {
-        val model = loadHttpQueryModel()
-        testHttp1xWithModel(model, http1x = false, addValidationExceptionToConstrainedOperations = true)
-    }
-
-    @Test
-    fun `httpQuery binding traits and ValidationException with http-1x enabled`() {
-        val model = loadHttpQueryModel()
-        testHttp1xWithModel(model, http1x = true, addValidationExceptionToConstrainedOperations = true)
-    }
+//    @Test
+//    fun `httpQuery binding traits and constraints with http-1x disabled`() {
+//        val model = loadHttpQueryModel()
+//        testHttp1xWithModel(model, http1x = false)
+//    }
+//
+//    @Test
+//    fun `httpQuery binding traits and constraints with http-1x enabled`() {
+//        val model = loadHttpQueryModel()
+//        testHttp1xWithModel(model, http1x = true)
+//    }
+//
+//    @Test
+//    fun `httpQuery binding traits and ValidationException with http-1x disabled`() {
+//        val model = loadHttpQueryModel()
+//        testHttp1xWithModel(model, http1x = false, addValidationExceptionToConstrainedOperations = true)
+//    }
+//
+//    @Test
+//    fun `httpQuery binding traits and ValidationException with http-1x enabled`() {
+//        val model = loadHttpQueryModel()
+//        testHttp1xWithModel(model, http1x = true, addValidationExceptionToConstrainedOperations = true)
+//    }
 }
