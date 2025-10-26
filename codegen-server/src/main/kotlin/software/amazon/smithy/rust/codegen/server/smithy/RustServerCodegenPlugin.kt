@@ -82,7 +82,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
             // Generate different types for EventStream shapes (e.g. transcribe streaming)
             .let {
                 // Get the correct smithy-http dependency based on http-1x flag
-                val httpDeps = HttpDependenciesFactory.create(settings.codegenConfig.http1x, rustSymbolProviderConfig.runtimeConfig)
+                val httpDeps = HttpDependencies.create(settings.codegenConfig.http1x, rustSymbolProviderConfig.runtimeConfig)
                 EventStreamSymbolProvider(rustSymbolProviderConfig.runtimeConfig, it, CodegenTarget.SERVER, httpDeps.smithyHttp)
             }
             // Generate [ByteStream] instead of `Blob` for streaming binary shapes (e.g. S3 GetObject)

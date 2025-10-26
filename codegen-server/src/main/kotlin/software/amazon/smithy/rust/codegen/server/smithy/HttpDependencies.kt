@@ -159,4 +159,50 @@ data class HttpDependencies(
             "aws-smithy-json" to smithyJson,
             "aws-smithy-http" to smithyHttp,
         )
+
+    companion object {
+        /**
+         * Factory method for creating HttpDependencies based on http-1x configuration.
+         *
+         * This factory is used in multiple places:
+         * - ServerCodegenContext (lazy initialization)
+         * - RustServerCodegenPlugin (for EventStreamSymbolProvider)
+         * - Server protocol generators (for EventStream marshallers/unmarshallers)
+         */
+        fun create(http1x: Boolean, runtimeConfig: software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig): HttpDependencies {
+            return if (http1x) {
+                println("[HttpDependencies.create] Creating HTTP 1.x dependencies")
+                HttpDependencies(
+                    http = CargoDependency.Http1x,
+                    httpBody = CargoDependency.HttpBody1x,
+                    httpBodyUtil = CargoDependency.HttpBodyUtil01x,
+                    hyper = CargoDependency("hyper", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("1")),
+                    hyperDev = CargoDependency("hyper", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("1"), scope = software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope.Dev),
+                    smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig),
+                    smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-1x"),
+                    smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-1-x"),
+                    smithyHttp = CargoDependency.smithyHttp(runtimeConfig),
+                    smithyJson = CargoDependency.smithyJson(runtimeConfig),
+                    smithyCbor = CargoDependency.smithyCbor(runtimeConfig),
+                    smithyXml = CargoDependency.smithyXml(runtimeConfig),
+                )
+            } else {
+                println("[HttpDependencies.create] Creating HTTP 0.x dependencies")
+                HttpDependencies(
+                    http = CargoDependency("http-0x", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("0.2.9"), `package` = "http"),
+                    httpBody = CargoDependency("http-body-0x", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("0.4.4"), `package` = "http-body"),
+                    httpBodyUtil = null,
+                    hyper = CargoDependency.Hyper,
+                    hyperDev = ServerCargoDependency.HyperDev,
+                    smithyHttpServer = ServerCargoDependency.smithyHttpLegacyServer(runtimeConfig),
+                    smithyRuntimeApi = CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-02x"),
+                    smithyTypes = CargoDependency.smithyTypes(runtimeConfig).withFeature("http-body-0-4-x"),
+                    smithyHttp = ServerCargoDependency.smithyHttpLegacy(runtimeConfig),
+                    smithyJson = CargoDependency.smithyJson(runtimeConfig),
+                    smithyCbor = CargoDependency.smithyCbor(runtimeConfig),
+                    smithyXml = CargoDependency.smithyXml(runtimeConfig),
+                )
+            }
+        }
+    }
 }

@@ -36,7 +36,7 @@ class StreamPayloadSerializerCustomization : ServerHttpBoundProtocolCustomizatio
                         withBlockTemplate(
                             "#{FuturesStreamCompatByteStream}::new(",
                             ")",
-                            "FuturesStreamCompatByteStream" to RuntimeType.futuresStreamCompatByteStream(section.params.codegenContext.runtimeConfig),
+                            "FuturesStreamCompatByteStream" to section.params.codegenContext.httpDependencies().smithyHttp.toType().resolve("futures_stream_adapter::FuturesStreamCompatByteStream"),
                         ) {
                             section.params.payloadGenerator.generatePayload(
                                 this,

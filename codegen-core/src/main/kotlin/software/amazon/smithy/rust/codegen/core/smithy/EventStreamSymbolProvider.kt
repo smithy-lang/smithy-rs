@@ -58,10 +58,10 @@ class EventStreamSymbolProvider(
                         (shape.isOutputEventStream(model) && target == CodegenTarget.SERVER)
                 val outer =
                     when (isSender) {
-                        true -> RuntimeType.eventStreamSender(runtimeConfig).toSymbol().rustType()
+                        true -> smithyHttpDependency.toType().resolve("event_stream::EventStreamSender").toSymbol().rustType()
                         else -> {
                             if (target == CodegenTarget.SERVER) {
-                                RuntimeType.eventStreamReceiver(runtimeConfig).toSymbol().rustType()
+                                smithyHttpDependency.toType().resolve("event_stream::Receiver").toSymbol().rustType()
                             } else {
                                 RuntimeType.eventReceiver(runtimeConfig).toSymbol().rustType()
                             }

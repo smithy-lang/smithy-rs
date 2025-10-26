@@ -26,6 +26,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -270,6 +271,7 @@ class HttpBindingGenerator(
                 codegenContext,
                 operationShape,
                 targetShape,
+                smithyHttpRuntimeType.dependency!! as CargoDependency,
             ).render()
         rustTemplate(
             """
