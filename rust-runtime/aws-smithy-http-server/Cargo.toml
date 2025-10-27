@@ -51,6 +51,7 @@ uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"
+hyper-util = { version = "0.1", features = ["tokio", "client", "client-legacy", "http1"] }
 
 [package.metadata.docs.rs]
 all-features = true
