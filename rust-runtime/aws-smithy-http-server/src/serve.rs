@@ -182,19 +182,19 @@ where
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
             // Create watch channels for shutdown coordination (Axum pattern)
-            let (signal_tx, signal_rx) = watch::channel(());
-            let (close_tx, mut close_rx) = watch::channel(());
+            let (shutdown_tx, shutdown_rx) = watch::channel(());
+            let (inflight_tx, mut inflight_rx) = watch::channel(());
 
             // Spawn the shutdown signal watcher
             tokio::spawn(async move {
                 self.signal.await;
-                drop(signal_rx); // This triggers signal_tx.closed()
+                drop(shutdown_rx); // This triggers shutdown_tx.closed()
             });
 
             loop {
                 let (stream, _remote_addr) = tokio::select! {
                     // Shutdown signal received - stop accepting new connections
-                    _ = signal_tx.closed() => {
+                    _ = shutdown_tx.closed() => {
                         break;
                     }
                     // Accept new connection
@@ -204,7 +204,7 @@ where
                 };
 
                 let tower_service = self.service.clone();
-                let close_tx = close_tx.clone();
+                let inflight_tx = inflight_tx.clone();
 
                 tokio::task::spawn(async move {
                     let io = hyper_util::rt::TokioIo::new(stream);
@@ -221,18 +221,18 @@ where
                         eprintln!("Error serving connection: {:?}", err);
                     }
 
-                    // Connection is done - drop close_tx
-                    drop(close_tx);
+                    // Connection is done - drop inflight_tx
+                    drop(inflight_tx);
                 });
             }
 
             // Dropped out of the loop - shutdown signal received
-            // Drop the original close_tx so close_rx will notice when all connections finish
-            drop(close_tx);
+            // Drop the original inflight_tx so inflight_rx will notice when all connections finish
+            drop(inflight_tx);
 
-            // Wait for all active connections to finish
-            // When all close_tx clones are dropped, the receiver will see the channel is closed
-            let _ = close_rx.changed().await;
+            // Wait for all in-flight connections to finish
+            // When all inflight_tx clones are dropped, the receiver will see the channel is closed
+            let _ = inflight_rx.changed().await;
 
             Ok(())
         })
