@@ -40,7 +40,7 @@ impl PySocket {
     #[pyo3(text_signature = "($self, address, port, backlog=None)")]
     #[new]
     pub fn new(address: String, port: i32, backlog: Option<i32>) -> PyResult<Self> {
-        let address: SocketAddr = format!("{}:{}", address, port).parse()?;
+        let address: SocketAddr = format!("{address}:{port}").parse()?;
         let (domain, ip_version) = PySocket::socket_domain(address);
         tracing::trace!(address = %address, ip_version, "shared socket listening");
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;

@@ -392,7 +392,7 @@ mod tests {
                 acc
             });
 
-        format!("0x{}", decoded_checksum)
+        format!("0x{decoded_checksum}")
     }
 
     #[test]
