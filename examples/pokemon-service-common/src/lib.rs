@@ -293,7 +293,7 @@ pub async fn capture_pokemon(
                     }
                     None => break,
                 },
-                Err(e) => println!("{:?}", e),
+                Err(e) => println!("{e:?}"),
             }
         }
     };

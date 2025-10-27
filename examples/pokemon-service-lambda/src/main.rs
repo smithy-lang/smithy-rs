@@ -41,6 +41,6 @@ pub async fn main() {
     let lambda = lambda_http::run(handler);
 
     if let Err(err) = lambda.await {
-        eprintln!("lambda error: {}", err);
+        eprintln!("lambda error: {err}");
     }
 }

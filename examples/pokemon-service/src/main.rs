@@ -110,6 +110,6 @@ pub async fn main() {
 
     // Run forever-ish...
     if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+        eprintln!("server error: {err}");
     }
 }
