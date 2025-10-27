@@ -43,7 +43,7 @@ fn check_copyright_header(path: impl AsRef<Path>) -> Vec<LintError> {
     }
     let contents = match fs::read_to_string(path.as_ref()) {
         Ok(contents) => contents,
-        Err(err) if format!("{}", err).contains("No such file or directory") => {
+        Err(err) if format!("{err}").contains("No such file or directory") => {
             eprintln!("Note: {} does not exist", path.as_ref().display());
             return vec![];
         }

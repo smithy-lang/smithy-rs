@@ -164,7 +164,12 @@ class ErrorImplGenerator(
                         write("""::std::write!(f, ": {}", $REDACTION)?;""")
                     } else {
                         ifSet(it, symbolProvider.toSymbol(it), ValueExpression.Reference("&self.message")) { field ->
-                            write("""::std::write!(f, ": {}", ${field.asRef()})?;""")
+                            val referenced = field.asRef()
+                            if (referenced.startsWith("&")) {
+                                write("""::std::write!(f, ": {}", $referenced)?;""")
+                            } else {
+                                write("""::std::write!(f, ": {$referenced}")?;""")
+                            }
                         }
                     }
                 }

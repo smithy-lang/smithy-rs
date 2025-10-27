@@ -38,12 +38,12 @@ class AwsQueryParserGenerator(
             rustTemplate(
                 """
                 if !(${XmlBindingTraitParserGenerator.XmlName(responseWrapperName).matchExpression("start_el")}) {
-                    return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $responseWrapperName got {:?}", start_el)))
+                    return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $responseWrapperName got {start_el:?}")))
                 }
                 if let Some(mut result_tag) = decoder.next_tag() {
                     let start_el = result_tag.start_el();
                     if !(${XmlBindingTraitParserGenerator.XmlName(resultWrapperName).matchExpression("start_el")}) {
-                        return Err(#{XmlDecodeError}::custom(format!("invalid result, expected $resultWrapperName got {:?}", start_el)))
+                        return Err(#{XmlDecodeError}::custom(format!("invalid result, expected $resultWrapperName got {start_el:?}")))
                     }
                 """,
                 "XmlDecodeError" to context.xmlDecodeErrorType,
