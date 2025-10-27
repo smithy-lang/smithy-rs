@@ -68,11 +68,44 @@ where
 pub struct Serve<S> {
     listener: tokio::net::TcpListener,
     service: S,
+    enable_connect_info: bool,
 }
 
 impl<S> Serve<S> {
     fn new(listener: tokio::net::TcpListener, service: S) -> Self {
-        Self { listener, service }
+        Self {
+            listener,
+            service,
+            enable_connect_info: false,
+        }
+    }
+
+    /// Enable `ConnectInfo` extraction in request handlers.
+    ///
+    /// When enabled, the remote address will be available in handlers via
+    /// `ConnectInfo<SocketAddr>` extraction.
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use tokio::net::TcpListener;
+    /// use aws_smithy_http_server::request::connect_info::ConnectInfo;
+    ///
+    /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// aws_smithy_http_server::serve(listener, app)
+    ///     .with_connect_info()
+    ///     .await
+    ///     .unwrap();
+    ///
+    /// // In your handler:
+    /// // fn handler(input: Input, connect_info: ConnectInfo<SocketAddr>) -> Output {
+    /// //     println!("Request from: {}", connect_info.0);
+    /// //     ...
+    /// // }
+    /// ```
+    pub fn with_connect_info(mut self) -> Self {
+        self.enable_connect_info = true;
+        self
     }
 
     /// Enable graceful shutdown for the server.
@@ -102,7 +135,7 @@ impl<S> Serve<S> {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        WithGracefulShutdown::new(self.listener, self.service, signal)
+        WithGracefulShutdown::new(self.listener, self.service, signal, self.enable_connect_info)
     }
 }
 
@@ -121,12 +154,16 @@ where
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
             loop {
-                let (stream, _remote_addr) = self.listener.accept().await?;
+                let (stream, remote_addr) = self.listener.accept().await?;
                 let tower_service = self.service.clone();
+                let enable_connect_info = self.enable_connect_info;
 
                 tokio::task::spawn(async move {
                     let io = hyper_util::rt::TokioIo::new(stream);
-                    let hyper_service = hyper::service::service_fn(move |request| {
+                    let hyper_service = hyper::service::service_fn(move |mut request| {
+                        if enable_connect_info {
+                            request.extensions_mut().insert(crate::request::connect_info::ConnectInfo(remote_addr));
+                        }
                         tower_service.clone().call(request)
                     });
 
@@ -151,10 +188,11 @@ pub struct WithGracefulShutdown<S, F> {
     listener: tokio::net::TcpListener,
     service: S,
     signal: F,
+    enable_connect_info: bool,
 }
 
 impl<S, F> WithGracefulShutdown<S, F> {
-    fn new(listener: tokio::net::TcpListener, service: S, signal: F) -> Self
+    fn new(listener: tokio::net::TcpListener, service: S, signal: F, enable_connect_info: bool) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -162,7 +200,17 @@ impl<S, F> WithGracefulShutdown<S, F> {
             listener,
             service,
             signal,
+            enable_connect_info,
         }
+    }
+
+    /// Enable `ConnectInfo` extraction in request handlers.
+    ///
+    /// When enabled, the remote address will be available in handlers via
+    /// `ConnectInfo<SocketAddr>` extraction.
+    pub fn with_connect_info(mut self) -> Self {
+        self.enable_connect_info = true;
+        self
     }
 }
 
@@ -191,8 +239,10 @@ where
                 drop(shutdown_rx); // This triggers shutdown_tx.closed()
             });
 
+            let enable_connect_info = self.enable_connect_info;
+
             loop {
-                let (stream, _remote_addr) = tokio::select! {
+                let (stream, remote_addr) = tokio::select! {
                     // Shutdown signal received - stop accepting new connections
                     _ = shutdown_tx.closed() => {
                         break;
@@ -208,7 +258,10 @@ where
 
                 tokio::task::spawn(async move {
                     let io = hyper_util::rt::TokioIo::new(stream);
-                    let hyper_service = hyper::service::service_fn(move |request| {
+                    let hyper_service = hyper::service::service_fn(move |mut request| {
+                        if enable_connect_info {
+                            request.extensions_mut().insert(crate::request::connect_info::ConnectInfo(remote_addr));
+                        }
                         tower_service.clone().call(request)
                     });
 
