@@ -38,7 +38,7 @@ class RestXmlParserGenerator(
                     if !${XmlBindingTraitParserGenerator.XmlName(shapeName).matchExpression("start_el")} {
                         return Err(
                             #{XmlDecodeError}::custom(
-                                format!("encountered invalid XML root: expected $shapeName but got {:?}. This is likely a bug in the SDK.", start_el)
+                                format!("encountered invalid XML root: expected $shapeName but got {start_el:?}. This is likely a bug in the SDK.")
                             )
                         )
                     }
