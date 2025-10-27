@@ -16,9 +16,20 @@ use std::convert::Infallible;
 use std::future::Future;
 use std::io;
 use std::pin::Pin;
+use std::sync::Arc;
+use std::time::Duration;
 
 use tokio::sync::watch;
 use tower::Service;
+
+type ConfigureHyperFn = Arc<
+    dyn Fn(
+            hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
+        ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
+        + Send
+        + Sync
+        + 'static,
+>;
 
 /// Serve a service on the given listener.
 ///
@@ -69,6 +80,7 @@ pub struct Serve<S> {
     listener: tokio::net::TcpListener,
     service: S,
     enable_connect_info: bool,
+    configure_hyper: Option<ConfigureHyperFn>,
 }
 
 impl<S> Serve<S> {
@@ -77,6 +89,7 @@ impl<S> Serve<S> {
             listener,
             service,
             enable_connect_info: false,
+            configure_hyper: None,
         }
     }
 
@@ -108,6 +121,41 @@ impl<S> Serve<S> {
         self
     }
 
+    /// Configure the underlying Hyper server connection builder.
+    ///
+    /// This allows customization of Hyper settings like:
+    /// - `http1_max_buf_size()`
+    /// - `http2_max_concurrent_streams()`
+    /// - Other protocol-specific settings
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use tokio::net::TcpListener;
+    ///
+    /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// aws_smithy_http_server::serve(listener, app)
+    ///     .configure_hyper(|builder| {
+    ///         builder
+    ///             .http1_max_buf_size(16 * 1024)
+    ///             .http2_max_concurrent_streams(200)
+    ///     })
+    ///     .await
+    ///     .unwrap();
+    /// ```
+    pub fn configure_hyper<F>(mut self, f: F) -> Self
+    where
+        F: Fn(
+                hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
+            ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.configure_hyper = Some(Arc::new(f));
+        self
+    }
+
     /// Enable graceful shutdown for the server.
     ///
     /// When the provided future completes, the server will stop accepting new connections
@@ -135,7 +183,13 @@ impl<S> Serve<S> {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        WithGracefulShutdown::new(self.listener, self.service, signal, self.enable_connect_info)
+        WithGracefulShutdown::new(
+            self.listener,
+            self.service,
+            signal,
+            self.enable_connect_info,
+            self.configure_hyper,
+        )
     }
 }
 
@@ -153,10 +207,12 @@ where
 
     fn into_future(self) -> Self::IntoFuture {
         Box::pin(async move {
+            let configure_hyper = self.configure_hyper;
             loop {
                 let (stream, remote_addr) = self.listener.accept().await?;
                 let tower_service = self.service.clone();
                 let enable_connect_info = self.enable_connect_info;
+                let configure_hyper = configure_hyper.clone();
 
                 tokio::task::spawn(async move {
                     let io = hyper_util::rt::TokioIo::new(stream);
@@ -167,13 +223,15 @@ where
                         tower_service.clone().call(request)
                     });
 
-                    if let Err(err) = hyper_util::server::conn::auto::Builder::new(
+                    let mut builder = hyper_util::server::conn::auto::Builder::new(
                         hyper_util::rt::TokioExecutor::new(),
-                    )
-                    .serve_connection_with_upgrades(io, hyper_service)
-                    .await
-                    {
-                        eprintln!("Error serving connection: {:?}", err);
+                    );
+                    if let Some(configure) = configure_hyper {
+                        builder = configure(builder);
+                    }
+
+                    if let Err(err) = builder.serve_connection_with_upgrades(io, hyper_service).await {
+                        tracing::error!(error = ?err, "error serving connection");
                     }
                 });
             }
@@ -189,10 +247,18 @@ pub struct WithGracefulShutdown<S, F> {
     service: S,
     signal: F,
     enable_connect_info: bool,
+    configure_hyper: Option<ConfigureHyperFn>,
+    shutdown_timeout: Option<Duration>,
 }
 
 impl<S, F> WithGracefulShutdown<S, F> {
-    fn new(listener: tokio::net::TcpListener, service: S, signal: F, enable_connect_info: bool) -> Self
+    fn new(
+        listener: tokio::net::TcpListener,
+        service: S,
+        signal: F,
+        enable_connect_info: bool,
+        configure_hyper: Option<ConfigureHyperFn>,
+    ) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -201,6 +267,8 @@ impl<S, F> WithGracefulShutdown<S, F> {
             service,
             signal,
             enable_connect_info,
+            configure_hyper,
+            shutdown_timeout: None,
         }
     }
 
@@ -210,6 +278,68 @@ impl<S, F> WithGracefulShutdown<S, F> {
     /// `ConnectInfo<SocketAddr>` extraction.
     pub fn with_connect_info(mut self) -> Self {
         self.enable_connect_info = true;
+        self
+    }
+
+    /// Configure the underlying Hyper server connection builder.
+    ///
+    /// This allows customization of Hyper settings like:
+    /// - `http1_max_buf_size()`
+    /// - `http2_max_concurrent_streams()`
+    /// - Other protocol-specific settings
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use tokio::net::TcpListener;
+    ///
+    /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// aws_smithy_http_server::serve(listener, app)
+    ///     .with_graceful_shutdown(shutdown_signal())
+    ///     .configure_hyper(|builder| {
+    ///         builder
+    ///             .http1_max_buf_size(16 * 1024)
+    ///             .http2_max_concurrent_streams(200)
+    ///     })
+    ///     .await
+    ///     .unwrap();
+    /// ```
+    pub fn configure_hyper<G>(mut self, f: G) -> Self
+    where
+        G: Fn(
+                hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
+            ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.configure_hyper = Some(Arc::new(f));
+        self
+    }
+
+    /// Set a timeout for graceful shutdown.
+    ///
+    /// If the timeout expires before all in-flight connections finish,
+    /// the server will stop waiting and return. This only applies to the
+    /// shutdown phase, not the normal server operation.
+    ///
+    /// By default, there is no timeout (waits indefinitely).
+    ///
+    /// # Example
+    ///
+    /// ```rust,ignore
+    /// use std::time::Duration;
+    /// use tokio::net::TcpListener;
+    ///
+    /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    /// aws_smithy_http_server::serve(listener, app)
+    ///     .with_graceful_shutdown(shutdown_signal())
+    ///     .with_shutdown_timeout(Duration::from_secs(30))
+    ///     .await
+    ///     .unwrap();
+    /// ```
+    pub fn with_shutdown_timeout(mut self, timeout: Duration) -> Self {
+        self.shutdown_timeout = Some(timeout);
         self
     }
 }
@@ -240,6 +370,8 @@ where
             });
 
             let enable_connect_info = self.enable_connect_info;
+            let configure_hyper = self.configure_hyper;
+            let shutdown_timeout = self.shutdown_timeout;
 
             loop {
                 let (stream, remote_addr) = tokio::select! {
@@ -255,6 +387,7 @@ where
 
                 let tower_service = self.service.clone();
                 let inflight_tx = inflight_tx.clone();
+                let configure_hyper = configure_hyper.clone();
 
                 tokio::task::spawn(async move {
                     let io = hyper_util::rt::TokioIo::new(stream);
@@ -265,13 +398,15 @@ where
                         tower_service.clone().call(request)
                     });
 
-                    if let Err(err) = hyper_util::server::conn::auto::Builder::new(
+                    let mut builder = hyper_util::server::conn::auto::Builder::new(
                         hyper_util::rt::TokioExecutor::new(),
-                    )
-                    .serve_connection_with_upgrades(io, hyper_service)
-                    .await
-                    {
-                        eprintln!("Error serving connection: {:?}", err);
+                    );
+                    if let Some(configure) = configure_hyper {
+                        builder = configure(builder);
+                    }
+
+                    if let Err(err) = builder.serve_connection_with_upgrades(io, hyper_service).await {
+                        tracing::error!(error = ?err, "error serving connection");
                     }
 
                     // Connection is done - drop inflight_tx
@@ -283,9 +418,27 @@ where
             // Drop the original inflight_tx so inflight_rx will notice when all connections finish
             drop(inflight_tx);
 
-            // Wait for all in-flight connections to finish
+            // Wait for all in-flight connections to finish (with optional timeout)
             // When all inflight_tx clones are dropped, the receiver will see the channel is closed
-            let _ = inflight_rx.changed().await;
+            match shutdown_timeout {
+                Some(timeout) => {
+                    match tokio::time::timeout(timeout, inflight_rx.changed()).await {
+                        Ok(_) => {
+                            tracing::debug!("all in-flight connections completed during graceful shutdown");
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                timeout_secs = timeout.as_secs(),
+                                "graceful shutdown timeout expired, some connections may not have completed"
+                            );
+                        }
+                    }
+                }
+                None => {
+                    let _ = inflight_rx.changed().await;
+                    tracing::debug!("all in-flight connections completed during graceful shutdown");
+                }
+            }
 
             Ok(())
         })
