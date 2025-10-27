@@ -33,9 +33,9 @@ pub mod sync {
         fn expect_success_output(&mut self, context: &str) -> Result<String> {
             let output = self
                 .output()
-                .with_context(|| format!("failed to invoke {:?}", self))?;
+                .with_context(|| format!("failed to invoke {self:?}"))?;
             let stdout = String::from_utf8(output.stdout)
-                .with_context(|| format!("command: {:?}", self))
+                .with_context(|| format!("command: {self:?}"))
                 .context("output had invalid utf-8")?;
             if !output.status.success() {
                 bail!(
@@ -55,7 +55,7 @@ pub mod sync {
         ) -> Result<i32> {
             let output = self
                 .output()
-                .with_context(|| format!("failed to invoke {:?}", self))?;
+                .with_context(|| format!("failed to invoke {self:?}"))?;
             let expected: Vec<_> = statuses.into_iter().collect();
             let actual = output.status.code().unwrap();
             if expected.contains(&actual) {

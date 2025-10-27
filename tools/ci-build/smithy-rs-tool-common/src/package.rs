@@ -158,7 +158,7 @@ impl Package {
     ) -> Result<Option<Package>> {
         let manifest_path = manifest_path.as_ref();
         let mut manifest = Manifest::from_slice(manifest)
-            .with_context(|| format!("failed to load package manifest for {:?}", manifest_path))?;
+            .with_context(|| format!("failed to load package manifest for {manifest_path:?}"))?;
         manifest.complete_from_path(manifest_path)?;
         if let Some(package) = manifest.package {
             let name = package.name;

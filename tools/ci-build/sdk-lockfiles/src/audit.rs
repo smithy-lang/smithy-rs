@@ -252,10 +252,7 @@ fn lockfile_for(
     lockfile.push(relative_path_to_lockfile);
     Ok((
         Lockfile::load(lockfile).with_context(|| {
-            format!(
-                "failed to crate a `Lockfile` for {}",
-                relative_path_to_lockfile
-            )
+            format!("failed to crate a `Lockfile` for {relative_path_to_lockfile}")
         })?,
         relative_path_to_lockfile,
     ))
