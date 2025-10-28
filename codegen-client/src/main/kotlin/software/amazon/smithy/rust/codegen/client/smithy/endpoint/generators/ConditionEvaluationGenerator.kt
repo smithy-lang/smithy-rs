@@ -60,8 +60,10 @@ object ConditionEvaluationGenerator {
         conditionIndex: Int,
     ): Writable {
         val fn = condition.targetFunction()
+        val returnType = condition.function.functionDefinition.returnType
         val generator = ExpressionGenerator(Ownership.Borrowed, context)
         val target = generator.generate(fn)
+        val resultName = condition.result.get().name
 
         return writable {
             rustTemplate(
@@ -69,7 +71,7 @@ object ConditionEvaluationGenerator {
                 {
                     let result = #{target:W};
                     if let Some(value) = result {
-                        context.store(index, ConditionResult::String(value.to_string()));
+                        context.store(String::from("$resultName"), ConditionResult::String(value.to_string()));
                         true
                     } else {
                         false

@@ -3,6 +3,9 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::endpoint_lib::parse_url::Url;
+use std::collections::HashMap;
+
 //TODO(bdd): Should this just be an [i32; 3]? Might make it easier to make things const?
 /// Binary Decision Diagram node representation
 #[derive(Debug, Clone, Copy)]
@@ -13,38 +16,33 @@ pub struct BddNode {
 }
 
 /// Intermediate result from a condition evaluation
-#[derive(Debug, Clone)]
-pub enum ConditionResult {
+#[derive(Debug)]
+pub enum ConditionResult<'a> {
     String(String),
+    Bool(bool),
+    StringArray(Vec<String>),
+    Url(Url<'a>),
 }
 
 /// Stores intermediate results from condition evaluations
 #[derive(Debug, Default)]
-pub struct ConditionContext {
-    results: Vec<Option<ConditionResult>>,
+pub struct ConditionContext<'a> {
+    results: HashMap<String, ConditionResult<'a>>,
 }
 
-impl ConditionContext {
+impl<'a> ConditionContext<'a> {
     pub fn new(condition_count: usize) -> Self {
         Self {
-            results: vec![None; condition_count],
+            results: HashMap::with_capacity(condition_count),
         }
     }
 
-    pub fn store(&mut self, index: usize, result: ConditionResult) {
-        if let Some(slot) = self.results.get_mut(index) {
-            *slot = Some(result);
-        }
+    pub fn store(&mut self, ref_name: String, result: ConditionResult<'a>) {
+        self.results.insert(ref_name, result);
     }
 
-    pub fn get(&self, index: usize) -> Option<&ConditionResult> {
-        self.results.get(index)?.as_ref()
-    }
-
-    pub fn get_string(&self, index: usize) -> Option<&str> {
-        match self.get(index)? {
-            ConditionResult::String(s) => Some(s.as_str()),
-        }
+    pub fn get(&self, ref_name: &str) -> Option<&ConditionResult> {
+        self.results.get(ref_name)
     }
 }
 

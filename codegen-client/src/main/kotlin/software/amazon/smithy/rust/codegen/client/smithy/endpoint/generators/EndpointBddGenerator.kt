@@ -64,7 +64,11 @@ class EndpointBddGenerator(
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, condition) ->
                 if (condition.producesResult()) {
-                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionWithResultStorage(condition, context, idx)
+                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionWithResultStorage(
+                        condition,
+                        context,
+                        idx,
+                    )
                 } else {
                     "cond_$idx" to ConditionEvaluationGenerator.generateConditionEvaluation(condition, context, idx)
                 }
@@ -224,28 +228,5 @@ class EndpointBddGenerator(
 
 /**
  * Determines if a condition produces a result that should be stored in the context.
- * Result-producing conditions are those that:
- * - Are wrapped in IsSet (checking if a function returned Some)
- * - Have a non-boolean return type
  */
-private fun Condition.producesResult(): Boolean {
-    val fn = this.function
-
-    // IsSet wraps functions that return Option<T> - these produce results
-    if (fn is IsSet) {
-        return true
-    }
-
-    // Check if the function itself returns a non-boolean type
-    if (fn is FunctionNode) {
-        try {
-            val type = fn.type()
-            return type !is BooleanType
-        } catch (_: Exception) {
-            // Type checking not available, assume it doesn't produce a result
-            return false
-        }
-    }
-
-    return false
-}
+private fun Condition.producesResult(): Boolean = this.result.isPresent
