@@ -34,7 +34,8 @@ login = [
     "uuid?/v4",
     "dep:p256",
     "p256?/arithmetic",
-    "p256?/pem"
+    "p256?/pem",
+    "dep:rand",
 ]
 test-util = ["aws-runtime/test-util"]
 
@@ -77,7 +78,8 @@ sha2 = { version = "0.10.9", optional = true }
 aws-sdk-signin = { path = "../../sdk/build/aws-sdk/sdk/signin", default-features = false, optional = true }
 base64-simd = { version = "0.8.0", optional = true }
 uuid = { version = "1.18.1", optional = true }
-log = "0.4.28"
+# TODO(signin): latest version of rand uses a newer version of rand_core incompatible with current stable p256 crate, latest RC is up-to date so next release (0.14.x will use latest rand)
+rand = { version = "0.8.5", default-features = false, features = ["std", "std_rng"], optional = true }
 
 [dev-dependencies]
 aws-smithy-async = { path = "../../sdk/build/aws-sdk/sdk/aws-smithy-async", features = ["rt-tokio", "test-util"] }

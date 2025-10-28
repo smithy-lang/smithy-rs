@@ -25,9 +25,12 @@ use aws_smithy_types::Number;
 use aws_types::os_shim_internal::{Env, Fs};
 use aws_types::SdkConfig;
 use p256::ecdsa::signature::digest::Digest;
+use p256::ecdsa::signature::RandomizedSigner;
 use p256::ecdsa::{signature::Signer, Signature, SigningKey};
+use p256::elliptic_curve::group::GroupEncoding;
 use p256::elliptic_curve::sec1::ToEncodedPoint;
 use p256::SecretKey;
+use rand::SeedableRng;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -191,6 +194,8 @@ impl LoginCredentialsProvider {
             .map_err(|e| LoginTokenError::other("invalid secret key", Some(e.into())))?;
         let public_key = private_key.public_key();
         let point = public_key.to_encoded_point(false);
+        println!("#### public key length: {}", point.len());
+
         let x_bytes = point
             .x()
             .ok_or_else(|| LoginTokenError::other("invalid private key: x coordinate", None))?;
@@ -198,8 +203,13 @@ impl LoginCredentialsProvider {
             .y()
             .ok_or_else(|| LoginTokenError::other("invalid private key: y coordinate", None))?;
 
-        let x_b64 = base64_simd::URL_SAFE.encode_to_string(x_bytes);
-        let y_b64 = base64_simd::URL_SAFE.encode_to_string(y_bytes);
+        println!("x and y length: {} | {} ", x_bytes.len(), y_bytes.len());
+
+        let x_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(x_bytes);
+        let y_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(y_bytes);
+
+        println!("x base64: {x_b64}");
+        println!("y base64: {y_b64}");
 
         let mut header = String::new();
         let mut writer = JsonObjectWriter::new(&mut header);
@@ -213,11 +223,16 @@ impl LoginCredentialsProvider {
         jwk.finish();
         writer.finish();
 
+        println!("header: {header}");
+
         let jti = uuid::Uuid::new_v4().to_string();
         let iat = now
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_err(|e| LoginTokenError::other("system time before UNIX epoch", Some(e.into())))?
             .as_secs();
+
+        // let jti = "12345678-1234-1234-1234-123456789abc"; // hard coded for debugging
+        // let iat = 1730123380;
 
         let mut payload = String::new();
         let mut writer = JsonObjectWriter::new(&mut payload);
@@ -226,17 +241,25 @@ impl LoginCredentialsProvider {
         writer.key("htu").string(endpoint);
         writer.key("iat").number(Number::PosInt(iat));
         writer.finish();
+        println!("payload: {payload}");
 
-        let header_b64 = base64_simd::URL_SAFE.encode_to_string(header.as_bytes());
-        let payload_b64 = base64_simd::URL_SAFE.encode_to_string(payload.as_bytes());
+        let header_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(header.as_bytes());
+        let payload_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(payload.as_bytes());
+        println!("header base64: {header_b64}");
+        println!("payload base64: {payload_b64}");
         let message = format!("{}.{}", header_b64, payload_b64);
 
-        let message_sha256 = sha2::Sha256::digest(message.as_bytes());
+        // let message_sha256 = sha2::Sha256::digest(message.as_bytes());
 
         // Sign the message
         let signing_key = SigningKey::from(&private_key);
-        let signature: Signature = signing_key.sign(message_sha256.as_slice());
-        let signature_b64 = base64_simd::URL_SAFE.encode_to_string(signature.to_bytes());
+        // let signature: Signature = signing_key.sign(message_sha256.as_slice());
+        println!("message to sign: {message}");
+        let mut rng = rand::rngs::StdRng::from_entropy();
+        let signature: Signature = signing_key.sign_with_rng(&mut rng, message.as_bytes());
+        // let signature: Signature = signing_key.sign(message.as_bytes());
+        println!("signature length: {}", signature.to_bytes().len());
+        let signature_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(signature.to_bytes());
 
         Ok(format!("{}.{}", message, signature_b64))
     }
@@ -346,5 +369,16 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("invalid secret key"));
+    }
+
+    #[test]
+    fn test_valid_dpop() {
+        let private_key_pem = "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEICkzZJ3QIYPqeySX5PmR8Av5hLX6vXQvByMFC8kQIxGsoAoGCCqGSM49\nAwEHoUQDQgAE3xGubELTAc9haZnmC7RhSe5MNO3WwZBqVYeuHF0vu3u2lsKGuHLF\n6B7zzACp3nOszD9DiyMAHViphhwZjASasA==\n-----END EC PRIVATE KEY-----\n";
+        let endpoint = "https://ap-northeast-1.aws-signin-testing.amazon.com/v1/token";
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1730123380);
+
+        let result = LoginCredentialsProvider::calculate_dpop(private_key_pem, endpoint, now);
+        assert!(result.is_ok());
+        println!("dpop: {}", result.unwrap())
     }
 }
