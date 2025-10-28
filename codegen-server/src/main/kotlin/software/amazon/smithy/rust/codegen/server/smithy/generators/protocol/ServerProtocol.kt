@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -89,18 +90,18 @@ interface ServerProtocol : Protocol {
     fun serverContentTypeCheckNoModeledInput(): Boolean = false
 
     /** The protocol-specific `RequestRejection` type. **/
-    fun requestRejection(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    fun requestRejection(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::$protocolModulePath::rejection::RequestRejection")
 
     /** The protocol-specific `ResponseRejection` type. **/
-    fun responseRejection(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    fun responseRejection(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::$protocolModulePath::rejection::ResponseRejection")
 
     /** The protocol-specific `RuntimeError` type. **/
-    fun runtimeError(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    fun runtimeError(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::$protocolModulePath::runtime_error::RuntimeError")
 
     /**
@@ -200,16 +201,16 @@ class ServerAwsJsonProtocol(
             AwsJsonVersion.Json11 -> "new_aws_json_11_router"
         }
 
-    override fun requestRejection(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    override fun requestRejection(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::aws_json::rejection::RequestRejection")
 
-    override fun responseRejection(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    override fun responseRejection(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::aws_json::rejection::ResponseRejection")
 
-    override fun runtimeError(httpDependencies: HttpDependencies): RuntimeType =
-        httpDependencies.smithyHttpServer
+    override fun runtimeError(smithyHttpServer: CargoDependency): RuntimeType =
+        smithyHttpServer
             .toType().resolve("protocol::aws_json::runtime_error::RuntimeError")
 
     /*
@@ -220,7 +221,7 @@ class ServerAwsJsonProtocol(
         deserializePayloadErrorType(
             codegenContext,
             binding,
-            requestRejection(httpDeps),
+            requestRejection(httpDeps.smithyHttpServer),
             (codegenContext as ServerCodegenContext).httpDependencies().smithyJsonModule().resolve("deserialize::error::DeserializeError"),
         )
 }
@@ -270,7 +271,7 @@ class ServerRestJsonProtocol(
         deserializePayloadErrorType(
             codegenContext,
             binding,
-            requestRejection(httpDeps),
+            requestRejection(httpDeps.smithyHttpServer),
             (codegenContext as ServerCodegenContext).httpDependencies().smithyJsonModule().resolve("deserialize::error::DeserializeError"),
         )
 }
@@ -308,7 +309,7 @@ class ServerRestXmlProtocol(
         deserializePayloadErrorType(
             codegenContext,
             binding,
-            requestRejection(httpDeps),
+            requestRejection(httpDeps.smithyHttpServer),
             httpDeps.smithyXmlModule().resolve("decode::XmlDecodeError"),
         )
 }
@@ -388,7 +389,7 @@ class ServerRpcV2CborProtocol(
         deserializePayloadErrorType(
             codegenContext,
             binding,
-            requestRejection(httpDeps),
+            requestRejection(httpDeps.smithyHttpServer),
             httpDeps.smithyCborModule().resolve("decode::DeserializeError"),
         )
 }

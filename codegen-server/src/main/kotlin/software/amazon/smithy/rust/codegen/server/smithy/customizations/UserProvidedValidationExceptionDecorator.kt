@@ -248,7 +248,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 }
                 """,
                 *preludeScope,
-                "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+                "RequestRejection" to protocol.requestRejection(codegenContext.httpDependencies().smithyHttpServer),
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {

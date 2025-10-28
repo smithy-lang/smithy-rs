@@ -199,9 +199,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "Regex" to RuntimeType.Regex,
             "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
             "SmithyTypes" to httpDeps.smithyTypesModule(),
-            "RuntimeError" to protocol.runtimeError(httpDeps),
-            "RequestRejection" to protocol.requestRejection(httpDeps),
-            "ResponseRejection" to protocol.responseRejection(httpDeps),
+            "RuntimeError" to protocol.runtimeError(httpDeps.smithyHttpServer),
+            "RequestRejection" to protocol.requestRejection(httpDeps.smithyHttpServer),
+            "ResponseRejection" to protocol.responseRejection(httpDeps.smithyHttpServer),
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
             "http" to httpDeps.httpModule(),
             "Tracing" to RuntimeType.Tracing,
@@ -948,7 +948,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 """,
                                 "Deserializer" to deserializer,
                                 "InitialMessageType" to
-                                    RuntimeType.smithyHttp(runtimeConfig)
+                                    httpDeps.smithyHttp.toType()
                                         .resolve("event_stream::InitialMessageType"),
                                 "parseInitialRequest" to parseInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),

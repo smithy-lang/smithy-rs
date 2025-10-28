@@ -168,7 +168,6 @@ data class ServerCodegenConfig(
                         "http-1x", 
                         DEFAULT_HTTP_1X,
                     ),
-               http1x = configNode.getBooleanMemberOrDefault("http-1x", DEFAULT_HTTP_1X),
             )
         } else {
             ServerCodegenConfig(

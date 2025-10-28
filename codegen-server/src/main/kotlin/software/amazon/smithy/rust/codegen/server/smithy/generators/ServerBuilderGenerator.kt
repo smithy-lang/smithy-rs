@@ -157,7 +157,7 @@ class ServerBuilderGenerator(
 
     private val codegenScope =
         arrayOf(
-            "RequestRejection" to protocol.requestRejection(codegenContext.httpDependencies()),
+            "RequestRejection" to protocol.requestRejection(codegenContext.httpDependencies().smithyHttpServer),
             "Structure" to structureSymbol,
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
