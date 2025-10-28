@@ -122,7 +122,7 @@ impl ProviderChain {
                 #[cfg(feature = "login")]
                 {
                     Arc::new({
-                        let mut builder = LoginCredentialsProvider::builder(*login_session_arn)
+                        let builder = LoginCredentialsProvider::builder(*login_session_arn)
                             .enabled_from_profile(true)
                             .configure(provider_config);
                         builder.build()
