@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-package software.amazon.smithy.rust.codegen.traits
+package software.amazon.smithy.framework.rust
 
 import software.amazon.smithy.model.SourceLocation
 import software.amazon.smithy.model.node.Node
@@ -11,11 +11,11 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.traits.AbstractTrait
 import software.amazon.smithy.model.traits.Trait
 
-class ValidationExceptionTrait(
+class ValidationMessageTrait(
     sourceLocation: SourceLocation,
 ) : AbstractTrait(ID, sourceLocation) {
     companion object {
-        val ID: ShapeId = ShapeId.from("smithy.rust.codegen.traits#validationException")
+        val ID: ShapeId = ShapeId.from("smithy.framework.rust#validationMessage")
     }
 
     override fun createNode(): Node = Node.objectNode()
@@ -25,7 +25,7 @@ class ValidationExceptionTrait(
             target: ShapeId,
             value: Node,
         ): Trait {
-            val result = ValidationExceptionTrait(value.sourceLocation)
+            val result = ValidationMessageTrait(value.sourceLocation)
             result.setNodeCache(value)
             return result
         }

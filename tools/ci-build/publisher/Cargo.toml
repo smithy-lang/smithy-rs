@@ -1,6 +1,6 @@
 [package]
 name = "publisher"
-version = "0.4.2"
+version = "0.4.3"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Tool used to publish the AWS SDK to crates.io"
 edition = "2021"

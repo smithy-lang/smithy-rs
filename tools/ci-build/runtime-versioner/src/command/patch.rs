@@ -118,8 +118,7 @@ fn crate_version_has_changed(runtime_crate: &Package, aws_sdk_rust: &Repo) -> Re
     }
     assert!(
         to_patch_cargo_toml.exists(),
-        "{:?} did not exist!",
-        to_patch_cargo_toml
+        "{to_patch_cargo_toml:?} did not exist!"
     );
     let sdk_cargo_toml = Manifest::from_path(&sdk_cargo_toml)
         .context("could not parse SDK Cargo.toml")

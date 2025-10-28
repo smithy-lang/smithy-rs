@@ -55,10 +55,8 @@ impl VersionsManifest {
     }
 
     pub async fn from_github_tag(tag: &ReleaseTag) -> Result<VersionsManifest> {
-        let manifest_url = format!(
-            "https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{}/versions.toml",
-            tag
-        );
+        let manifest_url =
+            format!("https://raw.githubusercontent.com/awslabs/aws-sdk-rust/{tag}/versions.toml");
         let manifest_contents = reqwest::get(manifest_url)
             .await
             .context("failed to download release manifest")?

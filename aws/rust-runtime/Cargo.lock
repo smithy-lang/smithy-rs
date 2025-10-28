@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.12"
+version = "1.5.13"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -154,7 +154,7 @@ version = "1.1.9"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.3.5"
+version = "1.3.6"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.12"
+version = "0.60.13"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -269,7 +269,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.5"
+version = "0.63.6"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -308,7 +308,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.9.1"
+version = "1.9.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.3.3"
+version = "1.3.4"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -347,7 +347,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.3.9"
+version = "1.3.10"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",

@@ -774,12 +774,11 @@ class HttpBindingGenerator(
                     },
                 "invalid_header_value" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
+                        val maybeRedactedValue = memberShape.redactIfNecessary(model, "v")
                         rust(
                             """
                             format!(
-                                "`{}` cannot be used as a header value: {}",
-                                ${memberShape.redactIfNecessary(model, "v")},
-                                err
+                                "`{$maybeRedactedValue}` cannot be used as a header value: {err}"
                             )
                             """,
                         )

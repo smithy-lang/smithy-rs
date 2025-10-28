@@ -61,7 +61,7 @@ pub async fn transcribe_canary(
                     }
                 }
             }
-            otherwise => panic!("received unexpected event type: {:?}", otherwise),
+            otherwise => panic!("received unexpected event type: {otherwise:?}"),
         }
     }
 

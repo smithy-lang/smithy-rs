@@ -14,7 +14,6 @@ members = [
     "lambda",
     "no-default-features",
     "polly",
-    "qldbsession",
     "s3",
     "s3control",
     "sts",

@@ -132,6 +132,8 @@ fun Shape.targetOrSelf(model: Model): Shape =
         else -> this
     }
 
+fun MemberShape.targetShape(model: Model): Shape = model.expectShape(this.target)
+
 /** Kotlin sugar for hasTrait() check. e.g. shape.hasTrait<EnumTrait>() instead of shape.hasTrait(EnumTrait::class.java) */
 inline fun <reified T : Trait> Shape.hasTrait(): Boolean = hasTrait(T::class.java)
 

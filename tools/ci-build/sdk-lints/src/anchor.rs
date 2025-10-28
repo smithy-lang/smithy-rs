@@ -7,8 +7,8 @@ use anyhow::bail;
 
 pub fn anchors(name: &str) -> (String, String) {
     (
-        format!("{}{} -->", ANCHOR_START, name),
-        format!("{}{} -->", ANCHOR_END, name),
+        format!("{ANCHOR_START}{name} -->"),
+        format!("{ANCHOR_END}{name} -->"),
     )
 }
 
