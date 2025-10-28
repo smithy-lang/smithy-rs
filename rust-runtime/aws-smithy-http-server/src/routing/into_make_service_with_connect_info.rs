@@ -106,6 +106,15 @@ impl Connected<SocketAddr> for SocketAddr {
     }
 }
 
+impl<'a, L> Connected<crate::serve::IncomingStream<'a, L>> for SocketAddr
+where
+    L: crate::serve::Listener<Addr = SocketAddr>,
+{
+    fn connect_info(target: crate::serve::IncomingStream<'a, L>) -> Self {
+        *target.remote_addr()
+    }
+}
+
 impl<S, C, T> Service<T> for IntoMakeServiceWithConnectInfo<S, C>
 where
     S: Clone,

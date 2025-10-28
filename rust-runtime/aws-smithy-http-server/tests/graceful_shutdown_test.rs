@@ -3,20 +3,11 @@
 //! These tests verify that the serve function and graceful shutdown work correctly
 
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
+use aws_smithy_http_server::routing::{IntoMakeService, IntoMakeServiceWithConnectInfo};
 use std::convert::Infallible;
 use std::time::Duration;
 use tokio::sync::oneshot;
 use tower::service_fn;
-
-/// Simple test service that responds with "Hello"
-async fn test_service(
-    _request: http::Request<hyper::body::Incoming>,
-) -> Result<http::Response<BoxBody>, Infallible> {
-    Ok(http::Response::builder()
-        .status(200)
-        .body(to_boxed("Hello"))
-        .unwrap())
-}
 
 /// Test service that delays before responding
 async fn slow_service(
@@ -46,7 +37,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
 
     // Start server in background
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, service_fn(slow_service))
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(slow_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -111,7 +102,7 @@ async fn test_graceful_shutdown_with_timeout() {
 
     // Start server with short timeout
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, service_fn(very_slow_service))
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(very_slow_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -182,12 +173,14 @@ async fn test_with_connect_info() {
 
     // Start server with connect_info enabled
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, service_fn(service_with_connect_info))
-            .with_connect_info()
-            .with_graceful_shutdown(async {
-                shutdown_rx.await.ok();
-            })
-            .await
+        aws_smithy_http_server::serve(
+            listener,
+            IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service_fn(service_with_connect_info)),
+        )
+        .with_graceful_shutdown(async {
+            shutdown_rx.await.ok();
+        })
+        .await
     });
 
     // Give server time to start
