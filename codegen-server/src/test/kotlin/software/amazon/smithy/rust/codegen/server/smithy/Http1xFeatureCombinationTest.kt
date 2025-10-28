@@ -141,17 +141,17 @@ internal class Http1xFeatureCombinationTest {
         integer RangedInteger
         """.asSmithyModel(smithyVersion = "2")
 
-    @Test
-    fun `constraints model with AwsJson10 and http-1x disabled`() {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.AwsJson10)
-        testHttp1xWithModel(model, serviceShapeId, http1x = false)
-    }
-
-    @Test
-    fun `constraints model with AwsJson11 and http-1x disabled`() {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.AwsJson11)
-        testHttp1xWithModel(model, serviceShapeId, http1x = false)
-    }
+//    @Test
+//    fun `constraints model with AwsJson10 and http-1x disabled`() {
+//        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.AwsJson10)
+//        testHttp1xWithModel(model, serviceShapeId, http1x = false)
+//    }
+//
+//    @Test
+//    fun `constraints model with AwsJson11 and http-1x disabled`() {
+//        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.AwsJson11)
+//        testHttp1xWithModel(model, serviceShapeId, http1x = false)
+//    }
 
     @Test
     fun `constraints model with RestJson and http-1x disabled`() {

@@ -145,21 +145,6 @@ data class HttpDependencies(
      */
     fun smithyXmlModule(): RuntimeType = smithyXml.toType()
 
-    /**
-     * Returns a map of dependency names to CargoDependency objects that need pinning.
-     *
-     * This is used by decorators to apply manifest customizations for HTTP 0.x dependencies
-     * that require specific versions or features.
-     *
-     * Returns a map containing only dependencies that have customizations to apply
-     * (version pinning or feature flags).
-     */
-    fun dependenciesToPin(): Map<String, CargoDependency> =
-        mapOf(
-            "aws-smithy-json" to smithyJson,
-            "aws-smithy-http" to smithyHttp,
-        )
-
     companion object {
         /**
          * Factory method for creating HttpDependencies based on http-1x configuration.
