@@ -110,13 +110,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
-<<<<<<< HEAD
             fun alwaysSendEventStreamInitialResponse(enabled: Boolean = true): Builder {
                 settings.add(AlwaysSendEventStreamInitialResponse(enabled))
-=======
+                return this
+            }
+
             fun withHttp1x(enabled: Boolean = true): Builder {
                 settings.add(Http1x(enabled))
->>>>>>> 749e7a396 (Add integration tests)
                 return this
             }
 
@@ -146,6 +146,8 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("alwaysSendEventStreamInitialResponse", enabled)
+                    .build()
+        }
 
         private data class Http1x(val enabled: Boolean) : AdditionalSettings() {
             override fun toObjectNode(): ObjectNode =
