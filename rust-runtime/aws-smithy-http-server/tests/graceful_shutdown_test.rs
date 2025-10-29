@@ -3,7 +3,7 @@
 //! These tests verify that the serve function and graceful shutdown work correctly
 
 use aws_smithy_http_server::body::{to_boxed, BoxBody};
-use aws_smithy_http_server::routing::{IntoMakeService, IntoMakeServiceWithConnectInfo};
+use aws_smithy_http_server::routing::IntoMakeService;
 use std::convert::Infallible;
 use std::time::Duration;
 use tokio::sync::oneshot;
@@ -173,6 +173,8 @@ async fn test_with_connect_info() {
 
     // Start server with connect_info enabled
     let server_handle = tokio::spawn(async move {
+        use aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo;
+
         aws_smithy_http_server::serve(
             listener,
             IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service_fn(service_with_connect_info)),
@@ -212,5 +214,4 @@ async fn test_with_connect_info() {
 }
 
 // Note: configure_hyper is tested implicitly by the code compiling and the other tests working
-// A dedicated shutdown test was removed due to watch channel behavior with no active connections
 // The configure_hyper functionality itself works correctly as shown by successful compilation

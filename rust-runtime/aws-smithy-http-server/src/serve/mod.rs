@@ -8,7 +8,7 @@
 //! This module provides a convenient [`serve`] function similar to `axum::serve`
 //! for easily serving Tower services with Hyper.
 //!
-//! Portions of the graceful shutdown implementation are adapted from axum
+//! Portions of the implementation are adapted from axum
 //! (https://github.com/tokio-rs/axum), which is licensed under the MIT License.
 //! Copyright (c) 2019 Axum Contributors
 
@@ -42,7 +42,6 @@ type ConfigureHyperFn = Arc<
         + Sync
         + 'static,
 >;
-
 
 /// An incoming stream that bundles connection information.
 ///
@@ -96,9 +95,16 @@ where
 ///
 /// It supports both HTTP/1 as well as HTTP/2.
 ///
+/// This function accepts services wrapped with [`IntoMakeService`] or
+/// [`IntoMakeServiceWithConnectInfo`].
+///
+/// For generated Smithy services, use `.into_make_service()` or
+/// `.into_make_service_with_connect_info::<C>()`. For services wrapped with
+/// Tower middleware, use `IntoMakeService::new(service)`.
+///
 /// # Examples
 ///
-/// Serving with a TCP listener:
+/// Serving a Smithy service with a TCP listener:
 ///
 /// ```rust,ignore
 /// use tokio::net::TcpListener;
@@ -107,7 +113,22 @@ where
 /// aws_smithy_http_server::serve(listener, app.into_make_service()).await.unwrap();
 /// ```
 ///
-/// For graceful shutdown support:
+/// Serving with middleware applied:
+///
+/// ```rust,ignore
+/// use tokio::net::TcpListener;
+/// use tower::Layer;
+/// use tower::timeout::TimeoutLayer;
+/// use aws_smithy_http_server::routing::IntoMakeService;
+///
+/// let app = /* ... build service ... */;
+/// let app = TimeoutLayer::new(Duration::from_secs(30)).layer(app);
+///
+/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+/// aws_smithy_http_server::serve(listener, IntoMakeService::new(app)).await.unwrap();
+/// ```
+///
+/// For graceful shutdown:
 ///
 /// ```rust,ignore
 /// use tokio::net::TcpListener;
@@ -120,6 +141,21 @@ where
 ///     })
 ///     .await
 ///     .unwrap();
+/// ```
+///
+/// With connection info:
+///
+/// ```rust,ignore
+/// use tokio::net::TcpListener;
+/// use std::net::SocketAddr;
+///
+/// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
+/// aws_smithy_http_server::serve(
+///     listener,
+///     app.into_make_service_with_connect_info::<SocketAddr>()
+/// )
+/// .await
+/// .unwrap();
 /// ```
 pub fn serve<L, M, S, B>(listener: L, make_service: M) -> Serve<L, M, S, B>
 where
@@ -377,7 +413,7 @@ where
 // Common connection handling logic shared by both graceful and non-graceful shutdown
 async fn handle_connection_common<L, M, S, B, F, Fut>(
     make_service: &mut M,
-    io: <L as Listener>::Io,
+    conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
     configure_hyper: Option<ConfigureHyperFn>,
     serve_fn: F,
@@ -394,7 +430,7 @@ async fn handle_connection_common<L, M, S, B, F, Fut>(
     F: FnOnce(Builder<TokioExecutor>, TokioIo<L::Io>, TowerToHyperService<S>) -> Fut + Send + 'static,
     Fut: Future<Output = ()> + Send + 'static,
 {
-    let io = TokioIo::new(io);
+    let tokio_io = TokioIo::new(conn_io);
 
     tracing::trace!("connection {remote_addr:?} accepted");
 
@@ -405,7 +441,7 @@ async fn handle_connection_common<L, M, S, B, F, Fut>(
 
     let tower_service = make_service
         .call(IncomingStream {
-            io: &io,
+            io: &tokio_io,
             remote_addr,
         })
         .await
@@ -419,15 +455,15 @@ async fn handle_connection_common<L, M, S, B, F, Fut>(
             builder = configure(builder);
         }
 
-        // Call the provided lambda to handle the actual connection serving
-        serve_fn(builder, io, hyper_service).await;
+        // Call the provided closure to handle the actual connection serving
+        serve_fn(builder, tokio_io, hyper_service).await;
     });
 }
 
 // Version without graceful shutdown - zero cost!
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
-    io: <L as Listener>::Io,
+    conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
     configure_hyper: Option<ConfigureHyperFn>,
 ) where
@@ -443,13 +479,11 @@ async fn handle_connection<L, M, S, B>(
 {
     handle_connection_common::<L, M, S, B, _, _>(
         make_service,
-        io,
+        conn_io,
         remote_addr,
         configure_hyper,
-        |builder, io, hyper_service| async move {
-            let conn = builder.serve_connection_with_upgrades(io, hyper_service);
-
-            // Direct await - no select!, no watch channels, zero cost!
+        |builder, tokio_io, hyper_service| async move {
+            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
             if let Err(err) = conn.await {
                 tracing::error!(error = ?err, "error serving connection");
             }
@@ -461,7 +495,7 @@ async fn handle_connection<L, M, S, B>(
 // Version with graceful shutdown
 async fn handle_connection_graceful<L, M, S, B>(
     make_service: &mut M,
-    io: <L as Listener>::Io,
+    conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
     configure_hyper: Option<ConfigureHyperFn>,
     signal_tx: watch::Sender<()>,
@@ -479,13 +513,13 @@ async fn handle_connection_graceful<L, M, S, B>(
 {
     handle_connection_common::<L, M, S, B, _, _>(
         make_service,
-        io,
+        conn_io,
         remote_addr,
         configure_hyper,
-        move |builder, io, hyper_service| async move {
+        move |builder, tokio_io, hyper_service| async move {
             let _close_guard = close_rx; // Will be dropped when this async block completes
 
-            let conn = builder.serve_connection_with_upgrades(io, hyper_service);
+            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
             let mut conn = std::pin::pin!(conn);
 
             // Use tokio::select! for graceful shutdown
