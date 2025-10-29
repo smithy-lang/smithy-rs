@@ -63,8 +63,6 @@ fn native_tls_connector() -> NativeTlsConnector {
     let tls_connector = hyper_tls::native_tls::TlsConnector::builder()
         .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
         .add_root_certificate(cert)
-        .danger_accept_invalid_certs(true)
-        .danger_accept_invalid_hostnames(true)
         .build()
         .unwrap_or_else(|e| panic!("error while creating TLS connector: {}", e));
     let mut http_connector = hyper::client::HttpConnector::new();
