@@ -15,7 +15,7 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
+use aws_smithy_http_client::{Connector, tls};
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
 use pokemon_service_server_sdk::{
@@ -293,7 +293,7 @@ pub async fn capture_pokemon(
                     }
                     None => break,
                 },
-                Err(e) => println!("{:?}", e),
+                Err(e) => println!("{e:?}"),
             }
         }
     };
@@ -328,7 +328,9 @@ pub async fn stream_pokemon_radio(
         .parse::<Uri>()
         .expect("Invalid url in `RADIO_STREAMS`");
 
-    let connector = HyperConnector::builder().build_https();
+    let connector = Connector::builder()
+        .tls_provider(tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc))
+        .build();
     let result = connector
         .call(
             http::Request::builder()
