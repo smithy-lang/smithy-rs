@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{fs::File, io::BufReader, process::Command, time::Duration};
-
-use assert_cmd::prelude::*;
+use assert_cmd::cargo_bin;
 use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
+use std::{fs::File, io::BufReader, process::Command, time::Duration};
 use tokio::time::sleep;
 
 use pokemon_service_client::{Client, Config};
@@ -14,8 +13,7 @@ use pokemon_service_common::ChildDrop;
 use pokemon_service_tls::{DEFAULT_DOMAIN, DEFAULT_PORT, DEFAULT_TEST_CERT};
 
 pub async fn run_server() -> ChildDrop {
-    let crate_name = std::env::var("CARGO_PKG_NAME").unwrap();
-    let child = Command::cargo_bin(crate_name).unwrap().spawn().unwrap();
+    let child = Command::new(cargo_bin!()).spawn().unwrap();
 
     sleep(Duration::from_millis(500)).await;
 
@@ -65,6 +63,8 @@ fn native_tls_connector() -> NativeTlsConnector {
     let tls_connector = hyper_tls::native_tls::TlsConnector::builder()
         .min_protocol_version(Some(hyper_tls::native_tls::Protocol::Tlsv12))
         .add_root_certificate(cert)
+        .danger_accept_invalid_certs(true)
+        .danger_accept_invalid_hostnames(true)
         .build()
         .unwrap_or_else(|e| panic!("error while creating TLS connector: {}", e));
     let mut http_connector = hyper::client::HttpConnector::new();
