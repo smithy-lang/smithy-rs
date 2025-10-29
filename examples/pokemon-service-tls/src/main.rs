@@ -37,12 +37,16 @@ use pokemon_service_common::{
 };
 use pokemon_service_server_sdk::{
     input, output,
-    server::{request::connect_info::ConnectInfo, routing::Connected, serve, AddExtensionLayer},
+    server::{
+        request::connect_info::ConnectInfo,
+        routing::Connected,
+        serve::{serve, Listener},
+        AddExtensionLayer
+    },
     PokemonService, PokemonServiceConfig,
 };
 use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
 use tokio::net::TcpStream;
-use aws_smithy_http_server::serve::Listener;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -117,11 +121,11 @@ pub struct TlsConnectInfo {
     pub certs: Option<Arc<Vec<CertificateDer<'static>>>>,
 }
 
-impl<'a> Connected<aws_smithy_http_server::serve::IncomingStream<'a, TlsListener>>
+impl<'a> Connected<pokemon_service_server_sdk::server::serve::IncomingStream<'a, TlsListener>>
     for TlsConnectInfo
 {
     fn connect_info(
-        target: aws_smithy_http_server::serve::IncomingStream<'a, TlsListener>,
+        target: pokemon_service_server_sdk::server::serve::IncomingStream<'a, TlsListener>,
     ) -> Self {
         let tls_stream = target.io();
         let socket_addr = *target.remote_addr();
