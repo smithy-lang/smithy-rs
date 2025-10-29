@@ -318,7 +318,7 @@ impl Changelog {
             .map(validate_aws_handauthored)
             .chain(self.smithy_rs.iter().map(validate_smithyrs_handauthored))
             .filter_map(Result::err)
-            .map(|e| format!("{}", e))
+            .map(|e| format!("{e}"))
             .collect();
         if errors.is_empty() {
             Ok(())

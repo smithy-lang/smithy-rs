@@ -69,6 +69,8 @@ class AllowLintsCustomization(
     private val rustcLints: List<String> = allowedRustcLints,
     private val clippyLints: List<String> = allowedClippyLints,
     private val rustdocLints: List<String> = allowedRustdocLints,
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/4366) Remove additionalClippyLints once the issue is resolved
+    private val additionalClippyLints: List<String> = emptyList(),
 ) : LibRsCustomization() {
     override fun section(section: LibRsSection) =
         when (section) {
@@ -77,7 +79,7 @@ class AllowLintsCustomization(
                     rustcLints.forEach {
                         Attribute(allow(it)).render(this, AttributeKind.Inner)
                     }
-                    clippyLints.forEach {
+                    (clippyLints + additionalClippyLints).forEach {
                         Attribute(allow("clippy::$it")).render(this, AttributeKind.Inner)
                     }
                     rustdocLints.forEach {

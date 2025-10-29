@@ -190,7 +190,7 @@ mod tests {
         let original: HeaderMap = to_header_map(HEADER_MAP);
 
         let output = SensitiveHeaders::new(&original, |_| HeaderMarker::default());
-        assert_eq!(format!("{:?}", output), format!("{:?}", original));
+        assert_eq!(format!("{output:?}"), format!("{:?}", original));
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
@@ -212,7 +212,7 @@ mod tests {
             value: true,
             key_suffix: None,
         });
-        assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+        assert_eq!(format!("{output:?}"), format!("{:?}", expected));
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
@@ -234,7 +234,7 @@ mod tests {
             value: name == "name-a",
             key_suffix: None,
         });
-        assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+        assert_eq!(format!("{output:?}"), format!("{:?}", expected));
     }
 
     #[cfg(not(feature = "unredacted-logging"))]
@@ -261,6 +261,6 @@ mod tests {
                 None
             },
         });
-        assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+        assert_eq!(format!("{output:?}"), format!("{:?}", expected));
     }
 }

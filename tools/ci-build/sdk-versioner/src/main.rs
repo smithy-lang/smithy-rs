@@ -140,7 +140,7 @@ fn update_manifest(
     manifest_path: &Path,
     dependency_context: &DependencyContext,
 ) -> anyhow::Result<()> {
-    println!("Updating {:?}...", manifest_path);
+    println!("Updating {manifest_path:?}...");
     let crate_path = manifest_path.parent().expect("manifest has a parent");
 
     let mut metadata: DocumentMut = String::from_utf8(

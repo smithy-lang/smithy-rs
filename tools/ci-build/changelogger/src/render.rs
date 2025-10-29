@@ -46,7 +46,7 @@ static MAINTAINERS: LazyLock<Vec<String>> = LazyLock::new(|| {
 
 fn is_maintainer(name: &str) -> bool {
     let name_lower = name.to_ascii_lowercase();
-    MAINTAINERS.iter().any(|name| *name == name_lower)
+    MAINTAINERS.contains(&name_lower)
 }
 
 #[derive(Parser, Debug, Eq, PartialEq)]
@@ -387,11 +387,11 @@ fn update_changelogs(
     if let Some(source_to_truncate) = &args.source_to_truncate {
         fs::remove_dir_all(source_to_truncate)
             .and_then(|_| fs::create_dir(source_to_truncate))
-            .with_context(|| format!("failed to empty directory {:?}", source_to_truncate))
+            .with_context(|| format!("failed to empty directory {source_to_truncate:?}"))
             .and_then(|_| {
                 let dot_example = source_to_truncate.join(".example");
                 fs::write(dot_example.clone(), EXAMPLE_ENTRY)
-                    .with_context(|| format!("failed to create {:?}", dot_example))
+                    .with_context(|| format!("failed to create {dot_example:?}"))
             })?;
     }
     eprintln!("Changelogs updated!");
@@ -487,7 +487,7 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
         out.push_str("- @");
         out.push_str(contributor_handle);
         if !contribution_references.is_empty() {
-            write!(out, " ({})", contribution_references)
+            write!(out, " ({contribution_references})")
                 // The `Write` implementation for `String` is infallible,
                 // see https://doc.rust-lang.org/src/alloc/string.rs.html#2815
                 .unwrap()
@@ -500,7 +500,7 @@ fn render_external_contributors(entries: &[ChangelogEntry], out: &mut String) {
 fn render_details(summary: &str, body: &str, out: &mut String) {
     out.push_str("<details>");
     out.push('\n');
-    write!(out, "<summary>{}</summary>", summary).unwrap();
+    write!(out, "<summary>{summary}</summary>").unwrap();
     out.push('\n');
     // A blank line is required for the body to be rendered properly
     out.push('\n');

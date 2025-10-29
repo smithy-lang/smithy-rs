@@ -19,7 +19,7 @@ pub struct LintError {
 
 impl LintError {
     pub(crate) fn via_display<T: Display>(t: T) -> Self {
-        LintError::new(format!("{}", t))
+        LintError::new(format!("{t}"))
     }
     pub(crate) fn new(message: impl Into<Cow<'static, str>>) -> Self {
         LintError {
@@ -40,7 +40,7 @@ impl Display for LintError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)?;
         if let Some(ctx) = &self.context {
-            write!(f, "({})", ctx)?;
+            write!(f, "({ctx})")?;
         }
         if let Some(path) = &self.location {
             write!(f, "({})", path.display())?;
@@ -73,7 +73,7 @@ pub(crate) trait Lint {
         } else {
             eprintln!("Errors for {}:", self.name());
             for error in &errors {
-                eprintln!("  {}", error)
+                eprintln!("  {error}")
             }
         }
         Ok(errors)
@@ -95,7 +95,7 @@ pub(crate) trait Lint {
             if !errs.is_empty() {
                 eprintln!("Errors for {}:", path.display());
                 for error in &errs {
-                    eprintln!("  {}", error)
+                    eprintln!("  {error}")
                 }
             }
             if new_content != current_content {

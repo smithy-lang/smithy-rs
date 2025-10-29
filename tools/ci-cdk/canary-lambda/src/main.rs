@@ -61,7 +61,7 @@ async fn main() -> Result<(), Error> {
         {
             Ok(())
         } else {
-            Err(format!("canary failed: {:?}", result).into())
+            Err(format!("canary failed: {result:?}").into())
         }
     } else {
         lambda_runtime::run(main_handler).await?;
@@ -127,7 +127,7 @@ async fn canary_result(handle: JoinHandle<anyhow::Result<()>>) -> Result<(), Str
         Err(_timeout) => Err("canary timed out".into()),
         Ok(Ok(result)) => match result {
             Ok(_) => Ok(()),
-            Err(err) => Err(format!("{:?}", err)),
+            Err(err) => Err(format!("{err:?}")),
         },
         Ok(Err(err)) => Err(err.to_string()),
     }

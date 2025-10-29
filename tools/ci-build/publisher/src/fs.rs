@@ -46,20 +46,20 @@ async fn tokio_read_file(path: &Path) -> Result<Vec<u8>> {
     let mut contents = Vec::new();
     let mut file = File::open(path)
         .await
-        .with_context(|| format!("failed to open {:?}", path))?;
+        .with_context(|| format!("failed to open {path:?}"))?;
     file.read_to_end(&mut contents)
         .await
-        .with_context(|| format!("failed to read {:?}", path))?;
+        .with_context(|| format!("failed to read {path:?}"))?;
     Ok(contents)
 }
 
 async fn tokio_write_file(path: &Path, contents: &[u8]) -> Result<()> {
     let mut file = File::create(path)
         .await
-        .with_context(|| format!("failed to create {:?}", path))?;
+        .with_context(|| format!("failed to create {path:?}"))?;
     file.write_all(contents)
         .await
-        .with_context(|| format!("failed to write {:?}", path))?;
+        .with_context(|| format!("failed to write {path:?}"))?;
     file.flush().await?;
     Ok(())
 }

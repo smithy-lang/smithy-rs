@@ -50,10 +50,7 @@ pub(crate) fn parse_url<'a>(url: &'a str, e: &mut DiagnosticCollector) -> Option
     let uri: Uri = e.capture(url.parse())?;
     let url: ParsedUrl = e.capture(url.parse())?;
     if let Some(query) = uri.query() {
-        e.report_error(format!(
-            "URL cannot have a query component (found {})",
-            query
-        ));
+        e.report_error(format!("URL cannot have a query component (found {query})"));
         return None;
     }
     if !["http", "https"].contains(&url.scheme()) {

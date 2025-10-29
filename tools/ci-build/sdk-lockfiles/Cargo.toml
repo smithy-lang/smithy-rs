@@ -1,6 +1,6 @@
 [package]
 name = "sdk-lockfiles"
-version = "0.1.4"
+version = "0.1.5"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = """
 A CLI tool to audit lockfiles for Smithy runtime crates, AWS runtime crates, `aws-config`, and the workspace containing
