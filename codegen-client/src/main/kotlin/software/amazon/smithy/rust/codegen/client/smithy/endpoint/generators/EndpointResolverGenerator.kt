@@ -260,7 +260,7 @@ internal class EndpointResolverGenerator(
                 // it's hard to figure out if these are always needed or not
                 Attribute.AllowUnreachableCode.render(this)
                 rustTemplate(
-                    """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {:?}", $PARAMS_NAME)));""",
+                    """return Err(#{EndpointError}::message(format!("No rules matched these parameters. This is a bug. {$PARAMS_NAME:?}")));""",
                     *codegenScope,
                 )
             }

@@ -9,6 +9,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.EndpointTrait
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.rustFormatString
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.AllowUninlinedFormatArgs
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -88,6 +89,11 @@ class EndpointTraitBindings(
                         }
                         "${label.content} = $field"
                     }
+                // Suppress the suggestion that would change the following:
+                //   EndpointPrefix::new(format!("{accountId}."))
+                // To:
+                //   EndpointPrefix::new(format!("{accountId}.", accountId = account_id))
+                AllowUninlinedFormatArgs.render(this)
                 rustTemplate(
                     "#{EndpointPrefix}::new(format!($formatLiteral, ${args.joinToString()}))",
                     "EndpointPrefix" to endpointPrefix,

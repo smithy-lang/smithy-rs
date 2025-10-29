@@ -240,6 +240,7 @@ open class ServerCodegenVisitor(
 
         val validationExceptionShapeId = validationExceptionConversionGenerator.shapeId
         for (validationResult in listOf(
+            validateModelHasAtMostOneValidationException(model, service),
             codegenDecorator.postprocessValidationExceptionNotAttachedErrorMessage(
                 validateOperationsWithConstrainedInputHaveValidationExceptionAttached(
                     model,
@@ -248,6 +249,13 @@ open class ServerCodegenVisitor(
                 ),
             ),
             validateUnsupportedConstraints(model, service, codegenContext.settings.codegenConfig),
+            codegenDecorator.postprocessMultipleValidationExceptionsErrorMessage(
+                validateOperationsWithConstrainedInputHaveOneValidationExceptionAttached(
+                    model,
+                    service,
+                    validationExceptionShapeId,
+                ),
+            ),
         )) {
             for (logMessage in validationResult.messages) {
                 // TODO(https://github.com/smithy-lang/smithy-rs/issues/1756): These are getting duplicated.

@@ -632,7 +632,7 @@ class JsonParserGenerator(
                                         // Consultation: https://github.com/awslabs/smithy/issues/1222
                                         false ->
                                             rustTemplate(
-                                                """variant => return Err(#{Error}::custom(format!("unexpected union variant: {}", variant)))""",
+                                                """variant => return Err(#{Error}::custom(format!("unexpected union variant: {variant}")))""",
                                                 *codegenScope,
                                             )
                                     }
@@ -693,7 +693,7 @@ class JsonParserGenerator(
                         inner()
                     }
                     rustTemplate(
-                        """other => return Err(#{Error}::custom(format!("expected object key or end object, found: {:?}", other)))""",
+                        """other => return Err(#{Error}::custom(format!("expected object key or end object, found: {other:?}")))""",
                         *codegenScope,
                     )
                 }

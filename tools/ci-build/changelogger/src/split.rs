@@ -46,15 +46,13 @@ pub fn subcommand_split(args: &SplitArgs) -> Result<()> {
     }
     .map_err(|errs| {
         anyhow::Error::msg(format!(
-            "cannot split changelogs with changelog errors: {:#?}",
-            errs
+            "cannot split changelogs with changelog errors: {errs:#?}"
         ))
     })?;
     let current_sdk_changelog = if args.destination.exists() {
         loader.load_from_file(&args.destination).map_err(|errs| {
             anyhow::Error::msg(format!(
-                "failed to load existing SDK changelog entries: {:#?}",
-                errs
+                "failed to load existing SDK changelog entries: {errs:#?}"
             ))
         })?
     } else {

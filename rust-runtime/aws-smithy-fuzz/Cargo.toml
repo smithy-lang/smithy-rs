@@ -1,7 +1,7 @@
 [workspace]
 [package]
 name = "aws-smithy-fuzz"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Fuzzing utilities for smithy-rs servers"
 edition = "2021"

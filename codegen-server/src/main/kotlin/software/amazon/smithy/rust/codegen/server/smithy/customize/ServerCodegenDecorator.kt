@@ -49,6 +49,13 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
     fun postprocessValidationExceptionNotAttachedErrorMessage(validationResult: ValidationResult) = validationResult
 
     /**
+     * Injection point to allow a decorator to postprocess the error message that arises when an operation is
+     * constrained and there are multiple of: `ValidationException` and/or custom structures with the
+     * @validationException trait attached to the operation's errors.
+     */
+    fun postprocessMultipleValidationExceptionsErrorMessage(validationResult: ValidationResult) = validationResult
+
+    /**
      * For each operation in the service's closure, this hook allows decorators to return a collection of structure shapes that will additionally be generated.
      * If a structure shape is in the service's closure, note that returning it here will cause for it to be generated more than once,
      * making the resulting crate not compile (since it will contain more than one struct with the same name).
@@ -112,6 +119,13 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     ): ValidationResult =
         orderedDecorators.foldRight(validationResult) { decorator, accumulated ->
             decorator.postprocessValidationExceptionNotAttachedErrorMessage(accumulated)
+        }
+
+    override fun postprocessMultipleValidationExceptionsErrorMessage(
+        validationResult: ValidationResult,
+    ): ValidationResult =
+        orderedDecorators.foldRight(validationResult) { decorator, accumulated ->
+            decorator.postprocessMultipleValidationExceptionsErrorMessage(accumulated)
         }
 
     override fun postprocessOperationGenerateAdditionalStructures(

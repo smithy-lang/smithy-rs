@@ -3,3 +3,4 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 software.amazon.smithy.rust.codegen.server.smithy.PatternTraitEscapedSpecialCharsValidator
+software.amazon.smithy.rust.codegen.server.smithy.validators.CustomValidationExceptionValidator

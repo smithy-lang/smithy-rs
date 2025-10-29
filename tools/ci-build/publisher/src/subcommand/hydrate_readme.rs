@@ -44,7 +44,7 @@ pub fn subcommand_hydrate_readme(
     let context = make_context(msrv, &versions_manifest);
     let hydrated = hydrate_template(&template, &context)?;
     fs::write(output, hydrated.as_bytes())
-        .with_context(|| format!("Failed to write hydrated README to {:?}", output))?;
+        .with_context(|| format!("Failed to write hydrated README to {output:?}"))?;
     Ok(())
 }
 
