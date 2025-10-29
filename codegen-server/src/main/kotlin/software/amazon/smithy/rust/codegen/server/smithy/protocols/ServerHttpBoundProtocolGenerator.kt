@@ -931,7 +931,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 {
-                                    let mut receiver = #{Deserializer}(&mut body.into().into_inner())?;
+                                    let mut receiver = #{Deserializer}(&mut #{eventStreamBodyInto})?;
                                     if let Some(_initial_event) = receiver
                                         .try_recv_initial(#{InitialMessageType}::Request)
                                         .await
@@ -952,16 +952,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         .resolve("event_stream::InitialMessageType"),
                                 "parseInitialRequest" to parseInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                "eventStreamBodyInto" to eventStreamBodyInto(),
                                 *codegenScope,
                             )
                         } else {
                             rustTemplate(
                                 """
                                 {
-                                    Some(#{Deserializer}(&mut body.into().into_inner())?)
+                                    Some(#{Deserializer}(&mut #{eventStreamBodyInto}.into_inner())?)
                                 }
                                 """,
                                 "Deserializer" to deserializer,
+                                "eventStreamBodyInto" to eventStreamBodyInto(),
                                 *codegenScope,
                             )
                         }
@@ -1527,12 +1529,13 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             ""
         }
 
-    private fun streamingBodyInto() =
+    private fun eventStreamBodyInto() = writable {
         if (codegenContext.isHttp1()) {
-            "#{SmithyTypes}::byte_stream::ByteStream::from_body_1_x(body)"
+            rustTemplate("#{SmithyTypes}::body::SdkBody::from_body_1_x(body)", *codegenScope)
         } else {
-            "body.into()"
+            rust("body.into().into_inner()")
         }
+    }
 
     private fun httpBindingGenerator(operationShape: OperationShape) =
         ServerRequestBindingGenerator(protocol, codegenContext, operationShape, additionalHttpBindingCustomizations)

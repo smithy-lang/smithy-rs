@@ -498,31 +498,6 @@ class ServerServiceGenerator(
             }
         }.join(", ")
 
-    /**
-     * Returns a `Writable` for the `into_make_service()` methods.
-     * These methods are only generated for HTTP 0.x (when http1x flag is false).
-     * HTTP 1.x will use a different mechanism.
-     */
-    private fun intoMakeServiceMethods(): Writable =
-        writable {
-            if (!codegenContext.isHttp1()) {
-                rustTemplate(
-                    """
-                    /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
-                    pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
-                        #{SmithyHttpServer}::routing::IntoMakeService::new(self)
-                    }
-
-                    /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
-                    pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
-                        #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
-                    }
-                    """,
-                    *codegenScope,
-                )
-            }
-        }
-
     /** Returns a `Writable` containing the service struct definition and its implementations. */
     private fun serviceStruct(): Writable =
         writable {
@@ -613,7 +588,15 @@ class ServerServiceGenerator(
                 }
 
                 impl<S> $serviceName<S> {
-                    #{IntoMakeServiceMethods:W}
+                    /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService).
+                    pub fn into_make_service(self) -> #{SmithyHttpServer}::routing::IntoMakeService<Self> {
+                        #{SmithyHttpServer}::routing::IntoMakeService::new(self)
+                    }
+
+                    /// Converts [`$serviceName`] into a [`MakeService`](tower::make::MakeService) with [`ConnectInfo`](#{SmithyHttpServer}::request::connect_info::ConnectInfo).
+                    pub fn into_make_service_with_connect_info<C>(self) -> #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo<Self, C> {
+                        #{SmithyHttpServer}::routing::IntoMakeServiceWithConnectInfo::new(self)
+                    }
                 }
 
                 impl<S>
@@ -695,7 +678,6 @@ class ServerServiceGenerator(
                 "NotSetFields2" to notSetFields(),
                 "Router" to protocol.routerType(),
                 "Protocol" to protocol.markerStruct(),
-                "IntoMakeServiceMethods" to intoMakeServiceMethods(),
                 *codegenScope,
             )
         }

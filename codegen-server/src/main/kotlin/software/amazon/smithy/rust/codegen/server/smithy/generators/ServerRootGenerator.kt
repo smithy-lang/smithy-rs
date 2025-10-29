@@ -101,7 +101,7 @@ open class ServerRootGenerator(
                 //! ##         .build()$unwrapConfigBuilder
                 //! ## ).build_unchecked();
                 //! let listener = TcpListener::bind("127.0.0.1:6969").await.expect("failed to bind");
-                //! $crateName::server::serve(listener, app).await.expect("server error");
+                //! $crateName::server::serve(listener, app.into_make_service()).await.expect("server error");
                 //! ## }
                 //! ```
                 //!
@@ -119,7 +119,7 @@ open class ServerRootGenerator(
                 //! ##         .build()$unwrapConfigBuilder
                 //! ## ).build_unchecked();
                 //! let listener = TcpListener::bind("127.0.0.1:6969").await.expect("failed to bind");
-                //! $crateName::server::serve(listener, app)
+                //! $crateName::server::serve(listener, app.into_make_service())
                 //!     .with_graceful_shutdown(async {
                 //!         signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
                 //!     })

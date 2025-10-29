@@ -119,6 +119,7 @@ data class ServerCodegenConfig(
                 "ignoreUnsupportedConstraints",
                 "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
                 "addValidationExceptionToConstrainedOperations",
+                "alwaysSendEventStreamInitialResponse",
                 "http-1x",
             )
 
