@@ -22,21 +22,14 @@
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
 // flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
-use std::{fs::File, io::BufReader, net::SocketAddr, sync::Arc};
+use std::{fs::File, io::{self, BufReader}, net::SocketAddr, sync::Arc};
 
 use clap::Parser;
-use hyper::server::conn::http1;
-use hyper_util::service::TowerToHyperService;
-use tls_listener::TlsListener;
 use tokio::net::TcpListener;
 use tokio_rustls::{
-    rustls::{
-        pki_types::{CertificateDer, PrivateKeyDer},
-        ServerConfig,
-    },
+    rustls::{pki_types::{CertificateDer, PrivateKeyDer}, ServerConfig},
     TlsAcceptor,
 };
-use tower::Service;
 
 use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, get_storage,
@@ -44,10 +37,12 @@ use pokemon_service_common::{
 };
 use pokemon_service_server_sdk::{
     input, output,
-    server::{request::connect_info::ConnectInfo, routing::Connected, AddExtensionLayer},
+    server::{request::connect_info::ConnectInfo, routing::Connected, serve, AddExtensionLayer},
     PokemonService, PokemonServiceConfig,
 };
 use pokemon_service_tls::{DEFAULT_ADDRESS, DEFAULT_PORT, DEFAULT_TEST_CERT, DEFAULT_TEST_KEY};
+use tokio::net::TcpStream;
+use aws_smithy_http_server::serve::Listener;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -66,6 +61,52 @@ struct Args {
     tls_key_path: String,
 }
 
+/// A TLS listener that wraps TcpListener and TlsAcceptor
+pub struct TlsListener {
+    tcp_listener: TcpListener,
+    tls_acceptor: TlsAcceptor,
+    bind_addr: SocketAddr,
+}
+
+impl TlsListener {
+    pub fn new(tcp_listener: TcpListener, tls_acceptor: TlsAcceptor, bind_addr: SocketAddr) -> Self {
+        Self {
+            tcp_listener,
+            tls_acceptor,
+            bind_addr,
+        }
+    }
+}
+
+impl Listener for TlsListener {
+    type Io = tokio_rustls::server::TlsStream<TcpStream>;
+    type Addr = SocketAddr;
+
+    async fn accept(&mut self) -> (Self::Io, Self::Addr) {
+        loop {
+            match self.tcp_listener.accept().await {
+                Ok((tcp_stream, remote_addr)) => {
+                    match self.tls_acceptor.accept(tcp_stream).await {
+                        Ok(tls_stream) => return (tls_stream, remote_addr),
+                        Err(err) => {
+                            eprintln!("TLS handshake failed: {err}");
+                            continue;
+                        }
+                    }
+                }
+                Err(err) => {
+                    eprintln!("Failed to accept TCP connection: {err}");
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                }
+            }
+        }
+    }
+
+    fn local_addr(&self) -> io::Result<Self::Addr> {
+        Ok(self.bind_addr)
+    }
+}
+
 /// Information derived from the TLS connection.
 #[derive(Debug, Clone)]
 pub struct TlsConnectInfo {
@@ -76,24 +117,22 @@ pub struct TlsConnectInfo {
     pub certs: Option<Arc<Vec<CertificateDer<'static>>>>,
 }
 
-/// Wrapper struct for TLS connection data used in Connected trait
-pub struct TlsConnectionData<'a> {
-    pub remote_addr: SocketAddr,
-    pub tls_stream: &'a tokio_rustls::server::TlsStream<tokio::net::TcpStream>,
-}
+impl<'a> Connected<aws_smithy_http_server::serve::IncomingStream<'a, TlsListener>>
+    for TlsConnectInfo
+{
+    fn connect_info(
+        target: aws_smithy_http_server::serve::IncomingStream<'a, TlsListener>,
+    ) -> Self {
+        let tls_stream = target.io();
+        let socket_addr = *target.remote_addr();
 
-impl Connected<TlsConnectionData<'_>> for TlsConnectInfo {
-    fn connect_info(data: TlsConnectionData<'_>) -> Self {
-        let (_tcp_stream, session) = data.tls_stream.get_ref();
-
-        let certs = session
+        let certs = tls_stream
+            .get_ref()
+            .1
             .peer_certificates()
             .map(|certs| Arc::new(certs.to_vec()));
 
-        TlsConnectInfo {
-            socket_addr: data.remote_addr,
-            certs,
-        }
+        TlsConnectInfo { socket_addr, certs }
     }
 }
 
@@ -138,57 +177,19 @@ pub async fn main() {
         .expect("unable to parse the server bind address and port");
 
     let tls_acceptor = acceptor(&args.tls_cert_path, &args.tls_key_path);
+    let tcp_listener = TcpListener::bind(addr)
+        .await
+        .expect("failed to bind TCP listener");
+
+    let tls_listener = TlsListener::new(tcp_listener, tls_acceptor, addr);
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `TlsConnectInfo`
     // connection info.
     let make_app = app.into_make_service_with_connect_info::<TlsConnectInfo>();
 
-    // Bind the application to a socket and wrap with TLS listener
-    let tcp_listener = TcpListener::bind(addr)
-        .await
-        .expect("failed to bind to address");
-
-    let mut tls_listener = TlsListener::new(tls_acceptor, tcp_listener);
-
-    // Accept connections using tls-listener 0.11 API
-    loop {
-        match tls_listener.accept().await {
-            Ok((tls_stream, remote_addr)) => {
-                let make_app_clone = make_app.clone();
-
-                // Spawn a task to handle the connection
-                tokio::task::spawn(async move {
-                    // Create a service for this specific connection using the TLS connection data
-                    let mut make_service = make_app_clone;
-                    let connection_data = TlsConnectionData {
-                        remote_addr,
-                        tls_stream: &tls_stream,
-                    };
-                    let service = match make_service.call(connection_data).await {
-                        Ok(service) => service,
-                        Err(err) => {
-                            eprintln!("failed to create service: {:?}", err);
-                            return;
-                        }
-                    };
-
-                    let io = hyper_util::rt::TokioIo::new(tls_stream);
-
-                    // Wrap the tower service to make it compatible with hyper
-                    let hyper_service = TowerToHyperService::new(service);
-
-                    if let Err(err) = http1::Builder::new()
-                        .serve_connection(io, hyper_service)
-                        .await
-                    {
-                        eprintln!("error serving connection: {:?}", err);
-                    }
-                });
-            }
-            Err(err) => {
-                eprintln!("TLS connection error: {:?}", err);
-            }
-        }
+    // Run the server using the serve function
+    if let Err(err) = serve(tls_listener, make_app).await {
+        eprintln!("server error: {err}");
     }
 }
 
@@ -211,19 +212,17 @@ pub fn acceptor(cert_path: &str, key_path: &str) -> TlsAcceptor {
 fn load_certs(path: &str) -> Vec<CertificateDer<'static>> {
     let mut reader = BufReader::new(File::open(path).expect("could not open certificate"));
     rustls_pemfile::certs(&mut reader)
+        .collect::<Result<Vec<_>, _>>()
         .expect("could not parse certificate")
-        .into_iter()
-        .map(|cert| cert.to_owned().into())
-        .collect()
 }
 
 fn load_key(path: &str) -> PrivateKeyDer<'static> {
     let mut reader = BufReader::new(File::open(path).expect("could not open private key"));
     loop {
         match rustls_pemfile::read_one(&mut reader).expect("could not parse private key") {
-            Some(rustls_pemfile::Item::RSAKey(key)) => return PrivateKeyDer::Pkcs1(key.into()),
-            Some(rustls_pemfile::Item::PKCS8Key(key)) => return PrivateKeyDer::Pkcs8(key.into()),
-            Some(rustls_pemfile::Item::ECKey(key)) => return PrivateKeyDer::Sec1(key.into()),
+            Some(rustls_pemfile::Item::Pkcs1Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Pkcs8Key(key)) => return key.into(),
+            Some(rustls_pemfile::Item::Sec1Key(key)) => return key.into(),
             None => break,
             _ => {}
         }
