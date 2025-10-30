@@ -959,7 +959,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 {
-                                    Some(#{Deserializer}(&mut #{eventStreamBodyInto}.into_inner())?)
+                                    Some(#{Deserializer}(&mut #{eventStreamBodyInto})?)
                                 }
                                 """,
                                 "Deserializer" to deserializer,
