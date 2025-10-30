@@ -5,9 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
-import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
-import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionNode
-import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -48,42 +45,45 @@ class EndpointBddGenerator(
         val nodes = generateNodeArray()
         val conditionCount = bddTrait.conditions.size
         val resultCount = bddTrait.results.size
-        val generator = EndpointTypesGenerator.fromContext(codegenContext)
-
+        val typeGenerator = EndpointTypesGenerator.fromContext(codegenContext)
+        val conditionGenerator = ConditionEvaluationGenerator(codegenContext, stdlib)
         // Create context for expression generation with stdlib
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
+
+        // Render conditions to a dummy writer to populate the function registry
+        // This is the same trick used by EndpointResolverGenerator
+        val dummyWriter = RustWriter.root()
+        bddTrait.conditions.forEach { cond ->
+            conditionGenerator.generateCondition(cond, context, 0)(
+                RustWriter.root(),
+            )
+        }
+
+        // Now get the functions that were actually used during condition generation
+        val fnsUsed = registry.fnsUsed()
 
         val endpointLib =
             InlineDependency.forRustFile(
                 RustModule.pubCrate("bdd_interpreter"),
                 "/inlineable/src/endpoint_lib/bdd_interpreter.rs",
+                EndpointsLib.partitionResolver(runtimeConfig).dependency!!,
             )
 
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, condition) ->
-                if (condition.producesResult()) {
-                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionWithResultStorage(
+
+                "cond_$idx" to
+                    conditionGenerator.generateCondition(
                         condition,
                         context,
                         idx,
                     )
-                } else {
-                    "cond_$idx" to ConditionEvaluationGenerator.generateConditionEvaluation(condition, context, idx)
-                }
             }
 
         // Identify which conditions produce results
         val conditionProducesResult = bddTrait.conditions.map { it.producesResult() }
-
-        // Render conditions to a dummy writer to populate the function registry
-        // This is the same trick used by EndpointResolverGenerator
-        val dummyWriter = RustWriter.root()
-        conditionScope.values.forEach { it(dummyWriter) }
-
-        // Now get the functions that were actually used during condition generation
-        val fnsUsed = registry.fnsUsed()
 
         // Build additional args for custom runtime functions
         val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignature() }
@@ -137,6 +137,7 @@ class EndpointBddGenerator(
 
             ##[derive(Debug)]
             pub struct DefaultResolver {
+                partition_resolver: #{PartitionResolver},
                 #{custom_fields}
             }
 
@@ -179,10 +180,11 @@ class EndpointBddGenerator(
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
             *Types(runtimeConfig).toArray(),
-            "Params" to generator.paramsStruct(),
+            "Params" to typeGenerator.paramsStruct(),
             "param_bindings" to generateParamBindings(),
             *conditionScope.toList().toTypedArray(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+            "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
             "custom_fields" to writable { fnsUsed.mapNotNull { it.structField() }.forEach { rust("#W,", it) } },
             "custom_fields_init" to
                 writable {

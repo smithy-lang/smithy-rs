@@ -22,6 +22,8 @@ pub enum ConditionResult<'a> {
     Bool(bool),
     StringArray(Vec<String>),
     Url(Url<'a>),
+    Partition(crate::endpoint_lib::partition::Partition<'a>),
+    Arn(crate::endpoint_lib::arn::Arn<'a>),
 }
 
 /// Stores intermediate results from condition evaluations
@@ -66,10 +68,12 @@ pub fn evaluate_bdd<P, C, R: Clone>(
     params: &P,
     conditions: &[C],
     results: &[R],
+    partition_resolver: &crate::endpoint_lib::partition::PartitionResolver,
     diagnostic_collector: &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
     condition_evaluator: impl Fn(
         &P,
         &C,
+        &crate::endpoint_lib::partition::PartitionResolver,
         &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
         &mut ConditionContext,
         usize,
@@ -98,6 +102,7 @@ pub fn evaluate_bdd<P, C, R: Clone>(
                 let condition_result = condition_evaluator(
                     params,
                     condition,
+                    partition_resolver,
                     diagnostic_collector,
                     &mut context,
                     condition_index,
