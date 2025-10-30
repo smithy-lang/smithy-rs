@@ -156,7 +156,6 @@ data class HttpDependencies(
          */
         fun create(http1x: Boolean, runtimeConfig: software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig): HttpDependencies {
             return if (http1x) {
-                println("[HttpDependencies.create] Creating HTTP 1.x dependencies")
                 HttpDependencies(
                     http = CargoDependency.Http1x,
                     httpBody = CargoDependency.HttpBody1x,
@@ -172,7 +171,6 @@ data class HttpDependencies(
                     smithyXml = CargoDependency.smithyXml(runtimeConfig),
                 )
             } else {
-                println("[HttpDependencies.create] Creating HTTP 0.x dependencies")
                 HttpDependencies(
                     http = CargoDependency("http-0x", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("0.2.9"), `package` = "http"),
                     httpBody = CargoDependency("http-body-0x", software.amazon.smithy.rust.codegen.core.rustlang.CratesIo("0.4.4"), `package` = "http-body"),

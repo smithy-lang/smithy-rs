@@ -6,6 +6,11 @@
 package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.Arguments
+import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.MethodSource
+import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,33 +29,19 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * Uses cargo_metadata to parse and validate dependencies instead of string matching.
  */
 internal class Http1xDependencyTest {
-    private val cargoMetadata = CargoDependency("cargo_metadata", CratesIo("0.18"), features = setOf("builder"))
-    private val semver = CargoDependency("semver", CratesIo("1.0"))
+    private val cargoMetadata = CargoDependency("cargo_metadata", CratesIo("0.18"), features = setOf("builder")).toType()
+    private val semver = CargoDependency("semver", CratesIo("1.0")).toType()
 
-    private val testModel =
-        """
-        namespace test
-        use aws.protocols#restJson1
-
-        @restJson1
-        service TestService {
-            version: "2024-03-18"
-            operations: [GetStatus]
+    private fun buildAdditionalSettings(http1x: Boolean?, publicConstrainedTypes: Boolean): ObjectNode {
+        val builder = ServerAdditionalSettings.builder()
+        if (http1x != null) {
+            builder.withHttp1x(http1x)
         }
-        @http(uri: "/status", method: "GET")
-        operation GetStatus {
-            output: GetStatusOutput
-        }
-        structure GetStatusOutput {
-            status: String
-        }
-    """.asSmithyModel()
-
-    private fun buildAdditionalSettings(http1x: Boolean) =
-        ServerAdditionalSettings.builder()
-            .withHttp1x(http1x)
+        return builder
+            .publicConstrainedTypes(publicConstrainedTypes)
             .generateCodegenComments(true)
             .toObjectNode()
+    }
 
     private fun define_util_functions() = writable {
         rustTemplate(
@@ -154,25 +145,29 @@ internal class Http1xDependencyTest {
                 }
             }
             """,
-            "VersionReq" to semver.toType().resolve("VersionReq"),
-            "Version" to semver.toType().resolve("Version"),
-            "Op" to semver.toType().resolve("Op"),
-            "Prerelease" to semver.toType().resolve("Prerelease"),
-            "BuildMetadata" to semver.toType().resolve("BuildMetadata"),
-            "Metadata" to cargoMetadata.toType().resolve("Metadata"),
-            "Package" to cargoMetadata.toType().resolve("Package"),
-            "Dependency" to cargoMetadata.toType().resolve("Dependency"),
+            "VersionReq" to semver.resolve("VersionReq"),
+            "Version" to semver.resolve("Version"),
+            "Op" to semver.resolve("Op"),
+            "Prerelease" to semver.resolve("Prerelease"),
+            "BuildMetadata" to semver.resolve("BuildMetadata"),
+            "Metadata" to cargoMetadata.resolve("Metadata"),
+            "Package" to cargoMetadata.resolve("Package"),
+            "Dependency" to cargoMetadata.resolve("Dependency"),
             *preludeScope
         )
     }
 
-    @Test
-    fun `SDK with http-1x enabled compiles and has correct dependencies`() {
-        val (model, serviceShapeId) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestJson)
+    @ParameterizedTest
+    @MethodSource("protocolAndConstrainedTypesProvider")
+    fun `SDK with http-1x enabled compiles and has correct dependencies`(
+        protocol: ModelProtocol,
+        publicConstrainedTypes: Boolean
+    ) {
+        val (model, ) = loadSmithyConstraintsModelForProtocol(protocol)
         serverIntegrationTest(
             model,
             IntegrationTestParams(
-                additionalSettings = buildAdditionalSettings(true),
+                additionalSettings = buildAdditionalSettings(http1x = true, publicConstrainedTypes),
                 cargoCommand = "cargo test --all-features"
             ),
         ) { _, rustCrate ->
@@ -210,7 +205,7 @@ internal class Http1xDependencyTest {
                             );
                         }
                         """,
-                        "MetadataCommand" to cargoMetadata.toType().resolve("MetadataCommand"),
+                        "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
                         *preludeScope,
                     )
                 }
@@ -218,11 +213,16 @@ internal class Http1xDependencyTest {
         }
     }
 
-    @Test
-    fun `SDK defaults to http-1x disabled, and dependencies are correct`() {
+    @ParameterizedTest
+    @EnumSource(value = ModelProtocol::class, mode = EnumSource.Mode.MATCH_NONE, names = ["AwsJson.*"])
+    fun `SDK defaults to http-1x disabled, and dependencies are correct`(protocol: ModelProtocol) {
+        val (model, ) = loadSmithyConstraintsModelForProtocol(protocol)
         serverIntegrationTest(
-            testModel,
-            IntegrationTestParams(),
+            model,
+            IntegrationTestParams(
+                additionalSettings = buildAdditionalSettings(http1x = null, publicConstrainedTypes = false),
+                cargoCommand = "cargo test --all-features",
+            ),
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -268,11 +268,28 @@ internal class Http1xDependencyTest {
                             );
                         }
                         """,
-                        "MetadataCommand" to cargoMetadata.toType().resolve("MetadataCommand"),
-                        "VersionReq" to semver.toType().resolve("VersionReq"),
-                        "Version" to semver.toType().resolve("Version"),
+                        "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+                        "VersionReq" to semver.resolve("VersionReq"),
+                        "Version" to semver.resolve("Version"),
                         *preludeScope,
                     )
+                }
+            }
+        }
+    }
+
+    companion object {
+        @JvmStatic
+        fun protocolAndConstrainedTypesProvider(): List<Arguments> {
+            //val protocols = ModelProtocol.values().filter {
+            //    !it.name.matches(Regex("AwsJson.*"))
+            //}
+            val protocols = listOf(ModelProtocol.Rpcv2Cbor)
+            val constrainedSettings = listOf(true, false)
+
+            return protocols.flatMap { protocol ->
+                constrainedSettings.map { publicConstrained ->
+                    Arguments.of(protocol, publicConstrained)
                 }
             }
         }
