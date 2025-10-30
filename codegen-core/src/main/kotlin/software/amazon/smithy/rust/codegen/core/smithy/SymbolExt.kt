@@ -83,9 +83,14 @@ fun Symbol.makeMaybeConstrained(): Symbol =
  * WARNING: This function does not update any symbol references (e.g., `symbol.addReference()`) on the
  * returned symbol. You will have to add those yourself if your logic relies on them.
  **/
-fun Symbol.mapRustType(f: (RustType) -> RustType): Symbol {
+fun Symbol.mapRustType(
+    vararg dependencies: RuntimeType,
+    f: (RustType) -> RustType,
+): Symbol {
     val newType = f(this.rustType())
-    return Symbol.builder().rustType(newType)
+    val builder = this.toBuilder()
+    dependencies.forEach { builder.addReference(it.toSymbol()) }
+    return builder.rustType(newType)
         .name(newType.name)
         .build()
 }
