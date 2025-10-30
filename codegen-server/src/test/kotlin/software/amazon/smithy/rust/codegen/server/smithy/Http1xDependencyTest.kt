@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -23,7 +24,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrat
  * Uses cargo_metadata to parse and validate dependencies instead of string matching.
  */
 internal class Http1xDependencyTest {
-    private val cargoMetadata = CargoDependency("cargo_metadata", CratesIo("0.18"))
+    private val cargoMetadata = CargoDependency("cargo_metadata", CratesIo("0.18"), features = setOf("builder"))
     private val semver = CargoDependency("semver", CratesIo("1.0"))
 
     private val testModel =
@@ -51,13 +52,11 @@ internal class Http1xDependencyTest {
             .generateCodegenComments(true)
             .toObjectNode()
 
-    private fun extract_min_version() = writable {
+    private fun define_util_functions() = writable {
         rustTemplate(
            """
             ##[cfg(test)]
             fn extract_min_version(req: &#{VersionReq}) -> #{Version} {
-                use semver::Op;
-
                 // Handle wildcard (*) requirements - empty comparators means "any version"
                 if req.comparators.is_empty() {
                     return #{Version}::new(0, 0, 0);
@@ -66,13 +65,13 @@ internal class Http1xDependencyTest {
                 req.comparators.iter()
                     .filter_map(|c| {
                         match c.op {
-                            Op::GreaterEq | Op::Exact | Op::Caret | Op::Tilde => {
-                                Some(semver::Version {
+                            #{Op}::GreaterEq | #{Op}::Exact | #{Op}::Caret | #{Op}::Tilde => {
+                                Some(#{Version} {
                                     major: c.major,
                                     minor: c.minor.unwrap_or(0),
                                     patch: c.patch.unwrap_or(0),
-                                    pre: semver::Prerelease::EMPTY,
-                                    build: semver::BuildMetadata::EMPTY,
+                                    pre: #{Prerelease}::EMPTY,
+                                    build: #{BuildMetadata}::EMPTY,
                                 })
                             }
                             _ => None,
@@ -83,16 +82,87 @@ internal class Http1xDependencyTest {
             }
 
             ##[cfg(test)]
-            fn get_package_version(metadata: &cargo_metadata::Metadata, package_name: &str) -> #{Version} {
+            fn get_package_version(metadata: &#{Metadata}, package_name: &str) -> #{Version} {
                 // Find the package in the metadata (works for both path and registry dependencies)
                 metadata.packages.iter()
                     .find(|pkg| pkg.name == package_name)
                     .map(|pkg| #{Version}::parse(&pkg.version.to_string()).expect("Failed to parse package version"))
                     .expect(&format!("Could not find package {} in metadata", package_name))
             }
+
+            ##[cfg(test)]
+            fn parse_crate_versions<'a>(
+                crates: &[(&'a str, &str, #{Option}<&[&str]>)]
+            ) -> #{Vec}<(&'a str, #{Version}, #{Option}<#{Vec}<#{String}>>)> {
+                crates.iter()
+                    .map(|(name, ver_str, features_opt)| {
+                        let version = #{Version}::parse(ver_str)
+                            .expect(&format!("Invalid version string '{}' for {}", ver_str, name));
+                        let features = features_opt.map(|f| {
+                            f.iter().map(|s| s.to_string()).collect::<#{Vec}<#{String}>>()
+                        });
+                        (*name, version, features)
+                    })
+                    .collect()
+            }
+
+            ##[cfg(test)]
+            fn satisfies_minimum_version(actual: &#{Dependency}, expected_min: &#{Version}, metadata: &#{Metadata}) -> bool {
+                let actual_version = if actual.path.is_some() || actual.req.to_string() == "*" {
+                    // For path dependencies, get actual version from package metadata
+                    get_package_version(metadata, &actual.name)
+                } else {
+                    // For registry dependencies, extract minimum version from requirement
+                    extract_min_version(&actual.req)
+                };
+
+                actual_version >= *expected_min
+            }
+
+            ##[allow(dead_code)]
+            ##[cfg(test)]
+            fn has_required_features(actual: &#{Dependency}, required: &[#{String}]) -> bool {
+                required.iter().all(|f| actual.features.contains(f))
+            }
+
+            ##[cfg(test)]
+            fn verify_dependencies(
+                metadata: &#{Metadata},
+                root_package: &#{Package},
+                expected: &[(&str, #{Version}, #{Option}<#{Vec}<#{String}>>)]
+            ) {
+                for (dep_name, expected_min, expected_features) in expected {
+                    let dep = root_package.dependencies.iter()
+                        .find(|d| d.name == *dep_name)
+                        .expect(&format!("Must have `{}` dependency", dep_name));
+
+                    // Check version
+                    assert!(
+                        satisfies_minimum_version(dep, expected_min, metadata),
+                        "{} does not satisfy minimum version >= {}. Actual requirement: {} (path: {:?})",
+                        dep_name, expected_min, dep.req, dep.path
+                    );
+
+                    // Check features if specified
+                    if let #{Some}(required_features) = expected_features {
+                        assert!(
+                            has_required_features(dep, required_features),
+                            "{} does not have required features: {:?}. Actual features: {:?}",
+                            dep_name, required_features, dep.features
+                        );
+                    }
+                }
+            }
             """,
             "VersionReq" to semver.toType().resolve("VersionReq"),
             "Version" to semver.toType().resolve("Version"),
+            "Op" to semver.toType().resolve("Op"),
+            "Prerelease" to semver.toType().resolve("Prerelease"),
+            "BuildMetadata" to semver.toType().resolve("BuildMetadata"),
+            "Metadata" to cargoMetadata.toType().resolve("Metadata"),
+            "Package" to cargoMetadata.toType().resolve("Package"),
+            "Dependency" to cargoMetadata.toType().resolve("Dependency"),
+            *preludeScope
         )
     }
 
@@ -107,71 +177,43 @@ internal class Http1xDependencyTest {
             ),
         ) { _, rustCrate ->
             rustCrate.lib {
-                addDependency(cargoMetadata)
+                define_util_functions().invoke(this)
 
-                extract_min_version().invoke(this)
+                unitTest("http_1x_dependencies") {
+                    rustTemplate(
+                        """
+                        let metadata = #{MetadataCommand}::new()
+                            .exec()
+                            .expect("Failed to run cargo metadata");
 
-                unitTest(
-                    "http_1x_dependencies",
-                    """
-                    use semver::{Version, VersionReq};
+                        let root_package = metadata.root_package()
+                            .expect("Failed to get root package");
 
-                    let metadata = cargo_metadata::MetadataCommand::new()
-                        .exec()
-                        .expect("Failed to run cargo metadata");
+                        // Check all HTTP 1.x dependencies have minimum versions and features
+                        let http1_crates = parse_crate_versions(&[
+                            ("http", "1.0.0", None),
+                            ("aws-smithy-http", "0.63.0", None),
+                            ("aws-smithy-http-server", "0.66.0", None),
+                            ("http-body-util", "0.1.3", None),
+                            ("aws-smithy-types", "1.3.3", Some(&["http-body-1-x"])),
+                            ("aws-smithy-runtime-api", "1.9.1", Some(&["http-1x"])),
+                        ]);
 
-                    let root_package = metadata.root_package()
-                        .expect("Failed to get root package");
+                        verify_dependencies(&metadata, root_package, &http1_crates);
 
-                    // Check all HTTP 1.x dependencies have minimum versions
-                    let http1_crates = [
-                        ("http", "1.0.0"),
-                        ("aws-smithy-http", "0.63.0"),
-                        ("aws-smithy-http-server", "0.66.0"),
-                        ("http-body-util", "0.1.3"),
-                    ];
-                    for (dep_name, min_version_str) in http1_crates {
-                        let dep = root_package.dependencies.iter()
-                            .find(|d| d.name == dep_name)
-                            .expect(&format!("Must have `{}` dependency", dep_name));
-
-                        let expected_min = Version::parse(min_version_str)
-                            .expect(&format!("Failed to parse expected min version for {}", dep_name));
-
-                        // Check if this is a path dependency (wildcard requirement)
-                        let actual_version = if dep.path.is_some() || dep.req.to_string() == "*" {
-                            // For path dependencies, get the actual version from the package metadata
-                            eprintln!("Info: {} is a path dependency, reading version from package metadata", dep_name);
-                            get_package_version(&metadata, dep_name)
-                        } else {
-                            // For registry dependencies, extract minimum from the requirement
-                            let req = VersionReq::parse(&dep.req.to_string())
-                                .expect(&format!("Failed to parse version req for {}", dep_name));
-                            extract_min_version(&req)
-                        };
-
-                        let source_msg = if dep.path.is_some() {
-                            "path dependency".to_string()
-                        } else {
-                            format!("requirement: {}", dep.req)
-                        };
-                        assert!(
-                            actual_version >= expected_min,
-                            "{} version should be >= {}, but got: {} (from {})",
-                            dep_name, expected_min, actual_version, source_msg
-                        );
-                    }
-
-                    // Should NOT have legacy dependencies
-                    let legacy = ["aws-smithy-http-legacy-server", "aws-smithy-legacy-http"];
-                    for legacy_crate in legacy {
-                        assert!(
-                            !root_package.dependencies.iter().any(|dep| dep.name == legacy_crate),
-                            "Should NOT have {legacy_crate} dependency"
-                        );
-                    }
-                   """,
-                )
+                        // Should NOT have legacy dependencies
+                        let legacy = ["aws-smithy-http-legacy-server", "aws-smithy-legacy-http"];
+                        for legacy_crate in legacy {
+                            assert!(
+                                !root_package.dependencies.iter().any(|dep| dep.name == legacy_crate),
+                                "Should NOT have {legacy_crate} dependency"
+                            );
+                        }
+                        """,
+                        "MetadataCommand" to cargoMetadata.toType().resolve("MetadataCommand"),
+                        *preludeScope,
+                    )
+                }
             }
         }
     }
@@ -185,107 +227,53 @@ internal class Http1xDependencyTest {
             ),
         ) { _, rustCrate ->
             rustCrate.lib {
-                addDependency(cargoMetadata)
-                addDependency(semver)
+                define_util_functions().invoke(this)
 
-                // Add helper function for extracting minimum version from requirements
-                rust(
-                    """
-                    #[cfg(test)]
-                    fn extract_min_version(req: &semver::VersionReq) -> semver::Version {
-                        use semver::Op;
-                        req.comparators.iter()
-                            .filter_map(|c| {
-                                match c.op {
-                                    Op::GreaterEq | Op::Exact | Op::Caret | Op::Tilde => {
-                                        Some(semver::Version {
-                                            major: c.major,
-                                            minor: c.minor.unwrap_or(0),
-                                            patch: c.patch.unwrap_or(0),
-                                            pre: semver::Prerelease::EMPTY,
-                                            build: semver::BuildMetadata::EMPTY,
-                                        })
-                                    }
-                                    _ => None,
-                                }
-                            })
-                            .min()
-                            .expect("Could not determine minimum version from requirement")
-                    }
-                    """,
-                )
+                unitTest("http_0x_dependencies") {
+                    rustTemplate(
+                        """
+                        let metadata = #{MetadataCommand}::new()
+                            .exec()
+                            .expect("Failed to run cargo metadata");
 
-                unitTest(
-                    "http_0x_dependencies",
-                    """
-                    use semver::{Version, VersionReq};
+                        let root_package = metadata.root_package()
+                            .expect("Failed to get root package");
 
-                    let metadata = cargo_metadata::MetadataCommand::new()
-                        .exec()
-                        .expect("Failed to run cargo metadata");
+                        // Check all HTTP 0.x dependencies have minimum versions
+                        let http0_crates = parse_crate_versions(&[
+                            ("http", "0.2.0", None),
+                            ("aws-smithy-http-legacy-server", "0.65.7", None),
+                        ]);
 
-                    let root_package = metadata.root_package()
-                        .expect("Failed to get root package");
+                        verify_dependencies(&metadata, root_package, &http0_crates);
 
-                    // Check all HTTP 0.x dependencies have minimum versions
-                    let http0_crates = [
-                        ("http", "0.2.0"),
-                        ("aws-smithy-http-legacy-server", "0.60.0"),
-                    ];
-                    for (dep_name, min_version_str) in http0_crates {
-                        let dep = root_package.dependencies.iter()
-                            .find(|d| d.name == dep_name)
-                            .expect(&format!("Must have `{}` dependency", dep_name));
-
-                        let expected_min = Version::parse(min_version_str)
-                            .expect(&format!("Failed to parse expected min version for {}", dep_name));
-
-                        // Check if this is a path dependency (wildcard requirement)
-                        let actual_version = if dep.path.is_some() || dep.req.to_string() == "*" {
-                            // For path dependencies, get the actual version from the package metadata
-                            eprintln!("Info: {} is a path dependency, reading version from package metadata", dep_name);
-                            get_package_version(&metadata, dep_name)
-                        } else {
-                            // For registry dependencies, extract minimum from the requirement
-                            let req = VersionReq::parse(&dep.req.to_string())
-                                .expect(&format!("Failed to parse version req for {}", dep_name));
-                            extract_min_version(&req)
-                        };
-
-                        let source_msg = if dep.path.is_some() {
-                            "path dependency".to_string()
-                        } else {
-                            format!("requirement: {}", dep.req)
-                        };
+                        // Verify http crate does NOT accept version 1.x
+                        let http_dep = root_package.dependencies.iter()
+                            .find(|dep| dep.name == "http")
+                            .expect("Should have http dependency");
+                        let http_req = #{VersionReq}::parse(&http_dep.req.to_string())
+                            .expect("Failed to parse http version requirement");
+                        let v1 = #{Version}::parse("1.0.0").unwrap();
                         assert!(
-                            actual_version >= expected_min,
-                            "{} version should be >= {}, but got: {} (from {})",
-                            dep_name, expected_min, actual_version, source_msg
+                            !http_req.matches(&v1),
+                            "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
                         );
-                    }
 
-                    // Verify http crate does NOT accept version 1.x
-                    let http_dep = root_package.dependencies.iter()
-                        .find(|dep| dep.name == "http")
-                        .expect("Should have http dependency");
-                    let http_req = VersionReq::parse(&http_dep.req.to_string())
-                        .expect("Failed to parse http version requirement");
-                    let v1 = Version::parse("1.0.0").unwrap();
-                    assert!(
-                        !http_req.matches(&v1),
-                        "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
-                    );
-
-                    // Should NOT have HTTP 1.x specific dependencies
-                    let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
-                    for dep_name in http1_only_crates {
-                        assert!(
-                            !root_package.dependencies.iter().any(|d| d.name == dep_name),
-                            "Should NOT have `{}` dependency for HTTP 0.x", dep_name
-                        );
-                    }
-                   """,
-                )
+                        // Should NOT have HTTP 1.x specific dependencies
+                        let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
+                        for dep_name in http1_only_crates {
+                            assert!(
+                                !root_package.dependencies.iter().any(|d| d.name == dep_name),
+                                "Should NOT have `{}` dependency for HTTP 0.x", dep_name
+                            );
+                        }
+                        """,
+                        "MetadataCommand" to cargoMetadata.toType().resolve("MetadataCommand"),
+                        "VersionReq" to semver.toType().resolve("VersionReq"),
+                        "Version" to semver.toType().resolve("Version"),
+                        *preludeScope,
+                    )
+                }
             }
         }
     }
