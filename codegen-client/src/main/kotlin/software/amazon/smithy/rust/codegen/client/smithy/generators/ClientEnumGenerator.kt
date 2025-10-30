@@ -155,7 +155,7 @@ data class InfallibleEnumType(
                                     """,
                                 )
                             }
-                            rust("""${context.enumName}::Unknown(value) => write!(f, "{}", value)""")
+                            rust("""${context.enumName}::Unknown(value) => write!(f, "{value}")""")
                         },
                 )
             }

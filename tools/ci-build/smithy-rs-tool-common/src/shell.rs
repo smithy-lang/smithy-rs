@@ -52,7 +52,7 @@ pub fn capture_error(operation_name: &str, output: &Output) -> anyhow::Error {
         "Failed to {name}:\nStatus: {status}\nStdout: {stdout}\nStderr: {stderr}\n",
         name = operation_name,
         status = if let Some(code) = output.status.code() {
-            format!("{}", code)
+            format!("{code}")
         } else {
             "Killed by signal".to_string()
         },

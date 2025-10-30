@@ -246,14 +246,14 @@ impl Git for GitCLI {
     ) -> Result<()> {
         let mut command = Command::new(&self.binary_name);
         command.arg("-c");
-        command.arg(format!("user.name={}", bot_name));
+        command.arg(format!("user.name={bot_name}"));
         command.arg("-c");
-        command.arg(format!("user.email={}", bot_email));
+        command.arg(format!("user.email={bot_email}"));
         command.arg("commit");
         command.arg("-m");
         command.arg(message);
         command.arg("--author");
-        command.arg(format!("{} <{}>", author_name, author_email));
+        command.arg(format!("{author_name} <{author_email}>"));
         command.current_dir(&self.repo_path);
 
         let output = log_command(command).output()?;
@@ -264,9 +264,9 @@ impl Git for GitCLI {
     fn commit(&self, name: &str, email: &str, message: &str) -> Result<()> {
         let mut command = Command::new(&self.binary_name);
         command.arg("-c");
-        command.arg(format!("user.name={}", name));
+        command.arg(format!("user.name={name}"));
         command.arg("-c");
-        command.arg(format!("user.email={}", email));
+        command.arg(format!("user.email={email}"));
         command.arg("commit");
         command.arg("-m");
         command.arg(message);
@@ -286,8 +286,7 @@ impl Git for GitCLI {
         let mut command = Command::new(&self.binary_name);
         command.arg("rev-list");
         command.arg(format!(
-            "{}..{}",
-            end_exclusive_revision, start_inclusive_revision
+            "{end_exclusive_revision}..{start_inclusive_revision}"
         ));
         if let Some(path) = path {
             command.arg("--");
@@ -366,9 +365,9 @@ impl Git for GitCLI {
     fn squash_merge(&self, author_name: &str, author_email: &str, branch_name: &str) -> Result<()> {
         let mut command = Command::new(&self.binary_name);
         command.arg("-c");
-        command.arg(format!("user.name={}", author_name));
+        command.arg(format!("user.name={author_name}"));
         command.arg("-c");
-        command.arg(format!("user.email={}", author_email));
+        command.arg(format!("user.email={author_email}"));
         command.arg("merge");
         command.arg("--squash");
         command.arg(branch_name);
@@ -432,7 +431,7 @@ fn split_file_names(value: &str) -> Vec<PathBuf> {
 fn log_command(command: Command) -> Command {
     let mut message = String::new();
     if let Some(cwd) = command.get_current_dir() {
-        write!(&mut message, "[in {:?}]: ", cwd).unwrap();
+        write!(&mut message, "[in {cwd:?}]: ").unwrap();
     }
     message.push_str(command.get_program().to_str().expect("valid str"));
     for arg in command.get_args() {

@@ -150,7 +150,7 @@ class XmlBindingTraitParserGenerator(
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
                     if !(${shapeName.matchExpression("start_el")}) {
-                        return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {:?}", start_el)))
+                        return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {start_el:?}")))
                     }
                     """,
                     *codegenScope,
@@ -468,7 +468,7 @@ class XmlBindingTraitParserGenerator(
                             true -> rust("_unknown => base = Some(#T::${UnionGenerator.UNKNOWN_VARIANT_NAME}),", symbol)
                             false ->
                                 rustTemplate(
-                                    """variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {:?}", variant)))""",
+                                    """variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {variant:?}")))""",
                                     *codegenScope,
                                 )
                         }
@@ -713,7 +713,7 @@ class XmlBindingTraitParserGenerator(
                     provider()
                 }
                 rustTemplate(
-                    """.map_err(|err|#{XmlDecodeError}::custom(format!("invalid base64: {:?}", err))).map(#{Blob}::new)""",
+                    """.map_err(|err|#{XmlDecodeError}::custom(format!("invalid base64: {err:?}"))).map(#{Blob}::new)""",
                     *codegenScope,
                 )
             }
@@ -734,7 +734,7 @@ class XmlBindingTraitParserGenerator(
                         provider()
                     }
                     rustTemplate(
-                        """.map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {}", e)))?""",
+                        """.map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {e}")))?""",
                         *codegenScope,
                     )
                 } else {

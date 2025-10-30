@@ -48,7 +48,7 @@ impl Check for TodosHaveContext {
     fn check(&self, path: impl AsRef<Path>) -> anyhow::Result<Vec<LintError>> {
         let contents = match fs::read_to_string(path.as_ref()) {
             Ok(contents) => contents,
-            Err(err) if format!("{}", err).contains("No such file or directory") => {
+            Err(err) if format!("{err}").contains("No such file or directory") => {
                 eprintln!("Note: {} does not exist", path.as_ref().display());
                 return Ok(vec![]);
             }
@@ -59,8 +59,7 @@ impl Check for TodosHaveContext {
             if !todo.starts_with('(') {
                 let todo_line = todo.lines().next().unwrap_or_default();
                 errs.push(LintError::new(format!(
-                    "TODO without context: `TODO{}`",
-                    todo_line
+                    "TODO without context: `TODO{todo_line}`"
                 )))
             }
         }

@@ -186,7 +186,7 @@ private class AwsFluentClientRetryPartition(private val codegenContext: ClientCo
                     rustTemplate(
                         """
                         let default_retry_partition = match config.region() {
-                            Some(region) => #{Cow}::from(format!("{default_retry_partition}-{}", region)),
+                            Some(region) => #{Cow}::from(format!("{default_retry_partition}-{region}")),
                             None => #{Cow}::from(default_retry_partition),
                         };
                         """,

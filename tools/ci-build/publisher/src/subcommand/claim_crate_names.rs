@@ -84,7 +84,7 @@ async fn load_publishable_crate_names(path: &Path) -> Result<HashSet<String>> {
         let content =
             fs::read(manifest_path).with_context(|| format!("failed to read {path:?}"))?;
         let manifest = Manifest::from_slice(&content)
-            .with_context(|| format!("failed to load crate manifest for {:?}", path))?;
+            .with_context(|| format!("failed to load crate manifest for {path:?}"))?;
         if let Some(package) = manifest.package {
             let crate_name = package.name();
             if matches!(package.publish(), cargo_toml::Publish::Flag(true)) {
@@ -113,13 +113,12 @@ async fn discover_publishable_crate_names(repository_root: &Path) -> Result<Vec<
 async fn create_dummy_lib_crate(fs: Fs, package_name: &str, directory_path: PathBuf) -> Result<()> {
     let cargo_toml = format!(
         r#"[package]
-name = "{}"
+name = "{package_name}"
 version = "0.0.1"
 edition = "2021"
 description = "Placeholder ahead of the next smithy-rs release"
 license = "Apache-2.0"
-repository = "https://github.com/smithy-lang/smithy-rs""#,
-        package_name
+repository = "https://github.com/smithy-lang/smithy-rs""#
     );
     fs.write_file(directory_path.join("Cargo.toml"), cargo_toml.as_bytes())
         .await?;

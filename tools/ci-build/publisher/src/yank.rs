@@ -13,7 +13,7 @@ use tracing::info;
 pub async fn yank(crate_name: &str, crate_version: &str) -> anyhow::Result<()> {
     info!("Yanking `{}-{}`...", crate_name, crate_version);
     run_with_retry(
-        &format!("Yanking `{}-{}`", crate_name, crate_version),
+        &format!("Yanking `{crate_name}-{crate_version}`"),
         5,
         Duration::from_secs(60),
         || async {
