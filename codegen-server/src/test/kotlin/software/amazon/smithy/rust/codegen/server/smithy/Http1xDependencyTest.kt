@@ -91,7 +91,7 @@ internal class Http1xDependencyTest {
             }
 
             ##[cfg(test)]
-            fn parse_crate_versions<'a>(
+            fn parse_crate_min_versions<'a>(
                 crates: &[(&'a str, &str, #{Option}<&[&str]>)]
             ) -> #{Vec}<(&'a str, #{Version}, #{Option}<#{Vec}<#{String}>>)> {
                 crates.iter()
@@ -190,7 +190,7 @@ internal class Http1xDependencyTest {
                             .expect("Failed to get root package");
 
                         // Check all HTTP 1.x dependencies have minimum versions and features
-                        let http1_crates = parse_crate_versions(&[
+                        let http1_crates = parse_crate_min_versions(&[
                             ("http", "1.0.0", None),
                             ("aws-smithy-http", "0.63.0", None),
                             ("aws-smithy-http-server", "0.66.0", None),
@@ -219,12 +219,10 @@ internal class Http1xDependencyTest {
     }
 
     @Test
-    fun `SDK with http-1x disabled compiles and has correct dependencies`() {
+    fun `SDK defaults to http-1x disabled, and dependencies are correct`() {
         serverIntegrationTest(
             testModel,
-            IntegrationTestParams(
-                additionalSettings = buildAdditionalSettings(http1x = false),
-            ),
+            IntegrationTestParams(),
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -240,9 +238,11 @@ internal class Http1xDependencyTest {
                             .expect("Failed to get root package");
 
                         // Check all HTTP 0.x dependencies have minimum versions
-                        let http0_crates = parse_crate_versions(&[
+                        let http0_crates = parse_crate_min_versions(&[
                             ("http", "0.2.0", None),
-                            ("aws-smithy-http-legacy-server", "0.65.7", None),
+                            ("aws-smithy-legacy-http-server", "0.65.7", None),
+                            ("aws-smithy-legacy-http", "0.62.5", None),
+                            ("aws-smithy-runtime-api", "1.9.1", Some(&["http-02x"])),
                         ]);
 
                         verify_dependencies(&metadata, root_package, &http0_crates);
@@ -274,57 +274,6 @@ internal class Http1xDependencyTest {
                         *preludeScope,
                     )
                 }
-            }
-        }
-    }
-
-    @Test
-    fun `SDK defaults to http-0x when no flag is provided`() {
-        serverIntegrationTest(
-            testModel,
-            IntegrationTestParams(),
-        ) { _, rustCrate ->
-            rustCrate.lib {
-                addDependency(cargoMetadata)
-                addDependency(semver)
-                unitTest(
-                    "default_http_0x_dependencies",
-                    """
-                    use semver::{Version, VersionReq};
-
-                    let metadata = cargo_metadata::MetadataCommand::new()
-                        .exec()
-                        .expect("Failed to run cargo metadata");
-
-                    let root_package = metadata.root_package()
-                        .expect("Failed to get root package");
-
-                    // Should default to HTTP 0.x
-                    let http_dep = root_package.dependencies.iter()
-                        .find(|dep| dep.name == "http")
-                        .expect("Should have http dependency");
-
-                    let req = VersionReq::parse(&http_dep.req.to_string())
-                        .expect("Failed to parse version requirement");
-
-                    // Verify it uses HTTP 0.2.x by default
-                    let v0_2 = Version::parse("0.2.0").unwrap();
-                    assert!(
-                        req.matches(&v0_2),
-                        "Should default to http 0.2.x, got: {}", http_dep.req
-                    );
-
-                    assert!(
-                        root_package.dependencies.iter().any(|dep| dep.name == "aws-smithy-http-legacy-server"),
-                        "Should default to aws-smithy-http-legacy-server dependency"
-                    );
-
-                    assert!(
-                        !root_package.dependencies.iter().any(|dep| dep.name == "http-body-util"),
-                        "Should NOT have http-body-util dependency by default"
-                    );
-                    """,
-                )
             }
         }
     }
