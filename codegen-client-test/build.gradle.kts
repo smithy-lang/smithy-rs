@@ -115,7 +115,7 @@ val allCodegenTests = listOf(
     ClientTest("aws.protocoltests.json#TestService", "endpoint-rules"),
     ClientTest(
         "com.aws.example#PokemonService",
-        "pokemon-service-client",
+        "pokemon-service-client-http0x",
         dependsOn = listOf("pokemon.smithy", "pokemon-common.smithy"),
     ),
     ClientTest(
@@ -124,7 +124,14 @@ val allCodegenTests = listOf(
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
-).map(ClientTest::toCodegenTest)
+).map(ClientTest::toCodegenTest) + listOf(
+    CodegenTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-client",
+        extraConfig = """, "codegen": { "http-1x": true } """,
+        imports = listOf("../codegen-core/common-test-models/pokemon.smithy", "../codegen-core/common-test-models/pokemon-common.smithy"),
+    )
+)
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

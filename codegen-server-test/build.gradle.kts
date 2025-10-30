@@ -107,6 +107,12 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "com.aws.example#PokemonService",
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
+            extraConfig = """, "codegen": { "http-1x": true, "debugMode": true } """,
+        ),
+        CodegenTest(
+            "com.aws.example#PokemonService",
+            "pokemon-service-server-sdk-http0x",
+            imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
         ),
         CodegenTest(
             "com.aws.example#PokemonService",
