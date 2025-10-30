@@ -2,6 +2,9 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+//! Portions of the implementation are adapted from axum
+//! (https://github.com/tokio-rs/axum), which is licensed under the MIT License.
+//! Copyright (c) 2019 Axum Contributors
 
 use std::{
     fmt,
@@ -120,10 +123,7 @@ pub trait ListenerExt: Listener + Sized {
     where
         F: FnMut(&mut Self::Io) + Send + 'static,
     {
-        TapIo {
-            listener: self,
-            tap_fn,
-        }
+        TapIo { listener: self, tap_fn }
     }
 }
 
@@ -167,11 +167,7 @@ pin_project! {
 
 // Simply forward implementation to `io` field.
 impl<T: AsyncRead> AsyncRead for ConnLimiterIo<T> {
-    fn poll_read(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &mut tokio::io::ReadBuf<'_>,
-    ) -> Poll<io::Result<()>> {
+    fn poll_read(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &mut tokio::io::ReadBuf<'_>) -> Poll<io::Result<()>> {
         self.project().io.poll_read(cx, buf)
     }
 }
@@ -190,11 +186,7 @@ impl<T: AsyncWrite> AsyncWrite for ConnLimiterIo<T> {
         self.project().io.poll_shutdown(cx)
     }
 
-    fn poll_write(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-        buf: &[u8],
-    ) -> Poll<io::Result<usize>> {
+    fn poll_write(self: Pin<&mut Self>, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         self.project().io.poll_write(cx, buf)
     }
 
@@ -268,8 +260,6 @@ async fn handle_accept_error(e: io::Error) {
 fn is_connection_error(e: &io::Error) -> bool {
     matches!(
         e.kind(),
-        io::ErrorKind::ConnectionRefused
-            | io::ErrorKind::ConnectionAborted
-            | io::ErrorKind::ConnectionReset
+        io::ErrorKind::ConnectionRefused | io::ErrorKind::ConnectionAborted | io::ErrorKind::ConnectionReset
     )
 }

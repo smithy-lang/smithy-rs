@@ -26,15 +26,15 @@ use http_body::Body as HttpBody;
 use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
+use hyper_util::server::graceful::GracefulShutdown;
 use hyper_util::service::TowerToHyperService;
-use tokio::sync::watch;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
 
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
 
-type ConfigureHyperFn = Arc<
+type ConfigureHyperBuilderFn = Arc<
     dyn Fn(
             hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
         ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
@@ -176,7 +176,7 @@ where
 pub struct Serve<L, M, S, B> {
     listener: L,
     make_service: M,
-    configure_hyper: Option<ConfigureHyperFn>,
+    configure_hyper: Option<ConfigureHyperBuilderFn>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -208,16 +208,11 @@ where
     }
 
     /// Enable graceful shutdown for the server.
-    pub fn with_graceful_shutdown<F>(self, signal: F) -> WithGracefulShutdown<L, M, S, F, B>
+    pub fn with_graceful_shutdown<F>(self, signal: F) -> ServeWithGracefulShutdown<L, M, S, F, B>
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        WithGracefulShutdown::new(
-            self.listener,
-            self.make_service,
-            signal,
-            self.configure_hyper,
-        )
+        ServeWithGracefulShutdown::new(self.listener, self.make_service, signal, self.configure_hyper)
     }
 
     /// Returns the local address this server is bound to.
@@ -253,7 +248,7 @@ where
 
             loop {
                 let (io, remote_addr) = listener.accept().await;
-                handle_connection(&mut make_service, io, remote_addr, configure_hyper.clone()).await;
+                handle_connection(&mut make_service, io, remote_addr, configure_hyper.clone(), None).await;
             }
         })
     }
@@ -262,22 +257,17 @@ where
 /// A server with graceful shutdown enabled.
 ///
 /// Created by [`Serve::with_graceful_shutdown`].
-pub struct WithGracefulShutdown<L, M, S, F, B> {
+pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     listener: L,
     make_service: M,
     signal: F,
-    configure_hyper: Option<ConfigureHyperFn>,
+    configure_hyper: Option<ConfigureHyperBuilderFn>,
     shutdown_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
 }
 
-impl<L: Listener, M, S, F, B> WithGracefulShutdown<L, M, S, F, B> {
-    fn new(
-        listener: L,
-        make_service: M,
-        signal: F,
-        configure_hyper: Option<ConfigureHyperFn>,
-    ) -> Self
+impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
+    fn new(listener: L, make_service: M, signal: F, configure_hyper: Option<ConfigureHyperBuilderFn>) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -318,7 +308,7 @@ impl<L: Listener, M, S, F, B> WithGracefulShutdown<L, M, S, F, B> {
 }
 
 // Implement IntoFuture so we can await WithGracefulShutdown directly
-impl<L, M, S, F, B> IntoFuture for WithGracefulShutdown<L, M, S, F, B>
+impl<L, M, S, F, B> IntoFuture for ServeWithGracefulShutdown<L, M, S, F, B>
 where
     L: Listener,
     L::Addr: Debug,
@@ -345,62 +335,50 @@ where
                 _marker,
             } = self;
 
-            // Create watch channels for shutdown coordination
-            let (signal_tx, signal_rx) = watch::channel(());
-            let (close_tx, close_rx) = watch::channel(());
-
-            // Spawn task to wait for shutdown signal
-            tokio::spawn(async move {
-                signal.await;
-                tracing::debug!("received graceful shutdown signal. Telling tasks to shutdown");
-                drop(signal_rx);  // Drop the receiver to signal all senders
-            });
+            // Create graceful shutdown coordinator
+            let graceful = GracefulShutdown::new();
+            let mut signal = std::pin::pin!(signal);
 
             loop {
-                let (io, remote_addr) = tokio::select! {
-                    conn = listener.accept() => conn,
-                    _ = signal_tx.closed() => {
-                        tracing::debug!("signal received, not accepting new connections");
+                tokio::select! {
+                    result = listener.accept() => {
+                        let (io, remote_addr) = result;
+
+                        handle_connection(
+                            &mut make_service,
+                            io,
+                            remote_addr,
+                            configure_hyper.clone(),
+                            Some(&graceful),
+                        )
+                        .await;
+                    }
+                    _ = signal.as_mut() => {
+                        tracing::debug!("received graceful shutdown signal, not accepting new connections");
                         break;
                     }
-                };
-
-                handle_connection_graceful(
-                    &mut make_service,
-                    io,
-                    remote_addr,
-                    configure_hyper.clone(),
-                    signal_tx.clone(),
-                    close_rx.clone(),
-                )
-                .await;
+                }
             }
 
             drop(listener);
-            drop(close_rx); // Drop the original receiver before waiting for connections to complete
 
-            tracing::debug!(
-                "waiting for {} task(s) to finish",
-                close_tx.receiver_count()
-            );
+            tracing::debug!("waiting for {} task(s) to finish", graceful.count());
 
             // Wait for all in-flight connections to finish (with optional timeout)
             match shutdown_timeout {
-                Some(timeout) => {
-                    match tokio::time::timeout(timeout, close_tx.closed()).await {
-                        Ok(_) => {
-                            tracing::debug!("all in-flight connections completed during graceful shutdown");
-                        }
-                        Err(_) => {
-                            tracing::warn!(
-                                timeout_secs = timeout.as_secs(),
-                                "graceful shutdown timeout expired, some connections may not have completed"
-                            );
-                        }
+                Some(timeout) => match tokio::time::timeout(timeout, graceful.shutdown()).await {
+                    Ok(_) => {
+                        tracing::debug!("all in-flight connections completed during graceful shutdown");
                     }
-                }
+                    Err(_) => {
+                        tracing::warn!(
+                            timeout_secs = timeout.as_secs(),
+                            "graceful shutdown timeout expired, some connections may not have completed"
+                        );
+                    }
+                },
                 None => {
-                    close_tx.closed().await;
+                    graceful.shutdown().await;
                     tracing::debug!("all in-flight connections completed during graceful shutdown");
                 }
             }
@@ -410,13 +388,12 @@ where
     }
 }
 
-// Common connection handling logic shared by both graceful and non-graceful shutdown
-async fn handle_connection_common<L, M, S, B, F, Fut>(
+async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
-    configure_hyper: Option<ConfigureHyperFn>,
-    serve_fn: F,
+    configure_hyper_builder: Option<ConfigureHyperBuilderFn>,
+    graceful: Option<&GracefulShutdown>,
 ) where
     L: Listener,
     L::Addr: Debug,
@@ -427,9 +404,8 @@ async fn handle_connection_common<L, M, S, B, F, Fut>(
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
-    F: FnOnce(Builder<TokioExecutor>, TokioIo<L::Io>, TowerToHyperService<S>) -> Fut + Send + 'static,
-    Fut: Future<Output = ()> + Send + 'static,
 {
+    let watcher = graceful.map(|g| g.watcher());
     let tokio_io = TokioIo::new(conn_io);
 
     tracing::trace!("connection {remote_addr:?} accepted");
@@ -451,93 +427,20 @@ async fn handle_connection_common<L, M, S, B, F, Fut>(
 
     tokio::spawn(async move {
         let mut builder = Builder::new(TokioExecutor::new());
-        if let Some(configure) = configure_hyper {
+        if let Some(configure) = configure_hyper_builder {
             builder = configure(builder);
         }
 
-        // Call the provided closure to handle the actual connection serving
-        serve_fn(builder, tokio_io, hyper_service).await;
+        let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
+
+        let result = if let Some(watcher) = watcher {
+            watcher.watch(conn).await
+        } else {
+            conn.await
+        };
+
+        if let Err(err) = result {
+            tracing::error!(error = ?err, "error serving connection");
+        }
     });
-}
-
-// Version without graceful shutdown - zero cost!
-async fn handle_connection<L, M, S, B>(
-    make_service: &mut M,
-    conn_io: <L as Listener>::Io,
-    remote_addr: <L as Listener>::Addr,
-    configure_hyper: Option<ConfigureHyperFn>,
-) where
-    L: Listener,
-    L::Addr: Debug,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-    handle_connection_common::<L, M, S, B, _, _>(
-        make_service,
-        conn_io,
-        remote_addr,
-        configure_hyper,
-        |builder, tokio_io, hyper_service| async move {
-            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-            if let Err(err) = conn.await {
-                tracing::error!(error = ?err, "error serving connection");
-            }
-        },
-    )
-    .await;
-}
-
-// Version with graceful shutdown
-async fn handle_connection_graceful<L, M, S, B>(
-    make_service: &mut M,
-    conn_io: <L as Listener>::Io,
-    remote_addr: <L as Listener>::Addr,
-    configure_hyper: Option<ConfigureHyperFn>,
-    signal_tx: watch::Sender<()>,
-    close_rx: watch::Receiver<()>,
-) where
-    L: Listener,
-    L::Addr: Debug,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
-{
-    handle_connection_common::<L, M, S, B, _, _>(
-        make_service,
-        conn_io,
-        remote_addr,
-        configure_hyper,
-        move |builder, tokio_io, hyper_service| async move {
-            let _close_guard = close_rx; // Will be dropped when this async block completes
-
-            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-            let mut conn = std::pin::pin!(conn);
-
-            // Use tokio::select! for graceful shutdown
-            loop {
-                tokio::select! {
-                    result = conn.as_mut() => {
-                        if let Err(err) = result {
-                            tracing::error!(error = ?err, "error serving connection");
-                        }
-                        break;
-                    }
-                    _ = signal_tx.closed() => {
-                        tracing::trace!("signal received in task, starting graceful shutdown");
-                        conn.as_mut().graceful_shutdown();
-                    }
-                }
-            }
-        },
-    )
-    .await;
 }
