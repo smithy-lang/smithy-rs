@@ -17,6 +17,7 @@ use aws_credential_types::provider;
 use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
+use aws_sdk_signin::config::Builder as SignInClientConfigBuilder;
 use aws_sdk_signin::types::CreateOAuth2TokenRequestBody;
 use aws_sdk_signin::Client as SignInClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -136,14 +137,14 @@ impl LoginCredentialsProvider {
         cached_token: &LoginToken,
         now: SystemTime,
     ) -> Result<LoginToken, LoginTokenError> {
-        // TODO(sign-in): this is meant to be resolved from resolver but that is impossible to determinstically resolve, hard coded for now
-        let endpoint = "https://ap-northeast-1.aws-signin-testing.amazon.com";
-        let htu = "https://ap-northeast-1.aws-signin-testing.amazon.com/v1/token";
+        let dpop_auth_scheme = dpop::DPoPAuthScheme::new(&cached_token.dpop_key)?;
+        let client_config = SignInClientConfigBuilder::from(&inner.sdk_config)
+            .auth_scheme_resolver(dpop::DPoPAuthSchemeOptionResolver)
+            .push_auth_scheme(dpop_auth_scheme)
+            .build();
 
-        let sdk_config = inner.sdk_config.to_builder().endpoint_url(endpoint).build();
+        let client = SignInClient::from_conf(client_config);
 
-        let client = SignInClient::new(&sdk_config);
-        let dpop = dpop::calculate(&cached_token.dpop_key, htu, now)?;
         let resp = client
             .create_o_auth2_token()
             .token_input(
@@ -154,7 +155,6 @@ impl LoginCredentialsProvider {
                     .build()
                     .expect("valid CreateOAuth2TokenRequestBody"),
             )
-            .dpop_proof(dpop)
             .send()
             .await
             .map_err(|e| {

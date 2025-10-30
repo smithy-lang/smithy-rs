@@ -11,6 +11,7 @@ use aws_runtime::fs_util::Os;
 use aws_smithy_json::deserialize::token::skip_value;
 use aws_smithy_json::deserialize::{json_token_iter, EscapeError, Token};
 use aws_smithy_json::serialize::JsonObjectWriter;
+use aws_smithy_runtime_api::client::identity::Identity;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
 use aws_types::os_shim_internal::Env;
@@ -150,6 +151,7 @@ pub(super) enum LoginTokenError {
     MissingField(&'static str),
     NoHomeDirectory,
     ExpiredToken,
+    WrongIdentityType(Identity),
     Other {
         message: String,
         source: Option<Box<dyn StdError + Send + Sync>>,
@@ -183,6 +185,9 @@ impl fmt::Display for LoginTokenError {
             }
             Self::NoHomeDirectory => write!(f, "couldn't resolve a home directory"),
             Self::ExpiredToken => write!(f, "cached Login token is expired"),
+            Self::WrongIdentityType(identity) => {
+                write!(f, "wrong identity type for Login. Expected DPoP private key but got `{identity:?}`")
+            }
             Self::Other { message, .. } => {
                 write!(f, "failed to load cached Login token: {message}")
             }
@@ -200,6 +205,7 @@ impl StdError for LoginTokenError {
             LoginTokenError::MissingField(_) => None,
             LoginTokenError::NoHomeDirectory => None,
             LoginTokenError::ExpiredToken => None,
+            LoginTokenError::WrongIdentityType(_) => None,
             LoginTokenError::Other { source, .. } => match source {
                 Some(err) => Some(err.as_ref()),
                 None => None,
