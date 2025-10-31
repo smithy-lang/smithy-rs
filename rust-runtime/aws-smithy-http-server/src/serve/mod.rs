@@ -512,12 +512,26 @@ async fn handle_connection<L, M, S, B>(
             builder = configure(builder);
         }
 
-        let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
-
-        let result = if let Some(watcher) = watcher {
-            watcher.watch(conn).await
+        // Use serve_connection (without upgrades) if protocol is already decided.
+        // This avoids the overhead of reading the connection preface to detect the protocol
+        // when the user has explicitly configured http1_only() or http2_only().
+        // serve_connection_with_upgrades always reads the preface, even when not needed.
+        let result = if builder.is_http1_available() && builder.is_http2_available() {
+            // Auto-detect mode - use with_upgrades for HTTP/1 upgrade support
+            let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
+            if let Some(watcher) = watcher {
+                watcher.watch(conn).await
+            } else {
+                conn.await
+            }
         } else {
-            conn.await
+            // Protocol is already decided (http1_only or http2_only) - skip preface reading
+            let conn = builder.serve_connection(tokio_io, hyper_service);
+            if let Some(watcher) = watcher {
+                watcher.watch(conn).await
+            } else {
+                conn.await
+            }
         };
 
         if let Err(err) = result {
