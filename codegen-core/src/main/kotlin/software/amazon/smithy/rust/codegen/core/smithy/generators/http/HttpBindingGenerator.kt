@@ -289,7 +289,7 @@ class HttpBindingGenerator(
                         rustTemplate(
                             "#{EventReceiver}::new(#{Receiver}::new(unmarshaller, body))",
                             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
-                            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+                            "Receiver" to smithyHttpRuntimeType.resolve("event_stream::Receiver"),
                         )
                     }
                 },
