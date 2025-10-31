@@ -39,7 +39,7 @@ use tower::{util::Oneshot, Service, ServiceExt};
 use http;
 use http_body::Body as HttpBody;
 
-use http::Response;
+use crate::http::Response;
 
 use crate::{
     body::{boxed, BoxBody},

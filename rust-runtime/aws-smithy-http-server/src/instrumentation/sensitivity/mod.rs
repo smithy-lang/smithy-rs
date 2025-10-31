@@ -15,9 +15,8 @@ mod response;
 mod sensitive;
 pub mod uri;
 
-use http;
 
-use http::{HeaderMap, StatusCode, Uri};
+use crate::http::{HeaderMap, StatusCode, Uri};
 pub use request::*;
 pub use response::*;
 pub use sensitive::*;

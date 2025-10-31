@@ -7,10 +7,9 @@ use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use http;
-
-use http::header::ToStrError;
-use http::HeaderMap;
+use crate::http;
+use crate::http::header::ToStrError;
+use crate::http::HeaderMap;
 use regex::Regex;
 use thiserror::Error;
 use tower::Layer;

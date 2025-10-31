@@ -30,10 +30,9 @@ use futures_util::{Future, FutureExt};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
 
-use http;
 use hyper;
 
-use http::StatusCode;
+use crate::http::StatusCode;
 use http_body::Body;
 
 use hyper::{Request, Response};

@@ -13,7 +13,7 @@
 
 use http;
 
-use http::request::Parts;
+use crate::http::request::Parts;
 use thiserror::Error;
 
 use crate::{body::BoxBody, response::IntoResponse};

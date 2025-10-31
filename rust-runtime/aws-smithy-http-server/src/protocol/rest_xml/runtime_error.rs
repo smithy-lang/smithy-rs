@@ -10,7 +10,7 @@ use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPON
 
 use http;
 
-use http::StatusCode;
+use crate::http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 

@@ -57,7 +57,7 @@ use futures_util::{
 
 use http;
 
-use http::{request::Parts, Request, StatusCode};
+use crate::http::{request::Parts, Request, StatusCode};
 
 use crate::{
     body::{empty, BoxBody},

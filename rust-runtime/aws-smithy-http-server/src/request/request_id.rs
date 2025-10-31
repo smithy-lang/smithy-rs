@@ -59,8 +59,8 @@ use uuid::Uuid;
 
 use http;
 
-use http::request::Parts;
-use http::{header::HeaderName, HeaderValue, Response};
+use crate::http::request::Parts;
+use crate::http::{header::HeaderName, HeaderValue, Response};
 
 use crate::{body::BoxBody, response::IntoResponse};
 
