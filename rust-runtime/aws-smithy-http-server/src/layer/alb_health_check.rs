@@ -215,11 +215,13 @@ mod tests {
     #[tokio::test]
     async fn test_non_health_check_requests_pass_through() {
         let layer = AlbHealthCheckLayer::from_handler("/health", |_req| async { StatusCode::OK });
-        let inner_service = service_fn(|_req| async { 
-            Ok::<_, Infallible>(Response::builder()
-                .status(StatusCode::ACCEPTED)
-                .body(crate::body::empty())
-                .unwrap())
+        let inner_service = service_fn(|_req| async {
+            Ok::<_, Infallible>(
+                Response::builder()
+                    .status(StatusCode::ACCEPTED)
+                    .body(crate::body::empty())
+                    .unwrap(),
+            )
         });
         let service = layer.layer(inner_service);
 
@@ -256,10 +258,7 @@ mod tests {
         assert_eq!(response.status(), StatusCode::OK);
 
         // Test without header
-        let request = Request::builder()
-            .uri("/ping")
-            .body(crate::body::empty())
-            .unwrap();
+        let request = Request::builder().uri("/ping").body(crate::body::empty()).unwrap();
 
         let response = service.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
@@ -267,15 +266,12 @@ mod tests {
 
     #[tokio::test]
     async fn test_works_with_any_body_type() {
-        use http_body_util::Full;
         use bytes::Bytes;
-        
-        let layer = AlbHealthCheckLayer::from_handler("/health", |_req: Request<Full<Bytes>>| async { 
-            StatusCode::OK 
-        });
-        let inner_service = service_fn(|_req: Request<Full<Bytes>>| async { 
-            Ok::<_, Infallible>(Response::new(crate::body::empty())) 
-        });
+        use http_body_util::Full;
+
+        let layer = AlbHealthCheckLayer::from_handler("/health", |_req: Request<Full<Bytes>>| async { StatusCode::OK });
+        let inner_service =
+            service_fn(|_req: Request<Full<Bytes>>| async { Ok::<_, Infallible>(Response::new(crate::body::empty())) });
         let service = layer.layer(inner_service);
 
         let request = Request::builder()

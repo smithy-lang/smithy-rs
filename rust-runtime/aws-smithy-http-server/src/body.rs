@@ -116,7 +116,7 @@ where
 {
     use http_body_util::BodyExt;
 
-    let collected = body.collect().await.map_err(|e| Error::new(e))?;
+    let collected = body.collect().await.map_err(Error::new)?;
     Ok(collected.to_bytes())
 }
 

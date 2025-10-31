@@ -20,8 +20,8 @@ aws-lambda = ["dep:lambda_http"]
 
 [dependencies]
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
-aws-smithy-http-1x = { package = "aws-smithy-http", path = "../aws-smithy-http", features = ["rt-tokio"] }
-aws-smithy-json-1x = { package = "aws-smithy-json", path = "../aws-smithy-json" }
+aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }

@@ -6,7 +6,6 @@
 use crate::response::IntoResponse;
 use thiserror::Error;
 
-
 // This is used across different protocol-specific `rejection` modules.
 #[derive(Debug, Error)]
 pub enum MissingContentTypeReason {
@@ -26,8 +25,8 @@ pub mod any_rejections {
     //! [`IntoResponse`].
 
     use super::IntoResponse;
-    use thiserror::Error;
     use http;
+    use thiserror::Error;
 
     macro_rules! any_rejection {
         ($name:ident, $($var:ident),+) => (

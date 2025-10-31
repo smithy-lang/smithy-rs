@@ -10,9 +10,7 @@ use tokio::sync::oneshot;
 use tower::service_fn;
 
 /// Test service that delays before responding
-async fn slow_service(
-    _request: http::Request<hyper::body::Incoming>,
-) -> Result<http::Response<BoxBody>, Infallible> {
+async fn slow_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
     // Simulate slow processing
     tokio::time::sleep(Duration::from_millis(100)).await;
     Ok(http::Response::builder()
@@ -48,8 +46,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Start a slow request
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build_http();
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
     let uri = format!("http://{}/slow", addr);
     let request = http::Request::builder()
@@ -114,8 +111,7 @@ async fn test_graceful_shutdown_with_timeout() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Start a very slow request
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build_http();
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
     let uri = format!("http://{}/very-slow", addr);
     let request = http::Request::builder()
@@ -155,18 +151,17 @@ async fn test_with_connect_info() {
     let addr = listener.local_addr().unwrap();
 
     // Service that extracts ConnectInfo
-    let service_with_connect_info =
-        |request: http::Request<hyper::body::Incoming>| async move {
-            // Check if ConnectInfo is in extensions
-            let connect_info = request.extensions().get::<ConnectInfo<SocketAddr>>();
-            let body = if connect_info.is_some() {
-                to_boxed("ConnectInfo present")
-            } else {
-                to_boxed("ConnectInfo missing")
-            };
-
-            Ok::<_, Infallible>(http::Response::builder().status(200).body(body).unwrap())
+    let service_with_connect_info = |request: http::Request<hyper::body::Incoming>| async move {
+        // Check if ConnectInfo is in extensions
+        let connect_info = request.extensions().get::<ConnectInfo<SocketAddr>>();
+        let body = if connect_info.is_some() {
+            to_boxed("ConnectInfo present")
+        } else {
+            to_boxed("ConnectInfo missing")
         };
+
+        Ok::<_, Infallible>(http::Response::builder().status(200).body(body).unwrap())
+    };
 
     // Create shutdown signal
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -189,8 +184,7 @@ async fn test_with_connect_info() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Make a request
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new())
-        .build_http();
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
     let uri = format!("http://{}/test", addr);
     let request = http::Request::builder()
