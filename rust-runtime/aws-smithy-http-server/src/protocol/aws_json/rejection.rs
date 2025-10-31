@@ -7,6 +7,8 @@ use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
 
+use http;
+
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
     #[error("error serializing JSON-encoded body: {0}")]
@@ -39,5 +41,13 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
+// Enable conversion from crate::Error for body::collect_bytes() error handling
+impl From<crate::Error> for RequestRejection {
+    fn from(err: crate::Error) -> Self {
+        Self::BufferHttpBodyBytes(err)
+    }
+}
+
 convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+
 convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);

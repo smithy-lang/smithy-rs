@@ -52,6 +52,8 @@ use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
+use http;
+
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.
 #[derive(Debug, Error)]
@@ -186,6 +188,13 @@ impl From<std::convert::Infallible> for RequestRejection {
         // We opt for this `match` here rather than [`unreachable`] to assure the reader that this
         // code path is dead.
         match _err {}
+    }
+}
+
+// Enable conversion from crate::Error for body::collect_bytes() error handling
+impl From<crate::Error> for RequestRejection {
+    fn from(err: crate::Error) -> Self {
+        Self::BufferHttpBodyBytes(err)
     }
 }
 

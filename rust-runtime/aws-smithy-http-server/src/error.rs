@@ -42,7 +42,10 @@ pub struct Error {
     inner: BoxError,
 }
 
-pub(crate) type BoxError = Box<dyn StdError + Send + Sync>;
+/// A boxed error type that can be used in trait bounds for body error conversion.
+///
+/// This type alias is used by generated code to specify trait bounds for body types.
+pub type BoxError = Box<dyn StdError + Send + Sync>;
 
 impl Error {
     /// Create a new `Error` from a boxable error.

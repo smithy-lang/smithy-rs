@@ -5,6 +5,8 @@
 
 use std::borrow::Cow;
 
+use http;
+
 use http::Request;
 use regex::Regex;
 

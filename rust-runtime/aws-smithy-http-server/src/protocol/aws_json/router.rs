@@ -13,6 +13,8 @@ use crate::routing::tiny_map::TinyMap;
 use crate::routing::Route;
 use crate::routing::Router;
 
+use http;
+
 use http::header::ToStrError;
 use thiserror::Error;
 

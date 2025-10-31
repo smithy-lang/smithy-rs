@@ -7,6 +7,9 @@ use crate::protocol::rest_xml::RestXml;
 use crate::response::IntoResponse;
 use crate::runtime_error::InternalFailureException;
 use crate::{extension::RuntimeErrorExtension, runtime_error::INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
+
+use http;
+
 use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};

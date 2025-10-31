@@ -7,6 +7,8 @@ use std::convert::Infallible;
 use std::str::FromStr;
 use std::sync::LazyLock;
 
+use http;
+
 use http::header::ToStrError;
 use http::HeaderMap;
 use regex::Regex;
@@ -252,7 +254,7 @@ impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
 
 #[cfg(test)]
 mod tests {
-    use http::{HeaderMap, HeaderValue, Method};
+    use crate::http::{HeaderMap, HeaderValue, Method};
     use regex::Regex;
 
     use crate::protocol::test_helpers::req;
