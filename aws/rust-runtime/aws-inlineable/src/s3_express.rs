@@ -520,10 +520,8 @@ pub(crate) mod identity_provider {
                     let mut data = Credentials::try_from(creds)?;
                     data.get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                         .push(AwsCredentialFeature::S3ExpressBucket);
-                    Ok((
-                        Identity::new(data.clone(), data.expiry()),
-                        data.expiry().unwrap(),
-                    ))
+                    let expiry = data.expiry().unwrap();
+                    Ok((Identity::from(data), expiry))
                 })
                 .await
         }
@@ -754,14 +752,24 @@ pub(crate) mod identity_provider {
             let credentials = identity
                 .data::<Credentials>()
                 .expect("Identity should contain Credentials");
-
             let features = credentials
                 .get_property::<Vec<AwsCredentialFeature>>()
                 .expect("Credentials should have features");
-
             assert!(
                 features.contains(&AwsCredentialFeature::S3ExpressBucket),
-                "S3ExpressBucket feature should be present in credentials returned by identity()"
+                "S3ExpressBucket feature should be present in Credentials' property field"
+            );
+
+            let identity_layer = identity
+                .property::<aws_smithy_types::config_bag::FrozenLayer>()
+                .expect("Identity should have a property layer");
+            let identity_features: Vec<AwsCredentialFeature> = identity_layer
+                .load::<AwsCredentialFeature>()
+                .cloned()
+                .collect();
+            assert!(
+                identity_features.contains(&AwsCredentialFeature::S3ExpressBucket),
+                "S3ExpressBucket feature should be present in Identity's property field"
             );
         }
     }

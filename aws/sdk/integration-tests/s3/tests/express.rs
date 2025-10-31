@@ -7,7 +7,9 @@ use std::time::{Duration, SystemTime};
 
 use aws_config::timeout::TimeoutConfig;
 use aws_config::Region;
-use aws_runtime::user_agent::test_util::assert_ua_does_not_contain_metric_values;
+use aws_runtime::user_agent::test_util::{
+    assert_ua_contains_metric_values, assert_ua_does_not_contain_metric_values,
+};
 use aws_sdk_s3::config::endpoint::{EndpointFuture, Params, ResolveEndpoint};
 use aws_sdk_s3::config::{Builder, Credentials};
 use aws_sdk_s3::presigning::PresigningConfig;
@@ -465,4 +467,35 @@ async fn s3_express_auth_flow_should_not_be_reached_with_no_auth_schemes() {
     let _ = client.list_objects_v2().bucket("test-bucket").send().await;
     // If s3 Express auth flow were exercised, no request would be received, most likely due to `TimeoutError`.
     let _ = request.expect_request();
+}
+
+#[tokio::test]
+async fn s3_express_request_contains_metric_j() {
+    let _logs = capture_test_logs();
+
+    let http_client = ReplayingClient::from_file("tests/data/express/mixed-auths.json").unwrap();
+    let client = test_client(|b| b.http_client(http_client.clone())).await;
+
+    let _result = client
+        .list_objects_v2()
+        .bucket("s3express-test-bucket--usw2-az1--x-s3")
+        .send()
+        .await
+        .expect("Request should succeed");
+
+    let requests = http_client.take_requests().await;
+
+    let s3_express_request = requests
+        .iter()
+        .find(|req| req.headers().get("x-amz-s3session-token").is_some())
+        .expect("Should have at least one S3 Express request with session token");
+
+    let user_agent = s3_express_request
+        .headers()
+        .get("x-amz-user-agent")
+        .expect("User-Agent header should be present")
+        .to_str()
+        .expect("User-Agent should be valid UTF-8");
+
+    assert_ua_contains_metric_values(user_agent, &["J"]);
 }
