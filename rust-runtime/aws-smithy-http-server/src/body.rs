@@ -129,14 +129,15 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 // Stream Wrapping for Event Streaming
 // ============================================================================
 
-/// Wrap a stream of byte chunks into a BoxBody for HTTP 1.x.
+/// Wrap a stream of byte chunks into a BoxBody.
 ///
 /// This is used for event streaming support. The stream should produce `Result<O, E>`
 /// where `O` can be converted into `Bytes` and `E` can be converted into an error.
 ///
-/// For HTTP 0.x, this is not needed since `Body::wrap_stream` exists on hyper::Body.
-/// For HTTP 1.x, we provide this as a module-level function since `Body` is just a type alias
-/// for `hyper::body::Incoming` which doesn't have a `wrap_stream` method.
+/// In hyper 0.x, `Body::wrap_stream` was available directly on the body type.
+/// In hyper 1.x, the `stream` feature was removed, and the official approach is to use
+/// `http_body_util::StreamBody` to convert streams into bodies, which is what this
+/// function provides as a convenient wrapper.
 pub fn wrap_stream<S, O, E>(stream: S) -> BoxBody
 where
     S: futures_util::Stream<Item = Result<O, E>> + Send + 'static,
@@ -152,6 +153,30 @@ where
         .map_err(|e| Error::new(e.into()));
 
     boxed(StreamBody::new(frame_stream))
+}
+
+/// Wrap a stream of byte chunks into a BoxBodySync.
+///
+/// This is the thread-safe variant of [`wrap_stream`], used for event streaming operations
+/// that require `Sync` bounds, such as lambda handlers.
+///
+/// The stream should produce `Result<O, E>` where `O` can be converted into `Bytes` and
+/// `E` can be converted into an error.
+pub fn wrap_stream_sync<S, O, E>(stream: S) -> BoxBodySync
+where
+    S: futures_util::Stream<Item = Result<O, E>> + Send + Sync + 'static,
+    O: Into<Bytes> + 'static,
+    E: Into<BoxError> + 'static,
+{
+    use futures_util::TryStreamExt;
+    use http_body_util::StreamBody;
+
+    // Convert the stream of Result<O, E> into a stream of Result<Frame<Bytes>, Error>
+    let frame_stream = stream
+        .map_ok(|chunk| http_body::Frame::data(chunk.into()))
+        .map_err(|e| Error::new(e.into()));
+
+    boxed_sync(StreamBody::new(frame_stream))
 }
 
 #[cfg(test)]
