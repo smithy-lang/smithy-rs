@@ -32,6 +32,54 @@
 //! [`.with_shutdown_timeout(duration)`](ServeWithGracefulShutdown::with_shutdown_timeout)
 //! to set a maximum wait time.
 //!
+//! ## Advanced: Custom Connection Handling
+//!
+//! If you need per-connection customization (e.g., different Hyper settings based on
+//! the remote address), you can implement your own connection loop using the building
+//! blocks provided by this module:
+//!
+//! ```rust,ignore
+//! use aws_smithy_http_server::routing::IntoMakeService;
+//! use aws_smithy_http_server::serve::Listener;
+//! use hyper_util::rt::{TokioExecutor, TokioIo};
+//! use hyper_util::server::conn::auto::Builder;
+//! use hyper_util::service::TowerToHyperService;
+//! use tower::ServiceExt;
+//!
+//! let mut listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await?;
+//! let make_service = app.into_make_service_with_connect_info::<SocketAddr>();
+//!
+//! loop {
+//!     let (stream, remote_addr) = listener.accept().await?;
+//!     let io = TokioIo::new(stream);
+//!
+//!     // Per-connection Hyper configuration
+//!     let mut builder = Builder::new(TokioExecutor::new());
+//!     if remote_addr.ip().is_loopback() {
+//!         builder = builder.http2_only();  // Local connections use HTTP/2
+//!     } else {
+//!         builder = builder.http1().keep_alive(true);  // External use HTTP/1
+//!     }
+//!
+//!     let tower_service = make_service
+//!         .ready()
+//!         .await?
+//!         .call(IncomingStream { io: &io, remote_addr })
+//!         .await?;
+//!
+//!     let hyper_service = TowerToHyperService::new(tower_service);
+//!
+//!     tokio::spawn(async move {
+//!         if let Err(err) = builder.serve_connection(io, hyper_service).await {
+//!             eprintln!("Error serving connection: {}", err);
+//!         }
+//!     });
+//! }
+//! ```
+//!
+//! This approach provides complete flexibility while still leveraging the efficient
+//! Hyper and Tower integration provided by this module.
+//!
 //! Portions of the implementation are adapted from axum
 //! (https://github.com/tokio-rs/axum), which is licensed under the MIT License.
 //! Copyright (c) 2019 Axum Contributors
@@ -43,7 +91,6 @@ use std::future::{Future, IntoFuture};
 use std::io;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::Arc;
 use std::time::Duration;
 
 use http_body::Body as HttpBody;
@@ -57,15 +104,6 @@ use tower::{Service, ServiceExt as _};
 mod listener;
 
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
-
-type ConfigureHyperBuilderFn = Arc<
-    dyn Fn(
-            hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
-        ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
-        + Send
-        + Sync
-        + 'static,
->;
 
 /// An incoming stream that bundles connection information.
 ///
@@ -213,7 +251,7 @@ where
 pub struct Serve<L, M, S, B> {
     listener: L,
     make_service: M,
-    configure_hyper: Option<ConfigureHyperBuilderFn>,
+    hyper_builder: Option<Builder<TokioExecutor>>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -224,7 +262,7 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Serve")
             .field("listener", &self.listener)
-            .field("has_hyper_config", &self.configure_hyper.is_some())
+            .field("has_hyper_config", &self.hyper_builder.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -237,7 +275,7 @@ where
         Self {
             listener,
             make_service,
-            configure_hyper: None,
+            hyper_builder: None,
             _marker: PhantomData,
         }
     }
@@ -247,8 +285,8 @@ where
     /// This allows you to customize Hyper's HTTP/1 and HTTP/2 settings,
     /// such as timeouts, max concurrent streams, keep-alive behavior, etc.
     ///
-    /// The configuration function is called once per connection to build the
-    /// connection handler.
+    /// The configuration is applied once and the configured builder is cloned
+    /// for each connection, providing optimal performance.
     ///
     /// # Example
     ///
@@ -265,16 +303,20 @@ where
     ///     })
     ///     .await?;
     /// ```
+    ///
+    /// # Advanced: Per-Connection Configuration
+    ///
+    /// If you need per-connection customization (e.g., different settings based on
+    /// the remote address), you can implement your own connection loop. See the
+    /// module-level documentation for examples.
     pub fn configure_hyper<F>(mut self, f: F) -> Self
     where
-        F: Fn(
+        F: FnOnce(
                 hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
-            ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
-            + Send
-            + Sync
-            + 'static,
+            ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
     {
-        self.configure_hyper = Some(Arc::new(f));
+        let builder = Builder::new(TokioExecutor::new());
+        self.hyper_builder = Some(f(builder));
         self
     }
 
@@ -283,7 +325,7 @@ where
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        ServeWithGracefulShutdown::new(self.listener, self.make_service, signal, self.configure_hyper)
+        ServeWithGracefulShutdown::new(self.listener, self.make_service, signal, self.hyper_builder)
     }
 
     /// Returns the local address this server is bound to.
@@ -313,13 +355,13 @@ where
             let Self {
                 mut listener,
                 mut make_service,
-                configure_hyper,
+                hyper_builder,
                 _marker,
             } = self;
 
             loop {
                 let (io, remote_addr) = listener.accept().await;
-                handle_connection(&mut make_service, io, remote_addr, configure_hyper.clone(), None).await;
+                handle_connection(&mut make_service, io, remote_addr, hyper_builder.as_ref(), None).await;
             }
         })
     }
@@ -343,7 +385,7 @@ pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     listener: L,
     make_service: M,
     signal: F,
-    configure_hyper: Option<ConfigureHyperBuilderFn>,
+    hyper_builder: Option<Builder<TokioExecutor>>,
     shutdown_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
 }
@@ -355,14 +397,14 @@ where
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("ServeWithGracefulShutdown")
             .field("listener", &self.listener)
-            .field("has_hyper_config", &self.configure_hyper.is_some())
+            .field("has_hyper_config", &self.hyper_builder.is_some())
             .field("shutdown_timeout", &self.shutdown_timeout)
             .finish_non_exhaustive()
     }
 }
 
 impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
-    fn new(listener: L, make_service: M, signal: F, configure_hyper: Option<ConfigureHyperBuilderFn>) -> Self
+    fn new(listener: L, make_service: M, signal: F, hyper_builder: Option<Builder<TokioExecutor>>) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -370,7 +412,7 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
             listener,
             make_service,
             signal,
-            configure_hyper,
+            hyper_builder,
             shutdown_timeout: None,
             _marker: PhantomData,
         }
@@ -411,7 +453,7 @@ where
                 mut listener,
                 mut make_service,
                 signal,
-                configure_hyper,
+                hyper_builder,
                 shutdown_timeout,
                 _marker,
             } = self;
@@ -429,7 +471,7 @@ where
                             &mut make_service,
                             io,
                             remote_addr,
-                            configure_hyper.clone(),
+                            hyper_builder.as_ref(),
                             Some(&graceful),
                         )
                         .await;
@@ -473,7 +515,7 @@ async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
-    configure_hyper_builder: Option<ConfigureHyperBuilderFn>,
+    hyper_builder: Option<&Builder<TokioExecutor>>,
     graceful: Option<&GracefulShutdown>,
 ) where
     L: Listener,
@@ -506,11 +548,13 @@ async fn handle_connection<L, M, S, B>(
 
     let hyper_service = TowerToHyperService::new(tower_service);
 
+    // Clone the configured builder, or create a default one
+    // This must be done before tokio::spawn to avoid lifetime issues
+    let builder = hyper_builder
+        .cloned()
+        .unwrap_or_else(|| Builder::new(TokioExecutor::new()));
+
     tokio::spawn(async move {
-        let mut builder = Builder::new(TokioExecutor::new());
-        if let Some(configure) = configure_hyper_builder {
-            builder = configure(builder);
-        }
 
         // Use serve_connection (without upgrades) if protocol is already decided.
         // This avoids the overhead of reading the connection preface to detect the protocol
