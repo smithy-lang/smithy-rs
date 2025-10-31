@@ -47,44 +47,5 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 #[cfg(test)]
 mod test_helpers;
 
+#[doc(no_inline)]
 pub use http;
-
-#[cfg(test)]
-mod dependency_tests {
-    #[test]
-    #[ignore]
-    fn test_http_body_0_4_only_from_aws_smithy_types() {
-        // This test ensures that http-body 0.4 is only brought in by aws-smithy-types
-        // and not by any other direct dependencies of aws-smithy-http-server.
-        //
-        // Run: cargo tree --invert http-body:0.4.6
-        // Expected: Only aws-smithy-types should be in the dependency path
-
-        let output = std::process::Command::new("cargo")
-            .args(["tree", "--invert", "http-body:0.4.6"])
-            .output()
-            .expect("Failed to run cargo tree");
-
-        let stdout = String::from_utf8(output.stdout).expect("Invalid UTF-8");
-
-        // Check that aws-smithy-types is the only direct dependency bringing in http-body 0.4
-        let lines: Vec<&str> = stdout.lines().collect();
-
-        // Find the line with http-body v0.4.6
-        let http_body_line_idx = lines
-            .iter()
-            .position(|line| line.contains("http-body v0.4.6"))
-            .expect("http-body 0.4.6 not found in dependency tree");
-
-        // The next line should show aws-smithy-types as the direct dependent
-        let dependent_line = lines
-            .get(http_body_line_idx + 1)
-            .expect("No dependent found for http-body 0.4.6");
-
-        assert!(
-            dependent_line.contains("aws-smithy-types"),
-            "http-body 0.4.6 should only be brought in by aws-smithy-types, but found: {}",
-            dependent_line
-        );
-    }
-}
