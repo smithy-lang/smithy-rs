@@ -1,12 +1,17 @@
 [workspace]
 resolver = "3"
-members = ["eventstreams"]
+members = ["eventstreams-legacy", "eventstreams"]
 
 [workspace.dependencies]
+# http@1 versions
 rpcv2cbor_extras = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras/rust-server-codegen" }
 rpcv2cbor_extras_no_initial_response = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras_no_initial_response/rust-server-codegen" }
+# http@0 versions (legacy)
+rpcv2cbor_extras_http0x = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras-http0x/rust-server-codegen", package = "rpcv2cbor_extras-http0x" }
+rpcv2cbor_extras_no_initial_response_http0x = { path = "../build/smithyprojections/codegen-server-test/rpcv2Cbor_extras_no_initial_response-http0x/rust-server-codegen", package = "rpcv2cbor_extras_no_initial_response-http0x" }
 aws-smithy-eventstream = { path = "../../rust-runtime/aws-smithy-eventstream", features = ["test-util"] }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http" }
+aws-smithy-legacy-http = { path = "../../rust-runtime/aws-smithy-legacy-http" }
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-cbor = { path = "../../rust-runtime/aws-smithy-cbor" }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types" }

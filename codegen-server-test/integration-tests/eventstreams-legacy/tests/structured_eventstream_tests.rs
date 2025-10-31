@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::event_stream::EventStreamSender;
+use aws_smithy_legacy_http::event_stream::EventStreamSender;
 use aws_smithy_runtime::test_util::capture_test_logs::show_filtered_test_logs;
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
-use eventstreams::{ManualEventStreamClient, RecvError};
-use rpcv2cbor_extras::model::{Event, Events};
-use rpcv2cbor_extras::server::serve;
-use rpcv2cbor_extras::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
+use eventstreams_legacy::{ManualEventStreamClient, RecvError};
+use rpcv2cbor_extras_http0x::model::{Event, Events};
+use rpcv2cbor_extras_http0x::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -57,7 +56,7 @@ impl TestServer {
         let handler_state4 = state.clone();
 
         let config = RpcV2CborServiceConfig::builder().build();
-        let app = RpcV2CborService::builder(config)
+        let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
             .streaming_operation(move |input| {
                 let state = handler_state.clone();
                 streaming_operation_handler(input, state)
@@ -81,10 +80,11 @@ impl TestServer {
 
         tokio::spawn(async move {
             let make_service = app.into_make_service();
-            serve(listener, make_service)
-                .configure_hyper(|builder| builder.http2_only())
-                .await
-                .unwrap();
+            let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+                .unwrap()
+                .http2_only(true)
+                .serve(make_service);
+            server.await.unwrap();
         });
 
         Self { addr, state }
@@ -442,15 +442,15 @@ async fn test_streaming_operation_with_initial_data_missing() {
 /// Test that when alwaysSendEventStreamInitialResponse is disabled, no initial-response is sent
 #[tokio::test]
 async fn test_server_no_initial_response_when_disabled() {
-    use rpcv2cbor_extras_no_initial_response::output;
-    use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
+    use rpcv2cbor_extras_no_initial_response_http0x::output;
+    use rpcv2cbor_extras_no_initial_response_http0x::{RpcV2CborService, RpcV2CborServiceConfig};
 
     let config = RpcV2CborServiceConfig::builder().build();
-    let app = RpcV2CborService::builder(config)
-        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
+    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response_http0x::input::StreamingOperationWithInitialDataInput| async move {
             let _ev = input.events.recv().await;
             Ok(output::StreamingOperationWithInitialDataOutput::builder()
-                .events(EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response::model::Events::A(rpcv2cbor_extras_no_initial_response::model::Event {}))))
+                .events(EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response_http0x::model::Events::A(rpcv2cbor_extras_no_initial_response_http0x::model::Event {}))))
                 .build()
                 .unwrap())
         })
@@ -461,10 +461,11 @@ async fn test_server_no_initial_response_when_disabled() {
 
     tokio::spawn(async move {
         let make_service = app.into_make_service();
-        rpcv2cbor_extras_no_initial_response::server::serve(listener, make_service)
-            .configure_hyper(|builder| builder.http2_only())
-            .await
-            .unwrap();
+        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+            .unwrap()
+            .http2_only(true)
+            .serve(make_service);
+        server.await.unwrap();
     });
 
     let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";

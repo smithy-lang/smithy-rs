@@ -51,19 +51,36 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             imports = listOf("$commonModels/naming-obstacle-course-structs.smithy"),
         ),
         CodegenTest("com.amazonaws.simple#SimpleService", "simple", imports = listOf("$commonModels/simple.smithy")),
-        CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor"),
+        // http@0 versions (legacy)
+        CodegenTest("smithy.protocoltests.rpcv2Cbor#RpcV2Protocol", "rpcv2Cbor-http0x"),
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
-            "rpcv2Cbor_extras",
+            "rpcv2Cbor_extras-http0x",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
             extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": true } """,
         ),
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras_no_initial_response-http0x",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+        ),
+        // http@1 versions
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2Protocol",
+            "rpcv2Cbor",
+            extraConfig = """, "codegen": { "http-1x": true } """,
+        ),
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            extraConfig = """, "codegen": { "http-1x": true, "alwaysSendEventStreamInitialResponse": true } """,
+        ),
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras_no_initial_response",
             imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
-            // This is the default behavior
-            // extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": false } """,
+            extraConfig = """, "codegen": { "http-1x": true } """,
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
