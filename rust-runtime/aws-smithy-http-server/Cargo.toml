@@ -31,8 +31,8 @@ futures-util = { version = "0.3.29", default-features = false }
 
 http = "1"
 http-body = "1.0"
-hyper = { version = "1", features = ["server", "http1"] }
-hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "server-graceful", "service"] }
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "server-graceful", "service", "http1", "http2"] }
 http-body-util = "0.1"
 
 lambda_http = { version = "0.17", optional = true }
@@ -51,7 +51,7 @@ uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
 pretty_assertions = "1"
-hyper-util = { version = "0.1", features = ["tokio", "client", "client-legacy", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio", "client", "client-legacy", "http1", "http2"] }
 
 [package.metadata.docs.rs]
 all-features = true
