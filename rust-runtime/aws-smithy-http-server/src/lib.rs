@@ -49,9 +49,6 @@ mod test_helpers;
 
 pub use http;
 
-pub(crate) use aws_smithy_http;
-pub(crate) use aws_smithy_json;
-
 #[cfg(test)]
 mod dependency_tests {
     #[test]

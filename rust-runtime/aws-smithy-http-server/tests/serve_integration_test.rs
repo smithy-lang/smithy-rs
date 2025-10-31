@@ -210,7 +210,7 @@ async fn test_tap_io_with_limit_connections() {
 
     // Verify tap_io was called at least once (may be 1-3 depending on connection reuse)
     let count = tap_count.load(Ordering::SeqCst);
-    assert!(count >= 1 && count <= 3, "tap_io was called {} times", count);
+    assert!((1..=3).contains(&count), "tap_io was called {} times", count);
 
     shutdown_tx.send(()).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
@@ -801,7 +801,7 @@ async fn test_multiple_concurrent_http2_streams() {
     for (i, handle) in handles.into_iter().enumerate() {
         let response = tokio::time::timeout(timeout, handle)
             .await
-            .expect(&format!("Request {} timed out", i))
+            .unwrap_or_else(|_| panic!("Request {} timed out", i))
             .unwrap()
             .expect("request failed");
         assert_eq!(response.status(), 200);

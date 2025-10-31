@@ -43,7 +43,7 @@ pub enum RequestRejection {
     XmlDeserialize(#[from] aws_smithy_xml::decode::XmlDecodeError),
 
     #[error("error binding request HTTP headers: {0}")]
-    HeaderParse(#[from] crate::aws_smithy_http::header::ParseError),
+    HeaderParse(#[from] aws_smithy_http::header::ParseError),
 
     #[error("request URI does not match pattern because of literal suffix after greedy label was not found")]
     UriPatternGreedyLabelPostfixNotFound,
