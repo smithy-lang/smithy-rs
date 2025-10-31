@@ -138,6 +138,8 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 /// In hyper 1.x, the `stream` feature was removed, and the official approach is to use
 /// `http_body_util::StreamBody` to convert streams into bodies, which is what this
 /// function provides as a convenient wrapper.
+///
+/// For scenarios requiring `Sync` (e.g., lambda handlers), use [`wrap_stream_sync`] instead.
 pub fn wrap_stream<S, O, E>(stream: S) -> BoxBody
 where
     S: futures_util::Stream<Item = Result<O, E>> + Send + 'static,
