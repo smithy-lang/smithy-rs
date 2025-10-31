@@ -148,12 +148,19 @@ data class HttpDependencies(
     /**
      * Returns the body type to use for service builder in protocol tests.
      * For HTTP 0.x, uses hyper::body::Body (concrete type).
-     * For HTTP 1.x, uses smithy BoxBody (since hyper::body::Body is a trait).
+     * For HTTP 1.x, uses smithy BoxBody or BoxBodySync depending on whether Sync is needed.
+     *
+     * @param needsSync If true, returns BoxBodySync for operations that require Sync bounds (e.g., streaming operations).
+     *                  If false, returns BoxBody (lighter weight, no Sync requirement).
      */
-    fun serviceBuilderBodyType(): RuntimeType {
+    fun serviceBuilderBodyType(needsSync: Boolean = false): RuntimeType {
         return if (httpBodyUtil != null) {
-            // HTTP 1.x: use BoxBody since hyper::body::Body is a trait
-            smithyHttpServer.toType().resolve("body::BoxBody")
+            // HTTP 1.x: use BoxBodySync for streaming operations that need Sync
+            if (needsSync) {
+                smithyHttpServer.toType().resolve("body::BoxBodySync")
+            } else {
+                smithyHttpServer.toType().resolve("body::BoxBody")
+            }
         } else {
             // HTTP 0.x: use hyper::body::Body (concrete type)
             hyperModule().resolve("body::Body")
@@ -180,15 +187,19 @@ data class HttpDependencies(
      * Returns code for creating an HTTP request body in protocol tests.
      * For HTTP 0.x: uses Body::from(bytes) or Body::empty()
      * For HTTP 1.x: boxes the body since there's no concrete Body type
+     *
+     * @param bytesExpr Expression for the bytes to put in the body, or null for empty body
+     * @param needsSync If true, uses boxed_sync for operations that require Sync bounds
      */
-    fun requestBodyConstructor(bytesExpr: String?): String {
+    fun requestBodyConstructor(bytesExpr: String?, needsSync: Boolean = false): String {
         val serverCrate = smithyHttpServer.toType().name.replace('-', '_')
         return if (httpBodyUtil != null) {
-            // HTTP 1.x: use http_body_util::Full and box it
+            // HTTP 1.x: use http_body_util::Full and box it (sync or unsync)
+            val boxFn = if (needsSync) "boxed_sync" else "boxed"
             if (bytesExpr != null) {
-                "::${serverCrate}::body::boxed(::http_body_util::Full::new($bytesExpr))"
+                "::${serverCrate}::body::${boxFn}(::http_body_util::Full::new($bytesExpr))"
             } else {
-                "::${serverCrate}::body::boxed(::http_body_util::Empty::new())"
+                "::${serverCrate}::body::${boxFn}(::http_body_util::Empty::new())"
             }
         } else {
             // HTTP 0.x: use Body::from or Body::empty

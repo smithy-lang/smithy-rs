@@ -327,6 +327,10 @@ class ServerProtocolTestGenerator(
             return
         }
 
+        // Check if this operation has streaming members to determine body type
+        val inputShape = operationShape.inputShape(model)
+        val needsSync = inputShape.hasStreamingMember(model)
+
         with(httpRequestTestCase) {
             renderHttpRequest(
                 uri,
@@ -336,6 +340,7 @@ class ServerProtocolTestGenerator(
                 bodyMediaType.orNull(),
                 queryParams,
                 host.orNull(),
+                needsSync,
             )
         }
         if (protocolSupport.requestBodyDeserialization) {
@@ -404,6 +409,10 @@ class ServerProtocolTestGenerator(
 
         val panicMessage = "request should have been rejected, but we accepted it; we parsed operation input `{:?}`"
 
+        // Check if this operation has streaming members to determine body type
+        val inputShape = operationShape.inputShape(model)
+        val needsSync = inputShape.hasStreamingMember(model)
+
         rustBlock("") {
             with(testCase.request) {
                 // TODO(https://github.com/awslabs/smithy/issues/1102): `uri` should probably not be an `Optional`.
@@ -415,6 +424,7 @@ class ServerProtocolTestGenerator(
                     bodyMediaType.orNull(),
                     queryParams,
                     host.orNull(),
+                    needsSync,
                 )
             }
 
@@ -436,6 +446,7 @@ class ServerProtocolTestGenerator(
         bodyMediaType: String?,
         queryParams: List<String>,
         host: String?,
+        needsSync: Boolean = false,
     ) {
         rustTemplate(
             """
@@ -467,9 +478,9 @@ class ServerProtocolTestGenerator(
                 )
                 """
 
-            httpDeps.requestBodyConstructor(encodedBodyTemplate)
+            httpDeps.requestBodyConstructor(encodedBodyTemplate, needsSync)
         } else {
-            httpDeps.requestBodyConstructor(null)
+            httpDeps.requestBodyConstructor(null, needsSync)
         }
 
         rustTemplate(
@@ -523,12 +534,18 @@ class ServerProtocolTestGenerator(
     ) {
         val (inputT, _) = operationInputOutputTypes[operationShape]!!
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
+
+        // Determine if this operation needs Sync (has streaming members)
+        val inputShape = operationShape.inputShape(model)
+        val needsSync = inputShape.hasStreamingMember(model)
+        val bodyType = httpDeps.serviceBuilderBodyType(needsSync)
+
         rustWriter.rustTemplate(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder::<#{ServiceBuilderBodyType}, _, _, _>(config)
+            let service = crate::service::$serviceName::builder::<#{BodyType}, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -543,6 +560,7 @@ class ServerProtocolTestGenerator(
                 .expect("unable to make an HTTP request");
             """,
             "Body" to body,
+            "BodyType" to bodyType,
             *codegenScope,
         )
     }
