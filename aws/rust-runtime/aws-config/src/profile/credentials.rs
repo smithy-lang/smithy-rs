@@ -800,6 +800,7 @@ sso_start_url = https://d-abc123.awsapps.com/start
 #[cfg(all(test, feature = "login"))]
 mod login_tests {
     use crate::provider_config::ProviderConfig;
+    use aws_credential_types::provider::error::CredentialsError;
     use aws_credential_types::provider::ProvideCredentials;
     use aws_sdk_signin::config::RuntimeComponents;
     use aws_smithy_runtime_api::client::{
@@ -1016,11 +1017,14 @@ region = us-east-1
             .configure(&provider_config)
             .build();
 
-        let _err = provider
+        let err = provider
             .provide_credentials()
             .await
             .expect_err("should fail on refresh error");
 
-        // TODO(signin) - update to check for a better provider error
+        match &err {
+            CredentialsError::ProviderError(_) => {}
+            _ => panic!("wrong error type"),
+        }
     }
 }

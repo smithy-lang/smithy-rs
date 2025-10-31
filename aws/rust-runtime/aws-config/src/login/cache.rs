@@ -5,6 +5,7 @@
 
 use crate::login::token::{LoginToken, SignInTokenType};
 use crate::login::PROVIDER_NAME;
+use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::Credentials;
 use aws_runtime::fs_util::home_dir;
 use aws_runtime::fs_util::Os;
@@ -138,10 +139,6 @@ pub(super) enum LoginTokenError {
     FailedToFormatDateTime {
         source: Box<dyn StdError + Send + Sync>,
     },
-    InvalidField {
-        field: &'static str,
-        source: Box<dyn StdError + Send + Sync>,
-    },
     IoError {
         what: &'static str,
         path: PathBuf,
@@ -152,6 +149,7 @@ pub(super) enum LoginTokenError {
     NoHomeDirectory,
     ExpiredToken,
     WrongIdentityType(Identity),
+    RefreshFailed(Box<dyn StdError + Send + Sync>),
     Other {
         message: String,
         source: Option<Box<dyn StdError + Send + Sync>>,
@@ -174,10 +172,6 @@ impl fmt::Display for LoginTokenError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::FailedToFormatDateTime { .. } => write!(f, "failed to format date time"),
-            Self::InvalidField { field, .. } => write!(
-                f,
-                "invalid value for the `{field}` field in the cached Login token file"
-            ),
             Self::IoError { what, path, .. } => write!(f, "failed to {what} `{}`", path.display()),
             Self::JsonError(_) => write!(f, "invalid JSON in cached Login token file"),
             Self::MissingField(field) => {
@@ -188,6 +182,7 @@ impl fmt::Display for LoginTokenError {
             Self::WrongIdentityType(identity) => {
                 write!(f, "wrong identity type for Login. Expected DPoP private key but got `{identity:?}`")
             }
+            Self::RefreshFailed(_) => write!(f, "failed to refresh cached Login token"),
             Self::Other { message, .. } => {
                 write!(f, "failed to load cached Login token: {message}")
             }
@@ -199,13 +194,13 @@ impl StdError for LoginTokenError {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
             LoginTokenError::FailedToFormatDateTime { source } => Some(source.as_ref()),
-            LoginTokenError::InvalidField { source, .. } => Some(source.as_ref()),
             LoginTokenError::IoError { source, .. } => Some(source),
             LoginTokenError::JsonError(source) => Some(source.as_ref()),
             LoginTokenError::MissingField(_) => None,
             LoginTokenError::NoHomeDirectory => None,
             LoginTokenError::ExpiredToken => None,
             LoginTokenError::WrongIdentityType(_) => None,
+            LoginTokenError::RefreshFailed(source) => Some(source.as_ref()),
             LoginTokenError::Other { source, .. } => match source {
                 Some(err) => Some(err.as_ref()),
                 None => None,
@@ -223,6 +218,24 @@ impl From<EscapeError> for LoginTokenError {
 impl From<aws_smithy_json::deserialize::error::DeserializeError> for LoginTokenError {
     fn from(err: aws_smithy_json::deserialize::error::DeserializeError) -> Self {
         Self::JsonError(err.into())
+    }
+}
+
+impl From<LoginTokenError> for CredentialsError {
+    fn from(val: LoginTokenError) -> CredentialsError {
+        match val {
+            LoginTokenError::FailedToFormatDateTime { .. } => {
+                CredentialsError::invalid_configuration(val)
+            }
+            LoginTokenError::IoError { .. } => CredentialsError::unhandled(val),
+            LoginTokenError::JsonError(_) => CredentialsError::unhandled(val),
+            LoginTokenError::MissingField(_) => CredentialsError::invalid_configuration(val),
+            LoginTokenError::NoHomeDirectory => CredentialsError::unhandled(val),
+            LoginTokenError::ExpiredToken => CredentialsError::unhandled(val),
+            LoginTokenError::RefreshFailed(_) => CredentialsError::provider_error(val),
+            LoginTokenError::WrongIdentityType(_) => CredentialsError::invalid_configuration(val),
+            LoginTokenError::Other { .. } => CredentialsError::unhandled(val),
+        }
     }
 }
 

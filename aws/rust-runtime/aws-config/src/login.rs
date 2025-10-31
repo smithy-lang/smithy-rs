@@ -14,7 +14,6 @@ use crate::login::token::LoginToken;
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider;
-use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_signin::config::Builder as SignInClientConfigBuilder;
@@ -157,12 +156,7 @@ impl LoginCredentialsProvider {
             )
             .send()
             .await
-            .map_err(|e| {
-                LoginTokenError::other(
-                    "CreateOAuth2Token - failed to refresh token",
-                    Some(e.into()),
-                )
-            })?;
+            .map_err(|e| LoginTokenError::RefreshFailed(e.into()))?;
 
         let token_output = resp.token_output.expect("valid token response");
         let new_token = LoginToken::from_refresh(cached_token, token_output, now);
@@ -175,11 +169,7 @@ impl LoginCredentialsProvider {
     }
 
     async fn credentials(&self) -> provider::Result {
-        let token = self
-            .resolve_token()
-            .await
-            // TODO(sign-in): better mapping to CredentialsError
-            .map_err(CredentialsError::provider_error)?;
+        let token = self.resolve_token().await?;
 
         let feat = match self.inner.enabled_from_profile {
             true => AwsCredentialFeature::CredentialsProfileLogin,
