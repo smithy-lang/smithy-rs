@@ -14,14 +14,13 @@ use tower::service_fn;
 
 /// Simple test service that returns OK
 async fn ok_service(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
-    Ok(http::Response::builder()
-        .status(200)
-        .body(to_boxed("OK"))
-        .unwrap())
+    Ok(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
 }
 
 /// Test service that returns custom headers for verification
-async fn service_with_custom_headers(_request: http::Request<hyper::body::Incoming>) -> Result<http::Response<BoxBody>, Infallible> {
+async fn service_with_custom_headers(
+    _request: http::Request<hyper::body::Incoming>,
+) -> Result<http::Response<BoxBody>, Infallible> {
     Ok(http::Response::builder()
         .status(200)
         .header("content-type", "text/plain")
@@ -48,10 +47,7 @@ async fn test_configure_hyper_http1_keep_alive() {
         aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(service_with_custom_headers)))
             .configure_hyper(|mut builder| {
                 // Configure HTTP/1 settings
-                builder
-                    .http1()
-                    .keep_alive(true)
-                    .title_case_headers(true);
+                builder.http1().keep_alive(true).title_case_headers(true);
                 builder
             })
             .with_graceful_shutdown(async {
@@ -312,7 +308,7 @@ async fn test_local_addr_with_graceful_shutdown() {
     assert_eq!(actual_addr, expected_addr);
 }
 
-/// Test HTTP/2 prior knowledge mode (cleartext HTTP/2 without ALPN), required for gRPC over cleartext.
+/// Test HTTP/2 prior knowledge mode (cleartext HTTP/2 without ALPN)
 #[tokio::test]
 async fn test_http2_only_prior_knowledge() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
@@ -325,9 +321,7 @@ async fn test_http2_only_prior_knowledge() {
     // Start server with HTTP/2 only (prior knowledge mode)
     let server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
-            .configure_hyper(|builder| {
-                builder.http2_only()
-            })
+            .configure_hyper(|builder| builder.http2_only())
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -376,9 +370,7 @@ async fn test_http1_only() {
 
     let server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
-            .configure_hyper(|builder| {
-                builder.http1_only()
-            })
+            .configure_hyper(|builder| builder.http1_only())
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -484,12 +476,7 @@ async fn test_mixed_protocol_concurrent_connections() {
             // Wait for all 4 requests to arrive
             barrier.wait().await;
             // Now all respond together
-            Ok::<_, Infallible>(
-                http::Response::builder()
-                    .status(200)
-                    .body(to_boxed("OK"))
-                    .unwrap(),
-            )
+            Ok::<_, Infallible>(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
         }
     };
 
@@ -612,12 +599,7 @@ async fn test_limit_connections_blocks_excess() {
         async move {
             // Wait for a permit (blocks until we release permits in the test)
             let _permit = sem.acquire().await.unwrap();
-            Ok::<_, Infallible>(
-                http::Response::builder()
-                    .status(200)
-                    .body(to_boxed("OK"))
-                    .unwrap(),
-            )
+            Ok::<_, Infallible>(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
         }
     };
 
@@ -741,12 +723,7 @@ async fn test_multiple_concurrent_http2_streams() {
             // Wait for all 5 requests to arrive
             barrier.wait().await;
             // Now all respond together
-            Ok::<_, Infallible>(
-                http::Response::builder()
-                    .status(200)
-                    .body(to_boxed("OK"))
-                    .unwrap(),
-            )
+            Ok::<_, Infallible>(http::Response::builder().status(200).body(to_boxed("OK")).unwrap())
         }
     };
 
@@ -789,9 +766,7 @@ async fn test_multiple_concurrent_http2_streams() {
             .unwrap();
 
         let mut sender_clone = sender.clone();
-        let handle = tokio::spawn(async move {
-            sender_clone.send_request(request).await
-        });
+        let handle = tokio::spawn(async move { sender_clone.send_request(request).await });
         handles.push(handle);
     }
 
