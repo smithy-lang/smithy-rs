@@ -111,6 +111,12 @@ pub async fn main() {
         .await
         .expect("failed to bind TCP listener");
 
+    // Get the actual bound address (important when port 0 is used for random port)
+    let actual_addr = listener.local_addr().expect("failed to get local address");
+
+    // Signal that the server is ready to accept connections, including the actual port
+    eprintln!("SERVER_READY:{}", actual_addr.port());
+
     // Run forever-ish...
     if let Err(err) = serve(listener, make_app).await {
         eprintln!("server error: {err}");

@@ -33,6 +33,7 @@ serial_test = "3.1.1"
 hyper-rustls = { version = "0.27", features = ["http2"] }
 
 # Local paths
+aws-smithy-http-client = { path = "../../rust-runtime/aws-smithy-http-client", features = ["default-client", "rustls-aws-lc"] }
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime", features = ["client", "default-https-client"] }
 aws-smithy-types = { path = "../../rust-runtime/aws-smithy-types/" }
 pokemon-service-client = { path = "../pokemon-service-client/", features = [

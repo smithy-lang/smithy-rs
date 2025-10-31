@@ -22,12 +22,20 @@
 // note that by default created certificates will be unknown and you should use `-k|--insecure`
 // flag while making requests with cURL or you can run `mkcert -install` to trust certificates created by `mkcert`.
 
-use std::{fs::File, io::{self, BufReader}, net::SocketAddr, sync::Arc};
+use std::{
+    fs::File,
+    io::{self, BufReader},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use clap::Parser;
 use tokio::net::TcpListener;
 use tokio_rustls::{
-    rustls::{pki_types::{CertificateDer, PrivateKeyDer}, ServerConfig},
+    rustls::{
+        pki_types::{CertificateDer, PrivateKeyDer},
+        ServerConfig,
+    },
     TlsAcceptor,
 };
 
@@ -41,7 +49,7 @@ use pokemon_service_server_sdk::{
         request::connect_info::ConnectInfo,
         routing::Connected,
         serve::{serve, Listener},
-        AddExtensionLayer
+        AddExtensionLayer,
     },
     PokemonService, PokemonServiceConfig,
 };
@@ -69,15 +77,13 @@ struct Args {
 pub struct TlsListener {
     tcp_listener: TcpListener,
     tls_acceptor: TlsAcceptor,
-    bind_addr: SocketAddr,
 }
 
 impl TlsListener {
-    pub fn new(tcp_listener: TcpListener, tls_acceptor: TlsAcceptor, bind_addr: SocketAddr) -> Self {
+    pub fn new(tcp_listener: TcpListener, tls_acceptor: TlsAcceptor) -> Self {
         Self {
             tcp_listener,
             tls_acceptor,
-            bind_addr,
         }
     }
 }
@@ -89,15 +95,13 @@ impl Listener for TlsListener {
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
         loop {
             match self.tcp_listener.accept().await {
-                Ok((tcp_stream, remote_addr)) => {
-                    match self.tls_acceptor.accept(tcp_stream).await {
-                        Ok(tls_stream) => return (tls_stream, remote_addr),
-                        Err(err) => {
-                            eprintln!("TLS handshake failed: {err}");
-                            continue;
-                        }
+                Ok((tcp_stream, remote_addr)) => match self.tls_acceptor.accept(tcp_stream).await {
+                    Ok(tls_stream) => return (tls_stream, remote_addr),
+                    Err(err) => {
+                        eprintln!("TLS handshake failed: {err}");
+                        continue;
                     }
-                }
+                },
                 Err(err) => {
                     eprintln!("Failed to accept TCP connection: {err}");
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
@@ -107,7 +111,7 @@ impl Listener for TlsListener {
     }
 
     fn local_addr(&self) -> io::Result<Self::Addr> {
-        Ok(self.bind_addr)
+        self.tcp_listener.local_addr()
     }
 }
 
@@ -185,7 +189,13 @@ pub async fn main() {
         .await
         .expect("failed to bind TCP listener");
 
-    let tls_listener = TlsListener::new(tcp_listener, tls_acceptor, addr);
+    // Get the actual bound address (important when port 0 is used for random port)
+    let actual_addr = tcp_listener.local_addr().expect("failed to get local address");
+
+    let tls_listener = TlsListener::new(tcp_listener, tls_acceptor);
+
+    // Signal that the server is ready to accept connections, including the actual port
+    eprintln!("SERVER_READY:{}", actual_addr.port());
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `TlsConnectInfo`
     // connection info.
