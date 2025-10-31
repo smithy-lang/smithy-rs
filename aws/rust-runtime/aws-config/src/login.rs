@@ -182,7 +182,7 @@ impl LoginCredentialsProvider {
             .map_err(CredentialsError::provider_error)?;
 
         let feat = match self.inner.enabled_from_profile {
-            true => AwsCredentialFeature::CredentialsProfileSignIn,
+            true => AwsCredentialFeature::CredentialsProfileLogin,
             false => AwsCredentialFeature::CredentialsProfile,
         };
 

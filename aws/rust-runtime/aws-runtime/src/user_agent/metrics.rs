@@ -175,8 +175,8 @@ iterable_enum!(
     CliV1ToV2MigrationDebugMode,
     LoginSameDevice,
     LoginCrossDevice,
-    CredentialsProfileSignIn,
-    CredentialsSignIn
+    CredentialsProfileLogin,
+    CredentialsLogin
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -271,8 +271,8 @@ impl ProvideBusinessMetric for AwsCredentialFeature {
             CredentialsImds => Some(BusinessMetric::CredentialsImds),
             BearerServiceEnvVars => Some(BusinessMetric::BearerServiceEnvVars),
             S3ExpressBucket => Some(BusinessMetric::S3ExpressBucket),
-            CredentialsProfileSignIn => Some(BusinessMetric::CredentialsProfileSignIn),
-            CredentialsSignIn => Some(BusinessMetric::CredentialsSignIn),
+            CredentialsProfileLogin => Some(BusinessMetric::CredentialsProfileLogin),
+            CredentialsLogin => Some(BusinessMetric::CredentialsLogin),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
                 // while continuing to use an outdated version of an SDK crate or the `aws-credential-types`

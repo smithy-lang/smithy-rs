@@ -24,7 +24,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use zeroize::Zeroizing;
 
-const LOGIN_CACHE_DIRECTORY_ENV_VAR: &str = "AWS_LOGIN_IN_CACHE_DIRECTORY";
+const LOGIN_CACHE_DIRECTORY_ENV_VAR: &str = "AWS_LOGIN_CACHE_DIRECTORY";
 
 /// Get the cache directory for Login (Sign-In) tokens
 fn get_cache_dir(env: &Env) -> Result<PathBuf, LoginTokenError> {
@@ -117,7 +117,7 @@ pub(super) async fn save_cached_token(
         .key("refreshToken")
         .string(token.refresh_token.as_str());
     if let Some(identity_token) = &token.identity_token {
-        writer.key("identityToken").string(identity_token);
+        writer.key("idToken").string(identity_token);
     }
     writer.key("clientId").string(&token.client_id);
     writer.key("dpopKey").string(token.dpop_key.as_str());
@@ -241,8 +241,8 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
           },
           "tokenType": "aws_sigv4",
           "refreshToken": "<opaque string>",
-          "identityToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.EkN-DOsnsuRjRO6BxXemmJDm3HbxrbRzXglbN2S4sOkopdU4IsDxTI8jO19W_A4K8ZPJijNLis4EZsHeY559a4DFOd50_OqgHs3UjpbCqhpuU5K_TGOj3pY-TJXSw",
-          "clientId": "aws:signin:::cli/same-device",
+          "idToken": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWV9.EkN-DOsnsuRjRO6BxXemmJDm3HbxrbRzXglbN2S4sOkopdU4IsDxTI8jO19W_A4K8ZPJijNLis4EZsHeY559a4DFOd50_OqgHs3UjpbCqhpuU5K_TGOj3pY-TJXSw",
+          "clientId": "arn:aws:signin:::devtools/same-device",
           "dpopKey": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIFDZHUzOG1Pzq+6F0mjMlOSp1syN9LRPBuHMoCFXTcXhoAoGCCqGSM49\nAwEHoUQDQgAE9qhj+KtcdHj1kVgwxWWWw++tqoh7H7UHs7oXh8jBbgF47rrYGC+t\ndjiIaHK3dBvvdE7MGj5HsepzLm3Kj91bqA==\n-----END EC PRIVATE KEY-----\n"
         }
     */
@@ -337,7 +337,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
                                 Some(Zeroizing::new(value.to_unescaped()?.into_owned()));
                         }
                         (k, Token::ValueString { value, .. })
-                            if k.eq_ignore_ascii_case("identityToken") =>
+                            if k.eq_ignore_ascii_case("idToken") =>
                         {
                             identity_token = Some(value.to_unescaped()?.into_owned());
                         }
@@ -436,8 +436,8 @@ mod tests {
             },
             "tokenType": "aws_sigv4",
             "refreshToken": "refresh-token-value",
-            "identityToken": "identity-token-value",
-            "clientId": "aws:signin:::cli/same-device",
+            "idToken": "identity-token-value",
+            "clientId": "arn:aws:signin:::devtools/same-device",
             "dpopKey": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----\n"
         }"#;
         let token = parse_cached_token(file_contents.as_bytes()).expect("success");
@@ -455,7 +455,11 @@ mod tests {
             Some("identity-token-value"),
             token.identity_token.as_deref()
         );
-        assert_eq!("aws:signin:::cli/same-device", token.client_id.as_str());
+
+        assert_eq!(
+            "arn:aws:signin:::devtools/same-device",
+            token.client_id.as_str()
+        );
         assert_eq!(
             "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----\n",
             token.dpop_key.as_str()
@@ -529,8 +533,8 @@ mod tests {
             },
             "tokenType": "aws_sigv4",
             "refreshToken": "refresh-token-value",
-            "identityToken": "identity-token-value",
-            "clientId": "aws:signin:::cli/same-device",
+            "idToken": "identity-token-value",
+            "clientId": "arn:aws:signin:::devtools/same-device",
             "dpopKey": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----\n"
         }"#;
 
@@ -549,7 +553,10 @@ mod tests {
             "012345678901",
             token.access_token.account_id().unwrap().as_str()
         );
-        assert_eq!("aws:signin:::cli/same-device", token.client_id.as_str());
+        assert_eq!(
+            "arn:aws:signin:::devtools/same-device",
+            token.client_id.as_str()
+        );
     }
 
     #[tokio::test]

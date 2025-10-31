@@ -52,9 +52,9 @@ pub enum AwsCredentialFeature {
     /// An operation called using S3 Express bucket credentials
     S3ExpressBucket,
     /// An operation called using credentials resolved from a LoginCredentialsProvider configured via profile
-    CredentialsProfileSignIn,
+    CredentialsProfileLogin,
     /// An operation called using credentials resolved from a LoginCredentialsProvider configured explicitly via code
-    CredentialsSignIn,
+    CredentialsLogin,
 }
 
 impl Storable for AwsCredentialFeature {
