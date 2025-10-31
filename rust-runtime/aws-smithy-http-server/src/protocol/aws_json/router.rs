@@ -15,7 +15,7 @@ use crate::routing::Router;
 
 use http;
 
-use http::header::ToStrError;
+use crate::http::header::ToStrError;
 use thiserror::Error;
 
 /// An AWS JSON routing error.

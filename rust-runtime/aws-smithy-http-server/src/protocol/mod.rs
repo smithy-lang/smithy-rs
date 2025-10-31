@@ -16,8 +16,8 @@ use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 
 use http;
 
-use http::header::CONTENT_TYPE;
-use http::HeaderMap;
+use crate::http::header::CONTENT_TYPE;
+use crate::http::HeaderMap;
 
 #[cfg(test)]
 pub mod test_helpers {

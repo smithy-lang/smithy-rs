@@ -9,7 +9,7 @@ use std::fmt::{Debug, Error, Formatter};
 
 use http;
 
-use http::{header::HeaderName, HeaderMap};
+use crate::http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::{MakeFmt, MakeIdentity};
 

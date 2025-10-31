@@ -10,7 +10,7 @@ use crate::{extension::RuntimeErrorExtension, protocol::aws_json_10::AwsJson1_0}
 
 use http;
 
-use http::StatusCode;
+use crate::http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 

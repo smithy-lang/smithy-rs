@@ -10,7 +10,7 @@ use bytes::Bytes;
 
 use http;
 
-use http::StatusCode;
+use crate::http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 

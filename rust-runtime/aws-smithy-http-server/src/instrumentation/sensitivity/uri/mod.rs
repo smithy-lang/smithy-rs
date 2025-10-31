@@ -10,9 +10,8 @@ mod query;
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use http;
-
-use http::Uri;
+use crate::http;
+use crate::http::Uri;
 
 pub use label::*;
 pub use query::*;
