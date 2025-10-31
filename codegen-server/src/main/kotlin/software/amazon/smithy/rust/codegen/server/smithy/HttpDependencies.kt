@@ -145,6 +145,61 @@ data class HttpDependencies(
      */
     fun smithyXmlModule(): RuntimeType = smithyXml.toType()
 
+    /**
+     * Returns the body type to use for service builder in protocol tests.
+     * For HTTP 0.x, uses hyper::body::Body (concrete type).
+     * For HTTP 1.x, uses smithy BoxBody (since hyper::body::Body is a trait).
+     */
+    fun serviceBuilderBodyType(): RuntimeType {
+        return if (httpBodyUtil != null) {
+            // HTTP 1.x: use BoxBody since hyper::body::Body is a trait
+            smithyHttpServer.toType().resolve("body::BoxBody")
+        } else {
+            // HTTP 0.x: use hyper::body::Body (concrete type)
+            hyperModule().resolve("body::Body")
+        }
+    }
+
+    /**
+     * Returns the protocol test dependency with the correct HTTP feature flag.
+     * For HTTP 0.x: uses http-02x feature (default).
+     * For HTTP 1.x: uses http-1x feature.
+     */
+    fun protocolTestDependency(runtimeConfig: software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig): software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency {
+        val baseDep = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.smithyProtocolTestHelpers(runtimeConfig)
+        return if (httpBodyUtil != null) {
+            // HTTP 1.x: add http-1x feature
+            baseDep.withFeature("http-1x")
+        } else {
+            // HTTP 0.x: http-02x is the default, no need to add it explicitly
+            baseDep
+        }
+    }
+
+    /**
+     * Returns code for creating an HTTP request body in protocol tests.
+     * For HTTP 0.x: uses Body::from(bytes) or Body::empty()
+     * For HTTP 1.x: boxes the body since there's no concrete Body type
+     */
+    fun requestBodyConstructor(bytesExpr: String?): String {
+        val serverCrate = smithyHttpServer.toType().name.replace('-', '_')
+        return if (httpBodyUtil != null) {
+            // HTTP 1.x: use http_body_util::Full and box it
+            if (bytesExpr != null) {
+                "::${serverCrate}::body::boxed(::http_body_util::Full::new($bytesExpr))"
+            } else {
+                "::${serverCrate}::body::boxed(::http_body_util::Empty::new())"
+            }
+        } else {
+            // HTTP 0.x: use Body::from or Body::empty
+            if (bytesExpr != null) {
+                "::${serverCrate}::body::Body::from($bytesExpr)"
+            } else {
+                "::${serverCrate}::body::Body::empty()"
+            }
+        }
+    }
+
     companion object {
         /**
          * Factory method for creating HttpDependencies based on http-1x configuration.

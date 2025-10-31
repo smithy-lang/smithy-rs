@@ -284,17 +284,22 @@ class ServerProtocolTestGenerator(
     private val serverCodegenContext = codegenContext as software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
     private val httpDeps = serverCodegenContext.httpDependencies()
 
+    private val protocolTestRuntimeType = httpDeps.protocolTestDependency(codegenContext.runtimeConfig).toType()
+
     private val codegenScope =
         arrayOf(
             "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
             "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
             "Hyper" to httpDeps.hyperModule(),
-            "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
+            "HttpRequest" to httpDeps.httpRequest(),
+            "HttpStatusCode" to httpDeps.httpModule().resolve("StatusCode"),
+            "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
             "SmithyHttpServer" to httpDeps.smithyHttpServer.toType(),
-            "decode_body_data" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "decode_body_data"),
+            "ServiceBuilderBodyType" to httpDeps.serviceBuilderBodyType(),
+            "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
         )
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
@@ -435,7 +440,7 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             ##[allow(unused_mut)]
-            let mut http_request = http::Request::builder()
+            let mut http_request = #{HttpRequest}::builder()
                 .uri("$uri")
                 .method("$method")
             """,
@@ -444,32 +449,32 @@ class ServerProtocolTestGenerator(
         for (header in headers) {
             rust(".header(${header.key.dq()}, ${header.value.dq()})")
         }
+        val bodyCode = if (body != null) {
+            // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+            // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+            //
+            // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+            // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+            // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+            // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+            //
+            // We also escape to avoid interactions with templating in the case where the body contains `#`.
+            val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+
+            val encodedBodyTemplate = """
+                #{Bytes}::copy_from_slice(
+                    &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
+                )
+                """
+
+            httpDeps.requestBodyConstructor(encodedBodyTemplate)
+        } else {
+            httpDeps.requestBodyConstructor(null)
+        }
+
         rustTemplate(
             """
-            .body(${
-                if (body != null) {
-                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
-                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
-                    //
-                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
-                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
-                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
-                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                    //
-                    // We also escape to avoid interactions with templating in the case where the body contains `#`.
-                    val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
-
-                    val encodedBody = """
-                        #{Bytes}::copy_from_slice(
-                            &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
-                        )
-                        """
-
-                    "#{SmithyHttpServer}::body::Body::from($encodedBody)"
-                } else {
-                    "#{SmithyHttpServer}::body::Body::empty()"
-                }
-            }).unwrap();
+            .body($bodyCode).unwrap();
                         """,
             *codegenScope,
         )
@@ -523,7 +528,7 @@ class ServerProtocolTestGenerator(
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder::<#{Hyper}::body::Body, _, _, _>(config)
+            let service = crate::service::$serviceName::builder::<#{ServiceBuilderBodyType}, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -592,7 +597,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals")
+                                protocolTestRuntimeType.resolve("FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -716,8 +721,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
+                    protocolTestRuntimeType.resolve("validate_body"),
+                    protocolTestRuntimeType.resolve("MediaType"),
                 )
             }
         }
@@ -730,7 +735,7 @@ class ServerProtocolTestGenerator(
         rustWriter.rustTemplate(
             """
             #{AssertEq}(
-                http::StatusCode::from_u16($statusCode).expect("invalid expected HTTP status code"),
+                #{HttpStatusCode}::from_u16($statusCode).expect("invalid expected HTTP status code"),
                 http_response.status()
             );
             """,

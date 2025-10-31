@@ -10,6 +10,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.MethodSource
+import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
@@ -22,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSetting
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import java.io.File
 
 /**
  * Tests for HTTP dependency selection based on http-1x flag.
@@ -278,6 +280,122 @@ internal class Http1xDependencyTest {
         }
     }
 
+    @Test
+    fun `SDK with http-1x enabled for rpcv2Cbor extras model has correct dependencies`() {
+        val model = loadRpcv2CborExtrasModel()
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = buildAdditionalSettings(http1x = true, publicConstrainedTypes = false),
+                cargoCommand = "cargo test --all-features"
+            ),
+        ) { _, rustCrate ->
+            rustCrate.lib {
+                define_util_functions().invoke(this)
+
+                unitTest("http_1x_dependencies_rpcv2cbor_extras") {
+                    rustTemplate(
+                        """
+                        let metadata = #{MetadataCommand}::new()
+                            .exec()
+                            .expect("Failed to run cargo metadata");
+
+                        let root_package = metadata.root_package()
+                            .expect("Failed to get root package");
+
+                        // Check all HTTP 1.x dependencies have minimum versions and features
+                        let http1_crates = parse_crate_min_versions(&[
+                            ("http", "1.0.0", None),
+                            ("aws-smithy-http", "0.63.0", None),
+                            ("aws-smithy-http-server", "0.66.0", None),
+                            ("http-body-util", "0.1.3", None),
+                            ("aws-smithy-types", "1.3.3", Some(&["http-body-1-x"])),
+                            ("aws-smithy-runtime-api", "1.9.1", Some(&["http-1x"])),
+                        ]);
+
+                        verify_dependencies(&metadata, root_package, &http1_crates);
+
+                        // Should NOT have legacy dependencies
+                        let legacy = ["aws-smithy-http-legacy-server", "aws-smithy-legacy-http"];
+                        for legacy_crate in legacy {
+                            assert!(
+                                !root_package.dependencies.iter().any(|dep| dep.name == legacy_crate),
+                                "Should NOT have {legacy_crate} dependency"
+                            );
+                        }
+                        """,
+                        "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+                        *preludeScope,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `SDK defaults to http-0x for rpcv2Cbor extras model and dependencies are correct`() {
+        val model = loadRpcv2CborExtrasModel()
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = buildAdditionalSettings(http1x = null, publicConstrainedTypes = false),
+                cargoCommand = "cargo test --all-features",
+            ),
+        ) { _, rustCrate ->
+            rustCrate.lib {
+                define_util_functions().invoke(this)
+
+                unitTest("http_0x_dependencies_rpcv2cbor_extras") {
+                    rustTemplate(
+                        """
+                        let metadata = #{MetadataCommand}::new()
+                            .exec()
+                            .expect("Failed to run cargo metadata");
+
+                        let root_package = metadata.root_package()
+                            .expect("Failed to get root package");
+
+                        // Check all HTTP 0.x dependencies have minimum versions
+                        let http0_crates = parse_crate_min_versions(&[
+                            ("http", "0.2.0", None),
+                            ("aws-smithy-legacy-http-server", "0.65.7", None),
+                            ("aws-smithy-legacy-http", "0.62.5", Some(&["event-stream"])),
+                            ("aws-smithy-runtime-api", "1.9.1", Some(&["http-02x"])),
+                        ]);
+
+                        verify_dependencies(&metadata, root_package, &http0_crates);
+
+                        // Verify http crate does NOT accept version 1.x
+                        let http_dep = root_package.dependencies.iter()
+                            .find(|dep| dep.name == "http")
+                            .expect("Should have http dependency");
+                        let http_req = #{VersionReq}::parse(&http_dep.req.to_string())
+                            .expect("Failed to parse http version requirement");
+                        let v1 = #{Version}::parse("1.0.0").unwrap();
+                        assert!(
+                            !http_req.matches(&v1),
+                            "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
+                        );
+
+                        // Should NOT have HTTP 1.x specific dependencies
+                        let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
+                        for dep_name in http1_only_crates {
+                            assert!(
+                                !root_package.dependencies.iter().any(|d| d.name == dep_name),
+                                "Should NOT have `{}` dependency for HTTP 0.x", dep_name
+                            );
+                        }
+                        """,
+                        "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+                        "VersionReq" to semver.resolve("VersionReq"),
+                        "Version" to semver.resolve("Version"),
+                        *preludeScope,
+                    )
+                }
+            }
+        }
+    }
+
     companion object {
         @JvmStatic
         fun protocolAndConstrainedTypesProvider(): List<Arguments> {
@@ -294,4 +412,12 @@ internal class Http1xDependencyTest {
             }
         }
     }
+}
+
+/**
+ * Loads the rpcv2Cbor-extras model defined in the common repository and returns the model.
+ */
+fun loadRpcv2CborExtrasModel(): Model {
+    val filePath = "../codegen-core/common-test-models/rpcv2Cbor-extras.smithy"
+    return File(filePath).readText().asSmithyModel()
 }
