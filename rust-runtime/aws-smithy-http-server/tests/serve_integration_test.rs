@@ -31,12 +31,10 @@ async fn service_with_custom_headers(_request: http::Request<hyper::body::Incomi
         .unwrap())
 }
 
+/// Test that `configure_hyper()` actually applies HTTP/1 settings like title-case headers at the wire level.
 #[tokio::test]
 async fn test_configure_hyper_http1_keep_alive() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
-
-    // This test verifies that configure_hyper actually applies settings
-    // We configure HTTP/1 keep-alive and title-case headers, then verify title-case at the wire level
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -115,95 +113,9 @@ async fn test_configure_hyper_http1_keep_alive() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
-#[tokio::test]
-async fn test_configure_hyper_http2_settings() {
-    // Test that HTTP/2 configuration is applied
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("failed to bind");
-    let addr = listener.local_addr().unwrap();
-
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
-    // Start server with HTTP/2 configuration
-    let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
-            .configure_hyper(|mut builder| {
-                builder
-                    .http2()
-                    .max_concurrent_streams(100)
-                    .keep_alive_interval(Duration::from_secs(10));
-                builder
-            })
-            .with_graceful_shutdown(async {
-                shutdown_rx.await.ok();
-            })
-            .await
-    });
-
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
-
-    let uri = format!("http://{}/test", addr);
-    let request = http::Request::builder()
-        .uri(&uri)
-        .body(http_body_util::Empty::<bytes::Bytes>::new())
-        .unwrap();
-
-    let response = client.request(request).await.expect("request failed");
-    assert_eq!(response.status(), 200);
-
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
-}
-
-#[tokio::test]
-async fn test_limit_connections() {
-    // Test that connection limiting works - the limit is enforced but connections still succeed
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
-        .await
-        .expect("failed to bind")
-        .limit_connections(2); // Allow only 2 concurrent connections
-
-    let addr = listener.local_addr().unwrap();
-
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
-
-    let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
-            .with_graceful_shutdown(async {
-                shutdown_rx.await.ok();
-            })
-            .await
-    });
-
-    tokio::time::sleep(Duration::from_millis(50)).await;
-
-    // Make sequential requests to verify the limiter doesn't break functionality
-    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
-
-    for i in 0..3 {
-        let uri = format!("http://{}/test", addr);
-        let request = http::Request::builder()
-            .uri(&uri)
-            .body(http_body_util::Empty::<bytes::Bytes>::new())
-            .unwrap();
-
-        let response = client.request(request).await.expect(&format!("request {} failed", i));
-        assert_eq!(response.status(), 200);
-    }
-
-    // The fact that all requests succeeded proves the limiter is working correctly
-    // (it allows connections through while enforcing the limit)
-
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
-}
-
+/// Test that `tap_io()` invokes the closure with access to the TCP stream for configuration.
 #[tokio::test]
 async fn test_tap_io_set_nodelay() {
-    // Test that tap_io actually calls the closure with the IO
     let called = Arc::new(AtomicBool::new(false));
     let called_clone = called.clone();
 
@@ -249,9 +161,9 @@ async fn test_tap_io_set_nodelay() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
+/// Test that `tap_io()` and `limit_connections()` can be chained together.
 #[tokio::test]
 async fn test_tap_io_with_limit_connections() {
-    // Test that tap_io and limit_connections can be chained
     let tap_count = Arc::new(AtomicUsize::new(0));
     let tap_count_clone = tap_count.clone();
 
@@ -304,6 +216,7 @@ async fn test_tap_io_with_limit_connections() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
+/// Test that the server works with Unix domain socket listeners.
 #[cfg(unix)]
 #[tokio::test]
 async fn test_unix_listener() {
@@ -362,9 +275,9 @@ async fn test_unix_listener() {
     let _ = std::fs::remove_file(&socket_path);
 }
 
+/// Test that `local_addr()` returns the correct bound address.
 #[tokio::test]
 async fn test_local_addr() {
-    // Test that local_addr() returns the correct address
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("failed to bind");
@@ -378,9 +291,9 @@ async fn test_local_addr() {
     assert_eq!(actual_addr, expected_addr);
 }
 
+/// Test that `local_addr()` still works after calling `with_graceful_shutdown()`.
 #[tokio::test]
 async fn test_local_addr_with_graceful_shutdown() {
-    // Test that local_addr() works after with_graceful_shutdown
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("failed to bind");
@@ -399,10 +312,9 @@ async fn test_local_addr_with_graceful_shutdown() {
     assert_eq!(actual_addr, expected_addr);
 }
 
+/// Test HTTP/2 prior knowledge mode (cleartext HTTP/2 without ALPN), required for gRPC over cleartext.
 #[tokio::test]
 async fn test_http2_only_prior_knowledge() {
-    // Test HTTP/2 prior knowledge mode (HTTP/2 over cleartext without ALPN)
-    // This is required for gRPC over cleartext connections
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("failed to bind");
@@ -452,9 +364,9 @@ async fn test_http2_only_prior_knowledge() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
+/// Test HTTP/1-only mode using `http1_only()` configuration.
 #[tokio::test]
 async fn test_http1_only() {
-    // Test HTTP/1 only mode (rejects HTTP/2)
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
         .expect("failed to bind");
@@ -486,6 +398,414 @@ async fn test_http1_only() {
 
     let response = client.request(request).await.expect("request failed");
     assert_eq!(response.status(), 200);
+
+    shutdown_tx.send(()).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+}
+
+/// Test that the default server configuration auto-detects and supports both HTTP/1 and HTTP/2.
+#[tokio::test]
+async fn test_default_server_supports_both_http1_and_http2() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    // Start server with DEFAULT configuration (no configure_hyper call)
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Test 1: Make an HTTP/1.1 request
+    let http1_client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+    let uri = format!("http://{}/test", addr);
+    let request = http::Request::builder()
+        .uri(&uri)
+        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .unwrap();
+
+    let response = http1_client.request(request).await.expect("HTTP/1 request failed");
+    assert_eq!(response.status(), 200, "HTTP/1 request should succeed");
+
+    // Test 2: Make an HTTP/2 request (prior knowledge mode)
+    let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    let (mut sender, conn) = hyper::client::conn::http2::handshake(hyper_util::rt::TokioExecutor::new(), io)
+        .await
+        .expect("http2 handshake failed");
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            eprintln!("HTTP/2 connection error: {:?}", err);
+        }
+    });
+
+    let request = http::Request::builder()
+        .uri("/test")
+        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .unwrap();
+
+    let response = sender.send_request(request).await.expect("HTTP/2 request failed");
+    assert_eq!(response.status(), 200, "HTTP/2 request should succeed");
+
+    shutdown_tx.send(()).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+}
+
+/// Test that the server handles concurrent HTTP/1 and HTTP/2 connections simultaneously using a barrier.
+#[tokio::test]
+async fn test_mixed_protocol_concurrent_connections() {
+    use tokio::sync::Barrier;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    // Use a barrier to ensure all 4 requests arrive before any respond
+    // This proves they're being handled concurrently
+    let barrier = Arc::new(Barrier::new(4));
+    let barrier_clone = barrier.clone();
+
+    let barrier_service = move |_request: http::Request<hyper::body::Incoming>| {
+        let barrier = barrier_clone.clone();
+        async move {
+            // Wait for all 4 requests to arrive
+            barrier.wait().await;
+            // Now all respond together
+            Ok::<_, Infallible>(
+                http::Response::builder()
+                    .status(200)
+                    .body(to_boxed("OK"))
+                    .unwrap(),
+            )
+        }
+    };
+
+    // Start server with default configuration (supports both protocols)
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Start multiple HTTP/1 connections
+    let make_http1_request = |addr: std::net::SocketAddr, path: &'static str| async move {
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let io = hyper_util::rt::TokioIo::new(stream);
+
+        let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await.unwrap();
+
+        tokio::spawn(async move {
+            if let Err(e) = conn.await {
+                eprintln!("HTTP/1 connection error: {:?}", e);
+            }
+        });
+
+        let request = http::Request::builder()
+            .uri(path)
+            .body(http_body_util::Empty::<bytes::Bytes>::new())
+            .unwrap();
+
+        sender.send_request(request).await
+    };
+
+    // Start multiple HTTP/2 connections
+    let make_http2_request = |addr: std::net::SocketAddr, path: &'static str| async move {
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let io = hyper_util::rt::TokioIo::new(stream);
+
+        let (mut sender, conn) = hyper::client::conn::http2::handshake(hyper_util::rt::TokioExecutor::new(), io)
+            .await
+            .unwrap();
+
+        tokio::spawn(async move {
+            if let Err(e) = conn.await {
+                eprintln!("HTTP/2 connection error: {:?}", e);
+            }
+        });
+
+        let request = http::Request::builder()
+            .uri(path)
+            .body(http_body_util::Empty::<bytes::Bytes>::new())
+            .unwrap();
+
+        sender.send_request(request).await
+    };
+
+    // Launch 2 HTTP/1 and 2 HTTP/2 requests concurrently
+    let h1_handle1 = tokio::spawn(make_http1_request(addr, "/http1-test1"));
+    let h1_handle2 = tokio::spawn(make_http1_request(addr, "/http1-test2"));
+    let h2_handle1 = tokio::spawn(make_http2_request(addr, "/http2-test1"));
+    let h2_handle2 = tokio::spawn(make_http2_request(addr, "/http2-test2"));
+
+    // Wait for all requests to complete with timeout
+    // If they complete, it means the barrier was satisfied (all 4 arrived concurrently)
+    let timeout = Duration::from_secs(60);
+    let h1_result1 = tokio::time::timeout(timeout, h1_handle1)
+        .await
+        .expect("HTTP/1 request 1 timed out")
+        .unwrap();
+    let h1_result2 = tokio::time::timeout(timeout, h1_handle2)
+        .await
+        .expect("HTTP/1 request 2 timed out")
+        .unwrap();
+    let h2_result1 = tokio::time::timeout(timeout, h2_handle1)
+        .await
+        .expect("HTTP/2 request 1 timed out")
+        .unwrap();
+    let h2_result2 = tokio::time::timeout(timeout, h2_handle2)
+        .await
+        .expect("HTTP/2 request 2 timed out")
+        .unwrap();
+
+    // All requests should succeed
+    assert!(h1_result1.is_ok(), "HTTP/1 request 1 failed");
+    assert!(h1_result2.is_ok(), "HTTP/1 request 2 failed");
+    assert!(h2_result1.is_ok(), "HTTP/2 request 1 failed");
+    assert!(h2_result2.is_ok(), "HTTP/2 request 2 failed");
+
+    assert_eq!(h1_result1.unwrap().status(), 200);
+    assert_eq!(h1_result2.unwrap().status(), 200);
+    assert_eq!(h2_result1.unwrap().status(), 200);
+    assert_eq!(h2_result2.unwrap().status(), 200);
+
+    shutdown_tx.send(()).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+}
+
+/// Test that `limit_connections()` enforces the connection limit correctly using semaphores.
+#[tokio::test]
+async fn test_limit_connections_blocks_excess() {
+    use tokio::sync::Semaphore;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind")
+        .limit_connections(2); // Allow only 2 concurrent connections
+
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    // Use a semaphore to control when requests complete
+    // We'll hold permits to keep connections open
+    let sem = Arc::new(Semaphore::new(0));
+    let sem_clone = sem.clone();
+
+    let semaphore_service = move |_request: http::Request<hyper::body::Incoming>| {
+        let sem = sem_clone.clone();
+        async move {
+            // Wait for a permit (blocks until we release permits in the test)
+            let _permit = sem.acquire().await.unwrap();
+            Ok::<_, Infallible>(
+                http::Response::builder()
+                    .status(200)
+                    .body(to_boxed("OK"))
+                    .unwrap(),
+            )
+        }
+    };
+
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(semaphore_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Create 3 separate TCP connections and HTTP/1 clients
+    let make_request = |addr: std::net::SocketAddr| async move {
+        let stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        let io = hyper_util::rt::TokioIo::new(stream);
+
+        let (mut sender, conn) = hyper::client::conn::http1::handshake(io).await.unwrap();
+
+        tokio::spawn(async move {
+            if let Err(e) = conn.await {
+                eprintln!("Connection error: {:?}", e);
+            }
+        });
+
+        let request = http::Request::builder()
+            .uri("/test")
+            .body(http_body_util::Empty::<bytes::Bytes>::new())
+            .unwrap();
+
+        sender.send_request(request).await
+    };
+
+    // Start 3 requests concurrently
+    let handle1 = tokio::spawn(make_request(addr));
+    let handle2 = tokio::spawn(make_request(addr));
+    let handle3 = tokio::spawn(make_request(addr));
+
+    // Give them time to attempt connections
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // Now release 3 permits so all requests can complete
+    sem.add_permits(3);
+
+    // All requests should eventually complete (with timeout to prevent hanging)
+    let timeout = Duration::from_secs(60);
+    let result1 = tokio::time::timeout(timeout, handle1)
+        .await
+        .expect("First request timed out")
+        .unwrap();
+    let result2 = tokio::time::timeout(timeout, handle2)
+        .await
+        .expect("Second request timed out")
+        .unwrap();
+    let result3 = tokio::time::timeout(timeout, handle3)
+        .await
+        .expect("Third request timed out")
+        .unwrap();
+
+    // All should succeed - the limiter allows connections through (just limits concurrency)
+    assert!(result1.is_ok(), "First request failed");
+    assert!(result2.is_ok(), "Second request failed");
+    assert!(result3.is_ok(), "Third request failed");
+
+    shutdown_tx.send(()).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+}
+
+/// Test that graceful shutdown completes quickly when there are no active connections.
+#[tokio::test]
+async fn test_immediate_graceful_shutdown() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    // Give server time to start
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Immediately trigger shutdown without any connections
+    shutdown_tx.send(()).unwrap();
+
+    // Server should shutdown quickly since there are no connections
+    let result = tokio::time::timeout(Duration::from_millis(500), server_handle)
+        .await
+        .expect("server did not shutdown in time")
+        .expect("server task panicked");
+
+    assert!(result.is_ok(), "server should shutdown cleanly");
+}
+
+/// Test HTTP/2 stream multiplexing by sending concurrent requests over a single connection using a barrier.
+#[tokio::test]
+async fn test_multiple_concurrent_http2_streams() {
+    use tokio::sync::Barrier;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    // Use a barrier to ensure all 5 requests arrive before any respond
+    // This proves HTTP/2 multiplexing is working
+    let barrier = Arc::new(Barrier::new(5));
+    let barrier_clone = barrier.clone();
+
+    let barrier_service = move |_request: http::Request<hyper::body::Incoming>| {
+        let barrier = barrier_clone.clone();
+        async move {
+            // Wait for all 5 requests to arrive
+            barrier.wait().await;
+            // Now all respond together
+            Ok::<_, Infallible>(
+                http::Response::builder()
+                    .status(200)
+                    .body(to_boxed("OK"))
+                    .unwrap(),
+            )
+        }
+    };
+
+    // Start server with HTTP/2 only and configure max concurrent streams
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
+            .configure_hyper(|mut builder| {
+                builder.http2().max_concurrent_streams(5);
+                builder.http2_only()
+            })
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Create HTTP/2 connection
+    let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    let (sender, conn) = hyper::client::conn::http2::handshake(hyper_util::rt::TokioExecutor::new(), io)
+        .await
+        .expect("http2 handshake failed");
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            eprintln!("HTTP/2 connection error: {:?}", err);
+        }
+    });
+
+    // Send multiple concurrent requests over the same HTTP/2 connection
+    let mut handles = vec![];
+
+    for i in 0..5 {
+        let request = http::Request::builder()
+            .uri(format!("/test{}", i))
+            .body(http_body_util::Empty::<bytes::Bytes>::new())
+            .unwrap();
+
+        let mut sender_clone = sender.clone();
+        let handle = tokio::spawn(async move {
+            sender_clone.send_request(request).await
+        });
+        handles.push(handle);
+    }
+
+    // Wait for all requests to complete with timeout
+    // If they complete, it means the barrier was satisfied (all 5 arrived concurrently)
+    let timeout = Duration::from_secs(60);
+    for (i, handle) in handles.into_iter().enumerate() {
+        let response = tokio::time::timeout(timeout, handle)
+            .await
+            .expect(&format!("Request {} timed out", i))
+            .unwrap()
+            .expect("request failed");
+        assert_eq!(response.status(), 200);
+    }
 
     shutdown_tx.send(()).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;

@@ -22,13 +22,13 @@ pub use http_body::Body as HttpBody;
 // BoxBody - Type-Erased Body
 // ============================================================================
 
-/// The primary [`Body`] returned by the generated `smithy-rs` service.
+/// The primary body type returned by the generated `smithy-rs` service.
 ///
 /// This provides a stable public API regardless of HTTP version.
 /// Internally it uses `UnsyncBoxBody` from the appropriate http-body version.
 pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 
-/// A thread-safe [`Body`] for operations that require `Sync`.
+/// A thread-safe body type for operations that require `Sync`.
 ///
 /// This is used specifically for event streaming operations and lambda handlers
 /// that need thread safety guarantees.
@@ -39,7 +39,7 @@ pub type BoxBodySync = http_body_util::combinators::BoxBody<Bytes, Error>;
 // ============================================================================
 
 // `boxed` is used in the codegen of the implementation of the operation `Handler` trait.
-/// Convert an HTTP body implementing [`http_body::Body`](http_body::Body) into a [`BoxBody`].
+/// Convert an HTTP body implementing [`http_body::Body`] into a [`BoxBody`].
 pub fn boxed<B>(body: B) -> BoxBody
 where
     B: http_body::Body<Data = Bytes> + Send + 'static,
@@ -48,7 +48,7 @@ where
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
 
-/// Convert an HTTP body implementing [`http_body::Body`](http_body::Body) into a [`BoxBodySync`].
+/// Convert an HTTP body implementing [`http_body::Body`] into a [`BoxBodySync`].
 pub fn boxed_sync<B>(body: B) -> BoxBodySync
 where
     B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
@@ -187,5 +187,23 @@ mod tests {
         let body = to_boxed(vec.clone());
         let collected = collect_bytes(body).await.unwrap();
         assert_eq!(collected.as_ref(), vec.as_slice());
+    }
+
+    #[tokio::test]
+    async fn test_boxed() {
+        use http_body_util::Full;
+        let full_body = Full::new(Bytes::from("test data"));
+        let boxed_body: BoxBody = boxed(full_body);
+        let collected = collect_bytes(boxed_body).await.unwrap();
+        assert_eq!(collected, Bytes::from("test data"));
+    }
+
+    #[tokio::test]
+    async fn test_boxed_sync() {
+        use http_body_util::Full;
+        let full_body = Full::new(Bytes::from("sync test"));
+        let boxed_body: BoxBodySync = boxed_sync(full_body);
+        let collected = collect_bytes(boxed_body).await.unwrap();
+        assert_eq!(collected, Bytes::from("sync test"));
     }
 }

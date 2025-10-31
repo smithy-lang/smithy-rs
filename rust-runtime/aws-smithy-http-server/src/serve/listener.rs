@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 //! Portions of the implementation are adapted from axum
-//! (https://github.com/tokio-rs/axum), which is licensed under the MIT License.
+//! (<https://github.com/tokio-rs/axum>), which is licensed under the MIT License.
 //! Copyright (c) 2019 Axum Contributors
 
 use std::{
