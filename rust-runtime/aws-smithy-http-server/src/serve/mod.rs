@@ -8,13 +8,37 @@
 //! This module provides a convenient [`serve`] function similar to `axum::serve`
 //! for easily serving Tower services with Hyper.
 //!
+//! ## When to Use This Module
+//!
+//! - Use [`serve`] when you need a simple, batteries-included HTTP server
+//! - For more control over the Hyper connection builder, use [`.configure_hyper()`](Serve::configure_hyper)
+//! - For Lambda environments, see the `aws-lambda` feature and `routing::lambda_handler`
+//!
+//! ## Graceful Shutdown
+//!
+//! Graceful shutdown is zero-cost when not used - no watch channels are allocated
+//! and no `tokio::select!` overhead is incurred. Call
+//! [`.with_graceful_shutdown(signal)`](Serve::with_graceful_shutdown) to enable it:
+//!
+//! ```ignore
+//! serve(listener, service)
+//!     .with_graceful_shutdown(async {
+//!         tokio::signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
+//!     })
+//!     .await
+//! ```
+//!
+//! This ensures in-flight requests complete before shutdown. Use
+//! [`.with_shutdown_timeout(duration)`](ServeWithGracefulShutdown::with_shutdown_timeout)
+//! to set a maximum wait time.
+//!
 //! Portions of the implementation are adapted from axum
 //! (https://github.com/tokio-rs/axum), which is licensed under the MIT License.
 //! Copyright (c) 2019 Axum Contributors
 
 use std::convert::Infallible;
 use std::error::Error as StdError;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::future::{Future, IntoFuture};
 use std::io;
 use std::marker::PhantomData;
@@ -170,14 +194,39 @@ where
     Serve::new(listener, make_service)
 }
 
-/// A server that can be awaited or configured with graceful shutdown.
+/// A server future that serves HTTP connections.
+///
+/// This is the return type of [`serve`]. It implements [`IntoFuture`], so
+/// you can directly `.await` it:
+///
+/// ```ignore
+/// serve(listener, service).await?;
+/// ```
+///
+/// Before awaiting, you can configure it:
+/// - [`configure_hyper`](Self::configure_hyper) - Configure Hyper's connection builder
+/// - [`with_graceful_shutdown`](Self::with_graceful_shutdown) - Enable graceful shutdown
+/// - [`local_addr`](Self::local_addr) - Get the bound address
 ///
 /// Created by [`serve`].
+#[must_use = "Serve does nothing until you `.await` or call `.into_future()` on it"]
 pub struct Serve<L, M, S, B> {
     listener: L,
     make_service: M,
     configure_hyper: Option<ConfigureHyperBuilderFn>,
     _marker: PhantomData<(S, B)>,
+}
+
+impl<L, M, S, B> fmt::Debug for Serve<L, M, S, B>
+where
+    L: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Serve")
+            .field("listener", &self.listener)
+            .field("has_hyper_config", &self.configure_hyper.is_some())
+            .finish_non_exhaustive()
+    }
 }
 
 impl<L, M, S, B> Serve<L, M, S, B>
@@ -193,7 +242,29 @@ where
         }
     }
 
-    /// Configure the underlying Hyper server connection builder.
+    /// Configure the underlying Hyper connection builder.
+    ///
+    /// This allows you to customize Hyper's HTTP/1 and HTTP/2 settings,
+    /// such as timeouts, max concurrent streams, keep-alive behavior, etc.
+    ///
+    /// The configuration function is called once per connection to build the
+    /// connection handler.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::time::Duration;
+    ///
+    /// serve(listener, service)
+    ///     .configure_hyper(|builder| {
+    ///         builder
+    ///             .http1()
+    ///             .keep_alive(true)
+    ///             .http2()
+    ///             .max_concurrent_streams(200)
+    ///     })
+    ///     .await?;
+    /// ```
     pub fn configure_hyper<F>(mut self, f: F) -> Self
     where
         F: Fn(
@@ -254,9 +325,20 @@ where
     }
 }
 
-/// A server with graceful shutdown enabled.
+/// A server future with graceful shutdown enabled.
+///
+/// This type is created by calling [`Serve::with_graceful_shutdown`]. It implements
+/// [`IntoFuture`], so you can directly `.await` it.
+///
+/// When the shutdown signal completes, the server will:
+/// 1. Stop accepting new connections
+/// 2. Wait for all in-flight requests to complete (or until timeout if configured)
+/// 3. Return once all connections are closed
+///
+/// Configure the shutdown timeout with [`with_shutdown_timeout`](Self::with_shutdown_timeout).
 ///
 /// Created by [`Serve::with_graceful_shutdown`].
+#[must_use = "ServeWithGracefulShutdown does nothing until you `.await` or call `.into_future()` on it"]
 pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     listener: L,
     make_service: M,
@@ -264,6 +346,19 @@ pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     configure_hyper: Option<ConfigureHyperBuilderFn>,
     shutdown_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
+}
+
+impl<L, M, S, F, B> fmt::Debug for ServeWithGracefulShutdown<L, M, S, F, B>
+where
+    L: Listener + fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ServeWithGracefulShutdown")
+            .field("listener", &self.listener)
+            .field("has_hyper_config", &self.configure_hyper.is_some())
+            .field("shutdown_timeout", &self.shutdown_timeout)
+            .finish_non_exhaustive()
+    }
 }
 
 impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
@@ -279,20 +374,6 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
             shutdown_timeout: None,
             _marker: PhantomData,
         }
-    }
-
-    /// Configure the underlying Hyper server connection builder.
-    pub fn configure_hyper<G>(mut self, f: G) -> Self
-    where
-        G: Fn(
-                hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
-            ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>
-            + Send
-            + Sync
-            + 'static,
-    {
-        self.configure_hyper = Some(Arc::new(f));
-        self
     }
 
     /// Set a timeout for graceful shutdown.
