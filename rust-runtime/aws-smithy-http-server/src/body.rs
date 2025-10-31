@@ -231,4 +231,165 @@ mod tests {
         let collected = collect_bytes(boxed_body).await.unwrap();
         assert_eq!(collected, Bytes::from("sync test"));
     }
+
+    #[tokio::test]
+    async fn test_wrap_stream_single_chunk() {
+        use futures_util::stream;
+
+        let data = Bytes::from("single chunk");
+        let stream = stream::iter(vec![Ok::<_, std::io::Error>(data.clone())]);
+
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, data);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_multiple_chunks() {
+        use futures_util::stream;
+
+        let chunks = vec![
+            Ok::<_, std::io::Error>(Bytes::from("chunk1")),
+            Ok(Bytes::from("chunk2")),
+            Ok(Bytes::from("chunk3")),
+        ];
+        let expected = Bytes::from("chunk1chunk2chunk3");
+
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, expected);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_empty() {
+        use futures_util::stream;
+
+        let stream = stream::iter(vec![Ok::<_, std::io::Error>(Bytes::new())]);
+
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_error() {
+        use futures_util::stream;
+
+        let chunks = vec![
+            Ok::<_, std::io::Error>(Bytes::from("chunk1")),
+            Err(std::io::Error::new(std::io::ErrorKind::Other, "test error")),
+        ];
+
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let result = collect_bytes(body).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_various_types() {
+        use futures_util::stream;
+
+        // Test that Into<Bytes> works for various types
+        let chunks = vec![
+            Ok::<_, std::io::Error>("string slice"),
+            Ok("another string"),
+        ];
+
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("string sliceanother string"));
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_sync_single_chunk() {
+        use futures_util::stream;
+
+        let data = Bytes::from("sync single chunk");
+        let stream = stream::iter(vec![Ok::<_, std::io::Error>(data.clone())]);
+
+        let body = wrap_stream_sync(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, data);
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_sync_multiple_chunks() {
+        use futures_util::stream;
+
+        let chunks = vec![
+            Ok::<_, std::io::Error>(Bytes::from("sync1")),
+            Ok(Bytes::from("sync2")),
+            Ok(Bytes::from("sync3")),
+        ];
+        let expected = Bytes::from("sync1sync2sync3");
+
+        let stream = stream::iter(chunks);
+        let body = wrap_stream_sync(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, expected);
+    }
+
+    #[tokio::test]
+    async fn test_empty_sync_body() {
+        let body = empty_sync();
+        let bytes = collect_bytes(body).await.unwrap();
+        assert_eq!(bytes.len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_to_boxed_sync() {
+        let data = Bytes::from("sync boxed data");
+        let body = to_boxed_sync(data.clone());
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, data);
+    }
+
+    // Compile-time tests to ensure Send/Sync bounds are correct
+    // Following the pattern used by hyper and axum
+    fn _assert_send<T: Send>() {}
+    fn _assert_sync<T: Sync>() {}
+
+    fn _assert_send_sync_bounds() {
+        // BoxBodySync must be both Send and Sync
+        _assert_send::<BoxBodySync>();
+        _assert_sync::<BoxBodySync>();
+
+        // BoxBody must be Send (but is intentionally NOT Sync - it's UnsyncBoxBody)
+        _assert_send::<BoxBody>();
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_sync_produces_sync_body() {
+        use futures_util::stream;
+
+        let data = Bytes::from("test sync");
+        let stream = stream::iter(vec![Ok::<_, std::io::Error>(data.clone())]);
+
+        let body = wrap_stream_sync(stream);
+
+        // Compile-time check: ensure the body is Sync
+        fn check_sync<T: Sync>(_: &T) {}
+        check_sync(&body);
+
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, data);
+    }
+
+    #[test]
+    fn test_empty_sync_is_sync() {
+        let body = empty_sync();
+        fn check_sync<T: Sync>(_: &T) {}
+        check_sync(&body);
+    }
+
+    #[test]
+    fn test_boxed_sync_is_sync() {
+        use http_body_util::Full;
+        let body = boxed_sync(Full::new(Bytes::from("test")));
+        fn check_sync<T: Sync>(_: &T) {}
+        check_sync(&body);
+    }
 }

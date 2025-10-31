@@ -47,4 +47,5 @@ pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 #[cfg(test)]
 mod test_helpers;
 
+#[doc(no_inline)]
 pub use http;
