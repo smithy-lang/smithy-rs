@@ -52,7 +52,7 @@ use std::ops::Deref;
 
 use thiserror::Error;
 
-use http;
+use crate::http;
 
 use crate::{body::BoxBody, request::FromParts, response::IntoResponse};
 

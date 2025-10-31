@@ -12,7 +12,7 @@ use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
-use http;
+use crate::http;
 
 #[derive(Debug, Error)]
 pub enum ResponseRejection {

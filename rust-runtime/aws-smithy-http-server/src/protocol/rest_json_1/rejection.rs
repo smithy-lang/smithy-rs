@@ -52,7 +52,7 @@ use aws_smithy_runtime_api::http::HttpError;
 use std::num::TryFromIntError;
 use thiserror::Error;
 
-use http;
+use crate::http;
 
 /// Errors that can occur when serializing the operation output provided by the service implementer
 /// into an HTTP response.

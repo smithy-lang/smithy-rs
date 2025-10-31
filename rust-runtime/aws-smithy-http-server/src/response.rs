@@ -34,7 +34,7 @@
 
 use crate::body::BoxBody;
 
-use http;
+use crate::http;
 
 pub type Response<T = BoxBody> = http::Response<T>;
 

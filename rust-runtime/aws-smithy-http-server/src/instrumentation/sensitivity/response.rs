@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Error, Formatter};
 
-use http;
+use crate::http;
 
 use crate::http::{header::HeaderName, HeaderMap};
 

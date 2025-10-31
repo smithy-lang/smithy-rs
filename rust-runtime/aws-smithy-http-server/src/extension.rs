@@ -27,7 +27,7 @@ use futures_util::TryFuture;
 use thiserror::Error;
 use tower::Service;
 
-use http;
+use crate::http;
 
 use crate::operation::OperationShape;
 use crate::plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack};

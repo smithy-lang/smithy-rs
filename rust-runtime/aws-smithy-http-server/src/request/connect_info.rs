@@ -11,7 +11,7 @@
 //! illustrates the use of [`IntoMakeServiceWithConnectInfo`](crate::routing::IntoMakeServiceWithConnectInfo)
 //! and [`ConnectInfo`] with a service builder.
 
-use http;
+use crate::http;
 
 use crate::http::request::Parts;
 use thiserror::Error;
