@@ -9,7 +9,7 @@ use std::{
 };
 use tower::Service;
 
-use http;
+use crate::http;
 use lambda_http::{Request, RequestExt};
 
 use crate::body::{self, BoxBodySync};

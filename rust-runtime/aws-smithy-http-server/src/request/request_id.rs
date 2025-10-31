@@ -57,7 +57,7 @@ use thiserror::Error;
 use tower::{Layer, Service};
 use uuid::Uuid;
 
-use http;
+use crate::http;
 
 use crate::http::request::Parts;
 use crate::http::{header::HeaderName, HeaderValue, Response};

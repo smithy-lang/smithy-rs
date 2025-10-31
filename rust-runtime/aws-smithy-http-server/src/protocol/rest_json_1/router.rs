@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http;
+use crate::http;
 
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;

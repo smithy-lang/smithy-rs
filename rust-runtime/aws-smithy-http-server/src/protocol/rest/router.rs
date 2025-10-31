@@ -15,7 +15,7 @@ use tower::Service;
 
 use thiserror::Error;
 
-use http;
+use crate::http;
 
 /// An AWS REST routing error.
 #[derive(Debug, Error, PartialEq)]
