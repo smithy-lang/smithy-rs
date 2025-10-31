@@ -351,6 +351,13 @@ where
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
     fn into_future(self) -> Self::IntoFuture {
+        // Decide once at serve-time which path to use based on the configured builder
+        let use_upgrades = self
+            .hyper_builder
+            .as_ref()
+            .map(|b| b.is_http1_available() && b.is_http2_available())
+            .unwrap_or(true); // Default to auto-detect if no builder configured
+
         Box::pin(async move {
             let Self {
                 mut listener,
@@ -361,7 +368,7 @@ where
 
             loop {
                 let (io, remote_addr) = listener.accept().await;
-                handle_connection(&mut make_service, io, remote_addr, hyper_builder.as_ref(), None).await;
+                handle_connection(&mut make_service, io, remote_addr, hyper_builder.as_ref(), use_upgrades, None).await;
             }
         })
     }
@@ -448,6 +455,13 @@ where
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
     fn into_future(self) -> Self::IntoFuture {
+        // Decide once at serve-time which path to use based on the configured builder
+        let use_upgrades = self
+            .hyper_builder
+            .as_ref()
+            .map(|b| b.is_http1_available() && b.is_http2_available())
+            .unwrap_or(true); // Default to auto-detect if no builder configured
+
         Box::pin(async move {
             let Self {
                 mut listener,
@@ -472,6 +486,7 @@ where
                             io,
                             remote_addr,
                             hyper_builder.as_ref(),
+                            use_upgrades,
                             Some(&graceful),
                         )
                         .await;
@@ -516,6 +531,7 @@ async fn handle_connection<L, M, S, B>(
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
     hyper_builder: Option<&Builder<TokioExecutor>>,
+    use_upgrades: bool,
     graceful: Option<&GracefulShutdown>,
 ) where
     L: Listener,
@@ -555,12 +571,10 @@ async fn handle_connection<L, M, S, B>(
         .unwrap_or_else(|| Builder::new(TokioExecutor::new()));
 
     tokio::spawn(async move {
-
-        // Use serve_connection (without upgrades) if protocol is already decided.
-        // This avoids the overhead of reading the connection preface to detect the protocol
-        // when the user has explicitly configured http1_only() or http2_only().
-        // serve_connection_with_upgrades always reads the preface, even when not needed.
-        let result = if builder.is_http1_available() && builder.is_http2_available() {
+        // Use serve_connection_with_upgrades or serve_connection based on the decision
+        // made at serve-time. This avoids per-connection method calls to is_http1_available()
+        // and is_http2_available().
+        let result = if use_upgrades {
             // Auto-detect mode - use with_upgrades for HTTP/1 upgrade support
             let conn = builder.serve_connection_with_upgrades(tokio_io, hyper_service);
             if let Some(watcher) = watcher {
