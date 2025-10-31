@@ -9,8 +9,8 @@ mod cache;
 mod dpop;
 mod token;
 
-use crate::login::cache::{load_cached_token, save_cached_token, LoginTokenError};
-use crate::login::token::LoginToken;
+use crate::login::cache::{load_cached_token, save_cached_token};
+use crate::login::token::{LoginToken, LoginTokenError};
 use crate::provider_config::ProviderConfig;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider;

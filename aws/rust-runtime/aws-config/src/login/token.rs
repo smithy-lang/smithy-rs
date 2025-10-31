@@ -4,9 +4,14 @@
  */
 
 use crate::login::PROVIDER_NAME;
+use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::Credentials;
 use aws_sdk_signin::types::CreateOAuth2TokenResponseBody;
+use aws_smithy_json::deserialize::EscapeError;
+use aws_smithy_runtime_api::client::identity::Identity;
+use std::error::Error as StdError;
 use std::fmt;
+use std::path::PathBuf;
 use std::time::{Duration, SystemTime};
 use zeroize::Zeroizing;
 
@@ -79,6 +84,111 @@ impl fmt::Display for SignInTokenType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             SignInTokenType::AwsSigv4 => write!(f, "aws_sigv4"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub(super) enum LoginTokenError {
+    FailedToFormatDateTime {
+        source: Box<dyn StdError + Send + Sync>,
+    },
+    IoError {
+        what: &'static str,
+        path: PathBuf,
+        source: std::io::Error,
+    },
+    JsonError(Box<dyn StdError + Send + Sync>),
+    MissingField(&'static str),
+    NoHomeDirectory,
+    ExpiredToken,
+    WrongIdentityType(Identity),
+    RefreshFailed(Box<dyn StdError + Send + Sync>),
+    Other {
+        message: String,
+        source: Option<Box<dyn StdError + Send + Sync>>,
+    },
+}
+
+impl LoginTokenError {
+    pub(super) fn other(
+        message: impl Into<String>,
+        source: Option<Box<dyn StdError + Send + Sync>>,
+    ) -> Self {
+        Self::Other {
+            message: message.into(),
+            source,
+        }
+    }
+}
+
+impl fmt::Display for LoginTokenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedToFormatDateTime { .. } => write!(f, "failed to format date time"),
+            Self::IoError { what, path, .. } => write!(f, "failed to {what} `{}`", path.display()),
+            Self::JsonError(_) => write!(f, "invalid JSON in cached Login token file"),
+            Self::MissingField(field) => {
+                write!(f, "missing field `{field}` in cached Login token file")
+            }
+            Self::NoHomeDirectory => write!(f, "couldn't resolve a home directory"),
+            Self::ExpiredToken => write!(f, "cached Login token is expired"),
+            Self::WrongIdentityType(identity) => {
+                write!(f, "wrong identity type for Login. Expected DPoP private key but got `{identity:?}`")
+            }
+            Self::RefreshFailed(_) => write!(f, "failed to refresh cached Login token"),
+            Self::Other { message, .. } => {
+                write!(f, "failed to load cached Login token: {message}")
+            }
+        }
+    }
+}
+
+impl StdError for LoginTokenError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            LoginTokenError::FailedToFormatDateTime { source } => Some(source.as_ref()),
+            LoginTokenError::IoError { source, .. } => Some(source),
+            LoginTokenError::JsonError(source) => Some(source.as_ref()),
+            LoginTokenError::MissingField(_) => None,
+            LoginTokenError::NoHomeDirectory => None,
+            LoginTokenError::ExpiredToken => None,
+            LoginTokenError::WrongIdentityType(_) => None,
+            LoginTokenError::RefreshFailed(source) => Some(source.as_ref()),
+            LoginTokenError::Other { source, .. } => match source {
+                Some(err) => Some(err.as_ref()),
+                None => None,
+            },
+        }
+    }
+}
+
+impl From<EscapeError> for LoginTokenError {
+    fn from(err: EscapeError) -> Self {
+        Self::JsonError(err.into())
+    }
+}
+
+impl From<aws_smithy_json::deserialize::error::DeserializeError> for LoginTokenError {
+    fn from(err: aws_smithy_json::deserialize::error::DeserializeError) -> Self {
+        Self::JsonError(err.into())
+    }
+}
+
+impl From<LoginTokenError> for CredentialsError {
+    fn from(val: LoginTokenError) -> CredentialsError {
+        match val {
+            LoginTokenError::FailedToFormatDateTime { .. } => {
+                CredentialsError::invalid_configuration(val)
+            }
+            LoginTokenError::IoError { .. } => CredentialsError::unhandled(val),
+            LoginTokenError::JsonError(_) => CredentialsError::unhandled(val),
+            LoginTokenError::MissingField(_) => CredentialsError::invalid_configuration(val),
+            LoginTokenError::NoHomeDirectory => CredentialsError::unhandled(val),
+            LoginTokenError::ExpiredToken => CredentialsError::unhandled(val),
+            LoginTokenError::RefreshFailed(_) => CredentialsError::provider_error(val),
+            LoginTokenError::WrongIdentityType(_) => CredentialsError::invalid_configuration(val),
+            LoginTokenError::Other { .. } => CredentialsError::unhandled(val),
         }
     }
 }

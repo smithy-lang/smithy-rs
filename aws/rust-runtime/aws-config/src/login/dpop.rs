@@ -2,7 +2,7 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
-use crate::login::cache::LoginTokenError;
+use crate::login::token::LoginTokenError;
 use aws_sdk_signin::config::auth::Params;
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_runtime_api::box_error::BoxError;
