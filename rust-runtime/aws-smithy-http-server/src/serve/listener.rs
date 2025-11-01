@@ -143,7 +143,8 @@ impl<T: Listener> Listener for ConnLimiter<T> {
     type Addr = T::Addr;
 
     async fn accept(&mut self) -> (Self::Io, Self::Addr) {
-        let permit = self.sem
+        let permit = self
+            .sem
             .clone()
             .acquire_owned()
             .await

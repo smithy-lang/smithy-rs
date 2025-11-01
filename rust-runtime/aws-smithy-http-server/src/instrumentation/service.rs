@@ -15,7 +15,6 @@ use futures_util::{ready, TryFuture};
 use tower::Service;
 use tracing::{debug, debug_span, instrument::Instrumented, Instrument};
 
-
 use crate::http::{HeaderMap, Request, Response, StatusCode, Uri};
 
 use crate::shape_id::ShapeId;
