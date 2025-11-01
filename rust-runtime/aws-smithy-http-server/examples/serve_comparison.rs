@@ -43,11 +43,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let service = service_fn(handle_request);
 
     // Use the public serve API which internally uses handle_connection_strategy
-    aws_smithy_http_server::serve(
-        listener,
-        aws_smithy_http_server::routing::IntoMakeService::new(service),
-    )
-    .await?;
+    aws_smithy_http_server::serve(listener, aws_smithy_http_server::routing::IntoMakeService::new(service)).await?;
 
     Ok(())
 }

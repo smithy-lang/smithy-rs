@@ -22,7 +22,10 @@
 //! oha -n 200 -c 200 http://localhost:3000
 //! ```
 
-use aws_smithy_http_server::{routing::IntoMakeService, serve::{serve, ListenerExt}};
+use aws_smithy_http_server::{
+    routing::IntoMakeService,
+    serve::{serve, ListenerExt},
+};
 use http::{Request, Response};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
@@ -46,9 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The listener limits concurrent connections to 100.
     // Once 100 connections are active, new connections will wait at the OS level
     // until an existing connection completes.
-    let listener = TcpListener::bind("0.0.0.0:3000")
-        .await?
-        .limit_connections(100);
+    let listener = TcpListener::bind("0.0.0.0:3000").await?.limit_connections(100);
 
     let app = service_fn(handler);
 

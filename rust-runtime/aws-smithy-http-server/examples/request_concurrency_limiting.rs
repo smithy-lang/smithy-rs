@@ -20,14 +20,17 @@
 //! curl http://localhost:3000
 //! ```
 
-use aws_smithy_http_server::{routing::IntoMakeService, serve::{serve, ListenerExt}};
+use aws_smithy_http_server::{
+    routing::IntoMakeService,
+    serve::{serve, ListenerExt},
+};
 use http::{Request, Response};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
 use std::{convert::Infallible, time::Duration};
 use tokio::net::TcpListener;
-use tower::{service_fn, ServiceBuilder};
 use tower::limit::ConcurrencyLimitLayer;
+use tower::{service_fn, ServiceBuilder};
 use tracing::info;
 
 async fn handler(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
@@ -43,9 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting server with request concurrency limit...");
 
     // Limit connections at the TCP level
-    let listener = TcpListener::bind("0.0.0.0:3000")
-        .await?
-        .limit_connections(100);
+    let listener = TcpListener::bind("0.0.0.0:3000").await?.limit_connections(100);
 
     // Limit concurrent requests at the application level
     let app = ServiceBuilder::new()

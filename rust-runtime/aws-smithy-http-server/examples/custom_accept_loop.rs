@@ -33,7 +33,7 @@ use hyper_util::{
 };
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::{net::TcpListener, sync::Semaphore};
-use tower::{service_fn, Service, ServiceBuilder, ServiceExt};
+use tower::{service_fn, ServiceBuilder, ServiceExt};
 use tower_http::timeout::TimeoutLayer;
 use tracing::{info, warn};
 
@@ -98,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         info!("accepted connection from {}", remote_addr);
 
-        let mut make_service = make_service.clone();
+        let make_service = make_service.clone();
 
         tokio::spawn(async move {
             // The permit will be dropped when this task ends, freeing up a connection slot
@@ -107,28 +107,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let io = TokioIo::new(stream);
 
             // Create service for this connection
-            let tower_service = match ServiceExt::oneshot(
-                make_service,
-                IncomingStream::<TcpListener> {
-                    io: &io,
-                    remote_addr,
-                },
-            )
-            .await
-            {
-                Ok(svc) => svc,
-                Err(_) => {
-                    warn!("failed to create service for connection from {}", remote_addr);
-                    return;
-                }
-            };
+            let tower_service =
+                match ServiceExt::oneshot(make_service, IncomingStream::<TcpListener> { io: &io, remote_addr }).await {
+                    Ok(svc) => svc,
+                    Err(_) => {
+                        warn!("failed to create service for connection from {}", remote_addr);
+                        return;
+                    }
+                };
 
             let hyper_service = TowerToHyperService::new(tower_service);
 
             // Configure Hyper builder with timeouts
             let mut builder = Builder::new(TokioExecutor::new());
-            builder.http1().header_read_timeout(Duration::from_secs(10)).keep_alive(true);
-            builder.http2().keep_alive_interval(Duration::from_secs(60)).keep_alive_timeout(Duration::from_secs(20));
+            builder
+                .http1()
+                .header_read_timeout(Duration::from_secs(10))
+                .keep_alive(true);
+            builder
+                .http2()
+                .keep_alive_interval(Duration::from_secs(60))
+                .keep_alive_timeout(Duration::from_secs(20));
 
             // Serve the connection with overall duration timeout
             let conn = builder.serve_connection(io, hyper_service);

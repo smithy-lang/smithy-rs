@@ -38,9 +38,7 @@ async fn handler(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infall
         "/slow" => {
             info!("slow handler: sleeping for 45 seconds (will timeout)");
             tokio::time::sleep(Duration::from_secs(45)).await;
-            Ok(Response::new(Full::new(Bytes::from(
-                "This won't be sent\n",
-            ))))
+            Ok(Response::new(Full::new(Bytes::from("This won't be sent\n"))))
         }
         _ => Ok(Response::new(Full::new(Bytes::from("Hello, World!\n")))),
     }

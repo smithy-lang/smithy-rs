@@ -53,9 +53,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     serve(listener, IntoMakeService::new(app))
         .configure_hyper(|mut builder| {
-            builder
-                .http1()
-                .header_read_timeout(Duration::from_secs(10));
+            builder.http1().header_read_timeout(Duration::from_secs(10));
             builder
         })
         .await?;
