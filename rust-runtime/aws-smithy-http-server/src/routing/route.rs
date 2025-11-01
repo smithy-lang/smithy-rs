@@ -34,7 +34,6 @@
 
 use crate::body::BoxBody;
 
-
 use crate::http::{Request, Response};
 use std::{
     convert::Infallible,
