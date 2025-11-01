@@ -30,9 +30,9 @@
 //! is identified with the implementation
 //!
 //! ```rust,no_run
-//! # use aws_smithy_http_server::shape_id::ShapeId;
-//! # use aws_smithy_http_server::service::{ServiceShape, ContainsOperation};
-//! # use aws_smithy_http_server::protocol::rest_json_1::RestJson1;
+//! # use aws_smithy_legacy_http_server::shape_id::ShapeId;
+//! # use aws_smithy_legacy_http_server::service::{ServiceShape, ContainsOperation};
+//! # use aws_smithy_legacy_http_server::protocol::rest_json_1::RestJson1;
 //! # pub struct Shopping;
 //! // For more information on these marker structs see `OperationShape`
 //! struct GetShopping;

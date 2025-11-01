@@ -29,7 +29,7 @@ where
 /// # Example
 ///
 /// ```rust
-/// # use aws_smithy_http_server::{service::*, operation::OperationShape, plugin::Plugin, shape_id::ShapeId};
+/// # use aws_smithy_legacy_http_server::{service::*, operation::OperationShape, plugin::Plugin, shape_id::ShapeId};
 /// # pub enum Operation { CheckHealth, GetPokemonSpecies }
 /// # impl Operation { fn shape_id(&self) -> ShapeId { ShapeId::new("", "", "") }}
 /// # pub struct CheckHealth;
@@ -45,7 +45,7 @@ where
 /// # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
 /// # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 /// # impl ContainsOperation<GetPokemonSpecies> for PokemonService { const VALUE: Operation = Operation::GetPokemonSpecies; }
-/// use aws_smithy_http_server::plugin::plugin_from_operation_fn;
+/// use aws_smithy_legacy_http_server::plugin::plugin_from_operation_fn;
 /// use tower::layer::layer_fn;
 ///
 /// struct FooService<S> {

@@ -18,7 +18,7 @@ use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::Label;
+/// # use aws_smithy_legacy_http_server::instrumentation::sensitivity::uri::Label;
 /// # use http::Uri;
 /// # let path = "";
 /// // Path segment 2 is redacted and a trailing greedy label
@@ -42,7 +42,7 @@ pub struct Label<'a, F> {
 /// The pattern, `/alpha/beta/{greedy+}/trail`, has segment index 2 and offset from the end of 6.
 ///
 /// ```rust
-/// # use aws_smithy_http_server::instrumentation::sensitivity::uri::GreedyLabel;
+/// # use aws_smithy_legacy_http_server::instrumentation::sensitivity::uri::GreedyLabel;
 /// let greedy_label = GreedyLabel::new(2, 6);
 /// ```
 #[derive(Clone, Debug)]
@@ -101,7 +101,7 @@ where
                             if (self.label_marker)(index) {
                                 write!(f, "/{}", Sensitive(segment))?;
                             } else {
-                                write!(f, "/{}", segment)?;
+                                write!(f, "/{segment}")?;
                             }
                             // Add the segment length and the separator to the `greedy_start`.
                             let greedy_start = greedy_start + segment.len() + 1;
@@ -140,7 +140,7 @@ where
                 if (self.label_marker)(index) {
                     write!(f, "/{}", Sensitive(segment))?;
                 } else {
-                    write!(f, "/{}", segment)?;
+                    write!(f, "/{segment}")?;
                 }
             }
         }

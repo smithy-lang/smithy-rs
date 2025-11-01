@@ -176,7 +176,7 @@ mod tests {
                     assert_eq!(actually_expected_mime, expected_mime);
                     assert_eq!(actually_found_mime, found_mime);
                 }
-                _ => panic!("unexpected `MissingContentTypeReason`: {}", e),
+                _ => panic!("unexpected `MissingContentTypeReason`: {e}"),
             },
         }
     }
