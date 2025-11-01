@@ -111,6 +111,23 @@ data class ServerCodegenConfig(
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         private const val DEFAULT_HTTP_1X = false
 
+        /**
+         * Configuration key for the HTTP 1.x flag.
+         *
+         * When set to true in codegen configuration, generates code that uses http@1.x/hyper@1.x
+         * instead of http@0.2.x/hyper@0.14.x.
+         *
+         * **Usage:**
+         * - Use this constant when reading/writing the codegen configuration
+         * - Use this constant in test utilities that set configuration (e.g., ServerCodegenIntegrationTest)
+         *
+         * **Do NOT use this constant for:**
+         * - External crate feature names (e.g., `smithyRuntimeApi.withFeature("http-1x")`)
+         *   Those feature names are defined by the external crates and may change independently
+         * - Cargo.toml feature names unless they are explicitly defined by us to match this value
+         */
+        const val HTTP_1X_CONFIG_KEY = "http-1x"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -120,7 +137,7 @@ data class ServerCodegenConfig(
                 "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
                 "addValidationExceptionToConstrainedOperations",
                 "alwaysSendEventStreamInitialResponse",
-                "http-1x",
+                HTTP_1X_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -164,9 +181,9 @@ data class ServerCodegenConfig(
                         "alwaysSendEventStreamInitialResponse",
                         DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
                     ),
-               http1x = 
+               http1x =
                     node.get().getBooleanMemberOrDefault(
-                        "http-1x", 
+                        HTTP_1X_CONFIG_KEY,
                         DEFAULT_HTTP_1X,
                     ),
             )

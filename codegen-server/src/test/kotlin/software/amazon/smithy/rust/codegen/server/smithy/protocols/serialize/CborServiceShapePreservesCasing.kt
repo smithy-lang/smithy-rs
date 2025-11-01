@@ -14,6 +14,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSetting
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class CborServiceShapePreservesCasing {
@@ -35,24 +37,23 @@ class CborServiceShapePreservesCasing {
         }
         """.asSmithyModel(smithyVersion = "2")
 
-    val codegenScope =
-        arrayOf(
-            "SerdeJson" to CargoDependency.SerdeJson.toDevDependency().toType(),
-            "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
-            "Hyper" to RuntimeType.Hyper,
-            "Http" to RuntimeType.Http,
-            "Tower" to RuntimeType.Tower,
-            "HashMap" to RuntimeType.HashMap,
-            *RuntimeType.preludeScope,
-        )
-
     @Test
     fun `service shape ID is preserved`() {
         val serviceShape = model.expectShape(ShapeId.from("test#SampleServiceWITHDifferentCASE"))
         serverIntegrationTest(
             model,
             params = IntegrationTestParams(service = serviceShape.id.toString(), additionalSettings = ServerAdditionalSettings.builder().generateCodegenComments().toObjectNode()),
-        ) { _codegenContext, rustCrate ->
+            testCoverage = HttpTestType.BOTH,
+        ) { codegenContext, rustCrate ->
+            val codegenScope = arrayOf(
+                "SerdeJson" to CargoDependency.SerdeJson.toDevDependency().toType(),
+                "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
+                "Http" to codegenContext.httpDependencies().httpModule(),
+                "Tower" to RuntimeType.Tower,
+                "HashMap" to RuntimeType.HashMap,
+                *RuntimeType.preludeScope,
+            )
+
             rustCrate.testModule {
                 rustTemplate(
                     """
@@ -95,7 +96,7 @@ class CborServiceShapePreservesCasing {
                             .method("POST")
                             .header("content-type", "application/cbor")
                             .header("Smithy-Protocol", "rpc-v2-cbor")
-                            .body(#{Hyper}::Body::from(cbor_data))
+                            .body(#{Body:W})
                             .expect("Failed to build request");
 
                         let response = #{Tower}::ServiceExt::oneshot(service, request)
@@ -103,9 +104,7 @@ class CborServiceShapePreservesCasing {
                             .expect("Failed to call service");
                         assert!(response.status().is_success());
 
-                        let body_bytes = #{Hyper}::body::to_bytes(response.into_body())
-                            .await
-                            .expect("could not get bytes from the body");
+                        let body_bytes = #{ReadBodyBytes:W};
                         let data: #{HashMap}<String, serde_json::Value> =
                             #{Ciborium}::de::from_reader(body_bytes.as_ref()).expect("could not convert into BTreeMap");
 
@@ -114,6 +113,8 @@ class CborServiceShapePreservesCasing {
                             .expect("y does not exist");
                         assert_eq!(value, "test response", "response doesn't contain expected value");
                         """,
+                        "Body" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                        "ReadBodyBytes" to ServerHttpTestHelpers.readBodyBytes(codegenContext, "response.into_body()"),
                         *codegenScope,
                     )
                 }
@@ -134,7 +135,7 @@ class CborServiceShapePreservesCasing {
                             .method("POST")
                             .header("content-type", "application/cbor")
                             .header("Smithy-Protocol", "rpc-v2-cbor")
-                            .body(#{Hyper}::Body::from(cbor_data.clone()))
+                            .body(#{Body1:W})
                             .expect("failed to build request");
 
                         let response = #{Tower}::ServiceExt::oneshot(service.clone(), request)
@@ -150,7 +151,7 @@ class CborServiceShapePreservesCasing {
                             .method("POST")
                             .header("content-type", "application/cbor")
                             .header("Smithy-Protocol", "rpc-v2-cbor")
-                            .body(#{Hyper}::Body::from(cbor_data))
+                            .body(#{Body2:W})
                             .expect("failed to build request");
 
                         let response = #{Tower}::ServiceExt::oneshot(service, request)
@@ -160,6 +161,8 @@ class CborServiceShapePreservesCasing {
                         // Should return 404 Not Found
                         assert_eq!(response.status(), #{Http}::StatusCode::NOT_FOUND);
                         """,
+                        "Body1" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data.clone()"),
+                        "Body2" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                         *codegenScope,
                     )
                 }

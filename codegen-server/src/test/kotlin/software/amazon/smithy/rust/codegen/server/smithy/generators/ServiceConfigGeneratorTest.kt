@@ -92,14 +92,16 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
+        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { context, rustCrate ->
+            val smithyHttpServer = context.httpDependencies().smithyHttpServer
             rustCrate.testModule {
-                rust(
+                rustTemplate(
                     """
                     use crate::{SimpleServiceConfig, SimpleServiceConfigError};
-                    use aws_smithy_http_server::plugin::IdentityPlugin;
+                    use #{SmithyHttpServer}::plugin::IdentityPlugin;
                     use crate::server::plugin::PluginStack;
                     """,
+                    "SmithyHttpServer" to smithyHttpServer,
                 )
 
                 unitTest("successful_config_initialization") {
@@ -208,10 +210,11 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
+        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { context, rustCrate ->
+            val smithyHttpServer = context.httpDependencies().smithyHttpServer
             rustCrate.testModule {
                 unitTest("successful_config_initialization_applying_the_three_layers") {
-                    rust(
+                    rustTemplate(
                         """
                         let _: crate::SimpleServiceConfig<
                             // Three Tower layers have been applied.
@@ -225,12 +228,13 @@ internal class ServiceConfigGeneratorTest {
                                     >,
                                 >,
                             >,
-                            aws_smithy_http_server::plugin::IdentityPlugin,
-                            aws_smithy_http_server::plugin::IdentityPlugin,
+                            #{SmithyHttpServer}::plugin::IdentityPlugin,
+                            #{SmithyHttpServer}::plugin::IdentityPlugin,
                         > = crate::SimpleServiceConfig::builder()
                             .three_non_required_layers()
                             .build();
                         """,
+                        "SmithyHttpServer" to smithyHttpServer,
                     )
                 }
 

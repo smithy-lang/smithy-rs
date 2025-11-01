@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 
@@ -43,6 +44,54 @@ internal class Http1xDependencyTest {
             .publicConstrainedTypes(publicConstrainedTypes)
             .generateCodegenComments(true)
             .toObjectNode()
+    }
+
+    private fun verify_http0x_dependencies(testName: String, additionalDeps: List<Triple<String, String, List<String>?>> = emptyList()) = writable {
+        rustTemplate(
+            """
+            let metadata = #{MetadataCommand}::new()
+                .exec()
+                .expect("Failed to run cargo metadata");
+
+            let root_package = metadata.root_package()
+                .expect("Failed to get root package");
+
+            // Check all HTTP 0.x dependencies have minimum versions
+            let http0_crates = parse_crate_min_versions(&[
+                ("http", "0.2.0", None),
+                ("aws-smithy-legacy-http-server", "0.65.7", None),
+                ("aws-smithy-legacy-http", "0.62.5", None),
+                ("aws-smithy-runtime-api", "1.9.1", Some(&["http-02x"])),
+            ]);
+
+            verify_dependencies(&metadata, root_package, &http0_crates);
+
+            // Verify http crate does NOT accept version 1.x
+            let http_dep = root_package.dependencies.iter()
+                .find(|dep| dep.name == "http")
+                .expect("Should have http dependency");
+            let http_req = #{VersionReq}::parse(&http_dep.req.to_string())
+                .expect("Failed to parse http version requirement");
+            let v1 = #{Version}::parse("1.0.0").unwrap();
+            assert!(
+                !http_req.matches(&v1),
+                "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
+            );
+
+            // Should NOT have HTTP 1.x specific dependencies
+            let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
+            for dep_name in http1_only_crates {
+                assert!(
+                    !root_package.dependencies.iter().any(|d| d.name == dep_name),
+                    "Should NOT have `{}` dependency for HTTP 0.x", dep_name
+                );
+            }
+            """,
+            "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
+            "VersionReq" to semver.resolve("VersionReq"),
+            "Version" to semver.resolve("Version"),
+            *preludeScope,
+        )
     }
 
     private fun define_util_functions() = writable {
@@ -172,6 +221,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(http1x = true, publicConstrainedTypes),
                 cargoCommand = "cargo test --all-features"
             ),
+            testCoverage = HttpTestType.HTTP_1_ONLY,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -225,56 +275,13 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(http1x = null, publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
+            testCoverage = HttpTestType.AS_CONFIGURED,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
 
                 unitTest("http_0x_dependencies") {
-                    rustTemplate(
-                        """
-                        let metadata = #{MetadataCommand}::new()
-                            .exec()
-                            .expect("Failed to run cargo metadata");
-
-                        let root_package = metadata.root_package()
-                            .expect("Failed to get root package");
-
-                        // Check all HTTP 0.x dependencies have minimum versions
-                        let http0_crates = parse_crate_min_versions(&[
-                            ("http", "0.2.0", None),
-                            ("aws-smithy-legacy-http-server", "0.65.7", None),
-                            ("aws-smithy-legacy-http", "0.62.5", None),
-                            ("aws-smithy-runtime-api", "1.9.1", Some(&["http-02x"])),
-                        ]);
-
-                        verify_dependencies(&metadata, root_package, &http0_crates);
-
-                        // Verify http crate does NOT accept version 1.x
-                        let http_dep = root_package.dependencies.iter()
-                            .find(|dep| dep.name == "http")
-                            .expect("Should have http dependency");
-                        let http_req = #{VersionReq}::parse(&http_dep.req.to_string())
-                            .expect("Failed to parse http version requirement");
-                        let v1 = #{Version}::parse("1.0.0").unwrap();
-                        assert!(
-                            !http_req.matches(&v1),
-                            "http dependency should NOT accept version 1.x (must be < 1.0), but requirement is: {}", http_dep.req
-                        );
-
-                        // Should NOT have HTTP 1.x specific dependencies
-                        let http1_only_crates = ["http-body-util", "aws-smithy-http", "aws-smithy-http-server"];
-                        for dep_name in http1_only_crates {
-                            assert!(
-                                !root_package.dependencies.iter().any(|d| d.name == dep_name),
-                                "Should NOT have `{}` dependency for HTTP 0.x", dep_name
-                            );
-                        }
-                        """,
-                        "MetadataCommand" to cargoMetadata.resolve("MetadataCommand"),
-                        "VersionReq" to semver.resolve("VersionReq"),
-                        "Version" to semver.resolve("Version"),
-                        *preludeScope,
-                    )
+                    verify_http0x_dependencies("http_0x_dependencies").invoke(this)
                 }
             }
         }
@@ -289,6 +296,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(http1x = true, publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features"
             ),
+            testCoverage = HttpTestType.HTTP_1_ONLY,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -341,6 +349,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(http1x = null, publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
+            testCoverage = HttpTestType.AS_CONFIGURED,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -396,13 +405,33 @@ internal class Http1xDependencyTest {
         }
     }
 
+    @Test
+    fun `SDK with explicit http-1x disabled has correct dependencies`() {
+        val (model, ) = loadSmithyConstraintsModelForProtocol(ModelProtocol.RestJson)
+        serverIntegrationTest(
+            model,
+            IntegrationTestParams(
+                additionalSettings = buildAdditionalSettings(http1x = false, publicConstrainedTypes = false),
+                cargoCommand = "cargo test --all-features",
+            ),
+            testCoverage = HttpTestType.HTTP_0_ONLY,
+        ) { _, rustCrate ->
+            rustCrate.lib {
+                define_util_functions().invoke(this)
+
+                unitTest("explicit_http_0x_disabled") {
+                    verify_http0x_dependencies("explicit_http_0x_disabled").invoke(this)
+                }
+            }
+        }
+    }
+
     companion object {
         @JvmStatic
         fun protocolAndConstrainedTypesProvider(): List<Arguments> {
-            //val protocols = ModelProtocol.values().filter {
-            //    !it.name.matches(Regex("AwsJson.*"))
-            //}
-            val protocols = listOf(ModelProtocol.Rpcv2Cbor)
+            val protocols = ModelProtocol.values().filter {
+                !it.name.matches(Regex("AwsJson.*"))
+            }
             val constrainedSettings = listOf(true, false)
 
             return protocols.flatMap { protocol ->

@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -16,6 +17,9 @@ import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.ServerHttpTestHelpers
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class EventStreamAcceptHeaderTest {
@@ -58,7 +62,7 @@ internal class EventStreamAcceptHeaderTest {
 
     @Test
     fun acceptHeaderTests() {
-        serverIntegrationTest(model) { codegenContext, rustCrate ->
+        serverIntegrationTest(model, testCoverage = HttpTestType.HTTP_0_ONLY) { codegenContext, rustCrate ->
             rustCrate.testModule {
                 generateAcceptHeaderTest(
                     acceptHeader = "application/vnd.amazon.eventstream",
@@ -88,29 +92,32 @@ internal class EventStreamAcceptHeaderTest {
     private fun RustWriter.generateAcceptHeaderTest(
         acceptHeader: String,
         shouldFail: Boolean,
-        codegenContext: CodegenContext,
+        codegenContext: ServerCodegenContext,
         testName: String = acceptHeader.toSnakeCase(),
     ) {
+        val smithyHttpServer = codegenContext.httpDependencies().smithyHttpServer.toType()
+        val httpModule = codegenContext.httpDependencies().httpModule()
         tokioTest("test_header_$testName") {
             rustTemplate(
                 """
-                use aws_smithy_http_server::body::Body;
-                use aws_smithy_http_server::request::FromRequest;
+                use #{SmithyHttpServer}::request::FromRequest;
                 let cbor_empty_bytes = #{Bytes}::copy_from_slice(&#{decode_body_data}(
                     "oA==".as_bytes(),
                     #{MediaType}::from("application/cbor"),
                 ));
 
-                let http_request = ::http::Request::builder()
+                let http_request = #{Http}::Request::builder()
                     .uri("/service/TestService/operation/StreamingOutputOperation")
                     .method("POST")
                     .header("Accept", ${acceptHeader.dq()})
                     .header("Content-Type", "application/cbor")
                     .header("smithy-protocol", "rpc-v2-cbor")
-                    .body(Body::from(cbor_empty_bytes))
+                    .body(#{BodyFromCborBytes})
                 .unwrap();
                 let parsed = crate::input::StreamingOutputOperationInput::from_request(http_request).await;
                 """,
+                "SmithyHttpServer" to smithyHttpServer,
+                "Http" to httpModule,
                 "Bytes" to RuntimeType.Bytes,
                 "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
                 "decode_body_data" to
@@ -118,6 +125,7 @@ internal class EventStreamAcceptHeaderTest {
                         codegenContext.runtimeConfig,
                         "decode_body_data",
                     ),
+                "BodyFromCborBytes" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_empty_bytes")
             )
 
             if (shouldFail) {

@@ -176,6 +176,7 @@ data class HttpDependencies(
         val baseDep = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.smithyProtocolTestHelpers(runtimeConfig)
         return if (httpBodyUtil != null) {
             // HTTP 1.x: add http-1x feature
+            // Note: "http-1x" is the feature name defined by smithy-protocol-test-helpers crate, not our config key
             baseDep.withFeature("http-1x")
         } else {
             // HTTP 0.x: http-02x is the default, no need to add it explicitly
