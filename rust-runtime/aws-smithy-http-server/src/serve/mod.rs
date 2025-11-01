@@ -253,8 +253,13 @@ use hyper_util::service::TowerToHyperService;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
+mod strategy;
 
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
+pub use self::strategy::{
+    ConnectionStrategy, ShutdownStrategy, WithGracefulShutdown, WithUpgrades, WithoutGracefulShutdown,
+    WithoutUpgrades,
+};
 
 /// An incoming stream that bundles connection information.
 ///
@@ -543,17 +548,30 @@ where
                 _marker,
             } = self;
 
-            loop {
-                let (io, remote_addr) = listener.accept().await;
-                handle_connection(
-                    &mut make_service,
-                    io,
-                    remote_addr,
-                    hyper_builder.as_ref(),
-                    use_upgrades,
-                    None,
-                )
-                .await;
+            if use_upgrades {
+                loop {
+                    let (io, remote_addr) = listener.accept().await;
+                    handle_connection_strategy::<L, M, S, B, WithUpgrades, WithoutGracefulShutdown>(
+                        &mut make_service,
+                        io,
+                        remote_addr,
+                        hyper_builder.as_ref(),
+                        None,
+                    )
+                    .await;
+                }
+            } else {
+                loop {
+                    let (io, remote_addr) = listener.accept().await;
+                    handle_connection_strategy::<L, M, S, B, WithoutUpgrades, WithoutGracefulShutdown>(
+                        &mut make_service,
+                        io,
+                        remote_addr,
+                        hyper_builder.as_ref(),
+                        None,
+                    )
+                    .await;
+                }
             }
         })
     }
@@ -676,24 +694,46 @@ where
             let graceful = GracefulShutdown::new();
             let mut signal = std::pin::pin!(signal);
 
-            loop {
-                tokio::select! {
-                    result = listener.accept() => {
-                        let (io, remote_addr) = result;
+            if use_upgrades {
+                loop {
+                    tokio::select! {
+                        result = listener.accept() => {
+                            let (io, remote_addr) = result;
 
-                        handle_connection(
-                            &mut make_service,
-                            io,
-                            remote_addr,
-                            hyper_builder.as_ref(),
-                            use_upgrades,
-                            Some(&graceful),
-                        )
-                        .await;
+                            handle_connection_strategy::<L, M, S, B, WithUpgrades, WithGracefulShutdown>(
+                                &mut make_service,
+                                io,
+                                remote_addr,
+                                hyper_builder.as_ref(),
+                                Some(&graceful),
+                            )
+                            .await;
+                        }
+                        _ = signal.as_mut() => {
+                            tracing::debug!("received graceful shutdown signal, not accepting new connections");
+                            break;
+                        }
                     }
-                    _ = signal.as_mut() => {
-                        tracing::debug!("received graceful shutdown signal, not accepting new connections");
-                        break;
+                }
+            } else {
+                loop {
+                    tokio::select! {
+                        result = listener.accept() => {
+                            let (io, remote_addr) = result;
+
+                            handle_connection_strategy::<L, M, S, B, WithoutUpgrades, WithGracefulShutdown>(
+                                &mut make_service,
+                                io,
+                                remote_addr,
+                                hyper_builder.as_ref(),
+                                Some(&graceful),
+                            )
+                            .await;
+                        }
+                        _ = signal.as_mut() => {
+                            tracing::debug!("received graceful shutdown signal, not accepting new connections");
+                            break;
+                        }
                     }
                 }
             }
@@ -726,6 +766,60 @@ where
     }
 }
 
+async fn handle_connection_strategy<L, M, S, B, CS, SS>(
+    make_service: &mut M,
+    conn_io: <L as Listener>::Io,
+    remote_addr: <L as Listener>::Addr,
+    hyper_builder: Option<&Builder<TokioExecutor>>,
+    graceful: Option<&GracefulShutdown>,
+) where
+    L: Listener,
+    L::Addr: Debug,
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    B: HttpBody + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    CS: ConnectionStrategy,
+    SS: ShutdownStrategy,
+{
+    let watcher = graceful.map(|g| g.watcher());
+    let tokio_io = TokioIo::new(conn_io);
+
+    tracing::trace!("connection {remote_addr:?} accepted");
+
+    make_service
+        .ready()
+        .await
+        .expect("make_service error type is Infallible and cannot fail");
+
+    let tower_service = make_service
+        .call(IncomingStream {
+            io: &tokio_io,
+            remote_addr,
+        })
+        .await
+        .expect("make_service error type is Infallible and cannot fail");
+
+    let hyper_service = TowerToHyperService::new(tower_service);
+
+    let mut builder = hyper_builder
+        .cloned()
+        .unwrap_or_else(|| Builder::new(TokioExecutor::new()));
+
+    tokio::spawn(async move {
+        let conn = CS::serve(&mut builder, tokio_io, hyper_service);
+        let result = SS::execute(watcher, conn).await;
+
+        if let Err(err) = result {
+            tracing::error!(error = ?err, "error serving connection");
+        }
+    });
+}
+
+#[allow(dead_code)]
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
