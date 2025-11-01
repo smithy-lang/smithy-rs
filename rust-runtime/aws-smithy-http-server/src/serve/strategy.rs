@@ -22,17 +22,17 @@ use hyper_util::service::TowerToHyperService;
 /// avoiding runtime if statements by using monomorphization.
 pub trait ConnectionStrategy {
     /// Serve a connection using this strategy.
+    ///
+    /// Note: This only requires an immutable reference to the builder because
+    /// Hyper's `serve_connection` methods don't mutate the builder.
     fn serve<S, B, I>(
-        builder: &mut Builder<TokioExecutor>,
+        builder: &Builder<TokioExecutor>,
         io: TokioIo<I>,
         service: TowerToHyperService<S>,
     ) -> impl GracefulConnection<Error: Debug> + Send
     where
         I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
-        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>>
-            + Clone
-            + Send
-            + 'static,
+        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
         S::Future: Send,
         S::Error: std::error::Error + Send + Sync + 'static,
         B: http_body::Body + Send + 'static,
@@ -49,21 +49,20 @@ pub struct WithUpgrades;
 
 impl ConnectionStrategy for WithUpgrades {
     fn serve<S, B, I>(
-        builder: &mut Builder<TokioExecutor>,
+        builder: &Builder<TokioExecutor>,
         io: TokioIo<I>,
         service: TowerToHyperService<S>,
     ) -> impl GracefulConnection<Error: Debug> + Send
     where
         I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
-        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>>
-            + Clone
-            + Send
-            + 'static,
-        S::Future: Send,
-        S::Error: std::error::Error + Send + Sync + 'static,
+        // Body bounds
         B: http_body::Body + Send + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+        // Service Bounds
+        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
+        S::Future: Send,
+        S::Error: std::error::Error + Send + Sync + 'static,
     {
         builder.serve_connection_with_upgrades(io, service)
     }
@@ -79,21 +78,20 @@ pub struct WithoutUpgrades;
 
 impl ConnectionStrategy for WithoutUpgrades {
     fn serve<S, B, I>(
-        builder: &mut Builder<TokioExecutor>,
+        builder: &Builder<TokioExecutor>,
         io: TokioIo<I>,
         service: TowerToHyperService<S>,
     ) -> impl GracefulConnection<Error: Debug> + Send
     where
         I: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
-        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>>
-            + Clone
-            + Send
-            + 'static,
-        S::Future: Send,
-        S::Error: std::error::Error + Send + Sync + 'static,
+        // Body Bounds
         B: http_body::Body + Send + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+        // Service Bounds
+        S: tower::Service<http::Request<hyper::body::Incoming>, Response = http::Response<B>> + Clone + Send + 'static,
+        S::Future: Send,
+        S::Error: std::error::Error + Send + Sync + 'static,
     {
         builder.serve_connection(io, service)
     }
@@ -105,48 +103,48 @@ impl ConnectionStrategy for WithoutUpgrades {
 /// avoiding runtime branching on whether graceful shutdown is enabled.
 pub trait ShutdownStrategy {
     /// Execute the connection future with appropriate shutdown handling.
-    ///
-    /// For strategies that use graceful shutdown, a `Watcher` must be provided.
-    ///
-    /// The default implementation simply returns the connection without
-    /// any graceful shutdown coordination.
-    fn execute<C>(
-        _watcher: Option<Watcher>,
-        conn: C,
-    ) -> impl Future<Output = C::Output> + Send
+    fn execute<C>(self, conn: C) -> impl Future<Output = C::Output> + Send
     where
-        C: GracefulConnection + Send,
-    {
-        conn
-    }
+        C: GracefulConnection + Send;
 }
 
 /// Shutdown strategy that uses graceful shutdown coordination.
 ///
 /// This strategy wraps the connection with a watcher that will trigger
 /// graceful shutdown when the shutdown signal is received.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct WithGracefulShutdown;
+#[derive(Debug)]
+pub struct WithGracefulShutdown {
+    watcher: Watcher,
+}
+
+impl WithGracefulShutdown {
+    /// Create a new graceful shutdown strategy with the given watcher.
+    pub fn new(watcher: Watcher) -> Self {
+        Self { watcher }
+    }
+}
 
 impl ShutdownStrategy for WithGracefulShutdown {
-    fn execute<C>(
-        watcher: Option<Watcher>,
-        conn: C,
-    ) -> impl Future<Output = C::Output> + Send
+    fn execute<C>(self, conn: C) -> impl Future<Output = C::Output> + Send
     where
         C: GracefulConnection + Send,
     {
-        watcher.expect("WithGracefulShutdown requires a watcher").watch(conn)
+        self.watcher.watch(conn)
     }
 }
 
 /// Shutdown strategy that does not use graceful shutdown.
 ///
 /// This strategy simply awaits the connection future directly without
-/// any shutdown coordination. It uses the default trait implementation.
+/// any shutdown coordination.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct WithoutGracefulShutdown;
 
 impl ShutdownStrategy for WithoutGracefulShutdown {
-    // Uses default implementation
+    fn execute<C>(self, conn: C) -> impl Future<Output = C::Output> + Send
+    where
+        C: GracefulConnection + Send,
+    {
+        conn
+    }
 }

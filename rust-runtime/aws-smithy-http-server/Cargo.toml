@@ -19,12 +19,12 @@ request-id = ["dep:uuid"]
 aws-lambda = ["dep:lambda_http"]
 
 [dependencies]
-aws-smithy-cbor = { path = "../aws-smithy-cbor" }
-aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
-aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
-aws-smithy-xml = { path = "../aws-smithy-xml" }
+aws-smithy-cbor = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-cbor" }
+aws-smithy-http = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
+aws-smithy-json = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-json" }
+aws-smithy-runtime-api = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-runtime-api" }
+aws-smithy-types = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-xml = { path = "/Volumes/workplace/upgrade-http/server/rust-runtime/aws-smithy-xml" }
 
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
@@ -52,6 +52,9 @@ uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 [dev-dependencies]
 pretty_assertions = "1"
 hyper-util = { version = "0.1", features = ["tokio", "client", "client-legacy", "http1", "http2"] }
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tower = { version = "0.4.13", features = ["util", "make", "limit"] }
+tower-http = { version = "0.6", features = ["timeout"] }
 
 [package.metadata.docs.rs]
 all-features = true
