@@ -34,9 +34,9 @@ impl<P> ModelPlugins<P> {
     /// Apply a new model plugin after the ones that have already been registered.
     ///
     /// ```rust
-    /// use aws_smithy_http_server::plugin::ModelPlugins;
-    /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-    /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+    /// use aws_smithy_legacy_http_server::plugin::ModelPlugins;
+    /// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+    /// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as MetricsPlugin;
     ///
     /// let model_plugins = ModelPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
     /// ```

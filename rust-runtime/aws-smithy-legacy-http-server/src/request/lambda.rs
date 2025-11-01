@@ -22,7 +22,7 @@ use crate::{body::BoxBody, response::IntoResponse};
 /// Use [`LambdaHandler`](crate::routing::LambdaHandler) to ensure it's present.
 #[non_exhaustive]
 #[derive(Debug, Error)]
-#[error("`Context` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
+#[error("`Context` is not present in the `http::Request` extensions - consider using `aws_smithy_legacy_http_server::routing::LambdaHandler`")]
 pub struct MissingContext;
 
 impl<Protocol> IntoResponse<Protocol> for MissingContext {
@@ -41,9 +41,9 @@ impl<P> FromParts<P> for Context {
 
 #[derive(Debug, Error)]
 enum MissingGatewayContextTypeV1 {
-    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
+    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_legacy_http_server::routing::LambdaHandler`")]
     MissingRequestContext,
-    #[error("`RequestContext::ApiGatewayV2` is present in the `http::Request` extensions - consider using the `aws_smithy_http_server::request::lambda::ApiGatewayV2httpRequestContext` extractor")]
+    #[error("`RequestContext::ApiGatewayV2` is present in the `http::Request` extensions - consider using the `aws_smithy_legacy_http_server::request::lambda::ApiGatewayV2httpRequestContext` extractor")]
     VersionMismatch,
 }
 
@@ -81,9 +81,9 @@ impl<P> FromParts<P> for ApiGatewayProxyRequestContext {
 
 #[derive(Debug, Error)]
 enum MissingGatewayContextTypeV2 {
-    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::LambdaHandler`")]
+    #[error("`RequestContext` is not present in the `http::Request` extensions - consider using `aws_smithy_legacy_http_server::routing::LambdaHandler`")]
     MissingRequestContext,
-    #[error("`RequestContext::ApiGatewayV1` is present in the `http::Request` extensions - consider using the `aws_smithy_http_server::request::lambda::ApiGatewayProxyRequestContext` extractor")]
+    #[error("`RequestContext::ApiGatewayV1` is present in the `http::Request` extensions - consider using the `aws_smithy_legacy_http_server::request::lambda::ApiGatewayProxyRequestContext` extractor")]
     VersionMismatch,
 }
 

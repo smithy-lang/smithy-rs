@@ -9,7 +9,7 @@
 //! # Example
 //!
 //! ```no_run
-//! use aws_smithy_http_server::layer::alb_health_check::AlbHealthCheckLayer;
+//! use aws_smithy_legacy_http_server::layer::alb_health_check::AlbHealthCheckLayer;
 //! use hyper::StatusCode;
 //! use tower::Layer;
 //!

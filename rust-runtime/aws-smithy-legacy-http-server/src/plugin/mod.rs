@@ -39,9 +39,9 @@
 //! # Filtered application of a HTTP [`Layer`](tower::Layer)
 //!
 //! ```
-//! # use aws_smithy_http_server::plugin::*;
-//! # use aws_smithy_http_server::scope;
-//! # use aws_smithy_http_server::shape_id::ShapeId;
+//! # use aws_smithy_legacy_http_server::plugin::*;
+//! # use aws_smithy_legacy_http_server::scope;
+//! # use aws_smithy_legacy_http_server::shape_id::ShapeId;
 //! # let layer = ();
 //! # #[derive(PartialEq)]
 //! # enum Operation { GetPokemonSpecies }
@@ -67,7 +67,7 @@
 //! # Construct a [`Plugin`] from a closure that takes as input the operation name
 //!
 //! ```rust
-//! # use aws_smithy_http_server::{service::*, operation::OperationShape, plugin::Plugin, shape_id::ShapeId};
+//! # use aws_smithy_legacy_http_server::{service::*, operation::OperationShape, plugin::Plugin, shape_id::ShapeId};
 //! # pub enum Operation { CheckHealth, GetPokemonSpecies }
 //! # impl Operation { fn shape_id(&self) -> ShapeId { ShapeId::new("", "", "") }}
 //! # pub struct CheckHealth;
@@ -83,7 +83,7 @@
 //! # impl OperationShape for GetPokemonSpecies { const ID: ShapeId = ShapeId::new("", "", ""); type Input = (); type Output = (); type Error = (); }
 //! # impl ContainsOperation<CheckHealth> for PokemonService { const VALUE: Operation = Operation::CheckHealth; }
 //! # impl ContainsOperation<GetPokemonSpecies> for PokemonService { const VALUE: Operation = Operation::GetPokemonSpecies; }
-//! use aws_smithy_http_server::plugin::plugin_from_operation_fn;
+//! use aws_smithy_legacy_http_server::plugin::plugin_from_operation_fn;
 //! use tower::layer::layer_fn;
 //!
 //! struct FooService<S> {
@@ -108,7 +108,7 @@
 //! # Combine [`Plugin`]s
 //!
 //! ```no_run
-//! # use aws_smithy_http_server::plugin::*;
+//! # use aws_smithy_legacy_http_server::plugin::*;
 //! # struct Foo;
 //! # impl HttpMarker for Foo { }
 //! # let a = Foo; let b = Foo;
@@ -132,7 +132,7 @@
 //! HTTP plugin or a model plugin.
 //!
 //! ```no_run
-//! use aws_smithy_http_server::{
+//! use aws_smithy_legacy_http_server::{
 //!     operation::OperationShape,
 //!     service::ServiceShape,
 //!     plugin::{Plugin, HttpMarker, HttpPlugins, ModelMarker},
@@ -278,7 +278,7 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// ```no_run
 /// use std::marker::PhantomData;
 ///
-/// use aws_smithy_http_server::{operation::OperationShape, plugin::{ModelMarker, Plugin}};
+/// use aws_smithy_legacy_http_server::{operation::OperationShape, plugin::{ModelMarker, Plugin}};
 /// use tower::Service;
 /// # pub struct SimpleService;
 /// # pub struct CheckHealth;
@@ -286,8 +286,8 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// #     health_info: (),
 /// # }
 /// # pub struct CheckHealthOutput;
-/// # impl aws_smithy_http_server::operation::OperationShape for CheckHealth {
-/// #     const ID: aws_smithy_http_server::shape_id::ShapeId = aws_smithy_http_server::shape_id::ShapeId::new(
+/// # impl aws_smithy_legacy_http_server::operation::OperationShape for CheckHealth {
+/// #     const ID: aws_smithy_legacy_http_server::shape_id::ShapeId = aws_smithy_legacy_http_server::shape_id::ShapeId::new(
 /// #         "com.amazonaws.simple#CheckHealth",
 /// #         "com.amazonaws.simple",
 /// #         "CheckHealth",
@@ -353,8 +353,8 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// // to the the only operation it can be applied to, the `CheckHealth` operation. If we apply the
 /// // plugin to other operations, we will get a compilation error.
 ///
-/// use aws_smithy_http_server::plugin::Scoped;
-/// use aws_smithy_http_server::scope;
+/// use aws_smithy_legacy_http_server::plugin::Scoped;
+/// use aws_smithy_legacy_http_server::scope;
 ///
 /// pub fn main() {
 ///     scope! {
@@ -379,7 +379,7 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// ```no_run
 /// use std::marker::PhantomData;
 ///
-/// use aws_smithy_http_server::operation::OperationShape;
+/// use aws_smithy_legacy_http_server::operation::OperationShape;
 /// use tower::Service;
 /// # pub struct SimpleService;
 /// # pub struct CheckHealth;
@@ -387,8 +387,8 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 /// #     health_info: (),
 /// # }
 /// # pub struct CheckHealthOutput;
-/// # impl aws_smithy_http_server::operation::OperationShape for CheckHealth {
-/// #     const ID: aws_smithy_http_server::shape_id::ShapeId = aws_smithy_http_server::shape_id::ShapeId::new(
+/// # impl aws_smithy_legacy_http_server::operation::OperationShape for CheckHealth {
+/// #     const ID: aws_smithy_legacy_http_server::shape_id::ShapeId = aws_smithy_legacy_http_server::shape_id::ShapeId::new(
 /// #         "com.amazonaws.simple#CheckHealth",
 /// #         "com.amazonaws.simple",
 /// #         "CheckHealth",
@@ -428,9 +428,9 @@ impl<Pl> HttpMarker for &Pl where Pl: HttpMarker {}
 ///
 /// // In `main.rs`:
 ///
-/// use aws_smithy_http_server::plugin::LayerPlugin;
-/// use aws_smithy_http_server::plugin::Scoped;
-/// use aws_smithy_http_server::scope;
+/// use aws_smithy_legacy_http_server::plugin::LayerPlugin;
+/// use aws_smithy_legacy_http_server::plugin::Scoped;
+/// use aws_smithy_legacy_http_server::scope;
 ///
 /// fn new_check_health_service<S, Ext>(inner: S) -> CheckHealthService<S, Ext> {
 ///     CheckHealthService {

@@ -53,8 +53,8 @@ impl<Inner, F> ModelMarker for FilterByOperation<Inner, F> where Inner: ModelMar
 /// # Example
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::filter_by_operation;
-/// # use aws_smithy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId, service::{ServiceShape, ContainsOperation}};
+/// use aws_smithy_legacy_http_server::plugin::filter_by_operation;
+/// # use aws_smithy_legacy_http_server::{plugin::Plugin, operation::OperationShape, shape_id::ShapeId, service::{ServiceShape, ContainsOperation}};
 /// # struct Pl;
 /// # struct PokemonService;
 /// # #[derive(PartialEq, Eq)]

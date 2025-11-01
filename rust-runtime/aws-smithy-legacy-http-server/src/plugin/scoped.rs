@@ -55,7 +55,7 @@ impl<P, Op, Pl, T> ConditionalApply<P, Op, Pl, T> for False {
 /// # Example
 ///
 /// ```rust
-/// # use aws_smithy_http_server::{scope, plugin::Scoped};
+/// # use aws_smithy_legacy_http_server::{scope, plugin::Scoped};
 /// # struct OperationA; struct OperationB; struct OperationC;
 /// # let plugin = ();
 ///
@@ -118,7 +118,7 @@ impl<Scope, Pl> ModelMarker for Scoped<Scope, Pl> where Pl: ModelMarker {}
 /// For a service with three operations: `OperationA`, `OperationB`, `OperationC`.
 ///
 /// ```rust
-/// # use aws_smithy_http_server::scope;
+/// # use aws_smithy_legacy_http_server::scope;
 /// # struct OperationA; struct OperationB; struct OperationC;
 /// scope! {
 ///     struct OnlyAB {

@@ -129,7 +129,7 @@ pub enum RequestRejection {
     /// Used when failing to parse HTTP headers that are bound to input members with the `httpHeader`
     /// or the `httpPrefixHeaders` traits.
     #[error("error binding request HTTP headers: {0}")]
-    HeaderParse(#[from] aws_smithy_legacy_http::header::ParseError),
+    HeaderParse(#[from] aws_smithy_http::header::ParseError),
 
     // In theory, the next two errors should never happen because the router should have already
     // rejected the request.
