@@ -19,11 +19,9 @@ type ServiceRequest = http::Request<BoxBodySync>;
 /// A [`Service`] that takes a `lambda_http::Request` and converts
 /// it to `http::Request<BoxBody>`.
 ///
-/// **Version Compatibility:**
-/// - For HTTP 0.x: Compatible with [`lambda_http`](https://docs.rs/lambda_http) ^0.8.0
-/// - For HTTP 1.x: Compatible with [`lambda_http`](https://docs.rs/lambda_http) ^0.13.0
-///
-/// Enable the `aws-lambda` feature for HTTP 0.x support, or `aws-lambda-http-1x` feature for HTTP 1.x support.
+/// **This version is only guaranteed to be compatible with
+/// [`lambda_http`](https://docs.rs/lambda_http) ^0.17.** Please ensure that your service crate's
+/// `Cargo.toml` depends on a compatible version.
 ///
 /// [`Service`]: tower::Service
 #[derive(Debug, Clone)]

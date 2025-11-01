@@ -6,8 +6,7 @@
 //! HTTP body utilities.
 //!
 //! This module provides a stable API for body handling regardless of the
-//! underlying HTTP version. The implementation uses conditional compilation
-//! to select the appropriate types and functions based on the `http-1x` feature.
+//! underlying HTTP version.
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
@@ -294,10 +293,7 @@ mod tests {
         use futures_util::stream;
 
         // Test that Into<Bytes> works for various types
-        let chunks = vec![
-            Ok::<_, std::io::Error>("string slice"),
-            Ok("another string"),
-        ];
+        let chunks = vec![Ok::<_, std::io::Error>("string slice"), Ok("another string")];
 
         let stream = stream::iter(chunks);
         let body = wrap_stream(stream);
