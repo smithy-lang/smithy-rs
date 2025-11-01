@@ -1,14 +1,14 @@
 [package]
 name = "aws-smithy-legacy-http-server"
-version = "0.65.7"
-authors = ["Smithy Legacy Rust Server <smithy-rs-server@amazon.com>"]
+version = "0.65.8"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
 keywords = ["smithy", "framework", "web", "api", "aws"]
 categories = ["asynchronous", "web-programming", "api-bindings"]
 description = """
-Legacy server runtime for Smithy Rust Server Framework.
+Server runtime for Smithy Rust Server Framework.
 """
 publish = true
 
@@ -18,12 +18,12 @@ unredacted-logging = []
 request-id = ["dep:uuid"]
 
 [dependencies]
-aws-smithy-legacy-http = { path = "../aws-smithy-legacy-http", features = ["rt-tokio", "event-stream"] }
+aws-smithy-http = { path = "../aws-smithy-legacy-http", features = ["rt-tokio"], package = "aws-smithy-legacy-http" }
 aws-smithy-json = { path = "../aws-smithy-json" }
-aws-smithy-cbor = { path = "../aws-smithy-cbor" }
-aws-smithy-xml = { path = "../aws-smithy-xml" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
+aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
 http = "0.2.9"

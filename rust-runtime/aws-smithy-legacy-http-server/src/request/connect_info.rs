@@ -24,7 +24,7 @@ use super::{internal_server_error, FromParts};
 #[non_exhaustive]
 #[derive(Debug, Error)]
 #[error(
-    "`ConnectInfo` is not present in the `http::Request` extensions - consider using `aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo`"
+    "`ConnectInfo` is not present in the `http::Request` extensions - consider using `aws_smithy_legacy_http_server::routing::IntoMakeServiceWithConnectInfo`"
 )]
 pub struct MissingConnectInfo;
 

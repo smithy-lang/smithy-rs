@@ -115,7 +115,7 @@ impl From<&PathSpec> for Regex {
                 .fold(String::new(), |a, b| a + sep + &b)
         };
 
-        Regex::new(&format!("^{}$", re)).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+        Regex::new(&format!("^{re}$")).expect("invalid `Regex` from `PathSpec`; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
     }
 }
 

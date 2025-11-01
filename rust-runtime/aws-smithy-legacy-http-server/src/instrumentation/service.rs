@@ -88,8 +88,8 @@ where
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
-/// # use aws_smithy_http_server::shape_id::ShapeId;
+/// # use aws_smithy_legacy_http_server::instrumentation::{sensitivity::{*, uri::*, headers::*}, *};
+/// # use aws_smithy_legacy_http_server::shape_id::ShapeId;
 /// # use tower::{Service, service_fn};
 /// # use http::{Request, Response};
 /// # async fn f(request: Request<()>) -> Result<Response<()>, ()> { Ok(Response::new(())) }

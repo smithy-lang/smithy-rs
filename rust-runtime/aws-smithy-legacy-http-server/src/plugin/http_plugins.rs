@@ -18,9 +18,9 @@ use super::{HttpMarker, LayerPlugin};
 /// have already been registered.
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::HttpPlugins;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+/// use aws_smithy_legacy_http_server::plugin::HttpPlugins;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as MetricsPlugin;
 ///
 /// let http_plugins = HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
 /// ```
@@ -39,12 +39,12 @@ use super::{HttpMarker, LayerPlugin};
 /// `CheckHealth` operation:
 ///
 /// ```rust
-/// use aws_smithy_http_server::scope;
-/// use aws_smithy_http_server::plugin::{HttpPlugins, Scoped};
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
-/// use aws_smithy_http_server::shape_id::ShapeId;
+/// use aws_smithy_legacy_http_server::scope;
+/// use aws_smithy_legacy_http_server::plugin::{HttpPlugins, Scoped};
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as AuthPlugin;
+/// use aws_smithy_legacy_http_server::shape_id::ShapeId;
 /// # #[derive(PartialEq)]
 /// # enum Operation { CheckHealth }
 /// # struct CheckHealth;
@@ -79,10 +79,10 @@ use super::{HttpMarker, LayerPlugin};
 /// `HttpPlugins` to the current `HttpPlugins`:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{IdentityPlugin, HttpPlugins, PluginStack};
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
+/// use aws_smithy_legacy_http_server::plugin::{IdentityPlugin, HttpPlugins, PluginStack};
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
 /// pub fn get_bundled_http_plugins() -> HttpPlugins<PluginStack<MetricsPlugin, PluginStack<LoggingPlugin, IdentityPlugin>>> {
 ///     HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin)
@@ -100,9 +100,9 @@ use super::{HttpMarker, LayerPlugin};
 /// This is a simple example using `AuthPlugin`:
 ///
 /// ```rust
-/// use aws_smithy_http_server::plugin::{HttpPlugins, PluginStack};
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-/// # use aws_smithy_http_server::plugin::IdentityPlugin as AuthPlugin;
+/// use aws_smithy_legacy_http_server::plugin::{HttpPlugins, PluginStack};
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+/// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as AuthPlugin;
 ///
 /// pub trait AuthPluginExt<CurrentPlugins> {
 ///     fn with_auth(self) -> HttpPlugins<PluginStack<AuthPlugin, CurrentPlugins>>;
@@ -141,9 +141,9 @@ impl<P> HttpPlugins<P> {
     /// Apply a new HTTP plugin after the ones that have already been registered.
     ///
     /// ```rust
-    /// use aws_smithy_http_server::plugin::HttpPlugins;
-    /// # use aws_smithy_http_server::plugin::IdentityPlugin as LoggingPlugin;
-    /// # use aws_smithy_http_server::plugin::IdentityPlugin as MetricsPlugin;
+    /// use aws_smithy_legacy_http_server::plugin::HttpPlugins;
+    /// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as LoggingPlugin;
+    /// # use aws_smithy_legacy_http_server::plugin::IdentityPlugin as MetricsPlugin;
     ///
     /// let http_plugins = HttpPlugins::new().push(LoggingPlugin).push(MetricsPlugin);
     /// ```

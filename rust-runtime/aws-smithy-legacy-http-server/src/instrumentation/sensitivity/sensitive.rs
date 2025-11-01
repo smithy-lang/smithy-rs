@@ -22,7 +22,7 @@ use super::REDACTED;
 /// # Example
 ///
 /// ```
-/// # use aws_smithy_http_server::instrumentation::sensitivity::Sensitive;
+/// # use aws_smithy_legacy_http_server::instrumentation::sensitivity::Sensitive;
 /// # let address = "";
 /// tracing::debug!(
 ///     name = %Sensitive("Alice"),
@@ -78,11 +78,11 @@ mod tests {
     fn debug() {
         let inner = "hello world";
         let sensitive = Sensitive(inner);
-        let actual = format!("{:?}", sensitive);
+        let actual = format!("{sensitive:?}");
         let expected = if cfg!(feature = "unredacted-logging") {
-            format!("{:?}", inner)
+            format!("{inner:?}")
         } else {
-            format!("{:?}", REDACTED)
+            format!("{REDACTED:?}")
         };
         assert_eq!(actual, expected)
     }
@@ -91,7 +91,7 @@ mod tests {
     fn display() {
         let inner = "hello world";
         let sensitive = Sensitive(inner);
-        let actual = format!("{}", sensitive);
+        let actual = format!("{sensitive}");
         let expected = if cfg!(feature = "unredacted-logging") {
             inner.to_string()
         } else {
