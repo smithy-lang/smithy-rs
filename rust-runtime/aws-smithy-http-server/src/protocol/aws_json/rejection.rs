@@ -11,6 +11,8 @@ use crate::http;
 
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing JSON-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]

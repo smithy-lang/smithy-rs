@@ -131,6 +131,47 @@
 //! serve(listener, app.into_make_service()).await?;
 //! ```
 //!
+//! ## Timeouts and Connection Management
+//!
+//! ### Available Timeout Types
+//!
+//! | Timeout Type | What It Does | How to Configure |
+//! |--------------|--------------|------------------|
+//! | **Header Read** | Time limit for reading HTTP headers | `.configure_hyper()` with `.http1().header_read_timeout()` |
+//! | **Request** | Time limit for processing one request | Tower's `TimeoutLayer` |
+//! | **Connection Duration** | Total connection lifetime limit | Custom accept loop with `tokio::time::timeout` |
+//! | **HTTP/2 Keep-Alive** | Idle timeout between HTTP/2 requests | `.configure_hyper()` with `.http2().keep_alive_*()` |
+//!
+//! **Examples:**
+//! - `examples/header_read_timeout.rs` - Configure header read timeout
+//! - `examples/request_timeout.rs` - Add request-level timeouts
+//! - `examples/custom_accept_loop.rs` - Implement connection duration limits
+//! - `examples/http2_keepalive.rs` - Configure HTTP/2 keep-alive
+//! - `examples/connection_limiting.rs` - Limit concurrent connections
+//! - `examples/request_concurrency_limiting.rs` - Limit concurrent requests
+//!
+//! ### Connection Duration vs Idle Timeout
+//!
+//! **Connection duration timeout**: Closes the connection after N seconds total, regardless of activity.
+//! Implemented with `tokio::time::timeout` wrapping the connection future.
+//!
+//! **Idle timeout**: Closes the connection only when inactive between requests.
+//! - HTTP/2: Available via `.keep_alive_interval()` and `.keep_alive_timeout()`
+//! - HTTP/1.1: Not available without modifying Hyper
+//!
+//! See `examples/custom_accept_loop.rs` for a working connection duration timeout example.
+//!
+//! ### Connection Limiting vs Request Limiting
+//!
+//! **Connection limiting** (`.limit_connections()`): Limits the number of TCP connections.
+//! Use this to prevent socket/file descriptor exhaustion.
+//!
+//! **Request limiting** (`ConcurrencyLimitLayer`): Limits in-flight requests.
+//! Use this to prevent work queue exhaustion. With HTTP/2, one connection can have multiple
+//! requests in flight simultaneously.
+//!
+//! Most applications should use both - they protect different layers.
+//!
 //! ## Troubleshooting
 //!
 //! ### Type Errors
@@ -242,19 +283,110 @@ use std::future::{Future, IntoFuture};
 use std::io;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::time::Duration;
 
 use http_body::Body as HttpBody;
 use hyper::body::Incoming;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
-use hyper_util::server::graceful::GracefulShutdown;
 use hyper_util::service::TowerToHyperService;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
+mod strategy;
 
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
+pub use self::strategy::{
+    ConnectionStrategy, HyperUtilShutdown, NoShutdown, ShutdownStrategy, WithUpgrades, WithoutUpgrades,
+};
+
+// ============================================================================
+// Type Bounds Documentation
+// ============================================================================
+//
+// ## Body Bounds (B)
+// HTTP response bodies must satisfy:
+// - `B: HttpBody + Send + 'static` - Implement the body trait and be sendable
+// - `B::Data: Send` - Data chunks must be sendable across threads
+// - `B::Error: Into<Box<dyn StdError + Send + Sync>>` - Errors must be convertible
+//
+// ## Service Bounds (S)
+//
+// The `S` type parameter represents a **per-connection HTTP service** - a Tower service
+// that handles individual HTTP requests and returns HTTP responses.
+//
+// Required bounds:
+// - `S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible>`
+//
+//   This is the core Tower Service trait. It means:
+//   * **Input**: Takes an HTTP request with a streaming body (`Incoming` from Hyper)
+//   * **Output**: Returns an HTTP response with body type `B`
+//   * **Error**: Must be `Infallible`, meaning the service never returns errors at the
+//     Tower level. Any application errors must be converted into HTTP responses
+//     (e.g., 500 Internal Server Error) before reaching this layer.
+//
+// - `S: Clone + Send + 'static`
+//   * **Clone**: Each HTTP/1.1 or HTTP/2 connection may handle multiple requests
+//     sequentially or concurrently. The service must be cloneable so each request
+//     can get its own copy.
+//   * **Send**: The service will be moved into a spawned Tokio task, so it must be
+//     safe to send across thread boundaries.
+//   * **'static**: No borrowed references - the service must own all its data since
+//     it will outlive the connection setup phase.
+//
+// - `S::Future: Send`
+//   The future returned by `Service::call()` must also be `Send` so it can be
+//   polled from any thread in Tokio's thread pool.
+//
+// ## MakeService Bounds (M)
+//
+// The `M` type parameter represents a **service factory** - a Tower service that
+// creates a new `S` service for each incoming connection. This allows us to customize
+// services based on connection metadata (remote address, TLS info, etc.).
+//
+// Connection Info → Service Factory → Per-Connection Service
+//
+// Required bounds:
+// - `M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S>`
+//
+//   This is the service factory itself:
+//   * **Input**: `IncomingStream<'a, L>` - A struct containing connection metadata:
+//     - `io: &'a TokioIo<L::Io>` - A borrowed reference to the connection's IO stream
+//     - `remote_addr: L::Addr` - The remote address of the client
+//
+//   * **Output**: Returns a new `S` service instance for this specific connection
+//
+//   * **Error**: Must be `Infallible` - service creation must never fail
+//
+//   * **Higher-Rank Trait Bound (`for<'a>`)**: The factory must work
+//     with `IncomingStream` that borrows the IO with *any* lifetime `'a`. This is
+//     necessary because the IO is borrowed only temporarily during service creation,
+//     and we don't know the specific lifetime at compile time.
+//
+// - `for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send`
+//
+//   The future returned by calling the make_service must be `Send` for any lifetime,
+//   so it can be awaited across threads while creating the service.
+//
+// ## Example Flow
+//
+// ```text
+// 1. Listener.accept() → (io, remote_addr)
+// 2. make_service.call(IncomingStream { io: &io, remote_addr }) → Future<Output = S>
+// 3. service.call(request) → Future<Output = Response>
+// 4. Repeat step 3 for each request on the connection
+// ```
+//
+// ## Why These Bounds Matter
+//
+// 1. **Services can be spawned onto Tokio tasks** (Send + 'static)
+// 2. **Multiple requests can be handled per connection** (Clone)
+// 3. **Error handling is infallible** - errors become HTTP responses, not Tower errors
+// 4. **The MakeService works with borrowed connection info** - via HRTB with IncomingStream
+//    This allows inspection of connection metadata without transferring ownership
+//
+// ============================================================================
 
 /// An incoming stream that bundles connection information.
 ///
@@ -297,8 +429,10 @@ pub struct IncomingStream<'a, L>
 where
     L: Listener,
 {
-    io: &'a TokioIo<L::Io>,
-    remote_addr: L::Addr,
+    /// Reference to the IO for this connection
+    pub io: &'a TokioIo<L::Io>,
+    /// Remote address of the client
+    pub remote_addr: L::Addr,
 }
 
 impl<L> IncomingStream<'_, L>
@@ -399,12 +533,15 @@ where
 pub fn serve<L, M, S, B>(listener: L, make_service: M) -> Serve<L, M, S, B>
 where
     L: Listener,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S>,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
+    // Body bounds: see module documentation for details
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Service bounds: see module documentation for details
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    // MakeService bounds: see module documentation for details
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S>,
 {
     Serve::new(listener, make_service)
 }
@@ -428,7 +565,7 @@ where
 pub struct Serve<L, M, S, B> {
     listener: L,
     make_service: M,
-    hyper_builder: Option<Builder<TokioExecutor>>,
+    hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     _marker: PhantomData<(S, B)>,
 }
 
@@ -493,7 +630,7 @@ where
         ) -> hyper_util::server::conn::auto::Builder<hyper_util::rt::TokioExecutor>,
     {
         let builder = Builder::new(TokioExecutor::new());
-        self.hyper_builder = Some(f(builder));
+        self.hyper_builder = Some(Arc::new(f(builder)));
         self
     }
 
@@ -511,18 +648,72 @@ where
     }
 }
 
+/// Macro to create an accept loop without graceful shutdown.
+///
+/// Accepts connections in a loop and handles them with the specified connection strategy.
+/// This macro eliminates code duplication when the only difference is the connection
+/// strategy type parameter (WithUpgrades vs WithoutUpgrades).
+macro_rules! accept_loop {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_strategy:ty) => {
+        loop {
+            let (io, remote_addr) = $listener.accept().await;
+            handle_connection_strategy::<L, M, S, B, $connection_strategy, NoShutdown>(
+                &mut $make_service,
+                io,
+                remote_addr,
+                $hyper_builder.as_ref(),
+                &(),
+            )
+            .await;
+        }
+    };
+}
+
+/// Macro to create an accept loop with graceful shutdown support.
+///
+/// Accepts connections in a loop with a shutdown signal that can interrupt the loop.
+/// Uses `tokio::select!` to race between accepting new connections and receiving the
+/// shutdown signal. This macro eliminates duplication between WithUpgrades and
+/// WithoutUpgrades variants.
+macro_rules! accept_loop_with_shutdown {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_strategy:ty, $signal:expr, $coordinator:expr) => {
+        loop {
+            tokio::select! {
+                result = $listener.accept() => {
+                    let (io, remote_addr) = result;
+                    handle_connection_strategy::<L, M, S, B, $connection_strategy, HyperUtilShutdown>(
+                        &mut $make_service,
+                        io,
+                        remote_addr,
+                        $hyper_builder.as_ref(),
+                        &$coordinator,
+                    )
+                    .await;
+                }
+                _ = $signal.as_mut() => {
+                    tracing::trace!("received graceful shutdown signal, not accepting new connections");
+                    break;
+                }
+            }
+        }
+    };
+}
+
 // Implement IntoFuture so we can await Serve directly
 impl<L, M, S, B> IntoFuture for Serve<L, M, S, B>
 where
     L: Listener,
     L::Addr: Debug,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
+    // Body bounds
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Service bounds
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    // MakeService bounds
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
 {
     type Output = io::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
@@ -543,17 +734,10 @@ where
                 _marker,
             } = self;
 
-            loop {
-                let (io, remote_addr) = listener.accept().await;
-                handle_connection(
-                    &mut make_service,
-                    io,
-                    remote_addr,
-                    hyper_builder.as_ref(),
-                    use_upgrades,
-                    None,
-                )
-                .await;
+            if use_upgrades {
+                accept_loop!(listener, make_service, hyper_builder, WithUpgrades)
+            } else {
+                accept_loop!(listener, make_service, hyper_builder, WithoutUpgrades)
             }
         })
     }
@@ -577,7 +761,7 @@ pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
     listener: L,
     make_service: M,
     signal: F,
-    hyper_builder: Option<Builder<TokioExecutor>>,
+    hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     shutdown_timeout: Option<Duration>,
     _marker: PhantomData<(S, B)>,
 }
@@ -596,7 +780,7 @@ where
 }
 
 impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
-    fn new(listener: L, make_service: M, signal: F, hyper_builder: Option<Builder<TokioExecutor>>) -> Self
+    fn new(listener: L, make_service: M, signal: F, hyper_builder: Option<Arc<Builder<TokioExecutor>>>) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -642,14 +826,18 @@ impl<L, M, S, F, B> IntoFuture for ServeWithGracefulShutdown<L, M, S, F, B>
 where
     L: Listener,
     L::Addr: Debug,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
-    F: Future<Output = ()> + Send + 'static,
+    // Body bounds
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Service bounds
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    // MakeService bounds
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
+    // Shutdown signal
+    F: Future<Output = ()> + Send + 'static,
 {
     type Output = io::Result<()>;
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
@@ -672,41 +860,29 @@ where
                 _marker,
             } = self;
 
-            // Create graceful shutdown coordinator
-            let graceful = GracefulShutdown::new();
+            // Initialize shutdown coordinator using the strategy
+            let coordinator = HyperUtilShutdown::init();
             let mut signal = std::pin::pin!(signal);
 
-            loop {
-                tokio::select! {
-                    result = listener.accept() => {
-                        let (io, remote_addr) = result;
-
-                        handle_connection(
-                            &mut make_service,
-                            io,
-                            remote_addr,
-                            hyper_builder.as_ref(),
-                            use_upgrades,
-                            Some(&graceful),
-                        )
-                        .await;
-                    }
-                    _ = signal.as_mut() => {
-                        tracing::debug!("received graceful shutdown signal, not accepting new connections");
-                        break;
-                    }
-                }
+            if use_upgrades {
+                accept_loop_with_shutdown!(listener, make_service, hyper_builder, WithUpgrades, signal, coordinator)
+            } else {
+                accept_loop_with_shutdown!(listener, make_service, hyper_builder, WithoutUpgrades, signal, coordinator)
             }
 
             drop(listener);
 
-            tracing::debug!("waiting for {} task(s) to finish", graceful.count());
+            tracing::trace!("waiting for in-flight connections to finish");
 
-            // Wait for all in-flight connections to finish (with optional timeout)
+            // Observability: If you need metrics, access the coordinator directly
+            // For example: coordinator.count() returns number of active connections
+            // This is separate from the shutdown mechanism itself
+
+            // Finalize shutdown and wait for all in-flight connections (with optional timeout)
             match shutdown_timeout {
-                Some(timeout) => match tokio::time::timeout(timeout, graceful.shutdown()).await {
+                Some(timeout) => match tokio::time::timeout(timeout, HyperUtilShutdown::finalize(coordinator)).await {
                     Ok(_) => {
-                        tracing::debug!("all in-flight connections completed during graceful shutdown");
+                        tracing::trace!("all in-flight connections completed during graceful shutdown");
                     }
                     Err(_) => {
                         tracing::warn!(
@@ -716,8 +892,8 @@ where
                     }
                 },
                 None => {
-                    graceful.shutdown().await;
-                    tracing::debug!("all in-flight connections completed during graceful shutdown");
+                    HyperUtilShutdown::finalize(coordinator).await;
+                    tracing::trace!("all in-flight connections completed during graceful shutdown");
                 }
             }
 
@@ -726,23 +902,95 @@ where
     }
 }
 
+async fn handle_connection_strategy<L, M, S, B, CS, SS>(
+    make_service: &mut M,
+    conn_io: <L as Listener>::Io,
+    remote_addr: <L as Listener>::Addr,
+    hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
+    coordinator: &SS::Coordinator,
+) where
+    L: Listener,
+    L::Addr: Debug,
+    // Body bounds
+    B: HttpBody + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Service bounds
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    // MakeService bounds
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
+    // Strategy bounds
+    CS: ConnectionStrategy,
+    SS: ShutdownStrategy,
+{
+    let tokio_io = TokioIo::new(conn_io);
+
+    tracing::trace!("connection {remote_addr:?} accepted");
+
+    make_service
+        .ready()
+        .await
+        .expect("make_service error type is Infallible and cannot fail");
+
+    let tower_service = make_service
+        .call(IncomingStream {
+            io: &tokio_io,
+            remote_addr,
+        })
+        .await
+        .expect("make_service error type is Infallible and cannot fail");
+
+    let hyper_service = TowerToHyperService::new(tower_service);
+
+    let builder = hyper_builder
+        .map(Arc::clone)
+        .unwrap_or_else(|| Arc::new(Builder::new(TokioExecutor::new())));
+
+    // Create a handle for this connection using the shutdown strategy
+    let handle = SS::track_connection(coordinator);
+
+    tokio::spawn(async move {
+        let conn = CS::serve(&builder, tokio_io, hyper_service);
+        // The connection is a GracefulConnection from ConnectionStrategy,
+        // which is compatible with all our ShutdownStrategy implementations
+        let result = SS::execute(handle, conn).await;
+
+        if let Err(err) = result {
+            tracing::trace!(error = ?err, "failed to serve connection");
+        }
+    });
+}
+
+/// Old connection handling function (kept as dead code for reference).
+///
+/// This was the original implementation before introducing the strategy pattern.
+/// It handles connections without the strategy abstraction by using runtime
+/// branching on `use_upgrades` and optional `graceful` shutdown.
+///
+/// Kept for historical reference and potential future use.
+#[allow(dead_code)]
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
-    hyper_builder: Option<&Builder<TokioExecutor>>,
+    hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
     use_upgrades: bool,
-    graceful: Option<&GracefulShutdown>,
+    graceful: Option<&hyper_util::server::graceful::GracefulShutdown>,
 ) where
     L: Listener,
     L::Addr: Debug,
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
+    // Body bounds
     B: HttpBody + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Service bounds
+    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S::Future: Send,
+    // MakeService bounds
+    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
+    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
 {
     let watcher = graceful.map(|g| g.watcher());
     let tokio_io = TokioIo::new(conn_io);
@@ -764,9 +1012,10 @@ async fn handle_connection<L, M, S, B>(
 
     let hyper_service = TowerToHyperService::new(tower_service);
 
+    // Clone the Arc (cheap - just increments refcount) or create a default builder
     let builder = hyper_builder
-        .cloned()
-        .unwrap_or_else(|| Builder::new(TokioExecutor::new()));
+        .map(Arc::clone)
+        .unwrap_or_else(|| Arc::new(Builder::new(TokioExecutor::new())));
 
     tokio::spawn(async move {
         let result = if use_upgrades {
@@ -788,7 +1037,7 @@ async fn handle_connection<L, M, S, B>(
         };
 
         if let Err(err) = result {
-            tracing::error!(error = ?err, "error serving connection");
+            tracing::trace!(error = ?err, "failed to serve connection");
         }
     });
 }

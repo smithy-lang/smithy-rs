@@ -23,7 +23,9 @@ aws-smithy-cbor = { path = "../aws-smithy-cbor" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
-aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = [
+    "http-body-1-x",
+] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 
 bytes = "1.10.0"
@@ -32,7 +34,15 @@ futures-util = { version = "0.3.29", default-features = false }
 http = "1"
 http-body = "1.0"
 hyper = { version = "1", features = ["server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "server-graceful", "service", "http1", "http2"] }
+hyper-util = { version = "0.1", features = [
+    "tokio",
+    "server",
+    "server-auto",
+    "server-graceful",
+    "service",
+    "http1",
+    "http2",
+] }
 http-body-util = "0.1"
 
 lambda_http = { version = "0.17", optional = true }
@@ -44,14 +54,35 @@ regex = "1.11.1"
 serde_urlencoded = "0.7"
 thiserror = "2"
 tokio = { version = "1.40.0", features = ["full"] }
-tower = { version = "0.4.13", features = ["util", "make"], default-features = false }
-tower-http = { version = "0.6", features = ["add-extension", "map-response-body"] }
+tower = { version = "0.4.13", features = [
+    "util",
+    "make",
+], default-features = false }
+tower-http = { version = "0.6", features = [
+    "add-extension",
+    "map-response-body",
+] }
 tracing = "0.1.40"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
+aws-smithy-legacy-http-server = { path = "../aws-smithy-legacy-http-server" }
+clap = { version = "4", features = ["derive"] }
+hyperlocal = "0.9"
+hyper014 = { package = "hyper", version = "0.14", features = ["server", "http1", "http2", "stream"] }
 pretty_assertions = "1"
-hyper-util = { version = "0.1", features = ["tokio", "client", "client-legacy", "http1", "http2"] }
+hyper-util = { version = "0.1", features = [
+    "tokio",
+    "client",
+    "client-legacy",
+    "http1",
+    "http2",
+] }
+rustls-pemfile = "2"
+tokio-rustls = "0.26"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+tower = { version = "0.4.13", features = ["util", "make", "limit"] }
+tower-http = { version = "0.6", features = ["timeout"] }
 
 [package.metadata.docs.rs]
 all-features = true
@@ -59,3 +90,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[[bench]]
+name = "compare_hyper_versions"
+harness = false
