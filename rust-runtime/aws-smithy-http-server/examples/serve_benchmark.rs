@@ -209,7 +209,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let server = match args.http_version.as_str() {
             "http1" => server.configure_hyper(|builder| builder.http1_only()),
             "http2" => server.configure_hyper(|builder| builder.http2_only()),
-            "auto" | _ => server,
+            _ => server, // "auto" or any other value
         };
 
         if args.graceful_shutdown {
@@ -237,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let server = match args.http_version.as_str() {
             "http1" => server.configure_hyper(|builder| builder.http1_only()),
             "http2" => server.configure_hyper(|builder| builder.http2_only()),
-            "auto" | _ => server,
+            _ => server, // "auto" or any other value
         };
 
         if args.graceful_shutdown {

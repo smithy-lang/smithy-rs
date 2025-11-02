@@ -294,12 +294,8 @@ use hyper_util::service::TowerToHyperService;
 use tower::{Service, ServiceExt as _};
 
 mod listener;
-mod strategy;
 
 pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapIo};
-pub use self::strategy::{
-    ConnectionStrategy, HyperUtilShutdown, NoShutdown, ShutdownStrategy, WithUpgrades, WithoutUpgrades,
-};
 
 // ============================================================================
 // Type Bounds Documentation
@@ -650,21 +646,13 @@ where
 
 /// Macro to create an accept loop without graceful shutdown.
 ///
-/// Accepts connections in a loop and handles them with the specified connection strategy.
-/// This macro eliminates code duplication when the only difference is the connection
-/// strategy type parameter (WithUpgrades vs WithoutUpgrades).
+/// Accepts connections in a loop and handles them with the connection handler.
 macro_rules! accept_loop {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_strategy:ty) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr) => {
         loop {
             let (io, remote_addr) = $listener.accept().await;
-            handle_connection_strategy::<L, M, S, B, $connection_strategy, NoShutdown>(
-                &mut $make_service,
-                io,
-                remote_addr,
-                $hyper_builder.as_ref(),
-                &(),
-            )
-            .await;
+            handle_connection::<L, M, S, B>(&mut $make_service, io, remote_addr, $hyper_builder.as_ref(), true, None)
+                .await;
         }
     };
 }
@@ -673,20 +661,20 @@ macro_rules! accept_loop {
 ///
 /// Accepts connections in a loop with a shutdown signal that can interrupt the loop.
 /// Uses `tokio::select!` to race between accepting new connections and receiving the
-/// shutdown signal. This macro eliminates duplication between WithUpgrades and
-/// WithoutUpgrades variants.
+/// shutdown signal.
 macro_rules! accept_loop_with_shutdown {
-    ($listener:expr, $make_service:expr, $hyper_builder:expr, $connection_strategy:ty, $signal:expr, $coordinator:expr) => {
+    ($listener:expr, $make_service:expr, $hyper_builder:expr, $signal:expr, $graceful:expr) => {
         loop {
             tokio::select! {
                 result = $listener.accept() => {
                     let (io, remote_addr) = result;
-                    handle_connection_strategy::<L, M, S, B, $connection_strategy, HyperUtilShutdown>(
+                    handle_connection::<L, M, S, B>(
                         &mut $make_service,
                         io,
                         remote_addr,
                         $hyper_builder.as_ref(),
-                        &$coordinator,
+                        true,
+                        Some(&$graceful),
                     )
                     .await;
                 }
@@ -719,13 +707,6 @@ where
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        // Decide once at serve-time which path to use based on the configured builder
-        let use_upgrades = self
-            .hyper_builder
-            .as_ref()
-            .map(|b| b.is_http1_available() && b.is_http2_available())
-            .unwrap_or(true); // Default to auto-detect if no builder configured
-
         Box::pin(async move {
             let Self {
                 mut listener,
@@ -734,11 +715,7 @@ where
                 _marker,
             } = self;
 
-            if use_upgrades {
-                accept_loop!(listener, make_service, hyper_builder, WithUpgrades)
-            } else {
-                accept_loop!(listener, make_service, hyper_builder, WithoutUpgrades)
-            }
+            accept_loop!(listener, make_service, hyper_builder)
         })
     }
 }
@@ -843,13 +820,6 @@ where
     type IntoFuture = Pin<Box<dyn Future<Output = io::Result<()>> + Send>>;
 
     fn into_future(self) -> Self::IntoFuture {
-        // Decide once at serve-time which path to use based on the configured builder
-        let use_upgrades = self
-            .hyper_builder
-            .as_ref()
-            .map(|b| b.is_http1_available() && b.is_http2_available())
-            .unwrap_or(true); // Default to auto-detect if no builder configured
-
         Box::pin(async move {
             let Self {
                 mut listener,
@@ -860,27 +830,19 @@ where
                 _marker,
             } = self;
 
-            // Initialize shutdown coordinator using the strategy
-            let coordinator = HyperUtilShutdown::init();
+            // Initialize graceful shutdown
+            let graceful = hyper_util::server::graceful::GracefulShutdown::new();
             let mut signal = std::pin::pin!(signal);
 
-            if use_upgrades {
-                accept_loop_with_shutdown!(listener, make_service, hyper_builder, WithUpgrades, signal, coordinator)
-            } else {
-                accept_loop_with_shutdown!(listener, make_service, hyper_builder, WithoutUpgrades, signal, coordinator)
-            }
+            accept_loop_with_shutdown!(listener, make_service, hyper_builder, signal, graceful);
 
             drop(listener);
 
             tracing::trace!("waiting for in-flight connections to finish");
 
-            // Observability: If you need metrics, access the coordinator directly
-            // For example: coordinator.count() returns number of active connections
-            // This is separate from the shutdown mechanism itself
-
-            // Finalize shutdown and wait for all in-flight connections (with optional timeout)
+            // Wait for all in-flight connections (with optional timeout)
             match shutdown_timeout {
-                Some(timeout) => match tokio::time::timeout(timeout, HyperUtilShutdown::finalize(coordinator)).await {
+                Some(timeout) => match tokio::time::timeout(timeout, graceful.shutdown()).await {
                     Ok(_) => {
                         tracing::trace!("all in-flight connections completed during graceful shutdown");
                     }
@@ -892,7 +854,7 @@ where
                     }
                 },
                 None => {
-                    HyperUtilShutdown::finalize(coordinator).await;
+                    graceful.shutdown().await;
                     tracing::trace!("all in-flight connections completed during graceful shutdown");
                 }
             }
@@ -902,75 +864,10 @@ where
     }
 }
 
-async fn handle_connection_strategy<L, M, S, B, CS, SS>(
-    make_service: &mut M,
-    conn_io: <L as Listener>::Io,
-    remote_addr: <L as Listener>::Addr,
-    hyper_builder: Option<&Arc<Builder<TokioExecutor>>>,
-    coordinator: &SS::Coordinator,
-) where
-    L: Listener,
-    L::Addr: Debug,
-    // Body bounds
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
-    // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
-    S::Future: Send,
-    // MakeService bounds
-    M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
-    for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
-    // Strategy bounds
-    CS: ConnectionStrategy,
-    SS: ShutdownStrategy,
-{
-    let tokio_io = TokioIo::new(conn_io);
-
-    tracing::trace!("connection {remote_addr:?} accepted");
-
-    make_service
-        .ready()
-        .await
-        .expect("make_service error type is Infallible and cannot fail");
-
-    let tower_service = make_service
-        .call(IncomingStream {
-            io: &tokio_io,
-            remote_addr,
-        })
-        .await
-        .expect("make_service error type is Infallible and cannot fail");
-
-    let hyper_service = TowerToHyperService::new(tower_service);
-
-    let builder = hyper_builder
-        .map(Arc::clone)
-        .unwrap_or_else(|| Arc::new(Builder::new(TokioExecutor::new())));
-
-    // Create a handle for this connection using the shutdown strategy
-    let handle = SS::track_connection(coordinator);
-
-    tokio::spawn(async move {
-        let conn = CS::serve(&builder, tokio_io, hyper_service);
-        // The connection is a GracefulConnection from ConnectionStrategy,
-        // which is compatible with all our ShutdownStrategy implementations
-        let result = SS::execute(handle, conn).await;
-
-        if let Err(err) = result {
-            tracing::trace!(error = ?err, "failed to serve connection");
-        }
-    });
-}
-
-/// Old connection handling function (kept as dead code for reference).
+/// Connection handling function.
 ///
-/// This was the original implementation before introducing the strategy pattern.
-/// It handles connections without the strategy abstraction by using runtime
-/// branching on `use_upgrades` and optional `graceful` shutdown.
-///
-/// Kept for historical reference and potential future use.
-#[allow(dead_code)]
+/// Handles connections by using runtime branching on `use_upgrades` and optional
+/// `graceful` shutdown.
 async fn handle_connection<L, M, S, B>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
