@@ -81,12 +81,13 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
             )
         }
 
+    // Defining multiple validation exceptions is unsupported. See `ValidateUnsupportedConstraints`
     internal fun firstStructureShapeWithValidationExceptionTrait(model: Model): StructureShape? =
         model
             .shapes(StructureShape::class.java)
-            .toList()
-            // Defining multiple validation exceptions is unsupported. See `ValidateUnsupportedConstraints`
-            .firstOrNull({ it.hasTrait(ValidationExceptionTrait.ID) })
+            .filter { it.hasTrait(ValidationExceptionTrait.ID) }
+            .findFirst()
+            .orElse(null)
 
     internal fun validationMessageMember(validationExceptionStructure: StructureShape): MemberShape =
         validationExceptionStructure
