@@ -33,12 +33,14 @@ interface BuilderInstantiator {
         mapErr: Writable? = null,
     ): Writable
 
+    fun setterProvider(field: MemberShape): String
+
     /** Set a field on a builder using the `$setterName` method. $value will be passed directly. */
     fun setFieldWithSetter(
         builder: String,
         value: Writable,
         field: MemberShape,
     ) = writable {
-        rustTemplate("$builder = $builder.${field.setterName()}(#{value})", "value" to value)
+        rustTemplate("$builder = $builder.${setterProvider(field)}(#{value})", "value" to value)
     }
 }

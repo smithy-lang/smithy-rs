@@ -134,11 +134,15 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     }
 }
 
-// Setter names will never hit a reserved word and therefore never need escaping.
-fun MemberShape.setterName() = "set_${this.memberName.toSnakeCase()}"
+fun MemberShape.setterName(symbolProvider: SymbolProvider): String {
+    val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
+    return "set_$unescaped"
+}
 
-// Getter names will never hit a reserved word and therefore never need escaping.
-fun MemberShape.getterName() = "get_${this.memberName.toSnakeCase()}"
+fun MemberShape.getterName(symbolProvider: SymbolProvider): String {
+    val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
+    return "get_$unescaped"
+}
 
 class BuilderGenerator(
     private val model: Model,
@@ -192,7 +196,7 @@ class BuilderGenerator(
                         val memberName = member.memberName.toSnakeCase()
                         val setter =
                             if (symbolProvider.toSymbol(member).isOptional()) {
-                                member.setterName()
+                                member.setterName(symbolProvider)
                             } else {
                                 memberName
                             }
@@ -311,7 +315,7 @@ class BuilderGenerator(
 
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
-        writer.rustBlock("pub fn ${member.setterName()}(mut self, input: ${inputType.render(true)}) -> Self") {
+        writer.rustBlock("pub fn ${member.setterName(symbolProvider)}(mut self, input: ${inputType.render(true)}) -> Self") {
             rust("self.$memberName = input; self")
         }
     }
@@ -333,7 +337,7 @@ class BuilderGenerator(
 
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
-        writer.rustBlock("pub fn ${member.getterName()}(&self) -> &${inputType.render(true)}") {
+        writer.rustBlock("pub fn ${member.getterName(symbolProvider)}(&self) -> &${inputType.render(true)}") {
             rust("&self.$memberName")
         }
     }
@@ -409,7 +413,13 @@ class BuilderGenerator(
     ) {
         docs("Appends an item to `$memberName`.")
         rust("///")
-        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        docs(
+            "To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${
+                member.setterName(
+                    symbolProvider,
+                )
+            }).",
+        )
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
         deprecatedShape(member)
@@ -435,7 +445,13 @@ class BuilderGenerator(
     ) {
         docs("Adds a key-value pair to `$memberName`.")
         rust("///")
-        docs("To override the contents of this collection use [`${member.setterName()}`](Self::${member.setterName()}).")
+        docs(
+            "To override the contents of this collection use [`${member.setterName(symbolProvider)}`](Self::${
+                member.setterName(
+                    symbolProvider,
+                )
+            }).",
+        )
         rust("///")
         documentShape(member, model, autoSuppressMissingDocs = false)
         deprecatedShape(member)

@@ -359,7 +359,7 @@ private fun generateOperationShapeDocs(
         val builderInputDoc = memberShape.asFluentBuilderInputDoc(symbolProvider)
         val builderInputLink = docLink("$fluentBuilderFullyQualifiedName::${symbolProvider.toMemberName(memberShape)}")
         val builderSetterDoc = memberShape.asFluentBuilderSetterDoc(symbolProvider)
-        val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName()}")
+        val builderSetterLink = docLink("$fluentBuilderFullyQualifiedName::${memberShape.setterName(symbolProvider)}")
 
         val docTrait = memberShape.getMemberTrait(model, DocumentationTrait::class.java).orNull()
         val docs =
@@ -440,7 +440,7 @@ internal fun MemberShape.asFluentBuilderInputDoc(symbolProvider: SymbolProvider)
  *  _NOTE: This function generates the setter type names that appear under **"The fluent builder is configurable:"**_
  */
 private fun MemberShape.asFluentBuilderSetterDoc(symbolProvider: SymbolProvider): String {
-    val memberName = this.setterName()
+    val memberName = this.setterName(symbolProvider)
     val outerType = symbolProvider.toSymbol(this).rustType()
 
     return "$memberName(${outerType.asArgumentType(fullyQualified = false)})"
