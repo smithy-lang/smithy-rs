@@ -46,7 +46,7 @@ class EndpointBddGenerator(
         val conditionCount = bddTrait.conditions.size
         val resultCount = bddTrait.results.size
         val typeGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val conditionGenerator = ConditionEvaluationGenerator(codegenContext, stdlib)
+        val conditionGenerator = ConditionEvaluationGenerator(codegenContext, stdlib, bddTrait)
         // Create context for expression generation with stdlib
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
