@@ -55,8 +55,12 @@ internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
     )
 
 class HttpRequestChecksumDecorator : ClientCodegenDecorator {
+    companion object {
+        const val ORDER: Byte = 0
+    }
+
     override val name: String = "HttpRequestChecksum"
-    override val order: Byte = 0
+    override val order: Byte = ORDER
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
