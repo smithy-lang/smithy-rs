@@ -3,7 +3,7 @@ applies_to:
   - aws-sdk-rust
   - client
 authors:
-  - aajtodd
+  - landonxjames
 references: []
 breaking: false
 new_feature: false
