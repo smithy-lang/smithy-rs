@@ -135,6 +135,11 @@ class RequestBindingGenerator(
                 "${label.content} = ${local(member)}"
             }
         val combinedArgs = listOf(formatString, *args.toTypedArray())
+        // Suppress the suggestion that would change the following:
+        //   ::std::write!(output, "/snapshots/{SnapshotId}/blocks/{BlockIndex}", SnapshotId = snapshot_id, BlockIndex = block_index)
+        // To:
+        //   ::std::write!(output, "/snapshots/{snapshot_id}/blocks/{block_index}")
+        Attribute.AllowUninlinedFormatArgs.render(writer)
         writer.rustBlockTemplate(
             "fn uri_base(_input: &#{Input}, output: &mut #{String}) -> #{Result}<(), #{BuildError}>",
             *codegenScope,
@@ -170,7 +175,7 @@ class RequestBindingGenerator(
         val dynamicParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY)
         val mapParams = index.getRequestBindings(operationShape, HttpBinding.Location.QUERY_PARAMS)
         val literalParams = httpTrait.uri.queryLiterals
-        if (dynamicParams.isEmpty() && literalParams.isEmpty()) {
+        if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty()) {
             return false
         }
         val preloadedParams = literalParams.keys + dynamicParams.map { it.locationName }

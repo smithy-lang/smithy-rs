@@ -64,8 +64,10 @@ class XmlBindingTraitSerializerGenerator(
     private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val codegenScope =
         arrayOf(
-            "XmlWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
-            "ElementWriter" to RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
+            "XmlWriter" to
+                RuntimeType.smithyXml(runtimeConfig).resolve("encode::XmlWriter"),
+            "ElementWriter" to
+                RuntimeType.smithyXml(runtimeConfig).resolve("encode::ElWriter"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "Error" to runtimeConfig.serializationError(),
             *RuntimeType.preludeScope,
@@ -115,7 +117,8 @@ class XmlBindingTraitSerializerGenerator(
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "op_input") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(input: &#{target}) -> #{Result}<#{SdkBody}, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(inputShape),
+                *codegenScope,
+                "target" to symbolProvider.toSymbol(inputShape),
             ) {
                 rust("let mut out = String::new();")
                 // Create a scope for writer. This ensures that:
@@ -132,7 +135,12 @@ class XmlBindingTraitSerializerGenerator(
                         """,
                         *codegenScope,
                     )
-                    serializeStructure(inputShape, xmlMembers, Ctx.Element("root", "input"), fnNameSuffix = "input")
+                    serializeStructure(
+                        inputShape,
+                        xmlMembers,
+                        Ctx.Element("root", "input"),
+                        fnNameSuffix = "input",
+                    )
                 }
                 rustTemplate("Ok(#{SdkBody}::from(out))", *codegenScope)
             }
@@ -146,7 +154,12 @@ class XmlBindingTraitSerializerGenerator(
     override fun payloadSerializer(member: MemberShape): RuntimeType {
         val target = model.expectShape(member.target)
         return protocolFunctions.serializeFn(member, fnNameSuffix = "payload") { fnName ->
-            val t = symbolProvider.toSymbol(member).rustType().stripOuter<RustType.Option>().render(true)
+            val t =
+                symbolProvider
+                    .toSymbol(member)
+                    .rustType()
+                    .stripOuter<RustType.Option>()
+                    .render(true)
             rustBlockTemplate(
                 "pub fn $fnName(input: &$t) -> std::result::Result<std::vec::Vec<u8>, #{Error}>",
                 *codegenScope,
@@ -173,9 +186,11 @@ class XmlBindingTraitSerializerGenerator(
                                 XmlMemberIndex.fromMembers(target.members().toList()),
                                 Ctx.Element("root", "input"),
                             )
-
                         is UnionShape -> serializeUnion(target, Ctx.Element("root", "input"))
-                        else -> throw IllegalStateException("xml payloadSerializer only supports structs and unions")
+                        else ->
+                            throw IllegalStateException(
+                                "xml payloadSerializer only supports structs and unions",
+                            )
                     }
                 }
                 rustTemplate("Ok(out.into_bytes())", *codegenScope)
@@ -216,7 +231,8 @@ class XmlBindingTraitSerializerGenerator(
         return protocolFunctions.serializeFn(operationShape, fnNameSuffix = "output") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(output: &#{target}) -> #{Result}<String, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(outputShape),
+                *codegenScope,
+                "target" to symbolProvider.toSymbol(outputShape),
             ) {
                 rust("let mut out = String::new();")
                 // Create a scope for writer. This ensures that:
@@ -243,13 +259,15 @@ class XmlBindingTraitSerializerGenerator(
     override fun serverErrorSerializer(shape: ShapeId): RuntimeType {
         val errorShape = model.expectShape(shape, StructureShape::class.java)
         val xmlMembers =
-            httpBindingResolver.errorResponseBindings(shape)
+            httpBindingResolver
+                .errorResponseBindings(shape)
                 .filter { it.location == HttpLocation.DOCUMENT }
                 .map { it.member }
         return protocolFunctions.serializeFn(errorShape, fnNameSuffix = "error") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(error: &#{target}) -> #{Result}<String, #{Error}>",
-                *codegenScope, "target" to symbolProvider.toSymbol(errorShape),
+                *codegenScope,
+                "target" to symbolProvider.toSymbol(errorShape),
             ) {
                 rust("let mut out = String::new();")
                 // Create a scope for writer. This ensures that:
@@ -290,9 +308,10 @@ class XmlBindingTraitSerializerGenerator(
         }
         members.attributeMembers.forEach { member ->
             handleOptional(member, ctx.scopedTo(member)) { ctx ->
-                withBlock("${ctx.elementWriter}.write_attribute(${xmlIndex.memberName(member).dq()},", ");") {
-                    serializeRawMember(member, ctx.input)
-                }
+                withBlock(
+                    "${ctx.elementWriter}.write_attribute(${xmlIndex.memberName(member).dq()},",
+                    ");",
+                ) { serializeRawMember(member, ctx.input) }
             }
         }
         Attribute.AllowUnusedMut.render(this)
@@ -310,7 +329,8 @@ class XmlBindingTraitSerializerGenerator(
     ) {
         when (model.expectShape(member.target)) {
             is StringShape -> {
-                // The `input` expression always evaluates to a reference type at this point, but if it does so because
+                // The `input` expression always evaluates to a reference type at this point, but if
+                // it does so because
                 // it's preceded by the `&` operator, calling `as_str()` on it will upset Clippy.
                 val dereferenced =
                     if (input.startsWith("&")) {
@@ -320,27 +340,30 @@ class XmlBindingTraitSerializerGenerator(
                     }
                 rust("$dereferenced.as_str()")
             }
-
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
                     RuntimeType.smithyTypes(runtimeConfig).resolve("primitive::Encoder"),
                 )
             }
-
-            is BlobShape -> rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
+            is BlobShape ->
+                rust("#T($input.as_ref()).as_ref()", RuntimeType.base64Encode(runtimeConfig))
             is TimestampShape -> {
                 val timestampFormat =
                     httpBindingResolver.timestampFormat(
                         member,
                         HttpLocation.DOCUMENT,
-                        TimestampFormatTrait.Format.DATE_TIME, model,
+                        TimestampFormatTrait.Format.DATE_TIME,
+                        model,
                     )
                 val timestampFormatType =
-                    RuntimeType.parseTimestampFormat(codegenTarget, runtimeConfig, timestampFormat)
+                    RuntimeType.parseTimestampFormat(
+                        codegenTarget,
+                        runtimeConfig,
+                        timestampFormat,
+                    )
                 rust("$input.fmt(#T)?.as_ref()", timestampFormatType)
             }
-
             else -> TODO(member.toString())
         }
     }
@@ -356,29 +379,37 @@ class XmlBindingTraitSerializerGenerator(
         val ns = memberShape.xmlNamespace(root = false).apply()
         handleOptional(memberShape, ctx) { ctx ->
             when (target) {
-                is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape -> {
-                    rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
+                is StringShape,
+                is BooleanShape,
+                is NumberShape,
+                is TimestampShape,
+                is BlobShape,
+                -> {
+                    rust(
+                        "let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();",
+                    )
                     withBlock("inner_writer.data(", ");") {
                         serializeRawMember(memberShape, ctx.input)
                     }
                 }
-
                 is CollectionShape ->
                     if (memberShape.hasTrait<XmlFlattenedTrait>()) {
                         serializeFlatList(memberShape, target, ctx)
                     } else {
-                        rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
+                        rust(
+                            "let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();",
+                        )
                         serializeList(target, Ctx.Scope("inner_writer", ctx.input))
                     }
-
                 is MapShape ->
                     if (memberShape.hasTrait<XmlFlattenedTrait>()) {
                         serializeMap(target, xmlIndex.memberName(memberShape), ctx)
                     } else {
-                        rust("let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
+                        rust(
+                            "let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();",
+                        )
                         serializeMap(target, "entry", Ctx.Scope("inner_writer", ctx.input))
                     }
-
                 is StructureShape -> {
                     // We call serializeStructure only when target.members() is nonempty.
                     // If it were empty, serializeStructure would generate the following code:
@@ -392,8 +423,10 @@ class XmlBindingTraitSerializerGenerator(
                     //       scope.finish();
                     //       Ok(())
                     //   }
-                    // However, this would cause a compilation error at a call site because it cannot
-                    // extract data out of the Unit type that corresponds to the variable "input" above.
+                    // However, this would cause a compilation error at a call site because it
+                    // cannot
+                    // extract data out of the Unit type that corresponds to the variable "input"
+                    // above.
                     if (target.members().isEmpty()) {
                         rust("${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();")
                     } else {
@@ -405,12 +438,10 @@ class XmlBindingTraitSerializerGenerator(
                         )
                     }
                 }
-
                 is UnionShape -> {
                     rust("let inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns;")
                     serializeUnion(target, Ctx.Element("inner_writer", ctx.input))
                 }
-
                 else -> TODO(target.toString())
             }
         }
@@ -424,7 +455,8 @@ class XmlBindingTraitSerializerGenerator(
     ) {
         val structureSymbol = symbolProvider.toSymbol(structureShape)
         val structureSerializer =
-            protocolFunctions.serializeFn(structureShape, fnNameSuffix = fnNameSuffix) { fnName ->
+            protocolFunctions.serializeFn(structureShape, fnNameSuffix = fnNameSuffix) { fnName,
+                ->
                 rustBlockTemplate(
                     "pub fn $fnName(input: &#{Input}, writer: #{ElementWriter}) -> #{Result}<(), #{Error}>",
                     "Input" to structureSymbol,
@@ -460,20 +492,26 @@ class XmlBindingTraitSerializerGenerator(
                         members.forEach { member ->
                             val memberShape = model.expectShape(member.target)
                             val memberName = symbolProvider.toMemberName(member)
+                            val isEmptyStruct =
+                                memberShape.isStructureShape &&
+                                    memberShape
+                                        .asStructureShape()
+                                        .get()
+                                        .allMembers
+                                        .isEmpty()
                             val variantName =
                                 if (member.isTargetUnit()) {
                                     "$memberName"
-                                } else if (memberShape.isStructureShape &&
-                                    memberShape.asStructureShape()
-                                        .get().allMembers.isEmpty()
-                                ) {
-                                    // Unit structs don't serialize inner, so it is never accessed
+                                } else if (isEmptyStruct) {
+                                    // Unit structs don't serialize inner, so it is never
+                                    // accessed
                                     "$memberName(_inner)"
                                 } else {
                                     "$memberName(inner)"
                                 }
+                            val innerVarName = if (isEmptyStruct) "_inner" else "inner"
                             withBlock("#T::$variantName =>", ",", unionSymbol) {
-                                serializeMember(member, Ctx.Scope("scope_writer", "inner"))
+                                serializeMember(member, Ctx.Scope("scope_writer", innerVarName))
                             }
                         }
 
@@ -508,7 +546,11 @@ class XmlBindingTraitSerializerGenerator(
     ) {
         val itemName = safeName("list_item")
         rustBlock("for $itemName in ${ctx.input}") {
-            serializeMember(listShape.member, ctx.copy(input = itemName), xmlIndex.memberName(member))
+            serializeMember(
+                listShape.member,
+                ctx.copy(input = itemName),
+                xmlIndex.memberName(member),
+            )
         }
     }
 
@@ -534,11 +576,10 @@ class XmlBindingTraitSerializerGenerator(
      * }
      * ```
      *
-     * If [member] is not an optional shape, generate code like:
-     * `{ .. BLOCK }`
+     * If [member] is not an optional shape, generate code like: `{ .. BLOCK }`
      *
-     * [inner] is passed a new `ctx` object to use for code generation which handles the
-     * potentially new name of the input.
+     * [inner] is passed a new `ctx` object to use for code generation which handles the potentially
+     * new name of the input.
      */
     private fun <T : Ctx> RustWriter.handleOptional(
         member: MemberShape,
@@ -562,9 +603,7 @@ class XmlBindingTraitSerializerGenerator(
                 } else {
                     "Some($tmp)"
                 }
-            rustBlock("if let $pattern = ${ctx.input}") {
-                inner(Ctx.updateInput(ctx, tmp))
-            }
+            rustBlock("if let $pattern = ${ctx.input}") { inner(Ctx.updateInput(ctx, tmp)) }
         } else {
             with(util) {
                 val valueExpression =
@@ -573,18 +612,20 @@ class XmlBindingTraitSerializerGenerator(
                     } else {
                         ValueExpression.Value(ctx.input)
                     }
-                ignoreDefaultsForNumbersAndBools(member, valueExpression) {
-                    inner(ctx)
-                }
+                ignoreDefaultsForNumbersAndBools(member, valueExpression) { inner(ctx) }
             }
         }
     }
 
     private fun OperationShape.requestBodyMembers(): XmlMemberIndex =
-        XmlMemberIndex.fromMembers(httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT))
+        XmlMemberIndex.fromMembers(
+            httpBindingResolver.requestMembers(this, HttpLocation.DOCUMENT),
+        )
 
     private fun OperationShape.responseBodyMembers(): XmlMemberIndex =
-        XmlMemberIndex.fromMembers(httpBindingResolver.responseMembers(this, HttpLocation.DOCUMENT))
+        XmlMemberIndex.fromMembers(
+            httpBindingResolver.responseMembers(this, HttpLocation.DOCUMENT),
+        )
 
     private fun Shape.xmlNamespace(root: Boolean): XmlNamespaceTrait? {
         return this.getTrait<XmlNamespaceTrait>().letIf(root) { it ?: rootNamespace }

@@ -116,6 +116,13 @@ sealed class ServiceConfig(name: String) : Section(name) {
      * The set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
      */
     data class DefaultForTests(val configBuilderRef: String) : ServiceConfig("DefaultForTests")
+
+    /**
+     * Set default value of a field for use in tests, e.g `${configBuilderRef}.set_credentials(Credentials::for_tests())`
+     *
+     * NOTE: V2 was added for backwards compatibility
+     */
+    data class DefaultForTestsV2(val configBuilderRef: String) : ServiceConfig("DefaultForTestsV2")
 }
 
 data class ConfigParam(
@@ -545,7 +552,7 @@ class ServiceConfigGenerator(
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. NOTE: Consider migrating to use `apply_test_defaults_v2` instead.")
             rustBlock("pub fn apply_test_defaults(&mut self) -> &mut Self") {
                 customizations.forEach { it.section(ServiceConfig.DefaultForTests("self"))(this) }
                 rustTemplate(
@@ -557,9 +564,25 @@ class ServiceConfigGenerator(
 
             testUtilOnly.render(this)
             Attribute.AllowUnusedMut.render(this)
-            docs("Apply test defaults to the builder")
+            docs("Apply test defaults to the builder. NOTE: Consider migrating to use `with_test_defaults_v2` instead.")
             rustBlock("pub fn with_test_defaults(mut self) -> Self") {
                 rust("self.apply_test_defaults(); self")
+            }
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder. V2 of this function sets additional test defaults such as region configuration (if applicable).")
+            rustBlock("pub fn apply_test_defaults_v2(&mut self) -> &mut Self") {
+                rust("self.apply_test_defaults();")
+                customizations.forEach { it.section(ServiceConfig.DefaultForTestsV2("self"))(this) }
+                rust("self")
+            }
+
+            testUtilOnly.render(this)
+            Attribute.AllowUnusedMut.render(this)
+            docs("Apply test defaults to the builder. V2 of this function sets additional test defaults such as region configuration (if applicable).")
+            rustBlock("pub fn with_test_defaults_v2(mut self) -> Self") {
+                rust("self.apply_test_defaults_v2(); self")
             }
 
             docs("Builds a [`Config`].")

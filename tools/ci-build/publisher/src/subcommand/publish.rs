@@ -130,8 +130,7 @@ async fn wait_for_eventual_consistency(index: Arc<CratesIndex>, package: &Packag
     }
     if !is_published(index.clone(), &package.handle).await? {
         return Err(anyhow::Error::msg(format!(
-            "package wasn't found on crates.io {} seconds after publish",
-            max_wait_time
+            "package wasn't found on crates.io {max_wait_time} seconds after publish"
         )));
     }
     Ok(())
@@ -177,7 +176,7 @@ pub async fn correct_owner(handle: &PackageHandle) -> Result<()> {
                     cargo::RemoveOwner::new(&handle.name, crate_owner)
                         .spawn()
                         .await
-                        .with_context(|| format!("remove incorrect owner `{}` from crate `{}`", crate_owner, handle))?;
+                        .with_context(|| format!("remove incorrect owner `{crate_owner}` from crate `{handle}`"))?;
                     info!(
                         "Removed incorrect owner `{}` from crate `{}`",
                         crate_owner, handle
@@ -213,7 +212,7 @@ fn confirm_plan(
 
     info!("Publish plan:");
     for item in full_plan {
-        println!("  {}", item);
+        println!("  {item}");
     }
     info!(
         "Will publish {} crates total ({} Smithy runtime, {} AWS runtime, {} AWS SDK).",

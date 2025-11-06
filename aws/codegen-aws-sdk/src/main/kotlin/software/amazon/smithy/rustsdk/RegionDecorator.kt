@@ -8,12 +8,16 @@ package software.amazon.smithy.rustsdk
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rulesengine.aws.language.functions.AwsBuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.configReexport
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -143,6 +147,35 @@ class RegionDecorator : ClientCodegenDecorator {
                         )
                     }
                 }
+
+                override fun endpointParamsBuilderValidator(
+                    codegenContext: ClientCodegenContext,
+                    parameter: Parameter,
+                ): Writable? {
+                    if (endpointTestsValidatesRegionAlready(codegenContext)) {
+                        return null
+                    }
+
+                    return when (parameter.builtIn) {
+                        AwsBuiltIns.REGION.builtIn ->
+                            writable {
+                                rustTemplate(
+                                    """
+                                    if let Some(region) = &self.${parameter.memberName()} {
+                                        if !#{is_valid_host_label}(region.as_ref() as &str, true, &mut #{DiagnosticCollector}::new()) {
+                                            return Err(#{ParamsError}::invalid_value(${parameter.memberName().dq()}, "must be a valid host label"))
+                                        }
+                                    }
+                                    """,
+                                    "is_valid_host_label" to EndpointsLib.isValidHostLabel,
+                                    "ParamsError" to EndpointParamsGenerator.paramsError(),
+                                    "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+                                )
+                            }
+
+                        else -> null
+                    }
+                }
             },
         )
     }
@@ -205,6 +238,17 @@ class RegionProviderConfig(codegenContext: ClientCodegenContext) : ConfigCustomi
                         *codegenScope,
                     )
                 }
+                is ServiceConfig.DefaultForTestsV2 -> {
+                    // this was added later, for backwards compat we only set a default if a region hasn't already been set by user
+                    rustTemplate(
+                        """
+                        if ${section.configBuilderRef}.config.load::<#{Region}>().is_none() {
+                            self.set_region(#{Some}(#{Region}::new("us-east-1")));
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
 
                 is ServiceConfig.BuilderFromConfigBag -> {
                     rustTemplate("${section.builder}.set_region(${section.configBag}.load::<#{Region}>().cloned());", *codegenScope)
@@ -227,3 +271,14 @@ fun usesRegion(codegenContext: ClientCodegenContext) =
     codegenContext.getBuiltIn(AwsBuiltIns.REGION) != null ||
         ServiceIndex.of(codegenContext.model)
             .getEffectiveAuthSchemes(codegenContext.serviceShape).containsKey(SigV4Trait.ID)
+
+/**
+ * Test if region is already validated via endpoint rules tests. Validating region when building parameters
+ * will break endpoint tests which validate during resolution and expect specific errors.
+ */
+fun endpointTestsValidatesRegionAlready(codegenContext: ClientCodegenContext): Boolean =
+    codegenContext.serviceShape.id in
+        setOf(
+            ShapeId.from("com.amazonaws.s3#AmazonS3"),
+            ShapeId.from("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
+        )

@@ -134,7 +134,7 @@ pub async fn main() {
     .connections()
     .filter(|conn| {
         if let Err(err) = conn {
-            eprintln!("connection error: {:?}", err);
+            eprintln!("connection error: {err:?}");
             future::ready(false)
         } else {
             future::ready(true)
@@ -146,7 +146,7 @@ pub async fn main() {
     let server =
         hyper::Server::builder(hyper::server::accept::from_stream(listener)).serve(make_app);
     if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+        eprintln!("server error: {err}");
     }
 }
 

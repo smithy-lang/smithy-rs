@@ -1,6 +1,6 @@
 [package]
 name = "changelogger"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "A CLI tool render and update changelogs from changelog files"
 edition = "2021"

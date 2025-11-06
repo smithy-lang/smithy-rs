@@ -33,10 +33,18 @@ smithy {
     format.set(false)
 }
 
-val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
+val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
     listOf(
-        CodegenTest("crate#Config", "naming_test_ops", imports = listOf("$commonModels/naming-obstacle-course-ops.smithy")),
-        CodegenTest("casing#ACRONYMInside_Service", "naming_test_casing", imports = listOf("$commonModels/naming-obstacle-course-casing.smithy")),
+        CodegenTest(
+            "crate#Config",
+            "naming_test_ops",
+            imports = listOf("$commonModels/naming-obstacle-course-ops.smithy"),
+        ),
+        CodegenTest(
+            "casing#ACRONYMInside_Service",
+            "naming_test_casing",
+            imports = listOf("$commonModels/naming-obstacle-course-casing.smithy"),
+        ),
         CodegenTest(
             "naming_obs_structs#NamingObstacleCourseStructs",
             "naming_test_structs",
@@ -47,7 +55,15 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         CodegenTest(
             "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
             "rpcv2Cbor_extras",
-            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy")
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": true } """,
+        ),
+        CodegenTest(
+            "smithy.protocoltests.rpcv2Cbor#RpcV2CborService",
+            "rpcv2Cbor_extras_no_initial_response",
+            imports = listOf("$commonModels/rpcv2Cbor-extras.smithy"),
+            // This is the default behavior
+            // extraConfig = """, "codegen": { "alwaysSendEventStreamInitialResponse": false } """,
         ),
         CodegenTest(
             "com.amazonaws.constraints#ConstraintsService",
@@ -99,6 +115,20 @@ val allCodegenTests = "../codegen-core/common-test-models".let { commonModels ->
         ),
     )
 }
+// When iterating on protocol tests use this to speed up codegen:
+// .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
+
+val customCodegenTests = "custom-test-models".let { customModels ->
+    listOf(
+        CodegenTest(
+            "com.aws.example#CustomValidationExample",
+            "custom-validation-exception-example",
+            imports = listOf("$customModels/custom-validation-exception.smithy"),
+        ),
+    )
+}
+
+val allCodegenTests = commonCodegenTests + customCodegenTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)
@@ -110,6 +140,12 @@ tasks["assemble"].finalizedBy("generateCargoWorkspace", "generateCargoConfigToml
 project.registerModifyMtimeTask()
 project.registerCargoCommandsTasks(layout.buildDirectory.dir(workingDirUnderBuildDir).get().asFile)
 
-tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString })
+tasks.register<Exec>("cargoTestIntegration") {
+    dependsOn("assemble")
+    workingDir(projectDir.resolve("integration-tests"))
+    commandLine("cargo", "test")
+}
+
+tasks["test"].finalizedBy(cargoCommands(properties).map { it.toString }, "cargoTestIntegration")
 
 tasks["clean"].doFirst { delete("smithy-build.json") }

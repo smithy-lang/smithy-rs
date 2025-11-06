@@ -10,8 +10,10 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CombinedCoreCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.customize.CoreCodegenDecorator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolMap
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -32,6 +34,11 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
         currentProtocols: ServerProtocolMap,
     ): ServerProtocolMap = currentProtocols
 
+    fun httpCustomizations(
+        symbolProvider: RustSymbolProvider,
+        protocol: ShapeId,
+    ): List<HttpBindingCustomization> = emptyList()
+
     fun validationExceptionConversion(codegenContext: ServerCodegenContext): ValidationExceptionConversionGenerator? =
         null
 
@@ -40,6 +47,13 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
      * constrained but the `ValidationException` shape is not attached to the operation's errors.
      */
     fun postprocessValidationExceptionNotAttachedErrorMessage(validationResult: ValidationResult) = validationResult
+
+    /**
+     * Injection point to allow a decorator to postprocess the error message that arises when an operation is
+     * constrained and there are multiple of: `ValidationException` and/or custom structures with the
+     * @validationException trait attached to the operation's errors.
+     */
+    fun postprocessMultipleValidationExceptionsErrorMessage(validationResult: ValidationResult) = validationResult
 
     /**
      * For each operation in the service's closure, this hook allows decorators to return a collection of structure shapes that will additionally be generated.
@@ -88,6 +102,11 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
             decorator.protocols(serviceId, protocolMap)
         }
 
+    override fun httpCustomizations(
+        symbolProvider: RustSymbolProvider,
+        protocol: ShapeId,
+    ): List<HttpBindingCustomization> = orderedDecorators.flatMap { it.httpCustomizations(symbolProvider, protocol) }
+
     override fun validationExceptionConversion(
         codegenContext: ServerCodegenContext,
     ): ValidationExceptionConversionGenerator =
@@ -100,6 +119,13 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     ): ValidationResult =
         orderedDecorators.foldRight(validationResult) { decorator, accumulated ->
             decorator.postprocessValidationExceptionNotAttachedErrorMessage(accumulated)
+        }
+
+    override fun postprocessMultipleValidationExceptionsErrorMessage(
+        validationResult: ValidationResult,
+    ): ValidationResult =
+        orderedDecorators.foldRight(validationResult) { decorator, accumulated ->
+            decorator.postprocessMultipleValidationExceptionsErrorMessage(accumulated)
         }
 
     override fun postprocessOperationGenerateAdditionalStructures(

@@ -96,6 +96,12 @@ sealed class HttpBindingSection(name: String) : Section(name) {
 
     data class AfterDeserializingIntoADateTimeOfHttpHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoADateTimeOfHttpHeaders")
+
+    data class BeforeCreatingEventStreamReceiver(
+        val operationShape: OperationShape,
+        val unionShape: UnionShape,
+        val unmarshallerVariableName: String,
+    ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -272,11 +278,27 @@ class HttpBindingGenerator(
         rustTemplate(
             """
             let unmarshaller = #{unmarshallerConstructorFn}();
+            """,
+            "unmarshallerConstructorFn" to unmarshallerConstructorFn,
+        )
+
+        // Allow customizations to wrap the unmarshaller
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.BeforeCreatingEventStreamReceiver(
+                    operationShape,
+                    targetShape,
+                    "unmarshaller",
+                ),
+            )(this)
+        }
+
+        rustTemplate(
+            """
             let body = std::mem::replace(body, #{SdkBody}::taken());
             Ok(#{receiver:W})
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
-            "unmarshallerConstructorFn" to unmarshallerConstructorFn,
             "receiver" to
                 writable {
                     if (codegenTarget == CodegenTarget.SERVER) {
@@ -774,12 +796,11 @@ class HttpBindingGenerator(
                     },
                 "invalid_header_value" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
+                        val maybeRedactedValue = memberShape.redactIfNecessary(model, "v")
                         rust(
                             """
                             format!(
-                                "`{}` cannot be used as a header value: {}",
-                                ${memberShape.redactIfNecessary(model, "v")},
-                                err
+                                "`{$maybeRedactedValue}` cannot be used as a header value: {err}"
                             )
                             """,
                         )

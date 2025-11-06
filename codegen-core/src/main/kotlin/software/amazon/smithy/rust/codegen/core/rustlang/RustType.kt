@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.rustlang
 
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.deprecated
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.derive
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.serde
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -517,6 +518,11 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
     constructor(str: String, isDeriveHelper: Boolean) : this(writable(str), isDeriveHelper)
     constructor(runtimeType: RuntimeType) : this(runtimeType.writable)
 
+    fun writable(attributeKind: AttributeKind = AttributeKind.Outer) =
+        writable {
+            render(this, attributeKind)
+        }
+
     fun render(
         writer: RustWriter,
         attributeKind: AttributeKind = AttributeKind.Outer,
@@ -592,6 +598,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
         val AllowMissingDocs = Attribute(allow("missing_docs"))
         val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
+        val AllowUninlinedFormatArgs = Attribute(allow("clippy::uninlined_format_args"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
         val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
         val AllowUnused = Attribute(allow("unused"))

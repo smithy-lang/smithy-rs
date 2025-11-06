@@ -25,7 +25,7 @@ pub async fn is_published(index: Arc<CratesIndex>, crate_name: &str) -> Result<b
 pub async fn publish(handle: &PackageHandle, crate_path: &Path) -> Result<()> {
     info!("Publishing `{}`...", handle);
     run_with_retry(
-        &format!("Publishing `{}`", handle),
+        &format!("Publishing `{handle}`"),
         5,
         Duration::from_secs(60),
         || async {

@@ -9,6 +9,7 @@ import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.MemberShape
@@ -135,7 +136,7 @@ class EventStreamUnmarshallerGenerator(
                     }
                     rustBlock("value => ") {
                         rustTemplate(
-                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :message-type: {}\", value)));",
+                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :message-type: {value}\")));",
                             *codegenScope,
                         )
                     }
@@ -170,7 +171,7 @@ class EventStreamUnmarshallerGenerator(
 
                     false ->
                         rustTemplate(
-                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
+                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :event-type: {_unknown_variant}\")));",
                             *codegenScope,
                         )
                 }
@@ -261,6 +262,7 @@ class EventStreamUnmarshallerGenerator(
                     is IntegerShape -> rustTemplate("#{expect_fns}::expect_int32(header)?", *codegenScope)
                     is LongShape -> rustTemplate("#{expect_fns}::expect_int64(header)?", *codegenScope)
                     is BlobShape -> rustTemplate("#{expect_fns}::expect_byte_array(header)?", *codegenScope)
+                    is EnumShape -> rustTemplate("#{expect_fns}::expect_string(header)?.as_str().into()", *codegenScope)
                     is StringShape -> rustTemplate("#{expect_fns}::expect_string(header)?", *codegenScope)
                     is TimestampShape -> rustTemplate("#{expect_fns}::expect_timestamp(header)?", *codegenScope)
                     else -> throw IllegalStateException("unsupported event stream header shape type: $target")
@@ -277,8 +279,7 @@ class EventStreamUnmarshallerGenerator(
                 let content_type = response_headers.content_type().unwrap_or_default();
                 if content_type != ${contentType.dq()} {
                     return Err(#{Error}::unmarshalling(format!(
-                        "expected :content-type to be '$contentType', but was '{}'",
-                        content_type
+                        "expected :content-type to be '$contentType', but was '{content_type}'"
                     )))
                 }
                 """,
@@ -318,7 +319,7 @@ class EventStreamUnmarshallerGenerator(
             """
             #{parser}(&message.payload()[..])
                 .map_err(|err| {
-                    #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {}", err))
+                    #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
                 })?
             """,
             "parser" to parser,
@@ -369,7 +370,7 @@ class EventStreamUnmarshallerGenerator(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
                                         .map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
+                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                         })?;
                                     builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
@@ -383,7 +384,8 @@ class EventStreamUnmarshallerGenerator(
                                             "builder", target,
                                             mapErr = {
                                                 rustTemplate(
-                                                    """|err|#{Error}::unmarshalling(format!("{}", err))""", *codegenScope,
+                                                    """|err|#{Error}::unmarshalling(format!("{err}"))""",
+                                                    *codegenScope,
                                                 )
                                             },
                                         ),
@@ -408,7 +410,7 @@ class EventStreamUnmarshallerGenerator(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
                                         .map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
+                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                         })?;
                                     """,
                                     "parser" to parser,

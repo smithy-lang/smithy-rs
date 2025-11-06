@@ -1,0 +1,20 @@
+[package]
+name = "eventstreams"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rpcv2cbor_extras = { workspace = true }
+rpcv2cbor_extras_no_initial_response = { workspace = true }
+tokio = { version = "1", features = ["full"] }
+aws-smithy-eventstream = { workspace = true }
+aws-smithy-http = { workspace = true }
+aws-smithy-cbor = { workspace = true }
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+hyper = { version = "1", features = ["http2", "server"] }
+hyper0 = { package = "hyper", version = "0.14", features = ["http2", "server"] }
+bytes = "1.0"
+aws-smithy-runtime = { workspace = true }
+http-body-util = "0.1.3"
+hyper-util = { version = "0.1.17", features = ["client-legacy", "tokio", "http2", "http1"] }
+tokio-stream = "0.1.17"

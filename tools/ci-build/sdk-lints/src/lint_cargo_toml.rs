@@ -91,8 +91,7 @@ fn check_crate_license(package: Package, path: impl AsRef<Path>) -> Result<Vec<L
     match package.license {
         Some(license) if license.as_ref().unwrap() == "Apache-2.0" => {}
         incorrect_license => errors.push(LintError::new(format!(
-            "invalid license: {:?}",
-            incorrect_license
+            "invalid license: {incorrect_license:?}"
         ))),
     };
     if !path
@@ -182,7 +181,7 @@ impl Fix for DocsRs {
         let package = match package(path) {
             Ok(Ok(package)) => package,
             Ok(Err(errs)) => return Ok((errs, updated)),
-            Err(errs) => return Ok((vec![LintError::new(format!("{}", errs))], updated)),
+            Err(errs) => return Ok((vec![LintError::new(format!("{errs}"))], updated)),
         };
         let lint_errors = check_docs_rs(&package);
         Ok((lint_errors, updated))
