@@ -3,7 +3,6 @@ plugins {
     signing
 }
 
-// Workaround per: https://github.com/gradle/gradle/issues/15383
 val Project.libs get() = the<org.gradle.accessors.dm.LibrariesForLibs>()
 // FIXME(publishing): create a real "javadoc" JAR from Dokka output
 val javadocJar = tasks.register<Jar>("emptyJar") {
