@@ -1,4 +1,11 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 6th, 2025
+==================
+**New this release:**
+- (client) Bump crc-fast version to 1.6.0
+- (client) Validate `Region` is a valid host label when constructing endpoints.
+
+
 October 30th, 2025
 ==================
 **Breaking Changes:**
