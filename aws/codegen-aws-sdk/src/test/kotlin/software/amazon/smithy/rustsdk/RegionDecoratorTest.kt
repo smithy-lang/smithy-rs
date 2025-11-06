@@ -7,7 +7,11 @@ package software.amazon.smithy.rustsdk
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 import kotlin.io.path.readText
 
 class RegionDecoratorTest {
@@ -104,5 +108,49 @@ class RegionDecoratorTest {
             }
         val configContents = path.resolve("src/config.rs").readText()
         assertTrue(configContents.contains("fn set_region("))
+    }
+
+    // V1988105516
+    @Test
+    fun `models with region built-in params should validate host label`() {
+        awsSdkIntegrationTest(modelWithRegionParam) { ctx, rustCrate ->
+            val rc = ctx.runtimeConfig
+            val codegenScope =
+                arrayOf(
+                    *RuntimeType.preludeScope,
+                    "capture_request" to RuntimeType.captureRequest(rc),
+                    "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
+                )
+
+            rustCrate.integrationTest("endpoint_params_validation") {
+                tokioTest("region_must_be_valid_host_label") {
+                    val moduleName = ctx.moduleUseName()
+                    rustTemplate(
+                        """
+                        let (http_client, _rx) = #{capture_request}(#{None});
+                        let client_config = $moduleName::Config::builder()
+                            .http_client(http_client)
+                            .region(#{Region}::new("@controlled-proxy.com##"))
+                            .build();
+
+                        let client = $moduleName::Client::from_conf(client_config);
+
+                        let err = client
+                            .some_operation()
+                            .send()
+                            .await
+                            .expect_err("error");
+
+                        let err_str = format!("{}", $moduleName::error::DisplayErrorContext(&err));
+                        dbg!(&err_str);
+                        let expected = "invalid value for field: `region` - must be a valid host label";
+                        assert!(err_str.contains(expected));
+
+                        """,
+                        *codegenScope,
+                    )
+                }
+            }
+        }
     }
 }
