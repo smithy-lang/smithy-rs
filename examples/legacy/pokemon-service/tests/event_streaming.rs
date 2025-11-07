@@ -7,6 +7,7 @@ pub mod common;
 
 use async_stream::stream;
 use rand::Rng;
+use serial_test::serial;
 
 use pokemon_service_client::types::{
     error::{AttemptCapturingPokemonEventError, MasterBallUnsuccessful},
@@ -33,9 +34,10 @@ fn get_pokeball() -> String {
 }
 
 #[tokio::test]
+#[serial]
 async fn event_stream_test() {
-    let server = common::run_server().await;
-    let client = common::client(server.port);
+    let _child = common::run_server().await;
+    let client = common::client();
 
     let mut team = vec![];
     let input_stream = stream! {
@@ -69,7 +71,7 @@ async fn event_stream_test() {
     };
 
     // Throw many!
-    let mut output = common::client(server.port)
+    let mut output = common::client()
         .capture_pokemon()
         .region("Kanto")
         .events(input_stream.into())
