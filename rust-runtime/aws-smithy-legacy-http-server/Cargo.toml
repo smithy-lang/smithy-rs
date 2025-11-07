@@ -1,0 +1,53 @@
+[package]
+name = "aws-smithy-legacy-http-server"
+version = "0.65.9"
+authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+keywords = ["smithy", "framework", "web", "api", "aws"]
+categories = ["asynchronous", "web-programming", "api-bindings"]
+description = """
+Server runtime for Smithy Rust Server Framework.
+"""
+publish = true
+
+[features]
+aws-lambda = ["dep:lambda_http"]
+unredacted-logging = []
+request-id = ["dep:uuid"]
+
+[dependencies]
+aws-smithy-http = { path = "../aws-smithy-legacy-http", features = ["rt-tokio"], package = "aws-smithy-legacy-http" }
+aws-smithy-json = { path = "../aws-smithy-json" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-02x"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "hyper-0-14-x"] }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
+aws-smithy-cbor = { path = "../aws-smithy-cbor" }
+bytes = "1.10.0"
+futures-util = { version = "0.3.29", default-features = false }
+http = "0.2.9"
+http-body = "0.4.5"
+hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
+lambda_http = { version = "0.8.4", optional = true }
+mime = "0.3.17"
+nom = "7.1.3"
+pin-project-lite = "0.2.14"
+regex = "1.11.1"
+serde_urlencoded = "0.7"
+thiserror = "2"
+tokio = { version = "1.40.0", features = ["full"] }
+tower = { version = "0.4.13", features = ["util", "make"], default-features = false }
+tower-http = { version = "0.3", features = ["add-extension", "map-response-body"] }
+tracing = "0.1.40"
+uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
+
+[dev-dependencies]
+pretty_assertions = "1"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata
