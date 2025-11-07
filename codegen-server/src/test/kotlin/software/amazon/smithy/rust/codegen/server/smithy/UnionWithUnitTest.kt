@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class UnionWithUnitTest {
@@ -72,6 +73,6 @@ class UnionWithUnitTest {
             """.asSmithyModel()
 
         // Ensure the generated SDK compiles.
-        serverIntegrationTest(model) { _, _ -> }
+        serverIntegrationTest(model, testCoverage = HttpTestType.AS_CONFIGURED) { _, _ -> }
     }
 }

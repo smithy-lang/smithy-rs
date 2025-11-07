@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLints
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
@@ -48,11 +49,15 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
             ),
         )
 
+        // Use version-aware smithy-http-server dependency name for features
+        val smithyHttpServerDep = ServerCargoDependency.smithyHttpServer(rc)
+        val smithyHttpServerName = smithyHttpServerDep.name
+
         rustCrate.mergeFeature(
             Feature(
                 "aws-lambda",
                 false,
-                listOf("aws-smithy-http-server/aws-lambda"),
+                listOf("$smithyHttpServerName/aws-lambda"),
             ),
         )
 
@@ -60,7 +65,7 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
             Feature(
                 "request-id",
                 true,
-                listOf("aws-smithy-http-server/request-id"),
+                listOf("$smithyHttpServerName/request-id"),
             ),
         )
 

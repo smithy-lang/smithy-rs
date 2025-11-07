@@ -11,6 +11,7 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSettings
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 /**
@@ -66,6 +67,7 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
             serverIntegrationTest(
                 testModelWithValidationExceptionImported,
                 IntegrationTestParams(),
+                testCoverage = HttpTestType.AS_CONFIGURED,
             )
         }
     }
@@ -80,6 +82,7 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
                         .addValidationExceptionToConstrainedOperations()
                         .toObjectNode(),
             ),
+            testCoverage = HttpTestType.AS_CONFIGURED,
         )
     }
 }

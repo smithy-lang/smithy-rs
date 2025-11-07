@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
 import software.amazon.smithy.rust.codegen.core.rustlang.DependencyScope
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 
 /**
@@ -29,10 +30,21 @@ object ServerCargoDependency {
     val TokioDev: CargoDependency =
         CargoDependency("tokio", CratesIo("1.23.1"), scope = DependencyScope.Dev)
     val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
-    val HyperDev: CargoDependency =
-        CargoDependency("hyper", CratesIo("0.14.12"), scope = DependencyScope.Dev)
 
-    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    /**
+     * Returns the appropriate smithy-http-server dependency based on HTTP version.
+     *
+     * For HTTP 1.x: returns `aws-smithy-http-server` (latest version)
+     * For HTTP 0.x: returns `aws-smithy-legacy-http-server` (forked version supporting http@0.2)
+     */
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig): CargoDependency =
+        when (runtimeConfig.httpVersion) {
+            HttpVersion.Http1x -> runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+            HttpVersion.Http0x -> runtimeConfig.smithyRuntimeCrate("smithy-legacy-http-server")
+        }
+
+    fun hyperDev(runtimeConfig: RuntimeConfig): CargoDependency =
+        CargoDependency.hyper(runtimeConfig).copy(scope = DependencyScope.Dev)
 
     fun smithyTypes(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-types")
 }
