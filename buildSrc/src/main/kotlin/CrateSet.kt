@@ -64,6 +64,7 @@ object CrateSet {
             "aws-smithy-http",
             "aws-smithy-http-client",
             "aws-smithy-json",
+            "aws-smithy-legacy-http",
             "aws-smithy-mocks",
             "aws-smithy-observability",
             "aws-smithy-observability-otel",
@@ -86,6 +87,7 @@ object CrateSet {
             Crate("aws-smithy-http-server", UNSTABLE_VERSION_PROP_NAME),
             Crate("aws-smithy-http-server-python", UNSTABLE_VERSION_PROP_NAME),
             Crate("aws-smithy-http-server-typescript", UNSTABLE_VERSION_PROP_NAME),
+            Crate("aws-smithy-legacy-http-server", UNSTABLE_VERSION_PROP_NAME),
         )
 
     val SERVER_SMITHY_RUNTIME = SMITHY_RUNTIME_COMMON + SERVER_SPECIFIC_SMITHY_RUNTIME
