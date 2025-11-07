@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
 import kotlin.streams.toList
@@ -304,6 +305,7 @@ class ConstraintsMemberShapeTest {
             IntegrationTestParams(
                 service = "constrainedMemberShape#ConstrainedService",
             ),
+            testCoverage = HttpTestType.AS_CONFIGURED,
         ) { _, rustCrate ->
             fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
                 unitTest(
