@@ -25,6 +25,7 @@ pub mod any_rejections {
     //! [`IntoResponse`].
 
     use super::IntoResponse;
+    use http;
     use thiserror::Error;
 
     macro_rules! any_rejection {

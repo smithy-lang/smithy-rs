@@ -19,7 +19,7 @@ use crate::instrumentation::{sensitivity::Sensitive, MakeFmt};
 ///
 /// ```
 /// # use aws_smithy_http_server::instrumentation::sensitivity::uri::Label;
-/// # use http::Uri;
+/// # use aws_smithy_http_server::http::Uri;
 /// # let path = "";
 /// // Path segment 2 is redacted and a trailing greedy label
 /// let uri = Label::new(&path, |x| x == 2, None);
@@ -177,7 +177,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use http::Uri;
+    use crate::http::Uri;
 
     use crate::instrumentation::sensitivity::uri::{tests::EXAMPLES, GreedyLabel};
 

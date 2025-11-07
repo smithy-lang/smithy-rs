@@ -6,6 +6,8 @@
 //! The [`lambda_http`] types included in [`http::Request`]s when [`LambdaHandler`](crate::routing::LambdaHandler) is
 //! used. Each are given a [`FromParts`] implementation for easy use within handlers.
 
+use crate::http;
+
 use lambda_http::request::RequestContext;
 #[doc(inline)]
 pub use lambda_http::{

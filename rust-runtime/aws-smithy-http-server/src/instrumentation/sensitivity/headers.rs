@@ -7,7 +7,7 @@
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use http::{header::HeaderName, HeaderMap};
+use crate::http::{header::HeaderName, HeaderMap};
 
 use crate::instrumentation::MakeFmt;
 
@@ -32,7 +32,7 @@ pub struct HeaderMarker {
 ///
 /// ```
 /// # use aws_smithy_http_server::instrumentation::sensitivity::headers::{SensitiveHeaders, HeaderMarker};
-/// # use http::header::HeaderMap;
+/// # use aws_smithy_http_server::http::header::HeaderMap;
 /// # let headers = HeaderMap::new();
 /// // Headers with keys equal to "header-name" are sensitive
 /// let marker = |key|

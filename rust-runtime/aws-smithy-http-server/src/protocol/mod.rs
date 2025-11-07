@@ -13,11 +13,15 @@ pub mod rpc_v2_cbor;
 
 use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
-use http::header::CONTENT_TYPE;
-use http::HeaderMap;
+
+use crate::http;
+
+use crate::http::header::CONTENT_TYPE;
+use crate::http::HeaderMap;
 
 #[cfg(test)]
 pub mod test_helpers {
+    use http;
     use http::{HeaderMap, Method, Request};
 
     /// Helper function to build a `Request`. Used in other test modules.
@@ -35,7 +39,8 @@ pub mod test_helpers {
         B: http_body::Body + std::marker::Unpin,
         B::Error: std::fmt::Debug,
     {
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        use http_body_util::BodyExt;
+        let body_bytes = body.collect().await.unwrap().to_bytes();
         String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 }

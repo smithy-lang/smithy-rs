@@ -34,9 +34,12 @@ use futures_util::{
     future::{Either, MapOk},
     TryFutureExt,
 };
-use http::Response;
-use http_body::Body as HttpBody;
 use tower::{util::Oneshot, Service, ServiceExt};
+
+use crate::http;
+use http_body::Body as HttpBody;
+
+use crate::http::Response;
 
 use crate::{
     body::{boxed, BoxBody},
