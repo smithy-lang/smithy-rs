@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.rustlang
 import software.amazon.smithy.codegen.core.SymbolDependency
 import software.amazon.smithy.codegen.core.SymbolDependencyContainer
 import software.amazon.smithy.rust.codegen.core.smithy.ConstrainedModule
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -369,6 +370,13 @@ data class CargoDependency(
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body")
         val HttpBodyUtil01x: CargoDependency =
             CargoDependency("http-body-util", CratesIo("0.1.3"))
+        private val Hyper1x: CargoDependency = CargoDependency("hyper-1x", CratesIo("1"), `package` = "hyper")
+
+        fun hyper(runtimeConfig: RuntimeConfig) =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> CargoDependency("hyper", CratesIo("1"))
+                HttpVersion.Http0x -> CargoDependency("hyper", CratesIo("0.14.26"))
+            }
 
         fun smithyAsync(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-async")
 
@@ -380,7 +388,17 @@ data class CargoDependency(
 
         fun smithyEventStream(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-eventstream")
 
-        fun smithyHttp(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http")
+        /**
+         * Returns the appropriate smithy-http dependency based on HTTP version.
+         *
+         * For HTTP 1.x: returns `aws-smithy-http` (latest version)
+         * For HTTP 0.x: returns `aws-smithy-legacy-http` (forked version supporting http@0.2)
+         */
+        fun smithyHttp(runtimeConfig: RuntimeConfig): CargoDependency =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> runtimeConfig.smithyRuntimeCrate("smithy-http")
+                HttpVersion.Http0x -> runtimeConfig.smithyRuntimeCrate("smithy-legacy-http")
+            }
 
         fun smithyHttpClient(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-client")
 
@@ -408,8 +426,17 @@ data class CargoDependency(
         fun smithyRuntimeApiTestUtil(runtimeConfig: RuntimeConfig) =
             smithyRuntimeApi(runtimeConfig).toDevDependency().withFeature("test-util")
 
-        fun smithyTypes(runtimeConfig: RuntimeConfig) =
-            runtimeConfig.smithyRuntimeCrate("smithy-types").withFeature("http-body-1-x")
+        /**
+         * Returns smithy-types with the appropriate http-body feature.
+         *
+         * For HTTP 1.x: adds "http-body-1-x" feature
+         * For HTTP 0.x: adds "http-body-0-4-x" feature
+         */
+        fun smithyTypes(runtimeConfig: RuntimeConfig): CargoDependency =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> runtimeConfig.smithyRuntimeCrate("smithy-types").withFeature("http-body-1-x")
+                HttpVersion.Http0x -> runtimeConfig.smithyRuntimeCrate("smithy-types").withFeature("http-body-0-4-x")
+            }
 
         fun smithyXml(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-xml")
 

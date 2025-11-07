@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingResolver
 
@@ -19,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpBindingReso
 class RestRequestSpecGenerator(
     private val httpBindingResolver: HttpBindingResolver,
     private val requestSpecModule: RuntimeType,
+    private val runtimeConfig: RuntimeConfig,
 ) {
     fun generate(operationShape: OperationShape): Writable {
         val httpTrait = httpBindingResolver.httpTrait(operationShape)
@@ -85,7 +87,7 @@ class RestRequestSpecGenerator(
                 *extraCodegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to RuntimeType.Http.resolve("Method"),
+                "Method" to RuntimeType.httpForConfig(runtimeConfig).resolve("Method"),
             )
         }
     }

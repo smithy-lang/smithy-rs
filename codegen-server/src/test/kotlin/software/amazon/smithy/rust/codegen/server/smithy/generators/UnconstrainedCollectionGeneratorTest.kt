@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class UnconstrainedCollectionGeneratorTest {
@@ -55,7 +56,7 @@ class UnconstrainedCollectionGeneratorTest {
             }
             """.asSmithyModel()
 
-        serverIntegrationTest(model) { _, rustCrate ->
+        serverIntegrationTest(model, testCoverage = HttpTestType.AS_CONFIGURED) { _, rustCrate ->
             rustCrate.testModule {
                 unitTest("list_a_unconstrained_fail_to_constrain_with_first_error") {
                     rust(
