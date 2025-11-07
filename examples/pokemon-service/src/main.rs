@@ -15,10 +15,11 @@ use pokemon_service_server_sdk::server::{
     layer::alb_health_check::AlbHealthCheckLayer,
     plugin::{HttpPlugins, ModelPlugins, Scoped},
     request::request_id::ServerRequestIdProviderLayer,
-    AddExtensionLayer,
+    serve, AddExtensionLayer,
 };
+use tokio::net::TcpListener;
 
-use hyper::StatusCode;
+use http::StatusCode;
 use plugin::PrintExt;
 
 use pokemon_service::{
@@ -106,10 +107,18 @@ pub async fn main() {
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
         .parse()
         .expect("unable to parse the server bind address and port");
-    let server = hyper::Server::bind(&bind).serve(make_app);
+    let listener = TcpListener::bind(bind)
+        .await
+        .expect("failed to bind TCP listener");
+
+    // Get the actual bound address (important when port 0 is used for random port)
+    let actual_addr = listener.local_addr().expect("failed to get local address");
+
+    // Signal that the server is ready to accept connections, including the actual port
+    eprintln!("SERVER_READY:{}", actual_addr.port());
 
     // Run forever-ish...
-    if let Err(err) = server.await {
-        eprintln!("server error: {}", err);
+    if let Err(err) = serve(listener, make_app).await {
+        eprintln!("server error: {err}");
     }
 }
