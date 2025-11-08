@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -33,7 +34,7 @@ enum class RefType {
     Variable,
 }
 
-data class VariableRef(
+data class AnnotatedRef(
     val name: String,
     val refType: RefType,
     val isOptional: Boolean,
@@ -85,7 +86,7 @@ internal class ConditionEvaluationGenerator(
 
     private fun annotateRefs(
         libraryFunction: LibraryFunction,
-        annotatedRefs: MutableList<VariableRef>,
+        annotatedRefs: MutableList<AnnotatedRef>,
     ) {
         val argExprAndType = libraryFunction.arguments.zip(libraryFunction.functionDefinition.arguments)
         argExprAndType.forEachIndexed { index, (argExpr, argType) ->
@@ -98,7 +99,7 @@ internal class ConditionEvaluationGenerator(
                     } else {
                         RefType.Variable
                     }
-                annotatedRefs.add(VariableRef(argExpr.name.toString(), refType, isOptional))
+                annotatedRefs.add(AnnotatedRef(argExpr.name.toString(), refType, isOptional))
             }
         }
 
@@ -109,48 +110,49 @@ internal class ConditionEvaluationGenerator(
         }
     }
 
-    private fun generateOptionalParamChecks(condition: Condition): Pair<String, Array<Pair<String, Writable>>> {
-        val annotatedRefs = mutableListOf<VariableRef>()
+    private fun generateOptionalParamChecks(condition: Condition): String {
+        val annotatedRefs = mutableListOf<AnnotatedRef>()
         annotateRefs(condition.function, annotatedRefs)
 
-//        condition.toExpression().references.forEach { refName ->
-//            val param = parameters.toList().find { it.name.toString() == refName }
-//            val isOptional =
-//                if (param != null) {
-//                    annotatedRefs.add(VariableRef(refName, RefType.Parameter, isOptional))
-//                } else {
-//                    annotatedRefs.add(VariableRef(refName, RefType.Variable, isOptional))
-//                }
-//        }
+        println("LNJ annotatedRefs: $annotatedRefs")
+        println("LNJ condition Result: ${condition.result}")
+        val ifLetStatement =
+            if (annotatedRefs.filter { it -> it.isOptional }.isNotEmpty()) {
+                var ifLetLhs = "if let ("
+                annotatedRefs.forEach { it ->
+                    if (it.isOptional) {
+                        ifLetLhs += "Some(${it.name.unsafeToRustName()}), "
+                    }
+                }
+                ifLetLhs += ")"
 
-        // TODO(Bdd): turn the annotated refs into an if/let block checking the tuple of
-        annotatedRefs.forEach { it ->
-        }
+                var ifLetRhs = "("
+                annotatedRefs.forEach { it ->
+                    if (it.isOptional) {
+                        if (it.refType == RefType.Parameter) {
+                            ifLetRhs += "${it.name.unsafeToRustName()}, "
+                        } else {
+                            ifLetRhs += "context.get(${it.name.unsafeToRustName()}), "
+                        }
+                    }
+                }
+                ifLetRhs += ")"
 
-        val argExpressions =
-            condition.function.arguments.mapIndexed { index, arg ->
-                index to ExpressionGenerator(Ownership.Borrowed, context).generate(arg)
-            }.toMap()
+                "$ifLetLhs = $ifLetRhs"
+            } else {
+                ""
+            }
 
-        val ifLetBlocks =
-            annotatedRefs.map { index ->
-                "if let Some(_param_$index) = #{arg_$index:W}"
-            }.joinToString(" ")
-
-        val templateArgs =
-            argExpressions.map { (index, writable) ->
-                "arg_$index" to writable
-            }.toTypedArray()
-
-        return ifLetBlocks to templateArgs
+        return ifLetStatement
     }
 
-    private fun generateConditionInternal(condition: Condition): Writable {
+    private fun generateConditionInternal(
+        condition: Condition,
+        conditionIndex: Int,
+    ): Writable {
         return {
             val generator = ExpressionGenerator(Ownership.Borrowed, context)
             val fn = condition.targetFunction()
-
-            println("LNJ CONDITION REFS: ${condition.function.references.map { it.unsafeToRustName() }}")
 
             // there are three patterns we need to handle:
             // 1. the RHS returns an option which we need to guard as "Some(...)"
@@ -160,45 +162,45 @@ internal class ConditionEvaluationGenerator(
             // (condition.result.orNull() ?: (fn as? Reference)?.name)?.rustName() ?: "_"
 
             // Check for optional parameters that need unwrapping
-            val optionalParams = condition.function.functionDefinition.arguments.filter { it is OptionalType }
             val target = generator.generate(fn)
 
-            val resultName = condition.result.map { it.toString().unsafeToRustName() }.orNull()
+            val resultName = condition.result.map { it.rustName() }.orNull()
             val contextStore =
                 if (resultName !== null) {
                     writable {
                         // TODO(bdd): might be better to use the functionDefinition.returnType here? But you can't get URL or ARN types by name
                         // they are just represented as a struct with fields, so would require a heuristic
                         val fnName = condition.function.name?.toString() ?: ""
-                        when {
-                            fnName == "parseURL" -> {
-                                rustTemplate(
-                                    "context.store(String::from(\"$resultName\"), ConditionResult::Url($resultName));",
-                                )
-                            }
-
-                            fnName == "aws.partition" -> {
-                                rustTemplate(
-                                    "context.store(String::from(\"$resultName\"), ConditionResult::Partition($resultName));",
-                                )
-                            }
-
-                            fnName == "aws.parseArn" -> {
-                                rustTemplate(
-                                    "context.store(String::from(\"$resultName\"), ConditionResult::Arn($resultName));",
-                                )
-                            }
-
-                            condition.function.functionDefinition.returnType is BooleanType -> {
-                                rustTemplate("context.store(String::from(\"$resultName\"), ConditionResult::Bool($resultName));")
-                            }
-
-                            else -> {
-                                rustTemplate(
-                                    "context.store(String::from(\"$resultName\"), ConditionResult::String($resultName.to_string()));",
-                                )
-                            }
-                        }
+//                        when {
+//                            fnName == "parseURL" -> {
+//                                rustTemplate(
+//                                    "context.store(String::from(\"$resultName\"), ConditionResult::Url($resultName));",
+//                                )
+//                            }
+//
+//                            fnName == "aws.partition" -> {
+//                                rustTemplate(
+//                                    "context.store(String::from(\"$resultName\"), ConditionResult::Partition($resultName));",
+//                                )
+//                            }
+//
+//                            fnName == "aws.parseArn" -> {
+//                                rustTemplate(
+//                                    "context.store(String::from(\"$resultName\"), ConditionResult::Arn($resultName));",
+//                                )
+//                            }
+//
+//                            condition.function.functionDefinition.returnType is BooleanType -> {
+//                                rustTemplate("context.store(String::from(\"$resultName\"), ConditionResult::Bool($resultName));")
+//                            }
+//
+//                            else -> {
+//                                rustTemplate(
+//                                    "context.store(String::from(\"$resultName\"), ConditionResult::String($resultName.to_string()));",
+//                                )
+//                            }
+//                        }
+                        rust("""context.$resultName = $resultName;""")
                     }
                 } else {
                     writable {}
@@ -206,20 +208,12 @@ internal class ConditionEvaluationGenerator(
 
             val returnType = condition.function.functionDefinition.returnType
 
-            val (ifLetBlocks, templateArgs) = generateOptionalParamChecks(condition)
-            println("LNJ IFLET: $ifLetBlocks")
-            println("LNJ TEMPLATE: ${templateArgs[0]}")
+            println("LNJ conditionIndex: $conditionIndex")
+            val ifLetStatement = generateOptionalParamChecks(condition)
+            println("LNJ ifLetStatement: $ifLetStatement")
+
             when {
                 // IsSet and Coalesce are inlined and not sourced from endpoint_lib
-                condition.function is IsSet -> {
-                    rustTemplate(
-                        """
-                        // LNJ IsSet
-                        #{target:W}.is_some()
-                        """.trimIndent(),
-                        "target" to target,
-                    )
-                }
 
                 condition.function is Coalesce -> {
                     rustTemplate(
@@ -231,68 +225,97 @@ internal class ConditionEvaluationGenerator(
                     )
                 }
 
+                condition.function is IsSet -> {
+                    println("LNJ FunctionDef: ${condition.function.functionDefinition.arguments}")
+                    rustTemplate(
+                        """
+                        // LNJ IsSet
+                        #{target:W}.is_some()
+                        """.trimIndent(),
+                        "target" to target,
+                    )
+                }
                 // Functions with optional parameters need parameter checking
-                optionalParams.isNotEmpty() -> {
-                    println("LNJ OPTIONAL PARAMS")
-
+                ifLetStatement.isNotEmpty() -> {
                     when {
+//                        condition.function is IsSet -> {
+//                            rustTemplate(
+//                                """
+//                                // LNJ IsSet (with if let)
+//                                $ifLetStatement {
+//                                    #{target:W}.is_some()
+//                                } else {
+//                                    false
+//                                }
+//                                """.trimIndent(),
+//                                "target" to target,
+//                            )
+//                        }
+
                         returnType is OptionalType -> {
                             rustTemplate(
-                                """$ifLetBlocks {
-                                if let Some($resultName) = #{target:W} {
-                                #{contextStore:W}
-                                true
+                                """
+                                // LNJ OptionalType (with if let)
+                                $ifLetStatement {
+                                    if let Some($resultName) = #{target:W} {
+                                        #{contextStore:W}
+                                        true
+                                    } else {
+                                        false
+                                    }
                                 } else {
-                                false
+                                    false
                                 }
-                                } else {
-                                false
-                                }""",
+                                """,
                                 "target" to target,
                                 "contextStore" to contextStore,
-                                *templateArgs,
                             )
                         }
 
                         returnType is BooleanType -> {
                             rustTemplate(
-                                """$ifLetBlocks {
-                                if #{target:W} {
-                                  #{contextStore:W}
-                                  true
+                                """
+                                // LNJ BooleanType (with if let)
+                                $ifLetStatement {
+                                    if #{target:W} {
+                                      #{contextStore:W}
+                                      true
+                                    } else {
+                                      #{contextStore:W}
+                                      false
+                                    }
                                 } else {
-                                  #{contextStore:W}
-                                  false
-                                }
-                                } else {
-                                false
+                                    false
                                 }""",
                                 "target" to target,
                                 "contextStore" to contextStore,
-                                *templateArgs,
                             )
                         }
 
                         else -> {
                             rustTemplate(
-                                """$ifLetBlocks {
-                                let $resultName = #{target:W};
-                                #{contextStore:W}
-                                true
+                                """
+                                // LNJ Infallible (with if let)
+                                $ifLetStatement {
+                                    let $resultName = #{target:W};
+                                    #{contextStore:W}
+                                    true
                                 } else {
-                                false
-                                }""",
+                                    false
+                                }
+                                """,
                                 "target" to target,
                                 "contextStore" to contextStore,
-                                *templateArgs,
                             )
                         }
                     }
                 }
 
                 // Other functions
+
                 returnType is OptionalType -> {
                     rustTemplate(
+                        // LNJ OptionalType
                         """if let Some($resultName) = #{target:W} {
                         #{contextStore:W}
                         true
@@ -308,6 +331,7 @@ internal class ConditionEvaluationGenerator(
                 returnType is BooleanType -> {
                     rustTemplate(
                         """
+                        // LNJ BooleanType
                         if #{target:W} {
                           #{contextStore:W}
                           true
@@ -347,7 +371,7 @@ internal class ConditionEvaluationGenerator(
         context: Context,
         conditionIndex: Int,
     ): Writable {
-        return generateConditionInternal(condition)
+        return generateConditionInternal(condition, conditionIndex)
     }
 
     /**

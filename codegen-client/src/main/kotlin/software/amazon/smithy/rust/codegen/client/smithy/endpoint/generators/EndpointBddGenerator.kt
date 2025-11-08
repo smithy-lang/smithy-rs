@@ -5,6 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
+import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
+import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -14,6 +20,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesG
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddExpressionGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -50,12 +59,13 @@ class EndpointBddGenerator(
         // Create context for expression generation with stdlib
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
+        val bddExpressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, listAllRefs())
 
         // Render conditions to a dummy writer to populate the function registry
         // This is the same trick used by EndpointResolverGenerator
         val dummyWriter = RustWriter.root()
-        bddTrait.conditions.forEach { cond ->
-            conditionGenerator.generateCondition(cond, context, 0)(
+        bddTrait.conditions.withIndex().forEach { (idx, cond) ->
+            bddExpressionGenerator.generateCondition(cond, 9999999)(
                 RustWriter.root(),
             )
         }
@@ -73,13 +83,7 @@ class EndpointBddGenerator(
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, condition) ->
-
-                "cond_$idx" to
-                    conditionGenerator.generateCondition(
-                        condition,
-                        context,
-                        idx,
-                    )
+                "cond_$idx" to bddExpressionGenerator.generateCondition(condition, idx)
             }
 
         // Identify which conditions produce results
@@ -91,7 +95,7 @@ class EndpointBddGenerator(
 
         writer.rustTemplate(
             """
-            use #{EndpointLib}::{evaluate_bdd, BddNode, ConditionContext, ConditionResult};
+            use #{EndpointLib}::{evaluate_bdd, BddNode, ConditionResult};
             use #{ResolveEndpointError};
 
             $nodes
@@ -103,12 +107,18 @@ class EndpointBddGenerator(
 
             impl ConditionFn {
                 fn evaluate(&self, params: &Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}, context: &mut ConditionContext, index: usize) -> bool {
+                    // Param bindings
                     #{param_bindings:W}
+
+                    // Non-Param references
+                    #{non_param_ref_bindings:W}
                     match self {
-                        ${(0 until conditionCount).joinToString(",\n            ") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
+                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
                     }
                 }
             }
+
+            #{ConditionContext:W}
 
             const CONDITIONS: &[ConditionFn] = &[
                 ${(0 until conditionCount).joinToString(",\n    ") { "ConditionFn::Cond$it" }}
@@ -137,7 +147,6 @@ class EndpointBddGenerator(
 
             ##[derive(Debug)]
             pub struct DefaultResolver {
-                partition_resolver: #{PartitionResolver},
                 #{custom_fields}
             }
 
@@ -159,7 +168,7 @@ class EndpointBddGenerator(
                         &CONDITIONS,
                         &RESULTS,
                         &mut diagnostic_collector,
-                        |service_params, condition, diagnostic_collector, context, index| {
+                        |service_params, condition, diagnostic_collector, ConditionContext::default(), index| {
                             condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, diagnostic_collector, context, index)
                         },
                     );
@@ -173,6 +182,59 @@ class EndpointBddGenerator(
                     })
                 }
             }
+
+            //TODO(BDD) move this to endpoint_lib
+            pub trait Coalesce {
+                type Arg1;
+                type Arg2;
+                type Result;
+
+                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result;
+            }
+
+            impl<T> Coalesce for &&&(&Option<T>, &Option<T>) {
+                type Arg1 = Option<T>;
+                type Arg2 = Option<T>;
+                type Result = Option<T>;
+
+                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
+                    |a: Option<T>, b: Option<T>| a.or(b)
+                }
+            }
+
+            impl<T> Coalesce for &&(&Option<T>, &T) {
+                type Arg1 = Option<T>;
+                type Arg2 = T;
+                type Result = T;
+
+                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
+                    |a: Option<T>, b: T| a.unwrap_or(b)
+                }
+            }
+
+            impl<T, U> Coalesce for &(&T, &U) {
+                type Arg1 = T;
+                type Arg2 = U;
+                type Result = T;
+
+                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
+                    |a: T, _b| a
+                }
+            }
+
+            ##[macro_export]
+            macro_rules! coalesce {
+                (${"$"}a:expr) => {${"$"}a};
+                (${"$"}a:expr, ${"$"}b:expr) => {{
+                    use ${"$"}crate::Coalesce;
+                    let a = ${"$"}a;
+                    let b = ${"$"}b;
+                    (&&&(&a, &b)).coalesce()(a, b)
+                }};
+                (${"$"}a:expr, ${"$"}b:expr ${'$'}(, ${"$"}c:expr)* ${'$'}(,)?) => {
+                    ${"$"}crate::coalesce!(${"$"}crate::coalesce!(${"$"}a, ${"$"}b) ${'$'}(, ${"$"}c)*)
+                }
+            }
             """,
             *preludeScope,
             "Endpoint" to Types(runtimeConfig).smithyEndpoint,
@@ -181,7 +243,9 @@ class EndpointBddGenerator(
             "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
             *Types(runtimeConfig).toArray(),
             "Params" to typeGenerator.paramsStruct(),
+            "ConditionContext" to generateContextStruct(),
             "param_bindings" to generateParamBindings(),
+            "non_param_ref_bindings" to generateNonParamReferences(),
             *conditionScope.toList().toTypedArray(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
@@ -216,6 +280,63 @@ class EndpointBddGenerator(
             }
         }
 
+    // All non-param references start as None
+    private fun generateNonParamReferences() =
+        writable {
+            val refs = extractNonParamReferences()
+            refs.forEach {
+                rust("let ${it.first.rustName()} = &mut context.${it.first.rustName()};")
+            }
+        }
+
+    private fun generateContextStruct() =
+        writable {
+            val refs = extractNonParamReferences()
+
+            val memberDefs =
+                refs.map {
+                    val fnName = it.third.function.name?.toString()
+                    val fn = it.third.function
+                    val type =
+                        if (it.second is OptionalType) {
+                            (it.second as OptionalType).inner()
+                        } else {
+                            it.second
+                        }
+                    val rustType =
+                        when {
+                            type is StringType -> "String"
+                            type is BooleanType -> "bool"
+                            type is ArrayType -> "Vec<String>"
+                            fn is ParseUrl -> "crate::endpoint_lib::parse_url::Url<'a>"
+                            fn is GetAttr -> "aws_smithy_types::Document"
+                            fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
+                            fnName == "aws.partition" -> "crate::endpoint_lib::partition::Partition<'a>"
+                            else -> throw IllegalArgumentException("Unsupported reference type $it")
+                        }
+                    "pub(crate) ${it.first.rustName()}: Option<$rustType>"
+                }.joinToString(",\n")
+
+            rustTemplate(
+                """
+                // These are all optional since they are sset by condition and will
+                // all be unset when we start evaluation
+                ##[derive(Default)]
+                pub(crate) struct ConditionContext<'a> {
+                    $memberDefs
+                }
+                """.trimIndent(),
+            )
+        }
+
+    private fun extractNonParamReferences() =
+        bddTrait.conditions.mapNotNull { cond ->
+            val result = cond.result.orElse(null)
+            val returnType = cond.function.functionDefinition.returnType
+
+            result?.let { Triple(it, returnType, cond) }
+        }
+
     private fun generateNodeArray(): String {
         val bdd = bddTrait.bdd
         val nodes = mutableListOf<String>()
@@ -225,6 +346,23 @@ class EndpointBddGenerator(
         }
 
         return "const NODES: &[BddNode] = &[\n    ${nodes.joinToString(",\n    ")}\n];"
+    }
+
+    private fun listAllRefs(): List<AnnotatedRef> {
+        val refs = mutableListOf<AnnotatedRef>()
+
+        bddTrait.parameters.forEach { param ->
+            refs.add(AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired))
+        }
+
+        bddTrait.conditions.forEach { cond ->
+            val result = cond.result.orElse(null)
+            if (result !== null) {
+                refs.add(AnnotatedRef(result.rustName(), RefType.Variable, true))
+            }
+        }
+
+        return refs
     }
 }
 
