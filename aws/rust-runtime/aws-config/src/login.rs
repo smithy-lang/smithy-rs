@@ -259,11 +259,11 @@ mod test {
     };
     use aws_smithy_types::body::SdkBody;
     use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::region::Region;
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
-    use aws_types::region::Region;
 
     #[derive(Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]
@@ -323,10 +323,10 @@ mod test {
     }
 
     #[derive(Deserialize, Debug)]
-    #[serde(untagged)]
+    #[serde(tag = "result")]
     enum Outcome {
+        #[serde(rename = "credentials")]
         Credentials {
-            result: String,
             #[serde(rename = "accessKeyId")]
             access_key_id: String,
             #[serde(rename = "secretAccessKey")]
@@ -339,16 +339,16 @@ mod test {
             #[allow(dead_code)]
             expires_at: Option<String>,
         },
-        Error {
-            result: String,
-        },
+        #[serde(rename = "error")]
+        Error,
+        #[serde(rename = "cacheContents")]
         CacheContents(HashMap<String, serde_json::Value>),
     }
 
     impl LoginTestCase {
         async fn check(&self) {
             let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
-            
+
             // Fixed time for testing: 2025-11-19T00:00:00Z
             let now = UNIX_EPOCH + Duration::from_secs(1763539200);
             let time_source = SharedTimeSource::new(StaticTimeSource::new(now));
@@ -380,9 +380,10 @@ mod test {
             let http_client = if self.mock_api_calls.is_empty() {
                 crate::test_case::no_traffic_client()
             } else {
-                aws_smithy_runtime_api::client::http::SharedHttpClient::new(
-                    TestHttpClient::new(&self.mock_api_calls, now),
-                )
+                aws_smithy_runtime_api::client::http::SharedHttpClient::new(TestHttpClient::new(
+                    &self.mock_api_calls,
+                    now,
+                ))
             };
 
             let provider_config = ProviderConfig::empty()
@@ -403,28 +404,24 @@ mod test {
             for outcome in &self.outcomes {
                 match outcome {
                     Outcome::Credentials {
-                        result: outcome_type,
                         access_key_id,
                         secret_access_key,
                         session_token,
                         account_id,
                         expires_at: _,
-                    } if outcome_type == "credentials" => {
+                    } => {
                         let creds = result.as_ref().expect("credentials should succeed");
                         assert_eq!(access_key_id, creds.access_key_id());
                         assert_eq!(secret_access_key, creds.secret_access_key());
                         assert_eq!(session_token, creds.session_token().unwrap());
                         assert_eq!(account_id, creds.account_id().unwrap().as_str());
                     }
-                    Outcome::Error { result: outcome_type } if outcome_type == "error" => {
+                    Outcome::Error => {
                         result.as_ref().expect_err("should fail");
                     }
                     Outcome::CacheContents(expected_cache) => {
                         // Verify cache was updated after provider call
                         for (filename, expected) in expected_cache {
-                            if filename == "result" {
-                                continue; // Skip the result field
-                            }
                             let path = format!("/home/user/.aws/login/cache/{}", filename);
                             let actual = fs.read_to_end(&path).await.expect("cache file exists");
                             let actual: serde_json::Value =
@@ -444,7 +441,6 @@ mod test {
                             );
                         }
                     }
-                    _ => {}
                 }
             }
         }
@@ -523,10 +519,9 @@ mod test {
 
     #[tokio::test]
     async fn run_login_tests() -> Result<(), Box<dyn Error>> {
-        let test_cases =
-            std::fs::read_to_string("test-data/login-provider-test-cases.json")?;
+        let test_cases = std::fs::read_to_string("test-data/login-provider-test-cases.json")?;
         let test_cases: Vec<LoginTestCase> = serde_json::from_str(&test_cases)?;
-        
+
         for (idx, test) in test_cases.iter().enumerate() {
             println!("Running test {}: {}", idx, test.documentation);
             test.check().await;
