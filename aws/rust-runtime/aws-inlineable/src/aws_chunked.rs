@@ -36,7 +36,7 @@ impl fmt::Display for Error {
         match self {
             Self::UnsizedRequestBody => write!(
                 f,
-                "Only request bodies with a known size can be aws-chunk encoded."
+                "Only request bodies with a known size can be aws-chunked encoded."
             ),
         }
     }
