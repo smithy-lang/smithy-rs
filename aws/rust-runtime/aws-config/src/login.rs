@@ -236,3 +236,301 @@ impl Builder {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    //! Test suite for LoginCredentialsProvider
+    //!
+    //! This test module reads test cases from `test-data/login-provider-test-cases.json`
+    //! and validates the behavior of the LoginCredentialsProvider against various scenarios
+    //! from the SEP.
+    use super::*;
+    use crate::provider_config::ProviderConfig;
+    use aws_credential_types::provider::ProvideCredentials;
+    use aws_sdk_signin::config::RuntimeComponents;
+    use aws_smithy_async::rt::sleep::TokioSleep;
+    use aws_smithy_async::time::{SharedTimeSource, StaticTimeSource};
+    use aws_smithy_runtime_api::client::{
+        http::{
+            HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
+            SharedHttpConnector,
+        },
+        orchestrator::{HttpRequest, HttpResponse},
+    };
+    use aws_smithy_types::body::SdkBody;
+    use aws_types::os_shim_internal::{Env, Fs};
+    use serde::Deserialize;
+    use std::collections::HashMap;
+    use std::error::Error;
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use aws_types::region::Region;
+
+    #[derive(Deserialize, Debug)]
+    #[serde(rename_all = "camelCase")]
+    struct LoginTestCase {
+        documentation: String,
+        config_contents: String,
+        cache_contents: HashMap<String, serde_json::Value>,
+        #[serde(default)]
+        mock_api_calls: Vec<MockApiCall>,
+        outcomes: Vec<Outcome>,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct MockApiCall {
+        request: MockRequest,
+        #[serde(default)]
+        response: Option<MockResponse>,
+        #[serde(default)]
+        response_code: Option<u16>,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct MockRequest {
+        token_input: TokenInput,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct TokenInput {
+        client_id: String,
+        refresh_token: String,
+        grant_type: String,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct MockResponse {
+        token_output: TokenOutput,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct TokenOutput {
+        access_token: AccessToken,
+        refresh_token: String,
+        expires_in: u64,
+    }
+
+    #[derive(Deserialize, Debug, Clone)]
+    #[serde(rename_all = "camelCase")]
+    struct AccessToken {
+        access_key_id: String,
+        secret_access_key: String,
+        session_token: String,
+    }
+
+    #[derive(Deserialize, Debug)]
+    #[serde(untagged)]
+    enum Outcome {
+        Credentials {
+            result: String,
+            #[serde(rename = "accessKeyId")]
+            access_key_id: String,
+            #[serde(rename = "secretAccessKey")]
+            secret_access_key: String,
+            #[serde(rename = "sessionToken")]
+            session_token: String,
+            #[serde(rename = "accountId")]
+            account_id: String,
+            #[serde(default, rename = "expiresAt")]
+            #[allow(dead_code)]
+            expires_at: Option<String>,
+        },
+        Error {
+            result: String,
+        },
+        CacheContents(HashMap<String, serde_json::Value>),
+    }
+
+    impl LoginTestCase {
+        async fn check(&self) {
+            let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
+            
+            // Fixed time for testing: 2025-11-19T00:00:00Z
+            let now = UNIX_EPOCH + Duration::from_secs(1763539200);
+            let time_source = SharedTimeSource::new(StaticTimeSource::new(now));
+
+            // Setup filesystem with cache and config contents
+            let mut fs_map = HashMap::new();
+            fs_map.insert(
+                "/home/user/.aws/config".to_string(),
+                self.config_contents.as_bytes().to_vec(),
+            );
+            for (filename, contents) in &self.cache_contents {
+                let path = format!("/home/user/.aws/login/cache/{}", filename);
+                // Add tokenType if missing (required by cache parser)
+                let mut contents = contents.clone();
+                if !contents.as_object().unwrap().contains_key("tokenType") {
+                    contents.as_object_mut().unwrap().insert(
+                        "tokenType".to_string(),
+                        serde_json::Value::String("aws_sigv4".to_string()),
+                    );
+                }
+                let json = serde_json::to_string(&contents).expect("valid json");
+                fs_map.insert(path, json.into_bytes());
+            }
+            let fs = Fs::from_map(fs_map);
+
+            let env = Env::from_slice(&[("HOME", "/home/user")]);
+
+            // Setup mock HTTP client
+            let http_client = if self.mock_api_calls.is_empty() {
+                crate::test_case::no_traffic_client()
+            } else {
+                aws_smithy_runtime_api::client::http::SharedHttpClient::new(
+                    TestHttpClient::new(&self.mock_api_calls, now),
+                )
+            };
+
+            let provider_config = ProviderConfig::empty()
+                .with_env(env.clone())
+                .with_fs(fs.clone())
+                .with_http_client(http_client)
+                .with_region(Some(Region::from_static("us-east-2")))
+                .with_sleep_impl(TokioSleep::new())
+                .with_time_source(time_source);
+
+            let provider = LoginCredentialsProvider::builder(session_arn)
+                .configure(&provider_config)
+                .build();
+
+            // Call provider once and validate result against all outcomes
+            let result = dbg!(provider.provide_credentials().await);
+
+            for outcome in &self.outcomes {
+                match outcome {
+                    Outcome::Credentials {
+                        result: outcome_type,
+                        access_key_id,
+                        secret_access_key,
+                        session_token,
+                        account_id,
+                        expires_at: _,
+                    } if outcome_type == "credentials" => {
+                        let creds = result.as_ref().expect("credentials should succeed");
+                        assert_eq!(access_key_id, creds.access_key_id());
+                        assert_eq!(secret_access_key, creds.secret_access_key());
+                        assert_eq!(session_token, creds.session_token().unwrap());
+                        assert_eq!(account_id, creds.account_id().unwrap().as_str());
+                    }
+                    Outcome::Error { result: outcome_type } if outcome_type == "error" => {
+                        result.as_ref().expect_err("should fail");
+                    }
+                    Outcome::CacheContents(expected_cache) => {
+                        // Verify cache was updated after provider call
+                        for (filename, expected) in expected_cache {
+                            if filename == "result" {
+                                continue; // Skip the result field
+                            }
+                            let path = format!("/home/user/.aws/login/cache/{}", filename);
+                            let actual = fs.read_to_end(&path).await.expect("cache file exists");
+                            let actual: serde_json::Value =
+                                serde_json::from_slice(&actual).expect("valid json");
+                            // Compare only the fields that matter (ignore formatting differences)
+                            assert_eq!(
+                                expected.get("accessToken"),
+                                actual.get("accessToken"),
+                                "accessToken mismatch for {}",
+                                filename
+                            );
+                            assert_eq!(
+                                expected.get("refreshToken"),
+                                actual.get("refreshToken"),
+                                "refreshToken mismatch for {}",
+                                filename
+                            );
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct TestHttpClient {
+        inner: SharedHttpConnector,
+    }
+
+    impl TestHttpClient {
+        fn new(mock_calls: &[MockApiCall], now: SystemTime) -> Self {
+            Self {
+                inner: SharedHttpConnector::new(TestHttpConnector {
+                    mock_calls: mock_calls.to_vec(),
+                    now,
+                }),
+            }
+        }
+    }
+
+    impl HttpClient for TestHttpClient {
+        fn http_connector(
+            &self,
+            _settings: &HttpConnectorSettings,
+            _components: &RuntimeComponents,
+        ) -> SharedHttpConnector {
+            self.inner.clone()
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    struct TestHttpConnector {
+        mock_calls: Vec<MockApiCall>,
+        now: SystemTime,
+    }
+
+    impl HttpConnector for TestHttpConnector {
+        fn call(&self, _request: HttpRequest) -> HttpConnectorFuture {
+            if let Some(mock) = self.mock_calls.first() {
+                if let Some(code) = mock.response_code {
+                    return HttpConnectorFuture::ready(Ok(HttpResponse::new(
+                        code.try_into().unwrap(),
+                        SdkBody::from("{\"error\":\"refresh_failed\"}"),
+                    )));
+                }
+                if let Some(resp) = &mock.response {
+                    let body = format!(
+                        r#"{{
+                            "accessToken": {{
+                                "accessKeyId": "{}",
+                                "secretAccessKey": "{}",
+                                "sessionToken": "{}"
+                            }},
+                            "expiresIn": {},
+                            "refreshToken": "{}"
+                        }}"#,
+                        resp.token_output.access_token.access_key_id,
+                        resp.token_output.access_token.secret_access_key,
+                        resp.token_output.access_token.session_token,
+                        resp.token_output.expires_in,
+                        resp.token_output.refresh_token
+                    );
+                    return HttpConnectorFuture::ready(Ok(HttpResponse::new(
+                        200.try_into().unwrap(),
+                        SdkBody::from(body),
+                    )));
+                }
+            }
+            HttpConnectorFuture::ready(Ok(HttpResponse::new(
+                500.try_into().unwrap(),
+                SdkBody::from("{\"error\":\"no_mock\"}"),
+            )))
+        }
+    }
+
+    #[tokio::test]
+    async fn run_login_tests() -> Result<(), Box<dyn Error>> {
+        let test_cases =
+            std::fs::read_to_string("test-data/login-provider-test-cases.json")?;
+        let test_cases: Vec<LoginTestCase> = serde_json::from_str(&test_cases)?;
+        
+        for (idx, test) in test_cases.iter().enumerate() {
+            println!("Running test {}: {}", idx, test.documentation);
+            test.check().await;
+        }
+        Ok(())
+    }
+}

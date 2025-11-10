@@ -1,6 +1,29 @@
 {
     "smithy": "2.0",
     "shapes": {
+        "com.amazonaws.signin#AccessDeniedException": {
+            "type": "structure",
+            "members": {
+                "error": {
+                    "target": "com.amazonaws.signin#OAuth2ErrorCode",
+                    "traits": {
+                        "smithy.api#documentation": "OAuth 2.0 error code indicating the specific type of access denial\nCan be TOKEN_EXPIRED, AUTHCODE_EXPIRED, USER_CREDENTIALS_CHANGED, or INSUFFICIENT_PERMISSIONS",
+                        "smithy.api#required": {}
+                    }
+                },
+                "message": {
+                    "target": "smithy.api#String",
+                    "traits": {
+                        "smithy.api#documentation": "Detailed message explaining the access denial\nProvides specific information about why access was denied",
+                        "smithy.api#required": {}
+                    }
+                }
+            },
+            "traits": {
+                "smithy.api#documentation": "Error thrown for access denied scenarios with flexible HTTP status mapping\n\nRuntime HTTP Status Code Mapping:\n- HTTP 401 (Unauthorized): TOKEN_EXPIRED, AUTHCODE_EXPIRED\n- HTTP 403 (Forbidden): USER_CREDENTIALS_CHANGED, INSUFFICIENT_PERMISSIONS\n\nThe specific HTTP status code is determined at runtime based on the error enum value.\nConsumers should use the error field to determine the specific access denial reason.",
+                "smithy.api#error": "client"
+            }
+        },
         "com.amazonaws.signin#AccessToken": {
             "type": "structure",
             "members": {
@@ -72,21 +95,21 @@
             },
             "errors": [
                 {
-                    "target": "com.amazonaws.signin#ForbiddenError"
+                    "target": "com.amazonaws.signin#AccessDeniedException"
                 },
                 {
-                    "target": "com.amazonaws.signin#InvalidRequestError"
+                    "target": "com.amazonaws.signin#InternalServerException"
                 },
                 {
                     "target": "com.amazonaws.signin#TooManyRequestsError"
                 },
                 {
-                    "target": "com.amazonaws.signin#UnauthorizedError"
+                    "target": "com.amazonaws.signin#ValidationException"
                 }
             ],
             "traits": {
                 "smithy.api#auth": [],
-                "smithy.api#documentation": "CreateOAuth2Token API\n\nPath: /v1/token\nRequest Method: POST\nContent-Type: application/json or application/x-www-form-urlencoded\n\nThis API implements OAuth 2.0 flows for AWS Sign-In CLI clients, supporting both:\n1. Authorization code redemption (grant_type=authorization_code) - NOT idempotent\n2. Token refresh (grant_type=refresh_token) - Idempotent within token validity window\n\nThe operation behavior is determined by the grant_type parameter in the request body:\n\n**Authorization Code Flow (NOT Idempotent):**\n- DPoP proof JWT header for demonstrating proof-of-possession of private key\n- JSON or form-encoded body with client_id, grant_type=authorization_code, code, redirect_uri, code_verifier\n- Returns access_token, token_type, expires_in, refresh_token, and id_token\n- Each authorization code can only be used ONCE for security (prevents replay attacks)\n\n**Token Refresh Flow (Idempotent):**\n- DPoP proof JWT header (same private key as original auth_code redemption)\n- JSON or form-encoded body with client_id, grant_type=refresh_token, refresh_token\n- Returns access_token, token_type, expires_in, and refresh_token (no id_token)\n- Multiple calls with same refresh_token return consistent results within validity window\n\nAuthentication and authorization:\n- Confidential clients: sigv4 signing required with signin:ExchangeToken permissions\n- CLI clients (public): authn/authz skipped based on client_id & grant_type\n\nNote: This operation cannot be marked as @idempotent because it handles both idempotent\n(token refresh) and non-idempotent (auth code redemption) flows in a single endpoint.",
+                "smithy.api#documentation": "CreateOAuth2Token API\n\nPath: /v1/token\nRequest Method: POST\nContent-Type: application/json or application/x-www-form-urlencoded\n\nThis API implements OAuth 2.0 flows for AWS Sign-In CLI clients, supporting both:\n1. Authorization code redemption (grant_type=authorization_code) - NOT idempotent\n2. Token refresh (grant_type=refresh_token) - Idempotent within token validity window\n\nThe operation behavior is determined by the grant_type parameter in the request body:\n\n**Authorization Code Flow (NOT Idempotent):**\n- JSON or form-encoded body with client_id, grant_type=authorization_code, code, redirect_uri, code_verifier\n- Returns access_token, token_type, expires_in, refresh_token, and id_token\n- Each authorization code can only be used ONCE for security (prevents replay attacks)\n\n**Token Refresh Flow (Idempotent):**\n- JSON or form-encoded body with client_id, grant_type=refresh_token, refresh_token\n- Returns access_token, token_type, expires_in, and refresh_token (no id_token)\n- Multiple calls with same refresh_token return consistent results within validity window\n\nAuthentication and authorization:\n- Confidential clients: sigv4 signing required with signin:ExchangeToken permissions\n- CLI clients (public): authn/authz skipped based on client_id & grant_type\n\nNote: This operation cannot be marked as @idempotent because it handles both idempotent\n(token refresh) and non-idempotent (auth code redemption) flows in a single endpoint.",
                 "smithy.api#http": {
                     "method": "POST",
                     "uri": "/v1/token"
@@ -95,7 +118,6 @@
                     {
                         "id": "TokenOperationSmokeTest",
                         "params": {
-                            "dpopProof": "test-dpop-proof",
                             "tokenInput": {
                                 "clientId": "aws:signin:::cli/same-device",
                                 "grantType": "authorization_code",
@@ -116,14 +138,6 @@
         "com.amazonaws.signin#CreateOAuth2TokenRequest": {
             "type": "structure",
             "members": {
-                "dpopProof": {
-                    "target": "com.amazonaws.signin#DPoPProof",
-                    "traits": {
-                        "smithy.api#documentation": "DPoP proof JWT header for demonstrating proof-of-possession of the private key\n\nHeader format: {\"typ\": \"dpop+jwt\", \"alg\": \"ES256\", \"jwk\": {...}}\nPayload format: {\"htm\": \"POST\", \"htu\": \"https://server.example.com/token\", \"iat\": timestamp, \"jti\": \"unique-id\"}\nMust be signed with the private key corresponding to the embedded jwk",
-                        "smithy.api#httpHeader": "DPoP",
-                        "smithy.api#required": {}
-                    }
-                },
                 "tokenInput": {
                     "target": "com.amazonaws.signin#CreateOAuth2TokenRequestBody",
                     "traits": {
@@ -253,16 +267,6 @@
                 "smithy.api#documentation": "Response body payload for CreateOAuth2Token operation\n\nThe response content depends on the grant_type from the request:\n- grant_type=authorization_code: Returns all fields including refresh_token and id_token\n- grant_type=refresh_token: Returns access_token, token_type, expires_in, refresh_token (no id_token)"
             }
         },
-        "com.amazonaws.signin#DPoPProof": {
-            "type": "string",
-            "traits": {
-                "smithy.api#documentation": "DPoP proof JWT for demonstrating proof-of-possession\n\nDPoP (Demonstration of Proof-of-Possession) JWT header structure:\nHeader: {\"typ\": \"dpop+jwt\", \"alg\": \"ES256\", \"jwk\": {...}}\nPayload: {\"htm\": \"POST\", \"htu\": \"https://server.example.com/token\", \"iat\": timestamp, \"jti\": \"unique-id\"}\n\nKey components:\n- htm: HTTP method being used (POST)\n- htu: HTTP URI being accessed (e.g., https://us-east-1.signin.aws.amazon.com/v1/token)\n- iat: Issued at timestamp\n- jti: Unique identifier for the JWT\n\nFor token refresh: Must be generated with same private key as original auth_code redemption.\nOnly iat changes (within acceptable clock skew).",
-                "smithy.api#length": {
-                    "min": 1,
-                    "max": 4096
-                }
-            }
-        },
         "com.amazonaws.signin#ExpiresIn": {
             "type": "integer",
             "traits": {
@@ -271,30 +275,6 @@
                     "min": 1,
                     "max": 900
                 }
-            }
-        },
-        "com.amazonaws.signin#ForbiddenError": {
-            "type": "structure",
-            "members": {
-                "error": {
-                    "target": "com.amazonaws.signin#OAuth2ErrorCode",
-                    "traits": {
-                        "smithy.api#documentation": "OAuth 2.0 error code indicating the specific type of error\nWill be ACCESS_DENIED for authorization failures",
-                        "smithy.api#required": {}
-                    }
-                },
-                "message": {
-                    "target": "smithy.api#String",
-                    "traits": {
-                        "smithy.api#documentation": "Detailed message explaining the authorization failure\nProvides information about permission or policy violations",
-                        "smithy.api#required": {}
-                    }
-                }
-            },
-            "traits": {
-                "smithy.api#documentation": "Error thrown when the client is not authorized or has insufficient permissions\n\nHTTP Status Code: 403 Forbidden\n\nPossible OAuth2ErrorCode values:\n- ACCESS_DENIED: Insufficient permissions, unauthorized client, policy failures\n\nPossible causes:\n- Unauthorized widget or client_id not registered\n- Insufficient permissions for the requested scope\n- Client not authorized to use the specified grant_type\n- DPoP key binding validation failure (cnf.jkt mismatch)\n- Policy evaluation failure for credential scoping",
-                "smithy.api#error": "client",
-                "smithy.api#httpError": 403
             }
         },
         "com.amazonaws.signin#GrantType": {
@@ -314,66 +294,73 @@
                 }
             }
         },
-        "com.amazonaws.signin#InvalidRequestError": {
+        "com.amazonaws.signin#InternalServerException": {
             "type": "structure",
             "members": {
                 "error": {
                     "target": "com.amazonaws.signin#OAuth2ErrorCode",
                     "traits": {
-                        "smithy.api#documentation": "OAuth 2.0 error code indicating the specific type of error\nCan be INVALID_REQUEST, INVALID_GRANT, or NOT_FOUND",
+                        "smithy.api#documentation": "OAuth 2.0 error code indicating server error\nWill be SERVER_ERROR for internal server errors",
                         "smithy.api#required": {}
                     }
                 },
                 "message": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "Detailed message explaining the request validation failure\nProvides specific information about which parameter or validation failed",
+                        "smithy.api#documentation": "Detailed message explaining the server error\nMay include error details for debugging purposes",
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "Error thrown when the request is malformed or missing required parameters\n\nHTTP Status Code: 400 Bad Request\n\nPossible OAuth2ErrorCode values:\n- INVALID_REQUEST: Malformed request body, missing parameters, invalid parameter values\n- INVALID_GRANT: Invalid/expired authorization code, PKCE code_verifier validation failure\n- NOT_FOUND: Feature not enabled (returned as 400 instead of 503)\n\nPossible causes:\n- Malformed request body (invalid form encoding)\n- Missing required parameters (client_id, grant_type, code, etc.)\n- Invalid parameter values (malformed client_id ARN, invalid grant_type)\n- Invalid DPoP proof JWT format or signature\n- PKCE code_verifier validation failure\n- Redirect URI mismatch with original authorization request\n- Feature not enabled or resource not found",
-                "smithy.api#error": "client",
-                "smithy.api#httpError": 400
+                "smithy.api#documentation": "Error thrown when an internal server error occurs\n\nHTTP Status Code: 500 Internal Server Error\n\nUsed for unexpected server-side errors that prevent request processing.",
+                "smithy.api#error": "server",
+                "smithy.api#httpError": 500
             }
         },
         "com.amazonaws.signin#OAuth2ErrorCode": {
             "type": "enum",
             "members": {
+                "TOKEN_EXPIRED": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Token has expired and needs to be refreshed",
+                        "smithy.api#enumValue": "token_expired"
+                    }
+                },
+                "USER_CREDENTIALS_CHANGED": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "User credentials have been changed",
+                        "smithy.api#enumValue": "user_credentials_changed"
+                    }
+                },
+                "INSUFFICIENT_PERMISSIONS": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Insufficient permissions to perform this operation",
+                        "smithy.api#enumValue": "insufficient_permissions"
+                    }
+                },
+                "AUTHCODE_EXPIRED": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Authorization code has expired",
+                        "smithy.api#enumValue": "authcode_expired"
+                    }
+                },
+                "SERVER_ERROR": {
+                    "target": "smithy.api#Unit",
+                    "traits": {
+                        "smithy.api#documentation": "Internal server error occurred",
+                        "smithy.api#enumValue": "server_error"
+                    }
+                },
                 "INVALID_REQUEST": {
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "The request is missing a required parameter, includes an invalid parameter value, or is otherwise malformed",
                         "smithy.api#enumValue": "invalid_request"
-                    }
-                },
-                "INVALID_CLIENT": {
-                    "target": "smithy.api#Unit",
-                    "traits": {
-                        "smithy.api#documentation": "Client authentication failed",
-                        "smithy.api#enumValue": "invalid_client"
-                    }
-                },
-                "NOT_FOUND": {
-                    "target": "smithy.api#Unit",
-                    "traits": {
-                        "smithy.api#documentation": "Feature not enabled or resource not found",
-                        "smithy.api#enumValue": "not_found"
-                    }
-                },
-                "ACCESS_DENIED": {
-                    "target": "smithy.api#Unit",
-                    "traits": {
-                        "smithy.api#documentation": "Insufficient permissions to perform this operation",
-                        "smithy.api#enumValue": "access_denied"
-                    }
-                },
-                "INVALID_GRANT": {
-                    "target": "smithy.api#Unit",
-                    "traits": {
-                        "smithy.api#documentation": "The provided authorization grant is invalid, expired, revoked, or malformed",
-                        "smithy.api#enumValue": "invalid_grant"
                     }
                 }
             },
@@ -1280,28 +1267,28 @@
                 "smithy.api#httpError": 429
             }
         },
-        "com.amazonaws.signin#UnauthorizedError": {
+        "com.amazonaws.signin#ValidationException": {
             "type": "structure",
             "members": {
                 "error": {
                     "target": "com.amazonaws.signin#OAuth2ErrorCode",
                     "traits": {
-                        "smithy.api#documentation": "OAuth 2.0 error code indicating the specific type of error\nWill be INVALID_CLIENT for authentication failures",
+                        "smithy.api#documentation": "OAuth 2.0 error code indicating validation failure\nWill be INVALID_REQUEST for validation errors",
                         "smithy.api#required": {}
                     }
                 },
                 "message": {
                     "target": "smithy.api#String",
                     "traits": {
-                        "smithy.api#documentation": "Detailed message explaining the authentication failure\nIndicates specific authentication issue (expired token, invalid signature, etc.)",
+                        "smithy.api#documentation": "Detailed message explaining the validation failure\nProvides specific information about which validation failed",
                         "smithy.api#required": {}
                     }
                 }
             },
             "traits": {
-                "smithy.api#documentation": "Error thrown when the access token is invalid or expired\n\nHTTP Status Code: 401 Unauthorized\n\nPossible OAuth2ErrorCode values:\n- INVALID_CLIENT: Client authentication failed, invalid tokens, DPoP validation failure\n\nPossible causes:\n- Invalid or expired authorization code\n- Invalid or expired refresh token\n- DPoP proof JWT validation failure (invalid signature, expired, wrong key)\n- Authorization code already used (replay attack prevention)\n- Refresh token revoked or invalid\n- Client authentication failed",
+                "smithy.api#documentation": "Error thrown when request validation fails\n\nHTTP Status Code: 400 Bad Request\n\nUsed for request validation errors such as malformed parameters,\nmissing required fields, or invalid parameter values.",
                 "smithy.api#error": "client",
-                "smithy.api#httpError": 401
+                "smithy.api#httpError": 400
             }
         }
     }
