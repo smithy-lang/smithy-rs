@@ -206,7 +206,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
                                                 expires_at = Some(c.expiration);
                                             }
                                             crate::json_credentials::JsonCredentials::Error { code, message } => {
-                                                return Err(Error::JsonError(format!("error parsing `accessToken`: {} - {}", code, message).into()))
+                                                return Err(Error::JsonError(format!("error parsing `accessToken`: {code} - {message}").into()))
                                             }
                                         }
                                         break;
@@ -263,7 +263,7 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
             }
             other => {
                 return Err(Error::other(
-                    format!("expected object key, found: {:?}", other),
+                    format!("expected object key, found: {other:?}"),
                     None,
                 ));
             }

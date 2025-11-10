@@ -98,7 +98,7 @@ fn build_message(header: &Header, payload: &Payload) -> String {
 
     let header_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(header_json.as_bytes());
     let payload_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(payload_json.as_bytes());
-    format!("{}.{}", header_b64, payload_b64)
+    format!("{header_b64}.{payload_b64}")
 }
 
 fn sign(message: &str, private_key: &SecretKey) -> Result<String, LoginTokenError> {
@@ -106,7 +106,7 @@ fn sign(message: &str, private_key: &SecretKey) -> Result<String, LoginTokenErro
     let mut rng = rand::rngs::StdRng::from_entropy();
     let signature: Signature = signing_key.sign_with_rng(&mut rng, message.as_bytes());
     let signature_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(signature.to_bytes());
-    Ok(format!("{}.{}", message, signature_b64))
+    Ok(format!("{message}.{signature_b64}"))
 }
 
 /// Calculate DPoP HTTP header using the private key.
