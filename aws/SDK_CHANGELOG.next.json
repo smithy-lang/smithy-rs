@@ -18,7 +18,7 @@
         "smithy-rs#4353"
       ],
       "since-commit": "cf1e783d15842aab12e1ee02ce9d329b8443e848",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add tags to `AssumeRoleProviderBuilder`\n",
@@ -32,7 +32,7 @@
         "aws-sdk-rust#1366"
       ],
       "since-commit": "cf1e783d15842aab12e1ee02ce9d329b8443e848",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Adds new `with_test_defaults_v2()` for all clients supporting region configuration which applies `us-east-1` as default region if not set by user. This allows `aws-smithy-mocks` to work for non AWS SDK generated clients. Also clarify `test-util` feature requirement when using `aws-smithy-mocks`.\n",
@@ -47,7 +47,7 @@
         "smithy-rs#4189"
       ],
       "since-commit": "cf1e783d15842aab12e1ee02ce9d329b8443e848",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Upgrade MSRV to Rust 1.88.0.\n",
@@ -61,6 +61,30 @@
         "smithy-rs#4367"
       ],
       "since-commit": "cf1e783d15842aab12e1ee02ce9d329b8443e848",
+      "age": 2
+    },
+    {
+      "message": "Bump crc-fast version to 1.6.0\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "landonxjames",
+      "references": [],
+      "since-commit": "4533810c833251e78df3d8a4992b8ccc5f2fc67c",
+      "age": 1
+    },
+    {
+      "message": "Validate `Region` is a valid host label when constructing endpoints.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "aajtodd",
+      "references": [],
+      "since-commit": "4533810c833251e78df3d8a4992b8ccc5f2fc67c",
       "age": 1
     }
   ],
