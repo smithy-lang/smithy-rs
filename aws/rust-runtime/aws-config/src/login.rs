@@ -279,25 +279,10 @@ mod test {
     #[derive(Deserialize, Debug, Clone)]
     #[serde(rename_all = "camelCase")]
     struct MockApiCall {
-        request: MockRequest,
         #[serde(default)]
         response: Option<MockResponse>,
         #[serde(default)]
         response_code: Option<u16>,
-    }
-
-    #[derive(Deserialize, Debug, Clone)]
-    #[serde(rename_all = "camelCase")]
-    struct MockRequest {
-        token_input: TokenInput,
-    }
-
-    #[derive(Deserialize, Debug, Clone)]
-    #[serde(rename_all = "camelCase")]
-    struct TokenInput {
-        client_id: String,
-        refresh_token: String,
-        grant_type: String,
     }
 
     #[derive(Deserialize, Debug, Clone)]
@@ -382,7 +367,6 @@ mod test {
             } else {
                 aws_smithy_runtime_api::client::http::SharedHttpClient::new(TestHttpClient::new(
                     &self.mock_api_calls,
-                    now,
                 ))
             };
 
@@ -452,11 +436,10 @@ mod test {
     }
 
     impl TestHttpClient {
-        fn new(mock_calls: &[MockApiCall], now: SystemTime) -> Self {
+        fn new(mock_calls: &[MockApiCall]) -> Self {
             Self {
                 inner: SharedHttpConnector::new(TestHttpConnector {
                     mock_calls: mock_calls.to_vec(),
-                    now,
                 }),
             }
         }
@@ -475,7 +458,6 @@ mod test {
     #[derive(Debug, Clone)]
     struct TestHttpConnector {
         mock_calls: Vec<MockApiCall>,
-        now: SystemTime,
     }
 
     impl HttpConnector for TestHttpConnector {
