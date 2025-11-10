@@ -17,7 +17,8 @@ use aws_credential_types::provider;
 use aws_credential_types::provider::future;
 use aws_credential_types::provider::ProvideCredentials;
 use aws_sdk_signin::config::Builder as SignInClientConfigBuilder;
-use aws_sdk_signin::types::CreateOAuth2TokenRequestBody;
+use aws_sdk_signin::operation::create_o_auth2_token::CreateOAuth2TokenError;
+use aws_sdk_signin::types::{CreateOAuth2TokenRequestBody, OAuth2ErrorCode};
 use aws_sdk_signin::Client as SignInClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime::expiring_cache::ExpiringCache;
@@ -156,7 +157,23 @@ impl LoginCredentialsProvider {
             )
             .send()
             .await
-            .map_err(|e| LoginTokenError::RefreshFailed(e.into()))?;
+            .map_err(|err| {
+                let service_err = err.into_service_error();
+                let message = match &service_err {
+                    CreateOAuth2TokenError::AccessDeniedException(e) => match e.error {
+                        OAuth2ErrorCode::InsufficientPermissions => Some("Unable to refresh credentials due to insufficient permissions. You may be missing permission for the 'CreateOAuth2Token' action.".to_string()),
+                        OAuth2ErrorCode::TokenExpired => Some("Your session has expired. Please reauthenticate.".to_string()),
+                        OAuth2ErrorCode::UserCredentialsChanged => Some("Unable to refresh credentials because of a change in your password. Please reauthenticate with your new password.".to_string()),
+                        _ => None,
+                    }
+                    _ => None,
+                };
+
+                LoginTokenError::RefreshFailed {
+                    message,
+                    source: service_err.into(),
+                }
+            })?;
 
         let token_output = resp.token_output.expect("valid token response");
         let new_token = LoginToken::from_refresh(cached_token, token_output, now);

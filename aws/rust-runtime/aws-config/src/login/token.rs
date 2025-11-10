@@ -103,7 +103,10 @@ pub(super) enum LoginTokenError {
     NoHomeDirectory,
     ExpiredToken,
     WrongIdentityType(Identity),
-    RefreshFailed(Box<dyn StdError + Send + Sync>),
+    RefreshFailed {
+        message: Option<String>,
+        source: Box<dyn StdError + Send + Sync>,
+    },
     Other {
         message: String,
         source: Option<Box<dyn StdError + Send + Sync>>,
@@ -136,7 +139,13 @@ impl fmt::Display for LoginTokenError {
             Self::WrongIdentityType(identity) => {
                 write!(f, "wrong identity type for Login. Expected DPoP private key but got `{identity:?}`")
             }
-            Self::RefreshFailed(_) => write!(f, "failed to refresh cached Login token"),
+            Self::RefreshFailed { message, .. } => {
+                if let Some(msg) = message {
+                    write!(f, "failed to refresh cached Login token: {msg}")
+                } else {
+                    write!(f, "failed to refresh cached Login token")
+                }
+            }
             Self::Other { message, .. } => {
                 write!(f, "failed to load cached Login token: {message}")
             }
@@ -154,7 +163,7 @@ impl StdError for LoginTokenError {
             LoginTokenError::NoHomeDirectory => None,
             LoginTokenError::ExpiredToken => None,
             LoginTokenError::WrongIdentityType(_) => None,
-            LoginTokenError::RefreshFailed(source) => Some(source.as_ref()),
+            LoginTokenError::RefreshFailed { source, .. } => Some(source.as_ref()),
             LoginTokenError::Other { source, .. } => match source {
                 Some(err) => Some(err.as_ref()),
                 None => None,
@@ -186,7 +195,7 @@ impl From<LoginTokenError> for CredentialsError {
             LoginTokenError::MissingField(_) => CredentialsError::invalid_configuration(val),
             LoginTokenError::NoHomeDirectory => CredentialsError::unhandled(val),
             LoginTokenError::ExpiredToken => CredentialsError::unhandled(val),
-            LoginTokenError::RefreshFailed(_) => CredentialsError::provider_error(val),
+            LoginTokenError::RefreshFailed { .. } => CredentialsError::provider_error(val),
             LoginTokenError::WrongIdentityType(_) => CredentialsError::invalid_configuration(val),
             LoginTokenError::Other { .. } => CredentialsError::unhandled(val),
         }
