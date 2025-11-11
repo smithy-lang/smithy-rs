@@ -325,28 +325,28 @@
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "Token has expired and needs to be refreshed",
-                        "smithy.api#enumValue": "token_expired"
+                        "smithy.api#enumValue": "TOKEN_EXPIRED"
                     }
                 },
                 "USER_CREDENTIALS_CHANGED": {
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "User credentials have been changed",
-                        "smithy.api#enumValue": "user_credentials_changed"
+                        "smithy.api#enumValue": "USER_CREDENTIALS_CHANGED"
                     }
                 },
                 "INSUFFICIENT_PERMISSIONS": {
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "Insufficient permissions to perform this operation",
-                        "smithy.api#enumValue": "insufficient_permissions"
+                        "smithy.api#enumValue": "INSUFFICIENT_PERMISSIONS"
                     }
                 },
                 "AUTHCODE_EXPIRED": {
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "Authorization code has expired",
-                        "smithy.api#enumValue": "authcode_expired"
+                        "smithy.api#enumValue": "AUTHCODE_EXPIRED"
                     }
                 },
                 "SERVER_ERROR": {
@@ -360,7 +360,7 @@
                     "target": "smithy.api#Unit",
                     "traits": {
                         "smithy.api#documentation": "The request is missing a required parameter, includes an invalid parameter value, or is otherwise malformed",
-                        "smithy.api#enumValue": "invalid_request"
+                        "smithy.api#enumValue": "INVALID_REQUEST"
                     }
                 }
             },
