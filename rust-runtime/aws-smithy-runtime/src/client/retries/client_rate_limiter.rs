@@ -387,7 +387,7 @@ impl ClientRateLimiterOps for StaticInner {
 
 impl StaticInner {
 
-    fn update_rate_limiter(&mut self, is_error: bool) {
+    fn update_rate_limiter(&mut self, is_throttling_error: bool) {
         // Enable bucket on first throttle
         if is_throttling_error && !self.enabled {
             self.enabled = true;
