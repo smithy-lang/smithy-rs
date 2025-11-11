@@ -10,7 +10,7 @@ use std::path::Path;
 pub fn utf8_path_buf(path: impl AsRef<Path>) -> Utf8PathBuf {
     let path: &Path = path.as_ref();
     <&Utf8Path>::try_from(path)
-        .with_context(|| format!("gross path_buf: {:?}", path))
+        .with_context(|| format!("gross path_buf: {path:?}"))
         .unwrap()
         .into()
 }

@@ -179,6 +179,14 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
+    fun withHttpBindingCustomizations(
+        customizations: List<HttpBindingCustomization>,
+    ): ServerHttpBoundProtocolTraitImplGenerator {
+        return ServerHttpBoundProtocolTraitImplGenerator(
+            codegenContext, protocol, this.customizations, additionalHttpBindingCustomizations + customizations,
+        )
+    }
+
     private val codegenScope =
         arrayOf(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),

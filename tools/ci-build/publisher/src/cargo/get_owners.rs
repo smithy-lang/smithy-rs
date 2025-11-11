@@ -43,8 +43,7 @@ impl ShellOperation for GetOwners {
                 result.push(user_id.to_string());
             } else {
                 return Err(anyhow::Error::msg(format!(
-                    "unrecognized line in `cargo owner` output: {}",
-                    line
+                    "unrecognized line in `cargo owner` output: {line}"
                 )));
             }
         }

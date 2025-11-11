@@ -107,6 +107,43 @@ interface EndpointCustomization {
         codegenContext: ClientCodegenContext,
         params: String,
     ): Writable? = null
+
+    /**
+     * Allows injecting validation logic for endpoint parameters into the `ParamsBuilder::build` method.
+     *
+     * e.g. when generating the builder for the endpoint parameters this allows you to insert validation logic before
+     * being finalizing the parameters.
+     *
+     * ```rs
+     * impl ParamsBuilder {
+     *     pub fn build(self) -> ::std::result::Result<crate::config::endpoint::Params, crate::config::endpoint::InvalidParams> {
+     *         <validation logic>
+     *         ...
+     *     }
+     * }
+     *
+     * Example:
+     * ```kotlin
+     *
+     *  override fun endpointParamsBuilderValidator(codegenContext: ClientCodegenContext, parameter: Parameter): Writable? {
+     *  rustTemplate("""
+     *      if let Some(region) = self.${parameter.memberName()} {
+     *          if #{is_valid_host_label}(region.as_ref() as &str, false, #{DiagnosticCollector}::new()) {
+     *              return Err(#{ParamsError}::invalid_value(${parameter.memberName().dq()}, "must be a valid host label"))
+     *          }
+     *      }
+     *      """,
+     *          "is_valid_host_label" to EndpointsLib.isValidHostLabel,
+     *          "ParamsError" to EndpointParamsGenerator.paramsError(),
+     *          "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+     *       )
+     *   }
+     * ```
+     */
+    fun endpointParamsBuilderValidator(
+        codegenContext: ClientCodegenContext,
+        parameter: Parameter,
+    ): Writable? = null
 }
 
 /**

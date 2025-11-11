@@ -31,7 +31,9 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
     override fun libRsCustomizations(
         codegenContext: ServerCodegenContext,
         baseCustomizations: List<LibRsCustomization>,
-    ): List<LibRsCustomization> = baseCustomizations + AllowLintsCustomization()
+    ): List<LibRsCustomization> =
+        // TODO(https://github.com/smithy-lang/smithy-rs/issues/4366) Remove additionalClippyLints once the issue is resolved
+        baseCustomizations + AllowLintsCustomization(additionalClippyLints = listOf("uninlined_format_args"))
 
     override fun extras(
         codegenContext: ServerCodegenContext,

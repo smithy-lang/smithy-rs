@@ -150,7 +150,7 @@ fn assert_ready_tokio<F: Future>(future: F) -> F::Output {
 }
 
 /// Polls a future and panics if it isn't already ready.
-fn assert_ready<F: Future>(mut future: F) -> F::Output {
+fn assert_ready<F: Future>(future: F) -> F::Output {
     // Create a waker that does nothing.
     let waker = noop_waker();
     // Create a context from the waker.

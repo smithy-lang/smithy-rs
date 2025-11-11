@@ -31,18 +31,13 @@ pub async fn paginator_canary(client: ec2::Client, page_size: usize) -> anyhow::
         let items_in_page = page.spot_price_history.unwrap_or_default().len();
         if items_in_page > page_size {
             bail!(
-                "failed to retrieve results of correct page size (expected {}, got {})",
-                page_size,
-                items_in_page
+                "failed to retrieve results of correct page size (expected {page_size}, got {items_in_page})",
             )
         }
         num_pages += 1;
     }
     if num_pages < 2 {
-        bail!(
-            "expected 3+ pages containing ~60 results but got {} pages",
-            num_pages
-        )
+        bail!("expected 3+ pages containing ~60 results but got {num_pages} pages",)
     }
 
     // https://github.com/awslabs/aws-sdk-rust/issues/405

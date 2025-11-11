@@ -1,4 +1,55 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 6th, 2025
+==================
+**New this release:**
+- (client) Bump crc-fast version to 1.6.0
+- (client) Validate `Region` is a valid host label when constructing endpoints.
+
+
+October 30th, 2025
+==================
+**Breaking Changes:**
+- :warning::tada: (server, [smithy-rs#4356](https://github.com/smithy-lang/smithy-rs/issues/4356)) Parse EventStream signed-frames for servers marked with `@sigv4`.
+
+    This is a breaking change, because events from SigV4 services are wrapped in a SignedEvent frame.
+- :warning: (all, [smithy-rs#4367](https://github.com/smithy-lang/smithy-rs/issues/4367)) Upgrade MSRV to Rust 1.88.0.
+
+**New this release:**
+- :bug::tada: (server, [smithy-rs#4352](https://github.com/smithy-lang/smithy-rs/issues/4352), [smithy-rs#4345](https://github.com/smithy-lang/smithy-rs/issues/4345)) Update smithy-rs servers to support sending `initial-response` events over event streams.
+
+    Prior to this change, event streams that had initial responses were unsupported. This change also adds a new codegen setting, `alwaysSendEventStreamInitialResponse`.
+
+    When this setting is set to `true`, the generated server will unconditionally send `initial-response` objects, even when empty. This is required for compatibility with smithy-java as well as a few other clients.
+
+    This setting defaults to false currently because smithy-rs based clients do not currently support this behavior.
+
+    ```json
+    "codegen": {
+      "alwaysSendEventStreamInitialResponse": true // default false
+    }
+    ```
+- :tada: (all, @arielby) Include the protocol name in `package.metadata.smithy.protocol` in `Cargo.toml`
+    to allow easily figuring out which protocol was used to generate a crate.
+- :bug::tada: (client, [smithy-rs#4349](https://github.com/smithy-lang/smithy-rs/issues/4349), @arielby) Make Hyper idle pool timeout configurable, and fix the bug where pool timeouts
+    would not work if the client was built directly.
+- :tada: (server, [smithy-rs#4317](https://github.com/smithy-lang/smithy-rs/issues/4317), @jasgin) Adds validators and codegen support for the custom traits custom traits `@validationException`, `@validationMessage`,
+    `@validationFieldList`, `@validationFieldName`, and `@validationFieldMessage` for defining a custom validation exception
+    to use instead of `smithy.framework#ValidationException`.
+- :bug: (client, [smithy-rs#4346](https://github.com/smithy-lang/smithy-rs/issues/4346)) Fix bug where httpQueryParams were silently dropped when no other query parameters were modeled.
+- :bug: (server, [smithy-rs#4344](https://github.com/smithy-lang/smithy-rs/issues/4344), [smithy-rs#4325](https://github.com/smithy-lang/smithy-rs/issues/4325)) Fix bug where servers did not attempt to parse an `initial-request`. `initial-requests` may be sent by clients both when they would contain valid data
+    and when they are empty.
+- :bug: (client, [smithy-rs#4352](https://github.com/smithy-lang/smithy-rs/issues/4352), [smithy-rs#4353](https://github.com/smithy-lang/smithy-rs/issues/4353)) Update clients to allow `initial-response` events to be accepted on event streams, even when know modeled initial response exists.
+
+    This is required for spec compliance, backwards compatibility, and compatibility with non-smithy-rs based servers that
+    MAY unconditionally send `initial-response` messages.
+- :bug: (client, [smithy-rs#4265](https://github.com/smithy-lang/smithy-rs/issues/4265), [smithy-rs#4189](https://github.com/smithy-lang/smithy-rs/issues/4189)) Adds new `with_test_defaults_v2()` for all clients supporting region configuration which applies `us-east-1` as default region if not set by user. This allows `aws-smithy-mocks` to work for non AWS SDK generated clients. Also clarify `test-util` feature requirement when using `aws-smithy-mocks`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @arielby ([smithy-rs#4349](https://github.com/smithy-lang/smithy-rs/issues/4349))
+- @jasgin ([smithy-rs#4317](https://github.com/smithy-lang/smithy-rs/issues/4317))
+
+
 October 6th, 2025
 =================
 **New this release:**
