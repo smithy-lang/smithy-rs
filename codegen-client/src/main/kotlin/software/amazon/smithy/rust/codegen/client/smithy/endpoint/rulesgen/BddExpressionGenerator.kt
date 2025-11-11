@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
-import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
@@ -23,6 +22,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.End
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
+import software.amazon.smithy.rust.codegen.core.rustlang.plus
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -33,17 +33,20 @@ import java.lang.RuntimeException
  * Root expression generator.
  */
 class BddExpressionGenerator(
+    private val condition: Condition,
     private val ownership: Ownership,
     private val context: Context,
     private val refs: List<AnnotatedRef>,
+    private val knownSomeRefs: MutableSet<AnnotatedRef>,
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
+    private val knownSomeRefsNames = knownSomeRefs.map { it.name }
 
     fun generateCondition(
         condition: Condition,
         idx: Int,
     ): Writable {
-        return generateExpression(condition.function, idx)
+        return condition.function.accept(OuterExprGeneratorVisitor(ownership, idx))
     }
 
     private fun generateExpression(
@@ -51,17 +54,14 @@ class BddExpressionGenerator(
         idx: Int,
     ): Writable {
         return expr.accept(
-            {
-                println("LNJ COND IDX: $idx")
-                ExprGeneratorVisitor(ownership, idx)
-            }(),
+            ExprGeneratorVisitor(ownership, idx),
         )
     }
 
     /**
      * Inner generator based on ExprVisitor
      */
-    private inner class ExprGeneratorVisitor(
+    private open inner class ExprGeneratorVisitor(
         private val ownership: Ownership,
         private val idx: Int,
     ) :
@@ -72,43 +72,64 @@ class BddExpressionGenerator(
 
         override fun visitRef(ref: Reference) =
             writable {
-                if (ownership == Ownership.Owned) {
-                    try {
-                        when (ref.type()) {
-                            is BooleanType -> rust("*${ref.name.rustName()}")
-                            else -> rust("${ref.name.rustName()}.to_owned()")
-                        }
-                    } catch (_: RuntimeException) {
-                        // Typechecking was never invoked - default to .to_owned()
-                        rust("${ref.name.rustName()}.to_owned()")
-                    }
+//                if (ownership == Ownership.Owned) {
+//                    try {
+//                        when (ref.type()) {
+//
+//                            is BooleanType -> {
+//                                rust("// Owned typecheck Succeeded got BooleanType")
+//                                rust("*${ref.name.rustName()}")
+//                            }
+//
+//                            else -> {
+//                                rust("// Owned typecheck Succeeded got not-BooleanType")
+//                                rust("${ref.name.rustName()}.to_owned()")
+//                            }
+//                        }
+//                    } catch (_: RuntimeException) {
+//                        // Typechecking was never invoked - default to .to_owned()
+//                        rust("// Owned typecheck failed")
+//                        rust("${ref.name.rustName()}.to_owned()")
+//                    }
+//                } else {
+//                    try {
+//                        when (ref.type()) {
+//                            // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
+//                            // Typically, we don't know which type will be returned due to code generation.
+//                            is StringType -> {
+//                                rust("// Borrowed typecheck succeeded got StringType")
+//                                rust("${ref.name.rustName()}.as_ref() as &str")
+//                            }
+//
+//                            else -> {
+//                                rust("// Borrowed typecheck succeeded got not-StringType")
+//                                rust(ref.name.rustName())
+//                            }
+//                        }
+//                    } catch (_: RuntimeException) {
+//                        // Because Typechecking was never invoked upon calling `.type()` on Reference for an expression
+//                        // like "{ref}: rust". See `generateLiterals2` in ExprGeneratorTest.
+//                        rust("// Borrowed typecheck failed")
+//                        rust(ref.name.rustName())
+//                    }
+//                }
+
+                if (knownSomeRefsNames.contains(ref.name.rustName())) {
+                    rust("${ref.name.rustName()}.unwrap()")
                 } else {
-                    try {
-                        when (ref.type()) {
-                            // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
-                            // Typically, we don't know which type will be returned due to code generation.
-                            is StringType -> rust("${ref.name.rustName()}.as_ref() as &str")
-                            else -> rust(ref.name.rustName())
-                        }
-                    } catch (_: RuntimeException) {
-                        // Because Typechecking was never invoked upon calling `.type()` on Reference for an expression
-                        // like "{ref}: rust". See `generateLiterals2` in ExprGeneratorTest.
-                        rust(ref.name.rustName())
-                    }
+                    rust("${ref.name.rustName()}")
                 }
             }
 
         override fun visitGetAttr(getAttr: GetAttr): Writable {
             val target =
-                BddExpressionGenerator(Ownership.Borrowed, context, refs).generateExpression(getAttr.target, idx)
+                BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs).generateExpression(
+                    getAttr.target,
+                    idx,
+                )
             val targetIsOptionalRef =
                 getAttr.target is Reference && optionalRefNames.contains((getAttr.target as Reference).name.rustName())
-            val targetRustName =
-                if (targetIsOptionalRef) {
-                    (getAttr.target as Reference).name.rustName()
-                } else {
-                    "doesntmatter"
-                }
+
             val path =
                 writable {
                     getAttr.path.toList().forEach { part ->
@@ -142,6 +163,7 @@ class BddExpressionGenerator(
             return if (targetIsOptionalRef) {
                 // Smithy statically analyzes that the ref must have been set before this is used
                 // so safe to unwrap
+                val targetRustName = (getAttr.target as Reference).name.rustName()
                 writable { rust("""#W.expect("$targetRustName should already be set")#W""", target, path) }
             } else {
                 writable { rust("#W#W", target, path) }
@@ -150,39 +172,93 @@ class BddExpressionGenerator(
 
         override fun visitIsSet(fn: Expression) =
             writable {
-                val expressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, refs)
+                val expressionGenerator =
+                    BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
+                if (fn is Reference) {
+                    // All references are in refs so safe to assert non-null
+                    knownSomeRefs.add(refs.find { it.name == fn.name.rustName() }!!)
+                }
                 rust("#W.is_some()", expressionGenerator.generateExpression(fn, idx))
             }
 
         override fun visitNot(not: Expression) =
             writable {
-                rust("!(#W)", BddExpressionGenerator(Ownership.Borrowed, context, refs).generateExpression(not, idx))
+                rust(
+                    "!(#W)",
+                    BddExpressionGenerator(
+                        condition,
+                        Ownership.Borrowed,
+                        context,
+                        refs,
+                        knownSomeRefs,
+                    ).generateExpression(not, idx),
+                )
             }
 
         override fun visitBoolEquals(
             left: Expression,
             right: Expression,
         ) = writable {
-            val expressionGenerator = BddExpressionGenerator(Ownership.Owned, context, refs)
+            val expressionGenerator = BddExpressionGenerator(condition, Ownership.Owned, context, refs, knownSomeRefs)
+            val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
+            val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
+//            rust(
+//                "(#W) == (#W)",
+//                expressionGenerator.generateExpression(left, idx),
+//                expressionGenerator.generateExpression(right, idx),
+//            )
+
+            val rhsRef =
+                if (!lhsIsOptionalRef && right is Literal) {
+                    "&"
+                } else {
+                    ""
+                }
+            val lhsRef =
+                if (!rhsIsOptionalRef && left is Literal) {
+                    "&"
+                } else {
+                    ""
+                }
+
+            if (rhsIsOptionalRef) {
+                rust("&mut Some(")
+            }
             rust(
-                "(#W) == (#W)",
+                "($lhsRef#W)",
                 expressionGenerator.generateExpression(left, idx),
+            )
+            if (rhsIsOptionalRef) {
+                rust(")")
+            }
+
+            rust("==")
+
+            if (lhsIsOptionalRef) {
+                rust("&mut Some(")
+            }
+            rust(
+                "($rhsRef#W)",
                 expressionGenerator.generateExpression(right, idx),
             )
+            if (lhsIsOptionalRef) {
+                rust(")")
+            }
         }
 
         override fun visitStringEquals(
             left: Expression,
             right: Expression,
         ) = writable {
-            val expressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, refs)
+            val expressionGenerator =
+                BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
             val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
             val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
 
             // TODO(BDD) this logic would probably look nicer with a writer util like conditionalBlock
             // but it is conditional parens and you can throw a Some (or other enum variant) in front
             if (rhsIsOptionalRef) {
-                rust("Some(")
+                rust("&mut Some(")
             }
             rust(
                 "(#W)",
@@ -195,7 +271,7 @@ class BddExpressionGenerator(
             rust("==")
 
             if (lhsIsOptionalRef) {
-                rust("Some(")
+                rust("&mut Some(")
             }
             rust(
                 "(#W)",
@@ -220,14 +296,13 @@ class BddExpressionGenerator(
                 // Special handling for coalesce - inline the logic since we can't do variadic fns
                 if (fn.id == "coalesce") {
                     // Use Borrowed ownership to avoid type checks
-                    val expressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, refs)
+                    val expressionGenerator =
+                        BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
                     val argWritables = args.map { expressionGenerator.generateExpression(it, idx) }
 
-                    // Generate: arg1.or(arg2).or(arg3)...
+                    // TODO(BDD) I could probably update the macro to handle no inputs
                     if (argWritables.isEmpty()) {
                         rust("None")
-                    } else if (argWritables.size == 1) {
-                        rust("#W", argWritables[0])
                     } else {
                         rust("crate::coalesce!(")
                         for (i in 0 until argWritables.size) {
@@ -245,42 +320,40 @@ class BddExpressionGenerator(
                                 "(hint: if this is a custom or aws-specific runtime function, ensure the relevant standard library has been loaded " +
                                 "on the classpath)",
                         )
-                val expressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, refs)
+                val expressionGenerator =
+                    BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
                 val argWritables =
                     args.map { arg ->
-                        println("LNJ ARG: $arg")
-                        println("ARG IS REF ${arg is Reference}")
-                        if (arg is Reference) {
-                            println("ARG RUSTNAME: ${arg.name.rustName()}")
-                            println("ARG IN OPTIONALREFS: ${optionalRefNames.contains(arg.name.rustName())}")
-                        }
-//                    println("LNJ OPTIONALREFS: $optionalRefs")
-                        try {
-//                        val argType = arg.type()
-                            if ((arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
-                                (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
-                            ) {
-                                println("LNJ ARG IS OPTIONAL")
-                                writable {
-                                    rust(
-                                        """
-                                        if let Some(param) = #W{
-                                            param
-                                        } else {
-                                            return false
-                                        }
-                                        """.trimMargin(),
-                                        expressionGenerator.generateExpression(arg, idx),
-                                    )
-                                }
-                            } else {
-                                expressionGenerator.generateExpression(arg, idx)
+                        if ((arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
+                            (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+                        ) {
+                            writable {
+                                rust(
+                                    """
+                                    if let Some(param) = #W{
+                                        param
+                                    } else {
+                                        return false
+                                    }
+                                    """.trimMargin(),
+                                    expressionGenerator.generateExpression(arg, idx),
+                                )
                             }
-                        } catch (_: RuntimeException) {
-                            // Typechecking not available - default to .to_owned()
+                        } else {
                             expressionGenerator.generateExpression(arg, idx)
                         }
                     }
+
+//                var fnWriter = writable {
+//                    rustTemplate(
+//                        "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
+//                        "fn" to fnDefinition.usage(),
+//                        "args" to argWritables.join(","),
+//                    )
+//                }
+//                if (ownership == Ownership.Owned) {
+//                    fnWriter = fnWriter.plus(writable { rust(".to_owned()") })
+//                }
 
                 rustTemplate(
                     "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
@@ -289,6 +362,133 @@ class BddExpressionGenerator(
                 )
                 if (ownership == Ownership.Owned) {
                     rust(".to_owned()")
+                }
+
+//
+//                if (fn.returnType is OptionalType) {
+//
+//                    rustTemplate(
+//                        """if let Some(result) = #{FN:W} {
+//                            result
+//                        } else {
+//                            return false;
+//                        }
+//                    """.trimMargin(),
+//                        "FN" to fnWriter,
+//                    )
+//
+//                } else {
+//                    rustTemplate(
+//                        """#{FN:W}""".trimMargin(),
+//                        "FN" to fnWriter,
+//                    )
+//                }
+            }
+    }
+
+    /**
+     * Outer expression generator visitor that handles BDD-specific logic
+     */
+    private inner class OuterExprGeneratorVisitor(
+        private val ownership: Ownership,
+        private val idx: Int,
+    ) : ExprGeneratorVisitor(ownership, 0) {
+        override fun visitGetAttr(getAttr: GetAttr): Writable =
+            writable {
+                val expressionGenerator =
+                    BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
+                if (condition.result.isPresent) {
+                    println("LNJ GetAttr CONDITION HAS RESULT")
+                    // If the path contains an idx then the result is already an option
+                    val pathContainsIdx = getAttr.path.toList().filter { it is GetAttr.Part.Index }.isNotEmpty()
+                    if (pathContainsIdx) {
+                        rustTemplate(
+                            """
+                            {
+                                ${condition.result.get().rustName()} = &mut #{FN:W}.map(|inner| inner.into());
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            {
+                                ${condition.result.get().rustName()} = &mut Some(#{FN:W}.into());
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                        )
+                    }
+                } else {
+                    rustTemplate(
+                        """
+                        #{FN:W}
+                        """.trimIndent(),
+                        "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                    )
+                }
+            }
+
+        override fun visitLibraryFunction(
+            fn: FunctionDefinition,
+            args: MutableList<Expression>,
+        ): Writable =
+            writable {
+                val fnDefinition =
+                    context.functionRegistry.fnFor(fn.id)
+                        ?: PANIC(
+                            "no runtime function for ${fn.id} " +
+                                "(hint: if this is a custom or aws-specific runtime function, ensure the relevant standard library has been loaded " +
+                                "on the classpath)",
+                        )
+                val expressionGenerator =
+                    BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
+
+                val fnReturnTypeOptional = condition.function.functionDefinition.returnType is OptionalType
+
+                println("LNJ Condition $idx")
+                // If the condition sets a result we do the assignment and return true to move on
+                if (condition.result.isPresent) {
+                    println("LNJ CONDITION HAS RESULT")
+                    // All results in the ConditionContext are Option<T> since they start out unassigned
+                    if (!fnReturnTypeOptional) {
+                        rustTemplate(
+                            """
+                            {
+                                ${condition.result.get().rustName()} = &mut Some(&#{FN:W});
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            {
+                                ${condition.result.get().rustName()} = &mut #{FN:W};
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                        )
+                    }
+                } else if (condition.function.functionDefinition.returnType !is BooleanType && fnReturnTypeOptional) {
+                    rustTemplate(
+                        """
+                        (#{FN:W}).is_some()
+                        """.trimIndent(),
+                        "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        #{FN:W}
+                        """.trimIndent(),
+                        "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                    )
                 }
             }
     }

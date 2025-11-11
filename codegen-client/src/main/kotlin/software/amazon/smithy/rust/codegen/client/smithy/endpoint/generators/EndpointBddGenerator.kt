@@ -59,12 +59,13 @@ class EndpointBddGenerator(
         // Create context for expression generation with stdlib
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
-        val bddExpressionGenerator = BddExpressionGenerator(Ownership.Borrowed, context, listAllRefs())
 
         // Render conditions to a dummy writer to populate the function registry
         // This is the same trick used by EndpointResolverGenerator
         val dummyWriter = RustWriter.root()
         bddTrait.conditions.withIndex().forEach { (idx, cond) ->
+            val bddExpressionGenerator =
+                BddExpressionGenerator(cond, Ownership.Borrowed, context, listAllRefs(), mutableSetOf())
             bddExpressionGenerator.generateCondition(cond, 9999999)(
                 RustWriter.root(),
             )
@@ -82,8 +83,10 @@ class EndpointBddGenerator(
 
         // Build the scope with condition evaluations
         val conditionScope =
-            bddTrait.conditions.withIndex().associate { (idx, condition) ->
-                "cond_$idx" to bddExpressionGenerator.generateCondition(condition, idx)
+            bddTrait.conditions.withIndex().associate { (idx, cond) ->
+                val bddExpressionGenerator =
+                    BddExpressionGenerator(cond, Ownership.Borrowed, context, listAllRefs(), mutableSetOf())
+                "cond_$idx" to bddExpressionGenerator.generateCondition(cond, idx)
             }
 
         // Identify which conditions produce results
@@ -226,7 +229,7 @@ class EndpointBddGenerator(
             macro_rules! coalesce {
                 (${"$"}a:expr) => {${"$"}a};
                 (${"$"}a:expr, ${"$"}b:expr) => {{
-                    use ${"$"}crate::Coalesce;
+                    use Coalesce;
                     let a = ${"$"}a;
                     let b = ${"$"}b;
                     (&&&(&a, &b)).coalesce()(a, b)
@@ -303,11 +306,12 @@ class EndpointBddGenerator(
                         } else {
                             it.second
                         }
+                    // TODO(BDD) I should maybe use the fnRegistry for this?
                     val rustType =
                         when {
-                            type is StringType -> "String"
+                            type is StringType -> "&'a str"
                             type is BooleanType -> "bool"
-                            type is ArrayType -> "Vec<String>"
+                            type is ArrayType -> "Vec<&'a str>"
                             fn is ParseUrl -> "crate::endpoint_lib::parse_url::Url<'a>"
                             fn is GetAttr -> "aws_smithy_types::Document"
                             fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
@@ -319,7 +323,7 @@ class EndpointBddGenerator(
 
             rustTemplate(
                 """
-                // These are all optional since they are sset by condition and will
+                // These are all optional since they are set by condition and will
                 // all be unset when we start evaluation
                 ##[derive(Default)]
                 pub(crate) struct ConditionContext<'a> {
