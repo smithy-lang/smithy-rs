@@ -19,7 +19,13 @@ pub trait ProvideMeter: Send + Sync + Debug + 'static {
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter;
 
     /// Downcast to `Any` for type inspection.
-    fn as_any(&self) -> &dyn std::any::Any;
+    ///
+    /// The default implementation returns a reference to `()`, which will fail
+    /// any downcast attempts. Implementors should override this method to return
+    /// `self` for proper type inspection support.
+    fn as_any(&self) -> &dyn std::any::Any {
+        &()
+    }
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
