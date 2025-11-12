@@ -10,3 +10,4 @@ pub(crate) mod r#static;
 pub use never::NeverRetryStrategy;
 pub use r#static::StaticRetryStrategy;
 pub use standard::StandardRetryStrategy;
+pub use r#static::StaticRetryStrategy;

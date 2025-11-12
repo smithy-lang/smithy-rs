@@ -272,6 +272,7 @@ impl TokenBucket {
         self.semaphore.available_permits()
     }
 
+<<<<<<< HEAD
     /// Returns true if the token bucket is full, false otherwise
     pub fn is_full(&self) -> bool {
         self.semaphore.available_permits() >= self.max_permits
@@ -280,6 +281,19 @@ impl TokenBucket {
     /// Returns true if the token bucket is empty, false otherwise
     pub fn is_empty(&self) -> bool {
         self.semaphore.available_permits() == 0
+=======
+    /// Add tokens back to the bucket (called by retry strategies)
+    pub(crate) fn add_permits(&self, amount: usize) {
+        let available = self.semaphore.available_permits();
+        if available < self.max_permits {
+            let space_available = self.max_permits - available;
+            let to_add = amount.min(space_available);
+            if to_add > 0 {
+                trace!("adding {to_add} permits back into the bucket");
+                self.semaphore.add_permits(to_add);
+            }
+        }
+>>>>>>> 9950eecc6 (Adding static retry strategy)
     }
 }
 
