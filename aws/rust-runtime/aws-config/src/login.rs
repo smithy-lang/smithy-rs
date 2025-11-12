@@ -6,6 +6,7 @@
 //! Credentials from an AWS Console session vended by AWS Sign-In.
 
 mod cache;
+/// Utils related to [RFC 9449: OAuth 2.0 Demonstrating Proof of Possession (DPoP)](https://datatracker.ietf.org/doc/html/rfc9449)
 mod dpop;
 mod token;
 
@@ -28,14 +29,16 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 use std::time::SystemTime;
-// TODO(sign-in): fill in additional details on this provider, examples, and links to documentation
 
 const REFRESH_BUFFER_TIME: Duration = Duration::from_secs(5 * 60 /* 5 minutes */);
 const MIN_TIME_BETWEEN_REFRESH: Duration = Duration::from_secs(30);
 pub(super) const PROVIDER_NAME: &str = "Login";
 
-/// AWS credentials provider vended by AWS Sign-In. This provider allows users to acquire AWS
-/// credentials that correspond to an AWS Console session.
+/// AWS credentials provider vended by AWS Sign-In. This provider allows users to acquire and refresh
+/// AWS credentials that correspond to an AWS Console session.
+///
+/// See the [SDK developer guide](https://docs.aws.amazon.com/sdkref/latest/guide/access-login.html)
+/// for more information on getting started with console sessions and the AWS CLI.
 #[derive(Debug)]
 pub struct LoginCredentialsProvider {
     inner: Arc<Inner>,
@@ -280,7 +283,7 @@ mod test {
     use serde::Deserialize;
     use std::collections::HashMap;
     use std::error::Error;
-    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    use std::time::{Duration, UNIX_EPOCH};
 
     #[derive(Deserialize, Debug)]
     #[serde(rename_all = "camelCase")]

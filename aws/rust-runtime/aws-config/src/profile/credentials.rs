@@ -132,6 +132,15 @@ pub(crate) mod repr;
 ///
 /// SSO can also be used as a source profile for assume role chains.
 ///
+/// ### Credentials from a console session
+///
+/// An existing AWS Console session can be used to provide credentials.
+///
+/// ```ini
+/// [default]
+/// login_session = arn:aws:iam::0123456789012:user/Admin
+/// ```
+///
 #[doc = include_str!("location_of_profile_files.md")]
 #[derive(Debug)]
 pub struct ProfileFileCredentialsProvider {

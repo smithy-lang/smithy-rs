@@ -19,7 +19,7 @@ use zeroize::Zeroizing;
 #[derive(Clone)]
 pub(super) struct LoginToken {
     pub(super) access_token: Credentials,
-    pub(super) token_type: SignInTokenType,
+    pub(super) token_type: Option<String>,
     pub(super) identity_token: Option<String>,
     pub(super) refresh_token: Zeroizing<String>,
     pub(super) client_id: String,
@@ -72,19 +72,6 @@ impl fmt::Debug for LoginToken {
             .field("client_id", &self.client_id)
             .field("dpop_key", &"** redacted **")
             .finish()
-    }
-}
-
-#[derive(Debug, Clone)]
-pub(super) enum SignInTokenType {
-    AwsSigv4,
-}
-
-impl fmt::Display for SignInTokenType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            SignInTokenType::AwsSigv4 => write!(f, "aws_sigv4"),
-        }
     }
 }
 

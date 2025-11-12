@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::login::token::{LoginToken, LoginTokenError, SignInTokenType};
+use crate::login::token::{LoginToken, LoginTokenError};
 use crate::login::PROVIDER_NAME;
 use aws_credential_types::Credentials;
 use aws_runtime::fs_util::home_dir;
@@ -107,9 +107,10 @@ pub(super) async fn save_cached_token(
     access_token.key("expiresAt").string(&expiration);
     access_token.finish();
 
-    writer
-        .key("tokenType")
-        .string(&token.token_type.to_string());
+    if let Some(token_type) = &token.token_type {
+        writer.key("tokenType").string(token_type.as_str());
+    }
+
     writer
         .key("refreshToken")
         .string(token.refresh_token.as_str());
@@ -278,11 +279,6 @@ fn parse_cached_token(cached_token_file_contents: &[u8]) -> Result<LoginToken, L
     let dpop_key = dpop_key.ok_or(Error::MissingField("dpopKey"))?;
     let refresh_token = refresh_token.ok_or(Error::MissingField("refreshToken"))?;
     let expires_at = expires_at.ok_or(Error::MissingField("expiresAt"))?;
-
-    let token_type = match token_type.as_deref() {
-        Some(t) if t.eq_ignore_ascii_case("aws_sigv4") => SignInTokenType::AwsSigv4,
-        _ => return Err(Error::other("invalid or missing tokenType", None)),
-    };
 
     let credentials = Credentials::builder()
         .access_key_id(access_key_id)
