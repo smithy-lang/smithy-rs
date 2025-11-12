@@ -321,7 +321,7 @@ fn check_rate_limiter_for_delay(
     None
 }
 
-fn calculate_exponential_backoff(
+pub(super) fn calculate_exponential_backoff(
     base: f64,
     initial_backoff: f64,
     retry_attempts: u32,
@@ -346,7 +346,7 @@ fn calculate_exponential_backoff(
     result.mul_f64(base)
 }
 
-fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
+pub(super) fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponents) -> f64 {
     let request_time = runtime_components
         .time_source()
         .expect("time source required for retries");

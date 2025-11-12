@@ -5,6 +5,8 @@
 
 mod never;
 pub(crate) mod standard;
+pub(crate) mod r#static;
 
 pub use never::NeverRetryStrategy;
 pub use standard::StandardRetryStrategy;
+pub use r#static::StaticRetryStrategy;
