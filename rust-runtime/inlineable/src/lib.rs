@@ -79,8 +79,7 @@ mod test {
             )
             .unwrap()
             .is_match(&token),
-            "token {} wasn't a valid random UUID",
-            token
+            "token {token} wasn't a valid random UUID"
         );
     }
 

@@ -272,7 +272,7 @@ mod tests {
                 });
                 let server = Server::builder(listener).serve(make_svc);
                 if let Err(err) = server.await {
-                    panic!("server error: {}", err);
+                    panic!("server error: {err}");
                 }
             });
         });

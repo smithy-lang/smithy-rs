@@ -287,8 +287,7 @@ mod deser {
                 },
                 other => {
                     return Err(DeserializeError::custom(format!(
-                        "expected object key or end object, found: {:?}",
-                        other
+                        "expected object key or end object, found: {other:?}",
                     )))
                 }
             }
@@ -359,8 +358,7 @@ mod deser {
                         },
                         other => {
                             return Err(DeserializeError::custom(format!(
-                                "expected object key or end object, found: {:?}",
-                                other
+                                "expected object key or end object, found: {other:?}"
                             )))
                         }
                     }
@@ -393,8 +391,7 @@ mod deser {
                         }
                         other => {
                             return Err(DeserializeError::custom(format!(
-                                "expected object key or end object, found: {:?}",
-                                other
+                                "expected object key or end object, found: {other:?}"
                             )))
                         }
                     }
@@ -451,8 +448,7 @@ mod deser {
                         },
                         other => {
                             return Err(DeserializeError::custom(format!(
-                                "expected object key or end object, found: {:?}",
-                                other
+                                "expected object key or end object, found: {other:?}",
                             )))
                         }
                     }

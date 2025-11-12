@@ -136,7 +136,7 @@ class EventStreamUnmarshallerGenerator(
                     }
                     rustBlock("value => ") {
                         rustTemplate(
-                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :message-type: {}\", value)));",
+                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :message-type: {value}\")));",
                             *codegenScope,
                         )
                     }
@@ -171,7 +171,7 @@ class EventStreamUnmarshallerGenerator(
 
                     false ->
                         rustTemplate(
-                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :event-type: {}\", _unknown_variant)));",
+                            "return Err(#{Error}::unmarshalling(format!(\"unrecognized :event-type: {_unknown_variant}\")));",
                             *codegenScope,
                         )
                 }
@@ -279,8 +279,7 @@ class EventStreamUnmarshallerGenerator(
                 let content_type = response_headers.content_type().unwrap_or_default();
                 if content_type != ${contentType.dq()} {
                     return Err(#{Error}::unmarshalling(format!(
-                        "expected :content-type to be '$contentType', but was '{}'",
-                        content_type
+                        "expected :content-type to be '$contentType', but was '{content_type}'"
                     )))
                 }
                 """,
@@ -320,7 +319,7 @@ class EventStreamUnmarshallerGenerator(
             """
             #{parser}(&message.payload()[..])
                 .map_err(|err| {
-                    #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {}", err))
+                    #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
                 })?
             """,
             "parser" to parser,
@@ -371,7 +370,7 @@ class EventStreamUnmarshallerGenerator(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
                                         .map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
+                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                         })?;
                                     builder.set_meta(Some(generic));
                                     return Ok(#{UnmarshalledMessage}::Error(
@@ -385,7 +384,7 @@ class EventStreamUnmarshallerGenerator(
                                             "builder", target,
                                             mapErr = {
                                                 rustTemplate(
-                                                    """|err|#{Error}::unmarshalling(format!("{}", err))""",
+                                                    """|err|#{Error}::unmarshalling(format!("{err}"))""",
                                                     *codegenScope,
                                                 )
                                             },
@@ -411,7 +410,7 @@ class EventStreamUnmarshallerGenerator(
                                     """
                                     builder = #{parser}(&message.payload()[..], builder)
                                         .map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {}", err))
+                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
                                         })?;
                                     """,
                                     "parser" to parser,

@@ -304,7 +304,7 @@ open class EventStreamMarshallerGenerator(
                     rustTemplate(
                         """
                         #{serializerFn}(&$input)
-                            .map_err(|err| #{Error}::marshalling(format!("{}", err)))?
+                            .map_err(|err| #{Error}::marshalling(format!("{err}")))?
                         """,
                         "serializerFn" to serializerFn,
                         *codegenScope,

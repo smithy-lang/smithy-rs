@@ -88,10 +88,7 @@ impl PyRequest {
             || Err(PyMiddlewareError::RequestGone.into()),
             |parts| {
                 parts.uri = uri_str.parse().map_err(|e: http::uri::InvalidUri| {
-                    PyValueError::new_err(format!(
-                        "URI `{}` cannot be parsed. Error: {}",
-                        uri_str, e
-                    ))
+                    PyValueError::new_err(format!("URI `{uri_str}` cannot be parsed. Error: {e}"))
                 })?;
                 Ok(())
             },

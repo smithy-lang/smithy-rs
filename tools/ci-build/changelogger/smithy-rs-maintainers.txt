@@ -1,6 +1,4 @@
-82marbag
 aws-sdk-rust-ci
-david-perez
 jdisanti
 rcoh
 ysaito1001
@@ -10,3 +8,4 @@ rhernandez35
 aajtodd
 landonxjames
 vcjana
+jasgin

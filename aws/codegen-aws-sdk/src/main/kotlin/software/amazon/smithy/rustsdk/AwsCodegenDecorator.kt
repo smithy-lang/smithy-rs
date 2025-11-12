@@ -56,6 +56,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             SdkConfigDecorator(),
             ServiceConfigDecorator(),
             AwsPresigningDecorator(),
+            AwsChunkedContentEncodingDecorator(),
             AwsCrateDocsDecorator(),
             AwsEndpointsStdLib(),
             *PromotedBuiltInsDecorators,
