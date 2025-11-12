@@ -65,6 +65,8 @@ val DECORATORS: List<ClientCodegenDecorator> =
             AwsRequestIdDecorator(),
             DisabledAuthDecorator(),
             RecursionDetectionDecorator(),
+            EndpointOverrideDecorator(),
+            ObservabilityDetectionDecorator(),
             InvocationIdDecorator(),
             RetryInformationHeaderDecorator(),
             RemoveDefaultsDecorator(),

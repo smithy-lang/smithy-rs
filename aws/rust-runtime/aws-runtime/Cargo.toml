@@ -21,6 +21,7 @@ aws-sigv4 = { path = "../aws-sigv4", features = ["http0-compat"] }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream", optional = true }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-observability = { path = "../../../rust-runtime/aws-smithy-observability" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }

@@ -133,6 +133,7 @@ impl Intercept for UserAgentInterceptor {
             .expect("`AwsUserAgent should have been created in `read_before_execution`")
             .clone();
 
+        // Load features from both the main config bag and interceptor_state
         let smithy_sdk_features = cfg.load::<SmithySdkFeature>();
         for smithy_sdk_feature in smithy_sdk_features {
             smithy_sdk_feature
@@ -142,6 +143,14 @@ impl Intercept for UserAgentInterceptor {
 
         let aws_sdk_features = cfg.load::<AwsSdkFeature>();
         for aws_sdk_feature in aws_sdk_features {
+            aws_sdk_feature
+                .provide_business_metric()
+                .map(|m| ua.add_business_metric(m));
+        }
+
+        // Also load AWS SDK features from interceptor_state (where interceptors store them)
+        let aws_sdk_features_from_interceptor = cfg.interceptor_state().load::<AwsSdkFeature>();
+        for aws_sdk_feature in aws_sdk_features_from_interceptor {
             aws_sdk_feature
                 .provide_business_metric()
                 .map(|m| ua.add_business_metric(m));

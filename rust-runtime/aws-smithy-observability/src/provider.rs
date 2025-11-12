@@ -13,6 +13,7 @@ use crate::{meter::ProvideMeter, noop::NoopMeterProvider};
 #[non_exhaustive]
 pub struct TelemetryProvider {
     meter_provider: Arc<dyn ProvideMeter + Send + Sync>,
+    is_otel: bool,
 }
 
 impl TelemetryProvider {
@@ -20,6 +21,7 @@ impl TelemetryProvider {
     pub fn builder() -> TelemetryProviderBuilder {
         TelemetryProviderBuilder {
             meter_provider: Arc::new(NoopMeterProvider),
+            is_otel: false,
         }
     }
 
@@ -27,12 +29,27 @@ impl TelemetryProvider {
     pub fn noop() -> TelemetryProvider {
         Self {
             meter_provider: Arc::new(NoopMeterProvider),
+            is_otel: false,
         }
     }
 
     /// Get the set [ProvideMeter]
     pub fn meter_provider(&self) -> &(dyn ProvideMeter + Send + Sync) {
         self.meter_provider.as_ref()
+    }
+
+    /// Returns true if this provider is using OpenTelemetry
+    pub fn is_otel(&self) -> bool {
+        self.is_otel
+    }
+
+    /// Returns true if this provider is a noop provider
+    pub fn is_noop(&self) -> bool {
+        // Check if the meter provider is the NoopMeterProvider by attempting to downcast
+        self.meter_provider
+            .as_any()
+            .downcast_ref::<NoopMeterProvider>()
+            .is_some()
     }
 }
 
@@ -44,6 +61,7 @@ impl Default for TelemetryProvider {
     fn default() -> Self {
         Self {
             meter_provider: Arc::new(NoopMeterProvider),
+            is_otel: false,
         }
     }
 }
@@ -52,6 +70,7 @@ impl Default for TelemetryProvider {
 #[non_exhaustive]
 pub struct TelemetryProviderBuilder {
     meter_provider: Arc<dyn ProvideMeter + Send + Sync>,
+    is_otel: bool,
 }
 
 impl TelemetryProviderBuilder {
@@ -61,10 +80,17 @@ impl TelemetryProviderBuilder {
         self
     }
 
+    /// Mark this provider as using OpenTelemetry.
+    pub fn with_otel(mut self, is_otel: bool) -> Self {
+        self.is_otel = is_otel;
+        self
+    }
+
     /// Build the [TelemetryProvider].
     pub fn build(self) -> TelemetryProvider {
         TelemetryProvider {
             meter_provider: self.meter_provider,
+            is_otel: self.is_otel,
         }
     }
 }

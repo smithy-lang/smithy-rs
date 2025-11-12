@@ -164,7 +164,11 @@ iterable_enum!(
     CredentialsImds,
     SsoLoginDevice,
     SsoLoginAuth,
-    BearerServiceEnvVars
+    BearerServiceEnvVars,
+    ObservabilityTracing,
+    ObservabilityMetrics,
+    ObservabilityOtelTracing,
+    ObservabilityOtelMetrics
 );
 
 pub(crate) trait ProvideBusinessMetric {
@@ -198,6 +202,7 @@ impl ProvideBusinessMetric for SmithySdkFeature {
             FlexibleChecksumsResWhenRequired => {
                 Some(BusinessMetric::FlexibleChecksumsResWhenRequired)
             }
+            ObservabilityTracing => Some(BusinessMetric::ObservabilityTracing),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
                 // while continuing to use an outdated version of an SDK crate or the `aws-runtime`
@@ -222,6 +227,10 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             S3Transfer => Some(BusinessMetric::S3Transfer),
             SsoLoginDevice => Some(BusinessMetric::SsoLoginDevice),
             SsoLoginAuth => Some(BusinessMetric::SsoLoginAuth),
+            ObservabilityMetrics => Some(BusinessMetric::ObservabilityMetrics),
+            ObservabilityOtelTracing => Some(BusinessMetric::ObservabilityOtelTracing),
+            ObservabilityOtelMetrics => Some(BusinessMetric::ObservabilityOtelMetrics),
+            EndpointOverride => Some(BusinessMetric::EndpointOverride),
         }
     }
 }
@@ -399,5 +408,98 @@ mod tests {
 
         let csv = "A,B";
         assert_eq!("A,B", drop_unfinished_metrics_to_fit(csv, 5));
+    }
+
+    #[test]
+    fn test_aws_sdk_feature_mappings() {
+        use crate::sdk_feature::AwsSdkFeature;
+        use crate::user_agent::metrics::ProvideBusinessMetric;
+
+        // Test ObservabilityMetrics mapping
+        assert_eq!(
+            AwsSdkFeature::ObservabilityMetrics.provide_business_metric(),
+            Some(BusinessMetric::ObservabilityMetrics)
+        );
+
+        // Test ObservabilityOtelTracing mapping
+        assert_eq!(
+            AwsSdkFeature::ObservabilityOtelTracing.provide_business_metric(),
+            Some(BusinessMetric::ObservabilityOtelTracing)
+        );
+
+        // Test ObservabilityOtelMetrics mapping
+        assert_eq!(
+            AwsSdkFeature::ObservabilityOtelMetrics.provide_business_metric(),
+            Some(BusinessMetric::ObservabilityOtelMetrics)
+        );
+
+        // Test SsoLoginDevice mapping
+        assert_eq!(
+            AwsSdkFeature::SsoLoginDevice.provide_business_metric(),
+            Some(BusinessMetric::SsoLoginDevice)
+        );
+
+        // Test SsoLoginAuth mapping
+        assert_eq!(
+            AwsSdkFeature::SsoLoginAuth.provide_business_metric(),
+            Some(BusinessMetric::SsoLoginAuth)
+        );
+
+        // Test EndpointOverride mapping
+        assert_eq!(
+            AwsSdkFeature::EndpointOverride.provide_business_metric(),
+            Some(BusinessMetric::EndpointOverride)
+        );
+    }
+
+    #[test]
+    fn test_smithy_sdk_feature_observability_tracing_mapping() {
+        use crate::user_agent::metrics::ProvideBusinessMetric;
+        use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
+
+        // Test ObservabilityTracing mapping
+        assert_eq!(
+            SmithySdkFeature::ObservabilityTracing.provide_business_metric(),
+            Some(BusinessMetric::ObservabilityTracing)
+        );
+    }
+
+    #[test]
+    fn test_metric_id_values() {
+        // Test that metric IDs match the expected values from FEATURES.md specification
+
+        // SSO Login metrics
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::SsoLoginDevice),
+            Some(&"1".into())
+        );
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::SsoLoginAuth),
+            Some(&"2".into())
+        );
+
+        // Observability metrics
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::ObservabilityTracing),
+            Some(&"4".into())
+        );
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::ObservabilityMetrics),
+            Some(&"5".into())
+        );
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::ObservabilityOtelTracing),
+            Some(&"6".into())
+        );
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::ObservabilityOtelMetrics),
+            Some(&"7".into())
+        );
+
+        // Endpoint Override metric
+        assert_eq!(
+            FEATURE_ID_TO_METRIC_VALUE.get(&BusinessMetric::EndpointOverride),
+            Some(&"N".into())
+        );
     }
 }

@@ -24,6 +24,14 @@ pub enum AwsSdkFeature {
     SsoLoginDevice,
     /// Calling an SSO-OIDC operation as part of the SSO login flow, when using the OAuth2.0 authorization code grant
     SsoLoginAuth,
+    /// An operation called with observability metrics collection enabled
+    ObservabilityMetrics,
+    /// An operation called with OpenTelemetry tracing integration enabled
+    ObservabilityOtelTracing,
+    /// An operation called with OpenTelemetry metrics integration enabled
+    ObservabilityOtelMetrics,
+    /// An operation called using a user provided endpoint URL
+    EndpointOverride,
 }
 
 impl Storable for AwsSdkFeature {

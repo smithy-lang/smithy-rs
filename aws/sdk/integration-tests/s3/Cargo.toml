@@ -22,6 +22,7 @@ aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util", "rt-tokio"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
+aws-smithy-observability = { path = "../../build/aws-sdk/sdk/aws-smithy-observability" }
 aws-smithy-protocol-test = { path = "../../build/aws-sdk/sdk/aws-smithy-protocol-test" }
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util", "http-1x"] }
@@ -49,6 +50,7 @@ tracing-subscriber = { version = "0.3.15", features = ["env-filter", "json"] }
 # If you're writing a test with this, take heed! `no-env-filter` means you'll be capturing
 # logs from everything that speaks, so be specific with your asserts.
 tracing-test = { version = "0.2.4", features = ["no-env-filter"] }
+serial_test = "3"
 
 [dependencies]
 pin-project-lite = "0.2.13"
