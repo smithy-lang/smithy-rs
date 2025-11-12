@@ -1,0 +1,23 @@
+[package]
+name = "aws-sdk-cloudfront-url-signer"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "CloudFront URL and cookie signing utilities for AWS SDK for Rust"
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[dependencies]
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
+time = { version = "0.3", features = ["macros"] }
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata
+
+[package.metadata.smithy-rs-release-tooling]
+stable = false
