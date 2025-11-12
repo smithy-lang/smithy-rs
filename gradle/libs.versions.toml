@@ -3,7 +3,7 @@ kotlin-version = "2.1.0"
 ktlint-version = "1.0.1"
 
 # codegen
-smithy-version = "1.62.0"
+smithy-version = "1.64.0"
 smithy-gradle-plugin-version = "1.3.0"
 
 # publishing
