@@ -19,6 +19,8 @@ import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.AnnotatedRef
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.RefType
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.RustType
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -41,6 +43,7 @@ class BddExpressionGenerator(
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
+    private val documentRefNames = refs.filter { it.rustType == RustType.Document }.map { it.name }
 
     fun generateCondition(
         condition: Condition,
@@ -200,6 +203,8 @@ class BddExpressionGenerator(
             right: Expression,
         ) = writable {
             val expressionGenerator = BddExpressionGenerator(condition, Ownership.Owned, context, refs, knownSomeRefs)
+            val lhsIsRef = left is Reference
+            val rhsIsRef = right is Reference
             val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
             val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
 //            rust(
@@ -209,13 +214,13 @@ class BddExpressionGenerator(
 //            )
 
             val rhsRef =
-                if (!lhsIsOptionalRef && right is Literal) {
+                if (lhsIsRef && !lhsIsOptionalRef && right is Literal) {
                     "&"
                 } else {
                     ""
                 }
             val lhsRef =
-                if (!rhsIsOptionalRef && left is Literal) {
+                if (rhsIsRef && !rhsIsOptionalRef && left is Literal) {
                     "&"
                 } else {
                     ""
@@ -254,14 +259,44 @@ class BddExpressionGenerator(
                 BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
             val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
             val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
+            val lhsIsDocument = (
+                left is Reference && refs.filter { it -> it.name == left.name.rustName() }
+                    .get(0).rustType == RustType.Document
+            )
+            val rhsIsDocument = (
+                right is Reference && refs.filter { it -> it.name == right.name.rustName() }
+                    .get(0).rustType == RustType.Document
+            )
+            // Params are Option<String> while condition results are Option<&str>
+            val lhsIsParameter = (
+                left is Reference && refs.filter { it -> it.name == left.name.rustName() }
+                    .get(0).refType == RefType.Parameter
+            )
+            val rhsIsParameter = (
+                right is Reference && refs.filter { it -> it.name == right.name.rustName() }
+                    .get(0).refType == RefType.Parameter
+            )
 
+            val rhsInto =
+                if (lhsIsDocument || lhsIsParameter) {
+                    ".into()"
+                } else {
+                    ""
+                }
+
+            val lhsInto =
+                if (rhsIsDocument || rhsIsParameter) {
+                    ".into()"
+                } else {
+                    ""
+                }
             // TODO(BDD) this logic would probably look nicer with a writer util like conditionalBlock
             // but it is conditional parens and you can throw a Some (or other enum variant) in front
             if (rhsIsOptionalRef) {
                 rust("&mut Some(")
             }
             rust(
-                "(#W)",
+                "(#W$lhsInto)",
                 expressionGenerator.generateExpression(left, idx),
             )
             if (rhsIsOptionalRef) {
@@ -274,7 +309,7 @@ class BddExpressionGenerator(
                 rust("&mut Some(")
             }
             rust(
-                "(#W)",
+                "(#W$rhsInto)",
                 expressionGenerator.generateExpression(right, idx),
             )
             if (lhsIsOptionalRef) {
@@ -327,11 +362,17 @@ class BddExpressionGenerator(
                         if ((arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
                             (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
                         ) {
+                            val param =
+                                if (arg is Reference && documentRefNames.contains(arg.name.rustName())) {
+                                    "&param.as_string().unwrap()"
+                                } else {
+                                    "param"
+                                }
                             writable {
                                 rust(
                                     """
                                     if let Some(param) = #W{
-                                        param
+                                        $param
                                     } else {
                                         return false
                                     }
@@ -398,7 +439,6 @@ class BddExpressionGenerator(
                 val expressionGenerator =
                     BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
                 if (condition.result.isPresent) {
-                    println("LNJ GetAttr CONDITION HAS RESULT")
                     // If the path contains an idx then the result is already an option
                     val pathContainsIdx = getAttr.path.toList().filter { it is GetAttr.Part.Index }.isNotEmpty()
                     if (pathContainsIdx) {
@@ -449,16 +489,16 @@ class BddExpressionGenerator(
 
                 val fnReturnTypeOptional = condition.function.functionDefinition.returnType is OptionalType
 
-                println("LNJ Condition $idx")
+//                println("LNJ Condition $idx")
                 // If the condition sets a result we do the assignment and return true to move on
                 if (condition.result.isPresent) {
-                    println("LNJ CONDITION HAS RESULT")
+//                    println("LNJ CONDITION HAS RESULT")
                     // All results in the ConditionContext are Option<T> since they start out unassigned
                     if (!fnReturnTypeOptional) {
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut Some(&#{FN:W});
+                                ${condition.result.get().rustName()} = &mut Some(#{FN:W}.into());
                                 true
                             }
                             """.trimIndent(),
@@ -468,7 +508,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut #{FN:W};
+                                ${condition.result.get().rustName()} = &mut #{FN:W}.map(|inner| inner.into());
                                 true
                             }
                             """.trimIndent(),

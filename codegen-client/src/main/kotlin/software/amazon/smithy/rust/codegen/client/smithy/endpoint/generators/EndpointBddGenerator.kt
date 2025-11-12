@@ -5,12 +5,14 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.AnyType
 import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
+import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
@@ -288,7 +290,7 @@ class EndpointBddGenerator(
         writable {
             val refs = extractNonParamReferences()
             refs.forEach {
-                rust("let ${it.first.rustName()} = &mut context.${it.first.rustName()};")
+                rust("let mut ${it.first.rustName()} = &mut context.${it.first.rustName()};")
             }
         }
 
@@ -309,13 +311,13 @@ class EndpointBddGenerator(
                     // TODO(BDD) I should maybe use the fnRegistry for this?
                     val rustType =
                         when {
-                            type is StringType -> "&'a str"
+                            type is StringType -> "String"
                             type is BooleanType -> "bool"
-                            type is ArrayType -> "Vec<&'a str>"
+                            type is ArrayType -> "Vec<String>"
                             fn is ParseUrl -> "crate::endpoint_lib::parse_url::Url<'a>"
                             fn is GetAttr -> "aws_smithy_types::Document"
-                            fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
                             fnName == "aws.partition" -> "crate::endpoint_lib::partition::Partition<'a>"
+                            fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
                     "pub(crate) ${it.first.rustName()}: Option<$rustType>"
@@ -356,14 +358,45 @@ class EndpointBddGenerator(
         val refs = mutableListOf<AnnotatedRef>()
 
         bddTrait.parameters.forEach { param ->
-            refs.add(AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired))
+            val rustType =
+                when (param.type) {
+                    ParameterType.STRING -> RustType.String
+                    ParameterType.STRING_ARRAY -> RustType.StringArray
+                    ParameterType.BOOLEAN -> RustType.Bool
+                    null -> RustType.String
+                }
+            refs.add(AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType))
         }
 
         bddTrait.conditions.forEach { cond ->
             val result = cond.result.orElse(null)
             if (result !== null) {
-                refs.add(AnnotatedRef(result.rustName(), RefType.Variable, true))
+                val returnType =
+                    if (cond.function.functionDefinition.returnType is OptionalType) {
+                        (cond.function.functionDefinition.returnType as OptionalType).inner()
+                    } else {
+                        cond.function.functionDefinition.returnType
+                    }
+                val rustType =
+                    when {
+                        returnType is AnyType -> RustType.Document
+                        returnType is StringType -> RustType.String
+                        returnType is BooleanType -> RustType.Bool
+                        returnType is ArrayType ->
+                            when (returnType.member) {
+                                is StringType -> RustType.StringArray
+                                else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                            }
+
+                        cond.function is ParseUrl -> RustType.Url
+                        cond.function.name == "aws.partition" -> RustType.Partition
+                        cond.function.name == "aws.parseArn" -> RustType.Arn
+                        else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                    }
+                refs.add(AnnotatedRef(result.rustName(), RefType.Variable, true, rustType))
             }
+
+//            println("LNJ REFS: ${refs}")
         }
 
         return refs

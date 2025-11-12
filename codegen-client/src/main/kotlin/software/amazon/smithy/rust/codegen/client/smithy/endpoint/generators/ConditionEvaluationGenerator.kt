@@ -5,8 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.AnyType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.IsSet
@@ -34,10 +36,22 @@ enum class RefType {
     Variable,
 }
 
+// Limited set of Rust types that refs can be
+enum class RustType {
+    Document,
+    String,
+    StringArray,
+    Bool,
+    Arn,
+    Partition,
+    Url,
+}
+
 data class AnnotatedRef(
     val name: String,
     val refType: RefType,
     val isOptional: Boolean,
+    val rustType: RustType,
 )
 
 /**
@@ -91,6 +105,11 @@ internal class ConditionEvaluationGenerator(
         val argExprAndType = libraryFunction.arguments.zip(libraryFunction.functionDefinition.arguments)
         argExprAndType.forEachIndexed { index, (argExpr, argType) ->
             val isOptional = (argType is OptionalType)
+            when {
+                argType is AnyType -> RustType.Document
+                argType is StringType -> RustType.String
+                argType is BooleanType -> RustType.Bool
+            }
 
             if (argExpr is Reference) {
                 val refType =
@@ -99,7 +118,7 @@ internal class ConditionEvaluationGenerator(
                     } else {
                         RefType.Variable
                     }
-                annotatedRefs.add(AnnotatedRef(argExpr.name.toString(), refType, isOptional))
+                annotatedRefs.add(AnnotatedRef(argExpr.name.toString(), refType, isOptional, RustType.String))
             }
         }
 
