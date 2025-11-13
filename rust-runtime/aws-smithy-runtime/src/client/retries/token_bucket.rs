@@ -10,7 +10,11 @@ use std::fmt;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+<<<<<<< HEAD
 use std::time::{Duration, SystemTime};
+=======
+use std::time::Instant;
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const DEFAULT_CAPACITY: usize = 500;
@@ -35,8 +39,12 @@ pub struct TokenBucket {
     success_reward: f32,
     fractional_tokens: Arc<AtomicF32>,
     refill_rate: f32,
+<<<<<<< HEAD
     time_source: SharedTimeSource,
     creation_time: SystemTime,
+=======
+    creation_time: Instant,
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
     last_refill_age_secs: Arc<AtomicU32>,
 }
 
@@ -93,8 +101,12 @@ impl Default for TokenBucket {
             success_reward: DEFAULT_SUCCESS_REWARD,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
+<<<<<<< HEAD
             time_source: time_source.clone(),
             creation_time: time_source.now(),
+=======
+            creation_time: Instant::now(),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -124,8 +136,12 @@ impl TokenBucket {
             success_reward: 0.0,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
+<<<<<<< HEAD
             time_source: time_source.clone(),
             creation_time: time_source.now(),
+=======
+            creation_time: Instant::now(),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -138,7 +154,11 @@ impl TokenBucket {
     pub(crate) fn acquire(&self, err: &ErrorKind) -> Option<OwnedSemaphorePermit> {
         // Add time-based tokens to fractional accumulator
         self.refill_tokens_based_on_time();
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // Convert accumulated fractional tokens to whole tokens
         self.convert_fractional_tokens();
 
@@ -194,6 +214,7 @@ impl TokenBucket {
     fn refill_tokens_based_on_time(&self) {
         if self.refill_rate > 0.0 {
             let last_refill_secs = self.last_refill_age_secs.load(Ordering::Relaxed);
+<<<<<<< HEAD
 
             // Get current time from TimeSource and calculate current age
             let current_time = self.time_source.now();
@@ -202,11 +223,19 @@ impl TokenBucket {
                 .unwrap_or(Duration::ZERO)
                 .as_secs() as u32;
 
+=======
+            let current_age_secs = self.creation_time.elapsed().as_secs() as u32;
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Early exit if no time elapsed - most threads take this path
             if current_age_secs == last_refill_secs {
                 return;
             }
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Try to atomically claim this time window with a single CAS
             // If we lose, another thread is handling the refill, so we can exit
             if self
@@ -222,19 +251,34 @@ impl TokenBucket {
                 // Another thread claimed this time window, we're done
                 return;
             }
+<<<<<<< HEAD
 
             // We won the CAS - we're responsible for adding tokens for this time window
             let current_fractional = self.fractional_tokens.load();
             let max_fractional = self.max_permits as f32;
 
+=======
+            
+            // We won the CAS - we're responsible for adding tokens for this time window
+            let current_fractional = self.fractional_tokens.load();
+            let max_fractional = self.max_permits as f32;
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Skip token addition if already at cap
             if current_fractional >= max_fractional {
                 return;
             }
+<<<<<<< HEAD
 
             let elapsed_secs = current_age_secs - last_refill_secs;
             let tokens_to_add = elapsed_secs as f32 * self.refill_rate;
 
+=======
+            
+            let elapsed_secs = current_age_secs - last_refill_secs;
+            let tokens_to_add = elapsed_secs as f32 * self.refill_rate;
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Add tokens to fractional accumulator, capping at max_permits to prevent unbounded growth
             let new_fractional = (current_fractional + tokens_to_add).min(max_fractional);
             self.fractional_tokens.store(new_fractional);
@@ -246,12 +290,20 @@ impl TokenBucket {
         if self.success_reward > 0.0 {
             let current = self.fractional_tokens.load();
             let max_fractional = self.max_permits as f32;
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Early exit if already at cap - no point calculating
             if current >= max_fractional {
                 return;
             }
+<<<<<<< HEAD
 
+=======
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             // Cap fractional tokens at max_permits to prevent unbounded growth
             let new_fractional = (current + self.success_reward).min(max_fractional);
             self.fractional_tokens.store(new_fractional);
@@ -305,7 +357,10 @@ pub struct TokenBucketBuilder {
     timeout_retry_cost: Option<u32>,
     success_reward: Option<f32>,
     refill_rate: Option<f32>,
+<<<<<<< HEAD
     time_source: Option<SharedTimeSource>,
+=======
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
 }
 
 impl TokenBucketBuilder {
@@ -346,11 +401,20 @@ impl TokenBucketBuilder {
     /// Negative values are clamped to 0.0. A refill rate of 0.0 disables time-based regeneration.
     /// Non-finite values (NaN, infinity) are treated as 0.0.
     pub fn refill_rate(mut self, rate: f32) -> Self {
+<<<<<<< HEAD
         let validated_rate = if rate.is_finite() { rate.max(0.0) } else { 0.0 };
+=======
+        let validated_rate = if rate.is_finite() {
+            rate.max(0.0)
+        } else {
+            0.0
+        };
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         self.refill_rate = Some(validated_rate);
         self
     }
 
+<<<<<<< HEAD
     /// Sets the time source for the token bucket.
     ///
     /// If not set, defaults to `SystemTimeSource`.
@@ -362,6 +426,8 @@ impl TokenBucketBuilder {
         self
     }
 
+=======
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
     /// Builds a `TokenBucket`.
     pub fn build(self) -> TokenBucket {
         let time_source = self.time_source.unwrap_or_default();
@@ -375,8 +441,12 @@ impl TokenBucketBuilder {
             success_reward: self.success_reward.unwrap_or(DEFAULT_SUCCESS_REWARD),
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: self.refill_rate.unwrap_or(0.0),
+<<<<<<< HEAD
             time_source: time_source.clone(),
             creation_time: time_source.now(),
+=======
+            creation_time: Instant::now(),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -496,10 +566,14 @@ mod tests {
             bucket.fractional_tokens.store(input);
             bucket.convert_fractional_tokens();
 
+<<<<<<< HEAD
             assert_eq!(
                 bucket.semaphore.available_permits() - initial,
                 expected_permits
             );
+=======
+            assert_eq!(bucket.semaphore.available_permits() - initial, expected_permits);
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             assert!((bucket.fractional_tokens.load() - expected_remaining).abs() < 0.0001);
         }
     }
@@ -538,6 +612,7 @@ mod tests {
     }
 
     #[test]
+<<<<<<< HEAD
     fn test_builder_default_time_source() {
         // Test that TokenBucket uses SystemTimeSource by default when builder doesn't specify one
         let bucket = TokenBucket::builder()
@@ -589,6 +664,8 @@ mod tests {
     }
 
     #[test]
+=======
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
     fn test_atomicf32_f32_to_bits_conversion_correctness() {
         // This is the core functionality
         let test_values = vec![
@@ -794,6 +871,7 @@ mod tests {
         assert_eq!(original.load(), 999.0, "Original should have new value");
     }
 
+<<<<<<< HEAD
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_combined_time_and_success_rewards() {
@@ -806,6 +884,14 @@ mod tests {
             success_reward: 0.5,
             time_source: time_source.clone().into(),
             creation_time: time_source.now(),
+=======
+    #[test]
+    fn test_combined_time_and_success_rewards() {
+        let bucket = TokenBucket {
+            refill_rate: 1.0,
+            success_reward: 0.5,
+            creation_time: Instant::now() - std::time::Duration::from_secs(2),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
@@ -815,9 +901,12 @@ mod tests {
         bucket.reward_success();
         bucket.reward_success();
 
+<<<<<<< HEAD
         // Advance time by 2 seconds
         time_source.advance(Duration::from_secs(2));
 
+=======
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // Trigger time-based refill: 2 sec * 1.0 = 2.0 tokens
         // Total: 1.0 + 2.0 = 3.0 tokens
         bucket.refill_tokens_based_on_time();
@@ -827,12 +916,17 @@ mod tests {
         assert!(bucket.fractional_tokens.load().abs() < 0.0001);
     }
 
+<<<<<<< HEAD
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_refill_rates() {
         use aws_smithy_async::test_util::ManualTimeSource;
         use std::time::UNIX_EPOCH;
 
+=======
+    #[test]
+    fn test_refill_rates() {
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // (refill_rate, elapsed_secs, expected_permits, expected_fractional)
         let test_cases = [
             (10.0, 2, 20, 0.0),      // Basic: 2 sec * 10 tokens/sec = 20 tokens
@@ -844,22 +938,34 @@ mod tests {
         ];
 
         for (refill_rate, elapsed_secs, expected_permits, expected_fractional) in test_cases {
+<<<<<<< HEAD
             let time_source = ManualTimeSource::new(UNIX_EPOCH);
             let bucket = TokenBucket {
                 refill_rate,
                 time_source: time_source.clone().into(),
                 creation_time: time_source.now(),
+=======
+            let bucket = TokenBucket {
+                refill_rate,
+                creation_time: Instant::now() - std::time::Duration::from_secs(elapsed_secs),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
                 semaphore: Arc::new(Semaphore::new(0)),
                 max_permits: 100,
                 ..Default::default()
             };
 
+<<<<<<< HEAD
             // Advance time by the specified duration
             time_source.advance(Duration::from_secs(elapsed_secs));
 
             bucket.refill_tokens_based_on_time();
             bucket.convert_fractional_tokens();
 
+=======
+            bucket.refill_tokens_based_on_time();
+            bucket.convert_fractional_tokens();
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             assert_eq!(
                 bucket.available_permits(),
                 expected_permits,
@@ -879,6 +985,7 @@ mod tests {
         }
     }
 
+<<<<<<< HEAD
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_rewards_capped_at_max_capacity() {
@@ -891,6 +998,14 @@ mod tests {
             success_reward: 2.0,
             time_source: time_source.clone().into(),
             creation_time: time_source.now(),
+=======
+    #[test]
+    fn test_rewards_capped_at_max_capacity() {
+        let bucket = TokenBucket {
+            refill_rate: 50.0,
+            success_reward: 2.0,
+            creation_time: Instant::now() - std::time::Duration::from_secs(100),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             semaphore: Arc::new(Semaphore::new(5)),
             max_permits: 10,
             ..Default::default()
@@ -900,6 +1015,7 @@ mod tests {
         for _ in 0..50 {
             bucket.reward_success();
         }
+<<<<<<< HEAD
 
         // Fractional tokens capped at 10 from success rewards
         assert_eq!(bucket.fractional_tokens.load(), 10.0);
@@ -907,6 +1023,12 @@ mod tests {
         // Advance time by 100 seconds
         time_source.advance(Duration::from_secs(100));
 
+=======
+        
+        // Fractional tokens capped at 10 from success rewards
+        assert_eq!(bucket.fractional_tokens.load(), 10.0);
+
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // Time-based refill: 100 * 50 = 5000 tokens (without cap)
         // But fractional is already at 10, so it stays at 10
         bucket.refill_tokens_based_on_time();
@@ -917,12 +1039,17 @@ mod tests {
             10.0,
             "Fractional tokens should be capped at max_permits"
         );
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // Convert should add 5 tokens (bucket at 5, can add 5 more to reach max 10)
         bucket.convert_fractional_tokens();
         assert_eq!(bucket.available_permits(), 10);
     }
 
+<<<<<<< HEAD
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_concurrent_time_based_refill_no_over_generation() {
@@ -938,14 +1065,28 @@ mod tests {
             refill_rate: 1.0,
             time_source: time_source.clone().into(),
             creation_time: time_source.now(),
+=======
+    #[test]
+    fn test_concurrent_time_based_refill_no_over_generation() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        // Create bucket with 1 token/sec refill, backdated by 10 seconds
+        let bucket = Arc::new(TokenBucket {
+            refill_rate: 1.0,
+            creation_time: Instant::now() - std::time::Duration::from_secs(10),
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
         });
 
+<<<<<<< HEAD
         // Advance time by 10 seconds
         time_source.advance(Duration::from_secs(10));
 
+=======
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
         // Launch 100 threads that all try to refill simultaneously
         let barrier = Arc::new(Barrier::new(100));
         let mut handles = Vec::new();
@@ -953,6 +1094,7 @@ mod tests {
         for _ in 0..100 {
             let bucket_clone = Arc::clone(&bucket);
             let barrier_clone = Arc::clone(&barrier);
+<<<<<<< HEAD
 
             let handle = thread::spawn(move || {
                 // Wait for all threads to be ready
@@ -962,6 +1104,17 @@ mod tests {
                 bucket_clone.refill_tokens_based_on_time();
             });
 
+=======
+            
+            let handle = thread::spawn(move || {
+                // Wait for all threads to be ready
+                barrier_clone.wait();
+                
+                // All threads call refill at the same time
+                bucket_clone.refill_tokens_based_on_time();
+            });
+            
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
             handles.push(handle);
         }
 
@@ -980,8 +1133,16 @@ mod tests {
             10,
             "Only one thread should have added tokens, not all 100"
         );
+<<<<<<< HEAD
 
         // Fractional should be 0 after conversion
         assert!(bucket.fractional_tokens.load().abs() < 0.0001);
     }
+=======
+        
+        // Fractional should be 0 after conversion
+        assert!(bucket.fractional_tokens.load().abs() < 0.0001);
+    }
+
+>>>>>>> 4c5471c60 (Add support for configurable token bucket success reward and fractional token management)
 }
