@@ -6,7 +6,7 @@
 use super::repr::{self, BaseProvider};
 #[cfg(feature = "credentials-process")]
 use crate::credential_process::CredentialProcessProvider;
-#[cfg(feature = "login")]
+#[cfg(feature = "credentials-login")]
 use crate::login::LoginCredentialsProvider;
 use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
@@ -119,7 +119,7 @@ impl ProviderChain {
                 }
             }
             BaseProvider::LoginSession { login_session_arn } => {
-                #[cfg(feature = "login")]
+                #[cfg(feature = "credentials-login")]
                 {
                     Arc::new({
                         let builder = LoginCredentialsProvider::builder(*login_session_arn)
@@ -128,7 +128,7 @@ impl ProviderChain {
                         builder.build()
                     })
                 }
-                #[cfg(not(feature = "login"))]
+                #[cfg(not(feature = "credentials-login"))]
                 {
                     let _ = login_session_arn;
                     Err(ProfileFileError::FeatureNotEnabled {

@@ -806,7 +806,7 @@ sso_start_url = https://d-abc123.awsapps.com/start
     }
 }
 
-#[cfg(all(test, feature = "login"))]
+#[cfg(all(test, feature = "credentials-login"))]
 mod login_tests {
     use crate::provider_config::ProviderConfig;
     use aws_credential_types::provider::error::CredentialsError;
