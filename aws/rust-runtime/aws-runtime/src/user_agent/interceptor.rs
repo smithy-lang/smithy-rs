@@ -29,7 +29,8 @@ macro_rules! add_metrics_unique {
     ($features:expr, $ua:expr, $added:expr) => {
         for feature in $features {
             if let Some(m) = feature.provide_business_metric() {
-                if $added.insert(m.clone()) {
+                if !$added.contains(&m) {
+                    $added.insert(m.clone());
                     $ua.add_business_metric(m);
                 }
             }
@@ -42,7 +43,8 @@ macro_rules! add_metrics_unique_reverse {
         let mut unique_metrics = Vec::new();
         for feature in $features {
             if let Some(m) = feature.provide_business_metric() {
-                if $added.insert(m.clone()) {
+                if !$added.contains(&m) {
+                    $added.insert(m.clone());
                     unique_metrics.push(m);
                 }
             }
