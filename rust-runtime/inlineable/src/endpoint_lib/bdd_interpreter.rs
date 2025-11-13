@@ -48,7 +48,6 @@ impl<'a> ConditionContext<'a> {
     }
 }
 
-//TODO(bdd): Should probably make P, C, and R statically typed, but need to write those types first
 /// Evaluates a BDD to resolve an endpoint result
 ///
 /// Arguments
@@ -62,7 +61,7 @@ impl<'a> ConditionContext<'a> {
 /// Returns
 /// * `Some(&R)` - Result if evaluation succeeds
 /// * `None` - No match found (terminal reached)
-pub fn evaluate_bdd<P, C, R: Clone>(
+pub fn evaluate_bdd<C, P, R: Clone>(
     nodes: &[BddNode],
     root_ref: i32,
     params: &P,
@@ -71,8 +70,9 @@ pub fn evaluate_bdd<P, C, R: Clone>(
     partition_resolver: &crate::endpoint_lib::partition::PartitionResolver,
     diagnostic_collector: &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
     condition_evaluator: impl Fn(
-        &P,
         &C,
+        &P,
+        &[R],
         &crate::endpoint_lib::partition::PartitionResolver,
         &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
         &mut ConditionContext,
@@ -90,18 +90,19 @@ pub fn evaluate_bdd<P, C, R: Clone>(
                 return results.get(result_index).map(Clone::clone);
             }
             // Terminals (1 = TRUE, -1 = FALSE) - no match
-            1 | -1 => return None,
+            1 | -1 => return None, //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
             // Node references
             ref_val => {
                 let is_complement = ref_val < 0;
-                let node_index = (ref_val.abs() - 2) as usize;
+                let node_index = (ref_val.abs() - 1) as usize;
 
                 let node = nodes.get(node_index)?;
                 let condition_index = node.condition_index as usize;
                 let condition = conditions.get(condition_index)?;
                 let condition_result = condition_evaluator(
-                    params,
                     condition,
+                    params,
+                    results,
                     partition_resolver,
                     diagnostic_collector,
                     &mut context,

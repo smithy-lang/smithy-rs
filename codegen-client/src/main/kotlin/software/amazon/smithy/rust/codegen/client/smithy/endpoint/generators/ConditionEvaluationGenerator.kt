@@ -31,29 +31,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-enum class RefType {
-    Parameter,
-    Variable,
-}
-
-// Limited set of Rust types that refs can be
-enum class RustType {
-    Document,
-    String,
-    StringArray,
-    Bool,
-    Arn,
-    Partition,
-    Url,
-}
-
-data class AnnotatedRef(
-    val name: String,
-    val refType: RefType,
-    val isOptional: Boolean,
-    val rustType: RustType,
-)
-
 /**
  * Utility for generating condition evaluation code that returns a boolean.
  * Used by both rule-based and BDD-based endpoint resolvers.

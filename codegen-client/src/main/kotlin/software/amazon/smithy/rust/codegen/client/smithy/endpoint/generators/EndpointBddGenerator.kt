@@ -407,3 +407,26 @@ class EndpointBddGenerator(
  * Determines if a condition produces a result that should be stored in the context.
  */
 private fun Condition.producesResult(): Boolean = this.result.isPresent
+
+enum class RefType {
+    Parameter,
+    Variable,
+}
+
+// Limited set of Rust types that refs can be
+enum class RustType {
+    Document,
+    String,
+    StringArray,
+    Bool,
+    Arn,
+    Partition,
+    Url,
+}
+
+data class AnnotatedRef(
+    val name: String,
+    val refType: RefType,
+    val isOptional: Boolean,
+    val rustType: RustType,
+)

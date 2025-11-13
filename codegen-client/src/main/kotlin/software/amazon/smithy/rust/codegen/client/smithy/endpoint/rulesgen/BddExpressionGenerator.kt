@@ -278,18 +278,19 @@ class BddExpressionGenerator(
             )
 
             val rhsInto =
-                if (lhsIsDocument || lhsIsParameter) {
+                if (left is Reference && (right is Literal || right is GetAttr)) {
                     ".into()"
                 } else {
                     ""
                 }
 
             val lhsInto =
-                if (rhsIsDocument || rhsIsParameter) {
+                if (right is Reference && (left is Literal || left is GetAttr)) {
                     ".into()"
                 } else {
                     ""
                 }
+
             // TODO(BDD) this logic would probably look nicer with a writer util like conditionalBlock
             // but it is conditional parens and you can throw a Some (or other enum variant) in front
             if (rhsIsOptionalRef) {
