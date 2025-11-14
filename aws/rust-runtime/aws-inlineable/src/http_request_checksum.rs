@@ -515,5 +515,15 @@ mod tests {
             Some(&expected_checksum),
             "expected checksum '{header_value:?}' to match '{expected_checksum}'"
         );
+        let expected_checksum = base64::encode(&crc32c_checksum);
+        while let Ok(Some(trailer)) = body.trailers().await {
+            if let Some(header_value) = trailer.get("x-amz-checksum-crc32c") {
+                let header_value = header_value.to_str().unwrap();
+                assert_eq!(
+                    header_value, expected_checksum,
+                    "expected checksum '{header_value}' to match '{expected_checksum}'"
+                );
+            }
+        }
     }
 }
