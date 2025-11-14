@@ -11,6 +11,14 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
 time = { version = "0.3", features = ["macros"] }
+rsa = "0.9.9"
+sha1 = { version = "0.10.6", features = ["oid"] }
+pem = "3.0.6"
+zeroize = "1.8.2"
+tokio = { version = "1.48.0", features = ["fs"], optional = true }
+
+[features]
+rt-tokio = ["dep:tokio"]
 
 [package.metadata.docs.rs]
 all-features = true
