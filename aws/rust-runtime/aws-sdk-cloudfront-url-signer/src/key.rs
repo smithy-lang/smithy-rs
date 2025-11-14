@@ -20,9 +20,9 @@ impl PrivateKey {
     pub(crate) fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
         let key = RsaPrivateKey::from_pkcs1_pem(
             std::str::from_utf8(bytes)
-                .map_err(|e| SigningError::InvalidKey(format!("Invalid UTF-8 in PEM: {e}")))?,
+                .map_err(|e| SigningError::InvalidKey { source: e.into() })?,
         )
-        .map_err(|e| SigningError::InvalidKey(format!("Failed to parse RSA key: {e}")))?;
+        .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
 
         Ok(Self { key })
     }
@@ -31,7 +31,7 @@ impl PrivateKey {
     pub async fn from_pem_file(path: impl AsRef<Path>) -> Result<Self, SigningError> {
         let bytes = tokio::fs::read(path.as_ref())
             .await
-            .map_err(|e| SigningError::InvalidKey(format!("Failed to read key file: {e}")))?;
+            .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
 
         Self::from_pem(&bytes)
     }
@@ -44,7 +44,7 @@ impl PrivateKey {
         let signature = self
             .key
             .sign(rsa::Pkcs1v15Sign::new::<Sha1>(), &digest)
-            .map_err(|e| SigningError::SigningFailure(format!("RSA signing failed: {e}")))?;
+            .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
 
         Ok(signature)
     }
@@ -68,7 +68,10 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_from_pem_invalid() {
         let result = PrivateKey::from_pem(b"invalid pem data");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), SigningError::InvalidKey(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            SigningError::InvalidKey { .. }
+        ));
     }
 
     #[test]
