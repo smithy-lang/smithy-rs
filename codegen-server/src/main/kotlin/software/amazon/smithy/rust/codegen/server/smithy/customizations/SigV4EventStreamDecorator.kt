@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -114,20 +113,8 @@ class SigV4EventStreamCustomization(private val symbolProvider: RustSymbolProvid
     override fun section(section: HttpBindingSection): Writable =
         writable {
             when (section) {
-                is HttpBindingSection.BeforeCreatingEventStreamReceiver -> {
-                    // Check if this service uses SigV4 auth
-                    if (symbolProvider.usesSigAuth()) {
-                        val codegenScope =
-                            SigV4EventStreamSupportStructures.codegenScope(symbolProvider.config.runtimeConfig)
-                        rustTemplate(
-                            """
-                            let ${section.unmarshallerVariableName} = #{SigV4Unmarshaller}::new(${section.unmarshallerVariableName});
-                            """,
-                            *codegenScope,
-                        )
-                    }
-                }
-
+                // Type wrapping happens via symbol provider
+                // SigV4Receiver::new() takes (unmarshaller, body) directly
                 else -> {}
             }
         }

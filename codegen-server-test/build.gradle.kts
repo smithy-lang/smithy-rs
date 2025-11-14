@@ -116,7 +116,7 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
     )
 }
 // When iterating on protocol tests use this to speed up codegen:
-// .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
+    .filter { it.module == "rpcv2Cbor_extras" || it.module == "rpcv2Cbor_extras_no_initial_response" }
 
 val customCodegenTests = "custom-test-models".let { customModels ->
     listOf(
