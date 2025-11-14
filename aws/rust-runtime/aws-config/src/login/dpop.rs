@@ -149,7 +149,7 @@ impl aws_sdk_signin::config::auth::ResolveAuthScheme for DPoPAuthSchemeOptionRes
     }
 }
 
-/// SigV4 auth scheme.
+/// DPoP auth scheme.
 #[derive(Debug)]
 pub(super) struct DPoPAuthScheme {
     signer: DPoPSigner,
