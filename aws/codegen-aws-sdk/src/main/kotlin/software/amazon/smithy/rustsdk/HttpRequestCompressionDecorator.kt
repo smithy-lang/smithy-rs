@@ -21,8 +21,12 @@ import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomizat
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 
 class HttpRequestCompressionDecorator : ClientCodegenDecorator {
+    companion object {
+        const val ORDER: Byte = 0
+    }
+
     override val name: String = "HttpRequestCompression"
-    override val order: Byte = 0
+    override val order: Byte = ORDER
 
     private fun usesRequestCompression(codegenContext: ClientCodegenContext): Boolean {
         val index = TopDownIndex.of(codegenContext.model)

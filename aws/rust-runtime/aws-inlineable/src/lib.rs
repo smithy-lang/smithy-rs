@@ -26,6 +26,9 @@
 #[allow(dead_code)]
 pub mod account_id_endpoint;
 
+/// Supporting code for the aws-chunked content encoding.
+pub mod aws_chunked;
+
 /// Supporting code to determine auth scheme options based on the `authSchemes` endpoint list property.
 #[allow(dead_code)]
 pub mod endpoint_auth;

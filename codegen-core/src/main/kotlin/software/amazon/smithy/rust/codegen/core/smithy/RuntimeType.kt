@@ -319,6 +319,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun smithyHttp(runtimeConfig: RuntimeConfig) = CargoDependency.smithyHttp(runtimeConfig).toType()
 
+        fun smithyHttpClientTestUtil(runtimeConfig: RuntimeConfig) =
+            CargoDependency.smithyHttpClientTestUtil(runtimeConfig).toType()
+
         fun smithyJson(runtimeConfig: RuntimeConfig) = CargoDependency.smithyJson(runtimeConfig).toType()
 
         fun smithyQuery(runtimeConfig: RuntimeConfig) = CargoDependency.smithyQuery(runtimeConfig).toType()
