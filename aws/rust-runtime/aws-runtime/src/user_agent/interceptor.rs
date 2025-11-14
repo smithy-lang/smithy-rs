@@ -437,4 +437,37 @@ mod tests {
             expect_header(&context, "x-amz-user-agent")
         );
     }
+
+    #[test]
+    fn test_cfg_load_captures_all_feature_layers() {
+        use crate::sdk_feature::AwsSdkFeature;
+
+        // Create a ConfigBag with features in both base layer and interceptor_state
+        let mut base_layer = Layer::new("base");
+        base_layer.store_append(AwsSdkFeature::EndpointOverride);
+
+        let mut config = ConfigBag::of_layers(vec![base_layer]);
+
+        // Store a feature in interceptor_state (simulating what interceptors do)
+        config
+            .interceptor_state()
+            .store_append(AwsSdkFeature::SsoLoginDevice);
+
+        // Verify that cfg.load() captures features from all layers
+        let all_features: Vec<&AwsSdkFeature> = config.load::<AwsSdkFeature>().collect();
+
+        assert_eq!(
+            all_features.len(),
+            2,
+            "cfg.load() should capture features from all layers"
+        );
+        assert!(
+            all_features.contains(&&AwsSdkFeature::EndpointOverride),
+            "should contain feature from base layer"
+        );
+        assert!(
+            all_features.contains(&&AwsSdkFeature::SsoLoginDevice),
+            "should contain feature from interceptor_state"
+        );
+    }
 }

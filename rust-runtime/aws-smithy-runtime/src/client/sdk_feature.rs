@@ -23,6 +23,7 @@ pub enum SmithySdkFeature {
     FlexibleChecksumsReqWhenRequired,
     FlexibleChecksumsResWhenSupported,
     FlexibleChecksumsResWhenRequired,
+    ObservabilityMetrics,
 }
 
 impl Storable for SmithySdkFeature {

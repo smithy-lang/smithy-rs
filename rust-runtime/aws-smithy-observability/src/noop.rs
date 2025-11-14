@@ -18,11 +18,18 @@ use crate::{
     meter::{Meter, ProvideMeter},
 };
 
+/// A no-op implementation of [`ProvideMeter`] that creates no-op meters.
+///
+/// This provider is useful for testing or when observability is disabled.
 #[derive(Debug)]
-pub(crate) struct NoopMeterProvider;
+pub struct NoopMeterProvider;
 impl ProvideMeter for NoopMeterProvider {
     fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Meter {
         Meter::new(Arc::new(NoopMeter))
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

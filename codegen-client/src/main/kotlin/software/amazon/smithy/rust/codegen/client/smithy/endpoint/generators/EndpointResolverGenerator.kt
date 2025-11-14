@@ -387,6 +387,7 @@ internal class EndpointResolverGenerator(
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
         val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
+
         return writable {
             rustTemplate("#{SmithyEndpoint}::builder().url(#{url:W})", *codegenScope, "url" to url)
             headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }

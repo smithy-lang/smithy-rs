@@ -24,6 +24,8 @@ pub enum AwsSdkFeature {
     SsoLoginDevice,
     /// Calling an SSO-OIDC operation as part of the SSO login flow, when using the OAuth2.0 authorization code grant
     SsoLoginAuth,
+    /// An operation called using a user provided endpoint URL
+    EndpointOverride,
 }
 
 impl Storable for AwsSdkFeature {
