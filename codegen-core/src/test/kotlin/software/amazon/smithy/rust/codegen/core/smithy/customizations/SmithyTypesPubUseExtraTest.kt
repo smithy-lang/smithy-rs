@@ -47,7 +47,11 @@ class SmithyTypesPubUseExtraTest {
                 input: SomeInput,
                 output: SomeOutput
             }
-        """.asSmithyModel()
+        """.asSmithyModel(
+            // Filters out models containing `smithy.test#EventHeaderValue` to avoid pulling in
+            // blob and timestamp types, which would defeat the purpose of this test.
+            additionalDeniedModels = arrayOf("smithy-protocol-test-traits"),
+        )
     }
 
     private fun initialize(model: Model): Pair<CodegenContext, RustCrate> {
