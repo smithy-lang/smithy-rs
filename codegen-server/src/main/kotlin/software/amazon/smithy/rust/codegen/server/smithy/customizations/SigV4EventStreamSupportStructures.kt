@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
@@ -77,11 +78,12 @@ object SigV4EventStreamSupportStructures {
                 ##[derive(Debug, Clone)]
                 pub struct SignatureInfo {
                     /// The chunk signature bytes from the `:chunk-signature` header
-                    pub chunk_signature: Vec<u8>,
+                    pub chunk_signature: #{Vec}<u8>,
                     /// The timestamp from the `:date` header
                     pub timestamp: #{SystemTime},
                 }
                 """,
+                *preludeScope,
                 "SystemTime" to RuntimeType.std.resolve("time::SystemTime"),
             )
         }
@@ -116,18 +118,25 @@ object SigV4EventStreamSupportStructures {
                 ##[derive(Debug)]
                 pub enum SignedEventError<E> {
                     /// Error from the underlying event stream
-                    Event(E),
+                    Event {
+                        /// The error from the underlying event stream
+                        error: E,
+                        /// Signature information if the message was signed
+                        signature: #{Option}<#{SignatureInfo}>,
+                    },
                     /// Error extracting signed message
                     InvalidSignedEvent(#{ExtractionError}),
                 }
 
                 impl<E> From<E> for SignedEventError<E> {
                     fn from(err: E) -> Self {
-                        SignedEventError::Event(err)
+                        SignedEventError::Event { error: err, signature: None }
                     }
                 }
                 """,
                 "ExtractionError" to extractionError(runtimeConfig),
+                "SignatureInfo" to signatureInfo(),
+                *preludeScope,
             )
         }
 
@@ -182,11 +191,14 @@ object SigV4EventStreamSupportStructures {
                                         #{UnmarshalledMessage}::Event(event) => {
                                             Ok(#{UnmarshalledMessage}::Event(#{SignedEvent} {
                                                 message: event,
-                                                signature: Some(signature),
+                                                signature: Some(signature.clone()),
                                             }))
                                         }
                                         #{UnmarshalledMessage}::Error(err) => {
-                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
+                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event {
+                                                error: err,
+                                                signature: Some(signature),
+                                            }))
                                         }
                                     },
                                     Err(err) => Err(err),
@@ -203,7 +215,10 @@ object SigV4EventStreamSupportStructures {
                                             }))
                                         }
                                         #{UnmarshalledMessage}::Error(err) => {
-                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
+                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event {
+                                                error: err,
+                                                signature: None,
+                                            }))
                                         }
                                     },
                                     Err(err) => Err(err),
