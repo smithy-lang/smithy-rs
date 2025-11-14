@@ -202,7 +202,7 @@ impl ProvideBusinessMetric for SmithySdkFeature {
             FlexibleChecksumsResWhenRequired => {
                 Some(BusinessMetric::FlexibleChecksumsResWhenRequired)
             }
-            ObservabilityTracing => Some(BusinessMetric::ObservabilityTracing),
+            ObservabilityMetrics => Some(BusinessMetric::ObservabilityMetrics),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
                 // while continuing to use an outdated version of an SDK crate or the `aws-runtime`
@@ -227,9 +227,6 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             S3Transfer => Some(BusinessMetric::S3Transfer),
             SsoLoginDevice => Some(BusinessMetric::SsoLoginDevice),
             SsoLoginAuth => Some(BusinessMetric::SsoLoginAuth),
-            ObservabilityMetrics => Some(BusinessMetric::ObservabilityMetrics),
-            ObservabilityOtelTracing => Some(BusinessMetric::ObservabilityOtelTracing),
-            ObservabilityOtelMetrics => Some(BusinessMetric::ObservabilityOtelMetrics),
             EndpointOverride => Some(BusinessMetric::EndpointOverride),
         }
     }
@@ -415,24 +412,6 @@ mod tests {
         use crate::sdk_feature::AwsSdkFeature;
         use crate::user_agent::metrics::ProvideBusinessMetric;
 
-        // Test ObservabilityMetrics mapping
-        assert_eq!(
-            AwsSdkFeature::ObservabilityMetrics.provide_business_metric(),
-            Some(BusinessMetric::ObservabilityMetrics)
-        );
-
-        // Test ObservabilityOtelTracing mapping
-        assert_eq!(
-            AwsSdkFeature::ObservabilityOtelTracing.provide_business_metric(),
-            Some(BusinessMetric::ObservabilityOtelTracing)
-        );
-
-        // Test ObservabilityOtelMetrics mapping
-        assert_eq!(
-            AwsSdkFeature::ObservabilityOtelMetrics.provide_business_metric(),
-            Some(BusinessMetric::ObservabilityOtelMetrics)
-        );
-
         // Test SsoLoginDevice mapping
         assert_eq!(
             AwsSdkFeature::SsoLoginDevice.provide_business_metric(),
@@ -453,14 +432,14 @@ mod tests {
     }
 
     #[test]
-    fn test_smithy_sdk_feature_observability_tracing_mapping() {
+    fn test_smithy_sdk_feature_observability_mappings() {
         use crate::user_agent::metrics::ProvideBusinessMetric;
         use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 
-        // Test ObservabilityTracing mapping
+        // Test ObservabilityMetrics mapping
         assert_eq!(
-            SmithySdkFeature::ObservabilityTracing.provide_business_metric(),
-            Some(BusinessMetric::ObservabilityTracing)
+            SmithySdkFeature::ObservabilityMetrics.provide_business_metric(),
+            Some(BusinessMetric::ObservabilityMetrics)
         );
     }
 

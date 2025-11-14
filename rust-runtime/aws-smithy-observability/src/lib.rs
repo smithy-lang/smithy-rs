@@ -25,6 +25,7 @@ mod error;
 pub use error::{ErrorKind, GlobalTelemetryProviderError, ObservabilityError};
 pub mod global;
 pub mod meter;
+#[doc(hidden)]
 pub mod noop;
 mod provider;
 pub use provider::{TelemetryProvider, TelemetryProviderBuilder};

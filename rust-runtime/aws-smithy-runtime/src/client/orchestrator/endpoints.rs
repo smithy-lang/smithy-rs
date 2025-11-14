@@ -47,7 +47,6 @@ impl ResolveEndpoint for StaticUriEndpointResolver {
     fn resolve_endpoint<'a>(&'a self, _params: &'a EndpointResolverParams) -> EndpointFuture<'a> {
         EndpointFuture::ready(Ok(Endpoint::builder()
             .url(self.endpoint.to_string())
-            .property("is_custom_endpoint", true)
             .build()))
     }
 }

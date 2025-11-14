@@ -6,14 +6,19 @@
 //! Endpoint override detection for business metrics tracking
 
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
 use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
-use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer};
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 
 use crate::sdk_feature::AwsSdkFeature;
 
 /// Interceptor that detects custom endpoint URLs for business metrics
+///
+/// This interceptor checks at runtime if a `StaticUriEndpointResolver` is configured,
+/// which indicates that `.endpoint_url()` was called. When detected, it stores the
+/// `AwsSdkFeature::EndpointOverride` feature flag for business metrics tracking.
 #[derive(Debug, Default)]
 #[non_exhaustive]
 pub struct EndpointOverrideInterceptor;
@@ -30,19 +35,25 @@ impl Intercept for EndpointOverrideInterceptor {
         "EndpointOverrideInterceptor"
     }
 
-    fn read_before_execution(
+    fn read_after_serialization(
         &self,
-        _context: &BeforeSerializationInterceptorContextRef<'_>,
+        _context: &BeforeTransmitInterceptorContextRef<'_>,
+        runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        // Check if endpoint_url was set in config
-        if cfg
-            .load::<aws_types::endpoint_config::EndpointUrl>()
-            .is_some()
-        {
+        // Check if the endpoint resolver is a StaticUriEndpointResolver
+        // This indicates that .endpoint_url() was called
+        let resolver = runtime_components.endpoint_resolver();
+
+        // Check the resolver's debug string to see if it's StaticUriEndpointResolver
+        let debug_str = format!("{:?}", resolver);
+
+        if debug_str.contains("StaticUriEndpointResolver") {
+            // Store in interceptor_state
             cfg.interceptor_state()
                 .store_append(AwsSdkFeature::EndpointOverride);
         }
+
         Ok(())
     }
 }
@@ -65,6 +76,15 @@ impl EndpointOverrideRuntimePlugin {
     pub fn new(config: Option<FrozenLayer>) -> Self {
         Self { config }
     }
+
+    /// Creates a new `EndpointOverrideRuntimePlugin` and marks that endpoint override is enabled
+    pub fn new_with_feature_flag() -> Self {
+        let mut layer = Layer::new("endpoint_override");
+        layer.store_append(AwsSdkFeature::EndpointOverride);
+        Self {
+            config: Some(layer.freeze()),
+        }
+    }
 }
 
 impl RuntimePlugin for EndpointOverrideRuntimePlugin {
@@ -77,10 +97,6 @@ impl RuntimePlugin for EndpointOverrideRuntimePlugin {
 mod tests {
     use super::*;
     use crate::sdk_feature::AwsSdkFeature;
-    use aws_smithy_runtime_api::client::interceptors::context::{
-        BeforeSerializationInterceptorContextRef, Input, InterceptorContext,
-    };
-    use aws_smithy_types::config_bag::ConfigBag;
 
     #[test]
     fn test_plugin_with_no_config() {
@@ -89,56 +105,55 @@ mod tests {
     }
 
     #[test]
-    fn test_interceptor_detects_endpoint_url_when_present() {
-        let interceptor = EndpointOverrideInterceptor::new();
-        let mut cfg = ConfigBag::base();
+    fn test_plugin_with_feature_flag() {
+        let plugin = EndpointOverrideRuntimePlugin::new_with_feature_flag();
+        let config = plugin.config().expect("config should be set");
 
-        // Set endpoint URL in config
-        let endpoint_url =
-            aws_types::endpoint_config::EndpointUrl("https://custom.example.com".to_string());
-        cfg.interceptor_state().store_put(endpoint_url);
-
-        // Create a dummy context
-        let input = Input::doesnt_matter();
-        let ctx = InterceptorContext::new(input);
-        let context = BeforeSerializationInterceptorContextRef::from(&ctx);
-
-        // Run the interceptor
-        interceptor
-            .read_before_execution(&context, &mut cfg)
-            .unwrap();
-
-        // Verify feature flag was set in interceptor_state
-        let features: Vec<_> = cfg
-            .interceptor_state()
-            .load::<AwsSdkFeature>()
-            .cloned()
-            .collect();
+        // Verify the feature flag is present in the config
+        let features: Vec<_> = config.load::<AwsSdkFeature>().cloned().collect();
         assert_eq!(features.len(), 1);
         assert_eq!(features[0], AwsSdkFeature::EndpointOverride);
     }
 
     #[test]
-    fn test_interceptor_does_not_set_flag_when_endpoint_url_absent() {
-        let interceptor = EndpointOverrideInterceptor::new();
+    fn test_interceptor_detects_static_uri_resolver() {
+        use aws_smithy_runtime::client::orchestrator::endpoints::StaticUriEndpointResolver;
+        use aws_smithy_runtime_api::client::endpoint::SharedEndpointResolver;
+        use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
+        use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+        use aws_smithy_types::config_bag::ConfigBag;
+
+        // Create a StaticUriEndpointResolver
+        let endpoint_resolver = SharedEndpointResolver::new(StaticUriEndpointResolver::uri(
+            "https://custom.example.com",
+        ));
+
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
+        context.enter_serialization_phase();
+        context.set_request(HttpRequest::empty());
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
+
+        let rc = RuntimeComponentsBuilder::for_tests()
+            .with_endpoint_resolver(Some(endpoint_resolver))
+            .build()
+            .unwrap();
         let mut cfg = ConfigBag::base();
 
-        // Create a dummy context
-        let input = Input::doesnt_matter();
-        let ctx = InterceptorContext::new(input);
-        let context = BeforeSerializationInterceptorContextRef::from(&ctx);
-
-        // Run the interceptor without setting endpoint URL
+        let interceptor = EndpointOverrideInterceptor::new();
+        let ctx = Into::into(&context);
         interceptor
-            .read_before_execution(&context, &mut cfg)
+            .read_after_serialization(&ctx, &rc, &mut cfg)
             .unwrap();
 
-        // Verify no feature flag was set
+        // Verify the feature flag was set
         let features: Vec<_> = cfg
             .interceptor_state()
             .load::<AwsSdkFeature>()
             .cloned()
             .collect();
-        assert_eq!(features.len(), 0);
+        assert_eq!(features.len(), 1, "Expected 1 feature, got: {:?}", features);
+        assert_eq!(features[0], AwsSdkFeature::EndpointOverride);
     }
 }

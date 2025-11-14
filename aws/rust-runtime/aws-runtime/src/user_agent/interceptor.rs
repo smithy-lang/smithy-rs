@@ -133,7 +133,10 @@ impl Intercept for UserAgentInterceptor {
             .expect("`AwsUserAgent should have been created in `read_before_execution`")
             .clone();
 
-        // Load features from both the main config bag and interceptor_state
+        // Load features from ConfigBag. Note: cfg.load() automatically captures features
+        // from all layers in the ConfigBag, including the interceptor_state layer where
+        // interceptors store their features. There is no need to separately call
+        // cfg.interceptor_state().load() as that would be redundant.
         let smithy_sdk_features = cfg.load::<SmithySdkFeature>();
         for smithy_sdk_feature in smithy_sdk_features {
             smithy_sdk_feature
@@ -143,14 +146,6 @@ impl Intercept for UserAgentInterceptor {
 
         let aws_sdk_features = cfg.load::<AwsSdkFeature>();
         for aws_sdk_feature in aws_sdk_features {
-            aws_sdk_feature
-                .provide_business_metric()
-                .map(|m| ua.add_business_metric(m));
-        }
-
-        // Also load AWS SDK features from interceptor_state (where interceptors store them)
-        let aws_sdk_features_from_interceptor = cfg.interceptor_state().load::<AwsSdkFeature>();
-        for aws_sdk_feature in aws_sdk_features_from_interceptor {
             aws_sdk_feature
                 .provide_business_metric()
                 .map(|m| ua.add_business_metric(m));
@@ -349,6 +344,39 @@ mod tests {
         assert_eq!(
             AwsUserAgent::for_tests().aws_ua_header(),
             expect_header(&context, "x-amz-user-agent")
+        );
+    }
+
+    #[test]
+    fn test_cfg_load_captures_all_feature_layers() {
+        use crate::sdk_feature::AwsSdkFeature;
+
+        // Create a ConfigBag with features in both base layer and interceptor_state
+        let mut base_layer = Layer::new("base");
+        base_layer.store_append(AwsSdkFeature::EndpointOverride);
+
+        let mut config = ConfigBag::of_layers(vec![base_layer]);
+
+        // Store a feature in interceptor_state (simulating what interceptors do)
+        config
+            .interceptor_state()
+            .store_append(AwsSdkFeature::SsoLoginDevice);
+
+        // Verify that cfg.load() captures features from all layers
+        let all_features: Vec<&AwsSdkFeature> = config.load::<AwsSdkFeature>().collect();
+
+        assert_eq!(
+            all_features.len(),
+            2,
+            "cfg.load() should capture features from all layers"
+        );
+        assert!(
+            all_features.contains(&&AwsSdkFeature::EndpointOverride),
+            "should contain feature from base layer"
+        );
+        assert!(
+            all_features.contains(&&AwsSdkFeature::SsoLoginDevice),
+            "should contain feature from interceptor_state"
         );
     }
 }

@@ -4,15 +4,19 @@
  */
 
 //! Observability feature detection for business metrics tracking
+//!
+//! This module provides an interceptor for detecting observability features in the AWS SDK:
+//!
+//! - [`ObservabilityDetectionInterceptor`]: Detects observability features during
+//!   request processing and tracks them for business metrics in the User-Agent header.
 
+use aws_smithy_observability_otel::meter::OtelMeterProvider;
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
-
-use crate::sdk_feature::AwsSdkFeature;
 
 /// Interceptor that detects when observability features are being used
 /// and tracks them for business metrics.
@@ -40,32 +44,18 @@ impl Intercept for ObservabilityDetectionInterceptor {
     ) -> Result<(), BoxError> {
         // Try to get the global telemetry provider
         if let Ok(provider) = aws_smithy_observability::global::get_telemetry_provider() {
-            // Check if it's not a noop provider
-            if !provider.is_noop() {
+            // Use type-safe downcasting to detect OpenTelemetry meter provider
+            // This works with any ProvideMeter implementation and doesn't require
+            // implementation-specific boolean flags
+            if provider
+                .meter_provider()
+                .as_any()
+                .downcast_ref::<OtelMeterProvider>()
+                .is_some()
+            {
                 // Track that observability metrics are enabled
                 cfg.interceptor_state()
-                    .store_append(AwsSdkFeature::ObservabilityMetrics);
-
-                // PRAGMATIC APPROACH: Track tracing based on meter provider state
-                //
-                // The SDK uses Rust's `tracing` crate globally but doesn't have a
-                // configurable tracer provider yet. We make the reasonable assumption
-                // that if a user has configured a meter provider, they've also set up
-                // tracing as part of their observability stack.
-                //
-                // This is a pragmatic workaround until a proper tracer provider is added.
-                cfg.interceptor_state()
-                    .store_append(SmithySdkFeature::ObservabilityTracing);
-
-                // Check if it's using OpenTelemetry
-                if provider.is_otel() {
-                    cfg.interceptor_state()
-                        .store_append(AwsSdkFeature::ObservabilityOtelMetrics);
-
-                    // If using OpenTelemetry for metrics, likely using it for tracing too
-                    cfg.interceptor_state()
-                        .store_append(AwsSdkFeature::ObservabilityOtelTracing);
-                }
+                    .store_append(SmithySdkFeature::ObservabilityMetrics);
             }
         }
 
@@ -76,6 +66,7 @@ impl Intercept for ObservabilityDetectionInterceptor {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sdk_feature::AwsSdkFeature;
     use aws_smithy_observability::TelemetryProvider;
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
@@ -102,12 +93,85 @@ mod tests {
             .read_before_signing(&ctx, &rc, &mut cfg)
             .unwrap();
 
-        // Should not track any features for noop provider
-        let features: Vec<_> = cfg.load::<AwsSdkFeature>().collect();
-        assert_eq!(features.len(), 0);
+        // Should not track any features for noop provider since it doesn't downcast to OtelMeterProvider
+        let smithy_features: Vec<_> = cfg.load::<SmithySdkFeature>().collect();
+        assert_eq!(smithy_features.len(), 0);
+
+        let aws_features: Vec<_> = cfg.load::<AwsSdkFeature>().collect();
+        assert_eq!(aws_features.len(), 0);
     }
 
-    // Note: We cannot easily test non-noop providers without creating a custom meter provider
-    // implementation, which would require exposing internal types. The noop test above
-    // is sufficient to verify the detection logic works correctly.
+    #[test]
+    fn test_custom_provider_not_detected_as_otel() {
+        use aws_smithy_observability::meter::{Meter, ProvideMeter};
+        use aws_smithy_observability::noop::NoopMeterProvider;
+        use aws_smithy_observability::Attributes;
+        use std::sync::Arc;
+
+        // Create a custom (non-OTel, non-noop) meter provider
+        // This simulates a user implementing their own metrics provider
+        #[derive(Debug)]
+        struct CustomMeterProvider {
+            inner: NoopMeterProvider,
+        }
+
+        impl ProvideMeter for CustomMeterProvider {
+            fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter {
+                // Delegate to noop for simplicity, but this is a distinct type
+                self.inner.get_meter(scope, attributes)
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+        }
+
+        let mut context = InterceptorContext::new(Input::doesnt_matter());
+        context.enter_serialization_phase();
+        context.set_request(HttpRequest::empty());
+        let _ = context.take_input();
+        context.enter_before_transmit_phase();
+
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut cfg = ConfigBag::base();
+
+        // Set the custom provider
+        let custom_provider = Arc::new(CustomMeterProvider {
+            inner: NoopMeterProvider,
+        });
+        let telemetry_provider = TelemetryProvider::builder()
+            .meter_provider(custom_provider)
+            .build();
+        let _ = aws_smithy_observability::global::set_telemetry_provider(telemetry_provider);
+
+        let interceptor = ObservabilityDetectionInterceptor::new();
+        let ctx = Into::into(&context);
+        interceptor
+            .read_before_signing(&ctx, &rc, &mut cfg)
+            .unwrap();
+
+        // Should NOT track any features for custom provider since it doesn't downcast to OtelMeterProvider
+        // The new implementation only emits metrics when OTel is detected
+        let smithy_features: Vec<_> = cfg
+            .interceptor_state()
+            .load::<SmithySdkFeature>()
+            .cloned()
+            .collect();
+        assert!(
+            !smithy_features.iter().any(|f| *f == SmithySdkFeature::ObservabilityMetrics),
+            "Should not detect custom provider as having observability metrics (only OTel is tracked)"
+        );
+
+        // Verify no AWS-specific features are tracked for custom provider
+        let aws_features: Vec<_> = cfg
+            .interceptor_state()
+            .load::<AwsSdkFeature>()
+            .cloned()
+            .collect();
+        assert_eq!(
+            aws_features.len(),
+            0,
+            "Should not track any AWS-specific features for custom provider"
+        );
+    }
 }
