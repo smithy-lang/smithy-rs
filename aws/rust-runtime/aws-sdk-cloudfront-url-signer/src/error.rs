@@ -3,36 +3,47 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Error types for CloudFront URL signing operations.
-
+use std::error::Error as StdError;
 use std::fmt;
 
-/// Errors that can occur during CloudFront URL signing.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 #[non_exhaustive]
 pub enum SigningError {
-    /// Invalid private key format or parsing failure.
-    InvalidKey(String),
-    /// Invalid policy configuration or validation failure.
-    InvalidPolicy(String),
-    /// Invalid input parameters.
-    InvalidInput(String),
-    /// Cryptographic signing operation failed.
-    SigningFailure(String),
+    InvalidKey {
+        source: Box<dyn StdError + Send + Sync>,
+    },
+    InvalidPolicy {
+        message: String,
+    },
+    InvalidInput {
+        message: String,
+    },
+    SigningFailure {
+        source: Box<dyn StdError + Send + Sync>,
+    },
 }
 
 impl fmt::Display for SigningError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SigningError::InvalidKey(msg) => write!(f, "invalid key: {msg}"),
-            SigningError::InvalidPolicy(msg) => write!(f, "invalid policy: {msg}"),
-            SigningError::InvalidInput(msg) => write!(f, "invalid input: {msg}"),
-            SigningError::SigningFailure(msg) => write!(f, "signing failure: {msg}"),
+            Self::InvalidKey { .. } => write!(f, "invalid private key"),
+            Self::InvalidPolicy { message } => write!(f, "invalid policy: {message}"),
+            Self::InvalidInput { message } => write!(f, "invalid input: {message}"),
+            Self::SigningFailure { .. } => write!(f, "signing operation failed"),
         }
     }
 }
 
-impl std::error::Error for SigningError {}
+impl StdError for SigningError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        match self {
+            SigningError::InvalidKey { source } => Some(source.as_ref()),
+            SigningError::InvalidPolicy { .. } => None,
+            SigningError::InvalidInput { .. } => None,
+            SigningError::SigningFailure { source } => Some(source.as_ref()),
+        }
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -40,31 +51,37 @@ mod tests {
 
     #[test]
     fn test_invalid_key_display() {
-        let err = SigningError::InvalidKey("malformed PEM".to_string());
-        assert_eq!(err.to_string(), "invalid key: malformed PEM");
+        let err = SigningError::InvalidKey {
+            source: "test error".into(),
+        };
+        assert_eq!(err.to_string(), "invalid private key");
+        assert!(err.source().is_some());
     }
 
     #[test]
     fn test_invalid_policy_display() {
-        let err = SigningError::InvalidPolicy("missing expiration".to_string());
-        assert_eq!(err.to_string(), "invalid policy: missing expiration");
+        let err = SigningError::InvalidPolicy {
+            message: "missing expires_at".to_string(),
+        };
+        assert_eq!(err.to_string(), "invalid policy: missing expires_at");
+        assert!(err.source().is_none());
     }
 
     #[test]
     fn test_invalid_input_display() {
-        let err = SigningError::InvalidInput("empty URL".to_string());
+        let err = SigningError::InvalidInput {
+            message: "empty URL".to_string(),
+        };
         assert_eq!(err.to_string(), "invalid input: empty URL");
+        assert!(err.source().is_none());
     }
 
     #[test]
     fn test_signing_failure_display() {
-        let err = SigningError::SigningFailure("RSA operation failed".to_string());
-        assert_eq!(err.to_string(), "signing failure: RSA operation failed");
-    }
-
-    #[test]
-    fn test_error_trait_implemented() {
-        let err = SigningError::InvalidKey("test".to_string());
-        let _: &dyn std::error::Error = &err;
+        let err = SigningError::SigningFailure {
+            source: "RSA error".into(),
+        };
+        assert_eq!(err.to_string(), "signing operation failed");
+        assert!(err.source().is_some());
     }
 }
