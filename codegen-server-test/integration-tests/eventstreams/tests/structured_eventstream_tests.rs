@@ -618,3 +618,67 @@ async fn test_streaming_operation_with_optional_data() {
     // Verify optional data was not provided
     assert_eq!(harness.server.optional_data(), None);
 }
+
+/// Test that SigV4-framed initial-request messages are properly handled.
+/// This demonstrates the bug in issue #4397 where try_recv_initial_request
+/// cannot see inside the SigV4 envelope to detect the initial-request event type.
+#[tokio::test]
+async fn test_sigv4_framed_initial_request_with_data() {
+    let _logs = show_filtered_test_logs(
+        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras=trace",
+    );
+    let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
+
+    // Send a SigV4-framed initial-request with data
+    let signed_initial_request = build_sigv4_signed_initial_data("test-data");
+    harness.client.send(signed_initial_request).await.unwrap();
+
+    harness.send_event("A").await;
+
+    // The connection will be closed because the server cannot detect the initial-request
+    // inside the SigV4 envelope, so it thinks the initial data is missing
+    let result = harness.recv().await;
+
+    // This demonstrates the bug: the server closes the connection instead of
+    // extracting the initial-request from inside the SigV4 envelope
+    assert!(
+        result.is_none(),
+        "Bug #4397: Server should extract initial-request from SigV4 envelope, but instead closes connection"
+    );
+
+    // The server never received the initial data because it couldn't unwrap the SigV4 envelope
+    assert_eq!(harness.server.initial_data(), None);
+}
+
+fn build_sigv4_signed_initial_data(data: &str) -> Message {
+    use aws_smithy_eventstream::frame::write_message_to;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    // Build the inner initial-request message with data
+    let inner_message = build_initial_data_message(data);
+
+    // Serialize the inner message to bytes
+    let mut inner_bytes = Vec::new();
+    write_message_to(&inner_message, &mut inner_bytes).unwrap();
+
+    // Create the SigV4 envelope with signature headers
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+
+    let headers = vec![
+        Header::new(
+            ":chunk-signature",
+            HeaderValue::ByteArray(Bytes::from(
+                "example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            )),
+        ),
+        Header::new(
+            ":date",
+            HeaderValue::Timestamp(aws_smithy_types::DateTime::from_secs(timestamp as i64)),
+        ),
+    ];
+
+    Message::new_from_parts(headers, Bytes::from(inner_bytes))
+}
