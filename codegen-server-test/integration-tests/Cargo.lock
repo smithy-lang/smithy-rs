@@ -452,6 +452,7 @@ dependencies = [
  "rpcv2cbor_extras_no_initial_response",
  "tokio",
  "tokio-stream",
+ "tracing",
 ]
 
 [[package]]

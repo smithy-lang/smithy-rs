@@ -9,30 +9,34 @@ use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
 use eventstreams::{ManualEventStreamClient, RecvError};
 use rpcv2cbor_extras::model::{Event, Events};
+use rpcv2cbor_extras::sigv4_event_stream::SignedEvent;
 use rpcv2cbor_extras::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
 #[derive(Debug, Default, Clone)]
 struct StreamingOperationState {
-    events: Vec<Events>,
+    events: Vec<SignedEvent<Events>>,
     num_calls: usize,
+    initial_signature: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default, Clone)]
 struct StreamingOperationWithInitialDataState {
     initial_data: Option<String>,
-    events: Vec<Events>,
+    events: Vec<SignedEvent<Events>>,
     #[allow(dead_code)]
     num_calls: usize,
+    initial_signature: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default, Clone)]
 struct StreamingOperationWithOptionalDataState {
     optional_data: Option<String>,
-    events: Vec<Events>,
+    events: Vec<SignedEvent<Events>>,
     #[allow(dead_code)]
     num_calls: usize,
+    initial_signature: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -90,7 +94,7 @@ impl TestServer {
         Self { addr, state }
     }
 
-    fn streaming_operation_events(&self) -> Vec<Events> {
+    fn streaming_operation_events(&self) -> Vec<SignedEvent<Events>> {
         self.state
             .lock()
             .unwrap()
@@ -99,7 +103,7 @@ impl TestServer {
             .clone()
     }
 
-    fn streaming_operation_with_initial_data_events(&self) -> Vec<Events> {
+    fn streaming_operation_with_initial_data_events(&self) -> Vec<SignedEvent<Events>> {
         self.state
             .lock()
             .unwrap()
@@ -117,7 +121,7 @@ impl TestServer {
             .clone()
     }
 
-    fn streaming_operation_with_optional_data_events(&self) -> Vec<Events> {
+    fn streaming_operation_with_optional_data_events(&self) -> Vec<SignedEvent<Events>> {
         self.state
             .lock()
             .unwrap()
@@ -134,6 +138,24 @@ impl TestServer {
             .optional_data
             .clone()
     }
+
+    fn initial_signature(&self) -> Option<Vec<u8>> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation_with_initial_data
+            .initial_signature
+            .clone()
+    }
+
+    fn streaming_operation_initial_signature(&self) -> Option<Vec<u8>> {
+        self.state
+            .lock()
+            .unwrap()
+            .streaming_operation
+            .initial_signature
+            .clone()
+    }
 }
 
 async fn streaming_operation_handler(
@@ -141,18 +163,26 @@ async fn streaming_operation_handler(
     state: Arc<Mutex<ServerState>>,
 ) -> Result<output::StreamingOperationOutput, error::StreamingOperationError> {
     state.lock().unwrap().streaming_operation.num_calls += 1;
-    let ev = input.events.recv().await;
+    state.lock().unwrap().streaming_operation.initial_signature = input
+        .events
+        .initial_signature()
+        .map(|s| s.chunk_signature.to_vec());
 
-    if let Ok(Some(signed_event)) = &ev {
-        // Extract the actual event from the SignedEvent wrapper
-        let actual_event = &signed_event.message;
-        state
-            .lock()
-            .unwrap()
-            .streaming_operation
-            .events
-            .push(actual_event.clone());
-    }
+    let state_clone = state.clone();
+    tokio::spawn(async move {
+        while let Ok(Some(signed_event)) = input.events.recv().await {
+            tracing::debug!(
+                "streaming_operation received event: {:?}",
+                signed_event.message
+            );
+            state_clone
+                .lock()
+                .unwrap()
+                .streaming_operation
+                .events
+                .push(signed_event);
+        }
+    });
 
     Ok(output::StreamingOperationOutput::builder()
         .events(EventStreamSender::once(Ok(Events::A(Event {}))))
@@ -173,19 +203,30 @@ async fn streaming_operation_with_initial_data_handler(
         .unwrap()
         .streaming_operation_with_initial_data
         .initial_data = Some(input.initial_data);
+    state
+        .lock()
+        .unwrap()
+        .streaming_operation_with_initial_data
+        .initial_signature = input
+        .events
+        .initial_signature()
+        .map(|s| s.chunk_signature.to_vec());
 
-    let ev = input.events.recv().await;
-
-    if let Ok(Some(signed_event)) = &ev {
-        // Extract the actual event from the SignedEvent wrapper
-        let actual_event = &signed_event.message;
-        state
-            .lock()
-            .unwrap()
-            .streaming_operation_with_initial_data
-            .events
-            .push(actual_event.clone());
-    }
+    let state_clone = state.clone();
+    tokio::spawn(async move {
+        while let Ok(Some(signed_event)) = input.events.recv().await {
+            tracing::debug!(
+                "streaming_operation_with_initial_data received event: {:?}",
+                signed_event.message
+            );
+            state_clone
+                .lock()
+                .unwrap()
+                .streaming_operation_with_initial_data
+                .events
+                .push(signed_event);
+        }
+    });
 
     Ok(output::StreamingOperationWithInitialDataOutput::builder()
         .events(EventStreamSender::once(Ok(Events::A(Event {}))))
@@ -200,7 +241,14 @@ async fn streaming_operation_with_initial_response_handler(
     output::StreamingOperationWithInitialResponseOutput,
     error::StreamingOperationWithInitialResponseError,
 > {
-    let _ev = input.events.recv().await;
+    tokio::spawn(async move {
+        while let Ok(Some(event)) = input.events.recv().await {
+            tracing::debug!(
+                "streaming_operation_with_initial_response received event: {:?}",
+                event
+            );
+        }
+    });
 
     Ok(
         output::StreamingOperationWithInitialResponseOutput::builder()
@@ -224,17 +272,30 @@ async fn streaming_operation_with_optional_data_handler(
         .unwrap()
         .streaming_operation_with_optional_data
         .optional_data = input.optional_data;
+    state
+        .lock()
+        .unwrap()
+        .streaming_operation_with_optional_data
+        .initial_signature = input
+        .events
+        .initial_signature()
+        .map(|s| s.chunk_signature.to_vec());
 
-    let ev = input.events.recv().await;
-
-    if let Ok(Some(event)) = &ev {
-        state
-            .lock()
-            .unwrap()
-            .streaming_operation_with_optional_data
-            .events
-            .push(event.message.clone());
-    }
+    let state_clone = state.clone();
+    tokio::spawn(async move {
+        while let Ok(Some(event)) = input.events.recv().await {
+            tracing::debug!(
+                "streaming_operation_with_optional_data received event: {:?}",
+                event
+            );
+            state_clone
+                .lock()
+                .unwrap()
+                .streaming_operation_with_optional_data
+                .events
+                .push(event);
+        }
+    });
 
     Ok(output::StreamingOperationWithOptionalDataOutput::builder()
         .optional_response_data(Some("optional response".to_string()))
@@ -373,6 +434,13 @@ fn sign_message(inner_message: Message, signature: &[u8], timestamp_secs: i64) -
 }
 
 fn build_sigv4_signed_event(event_type: &str) -> Message {
+    build_sigv4_signed_event_with_signature(
+        event_type,
+        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    )
+}
+
+fn build_sigv4_signed_event_with_signature(event_type: &str, signature: &[u8]) -> Message {
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let timestamp = SystemTime::now()
@@ -380,11 +448,7 @@ fn build_sigv4_signed_event(event_type: &str) -> Message {
         .unwrap()
         .as_secs();
 
-    sign_message(
-        build_event(event_type),
-        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        timestamp as i64,
-    )
+    sign_message(build_event(event_type), signature, timestamp as i64)
 }
 
 fn build_sigv4_signed_initial_data(data: &str, signature: &[u8], timestamp_secs: i64) -> Message {
@@ -421,7 +485,12 @@ async fn test_streaming_operation_with_initial_request() {
     );
 
     assert_eq!(
-        harness.server.streaming_operation_events(),
+        harness
+            .server
+            .streaming_operation_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
         vec![Events::A(Event {})]
     );
 }
@@ -436,7 +505,12 @@ async fn test_streaming_operation_without_initial_request() {
     let resp = harness.expect_message().await;
     assert_eq!(get_event_type(&resp), "A");
     assert_eq!(
-        harness.server.streaming_operation_events(),
+        harness
+            .server
+            .streaming_operation_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
         vec![Events::A(Event {})]
     );
 }
@@ -453,7 +527,10 @@ async fn test_streaming_operation_with_initial_data() {
     assert_eq!(
         harness
             .server
-            .streaming_operation_with_initial_data_events(),
+            .streaming_operation_with_initial_data_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
         vec![Events::A(Event {})]
     );
     // verify that we parsed the initial data properly
@@ -477,7 +554,10 @@ async fn test_streaming_operation_with_initial_data_missing() {
     assert_eq!(
         harness
             .server
-            .streaming_operation_with_initial_data_events(),
+            .streaming_operation_with_initial_data_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
         vec![]
     );
 }
@@ -486,6 +566,9 @@ async fn test_streaming_operation_with_initial_data_missing() {
 /// The client wraps the actual event in a SigV4 envelope with signature headers.
 #[tokio::test]
 async fn test_sigv4_signed_event_stream() {
+    let _logs = show_filtered_test_logs(
+        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras=trace",
+    );
     let mut harness = TestHarness::new("StreamingOperation").await;
 
     // Send a SigV4 signed event - the inner message is wrapped in an envelope
@@ -494,92 +577,104 @@ async fn test_sigv4_signed_event_stream() {
 
     let resp = harness.expect_message().await;
     assert_eq!(get_event_type(&resp), "A");
+
+    let events = harness.server.streaming_operation_events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].message, Events::A(Event {}));
+    // The event itself is signed
+    assert!(events[0].signature.is_some());
     assert_eq!(
-        harness.server.streaming_operation_events(),
-        vec![Events::A(Event {})]
+        events[0].signature.as_ref().unwrap().chunk_signature,
+        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
     );
 }
 
-/// Test that initial_signature field is populated when initial message is SigV4 signed
+/// Test that SigV4-signed initial-request works on operations without initial data
 #[tokio::test]
-async fn test_sigv4_initial_signature() {
-    use std::sync::Arc;
-    use tokio::sync::Mutex;
+async fn test_sigv4_signed_initial_request_initial_event_empty() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
 
-    let initial_sig = Arc::new(Mutex::new(None));
-    let sig_capture = initial_sig.clone();
-
-    let config = RpcV2CborServiceConfig::builder().build();
-    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
-        .streaming_operation_with_initial_data(
-            move |mut input: input::StreamingOperationWithInitialDataInput| {
-                let sig_capture = sig_capture.clone();
-                async move {
-                    // Capture the initial signature
-                    *sig_capture.lock().await = input.events.initial_signature().map(|s| s.clone());
-
-                    let _ev = input.events.recv().await;
-                    Ok(output::StreamingOperationWithInitialDataOutput::builder()
-                        .events(EventStreamSender::once(Ok(Events::A(Event {}))))
-                        .build()
-                        .unwrap())
-                }
-            },
-        )
-        .build_unchecked();
-
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
-    tokio::spawn(async move {
-        let make_service = app.into_make_service();
-        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .http2_only(true)
-            .serve(make_service);
-        server.await.unwrap();
-    });
-
-    let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";
-    let mut client = ManualEventStreamClient::connect_to_service(
-        addr,
-        path,
-        vec![("Smithy-Protocol", "rpc-v2-cbor")],
-    )
-    .await
-    .unwrap();
-
-    // Send SigV4-signed initial-data message with specific signature and timestamp
-    let test_signature = b"test-signature-12345";
-    let test_timestamp = 1700000000i64;
-    let signed_initial =
-        build_sigv4_signed_initial_data("test-data", test_signature, test_timestamp);
-    client.send(signed_initial).await.unwrap();
+    // Send SigV4-signed initial-request (empty) to operation that doesn't expect initial data
+    let signed_initial = sign_message(build_initial_request(), b"test-sig-123", 1700000000);
+    harness.client.send(signed_initial).await.unwrap();
 
     // Send an event
-    client.send(build_event("A")).await.unwrap();
+    harness.send_event("A").await;
+    harness.send_event("B").await;
+
+    // Should receive the event response
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+
+    let events = harness.server.streaming_operation_events();
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0].message, Events::A(Event {}));
+    assert_eq!(events[0].signature, None); // Unsigned event
+    assert_eq!(events[1].message, Events::B(Event {}));
+    assert_eq!(events[1].signature, None); // Unsigned event
+
+    assert_eq!(
+        harness.server.streaming_operation_initial_signature(),
+        Some(b"test-sig-123".to_vec())
+    );
+}
+
+/// Test that SigV4-signed initial-request works on operations without initial data
+#[tokio::test]
+async fn test_sigv4_signed_initial_request_no_initial_event() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Send an event
+    harness.send_event("A").await;
+    harness.send_event("B").await;
+
+    // Should receive the event response
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+    assert_eq!(
+        harness
+            .server
+            .streaming_operation_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
+        vec![Events::A(Event {}), Events::B(Event {})]
+    );
+    assert_eq!(harness.server.streaming_operation_initial_signature(), None);
+}
+
+/// Test that multiple SigV4-signed events are properly unwrapped with signatures preserved
+#[tokio::test]
+async fn test_sigv4_signed_multiple_events() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Send multiple SigV4-signed events with different signatures
+    let signed_event_a = build_sigv4_signed_event_with_signature("A", b"signature-for-event-A");
+    harness.client.send(signed_event_a).await.unwrap();
+
+    let signed_event_b = build_sigv4_signed_event_with_signature("B", b"signature-for-event-B");
+    harness.client.send(signed_event_b).await.unwrap();
 
     // Receive response
-    let _resp = client.recv().await.unwrap().unwrap();
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
 
-    // Verify initial_signature was captured and has expected values
-    let sig = initial_sig.lock().await;
-    let sig_info = sig
-        .as_ref()
-        .expect("initial_signature should be populated for signed initial message");
+    // Verify both events were received with their distinct signatures
+    let events = harness.server.streaming_operation_events();
+    assert_eq!(events.len(), 2);
 
-    // Verify the chunk signature matches what we sent
+    assert_eq!(events[0].message, Events::A(Event {}));
+    assert!(events[0].signature.is_some());
     assert_eq!(
-        sig_info.chunk_signature, test_signature,
-        "chunk_signature should match the signature sent in the message"
+        events[0].signature.as_ref().unwrap().chunk_signature,
+        b"signature-for-event-A"
     );
 
-    // Verify timestamp matches what we sent
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let expected_time = UNIX_EPOCH + std::time::Duration::from_secs(test_timestamp as u64);
+    assert_eq!(events[1].message, Events::B(Event {}));
+    assert!(events[1].signature.is_some());
     assert_eq!(
-        sig_info.timestamp, expected_time,
-        "timestamp should match the timestamp sent in the message"
+        events[1].signature.as_ref().unwrap().chunk_signature,
+        b"signature-for-event-B"
     );
 }
 
@@ -701,7 +796,10 @@ async fn test_streaming_operation_with_optional_data() {
     assert_eq!(
         harness
             .server
-            .streaming_operation_with_optional_data_events(),
+            .streaming_operation_with_optional_data_events()
+            .into_iter()
+            .map(|e| e.message)
+            .collect::<Vec<_>>(),
         vec![Events::A(Event {})]
     );
     // Verify optional data was not provided
@@ -734,4 +832,8 @@ async fn test_sigv4_framed_initial_request_with_data() {
 
     // Verify the server received and parsed the initial data from inside the SigV4 envelope
     assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
+    assert_eq!(
+        harness.server.initial_signature(),
+        Some(b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_vec())
+    );
 }
