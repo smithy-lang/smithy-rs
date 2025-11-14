@@ -352,37 +352,43 @@ fn build_event(event_type: &str) -> Message {
     Message::new_from_parts(headers, empty_cbor)
 }
 
-fn build_sigv4_signed_event(event_type: &str) -> Message {
+fn sign_message(inner_message: Message, signature: &[u8], timestamp_secs: i64) -> Message {
     use aws_smithy_eventstream::frame::write_message_to;
+
+    let mut inner_bytes = Vec::new();
+    write_message_to(&inner_message, &mut inner_bytes).unwrap();
+
+    let headers = vec![
+        Header::new(
+            ":chunk-signature",
+            HeaderValue::ByteArray(Bytes::from(signature.to_vec())),
+        ),
+        Header::new(
+            ":date",
+            HeaderValue::Timestamp(aws_smithy_types::DateTime::from_secs(timestamp_secs)),
+        ),
+    ];
+
+    Message::new_from_parts(headers, Bytes::from(inner_bytes))
+}
+
+fn build_sigv4_signed_event(event_type: &str) -> Message {
     use std::time::{SystemTime, UNIX_EPOCH};
 
-    // Build the inner event message
-    let inner_event = build_event(event_type);
-
-    // Serialize the inner message to bytes
-    let mut inner_bytes = Vec::new();
-    write_message_to(&inner_event, &mut inner_bytes).unwrap();
-
-    // Create the SigV4 envelope with signature headers
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_secs();
 
-    let headers = vec![
-        Header::new(
-            ":chunk-signature",
-            HeaderValue::ByteArray(Bytes::from(
-                "example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            )),
-        ),
-        Header::new(
-            ":date",
-            HeaderValue::Timestamp(aws_smithy_types::DateTime::from_secs(timestamp as i64)),
-        ),
-    ];
+    sign_message(
+        build_event(event_type),
+        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        timestamp as i64,
+    )
+}
 
-    Message::new_from_parts(headers, Bytes::from(inner_bytes))
+fn build_sigv4_signed_initial_data(data: &str, signature: &[u8], timestamp_secs: i64) -> Message {
+    sign_message(build_initial_data_message(data), signature, timestamp_secs)
 }
 
 fn get_event_type(msg: &Message) -> &str {
@@ -491,6 +497,89 @@ async fn test_sigv4_signed_event_stream() {
     assert_eq!(
         harness.server.streaming_operation_events(),
         vec![Events::A(Event {})]
+    );
+}
+
+/// Test that initial_signature field is populated when initial message is SigV4 signed
+#[tokio::test]
+async fn test_sigv4_initial_signature() {
+    use std::sync::Arc;
+    use tokio::sync::Mutex;
+
+    let initial_sig = Arc::new(Mutex::new(None));
+    let sig_capture = initial_sig.clone();
+
+    let config = RpcV2CborServiceConfig::builder().build();
+    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        .streaming_operation_with_initial_data(
+            move |mut input: input::StreamingOperationWithInitialDataInput| {
+                let sig_capture = sig_capture.clone();
+                async move {
+                    // Capture the initial signature
+                    *sig_capture.lock().await = input.events.initial_signature().map(|s| s.clone());
+
+                    let _ev = input.events.recv().await;
+                    Ok(output::StreamingOperationWithInitialDataOutput::builder()
+                        .events(EventStreamSender::once(Ok(Events::A(Event {}))))
+                        .build()
+                        .unwrap())
+                }
+            },
+        )
+        .build_unchecked();
+
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        let make_service = app.into_make_service();
+        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+            .unwrap()
+            .http2_only(true)
+            .serve(make_service);
+        server.await.unwrap();
+    });
+
+    let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";
+    let mut client = ManualEventStreamClient::connect_to_service(
+        addr,
+        path,
+        vec![("Smithy-Protocol", "rpc-v2-cbor")],
+    )
+    .await
+    .unwrap();
+
+    // Send SigV4-signed initial-data message with specific signature and timestamp
+    let test_signature = b"test-signature-12345";
+    let test_timestamp = 1700000000i64;
+    let signed_initial =
+        build_sigv4_signed_initial_data("test-data", test_signature, test_timestamp);
+    client.send(signed_initial).await.unwrap();
+
+    // Send an event
+    client.send(build_event("A")).await.unwrap();
+
+    // Receive response
+    let _resp = client.recv().await.unwrap().unwrap();
+
+    // Verify initial_signature was captured and has expected values
+    let sig = initial_sig.lock().await;
+    let sig_info = sig
+        .as_ref()
+        .expect("initial_signature should be populated for signed initial message");
+
+    // Verify the chunk signature matches what we sent
+    assert_eq!(
+        sig_info.chunk_signature, test_signature,
+        "chunk_signature should match the signature sent in the message"
+    );
+
+    // Verify timestamp matches what we sent
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let expected_time = UNIX_EPOCH + std::time::Duration::from_secs(test_timestamp as u64);
+    assert_eq!(
+        sig_info.timestamp, expected_time,
+        "timestamp should match the timestamp sent in the message"
     );
 }
 
@@ -630,7 +719,11 @@ async fn test_sigv4_framed_initial_request_with_data() {
     let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
 
     // Send a SigV4-framed initial-request with data
-    let signed_initial_request = build_sigv4_signed_initial_data("test-data");
+    let signed_initial_request = build_sigv4_signed_initial_data(
+        "test-data",
+        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        1700000000,
+    );
     harness.client.send(signed_initial_request).await.unwrap();
 
     harness.send_event("A").await;
@@ -641,37 +734,4 @@ async fn test_sigv4_framed_initial_request_with_data() {
 
     // Verify the server received and parsed the initial data from inside the SigV4 envelope
     assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
-}
-
-fn build_sigv4_signed_initial_data(data: &str) -> Message {
-    use aws_smithy_eventstream::frame::write_message_to;
-    use std::time::{SystemTime, UNIX_EPOCH};
-
-    // Build the inner initial-request message with data
-    let inner_message = build_initial_data_message(data);
-
-    // Serialize the inner message to bytes
-    let mut inner_bytes = Vec::new();
-    write_message_to(&inner_message, &mut inner_bytes).unwrap();
-
-    // Create the SigV4 envelope with signature headers
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-
-    let headers = vec![
-        Header::new(
-            ":chunk-signature",
-            HeaderValue::ByteArray(Bytes::from(
-                "example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            )),
-        ),
-        Header::new(
-            ":date",
-            HeaderValue::Timestamp(aws_smithy_types::DateTime::from_secs(timestamp as i64)),
-        ),
-    ];
-
-    Message::new_from_parts(headers, Bytes::from(inner_bytes))
 }
