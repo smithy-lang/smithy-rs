@@ -100,18 +100,73 @@ class EndpointBddGenerator(
 
         writer.rustTemplate(
             """
-            use #{EndpointLib}::{evaluate_bdd, BddNode, ConditionResult};
+            use #{EndpointLib}::{evaluate_bdd, BddNode,};
             use #{ResolveEndpointError};
 
-            $nodes
+            ##[derive(Debug)]
+            pub struct DefaultResolver {
+                #{custom_fields}
+            }
+
+            impl  DefaultResolver {
+                pub fn new() -> Self {
+                    Self {
+                        #{custom_fields_init}
+                    }
+                }
+
+                pub(crate) fn evaluate_fn(
+                    &self,
+                ) -> impl for<'a> FnMut(
+                    &ConditionFn,
+                    &'a Params,
+                    &mut ConditionContext<'a>,
+                    &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
+                ) -> bool
+                       + '_ {
+                    move |cond, params, context, _diagnostic_collector| {
+                        cond.evaluate(
+                            params,
+                            context,
+                            self.partition_resolver,
+                            _diagnostic_collector,
+                        )
+                    }
+                }
+            }
+
+            impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                    let mut diagnostic_collector = #{DiagnosticCollector}::new();
+                    let mut condition_context = ConditionContext::default();
+                    let result = evaluate_bdd(
+                        &NODES,
+                        &CONDITIONS,
+                        &RESULTS,
+                        (${bddTrait.bdd.rootRef} - 1),
+                        params,
+                        &mut condition_context,
+                        &mut diagnostic_collector,
+                        self.evaluate_fn(),
+                    );
+
+                    #{EndpointFuture}::ready(match result {
+                        #{Some}(endpoint) => match endpoint.to_endpoint() {
+                            Ok(ep) => Ok(ep),
+                            Err(err) => Err(Box::new(err)),
+                        },
+                        #{None} => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched"))),
+                    })
+                }
+            }
 
             ##[derive(Debug)]
             enum ConditionFn {
                 ${(0 until conditionCount).joinToString(",\n    ") { "Cond$it" }}
             }
 
-            impl<'a> ConditionFn {
-                fn evaluate(&self, params: &'a Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}, context: &mut ConditionContext<'a>, index: usize) -> bool {
+            impl ConditionFn {
+                fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
                     // Param bindings
                     #{param_bindings:W}
 
@@ -150,43 +205,7 @@ class EndpointBddGenerator(
                 ${(0 until resultCount).joinToString(",\n    ") { "ResultEndpoint::Result$it" }}
             ];
 
-            ##[derive(Debug)]
-            pub struct DefaultResolver {
-                #{custom_fields}
-            }
 
-            impl DefaultResolver {
-                pub fn new() -> Self {
-                    Self {
-                        #{custom_fields_init}
-                    }
-                }
-            }
-
-            impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
-                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
-                    let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                    let result = evaluate_bdd(
-                        &NODES,
-                        &CONDITIONS,
-                        &RESULTS,
-                        (${bddTrait.bdd.rootRef} - 1),
-                        params,
-                        &mut diagnostic_collector,
-                        |service_params, condition, diagnostic_collector, ConditionContext::default(), index| {
-                            condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, diagnostic_collector, context, index)
-                        },
-                    );
-
-                    #{EndpointFuture}::ready(match result {
-                        #{Some}(endpoint) => match endpoint.to_endpoint() {
-                            Ok(ep) => Ok(ep),
-                            Err(err) => Err(Box::new(err)),
-                        },
-                        #{None} => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched"))),
-                    })
-                }
-            }
 
             //TODO(BDD) move this to endpoint_lib
             pub trait Coalesce {
@@ -240,6 +259,8 @@ class EndpointBddGenerator(
                     ${"$"}crate::coalesce!(${"$"}crate::coalesce!(${"$"}a, ${"$"}b) ${'$'}(, ${"$"}c)*)
                 }
             }
+
+            $nodes
             """,
             *preludeScope,
             "Endpoint" to Types(runtimeConfig).smithyEndpoint,
@@ -254,10 +275,10 @@ class EndpointBddGenerator(
             *conditionScope.toList().toTypedArray(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
-            "custom_fields" to writable { fnsUsed.mapNotNull { it.structField() }.forEach { rust("#W,", it) } },
+            "custom_fields" to writable { fnsUsed.mapNotNull { it.structFieldBdd() }.forEach { rust("#W,", it) } },
             "custom_fields_init" to
                 writable {
-                    fnsUsed.mapNotNull { it.structFieldInit() }.forEach { rust("#W,", it) }
+                    fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
                 },
             "additional_args_sig_prefix" to writable { if (additionalArgsSignature.isNotEmpty()) rust(", ") },
             "additional_args_sig" to

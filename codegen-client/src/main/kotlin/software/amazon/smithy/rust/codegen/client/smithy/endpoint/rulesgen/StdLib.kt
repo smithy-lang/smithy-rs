@@ -57,36 +57,51 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             "tracing" to RuntimeType.Tracing,
         )
 
+    private val defaultPartitionResolver =
+        RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
+            rustTemplate(
+                """
+                // Loading the partition JSON is expensive since it involves many regex compilations,
+                // so cache the result so that it only need to be paid for the first constructed client.
+                pub(crate) static DEFAULT_PARTITION_RESOLVER: std::sync::LazyLock<#{PartitionResolver}> =
+                    std::sync::LazyLock::new(|| {
+                        match std::env::var("SMITHY_CLIENT_SDK_CUSTOM_PARTITION") {
+                            Ok(partitions) => {
+                                #{tracing}::debug!("loading custom partitions located at {partitions}");
+                                let partition_dot_json = std::fs::read_to_string(partitions).expect("should be able to read a custom partition JSON");
+                                #{PartitionResolver}::new_from_json(partition_dot_json.as_bytes()).expect("valid JSON")
+                            },
+                            _ => {
+                                #{tracing}::debug!("loading default partitions");
+                                #{PartitionResolver}::new_from_json(b${
+                Node.printJson(partitionsDotJson).dq()
+                }).expect("valid JSON")
+                            }
+                        }
+                    });
+                """,
+                *codegenScope,
+            )
+        }
+
     override fun structFieldInit() =
         writable {
-            val json = Node.printJson(partitionsDotJson).dq()
             rustTemplate(
                 """partition_resolver: #{DEFAULT_PARTITION_RESOLVER}.clone()""",
                 *codegenScope,
                 "DEFAULT_PARTITION_RESOLVER" to
-                    RuntimeType.forInlineFun("DEFAULT_PARTITION_RESOLVER", EndpointStdLib) {
-                        rustTemplate(
-                            """
-                            // Loading the partition JSON is expensive since it involves many regex compilations,
-                            // so cache the result so that it only need to be paid for the first constructed client.
-                            pub(crate) static DEFAULT_PARTITION_RESOLVER: std::sync::LazyLock<#{PartitionResolver}> =
-                                std::sync::LazyLock::new(|| {
-                                    match std::env::var("SMITHY_CLIENT_SDK_CUSTOM_PARTITION") {
-                                        Ok(partitions) => {
-                                            #{tracing}::debug!("loading custom partitions located at {partitions}");
-                                            let partition_dot_json = std::fs::read_to_string(partitions).expect("should be able to read a custom partition JSON");
-                                            #{PartitionResolver}::new_from_json(partition_dot_json.as_bytes()).expect("valid JSON")
-                                        },
-                                        _ => {
-                                            #{tracing}::debug!("loading default partitions");
-                                            #{PartitionResolver}::new_from_json(b$json).expect("valid JSON")
-                                        }
-                                    }
-                                });
-                            """,
-                            *codegenScope,
-                        )
-                    },
+                    defaultPartitionResolver,
+            )
+        }
+
+    override fun structFieldInitBdd() =
+        writable {
+            val json = Node.printJson(partitionsDotJson).dq()
+            rustTemplate(
+                """partition_resolver: &#{DEFAULT_PARTITION_RESOLVER}""",
+                *codegenScope,
+                "DEFAULT_PARTITION_RESOLVER" to
+                    defaultPartitionResolver,
             )
         }
 
@@ -110,6 +125,11 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             rustTemplate("partition_resolver: #{PartitionResolver}", *codegenScope)
         }
 
+    override fun structFieldBdd(): Writable =
+        writable {
+            rustTemplate("partition_resolver: &'static #{PartitionResolver}", *codegenScope)
+        }
+
     override fun usage() = writable { rust("partition_resolver.resolve_partition") }
 }
 
@@ -122,6 +142,8 @@ private class SimpleRuntimeFunction(override val id: String, private val runtime
     CustomRuntimeFunction() {
     override fun structFieldInit(): Writable? = null
 
+    override fun structFieldInitBdd(): Writable? = null
+
     override fun additionalArgsSignature(): Writable? = null
 
     override fun additionalArgsSignatureBdd(): Writable? = null
@@ -129,6 +151,8 @@ private class SimpleRuntimeFunction(override val id: String, private val runtime
     override fun additionalArgsInvocation(self: String): Writable? = null
 
     override fun structField(): Writable? = null
+
+    override fun structFieldBdd(): Writable? = null
 
     override fun usage() = writable { rust("#T", runtimeType) }
 }
