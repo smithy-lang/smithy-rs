@@ -467,55 +467,6 @@ fn get_event_type(msg: &Message) -> &str {
 }
 
 #[tokio::test]
-async fn test_streaming_operation_with_initial_request() {
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // if we send an initial request it should work
-    harness.send_initial_request().await;
-    harness.send_event("A").await;
-
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-
-    // Check that initial-response was received
-    assert!(harness.initial_response.is_some());
-    assert_eq!(
-        get_event_type(harness.initial_response.as_ref().unwrap()),
-        "initial-response"
-    );
-
-    assert_eq!(
-        harness
-            .server
-            .streaming_operation_events()
-            .into_iter()
-            .map(|e| e.message)
-            .collect::<Vec<_>>(),
-        vec![Events::A(Event {})]
-    );
-}
-
-#[tokio::test]
-async fn test_streaming_operation_without_initial_request() {
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // BUT: if we don't send an initial request, it should also work
-    harness.send_event("A").await;
-
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-    assert_eq!(
-        harness
-            .server
-            .streaming_operation_events()
-            .into_iter()
-            .map(|e| e.message)
-            .collect::<Vec<_>>(),
-        vec![Events::A(Event {})]
-    );
-}
-
-#[tokio::test]
 async fn test_streaming_operation_with_initial_data() {
     let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
     harness.send_initial_data("test-data").await;
@@ -559,122 +510,6 @@ async fn test_streaming_operation_with_initial_data_missing() {
             .map(|e| e.message)
             .collect::<Vec<_>>(),
         vec![]
-    );
-}
-
-/// Test that the server can handle SigV4 signed event stream messages.
-/// The client wraps the actual event in a SigV4 envelope with signature headers.
-#[tokio::test]
-async fn test_sigv4_signed_event_stream() {
-    let _logs = show_filtered_test_logs(
-        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras=trace",
-    );
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // Send a SigV4 signed event - the inner message is wrapped in an envelope
-    let signed_event = build_sigv4_signed_event("A");
-    harness.client.send(signed_event).await.unwrap();
-
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-
-    let events = harness.server.streaming_operation_events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].message, Events::A(Event {}));
-    // The event itself is signed
-    assert!(events[0].signature.is_some());
-    assert_eq!(
-        events[0].signature.as_ref().unwrap().chunk_signature,
-        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    );
-}
-
-/// Test that SigV4-signed initial-request works on operations without initial data
-#[tokio::test]
-async fn test_sigv4_signed_initial_request_initial_event_empty() {
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // Send SigV4-signed initial-request (empty) to operation that doesn't expect initial data
-    let signed_initial = sign_message(build_initial_request(), b"test-sig-123", 1700000000);
-    harness.client.send(signed_initial).await.unwrap();
-
-    // Send an event
-    harness.send_event("A").await;
-    harness.send_event("B").await;
-
-    // Should receive the event response
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-
-    let events = harness.server.streaming_operation_events();
-    assert_eq!(events.len(), 2);
-    assert_eq!(events[0].message, Events::A(Event {}));
-    assert_eq!(events[0].signature, None); // Unsigned event
-    assert_eq!(events[1].message, Events::B(Event {}));
-    assert_eq!(events[1].signature, None); // Unsigned event
-
-    assert_eq!(
-        harness.server.streaming_operation_initial_signature(),
-        Some(b"test-sig-123".to_vec())
-    );
-}
-
-/// Test that SigV4-signed initial-request works on operations without initial data
-#[tokio::test]
-async fn test_sigv4_signed_initial_request_no_initial_event() {
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // Send an event
-    harness.send_event("A").await;
-    harness.send_event("B").await;
-
-    // Should receive the event response
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-    assert_eq!(
-        harness
-            .server
-            .streaming_operation_events()
-            .into_iter()
-            .map(|e| e.message)
-            .collect::<Vec<_>>(),
-        vec![Events::A(Event {}), Events::B(Event {})]
-    );
-    assert_eq!(harness.server.streaming_operation_initial_signature(), None);
-}
-
-/// Test that multiple SigV4-signed events are properly unwrapped with signatures preserved
-#[tokio::test]
-async fn test_sigv4_signed_multiple_events() {
-    let mut harness = TestHarness::new("StreamingOperation").await;
-
-    // Send multiple SigV4-signed events with different signatures
-    let signed_event_a = build_sigv4_signed_event_with_signature("A", b"signature-for-event-A");
-    harness.client.send(signed_event_a).await.unwrap();
-
-    let signed_event_b = build_sigv4_signed_event_with_signature("B", b"signature-for-event-B");
-    harness.client.send(signed_event_b).await.unwrap();
-
-    // Receive response
-    let resp = harness.expect_message().await;
-    assert_eq!(get_event_type(&resp), "A");
-
-    // Verify both events were received with their distinct signatures
-    let events = harness.server.streaming_operation_events();
-    assert_eq!(events.len(), 2);
-
-    assert_eq!(events[0].message, Events::A(Event {}));
-    assert!(events[0].signature.is_some());
-    assert_eq!(
-        events[0].signature.as_ref().unwrap().chunk_signature,
-        b"signature-for-event-A"
-    );
-
-    assert_eq!(events[1].message, Events::B(Event {}));
-    assert!(events[1].signature.is_some());
-    assert_eq!(
-        events[1].signature.as_ref().unwrap().chunk_signature,
-        b"signature-for-event-B"
     );
 }
 
@@ -835,5 +670,197 @@ async fn test_sigv4_framed_initial_request_with_data() {
     assert_eq!(
         harness.server.initial_signature(),
         Some(b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_vec())
+    );
+}
+
+#[derive(Debug, Clone, Copy)]
+enum InitialMessage {
+    None,
+    Unsigned,
+    Signed,
+}
+
+#[derive(Debug, Clone)]
+struct EventStreamTestCase {
+    initial: InitialMessage,
+    events_signed: Vec<bool>,
+}
+
+/// Comprehensive test matrix for SigV4 event stream combinations
+#[rstest::rstest]
+#[case::no_initial_unsigned_events(EventStreamTestCase { initial: InitialMessage::None, events_signed: vec![false, false] })]
+#[case::no_initial_signed_events(EventStreamTestCase { initial: InitialMessage::None, events_signed: vec![true, true] })]
+#[case::no_initial_mixed_events(EventStreamTestCase { initial: InitialMessage::None, events_signed: vec![false, true] })]
+#[case::unsigned_initial_unsigned_events(EventStreamTestCase { initial: InitialMessage::Unsigned, events_signed: vec![false, false] })]
+#[case::unsigned_initial_signed_events(EventStreamTestCase { initial: InitialMessage::Unsigned, events_signed: vec![true, true] })]
+#[case::unsigned_initial_mixed_events(EventStreamTestCase { initial: InitialMessage::Unsigned, events_signed: vec![false, true] })]
+#[case::signed_initial_unsigned_events(EventStreamTestCase { initial: InitialMessage::Signed, events_signed: vec![false, false] })]
+#[case::signed_initial_signed_events(EventStreamTestCase { initial: InitialMessage::Signed, events_signed: vec![true, true] })]
+#[case::signed_initial_mixed_events(EventStreamTestCase { initial: InitialMessage::Signed, events_signed: vec![false, true] })]
+#[case::no_events(EventStreamTestCase { initial: InitialMessage::None, events_signed: vec![] })]
+#[case::many_signed_events(EventStreamTestCase { initial: InitialMessage::Signed, events_signed: vec![true; 100] })]
+#[case::many_unsigned_events(EventStreamTestCase { initial: InitialMessage::None, events_signed: vec![false; 100] })]
+#[tokio::test]
+async fn test_sigv4_event_stream_matrix(#[case] test_case: EventStreamTestCase) {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Send initial message if specified
+    match test_case.initial {
+        InitialMessage::None => {}
+        InitialMessage::Unsigned => {
+            harness.client.send(build_initial_request()).await.unwrap();
+        }
+        InitialMessage::Signed => {
+            let signed_initial = sign_message(build_initial_request(), b"initial-sig", 1700000000);
+            harness.client.send(signed_initial).await.unwrap();
+        }
+    }
+
+    // Send events
+    for (i, &signed) in test_case.events_signed.iter().enumerate() {
+        let event_type = if i % 2 == 0 { "A" } else { "B" };
+        if signed {
+            let sig = format!("sig-event-{}", i);
+            let signed_event = build_sigv4_signed_event_with_signature(event_type, sig.as_bytes());
+            harness.client.send(signed_event).await.unwrap();
+        } else {
+            harness.send_event(event_type).await;
+        }
+    }
+
+    // Receive response (only if we sent events)
+    if !test_case.events_signed.is_empty() {
+        let resp = harness.expect_message().await;
+        assert_eq!(get_event_type(&resp), "A");
+    }
+
+    // Verify events
+    let events = harness.server.streaming_operation_events();
+    assert_eq!(events.len(), test_case.events_signed.len());
+
+    for (i, &signed) in test_case.events_signed.iter().enumerate() {
+        let expected_event = if i % 2 == 0 {
+            Events::A(Event {})
+        } else {
+            Events::B(Event {})
+        };
+        assert_eq!(events[i].message, expected_event);
+
+        if signed {
+            assert!(
+                events[i].signature.is_some(),
+                "Event {} should have signature",
+                i
+            );
+            let expected_sig = format!("sig-event-{}", i);
+            assert_eq!(
+                events[i].signature.as_ref().unwrap().chunk_signature,
+                expected_sig.as_bytes()
+            );
+        } else {
+            assert!(
+                events[i].signature.is_none(),
+                "Event {} should not have signature",
+                i
+            );
+        }
+    }
+
+    // Verify initial signature
+    match test_case.initial {
+        InitialMessage::Signed => {
+            assert_eq!(
+                harness.server.streaming_operation_initial_signature(),
+                Some(b"initial-sig".to_vec())
+            );
+        }
+        InitialMessage::None | InitialMessage::Unsigned => {
+            assert_eq!(harness.server.streaming_operation_initial_signature(), None);
+        }
+    }
+}
+
+/// Test signed initial data with signed events
+#[tokio::test]
+async fn test_sigv4_signed_initial_data_with_signed_events() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
+
+    // Send signed initial data
+    let signed_initial =
+        build_sigv4_signed_initial_data("test-data", b"sig-initial-data", 1700000000);
+    harness.client.send(signed_initial).await.unwrap();
+
+    // Send signed events
+    let signed_event_a = build_sigv4_signed_event_with_signature("A", b"sig-event-A");
+    harness.client.send(signed_event_a).await.unwrap();
+
+    let signed_event_b = build_sigv4_signed_event_with_signature("B", b"sig-event-B");
+    harness.client.send(signed_event_b).await.unwrap();
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+
+    // Verify initial data was received
+    assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
+
+    // Verify initial signature
+    assert_eq!(
+        harness.server.initial_signature(),
+        Some(b"sig-initial-data".to_vec())
+    );
+
+    // Verify events with signatures
+    let events = harness
+        .server
+        .streaming_operation_with_initial_data_events();
+    assert_eq!(events.len(), 2);
+
+    assert_eq!(events[0].message, Events::A(Event {}));
+    assert_eq!(
+        events[0].signature.as_ref().unwrap().chunk_signature,
+        b"sig-event-A"
+    );
+
+    assert_eq!(events[1].message, Events::B(Event {}));
+    assert_eq!(
+        events[1].signature.as_ref().unwrap().chunk_signature,
+        b"sig-event-B"
+    );
+}
+
+/// Test that timestamps are preserved in signatures
+#[tokio::test]
+async fn test_sigv4_timestamp_preservation() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Send events with specific timestamps
+    let timestamp1 = 1700000000i64;
+    let timestamp2 = 1700000100i64;
+
+    let event1 = sign_message(build_event("A"), b"sig-1", timestamp1);
+    harness.client.send(event1).await.unwrap();
+
+    let event2 = sign_message(build_event("B"), b"sig-2", timestamp2);
+    harness.client.send(event2).await.unwrap();
+
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+
+    let events = harness.server.streaming_operation_events();
+    assert_eq!(events.len(), 2);
+
+    // Verify timestamps are preserved
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let expected_time1 = UNIX_EPOCH + std::time::Duration::from_secs(timestamp1 as u64);
+    assert_eq!(
+        events[0].signature.as_ref().unwrap().timestamp,
+        expected_time1
+    );
+
+    let expected_time2 = UNIX_EPOCH + std::time::Duration::from_secs(timestamp2 as u64);
+    assert_eq!(
+        events[1].signature.as_ref().unwrap().timestamp,
+        expected_time2
     );
 }
