@@ -61,24 +61,24 @@ impl<'a> ConditionContext<'a> {
 /// Returns
 /// * `Some(&R)` - Result if evaluation succeeds
 /// * `None` - No match found (terminal reached)
-pub fn evaluate_bdd<C, P, R: Clone>(
+pub fn evaluate_bdd<Cond, Params, Res: Clone>(
     nodes: &[BddNode],
+    conditions: &[Cond],
+    results: &[Res],
     root_ref: i32,
-    params: &P,
-    conditions: &[C],
-    results: &[R],
+    params: &Params,
     partition_resolver: &crate::endpoint_lib::partition::PartitionResolver,
     diagnostic_collector: &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
     condition_evaluator: impl Fn(
-        &C,
-        &P,
-        &[R],
+        &Cond,
+        &Params,
+        &[Res],
         &crate::endpoint_lib::partition::PartitionResolver,
         &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
         &mut ConditionContext,
         usize,
     ) -> bool,
-) -> Option<R> {
+) -> Option<Res> {
     let mut context = ConditionContext::new(conditions.len());
     let mut current_ref = root_ref;
 
@@ -89,7 +89,7 @@ pub fn evaluate_bdd<C, P, R: Clone>(
                 let result_index = (ref_val - 100_000_000) as usize;
                 return results.get(result_index).map(Clone::clone);
             }
-            // Terminals (1 = TRUE, -1 = FALSE) - no match
+            // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
             1 | -1 => return None, //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
             // Node references
             ref_val => {

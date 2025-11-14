@@ -95,6 +95,11 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
             rustTemplate("partition_resolver: &#{PartitionResolver}", *codegenScope)
         }
 
+    override fun additionalArgsSignatureBdd(): Writable =
+        writable {
+            rustTemplate("partition_resolver: &'a #{PartitionResolver}", *codegenScope)
+        }
+
     override fun additionalArgsInvocation(self: String) =
         writable {
             rust("&$self.partition_resolver")
@@ -118,6 +123,8 @@ private class SimpleRuntimeFunction(override val id: String, private val runtime
     override fun structFieldInit(): Writable? = null
 
     override fun additionalArgsSignature(): Writable? = null
+
+    override fun additionalArgsSignatureBdd(): Writable? = null
 
     override fun additionalArgsInvocation(self: String): Writable? = null
 

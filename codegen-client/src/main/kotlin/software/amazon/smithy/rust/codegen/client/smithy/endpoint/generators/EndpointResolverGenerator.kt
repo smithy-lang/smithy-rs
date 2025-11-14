@@ -53,6 +53,13 @@ abstract class CustomRuntimeFunction {
      * */
     abstract fun additionalArgsSignature(): Writable?
 
+    /** The argument slot of the runtime function for BDD codegen. Some refs in BDD's require
+     * a lifetime, so this is separate from the version for tree based codegen.
+     *  MUST NOT end with `,`
+     *  e.g `partition_data: &PartitionData`
+     * */
+    abstract fun additionalArgsSignatureBdd(): Writable?
+
     /**
      * A writable that passes additional args from `self` into the function.
      *

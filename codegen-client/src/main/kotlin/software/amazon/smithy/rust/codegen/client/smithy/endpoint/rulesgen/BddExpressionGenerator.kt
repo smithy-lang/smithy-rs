@@ -167,7 +167,7 @@ class BddExpressionGenerator(
                 // Smithy statically analyzes that the ref must have been set before this is used
                 // so safe to unwrap
                 val targetRustName = (getAttr.target as Reference).name.rustName()
-                writable { rust("""#W.expect("$targetRustName should already be set")#W""", target, path) }
+                writable { rust("""#W.as_ref().expect("$targetRustName should already be set")#W""", target, path) }
             } else {
                 writable { rust("#W#W", target, path) }
             }
@@ -277,6 +277,8 @@ class BddExpressionGenerator(
                     .get(0).refType == RefType.Parameter
             )
 
+            // References are always stored as String, but functions (GetAttr, coalesce, etc) often produce
+            // &str, so we .into() those result to match the reference.
             val rhsInto =
                 if (left is Reference && (right is Literal || right is GetAttr)) {
                     ".into()"

@@ -95,7 +95,7 @@ class EndpointBddGenerator(
         val conditionProducesResult = bddTrait.conditions.map { it.producesResult() }
 
         // Build additional args for custom runtime functions
-        val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignature() }
+        val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignatureBdd() }
         val additionalArgsInvocation = fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
 
         writer.rustTemplate(
@@ -110,8 +110,8 @@ class EndpointBddGenerator(
                 ${(0 until conditionCount).joinToString(",\n    ") { "Cond$it" }}
             }
 
-            impl ConditionFn {
-                fn evaluate(&self, params: &Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}, context: &mut ConditionContext, index: usize) -> bool {
+            impl<'a> ConditionFn {
+                fn evaluate(&self, params: &'a Params#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}, context: &mut ConditionContext<'a>, index: usize) -> bool {
                     // Param bindings
                     #{param_bindings:W}
 
@@ -168,10 +168,10 @@ class EndpointBddGenerator(
                     let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let result = evaluate_bdd(
                         &NODES,
-                        ${bddTrait.bdd.rootRef},
-                        params,
                         &CONDITIONS,
                         &RESULTS,
+                        (${bddTrait.bdd.rootRef} - 1),
+                        params,
                         &mut diagnostic_collector,
                         |service_params, condition, diagnostic_collector, ConditionContext::default(), index| {
                             condition.evaluate(service_params#{additional_args_invoke_prefix}#{additional_args_invoke}, diagnostic_collector, context, index)
