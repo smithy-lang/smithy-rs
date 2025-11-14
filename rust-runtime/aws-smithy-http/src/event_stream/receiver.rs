@@ -251,7 +251,7 @@ impl<T, E> Receiver<T, E> {
     {
         if let Some(message) = self.next_message().await? {
             let (processed_message, metadata) =
-                preprocessor(message).map_err(|err| SdkError::ResponseError(err))?;
+                preprocessor(message.clone()).map_err(|err| SdkError::ResponseError(err))?;
 
             if let Some(event_type) = processed_message
                 .headers()
@@ -268,7 +268,7 @@ impl<T, E> Receiver<T, E> {
                 }
             }
             // Buffer the processed message so that it can be returned by the next call to `recv()`
-            self.buffered_message = Some(processed_message);
+            self.buffered_message = Some(message);
         }
         Ok(None)
     }
