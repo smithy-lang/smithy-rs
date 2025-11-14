@@ -210,8 +210,11 @@ impl RetryStrategy for StandardRetryStrategy {
             .unwrap_or(false);
         update_rate_limiter_if_exists(runtime_components, cfg, is_throttling_error);
 
-        // on success release any retry quota held by previous attempts
+        // on success release any retry quota held by previous attempts and award success tokens
         if !ctx.is_failed() {
+            // When a request succeeds, we grant an award, if present
+            token_bucket.reward_success();
+
             if let NoPermitWasReleased = self.release_retry_permit() {
                 // In the event that there was no retry permit to release, we generate new
                 // permits from nothing. We do this to make up for permits we had to "forget".
