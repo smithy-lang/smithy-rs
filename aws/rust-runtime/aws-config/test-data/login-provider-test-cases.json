@@ -182,7 +182,7 @@
             "secretAccessKey": "newRefreshedSecretKey",
             "sessionToken": "newRefreshedSessionToken",
             "accountId": "012345678901",
-            "expiresAt": "2025-11-19T08:15:00Z"
+            "expiresAt": "2025-11-19T00:15:00Z"
           },
           "clientId": "arn:aws:signin:::devtools/same-device",
           "refreshToken": "new_refresh_token",

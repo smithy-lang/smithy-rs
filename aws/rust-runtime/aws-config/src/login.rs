@@ -355,7 +355,7 @@ mod test {
             let session_arn = "arn:aws:sts::012345678910:assumed-role/Admin/admin";
 
             // Fixed time for testing: 2025-11-19T00:00:00Z
-            let now = UNIX_EPOCH + Duration::from_secs(1763539200);
+            let now = UNIX_EPOCH + Duration::from_secs(1763510400);
             let time_source = SharedTimeSource::new(StaticTimeSource::new(now));
 
             // Setup filesystem with cache and config contents
