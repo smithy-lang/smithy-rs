@@ -76,7 +76,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.5"
+version = "0.62.6"
 dependencies = [
  "aws-smithy-eventstream",
  "aws-smithy-runtime-api",

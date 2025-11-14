@@ -96,18 +96,6 @@ sealed class HttpBindingSection(name: String) : Section(name) {
 
     data class AfterDeserializingIntoADateTimeOfHttpHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoADateTimeOfHttpHeaders")
-
-    data class BeforeCreatingEventStreamReceiver(
-        val operationShape: OperationShape,
-        val unionShape: UnionShape,
-        val unmarshallerVariableName: String,
-    ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
-
-    data class WrapEventStreamReceiver(
-        val operationShape: OperationShape,
-        val unionShape: UnionShape,
-        val receiverExpression: String,
-    ) : HttpBindingSection("WrapEventStreamReceiver")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -288,22 +276,10 @@ class HttpBindingGenerator(
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
         )
 
-        // Allow customizations to wrap the unmarshaller
-        for (customization in customizations) {
-            customization.section(
-                HttpBindingSection.BeforeCreatingEventStreamReceiver(
-                    operationShape,
-                    targetShape,
-                    "unmarshaller",
-                ),
-            )(this)
-        }
-
         rustTemplate(
             """
             let body = std::mem::replace(body, #{SdkBody}::taken());
             let receiver = #{receiver:W};
-            #{wrapReceiver:W}
             Ok(receiver)
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
@@ -317,18 +293,6 @@ class HttpBindingGenerator(
                             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
                             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
                         )
-                    }
-                },
-            "wrapReceiver" to
-                writable {
-                    for (customization in customizations) {
-                        customization.section(
-                            HttpBindingSection.WrapEventStreamReceiver(
-                                operationShape,
-                                targetShape,
-                                "receiver",
-                            ),
-                        )(this)
                     }
                 },
         )

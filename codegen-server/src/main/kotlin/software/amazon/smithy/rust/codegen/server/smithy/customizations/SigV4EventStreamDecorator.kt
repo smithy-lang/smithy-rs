@@ -11,17 +11,8 @@ import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
-import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
-import software.amazon.smithy.rust.codegen.core.rustlang.Writable
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.WrappingSymbolProvider
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingCustomization
-import software.amazon.smithy.rust.codegen.core.smithy.generators.http.HttpBindingSection
-import software.amazon.smithy.rust.codegen.core.smithy.mapRustType
-import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
@@ -35,44 +26,17 @@ class SigV4EventStreamDecorator : ServerCodegenDecorator {
     override val name: String = "SigV4EventStreamDecorator"
     override val order: Byte = 0
 
-    override fun httpCustomizations(
-        symbolProvider: RustSymbolProvider,
-        protocol: ShapeId,
-    ): List<HttpBindingCustomization> {
-        return listOf(SigV4EventStreamCustomization(symbolProvider))
-    }
-
     override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider {
-        // We need access to the service shape to check for SigV4 trait, but the base interface doesn't provide it.
-        // For now, we'll wrap all event streams and let the runtime code handle the detection.
-        return SigV4EventStreamSymbolProvider(base)
+        if (base.usesSigAuth()) {
+            return SigV4EventStreamSymbolProvider(base)
+        } else {
+            return base
+        }
     }
 }
 
 internal fun RustSymbolProvider.usesSigAuth(): Boolean =
     ServiceIndex.of(model).getAuthSchemes(moduleProviderContext.serviceShape!!).containsKey(SigV4Trait.ID)
-
-// Goes from `T` to `SignedEvent<T>`
-fun wrapInSignedEvent(
-    inner: Symbol,
-    runtimeConfig: RuntimeConfig,
-) = inner.mapRustType {
-    RustType.Application(
-        SigV4EventStreamSupportStructures.signedEvent(runtimeConfig).toSymbol().rustType(),
-        listOf(inner.rustType()),
-    )
-}
-
-// Goes from `E` to `SignedEventError<E>`
-fun wrapInSignedEventError(
-    inner: Symbol,
-    runtimeConfig: RuntimeConfig,
-) = inner.mapRustType {
-    RustType.Application(
-        SigV4EventStreamSupportStructures.signedEventError(runtimeConfig).toSymbol().rustType(),
-        listOf(inner.rustType()),
-    )
-}
 
 /**
  * Symbol provider wrapper that modifies event stream types to support SigV4 signed messages.
@@ -80,14 +44,10 @@ fun wrapInSignedEventError(
 class SigV4EventStreamSymbolProvider(
     base: RustSymbolProvider,
 ) : WrappingSymbolProvider(base) {
-    private val serviceIsSigv4 = base.usesSigAuth()
     private val runtimeConfig = base.config.runtimeConfig
 
     override fun toSymbol(shape: Shape): Symbol {
         val baseSymbol = super.toSymbol(shape)
-        if (!serviceIsSigv4) {
-            return baseSymbol
-        }
         // We only want to wrap with Event Stream types when dealing with member shapes
         if (shape is MemberShape && shape.isEventStream(model)) {
             // Determine if the member has a container that is a synthetic input or output
@@ -107,15 +67,4 @@ class SigV4EventStreamSymbolProvider(
 
         return baseSymbol
     }
-}
-
-class SigV4EventStreamCustomization(private val symbolProvider: RustSymbolProvider) : HttpBindingCustomization() {
-    override fun section(section: HttpBindingSection): Writable =
-        writable {
-            when (section) {
-                // Type wrapping happens via symbol provider
-                // SigV4Receiver::new() takes (unmarshaller, body) directly
-                else -> {}
-            }
-        }
 }
