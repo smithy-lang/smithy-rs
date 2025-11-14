@@ -620,8 +620,8 @@ async fn test_streaming_operation_with_optional_data() {
 }
 
 /// Test that SigV4-framed initial-request messages are properly handled.
-/// This demonstrates the bug in issue #4397 where try_recv_initial_request
-/// cannot see inside the SigV4 envelope to detect the initial-request event type.
+/// This verifies the fix for issue #4397 where try_recv_initial_request
+/// can now see inside the SigV4 envelope to detect the initial-request event type.
 #[tokio::test]
 async fn test_sigv4_framed_initial_request_with_data() {
     let _logs = show_filtered_test_logs(
@@ -635,19 +635,12 @@ async fn test_sigv4_framed_initial_request_with_data() {
 
     harness.send_event("A").await;
 
-    // The connection will be closed because the server cannot detect the initial-request
-    // inside the SigV4 envelope, so it thinks the initial data is missing
-    let result = harness.recv().await;
+    // The server should now properly extract the initial-request from the SigV4 envelope
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
 
-    // This demonstrates the bug: the server closes the connection instead of
-    // extracting the initial-request from inside the SigV4 envelope
-    assert!(
-        result.is_none(),
-        "Bug #4397: Server should extract initial-request from SigV4 envelope, but instead closes connection"
-    );
-
-    // The server never received the initial data because it couldn't unwrap the SigV4 envelope
-    assert_eq!(harness.server.initial_data(), None);
+    // Verify the server received and parsed the initial data from inside the SigV4 envelope
+    assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
 }
 
 fn build_sigv4_signed_initial_data(data: &str) -> Message {

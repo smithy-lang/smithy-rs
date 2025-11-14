@@ -102,6 +102,12 @@ sealed class HttpBindingSection(name: String) : Section(name) {
         val unionShape: UnionShape,
         val unmarshallerVariableName: String,
     ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
+
+    data class WrapEventStreamReceiver(
+        val operationShape: OperationShape,
+        val unionShape: UnionShape,
+        val receiverExpression: String,
+    ) : HttpBindingSection("WrapEventStreamReceiver")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -296,7 +302,9 @@ class HttpBindingGenerator(
         rustTemplate(
             """
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok(#{receiver:W})
+            let receiver = #{receiver:W};
+            #{wrapReceiver:W}
+            Ok(receiver)
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "receiver" to
@@ -309,6 +317,18 @@ class HttpBindingGenerator(
                             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
                             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
                         )
+                    }
+                },
+            "wrapReceiver" to
+                writable {
+                    for (customization in customizations) {
+                        customization.section(
+                            HttpBindingSection.WrapEventStreamReceiver(
+                                operationShape,
+                                targetShape,
+                                "receiver",
+                            ),
+                        )(this)
                     }
                 },
         )
