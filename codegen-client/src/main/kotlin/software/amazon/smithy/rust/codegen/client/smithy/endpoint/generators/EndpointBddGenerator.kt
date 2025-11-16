@@ -161,7 +161,7 @@ class EndpointBddGenerator(
             }
 
             ##[derive(Debug)]
-            enum ConditionFn {
+            pub(crate) enum ConditionFn {
                 ${(0 until conditionCount).joinToString(",\n    ") { "Cond$it" }}
             }
 

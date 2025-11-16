@@ -49,8 +49,15 @@ pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
         match current_ref {
             // Result references (>= 100_000_000)
             ref_val if ref_val >= 100_000_000 => {
+                // 100_000_000 → NoMatchRule (implicit, not serialized)
+                // 100_000_001 → results[0] in the serialized array (the first actual endpoint/error rule)
+                // 100_000_002 → results[1] in the serialized array
                 let result_index = (ref_val - 100_000_000) as usize;
-                return results.get(result_index).map(Clone::clone);
+                if (result_index == 0) {
+                    return None;
+                } else {
+                    return results.get(result_index - 1).map(Clone::clone);
+                }
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
             1 | -1 => return None, //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
