@@ -46,7 +46,7 @@ impl Intercept for EndpointOverrideInterceptor {
         let resolver = runtime_components.endpoint_resolver();
 
         // Check the resolver's debug string to see if it's StaticUriEndpointResolver
-        let debug_str = format!("{:?}", resolver);
+        let debug_str = format!("{resolver:?}");
 
         if debug_str.contains("StaticUriEndpointResolver") {
             // Store in interceptor_state

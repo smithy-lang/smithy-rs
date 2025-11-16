@@ -7,7 +7,7 @@
 //!
 //! This module provides an interceptor for detecting observability features in the AWS SDK:
 //!
-//! - [`ObservabilityDetectionInterceptor`]: Detects observability features during
+//! - [`crate::observability_detection::ObservabilityDetectionInterceptor`]: Detects observability features during
 //!   request processing and tracks them for business metrics in the User-Agent header.
 
 use aws_smithy_observability_otel::meter::OtelMeterProvider;
