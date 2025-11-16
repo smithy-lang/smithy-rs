@@ -414,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.15"
+version = "1.5.16"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -1275,7 +1275,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http-client",
