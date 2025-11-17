@@ -146,6 +146,82 @@ class UserAgentDecoratorTest {
     }
 
     @Test
+    fun `it avoids emitting repeated business metrics on retry`() {
+        awsSdkIntegrationTest(model) { context, rustCrate ->
+            rustCrate.integrationTest("business_metrics") {
+                tokioTest("metrics_should_not_be_repeated") {
+                    val rc = context.runtimeConfig
+                    val moduleName = context.moduleUseName()
+                    rustTemplate(
+                        """
+                        use $moduleName::config::{AppName, Credentials, Region, SharedCredentialsProvider};
+                        use $moduleName::{Config, Client};
+
+                        let http_client = #{StaticReplayClient}::new(vec![
+                            #{ReplayEvent}::new(
+                                #{http}::Request::builder()
+                                    .uri("http://localhost:1234/")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                #{http}::Response::builder()
+                                    .status(500)
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                            ),
+                            #{ReplayEvent}::new(
+                                #{http}::Request::builder()
+                                    .uri("http://localhost:1234/")
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                #{http}::Response::builder()
+                                    .status(200)
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                            ),
+                        ]);
+
+                        let mut creds = Credentials::for_tests();
+                        creds.get_property_mut_or_default::<Vec<#{AwsCredentialFeature}>>()
+                            .push(#{AwsCredentialFeature}::CredentialsEnvVars);
+
+                        let config = Config::builder()
+                            .credentials_provider(SharedCredentialsProvider::new(creds))
+                            .retry_config(#{RetryConfig}::standard().with_max_attempts(2))
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .app_name(AppName::new("test-app-name").expect("valid app name"))
+                            .build();
+                        let client = Client::from_conf(config);
+                        let _ = client.some_operation().send().await;
+
+                        let req = http_client.actual_requests().last().unwrap();
+                        let aws_ua_header = req.headers().get("x-amz-user-agent").unwrap();
+                        let metrics_section = aws_ua_header
+                            .split(" m/")
+                            .nth(1)
+                            .unwrap()
+                            .split_ascii_whitespace()
+                            .nth(0)
+                            .unwrap();
+                        assert_eq!(1, metrics_section.matches("g").count());
+                        """,
+                        "http" to RuntimeType.Http,
+                        "AwsCredentialFeature" to
+                            AwsRuntimeType.awsCredentialTypes(rc)
+                                .resolve("credential_feature::AwsCredentialFeature"),
+                        "RetryConfig" to RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
+                        "ReplayEvent" to RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::ReplayEvent"),
+                        "SdkBody" to RuntimeType.sdkBody(rc),
+                        "StaticReplayClient" to
+                            RuntimeType.smithyHttpClientTestUtil(rc)
+                                .resolve("test_util::StaticReplayClient"),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `it emits business metric for RPC v2 CBOR in user agent`() {
         val model =
             """
