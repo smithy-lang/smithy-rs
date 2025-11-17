@@ -229,7 +229,7 @@ impl<T, E> Receiver<T, E> {
         &mut self,
         message_type: InitialMessageType,
     ) -> Result<Option<Message>, SdkError<E, RawMessage>> {
-        self.try_recv_initial_with_preprocessor(message_type, |msg| Ok((msg.clone(), ())))
+        self.try_recv_initial_with_preprocessor(message_type, |msg| Ok((msg, ())))
             .await
             .map(|opt| opt.map(|(msg, _)| msg))
     }

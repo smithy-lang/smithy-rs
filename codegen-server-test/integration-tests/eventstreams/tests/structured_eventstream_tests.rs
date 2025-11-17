@@ -316,7 +316,7 @@ struct TestHarness {
 impl TestHarness {
     async fn new(operation: &str) -> Self {
         let server = TestServer::start().await;
-        let path = format!("/service/RpcV2CborService/operation/{}", operation);
+        let path = format!("/service/RpcV2CborService/operation/{operation}");
         let client = ManualEventStreamClient::connect_to_service(
             server.addr,
             &path,
@@ -330,11 +330,6 @@ impl TestHarness {
             client,
             initial_response: None,
         }
-    }
-
-    async fn send_initial_request(&mut self) {
-        let msg = build_initial_request();
-        self.client.send(msg).await.ok();
     }
 
     async fn send_initial_data(&mut self, data: &str) {
@@ -431,13 +426,6 @@ fn sign_message(inner_message: Message, signature: &[u8], timestamp_secs: i64) -
     ];
 
     Message::new_from_parts(headers, Bytes::from(inner_bytes))
-}
-
-fn build_sigv4_signed_event(event_type: &str) -> Message {
-    build_sigv4_signed_event_with_signature(
-        event_type,
-        b"example298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    )
 }
 
 fn build_sigv4_signed_event_with_signature(event_type: &str, signature: &[u8]) -> Message {
@@ -720,7 +708,7 @@ async fn test_sigv4_event_stream_matrix(#[case] test_case: EventStreamTestCase) 
     for (i, &signed) in test_case.events_signed.iter().enumerate() {
         let event_type = if i % 2 == 0 { "A" } else { "B" };
         if signed {
-            let sig = format!("sig-event-{}", i);
+            let sig = format!("sig-event-{i}");
             let signed_event = build_sigv4_signed_event_with_signature(event_type, sig.as_bytes());
             harness.client.send(signed_event).await.unwrap();
         } else {
@@ -749,10 +737,9 @@ async fn test_sigv4_event_stream_matrix(#[case] test_case: EventStreamTestCase) 
         if signed {
             assert!(
                 events[i].signature.is_some(),
-                "Event {} should have signature",
-                i
+                "Event {i} should have signature"
             );
-            let expected_sig = format!("sig-event-{}", i);
+            let expected_sig = format!("sig-event-{i}");
             assert_eq!(
                 events[i].signature.as_ref().unwrap().chunk_signature,
                 expected_sig.as_bytes()
@@ -760,8 +747,7 @@ async fn test_sigv4_event_stream_matrix(#[case] test_case: EventStreamTestCase) 
         } else {
             assert!(
                 events[i].signature.is_none(),
-                "Event {} should not have signature",
-                i
+                "Event {i} should not have signature"
             );
         }
     }
@@ -850,7 +836,7 @@ async fn test_sigv4_timestamp_preservation() {
     assert_eq!(events.len(), 2);
 
     // Verify timestamps are preserved
-    use std::time::{SystemTime, UNIX_EPOCH};
+    use std::time::UNIX_EPOCH;
 
     let expected_time1 = UNIX_EPOCH + std::time::Duration::from_secs(timestamp1 as u64);
     assert_eq!(

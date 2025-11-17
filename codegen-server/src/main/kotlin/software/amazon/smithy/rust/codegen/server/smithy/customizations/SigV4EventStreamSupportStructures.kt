@@ -17,7 +17,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 
 object SigV4EventStreamSupportStructures {
-    private val supportModule = RustModule.public("sigv4_event_stream", documentationOverride = "Support structures for SigV4 signed event streams")
+    internal val supportModule =
+        RustModule.public(
+            "sigv4_event_stream",
+            documentationOverride = "Support structures for SigV4 signed event streams",
+        )
 
     fun codegenScope(runtimeConfig: RuntimeConfig) =
         arrayOf(
@@ -319,7 +323,9 @@ object SigV4EventStreamSupportStructures {
                 "Message" to CargoDependency.smithyTypes(runtimeConfig).toType().resolve("event_stream::Message"),
                 "RawMessage" to CargoDependency.smithyTypes(runtimeConfig).toType().resolve("event_stream::RawMessage"),
                 "SdkError" to RuntimeType.sdkError(runtimeConfig),
-                "ResponseError" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::ResponseError"),
+                "ResponseError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::result::ResponseError"),
                 "UnmarshallMessage" to
                     CargoDependency.smithyEventStream(runtimeConfig).toType()
                         .resolve("frame::UnmarshallMessage"),
