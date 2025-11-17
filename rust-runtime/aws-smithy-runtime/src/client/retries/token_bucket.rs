@@ -87,6 +87,21 @@ impl TokenBucket {
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
+
+    /// Add tokens back to the bucket given sufficient room in bucket.
+    /// (called by retry strategies)
+    pub(super) fn add_permits(&self, amount: usize) {
+        let available = self.semaphore.available_permits();
+        if available < self.max_permits {
+            let space_available = self.max_permits - available;
+            let to_add = amount.min(space_available);
+            if to_add > 0 {
+                trace!("adding {to_add} permits back into the bucket");
+                self.semaphore.add_permits(to_add);
+            }
+        }
+    }
+
 }
 
 /// Builder for constructing a `TokenBucket`.
