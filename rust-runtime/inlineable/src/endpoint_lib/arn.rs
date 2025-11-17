@@ -8,7 +8,7 @@ use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, Eq, PartialEq, Clone, Default)]
 pub(crate) struct Arn<'a> {
     partition: &'a str,
     service: &'a str,

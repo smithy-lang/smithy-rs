@@ -448,7 +448,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut #{FN:W}.map(|inner| inner.into());
+                                *${condition.result.get().rustName()} = #{FN:W}.map(|inner| inner.into());
                                 true
                             }
                             """.trimIndent(),
@@ -458,7 +458,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut Some(#{FN:W}.into());
+                                *${condition.result.get().rustName()} = Some(#{FN:W}.into());
                                 true
                             }
                             """.trimIndent(),
@@ -492,16 +492,14 @@ class BddExpressionGenerator(
 
                 val fnReturnTypeOptional = condition.function.functionDefinition.returnType is OptionalType
 
-//                println("LNJ Condition $idx")
                 // If the condition sets a result we do the assignment and return true to move on
                 if (condition.result.isPresent) {
-//                    println("LNJ CONDITION HAS RESULT")
                     // All results in the ConditionContext are Option<T> since they start out unassigned
                     if (!fnReturnTypeOptional) {
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut Some(#{FN:W}.into());
+                                *${condition.result.get().rustName()} = Some(#{FN:W}.into());
                                 true
                             }
                             """.trimIndent(),
@@ -511,7 +509,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                ${condition.result.get().rustName()} = &mut #{FN:W}.map(|inner| inner.into());
+                                *${condition.result.get().rustName()} = #{FN:W}.map(|inner| inner.into());
                                 true
                             }
                             """.trimIndent(),

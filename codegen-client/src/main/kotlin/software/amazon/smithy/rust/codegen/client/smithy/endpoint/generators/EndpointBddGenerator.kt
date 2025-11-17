@@ -5,15 +5,20 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.Endpoint
 import software.amazon.smithy.rulesengine.language.evaluation.type.AnyType
 import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
+import software.amazon.smithy.rulesengine.language.syntax.rule.NoMatchRule
+import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
+import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
 import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
@@ -23,16 +28,19 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddExpressionGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 /**
@@ -49,6 +57,46 @@ class EndpointBddGenerator(
     fun generateBddResolver(): RuntimeType {
         return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
             generateBddResolverImpl(this)
+        }
+    }
+
+    inner class RuleVisitor(private val context: Context) : RuleValueVisitor<Writable> {
+        override fun visitTreeRule(rules: List<Rule>): Writable {
+            throw UnsupportedOperationException("Tree rules not supported in BDD endpoint resolver")
+        }
+
+        override fun visitErrorRule(error: Expression): Writable =
+            writable {
+                rustTemplate(
+                    "#{Err}(#{ResolveEndpointError}::message(#{message:W}))",
+                    *preludeScope,
+                    "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
+                )
+            }
+
+        override fun visitEndpointRule(endpoint: Endpoint): Writable =
+            writable {
+                rustTemplate("#{Ok}(#{endpoint:W})", *preludeScope, "endpoint" to generateEndpoint(endpoint))
+            }
+    }
+
+    private fun generateEndpoint(endpoint: Endpoint): Writable {
+        val registry = FunctionRegistry(stdlib)
+        val context = Context(registry, runtimeConfig)
+        val generator = ExpressionGenerator(Ownership.Owned, context)
+        val url = generator.generate(endpoint.url)
+        val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
+        val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
+        return writable {
+            rustTemplate(
+                "#{SmithyEndpoint}::builder().url(#{url:W})",
+                "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
+                "url" to url,
+            )
+            headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
+            properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
+            rust(".build()")
         }
     }
 
@@ -151,7 +199,7 @@ class EndpointBddGenerator(
                     );
 
                     #{EndpointFuture}::ready(match result {
-                        #{Some}(endpoint) => match endpoint.to_endpoint() {
+                        #{Some}(endpoint) => match endpoint.to_endpoint(params, &condition_context) {
                             Ok(ep) => Ok(ep),
                             Err(err) => Err(Box::new(err)),
                         },
@@ -189,14 +237,16 @@ class EndpointBddGenerator(
                 ${(0 until resultCount).joinToString(",\n    ") { "Result$it" }}
             }
 
-            impl ResultEndpoint {
-                fn to_endpoint(&self) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
+            impl<'a> ResultEndpoint {
+                fn to_endpoint(&self, params: &'a Params, context: &ConditionContext<'a>) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
+                    // Param bindings
+                    #{param_bindings:W}
+
+                    // Non-Param references
+                    #{non_param_ref_bindings_for_results:W}
+
                     match self {
-                        ${
-                (0 until resultCount).joinToString(",\n            ") { idx ->
-                    """Self::Result$idx => Err(#{ResolveEndpointError}::message("TODO(bdd): result $idx"))"""
-                }
-            }
+                        #{result_arms:W}
                     }
                 }
             }
@@ -272,6 +322,7 @@ class EndpointBddGenerator(
             "ConditionContext" to generateContextStruct(),
             "param_bindings" to generateParamBindings(),
             "non_param_ref_bindings" to generateNonParamReferences(),
+            "non_param_ref_bindings_for_results" to generateNonParamReferencesForResult(),
             *conditionScope.toList().toTypedArray(),
             "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
@@ -296,6 +347,7 @@ class EndpointBddGenerator(
                         rust("#W", it)
                     }
                 },
+            "result_arms" to generateResultArms(context),
         )
     }
 
@@ -306,12 +358,42 @@ class EndpointBddGenerator(
             }
         }
 
+    private fun generateResultArms(context: Context) =
+        writable {
+            val visitor = RuleVisitor(context)
+            val results = bddTrait.results
+            bddTrait.results.forEachIndexed { idx, rule ->
+                // Skip NoMatchRule (index 0) - it's a sentinel that doesn't support visitor pattern
+                if (rule is NoMatchRule) {
+                    rustTemplate(
+                        "Self::Result$idx => #{Err}(#{ResolveEndpointError}::message(\"No endpoint rule matched\")),\n",
+                        *preludeScope,
+                        "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    )
+                } else {
+                    val ruleOutput = rule.accept(visitor)
+                    rustTemplate("Self::Result$idx => #{output:W},\n", "output" to ruleOutput)
+                }
+            }
+        }
+
     // All non-param references start as None
     private fun generateNonParamReferences() =
         writable {
             val refs = extractNonParamReferences()
             refs.forEach {
-                rust("let mut ${it.first.rustName()} = &mut context.${it.first.rustName()};")
+                rust("let ${it.first.rustName()} = &mut context.${it.first.rustName()};")
+            }
+        }
+
+    // All non-param references are Option<>. When the BDD is compiled Smithy guarantees that
+    // the refs used to construct the result are Some, so it is same to unwrap_or_default them
+    // all and just use the necessary ones.
+    private fun generateNonParamReferencesForResult() =
+        writable {
+            val refs = extractNonParamReferences()
+            refs.forEach {
+                rust("let ${it.first.rustName()} = &context.${it.first.rustName()}.unwrap_or_default();")
             }
         }
 
@@ -416,8 +498,6 @@ class EndpointBddGenerator(
                     }
                 refs.add(AnnotatedRef(result.rustName(), RefType.Variable, true, rustType))
             }
-
-//            println("LNJ REFS: ${refs}")
         }
 
         return refs

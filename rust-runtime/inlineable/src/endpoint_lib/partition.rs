@@ -29,7 +29,7 @@ impl PartitionResolver {
 }
 
 /// Partition result returned from partition resolver
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub(crate) struct Partition<'a> {
     name: &'a str,
     dns_suffix: &'a str,
