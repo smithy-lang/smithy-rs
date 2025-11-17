@@ -202,6 +202,7 @@ impl ProvideBusinessMetric for SmithySdkFeature {
             FlexibleChecksumsResWhenRequired => {
                 Some(BusinessMetric::FlexibleChecksumsResWhenRequired)
             }
+            ObservabilityTracing => Some(BusinessMetric::ObservabilityTracing),
             ObservabilityMetrics => Some(BusinessMetric::ObservabilityMetrics),
             otherwise => {
                 // This may occur if a customer upgrades only the `aws-smithy-runtime-api` crate
@@ -228,6 +229,8 @@ impl ProvideBusinessMetric for AwsSdkFeature {
             SsoLoginDevice => Some(BusinessMetric::SsoLoginDevice),
             SsoLoginAuth => Some(BusinessMetric::SsoLoginAuth),
             EndpointOverride => Some(BusinessMetric::EndpointOverride),
+            ObservabilityOtelTracing => Some(BusinessMetric::ObservabilityOtelTracing),
+            ObservabilityOtelMetrics => Some(BusinessMetric::ObservabilityOtelMetrics),
         }
     }
 }
@@ -342,7 +345,7 @@ mod tests {
     impl Display for BusinessMetric {
         fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
             f.write_str(
-                &format!("{:?}", self)
+                &format!("{self:?}")
                     .as_str()
                     .from_case(Case::Pascal)
                     .with_boundaries(&[Boundary::DigitUpper, Boundary::LowerUpper])

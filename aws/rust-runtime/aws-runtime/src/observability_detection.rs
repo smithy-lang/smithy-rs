@@ -10,7 +10,11 @@
 //! - [`crate::observability_detection::ObservabilityDetectionInterceptor`]: Detects observability features during
 //!   request processing and tracks them for business metrics in the User-Agent header.
 
+#[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
+use crate::sdk_feature::AwsSdkFeature;
+#[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
 use aws_smithy_observability_otel::meter::OtelMeterProvider;
+#[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef;
@@ -40,22 +44,37 @@ impl Intercept for ObservabilityDetectionInterceptor {
         &self,
         _context: &BeforeTransmitInterceptorContextRef<'_>,
         _runtime_components: &RuntimeComponents,
-        cfg: &mut ConfigBag,
+        _cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
-        // Try to get the global telemetry provider
-        if let Ok(provider) = aws_smithy_observability::global::get_telemetry_provider() {
-            // Use type-safe downcasting to detect OpenTelemetry meter provider
-            // This works with any ProvideMeter implementation and doesn't require
-            // implementation-specific boolean flags
-            if provider
-                .meter_provider()
-                .as_any()
-                .downcast_ref::<OtelMeterProvider>()
-                .is_some()
-            {
-                // Track that observability metrics are enabled
-                cfg.interceptor_state()
-                    .store_append(SmithySdkFeature::ObservabilityMetrics);
+        #[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
+        {
+            // Try to get the global telemetry provider
+            if let Ok(provider) = aws_smithy_observability::global::get_telemetry_provider() {
+                let meter_provider = provider.meter_provider();
+
+                // Check if this is an OpenTelemetry meter provider
+                let is_otel = meter_provider
+                    .as_any()
+                    .downcast_ref::<OtelMeterProvider>()
+                    .is_some();
+
+                // Check if this is a noop provider (we don't want to track noop)
+                let is_noop = meter_provider
+                    .as_any()
+                    .downcast_ref::<aws_smithy_observability::noop::NoopMeterProvider>()
+                    .is_some();
+
+                if !is_noop {
+                    // Track generic observability metrics (for any non-noop provider)
+                    _cfg.interceptor_state()
+                        .store_append(SmithySdkFeature::ObservabilityMetrics);
+
+                    // If it's specifically OpenTelemetry, track that too
+                    if is_otel {
+                        _cfg.interceptor_state()
+                            .store_append(AwsSdkFeature::ObservabilityOtelMetrics);
+                    }
+                }
             }
         }
 
@@ -73,7 +92,9 @@ mod tests {
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::ConfigBag;
 
+    #[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
     #[test]
+    #[serial_test::serial]
     fn test_detects_noop_provider() {
         let mut context = InterceptorContext::new(Input::doesnt_matter());
         context.enter_serialization_phase();
@@ -93,15 +114,33 @@ mod tests {
             .read_before_signing(&ctx, &rc, &mut cfg)
             .unwrap();
 
-        // Should not track any features for noop provider since it doesn't downcast to OtelMeterProvider
-        let smithy_features: Vec<_> = cfg.load::<SmithySdkFeature>().collect();
-        assert_eq!(smithy_features.len(), 0);
+        // Should not track any features for noop provider
+        let smithy_features: Vec<_> = cfg
+            .interceptor_state()
+            .load::<SmithySdkFeature>()
+            .cloned()
+            .collect();
+        assert_eq!(
+            smithy_features.len(),
+            0,
+            "Should not track Smithy features for noop provider"
+        );
 
-        let aws_features: Vec<_> = cfg.load::<AwsSdkFeature>().collect();
-        assert_eq!(aws_features.len(), 0);
+        let aws_features: Vec<_> = cfg
+            .interceptor_state()
+            .load::<AwsSdkFeature>()
+            .cloned()
+            .collect();
+        assert_eq!(
+            aws_features.len(),
+            0,
+            "Should not track AWS features for noop provider"
+        );
     }
 
+    #[cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
     #[test]
+    #[serial_test::serial]
     fn test_custom_provider_not_detected_as_otel() {
         use aws_smithy_observability::meter::{Meter, ProvideMeter};
         use aws_smithy_observability::noop::NoopMeterProvider;
@@ -150,24 +189,27 @@ mod tests {
             .read_before_signing(&ctx, &rc, &mut cfg)
             .unwrap();
 
-        // Should NOT track any features for custom provider since it doesn't downcast to OtelMeterProvider
-        // The new implementation only emits metrics when OTel is detected
+        // Should track generic observability metrics for custom provider
         let smithy_features: Vec<_> = cfg
             .interceptor_state()
             .load::<SmithySdkFeature>()
             .cloned()
             .collect();
         assert!(
-            !smithy_features.iter().any(|f| *f == SmithySdkFeature::ObservabilityMetrics),
-            "Should not detect custom provider as having observability metrics (only OTel is tracked)"
+            smithy_features.contains(&SmithySdkFeature::ObservabilityMetrics),
+            "Should detect custom provider as having observability metrics"
         );
 
-        // Verify no AWS-specific features are tracked for custom provider
+        // Should NOT track AWS-specific observability metrics for custom provider
         let aws_features: Vec<_> = cfg
             .interceptor_state()
             .load::<AwsSdkFeature>()
             .cloned()
             .collect();
+        assert!(
+            !aws_features.contains(&AwsSdkFeature::ObservabilityOtelMetrics),
+            "Should NOT track OTel-specific metrics for custom provider"
+        );
         assert_eq!(
             aws_features.len(),
             0,

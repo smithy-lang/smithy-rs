@@ -431,7 +431,7 @@ mod test {
             "debug tester",
         );
         assert_eq!(
-            format!("{:?}", creds),
+            format!("{creds:?}"),
             r#"Credentials { provider_name: "debug tester", access_key_id: "akid", secret_access_key: "** redacted **", expires_after: "2009-02-13T23:31:30Z" }"#
         );
 
@@ -445,7 +445,7 @@ mod test {
             .provider_name("debug tester")
             .build();
         assert_eq!(
-            format!("{:?}", creds),
+            format!("{creds:?}"),
             r#"Credentials { provider_name: "debug tester", access_key_id: "akid", secret_access_key: "** redacted **", expires_after: "2009-02-13T23:31:30Z", account_id: "012345678901" }"#
         );
     }

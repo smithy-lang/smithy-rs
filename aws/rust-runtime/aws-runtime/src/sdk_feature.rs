@@ -26,6 +26,10 @@ pub enum AwsSdkFeature {
     SsoLoginAuth,
     /// An operation called using a user provided endpoint URL
     EndpointOverride,
+    /// An operation called with OpenTelemetry tracing integration enabled
+    ObservabilityOtelTracing,
+    /// An operation called with OpenTelemetry metrics integration enabled
+    ObservabilityOtelMetrics,
 }
 
 impl Storable for AwsSdkFeature {

@@ -245,7 +245,7 @@ mod tests {
         let tests = fs::read_to_string("test-data/file-location-tests.json")?;
         let tests: SourceTests = serde_json::from_str(&tests)?;
         for (i, test) in tests.tests.into_iter().enumerate() {
-            eprintln!("test: {}", i);
+            eprintln!("test: {i}");
             check(test)
                 .now_or_never()
                 .expect("these futures should never poll");

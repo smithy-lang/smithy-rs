@@ -33,7 +33,7 @@ aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-ap
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types" }
 aws-smithy-wasm = { path = "../../build/aws-sdk/sdk/aws-smithy-wasm" }
 http = "0.2.9"
-tokio = { version = "1.32.0", features = ["macros", "rt"] }
+tokio = { version = "1.32.0", features = ["macros", "rt", "sync", "time"], default-features = false }
 # getrandom is a transitive dependency, but requires the wasm_js feature to compile for wasm
 # also requires a compiler flag which is set in .cargo/config.toml
 # https://docs.rs/getrandom/0.3.3/getrandom/#webassembly-support

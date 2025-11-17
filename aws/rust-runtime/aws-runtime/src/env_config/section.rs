@@ -292,7 +292,7 @@ mod test {
         let tests = fs::read_to_string("test-data/profile-parser-tests.json")?;
         let tests: ParserTests = serde_json::from_str(&tests)?;
         for (i, test) in tests.tests.into_iter().enumerate() {
-            eprintln!("test: {}", i);
+            eprintln!("test: {i}");
             check(test);
         }
         Ok(())
@@ -432,22 +432,22 @@ mod test {
                 }
             }
             (Err(msg), ParserOutput::ErrorContaining(substr)) => {
-                if format!("{}", msg).contains(substr) {
+                if format!("{msg}").contains(substr) {
                     Ok(())
                 } else {
-                    Err(format!("Expected {} to contain {}", msg, substr))
+                    Err(format!("Expected {msg} to contain {substr}"))
                 }
             }
             (Ok(output), ParserOutput::ErrorContaining(err)) => Err(format!(
                 "expected an error: {err} but parse succeeded:\n{output:#?}",
             )),
             (Err(err), ParserOutput::Config { .. }) => {
-                Err(format!("Expected to succeed but got: {}", err))
+                Err(format!("Expected to succeed but got: {err}"))
             }
         };
         if let Err(e) = res {
-            eprintln!("Test case failed: {:#?}", copy);
-            eprintln!("failure: {}", e);
+            eprintln!("Test case failed: {copy:#?}");
+            eprintln!("failure: {e}");
             panic!("test failed")
         }
     }

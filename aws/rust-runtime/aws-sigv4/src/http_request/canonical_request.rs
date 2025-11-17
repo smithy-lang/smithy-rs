@@ -881,7 +881,7 @@ mod tests {
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
 
         let expected = test.canonical_request(SignatureLocation::Headers);
-        let actual = format!("{}", creq);
+        let actual = format!("{creq}");
         assert_eq!(actual, expected);
     }
 
@@ -894,7 +894,7 @@ mod tests {
         let signing_params = signing_params(&identity, SigningSettings::default());
         let creq = CanonicalRequest::from(&req, &signing_params).unwrap();
         let expected = test.canonical_request(SignatureLocation::Headers);
-        let actual = format!("{}", creq);
+        let actual = format!("{creq}");
         assert_eq!(actual, expected);
     }
 

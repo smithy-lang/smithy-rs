@@ -153,7 +153,7 @@ mod tests {
             .load::<AwsSdkFeature>()
             .cloned()
             .collect();
-        assert_eq!(features.len(), 1, "Expected 1 feature, got: {:?}", features);
+        assert_eq!(features.len(), 1, "Expected 1 feature, got: {features:?}");
         assert_eq!(features[0], AwsSdkFeature::EndpointOverride);
     }
 }

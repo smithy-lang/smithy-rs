@@ -111,7 +111,7 @@ impl SigningSuiteTest {
 fn test_parsed_request(path: &str) -> TestRequest {
     match parse_request(read(path).as_bytes()) {
         Ok(parsed) => parsed,
-        Err(err) => panic!("Failed to parse {}: {}", path, err),
+        Err(err) => panic!("Failed to parse {path}: {err}"),
     }
 }
 
@@ -428,14 +428,14 @@ pub(crate) mod v4a {
 }
 
 fn read(path: &str) -> String {
-    println!("Loading `{}` for test case...", path);
+    println!("Loading `{path}` for test case...");
     let v = {
         match std::fs::read_to_string(path) {
             // This replacement is necessary for tests to pass on Windows, as reading the
             // test snapshots from the file system results in CRLF line endings being inserted.
             Ok(value) => value.replace("\r\n", "\n"),
             Err(err) => {
-                panic!("failed to load test case `{}`: {}", path, err);
+                panic!("failed to load test case `{path}`: {err}");
             }
         }
     };
@@ -487,7 +487,7 @@ impl<B: AsRef<[u8]>> From<http0::Request<B>> for TestRequest {
             .values()
             .find(|h| std::str::from_utf8(h.as_bytes()).is_err());
         if let Some(invalid) = invalid {
-            panic!("invalid header: {:?}", invalid);
+            panic!("invalid header: {invalid:?}");
         }
         Self {
             uri: value.uri().to_string(),

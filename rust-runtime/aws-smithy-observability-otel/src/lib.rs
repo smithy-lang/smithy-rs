@@ -13,7 +13,8 @@
     rust_2018_idioms
 )]
 // The `opentelemetry_sdk` crate uses std::sync::atomic::{AtomicI64, AtomicU64} which are not available on powerpc
-#![cfg(not(target_arch = "powerpc"))]
+// Additionally, opentelemetry_sdk depends on async-std which is not compatible with WASM targets
+#![cfg(all(not(target_arch = "powerpc"), not(target_family = "wasm")))]
 
 //! Smithy Observability OpenTelemetry
 //TODO(smithyobservability): once we have finalized everything and integrated metrics with our runtime

@@ -180,7 +180,7 @@ mod tests {
         let mut file = NamedTempFile::new().unwrap();
 
         for i in 0..10000 {
-            let line = format!("This is a large file created for testing purposes {}", i);
+            let line = format!("This is a large file created for testing purposes {i}");
             file.as_file_mut().write_all(line.as_bytes()).unwrap();
         }
 
@@ -302,7 +302,7 @@ mod tests {
     async fn streaming_body(path: impl AsRef<std::path::Path>) -> SdkBody {
         let file = path.as_ref();
         ByteStream::read_from()
-            .path(&file)
+            .path(file)
             .build()
             .await
             .unwrap()

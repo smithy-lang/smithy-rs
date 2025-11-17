@@ -427,6 +427,7 @@ mod tests {
     use http_body::Body;
     use tempfile::NamedTempFile;
 
+    #[allow(clippy::type_complexity)]
     fn create_test_interceptor() -> RequestChecksumInterceptor<
         impl Fn(&Input) -> (Option<String>, bool) + Send + Sync,
         impl Fn(&mut Request, &ConfigBag) -> Result<bool, BoxError> + Send + Sync,
@@ -449,7 +450,7 @@ mod tests {
 
         let mut crc32c_checksum = checksum_algorithm.into_impl();
         for i in 0..10000 {
-            let line = format!("This is a large file created for testing purposes {}", i);
+            let line = format!("This is a large file created for testing purposes {i}");
             file.as_file_mut().write_all(line.as_bytes()).unwrap();
             crc32c_checksum.update(line.as_bytes());
         }
@@ -495,7 +496,7 @@ mod tests {
             body_data.extend_from_slice(&data.unwrap())
         }
         let body_str = std::str::from_utf8(&body_data).unwrap();
-        let expected = format!("This is a large file created for testing purposes 9999");
+        let expected = "This is a large file created for testing purposes 9999".to_string();
         assert!(
             body_str.ends_with(&expected),
             "expected '{body_str}' to end with '{expected}'"
