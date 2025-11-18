@@ -12,19 +12,35 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 
 #[derive(Debug)]
-pub(crate) struct PrivateKey {
-    key: RsaPrivateKey,
+pub(crate) enum PrivateKey {
+    Rsa(RsaPrivateKey),
+    Ecdsa(p256::ecdsa::SigningKey),
 }
 
 impl PrivateKey {
     pub(crate) fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
-        let key = RsaPrivateKey::from_pkcs1_pem(
-            std::str::from_utf8(bytes)
-                .map_err(|e| SigningError::InvalidKey { source: e.into() })?,
-        )
-        .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
+        let pem_str = std::str::from_utf8(bytes)
+            .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
 
-        Ok(Self { key })
+        // Try PKCS#1 RSA first (most common for RSA)
+        if let Ok(key) = RsaPrivateKey::from_pkcs1_pem(pem_str) {
+            return Ok(PrivateKey::Rsa(key));
+        }
+
+        // Try PKCS#8 (supports both RSA and ECDSA)
+        if let Ok(key) = p256::ecdsa::SigningKey::from_pkcs8_pem(pem_str) {
+            return Ok(PrivateKey::Ecdsa(key));
+        }
+
+        // Try PKCS#8 for RSA as fallback
+        use p256::pkcs8::DecodePrivateKey;
+        if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(pem_str) {
+            return Ok(PrivateKey::Rsa(key));
+        }
+
+        Err(SigningError::InvalidKey {
+            source: "Key must be RSA (PKCS#1 or PKCS#8) or ECDSA P-256 (PKCS#8)".into(),
+        })
     }
 
     #[cfg(feature = "rt-tokio")]
@@ -37,16 +53,33 @@ impl PrivateKey {
     }
 
     pub(crate) fn sign(&self, message: &[u8]) -> Result<Vec<u8>, SigningError> {
-        let mut hasher = Sha1::new();
-        hasher.update(message);
-        let digest = hasher.finalize();
+        match self {
+            PrivateKey::Rsa(key) => {
+                let mut hasher = Sha1::new();
+                hasher.update(message);
+                let digest = hasher.finalize();
 
-        let signature = self
-            .key
-            .sign(rsa::Pkcs1v15Sign::new::<Sha1>(), &digest)
-            .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
+                let signature = key
+                    .sign(rsa::Pkcs1v15Sign::new::<Sha1>(), &digest)
+                    .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
 
-        Ok(signature)
+                Ok(signature)
+            }
+            PrivateKey::Ecdsa(key) => {
+                use p256::ecdsa::signature::Signer;
+                use sha2::Sha256;
+
+                let mut hasher = Sha256::new();
+                hasher.update(message);
+                let digest = hasher.finalize();
+
+                let signature: p256::ecdsa::Signature = key
+                    .try_sign(&digest)
+                    .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
+
+                Ok(signature.to_vec())
+            }
+        }
     }
 }
 
@@ -54,7 +87,7 @@ impl PrivateKey {
 mod tests {
     use super::*;
 
-    const TEST_KEY_PEM: &[u8] = b"-----BEGIN RSA PRIVATE KEY-----
+    const TEST_RSA_KEY_PEM: &[u8] = b"-----BEGIN RSA PRIVATE KEY-----
 MIIBPAIBAAJBANW8WjQksUoX/7nwOfRDNt1XQpLCueHoXSt91MASMOSAqpbzZvXO
 g2hW2gCFUIFUPCByMXPoeRe6iUZ5JtjepssCAwEAAQJBALR7ybwQY/lKTLKJrZab
 D4BXCCt/7ZFbMxnftsC+W7UHef4S4qFW8oOOLeYfmyGZK1h44rXf2AIp4PndKUID
@@ -63,6 +96,12 @@ gb1XlBKw6GQvhcM0fXmP+bVXV+RtzFJjAiAP+2Z2yeu5u1egeV6gdCvqPnUcNobC
 FmA/NMcXt9xMSQIhALEMMJEFAInNeAIXSYKeoPNdkMPDzGnD3CueuCLEZCevAiEA
 j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
 -----END RSA PRIVATE KEY-----";
+
+    const TEST_ECDSA_KEY_PEM: &[u8] = b"-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQg4//aTM1/HqiVWagy
+01cAx3EaegJ0Y5KLRoTtub8T8EWhRANCAARV/wa477wYpyWB5LCrCdS5M9bEAvD+
+VORtjoydSpheKlsa+gE4PcFG88G2gE1Lilb8f6wEq/Lz+5kFa2S8gZmb
+-----END PRIVATE KEY-----";
 
     #[test]
     fn test_from_pem_invalid() {
@@ -75,8 +114,28 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     }
 
     #[test]
-    fn test_sign() {
-        let key = PrivateKey::from_pem(TEST_KEY_PEM).expect("valid test key");
+    fn test_rsa_key_parsing() {
+        let key = PrivateKey::from_pem(TEST_RSA_KEY_PEM).expect("valid RSA key");
+        assert!(matches!(key, PrivateKey::Rsa(_)));
+    }
+
+    #[test]
+    fn test_ecdsa_key_parsing() {
+        let key = PrivateKey::from_pem(TEST_ECDSA_KEY_PEM).expect("valid ECDSA key");
+        assert!(matches!(key, PrivateKey::Ecdsa(_)));
+    }
+
+    #[test]
+    fn test_rsa_sign() {
+        let key = PrivateKey::from_pem(TEST_RSA_KEY_PEM).expect("valid test key");
+        let message = b"test message";
+        let signature = key.sign(message).expect("signing should succeed");
+        assert!(!signature.is_empty());
+    }
+
+    #[test]
+    fn test_ecdsa_sign() {
+        let key = PrivateKey::from_pem(TEST_ECDSA_KEY_PEM).expect("valid test key");
         let message = b"test message";
         let signature = key.sign(message).expect("signing should succeed");
         assert!(!signature.is_empty());
