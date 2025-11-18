@@ -102,21 +102,18 @@ dependencies = [
  "http 1.3.1",
  "http-body 0.4.6",
  "http-body 1.0.1",
- "http-body-util",
  "lru",
  "ring",
  "sha2",
  "tempfile",
  "tokio",
  "tracing",
- "tracing-subscriber",
- "tracing-test",
  "url",
 ]
 
 [[package]]
 name = "aws-runtime"
-version = "1.6.0"
+version = "1.5.16"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -138,7 +135,6 @@ dependencies = [
  "http 1.3.1",
  "http-body 0.4.6",
  "http-body 1.0.1",
- "http-body-util",
  "percent-encoding",
  "pin-project-lite",
  "proptest",
@@ -201,16 +197,15 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.0"
+version = "0.63.11"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
  "bytes",
  "crc-fast",
  "hex",
- "http 1.3.1",
- "http-body 1.0.1",
- "http-body-util",
+ "http 0.2.12",
+ "http-body 0.4.6",
  "md-5",
  "pin-project-lite",
  "sha1",
@@ -229,7 +224,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.63.0"
+version = "0.62.5"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -237,9 +232,9 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "futures-util",
+ "http 0.2.12",
  "http 1.3.1",
- "http-body 1.0.1",
- "http-body-util",
+ "http-body 0.4.6",
  "percent-encoding",
  "pin-project-lite",
  "pin-utils",
@@ -305,7 +300,6 @@ dependencies = [
  "http 1.3.1",
  "http-body 0.4.6",
  "http-body 1.0.1",
- "http-body-util",
  "pin-project-lite",
  "pin-utils",
  "tokio",
@@ -485,9 +479,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.44"
+version = "1.2.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37521ac7aabe3d13122dc382493e20c9416f299d2ccd5b3a5340a2570cdeb0f3"
+checksum = "35900b6c8d709fb1d854671ae27aeaa9eec2f8b01b364e1619a40da3e6fe2afe"
 dependencies = [
  "find-msvc-tools",
  "shlex",
@@ -1657,9 +1651,9 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 
 [[package]]
 name = "quote"
-version = "1.0.41"
+version = "1.0.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
+checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
 dependencies = [
  "proc-macro2",
 ]
@@ -2142,9 +2136,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
-version = "2.0.108"
+version = "2.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da58917d35242480a05c2897064da0a80589a2a0476c9a3f2fdc83b53502e917"
+checksum = "a99801b5bd34ede4cf3fc688c5919368fea4e4814a4664359503e6015b280aea"
 dependencies = [
  "proc-macro2",
  "quote",

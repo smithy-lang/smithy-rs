@@ -252,7 +252,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {
-                        if (maybeValidationFieldList?.maybeValidationFieldMessageMember != null) {
+                        if (maybeValidationFieldList != null) {
                             rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
                         }
                     },
@@ -319,6 +319,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             .get(stringTraitInfo) as LengthTrait
                                     rustTemplate(
                                         """
+                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -384,6 +385,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                         blobConstraintsInfo.forEach { blobLength ->
                             rustTemplate(
                                 """
+                                ##[allow(unused_variables)]
                                 Self::Length(length) => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
@@ -424,6 +426,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                     shape.getTrait<LengthTrait>()?.also {
                         rustTemplate(
                             """
+                            ##[allow(unused_variables)]
                             Self::Length(length) => #{ValidationExceptionField} {
                                 #{FieldAssignments}
                             },""",
@@ -557,6 +560,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 is CollectionTraitInfo.Length -> {
                                     rustTemplate(
                                         """
+                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -640,11 +644,13 @@ class UserProvidedValidationExceptionConversionGenerator(
                         val pathExpression = member.wrapValueIfOptional(rawPathExpression)
                         val messageExpression = member.wrapValueIfOptional(rawMessageExpression)
                         when {
-                            member.hasTrait(ValidationFieldNameTrait.ID) ->
+                            member.isValidationFieldName() -> {
                                 "$memberName: $pathExpression"
+                            }
 
-                            member.hasTrait(ValidationFieldMessageTrait.ID) ->
+                            member.hasTrait(ValidationFieldMessageTrait.ID) -> {
                                 "$memberName: $messageExpression"
+                            }
 
                             else -> {
                                 "$memberName: ${defaultFieldAssignment(member)}"
@@ -673,10 +679,21 @@ class UserProvidedValidationExceptionConversionGenerator(
                     "$enumSymbol::$variantName"
                 }
 
-                node.isStringNode -> """"${node.expectStringNode().value}".to_string()"""
-                node.isBooleanNode -> node.expectBooleanNode().value.toString()
-                node.isNumberNode -> node.expectNumberNode().value.toString()
-                else -> "Default::default()"
+                node.isStringNode -> {
+                    """"${node.expectStringNode().value}".to_string()"""
+                }
+
+                node.isBooleanNode -> {
+                    node.expectBooleanNode().value.toString()
+                }
+
+                node.isNumberNode -> {
+                    node.expectNumberNode().value.toString()
+                }
+
+                else -> {
+                    "Default::default()"
+                }
             }
         } ?: "Default::default()"
     }
