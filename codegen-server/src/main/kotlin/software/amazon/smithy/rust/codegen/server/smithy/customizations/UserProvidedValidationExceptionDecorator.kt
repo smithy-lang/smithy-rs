@@ -252,7 +252,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                 "ValidationException" to codegenContext.symbolProvider.toSymbol(validationExceptionStructure),
                 "FieldCreation" to
                     writable {
-                        if (maybeValidationFieldList?.maybeValidationFieldMessageMember != null) {
+                        if (maybeValidationFieldList != null) {
                             rust("""let first_validation_exception_field = constraint_violation.as_validation_exception_field("".to_owned());""")
                         }
                     },
@@ -319,6 +319,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             .get(stringTraitInfo) as LengthTrait
                                     rustTemplate(
                                         """
+                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -328,7 +329,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    lengthTrait.validationErrorMessage().dq()
+                                                lengthTrait.validationErrorMessage().dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -351,7 +352,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    patternTrait.validationErrorMessage().dq()
+                                                patternTrait.validationErrorMessage().dq()
                                                 }, &path, ${patternTrait.pattern.toString().dq()})""",
                                             ),
                                     )
@@ -384,6 +385,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                         blobConstraintsInfo.forEach { blobLength ->
                             rustTemplate(
                                 """
+                                ##[allow(unused_variables)]
                                 Self::Length(length) => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
@@ -393,7 +395,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     fieldAssignments(
                                         "path.clone()",
                                         """format!(${
-                                            blobLength.lengthTrait.validationErrorMessage().dq()
+                                        blobLength.lengthTrait.validationErrorMessage().dq()
                                         }, length, &path)""",
                                     ),
                             )
@@ -424,6 +426,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                     shape.getTrait<LengthTrait>()?.also {
                         rustTemplate(
                             """
+                            ##[allow(unused_variables)]
                             Self::Length(length) => #{ValidationExceptionField} {
                                 #{FieldAssignments}
                             },""",
@@ -557,6 +560,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 is CollectionTraitInfo.Length -> {
                                     rustTemplate(
                                         """
+                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -566,8 +570,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    collectionTraitInfo.lengthTrait.validationErrorMessage()
-                                                        .dq()
+                                                collectionTraitInfo.lengthTrait.validationErrorMessage()
+                                                    .dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -585,8 +589,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
-                                                        .dq()
+                                                collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
+                                                    .dq()
                                                 }, &duplicate_indices, &path)""",
                                             ),
                                     )
@@ -640,7 +644,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                         val pathExpression = member.wrapValueIfOptional(rawPathExpression)
                         val messageExpression = member.wrapValueIfOptional(rawMessageExpression)
                         when {
-                            member.hasTrait(ValidationFieldNameTrait.ID) ->
+                            member.isValidationFieldName() ->
                                 "$memberName: $pathExpression"
 
                             member.hasTrait(ValidationFieldMessageTrait.ID) ->
