@@ -181,10 +181,8 @@ class EndpointBddGenerator(
                         )
                     }
                 }
-            }
 
-            impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
-                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                     let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let mut condition_context = ConditionContext::default();
                     let result = evaluate_bdd(
@@ -198,13 +196,21 @@ class EndpointBddGenerator(
                         self.evaluate_fn(),
                     );
 
-                    #{EndpointFuture}::ready(match result {
+                    match result {
                         #{Some}(endpoint) => match endpoint.to_endpoint(params, &condition_context) {
                             Ok(ep) => Ok(ep),
                             Err(err) => Err(Box::new(err)),
                         },
                         #{None} => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched"))),
-                    })
+                    }
+                }
+            }
+
+            impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
+                fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                    let result = self.resolve_endpoint(params);
+
+                    #{EndpointFuture}::ready(result)
                 }
             }
 
@@ -349,6 +355,8 @@ class EndpointBddGenerator(
                     }
                 },
             "result_arms" to generateResultArms(context),
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
         )
     }
 

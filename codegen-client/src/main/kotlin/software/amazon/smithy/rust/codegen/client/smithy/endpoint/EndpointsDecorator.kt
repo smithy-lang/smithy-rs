@@ -232,7 +232,7 @@ class EndpointsDecorator : ClientCodegenDecorator {
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
     val index = EndpointRulesetIndex.of(this.model)
 
-    // Check for BDD trait first (preferred)
+    // Prioritize BDD trait
     if (index.hasEndpointBddTrait(this.serviceShape)) {
         val bddTrait = index.getEndpointBddTrait(this.serviceShape) ?: return null
         val customizations = this.rootDecorator.endpointCustomizations(this)

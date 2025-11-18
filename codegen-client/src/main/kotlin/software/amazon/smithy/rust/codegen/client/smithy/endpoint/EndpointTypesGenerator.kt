@@ -10,6 +10,7 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointBddGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
@@ -33,6 +34,7 @@ class EndpointTypesGenerator(
     private val stdlib =
         customizations
             .flatMap { it.customRuntimeFunctions(codegenContext) }
+    private val endpointIndex = EndpointRulesetIndex.of(codegenContext.model)
 
     companion object {
         fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
@@ -50,7 +52,12 @@ class EndpointTypesGenerator(
             }
 
             val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
-            return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape), null)
+            return EndpointTypesGenerator(
+                codegenContext,
+                rulesOrNull,
+                index.endpointTests(codegenContext.serviceShape),
+                null,
+            )
         }
     }
 
@@ -61,8 +68,26 @@ class EndpointTypesGenerator(
     fun defaultResolver(): RuntimeType? =
         rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
 
+    fun defaultResolverBdd(): RuntimeType? =
+        endpointIndex.getEndpointBddTrait(codegenContext.serviceShape)?.let {
+            EndpointBddGenerator(
+                codegenContext,
+                it,
+                stdlib,
+            ).generateBddResolver()
+        }
+
     fun testGenerator(): Writable =
-        defaultResolver()?.let {
+        // BDD takes priority just like in EndpointDecorator
+        defaultResolverBdd()?.let {
+            EndpointTestGenerator(
+                tests,
+                paramsStruct(),
+                it,
+                params,
+                codegenContext = codegenContext,
+            ).generate()
+        } ?: defaultResolver()?.let {
             EndpointTestGenerator(
                 tests,
                 paramsStruct(),
