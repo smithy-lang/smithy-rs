@@ -16,6 +16,8 @@ sha1 = { version = "0.10.6", features = ["oid"] }
 pem = "3.0.6"
 zeroize = "1.8.2"
 tokio = { version = "1.48.0", features = ["fs"], optional = true }
+base64-simd = "0.8.0"
+aws-smithy-json = { version = "0.61.7", path = "../../../rust-runtime/aws-smithy-json" }
 
 [features]
 rt-tokio = ["dep:tokio"]
