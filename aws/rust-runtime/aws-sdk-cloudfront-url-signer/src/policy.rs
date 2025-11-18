@@ -7,11 +7,21 @@ use crate::error::SigningError;
 use aws_smithy_types::{DateTime, Number};
 
 #[derive(Debug, Clone)]
-pub(crate) struct Policy {
+struct PolicyStatement {
     resource: String,
-    expires_at: i64,
-    starts_at: Option<i64>,
-    ip_range: Option<String>,
+    condition: PolicyCondition,
+}
+
+#[derive(Debug, Clone)]
+struct PolicyCondition {
+    date_less_than: i64,
+    date_greater_than: Option<i64>,
+    ip_address: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct Policy {
+    statement: Vec<PolicyStatement>,
 }
 
 impl Policy {
@@ -20,7 +30,9 @@ impl Policy {
     }
 
     pub(crate) fn is_canned(&self) -> bool {
-        self.starts_at.is_none() && self.ip_range.is_none()
+        self.statement.len() == 1
+            && self.statement[0].condition.date_greater_than.is_none()
+            && self.statement[0].condition.ip_address.is_none()
     }
 
     pub(crate) fn to_json(&self) -> String {
@@ -28,34 +40,37 @@ impl Policy {
         let mut root = aws_smithy_json::serialize::JsonObjectWriter::new(&mut out);
 
         let mut statement_array = root.key("Statement").start_array();
-        let mut statement = statement_array.value().start_object();
 
-        statement.key("Resource").string(&self.resource);
+        for stmt in &self.statement {
+            let mut statement = statement_array.value().start_object();
+            statement.key("Resource").string(&stmt.resource);
 
-        let mut condition = statement.key("Condition").start_object();
+            let mut condition = statement.key("Condition").start_object();
 
-        let mut date_less = condition.key("DateLessThan").start_object();
-        date_less
-            .key("AWS:EpochTime")
-            .number(Number::PosInt(self.expires_at as u64));
-        date_less.finish();
-
-        if let Some(starts) = self.starts_at {
-            let mut date_greater = condition.key("DateGreaterThan").start_object();
-            date_greater
+            let mut date_less = condition.key("DateLessThan").start_object();
+            date_less
                 .key("AWS:EpochTime")
-                .number(Number::PosInt(starts as u64));
-            date_greater.finish();
+                .number(Number::PosInt(stmt.condition.date_less_than as u64));
+            date_less.finish();
+
+            if let Some(starts) = stmt.condition.date_greater_than {
+                let mut date_greater = condition.key("DateGreaterThan").start_object();
+                date_greater
+                    .key("AWS:EpochTime")
+                    .number(Number::PosInt(starts as u64));
+                date_greater.finish();
+            }
+
+            if let Some(ref ip) = stmt.condition.ip_address {
+                let mut ip_addr = condition.key("IpAddress").start_object();
+                ip_addr.key("AWS:SourceIp").string(ip);
+                ip_addr.finish();
+            }
+
+            condition.finish();
+            statement.finish();
         }
 
-        if let Some(ref ip) = self.ip_range {
-            let mut ip_addr = condition.key("IpAddress").start_object();
-            ip_addr.key("AWS:SourceIp").string(ip);
-            ip_addr.finish();
-        }
-
-        condition.finish();
-        statement.finish();
         statement_array.finish();
         root.finish();
 
@@ -118,10 +133,14 @@ impl PolicyBuilder {
         }
 
         Ok(Policy {
-            resource,
-            expires_at: expires_epoch,
-            starts_at: starts_epoch,
-            ip_range: self.ip_range,
+            statement: vec![PolicyStatement {
+                resource,
+                condition: PolicyCondition {
+                    date_less_than: expires_epoch,
+                    date_greater_than: starts_epoch,
+                    ip_address: self.ip_range,
+                },
+            }],
         })
     }
 }
