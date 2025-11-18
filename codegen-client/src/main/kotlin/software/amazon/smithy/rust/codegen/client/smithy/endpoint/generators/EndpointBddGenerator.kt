@@ -240,7 +240,7 @@ class EndpointBddGenerator(
             impl<'a> ResultEndpoint {
                 fn to_endpoint(&self, params: &'a Params, context: &ConditionContext<'a>) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
                     // Param bindings
-                    #{param_bindings:W}
+                    #{param_bindings_for_results:W}
 
                     // Non-Param references
                     #{non_param_ref_bindings_for_results:W}
@@ -321,6 +321,7 @@ class EndpointBddGenerator(
             "Params" to typeGenerator.paramsStruct(),
             "ConditionContext" to generateContextStruct(),
             "param_bindings" to generateParamBindings(),
+            "param_bindings_for_results" to generateParamBindingsForResults(),
             "non_param_ref_bindings" to generateNonParamReferences(),
             "non_param_ref_bindings_for_results" to generateNonParamReferencesForResult(),
             *conditionScope.toList().toTypedArray(),
@@ -358,6 +359,24 @@ class EndpointBddGenerator(
             }
         }
 
+    private fun generateParamBindingsForResults() =
+        writable {
+            val allRefs = listAllRefs()
+            bddTrait.parameters.toList().forEach {
+                if (it.isRequired) {
+                    rust("let ${it.memberName()} = params.${it.memberName()};")
+                } else {
+                    val stringRefs = allRefs.filter { it.rustType == RustType.String }.map { it.name }
+
+                    if (stringRefs.contains(it.memberName())) {
+                        rust("let ${it.memberName()} = params.${it.memberName()}.as_ref().map(|s| s.clone()).unwrap_or_default();")
+                    } else {
+                        rust("let ${it.memberName()} = params.${it.memberName()}.unwrap_or_default();")
+                    }
+                }
+            }
+        }
+
     private fun generateResultArms(context: Context) =
         writable {
             val visitor = RuleVisitor(context)
@@ -392,8 +411,19 @@ class EndpointBddGenerator(
     private fun generateNonParamReferencesForResult() =
         writable {
             val refs = extractNonParamReferences()
-            refs.forEach {
-                rust("let ${it.first.rustName()} = &context.${it.first.rustName()}.unwrap_or_default();")
+            val annotatedRefs = listAllRefs()
+            refs.forEachIndexed { idx, it ->
+                val rustName = it.first.rustName()
+                if (annotatedRefs.filter { it.rustType == RustType.Document }.map { it.name }.contains(rustName)) {
+                    rust(
+                        """
+                        let binding_$idx = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();
+                        let $rustName = binding_$idx.as_string().unwrap_or_default();
+                        """.trimIndent(),
+                    )
+                } else {
+                    rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();")
+                }
             }
         }
 

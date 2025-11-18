@@ -7,7 +7,7 @@ use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use http::Uri;
 use url::{Host, Url as ParsedUrl};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) struct Url<'a> {
     uri: Uri,
     url: ParsedUrl,

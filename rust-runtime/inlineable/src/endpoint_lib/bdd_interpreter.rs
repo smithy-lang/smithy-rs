@@ -3,9 +3,6 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::endpoint_lib::parse_url::Url;
-use std::collections::HashMap;
-
 //TODO(bdd): Should this just be an [i32; 3]? Might make it easier to make things const?
 /// Binary Decision Diagram node representation
 #[derive(Debug, Clone, Copy)]
@@ -19,14 +16,16 @@ pub struct BddNode {
 ///
 /// Arguments
 /// * `nodes` - Array of BDD nodes
-/// * `root_ref` - Root reference to start evaluation
-/// * `params` - Parameters for condition evaluation
 /// * `conditions` - Array of conditions referenced by nodes
 /// * `results` - Array of possible results
-/// * `condition_evaluator` - Function to evaluate conditions with context
+/// * `root_ref` - Root reference to start evaluation
+/// * `params` - Parameters for condition evaluation
+/// * `context` - Values that can be set/mutated by the conditions
+///  * `diagnostic_collector` - a struct for collecting information about the execution of conditions
+/// * `condition_evaluator` - Function to evaluate individual conditions with params and context
 ///
 /// Returns
-/// * `Some(&R)` - Result if evaluation succeeds
+/// * `Some(R)` - Result if evaluation succeeds
 /// * `None` - No match found (terminal reached)
 pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     nodes: &[BddNode],
@@ -49,15 +48,8 @@ pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
         match current_ref {
             // Result references (>= 100_000_000)
             ref_val if ref_val >= 100_000_000 => {
-                // 100_000_000 → NoMatchRule (implicit, not serialized)
-                // 100_000_001 → results[0] in the serialized array (the first actual endpoint/error rule)
-                // 100_000_002 → results[1] in the serialized array
                 let result_index = (ref_val - 100_000_000) as usize;
-                if (result_index == 0) {
-                    return None;
-                } else {
-                    return results.get(result_index - 1).map(Clone::clone);
-                }
+                return results.get(result_index).map(Clone::clone);
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
             1 | -1 => return None, //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
