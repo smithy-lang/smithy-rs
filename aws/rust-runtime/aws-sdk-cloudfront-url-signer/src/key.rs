@@ -11,7 +11,7 @@ use sha1::{Digest, Sha1};
 #[cfg(feature = "rt-tokio")]
 use std::path::Path;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) enum PrivateKey {
     Rsa(RsaPrivateKey),
     Ecdsa(p256::ecdsa::SigningKey),
