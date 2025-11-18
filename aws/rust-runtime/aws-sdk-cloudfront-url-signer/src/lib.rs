@@ -19,3 +19,6 @@
 pub mod error;
 mod key;
 mod policy;
+mod sign;
+
+pub use sign::{SignedCookies, SignedUrl, SigningRequest, SigningRequestBuilder};
