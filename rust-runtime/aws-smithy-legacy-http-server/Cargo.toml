@@ -1,7 +1,7 @@
 [package]
 name = "aws-smithy-legacy-http-server"
 version = "0.65.9"
-authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
