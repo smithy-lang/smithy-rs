@@ -461,7 +461,7 @@ class BddExpressionGenerator(
                             """
                             {
                                 *${condition.result.get().rustName()} = #{FN:W}.map(|inner| inner.into());
-                                true
+                                ${condition.result.get().rustName()}.is_some()
                             }
                             """.trimIndent(),
                             "FN" to expressionGenerator.generateExpression(condition.function, idx),

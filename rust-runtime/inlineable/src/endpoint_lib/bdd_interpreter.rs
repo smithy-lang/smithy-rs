@@ -22,7 +22,7 @@ pub struct BddNode {
 /// * `root_ref` - Root reference to start evaluation
 /// * `params` - Parameters for condition evaluation
 /// * `context` - Values that can be set/mutated by the conditions
-///  * `diagnostic_collector` - a struct for collecting information about the execution of conditions
+/// * `diagnostic_collector` - a struct for collecting information about the execution of conditions
 /// * `condition_evaluator` - Function to evaluate individual conditions with params and context
 ///
 /// Returns
