@@ -89,12 +89,12 @@ impl TokenBucket {
     }
 
     /// Returns true if the token bucket is full, false otherwise
-    pub fn is_token_bucket_full(&self) -> bool {
+    pub fn is_full(&self) -> bool {
         self.semaphore.available_permits() >= self.max_permits
     }
 
     /// Returns true if the token bucket is empty, false otherwise
-    pub fn is_token_bucket_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.semaphore.available_permits() == 0
     }
 }
