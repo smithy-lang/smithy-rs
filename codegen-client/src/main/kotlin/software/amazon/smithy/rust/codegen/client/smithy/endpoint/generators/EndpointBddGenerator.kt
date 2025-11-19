@@ -189,7 +189,7 @@ class EndpointBddGenerator(
                         &NODES,
                         &CONDITIONS,
                         &RESULTS,
-                        (${bddTrait.bdd.rootRef} - 1),
+                        ${bddTrait.bdd.rootRef},
                         params,
                         &mut condition_context,
                         &mut diagnostic_collector,

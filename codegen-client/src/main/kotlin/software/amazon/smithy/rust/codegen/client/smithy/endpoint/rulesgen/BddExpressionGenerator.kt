@@ -167,7 +167,19 @@ class BddExpressionGenerator(
                 // Smithy statically analyzes that the ref must have been set before this is used
                 // so safe to unwrap
                 val targetRustName = (getAttr.target as Reference).name.rustName()
-                writable { rust("""#W.as_ref().expect("$targetRustName should already be set")#W""", target, path) }
+//                writable { rust("""#W.as_ref().expect("$targetRustName should already be set")#W""", target, path) }
+                writable {
+                    rustTemplate(
+                        """
+                        if let Some(inner) = #{Target} {
+                            inner#{Path}
+                        }else{
+                            return false
+                        }
+                        """.trimIndent(),
+                        "Target" to target, "Path" to path,
+                    )
+                }
             } else {
                 writable { rust("#W#W", target, path) }
             }
@@ -491,11 +503,24 @@ class BddExpressionGenerator(
                     BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
 
                 val fnReturnTypeOptional = condition.function.functionDefinition.returnType is OptionalType
+                val fnReturnTypeIsBoolean = condition.function.functionDefinition.returnType is BooleanType
 
                 // If the condition sets a result we do the assignment and return true to move on
                 if (condition.result.isPresent) {
                     // All results in the ConditionContext are Option<T> since they start out unassigned
-                    if (!fnReturnTypeOptional) {
+                    if (!fnReturnTypeOptional && fnReturnTypeIsBoolean) {
+                        rustTemplate(
+                            """
+                            {
+                                let temp = #{FN:W}.into();
+                                *${condition.result.get().rustName()} = Some(temp);
+                                temp
+                            }
+                            """.trimIndent(),
+                            "FN" to expressionGenerator.generateExpression(condition.function, idx),
+                        )
+                    } else if (!fnReturnTypeOptional && !fnReturnTypeIsBoolean) {
+                        // Function is infallible
                         rustTemplate(
                             """
                             {
@@ -510,13 +535,13 @@ class BddExpressionGenerator(
                             """
                             {
                                 *${condition.result.get().rustName()} = #{FN:W}.map(|inner| inner.into());
-                                true
+                                ${condition.result.get().rustName()}.is_some()
                             }
                             """.trimIndent(),
                             "FN" to expressionGenerator.generateExpression(condition.function, idx),
                         )
                     }
-                } else if (condition.function.functionDefinition.returnType !is BooleanType && fnReturnTypeOptional) {
+                } else if (!fnReturnTypeIsBoolean && fnReturnTypeOptional) {
                     rustTemplate(
                         """
                         (#{FN:W}).is_some()
