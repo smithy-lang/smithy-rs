@@ -11,6 +11,7 @@ description = """
 Typescript server runtime for Smithy Rust Server Framework.
 """
 publish = false
+rust-version = "1.88"
 
 [dependencies]
 
