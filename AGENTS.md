@@ -147,6 +147,28 @@ gh pr view <number> --repo smithy-lang/smithy-rs
 gh pr diff <number> --repo smithy-lang/smithy-rs
 ```
 
+**Debug CI failures:**
+
+```bash
+# Get PR status and identify failed checks
+gh pr view <PR_NUMBER> --repo smithy-lang/smithy-rs --json statusCheckRollup | \
+  jq '.statusCheckRollup[] | select(.conclusion == "FAILURE") | {name: .name, url: .detailsUrl}'
+
+# Get run ID from PR
+gh pr view <PR_NUMBER> --repo smithy-lang/smithy-rs --json statusCheckRollup | \
+  jq -r '.statusCheckRollup[0].detailsUrl' | grep -oP 'runs/\K[0-9]+'
+
+# List failed jobs in a run
+gh api repos/smithy-lang/smithy-rs/actions/runs/<RUN_ID>/jobs | \
+  jq '.jobs[] | select(.conclusion == "failure") | {name: .name, id: .id}'
+
+# Get logs for a specific failed job
+gh api repos/smithy-lang/smithy-rs/actions/jobs/<JOB_ID>/logs | grep -B 5 -A 10 "error:"
+
+# Search logs for specific patterns
+gh api repos/smithy-lang/smithy-rs/actions/jobs/<JOB_ID>/logs | grep -i "lint\|doctest\|aborting"
+```
+
 **Add comments (use single quotes for complex markdown):**
 
 ```bash
