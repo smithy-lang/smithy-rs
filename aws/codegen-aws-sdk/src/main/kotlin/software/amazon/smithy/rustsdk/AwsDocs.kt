@@ -24,6 +24,7 @@ object AwsDocs {
                 ShapeId.from("com.amazonaws.sso#SWBPortalService"),
                 ShapeId.from("com.amazonaws.ssooidc#AWSSSOOIDCService"),
                 ShapeId.from("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
+                ShapeId.from("com.amazonaws.signin#Signin"),
             ).contains(codegenContext.serviceShape.id)
 
     fun constructClient(
