@@ -95,7 +95,7 @@ impl TokenBucket {
 
     /// Returns true if the token bucket is empty, false otherwise
     pub fn is_token_bucket_empty(&self) -> bool {
-        self.semaphore.available_permits <= 0
+        self.semaphore.available_permits() <= 0
     }
 }
 
