@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+November 20th, 2025
+===================
+**New this release:**
+- (client, [smithy-rs#4388](https://github.com/smithy-lang/smithy-rs/issues/4388), @greenwoodcm) Add `then_compute_response` to Smithy mock
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4388](https://github.com/smithy-lang/smithy-rs/issues/4388))
+
+
 November 6th, 2025
 ==================
 **New this release:**

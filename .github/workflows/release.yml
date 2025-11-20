@@ -191,7 +191,7 @@ jobs:
       always() &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_16-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Install Rust
@@ -286,7 +286,7 @@ jobs:
     needs:
     - release
     if: always() && needs.release.result == 'success'
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

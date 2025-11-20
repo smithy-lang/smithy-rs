@@ -69,7 +69,7 @@ jobs:
       run: ../smithy-rs/tools/ci-scripts/configure-tls/configure-badssl
     - name: Build SDK
       working-directory: smithy-rs
-      run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso,+ssooidc
+      run: ./gradlew :aws:sdk:assemble -Paws.services=+sts,+sso,+ssooidc,+signin
     - name: Build trytls
       shell: bash
       working-directory: trytls
