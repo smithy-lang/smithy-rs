@@ -9,6 +9,6 @@ set -eux
 cd smithy-rs
 
 # Generate only SDKs used by canary (see BASE_MANIFEST in build_bundle.rs of canary-runner)
-./gradlew -Paws.services=+ec2,+s3,+sso,+ssooidc,+sts,+transcribestreaming :aws:sdk:assemble
+./gradlew -Paws.services=+ec2,+s3,+sso,+ssooidc,+sts,+signin,+transcribestreaming :aws:sdk:assemble
 
 mv aws/sdk/build/aws-sdk ../artifacts/
