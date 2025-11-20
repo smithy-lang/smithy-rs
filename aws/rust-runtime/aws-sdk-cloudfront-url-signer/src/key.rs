@@ -12,13 +12,13 @@ use sha1::{Digest, Sha1};
 use std::path::Path;
 
 #[derive(Debug, Clone)]
-pub(crate) enum PrivateKey {
+pub enum PrivateKey {
     Rsa(RsaPrivateKey),
     Ecdsa(p256::ecdsa::SigningKey),
 }
 
 impl PrivateKey {
-    pub(crate) fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
+    pub fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
         let pem_str = std::str::from_utf8(bytes)
             .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
 
