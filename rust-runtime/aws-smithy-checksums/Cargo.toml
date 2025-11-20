@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.63.11"
+version = "0.63.12"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -9,6 +9,7 @@ description = "Checksum calculation and verification callbacks"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
