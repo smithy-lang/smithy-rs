@@ -28,6 +28,9 @@ else
     echo -e "# ${C_YELLOW}MSRV is ${MAIN_MSRV}${C_RESET}"
 fi
 
+# Array to collect MSRV mismatches
+msrv_mismatches=()
+
 for runtime_path in \
     "rust-runtime" \
     "aws/rust-runtime"
@@ -54,11 +57,11 @@ do
 
     for crate_path in *; do
         if [[ -f "${crate_path}/Cargo.toml" ]]; then
+        #s
             # verify that the MSRV is the main MSRV
             package_msrv=$(sed -rn 's/rust-version = "([^"]+)"/\1/p' "${crate_path}/Cargo.toml")
             if [[ "${package_msrv}" != "${MAIN_MSRV}" ]]; then
-                echo -e "## ${C_RED}MSRV mismatch in ${crate_path} - toolchain MSRV is ${MAIN_MSRV}, crate MSRV is ${package_msrv}${C_RESET}"
-                exit 1
+                msrv_mismatches+=("${runtime_path}/${crate_path}: toolchain MSRV is ${MAIN_MSRV}, crate MSRV is ${package_msrv}")
             fi
         fi
         if [[ -f "${crate_path}/external-types.toml" ]]; then
@@ -78,3 +81,12 @@ do
     echo -e "${C_YELLOW}Running additional per-crate checks for ${runtime_path}...${C_RESET}"
     ./tools/ci-scripts/additional-per-crate-checks.sh "${runtime_path}"
 done
+
+# Report MSRV mismatches if any were found
+if [ ${#msrv_mismatches[@]} -ne 0 ]; then
+    echo -e "# ${C_RED}MSRV mismatches found:${C_RESET}"
+    for mismatch in "${msrv_mismatches[@]}"; do
+        echo -e "## ${C_RED}${mismatch}${C_RESET}"
+    done
+    exit 1
+fi
