@@ -197,6 +197,7 @@ RUN set -eux; \
     yum -y install --allowerasing \
         ca-certificates \
         clang \
+        cmake \
         gcc \
         git \
         glibc-langpack-en \
