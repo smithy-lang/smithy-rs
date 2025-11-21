@@ -32,7 +32,7 @@ pub struct TokenBucket {
     timeout_retry_cost: u32,
     retry_cost: u32,
     success_reward: f32,
-    fractional_tokens: AtomicF32,
+    fractional_tokens: Arc<AtomicF32>,
 }
 
 struct AtomicF32 {
@@ -85,7 +85,7 @@ impl Default for TokenBucket {
             timeout_retry_cost: DEFAULT_RETRY_TIMEOUT_COST,
             retry_cost: DEFAULT_RETRY_COST,
             success_reward: DEFAULT_SUCCESS_REWARD,
-            fractional_tokens: AtomicF32::new(0.0),
+            fractional_tokens: Arc::new(AtomicF32::new(0.0)),
         }
     }
 }
@@ -108,7 +108,7 @@ impl TokenBucket {
             timeout_retry_cost: 0,
             retry_cost: 0,
             success_reward: 0.0,
-            fractional_tokens: AtomicF32::new(0.0),
+            fractional_tokens: Arc::new(AtomicF32::new(0.0)),
         }
     }
 
@@ -134,14 +134,20 @@ impl TokenBucket {
             self.retry_cost
         };
 
-        self.semaphore
+        let result = self.semaphore
             .clone()
             .try_acquire_many_owned(retry_cost)
-            .ok()
+            .ok();
+
+        result
+    }
+
+    pub(crate) fn success_reward(&self) -> f32 {
+        self.success_reward
     }
 
     pub(crate) fn regenerate_a_token(&self) {
-        self.add_tokens(PERMIT_REGENERATION_AMOUNT);
+        self.add_permits(PERMIT_REGENERATION_AMOUNT);
     }
 
     pub(crate) fn reward_success(&self) {
@@ -159,24 +165,22 @@ impl TokenBucket {
 
         let full_tokens_accumulated = calc_fractional_tokens.floor();
         if full_tokens_accumulated >= 1.0 {
-            self.add_tokens(full_tokens_accumulated as usize);
+            self.add_permits(full_tokens_accumulated as usize);
             calc_fractional_tokens -= full_tokens_accumulated;
         }
         // Always store the updated fractional tokens back, even if no conversion happened
         self.fractional_tokens.store(calc_fractional_tokens);
     }
 
-    fn add_tokens(&self, amount: usize) {
+    pub(crate) fn add_permits(&self, amount: usize) {
         let available = self.semaphore.available_permits();
         if available >= self.max_permits {
             return;
         }
-        let tokens_to_add = amount.min(self.max_permits - available);
-        trace!("adding {tokens_to_add} back into the bucket");
-        self.semaphore.add_permits(tokens_to_add);
+        self.semaphore.add_permits(amount.min(self.max_permits - available));
     }
 
-    #[cfg(all(test, any(feature = "test-util", feature = "legacy-test-util")))]
+    #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
@@ -234,7 +238,7 @@ impl TokenBucketBuilder {
                 .timeout_retry_cost
                 .unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
             success_reward: self.success_reward.unwrap_or(DEFAULT_SUCCESS_REWARD),
-            fractional_tokens: AtomicF32::new(0.0),
+            fractional_tokens: Arc::new(AtomicF32::new(0.0)),
         }
     }
 }

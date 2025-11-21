@@ -51,14 +51,28 @@ impl StandardRetryStrategy {
         Default::default()
     }
 
-    fn release_retry_permit(&self) -> ReleaseResult {
+    fn release_retry_permit(&self, token_bucket: &TokenBucket) -> ReleaseResult {
         let mut retry_permit = self.retry_permit.lock().unwrap();
         match retry_permit.take() {
             Some(p) => {
-                drop(p);
+                // Retry succeeded: reward success and forget permit if configured, otherwise release permit back
+                if token_bucket.success_reward() > 0.0 {
+                    token_bucket.reward_success();
+                    p.forget();
+                } else {
+                    drop(p); // Original behavior - release back to bucket
+                }
                 APermitWasReleased
             }
-            None => NoPermitWasReleased,
+            None => {
+                // First-attempt success: reward success or regenerate token
+                if token_bucket.success_reward() > 0.0 {
+                    token_bucket.reward_success();
+                } else {
+                    token_bucket.regenerate_a_token();
+                }
+                NoPermitWasReleased
+            }
         }
     }
 
@@ -210,18 +224,9 @@ impl RetryStrategy for StandardRetryStrategy {
             .unwrap_or(false);
         update_rate_limiter_if_exists(runtime_components, cfg, is_throttling_error);
 
-        // on success release any retry quota held by previous attempts and award success tokens
+        // on success release any retry quota held by previous attempts, reward success when indicated
         if !ctx.is_failed() {
-            // When a request succeeds, we grant an award, if present
-            token_bucket.reward_success();
-
-            if let NoPermitWasReleased = self.release_retry_permit() {
-                // In the event that there was no retry permit to release, we generate new
-                // permits from nothing. We do this to make up for permits we had to "forget".
-                // Otherwise, repeated retries would empty the bucket and nothing could fill it
-                // back up again.
-                token_bucket.regenerate_a_token();
-            }
+            self.release_retry_permit(token_bucket);
         }
         // end bookkeeping
 
