@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -231,6 +233,7 @@ abstract class QuerySerializerGenerator(private val codegenContext: CodegenConte
                 }
             }
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
+            is BigIntegerShape, is BigDecimalShape -> rust("$writer.string(${value.asRef()}.as_ref());")
             is NumberShape -> {
                 val numberType =
                     when (symbolProvider.toSymbol(target).rustType()) {

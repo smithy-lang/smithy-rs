@@ -10,6 +10,8 @@ import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.knowledge.HttpBinding
 import software.amazon.smithy.model.knowledge.HttpBindingIndex
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -372,6 +374,12 @@ class XmlBindingTraitParserGenerator(
         conditionalBlock("Some(", ")", forceOptional || symbol.isOptional()) {
             conditionalBlock("Box::new(", ")", symbol.isRustBoxed()) {
                 when (target) {
+                    is BigIntegerShape, is BigDecimalShape -> {
+                        parsePrimitiveInner(memberShape) {
+                            rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
+                        }
+                    }
+
                     is StringShape, is BooleanShape, is NumberShape, is TimestampShape, is BlobShape ->
                         parsePrimitiveInner(memberShape) {
                             rustTemplate("#{try_data}(&mut ${ctx.tag})?.as_ref()", *codegenScope)
@@ -396,6 +404,7 @@ class XmlBindingTraitParserGenerator(
                     }
 
                     is UnionShape -> parseUnion(target, ctx)
+
                     else -> PANIC("Unhandled: $target")
                 }
                 // each internal `parseT` function writes an `Result<T, E>` expression, unwrap those:
@@ -672,6 +681,31 @@ class XmlBindingTraitParserGenerator(
     ) {
         when (val shape = model.expectShape(member.target)) {
             is StringShape -> parseStringInner(shape, provider)
+
+            is BigIntegerShape -> {
+                rustBlock("") {
+                    rust("Ok(")
+                    rustTemplate(
+                        "<#{BigInteger} as ::std::str::FromStr>::from_str(",
+                        "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                    )
+                    provider()
+                    rust(").expect(\"infallible\"))")
+                }
+            }
+
+            is BigDecimalShape -> {
+                rustBlock("") {
+                    rust("Ok(")
+                    rustTemplate(
+                        "<#{BigDecimal} as ::std::str::FromStr>::from_str(",
+                        "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
+                    )
+                    provider()
+                    rust(").expect(\"infallible\"))")
+                }
+            }
+
             is NumberShape, is BooleanShape -> {
                 rustBlock("") {
                     withBlockTemplate(

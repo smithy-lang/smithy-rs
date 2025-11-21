@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -296,6 +298,8 @@ class JsonParserGenerator(
         when (val target = model.expectShape(memberShape.target)) {
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
+            is BigIntegerShape -> deserializeBigInteger()
+            is BigDecimalShape -> deserializeBigDecimal()
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
             is TimestampShape -> deserializeTimestamp(memberShape)
@@ -372,6 +376,63 @@ class JsonParserGenerator(
                 *codegenScope,
             )
         }
+    }
+
+    private fun RustWriter.deserializeBigInteger() {
+        // Match on Number enum to:
+        // 1. Validate only integers are accepted (reject floats)
+        // 2. Extract inner value and convert to string
+
+        rustTemplate(
+            """
+            #{expect_number_or_null}(tokens.next())?
+                .map(|v| {
+                    let s = match v {
+                        #{Number}::PosInt(n) => n.to_string(),
+                        #{Number}::NegInt(n) => n.to_string(),
+                        #{Number}::Float(_) => return Err(#{Error}::custom("expected integer, found float")),
+                    };
+                    Ok(<#{BigInteger} as ::std::str::FromStr>::from_str(&s).expect("infallible"))
+                })
+                .transpose()?
+            """,
+            "BigInteger" to RuntimeType.bigInteger(codegenContext.runtimeConfig),
+            "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.deserializeBigDecimal() {
+        // Match on Number enum to extract inner value and convert to string
+        // (Number doesn't implement Display, so we must match each variant)
+        // For floats, preserve decimal notation that f64::to_string() drops for whole numbers
+
+        rustTemplate(
+            """
+            #{expect_number_or_null}(tokens.next())?
+                .map(|v| {
+                    let s = match v {
+                        #{Number}::PosInt(n) => n.to_string(),
+                        #{Number}::NegInt(n) => n.to_string(),
+                        #{Number}::Float(f) => {
+                            // Use format! to avoid scientific notation and preserve precision
+                            let s = format!("{f}");
+                            // f64 formatting drops ".0" for whole numbers (0.0 -> "0")
+                            // Restore it to preserve that the original JSON had decimal notation
+                            if !s.contains('.') && !s.contains('e') && !s.contains('E') {
+                                format!("{s}.0")
+                            } else {
+                                s
+                            }
+                        },
+                    };
+                    <#{BigDecimal} as ::std::str::FromStr>::from_str(&s).expect("infallible")
+                })
+            """,
+            "BigDecimal" to RuntimeType.bigDecimal(codegenContext.runtimeConfig),
+            "Number" to RuntimeType.smithyTypes(codegenContext.runtimeConfig).resolve("Number"),
+            *codegenScope,
+        )
     }
 
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {

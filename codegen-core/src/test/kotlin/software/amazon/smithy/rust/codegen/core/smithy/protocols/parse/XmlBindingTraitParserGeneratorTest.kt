@@ -92,6 +92,23 @@ internal class XmlBindingTraitParserGeneratorTest {
         }
         """.asSmithyModel()
 
+    private val bigNumberModel =
+        """
+        namespace test
+        use aws.protocols#restXml
+
+        structure BigNumberData {
+            bigInt: BigInteger,
+            bigDec: BigDecimal,
+        }
+
+        @http(uri: "/bignumber", method: "POST")
+        operation BigNumberOp {
+            input: BigNumberData,
+            output: BigNumberData
+        }
+        """.asSmithyModel()
+
     @Test
     fun `generates valid parsers`() {
         val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(baseModel))
@@ -214,6 +231,42 @@ internal class XmlBindingTraitParserGeneratorTest {
         }
 
         model.lookup<OperationShape>("test#Op").outputShape(model).also { out ->
+            out.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `parses BigInteger and BigDecimal from XML`() {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(bigNumberModel))
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val parserGenerator =
+            XmlBindingTraitParserGenerator(
+                codegenContext,
+                RuntimeType.wrappedXmlErrors(TestRuntimeConfig),
+            ) { _, inner -> inner("decoder") }
+        val operationParser = parserGenerator.operationParser(model.lookup("test#BigNumberOp"))!!
+
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        project.lib {
+            unitTest(name = "parse_big_numbers") {
+                rustTemplate(
+                    """
+                    let xml = br##"<BigNumberData>
+                        <bigInt>12345678901234567890</bigInt>
+                        <bigDec>3.141592653589793238</bigDec>
+                    </BigNumberData>
+                    "##;
+                    let output = ${format(operationParser)}(xml, test_output::BigNumberOpOutput::builder()).unwrap().build();
+                    assert_eq!(output.big_int.as_ref().map(|v| v.as_ref()), Some("12345678901234567890"));
+                    assert_eq!(output.big_dec.as_ref().map(|v| v.as_ref()), Some("3.141592653589793238"));
+                    """,
+                )
+            }
+        }
+
+        model.lookup<OperationShape>("test#BigNumberOp").outputShape(model).also { out ->
             out.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()
