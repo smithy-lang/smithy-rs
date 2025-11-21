@@ -10,7 +10,6 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
-use tracing::trace;
 
 const DEFAULT_CAPACITY: usize = 500;
 // On a 32 bit architecture, the value of Semaphore::MAX_PERMITS is 536,870,911.
@@ -18,7 +17,7 @@ const DEFAULT_CAPACITY: usize = 500;
 // identical across platforms.
 // This also allows room for slight bucket overfill in the case where a bucket
 // is at maximum capacity and another thread drops a permit it was holding.
-pub const MAXIMUM_CAPACITY: usize = 500_000_000;
+const MAXIMUM_CAPACITY: usize = 500_000_000;
 const DEFAULT_RETRY_COST: u32 = 5;
 const DEFAULT_RETRY_TIMEOUT_COST: u32 = DEFAULT_RETRY_COST * 2;
 const PERMIT_REGENERATION_AMOUNT: usize = 1;
@@ -119,8 +118,8 @@ impl TokenBucket {
 
     pub(crate) fn acquire(&self, err: &ErrorKind) -> Option<OwnedSemaphorePermit> {
         // We have to handle the case where the number of permits in the semaphore exceeds the intended
-        // max. This can occur when the bucket is already at max capacity (success reward > 0) and then an 
-        // OwnedSemaphorePermit gets dropped (destroyed), automatically returning its permits to the 
+        // max. This can occur when the bucket is already at max capacity (success reward > 0) and then an
+        // OwnedSemaphorePermit gets dropped (destroyed), automatically returning its permits to the
         // semaphore and causing it to exceed max_permits.
         let available_permits = self.semaphore.available_permits();
         if available_permits > self.max_permits {
@@ -146,6 +145,10 @@ impl TokenBucket {
         self.success_reward
     }
 
+    pub(crate) fn success_reward(&self) -> f32 {
+        self.success_reward
+    }
+
     pub(crate) fn regenerate_a_token(&self) {
         self.add_permits(PERMIT_REGENERATION_AMOUNT);
     }
@@ -154,7 +157,10 @@ impl TokenBucket {
         let mut calc_fractional_tokens = self.fractional_tokens.load();
         // Verify that fractional tokens have not become corrupted - if they have, reset to zero
         if !calc_fractional_tokens.is_finite() {
-            tracing::error!("Fractional tokens corrupted to: {}, resetting to 0.0", calc_fractional_tokens);
+            tracing::error!(
+                "Fractional tokens corrupted to: {}, resetting to 0.0",
+                calc_fractional_tokens
+            );
             self.fractional_tokens.store(0.0);
             return;
         }
@@ -177,7 +183,8 @@ impl TokenBucket {
         if available >= self.max_permits {
             return;
         }
-        self.semaphore.add_permits(amount.min(self.max_permits - available));
+        self.semaphore
+            .add_permits(amount.min(self.max_permits - available));
     }
 
     #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
@@ -269,10 +276,7 @@ mod tests {
             assert!(permit.is_some());
             permits.push(permit);
             // Available permits should stay constant
-            assert_eq!(
-                MAXIMUM_CAPACITY,
-                bucket.semaphore.available_permits()
-            );
+            assert_eq!(MAXIMUM_CAPACITY, bucket.semaphore.available_permits());
         }
     }
 
