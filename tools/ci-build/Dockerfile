@@ -120,7 +120,8 @@ RUN cargo install --locked --path tools/ci-build/changelogger && \
     cargo install --locked --path tools/ci-build/sdk-versioner && \
     chmod g+rw -R /opt/cargo/registry && \
     rm -rf /opt/cargo/registry/src && \
-    rm -rf /opt/cargo/git/db
+    rm -rf /opt/cargo/git/db && \
+    rm -rf /root/.cargo/registry/cache
 
 FROM install_rust AS cargo_tools
 ARG cargo_deny_version=0.16.4
@@ -149,7 +150,8 @@ RUN cargo install cargo-deny --locked --version ${cargo_deny_version} && \
     cargo install mdbook --locked --version ${cargo_mdbook_version} && \
     cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version} && \
     rm -rf /opt/cargo/registry/src && \
-    rm -rf /opt/cargo/git/db
+    rm -rf /opt/cargo/git/db && \
+    rm -rf /root/.cargo/registry/cache
 
 # nodejs needed by internal release process
 FROM install_rust AS nodejs
@@ -198,12 +200,14 @@ RUN set -eux; \
         gcc \
         git \
         glibc-langpack-en \
+        go \
         java-17-amazon-corretto-devel \
         jq \
         make \
         openssl-devel \
         pkgconfig \
         python3 \
+        python3-devel \
         python3-pip \
         shadow-utils \
         tar \
