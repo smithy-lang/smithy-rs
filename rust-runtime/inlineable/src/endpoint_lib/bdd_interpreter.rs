@@ -28,6 +28,7 @@ pub struct BddNode {
 /// Returns
 /// * `Some(R)` - Result if evaluation succeeds
 /// * `None` - No match found (terminal reached)
+#[allow(clippy::too_many_arguments)]
 pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     nodes: &[BddNode],
     conditions: &[Cond],
@@ -52,13 +53,13 @@ pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
             ref_val if ref_val >= 100_000_000 => {
                 let result_index = (ref_val - 100_000_000) as usize;
                 println!("Result Idx: {result_index}");
-                return results.get(result_index).map(Clone::clone);
+                return results.get(result_index).cloned();
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
             1 | -1 => {
                 return {
                     println!("Terminal Idx: {current_ref}");
-                    results.get(0).map(Clone::clone)
+                    results.first().cloned()
                 }
             } //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
             // Node references

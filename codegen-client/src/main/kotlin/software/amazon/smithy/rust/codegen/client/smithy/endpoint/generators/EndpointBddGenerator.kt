@@ -149,14 +149,21 @@ class EndpointBddGenerator(
         writer.rustTemplate(
             """
             use #{EndpointLib}::{evaluate_bdd, BddNode,};
-            use #{ResolveEndpointError};
 
             ##[derive(Debug)]
+            /// The default endpoint resolver.
             pub struct DefaultResolver {
                 #{custom_fields}
             }
 
-            impl  DefaultResolver {
+             impl Default for DefaultResolver {
+                fn default() -> Self {
+                    Self::new()
+                }
+             }
+
+            impl DefaultResolver {
+                /// Create a new DefaultResolver
                 pub fn new() -> Self {
                     Self {
                         #{custom_fields_init}
@@ -186,9 +193,9 @@ class EndpointBddGenerator(
                     let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let mut condition_context = ConditionContext::default();
                     let result = evaluate_bdd(
-                        &NODES,
-                        &CONDITIONS,
-                        &RESULTS,
+                        NODES,
+                        CONDITIONS,
+                        RESULTS,
                         ${bddTrait.bdd.rootRef},
                         params,
                         &mut condition_context,
@@ -220,6 +227,9 @@ class EndpointBddGenerator(
             }
 
             impl ConditionFn {
+                ##[allow(unused_variables, unused_parens, clippy::double_parens,
+                    clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
+                    clippy::needless_borrow, clippy::useless_asref, )]
                 fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
                     // Param bindings
                     #{param_bindings:W}
@@ -244,6 +254,7 @@ class EndpointBddGenerator(
             }
 
             impl<'a> ResultEndpoint {
+                ##[allow(unused_variables, clippy::useless_asref)]
                 fn to_endpoint(&self, params: &'a Params, context: &ConditionContext<'a>) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
                     // Param bindings
                     #{param_bindings_for_results:W}
@@ -264,11 +275,16 @@ class EndpointBddGenerator(
 
 
             //TODO(BDD) move this to endpoint_lib
+            /// Helper trait to implement the coalesce! macro
             pub trait Coalesce {
+                /// The first arg
                 type Arg1;
+                /// The second arg
                 type Arg2;
+                /// The result of comparing Arg1 and Arg1
                 type Result;
 
+                /// Evaluates arguments in order and returns the first non-empty result, otherwise returns the result of the last argument.
                 fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result;
             }
 
@@ -302,6 +318,7 @@ class EndpointBddGenerator(
                 }
             }
 
+            /// Evaluates arguments in order and returns the first non-empty result, otherwise returns the result of the last argument.
             ##[macro_export]
             macro_rules! coalesce {
                 (${"$"}a:expr) => {${"$"}a};
