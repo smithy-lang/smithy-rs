@@ -3,6 +3,8 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
+#![allow(dead_code)]
+
 //! Partition function to determine a partition for a given region
 //!
 //! This function supports adding regions dynamically, parsing a JSON file, and builder construction.

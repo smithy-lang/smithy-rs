@@ -170,6 +170,7 @@ class EndpointBddGenerator(
                     }
                 }
 
+                ##[allow(clippy::needless_borrow)]
                 pub(crate) fn evaluate_fn(
                     &self,
                 ) -> impl for<'a> FnMut(
@@ -183,7 +184,7 @@ class EndpointBddGenerator(
                         cond.evaluate(
                             params,
                             context,
-                            self.partition_resolver,
+                            #{custom_fields_args}
                             _diagnostic_collector,
                         )
                     }
@@ -355,6 +356,10 @@ class EndpointBddGenerator(
                 writable {
                     fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
                 },
+            "custom_fields_args" to
+                writable {
+                    fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.forEach { rust("#W,", it) }
+                },
             "additional_args_sig_prefix" to writable { if (additionalArgsSignature.isNotEmpty()) rust(", ") },
             "additional_args_sig" to
                 writable {
@@ -389,7 +394,11 @@ class EndpointBddGenerator(
             val allRefs = listAllRefs()
             bddTrait.parameters.toList().forEach {
                 if (it.isRequired) {
-                    rust("let ${it.memberName()} = params.${it.memberName()};")
+                    if (it.type == ParameterType.STRING || it.type == ParameterType.STRING_ARRAY) {
+                        rust("let ${it.memberName()} = &params.${it.memberName()};")
+                    } else {
+                        rust("let ${it.memberName()} = params.${it.memberName()};")
+                    }
                 } else {
                     val stringRefs = allRefs.filter { it.rustType == RustType.String }.map { it.name }
 
@@ -486,8 +495,11 @@ class EndpointBddGenerator(
                 // These are all optional since they are set by condition and will
                 // all be unset when we start evaluation
                 ##[derive(Default)]
+                ##[allow(unused_lifetimes)]
                 pub(crate) struct ConditionContext<'a> {
                     $memberDefs
+                    // Sometimes none of the members reference the lifetime, this makes it still valid
+                    phantom: std::marker::PhantomData<&'a ()>
                 }
                 """.trimIndent(),
             )
