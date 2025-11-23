@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Feature
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -83,15 +84,24 @@ class EndpointOverrideMetricDecoratorTest {
     fun `endpoint override metric appears when set via SdkConfig`() {
         val testParams = awsIntegrationTestParams()
 
-        awsSdkIntegrationTest(model, testParams) { context, rustCrate ->
+        awsSdkIntegrationTest(
+            model,
+            testParams,
+            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
+        ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
+
+            // Enable test-util feature for aws-runtime
+            rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
+
             rustCrate.integrationTest("endpoint_override_via_sdk_config") {
                 rustTemplate(
                     """
                     use $moduleName::config::Region;
                     use $moduleName::Client;
                     use #{capture_request};
+                    use #{assert_ua_contains_metric_values};
 
                     ##[#{tokio}::test]
                     async fn metric_tracked_when_endpoint_set_via_sdk_config() {
@@ -121,29 +131,18 @@ class EndpointOverrideMetricDecoratorTest {
                             uri
                         );
 
-                        // Verify metric 'N' is present
-                        let user_agent = std::str::from_utf8(
-                            request
-                                .headers()
-                                .get("x-amz-user-agent")
-                                .expect("x-amz-user-agent header missing")
-                                .as_bytes(),
-                        )
-                        .expect("valid utf8");
-
-                        let has_metric = user_agent
-                            .split_whitespace()
-                            .any(|part| part.starts_with("m/") && part.contains("N"));
-
-                        assert!(
-                            has_metric,
-                            "Expected metric 'N' in user agent, got: {}",
-                            user_agent
-                        );
+                        // Verify metric 'N' is present in x-amz-user-agent header
+                        let user_agent = request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("x-amz-user-agent header missing");
+                        
+                        assert_ua_contains_metric_values(user_agent, &["N"]);
                     }
                     """,
                     *preludeScope,
                     "capture_request" to RuntimeType.captureRequest(rc),
+                    "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
                     "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
@@ -155,15 +154,24 @@ class EndpointOverrideMetricDecoratorTest {
     fun `no endpoint override metric when endpoint not set`() {
         val testParams = awsIntegrationTestParams()
 
-        awsSdkIntegrationTest(model, testParams) { context, rustCrate ->
+        awsSdkIntegrationTest(
+            model,
+            testParams,
+            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
+        ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
+
+            // Enable test-util feature for aws-runtime
+            rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
+
             rustCrate.integrationTest("no_endpoint_override") {
                 rustTemplate(
                     """
                     use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
                     use $moduleName::{Config, Client};
                     use #{capture_request};
+                    use #{assert_ua_contains_metric_values};
 
                     ##[#{tokio}::test]
                     async fn no_metric_when_endpoint_not_overridden() {
@@ -192,28 +200,25 @@ class EndpointOverrideMetricDecoratorTest {
                         );
 
                         // Verify metric 'N' is NOT present
-                        let user_agent = std::str::from_utf8(
-                            request
-                                .headers()
-                                .get("x-amz-user-agent")
-                                .map(|v| v.as_bytes())
-                                .unwrap_or(b""),
-                        )
-                        .unwrap_or("");
+                        let user_agent = request
+                            .headers()
+                            .get("x-amz-user-agent")
+                            .expect("x-amz-user-agent header should be present");
 
-                        let has_metric = user_agent
-                            .split_whitespace()
-                            .any(|part| part.starts_with("m/") && part.contains("N"));
-
+                        // This should panic if 'N' is found
+                        let result = std::panic::catch_unwind(|| {
+                            assert_ua_contains_metric_values(user_agent, &["N"]);
+                        });
+                        
                         assert!(
-                            !has_metric,
-                            "Did not expect metric 'N' when endpoint not overridden, got: {}",
-                            user_agent
+                            result.is_err(),
+                            "Metric 'N' should NOT be present when endpoint not overridden"
                         );
                     }
                     """,
                     *preludeScope,
                     "capture_request" to RuntimeType.captureRequest(rc),
+                    "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
                     "tokio" to CargoDependency.Tokio.toType(),
                 )
             }
