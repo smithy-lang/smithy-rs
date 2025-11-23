@@ -26,6 +26,9 @@ pub mod content_encoding;
 /// Supporting code for recursion detection in the AWS SDK.
 pub mod recursion_detection;
 
+/// Supporting code for endpoint override detection in the AWS SDK.
+pub mod endpoint_override;
+
 /// Supporting code for user agent headers in the AWS SDK.
 pub mod user_agent;
 
