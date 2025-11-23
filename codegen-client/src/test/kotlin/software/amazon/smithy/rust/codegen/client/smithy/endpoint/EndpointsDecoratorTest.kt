@@ -160,7 +160,7 @@ class EndpointsDecoratorTest {
         use aws.protocols#restJson1
         use smithy.rules#clientContextParams
         use smithy.rules#endpointBdd
-        use smithy.rules#endpointRuleSet
+        use smithy.rules#endpointTests
 
         @clientContextParams(
             Region: {type: "string", documentation: "docs"}
@@ -216,6 +216,42 @@ class EndpointsDecoratorTest {
             "nodeCount": 2,
             "nodes": "/////wAAAAH/////AAAAAAX14QEF9eEC"
         })
+        @endpointTests({
+          "version": "1.0",
+          "testCases": [
+            {
+              "documentation": "Region properly added in url.",
+              "params": {
+                "Region": "test-region"
+              },
+              "operationInputs": [
+                { "operationName": "Echo", "operationParams": { "string": "Foo" } }
+              ],
+              "expect": {
+                "endpoint": {
+                    "url": "https://service.test-region.amazonaws.com",
+                    "properties": {}
+                }
+              }
+            },
+            {
+              "documentation": "Fips properly added in url.",
+              "params": {
+                "Region": "test-region",
+                "UseFips": true
+              },
+              "operationInputs": [
+                { "operationName": "Echo", "operationParams": { "string": "Foo" } }
+              ],
+              "expect": {
+                "endpoint": {
+                    "url": "https://service-fips.test-region.amazonaws.com",
+                    "properties": {}
+                }
+              }
+            }
+         ]
+        })
         @restJson1
         service ServiceWithEndpointBdd {
             version: "2022-01-01"
@@ -223,7 +259,6 @@ class EndpointsDecoratorTest {
                 Echo
             ]
         }
-
         @http(method: "PUT", uri: "/echo")
         operation Echo {
             input := {
@@ -232,24 +267,6 @@ class EndpointsDecoratorTest {
             output := {
                 string: String
             }
-            errors: [
-                MyErrorA
-                MyErrorB
-            ]
-        }
-
-        @error("client")
-        @httpError(401)
-        structure MyErrorA {
-            @required
-            message: String
-        }
-
-        @error("server")
-        @httpError(501)
-        structure MyErrorB {
-            @required
-            message: String
         }
         """.trimIndent().asSmithyModel()
 
@@ -258,169 +275,9 @@ class EndpointsDecoratorTest {
         val testDir =
             clientIntegrationTest(
                 bddModel,
-                // Just run integration tests.
-                IntegrationTestParams(command = { "cargo test --all-features --test *".runCommand(it) }),
-            ) { clientCodegenContext, rustCrate ->
-                rustCrate.integrationTest("endpoint_params_test") {
-                    val moduleName = clientCodegenContext.moduleUseName()
-                    Attribute.TokioTest.render(this)
-                    rustTemplate(
-                        """
-                        async fn endpoint_params_are_set() {
-                            use #{NeverClient};
-                            use #{TokioSleep};
-                            use aws_smithy_runtime_api::box_error::BoxError;
-                            use aws_smithy_runtime_api::client::endpoint::EndpointResolverParams;
-                            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-                            use aws_smithy_types::config_bag::ConfigBag;
-                            use aws_smithy_types::endpoint::Endpoint;
-                            use aws_smithy_types::timeout::TimeoutConfig;
-                            use std::sync::atomic::AtomicBool;
-                            use std::sync::atomic::Ordering;
-                            use std::sync::Arc;
-                            use std::time::Duration;
-                            use $moduleName::{
-                                config::endpoint::Params, config::interceptors::BeforeTransmitInterceptorContextRef,
-                                config::Intercept, config::SharedAsyncSleep, types::NestedStructure, Client, Config,
-                            };
-
-                            ##[derive(Clone, Debug, Default)]
-                            struct TestInterceptor {
-                                called: Arc<AtomicBool>,
-                            }
-                            impl Intercept for TestInterceptor {
-                                fn name(&self) -> &'static str {
-                                    "TestInterceptor"
-                                }
-
-                                fn read_before_transmit(
-                                    &self,
-                                    _context: &BeforeTransmitInterceptorContextRef<'_>,
-                                    _runtime_components: &RuntimeComponents,
-                                    cfg: &mut ConfigBag,
-                                ) -> Result<(), BoxError> {
-                                    let params = cfg
-                                        .load::<EndpointResolverParams>()
-                                        .expect("params set in config");
-                                    let preset_params: &Params = params.get().expect("correct type");
-                                    let manual_params: &Params = &Params::builder()
-                                        .bucket("bucket-name".to_string())
-                                        .built_in_with_default("some-default")
-                                        .bool_built_in_with_default(true)
-                                        .a_bool_param(false)
-                                        .a_string_param("hello".to_string())
-                                        .region("us-east-2".to_string())
-                                        .a_string_array_param(
-                                            vec!["a", "b", "c"]
-                                                .iter()
-                                                .map(ToString::to_string)
-                                                .collect::<Vec<_>>(),
-                                        )
-                                        .jmes_path_param_string_array(vec!["key2".to_string(), "key1".to_string()])
-                                        .jmes_path_param_string("nested-field")
-                                        .build()
-                                        .unwrap();
-
-                                    // The params struct for this test contains a vec sourced from the JMESPath keys function which
-                                    // does not guarantee the order. Due to this we cannot compare the preset_params with the
-                                    // manual_params directly, instead we must assert equlaity field by field.
-                                    assert_eq!(preset_params.bucket(), manual_params.bucket());
-                                    assert_eq!(preset_params.region(), manual_params.region());
-                                    assert_eq!(
-                                        preset_params.a_string_param(),
-                                        manual_params.a_string_param()
-                                    );
-                                    assert_eq!(
-                                        preset_params.built_in_with_default(),
-                                        manual_params.built_in_with_default()
-                                    );
-                                    assert_eq!(
-                                        preset_params.bool_built_in_with_default(),
-                                        manual_params.bool_built_in_with_default()
-                                    );
-                                    assert_eq!(preset_params.a_bool_param(), manual_params.a_bool_param());
-                                    assert_eq!(
-                                        preset_params.a_string_array_param(),
-                                        manual_params.a_string_array_param()
-                                    );
-                                    assert_eq!(
-                                        preset_params.jmes_path_param_string(),
-                                        manual_params.jmes_path_param_string()
-                                    );
-                                    assert_eq!(
-                                        preset_params.jmes_path_param_boolean(),
-                                        manual_params.jmes_path_param_boolean()
-                                    );
-                                    assert!(preset_params
-                                        .jmes_path_param_string_array()
-                                        .unwrap()
-                                        .contains(&"key1".to_string()));
-                                    assert!(preset_params
-                                        .jmes_path_param_string_array()
-                                        .unwrap()
-                                        .contains(&"key2".to_string()));
-
-                                    let endpoint = cfg.load::<Endpoint>().expect("endpoint set in config");
-                                    assert_eq!(endpoint.url(), "https://www.us-east-2.example.com");
-
-                                    self.called.store(true, Ordering::Relaxed);
-                                    Ok(())
-                                }
-                            }
-
-                            let interceptor = TestInterceptor::default();
-                            let config = Config::builder()
-                                .behavior_version_latest()
-                                .http_client(NeverClient::new())
-                                .interceptor(interceptor.clone())
-                                .timeout_config(
-                                    TimeoutConfig::builder()
-                                        .operation_timeout(Duration::from_millis(30))
-                                        .build(),
-                                )
-                                .sleep_impl(SharedAsyncSleep::new(TokioSleep::new()))
-                                .a_string_param("hello")
-                                .a_bool_param(false)
-                                .build();
-                            let client = Client::from_conf(config);
-
-                            let _ = dbg!(
-                                client
-                                .test_operation()
-                                .bucket("bucket-name")
-                                .nested(
-                                    NestedStructure::builder()
-                                        .field("nested-field")
-                                        .map_field("key1", 1)
-                                        .map_field("key2", 2)
-                                        .build()
-                                )
-                                .send()
-                                .await
-                            );
-                            assert!(
-                                interceptor.called.load(Ordering::Relaxed),
-                                "the interceptor should have been called"
-                            );
-
-                            // bucket_name is unset and marked as required on the model, so we'll refuse to construct this request
-                            let err = client.test_operation().send().await.expect_err("param missing");
-                            assert_eq!(format!("{}", err), "failed to construct request");
-                        }
-                        """,
-                        "NeverClient" to
-                            CargoDependency.smithyHttpClientTestUtil(clientCodegenContext.runtimeConfig)
-                                .toType().resolve("test_util::NeverClient"),
-                        "TokioSleep" to
-                            CargoDependency.smithyAsync(clientCodegenContext.runtimeConfig)
-                                .withFeature("rt-tokio").toType().resolve("rt::sleep::TokioSleep"),
-                    )
-                }
-            }
-        // the model has an intentionally failing test—ensure it fails
-        val failure = shouldThrow<CommandError> { "cargo test".runWithWarnings(testDir) }
-        failure.output shouldContain "endpoint::test::test_1"
-        failure.output shouldContain "https://failingtest.com"
+                // Just run endpoint tests.
+                IntegrationTestParams(command = { "cargo test --lib config::endpoint".runWithWarnings(it) }),
+            )
         "cargo clippy".runWithWarnings(testDir)
     }
 
