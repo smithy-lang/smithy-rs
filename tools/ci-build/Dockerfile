@@ -51,6 +51,7 @@ RUN set -eux; \
 
 WORKDIR /root
 RUN yum -y install --allowerasing \
+        bc \
         autoconf \
         automake \
         binutils \
