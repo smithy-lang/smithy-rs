@@ -105,7 +105,6 @@ class EndpointBddGenerator(
         val conditionCount = bddTrait.conditions.size
         val resultCount = bddTrait.results.size
         val typeGenerator = EndpointTypesGenerator.fromContext(codegenContext)
-        val conditionGenerator = ConditionEvaluationGenerator(codegenContext, stdlib, bddTrait)
         // Create context for expression generation with stdlib
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
@@ -400,7 +399,8 @@ class EndpointBddGenerator(
                         rust("let ${it.memberName()} = params.${it.memberName()};")
                     }
                 } else {
-                    val stringRefs = allRefs.filter { it.rustType == RustType.String }.map { it.name }
+                    val stringRefs =
+                        allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.String }.map { ref -> ref.name }
 
                     if (stringRefs.contains(it.memberName())) {
                         rust("let ${it.memberName()} = params.${it.memberName()}.as_ref().map(|s| s.clone()).unwrap_or_default();")
@@ -448,7 +448,9 @@ class EndpointBddGenerator(
             val annotatedRefs = listAllRefs()
             refs.forEachIndexed { idx, it ->
                 val rustName = it.first.rustName()
-                if (annotatedRefs.filter { it.rustType == RustType.Document }.map { it.name }.contains(rustName)) {
+                if (annotatedRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.Document }
+                        .map { ref -> ref.name }.contains(rustName)
+                ) {
                     rust(
                         """
                         let binding_$idx = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();
@@ -488,7 +490,7 @@ class EndpointBddGenerator(
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
                     "pub(crate) ${it.first.rustName()}: Option<$rustType>"
-                }.joinToString(",\n")
+                }.joinToString(",\n", postfix = ",\n")
 
             rustTemplate(
                 """
@@ -524,51 +526,7 @@ class EndpointBddGenerator(
         return "const NODES: &[BddNode] = &[\n    ${nodes.joinToString(",\n    ")}\n];"
     }
 
-    private fun listAllRefs(): List<AnnotatedRef> {
-        val refs = mutableListOf<AnnotatedRef>()
-
-        bddTrait.parameters.forEach { param ->
-            val rustType =
-                when (param.type) {
-                    ParameterType.STRING -> RustType.String
-                    ParameterType.STRING_ARRAY -> RustType.StringArray
-                    ParameterType.BOOLEAN -> RustType.Bool
-                    null -> RustType.String
-                }
-            refs.add(AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType))
-        }
-
-        bddTrait.conditions.forEach { cond ->
-            val result = cond.result.orElse(null)
-            if (result !== null) {
-                val returnType =
-                    if (cond.function.functionDefinition.returnType is OptionalType) {
-                        (cond.function.functionDefinition.returnType as OptionalType).inner()
-                    } else {
-                        cond.function.functionDefinition.returnType
-                    }
-                val rustType =
-                    when {
-                        returnType is AnyType -> RustType.Document
-                        returnType is StringType -> RustType.String
-                        returnType is BooleanType -> RustType.Bool
-                        returnType is ArrayType ->
-                            when (returnType.member) {
-                                is StringType -> RustType.StringArray
-                                else -> throw IllegalArgumentException("Unsupported reference type $returnType")
-                            }
-
-                        cond.function is ParseUrl -> RustType.Url
-                        cond.function.name == "aws.partition" -> RustType.Partition
-                        cond.function.name == "aws.parseArn" -> RustType.Arn
-                        else -> throw IllegalArgumentException("Unsupported reference type $returnType")
-                    }
-                refs.add(AnnotatedRef(result.rustName(), RefType.Variable, true, rustType))
-            }
-        }
-
-        return refs
-    }
+    private fun listAllRefs(): AnnotatedRefs = AnnotatedRefs.from(bddTrait.parameters, bddTrait.conditions)
 }
 
 /**
@@ -576,25 +534,87 @@ class EndpointBddGenerator(
  */
 private fun Condition.producesResult(): Boolean = this.result.isPresent
 
-enum class RefType {
-    Parameter,
-    Variable,
-}
+/**
+ * Container for annotated references with lookup by name.
+ */
+class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
+    enum class RefType {
+        Parameter,
+        Variable,
+    }
 
-// Limited set of Rust types that refs can be
-enum class RustType {
-    Document,
-    String,
-    StringArray,
-    Bool,
-    Arn,
-    Partition,
-    Url,
-}
+    enum class RustType {
+        Document,
+        String,
+        StringArray,
+        Bool,
+        Arn,
+        Partition,
+        Url,
+    }
 
-data class AnnotatedRef(
-    val name: String,
-    val refType: RefType,
-    val isOptional: Boolean,
-    val rustType: RustType,
-)
+    data class AnnotatedRef(
+        val name: String,
+        val refType: RefType,
+        val isOptional: Boolean,
+        val rustType: RustType,
+    )
+
+    operator fun get(name: String): AnnotatedRef? = refs[name]
+
+    fun filter(predicate: (AnnotatedRef) -> Boolean): List<AnnotatedRef> = refs.values.filter(predicate)
+
+    fun map(transform: (AnnotatedRef) -> String): List<String> = refs.values.map(transform)
+
+    companion object {
+        fun from(
+            parameters: software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters,
+            conditions: List<Condition>,
+        ): AnnotatedRefs {
+            val refs = mutableMapOf<String, AnnotatedRef>()
+
+            parameters.forEach { param ->
+                val rustType =
+                    when (param.type) {
+                        ParameterType.STRING -> RustType.String
+                        ParameterType.STRING_ARRAY -> RustType.StringArray
+                        ParameterType.BOOLEAN -> RustType.Bool
+                        null -> RustType.String
+                    }
+                refs[param.memberName()] =
+                    AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType)
+            }
+
+            conditions.forEach { cond ->
+                val result = cond.result.orElse(null)
+                if (result !== null) {
+                    val returnType =
+                        if (cond.function.functionDefinition.returnType is OptionalType) {
+                            (cond.function.functionDefinition.returnType as OptionalType).inner()
+                        } else {
+                            cond.function.functionDefinition.returnType
+                        }
+                    val rustType =
+                        when {
+                            returnType is AnyType -> RustType.Document
+                            returnType is StringType -> RustType.String
+                            returnType is BooleanType -> RustType.Bool
+                            returnType is ArrayType ->
+                                when (returnType.member) {
+                                    is StringType -> RustType.StringArray
+                                    else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                                }
+
+                            cond.function is ParseUrl -> RustType.Url
+                            cond.function.name == "aws.partition" -> RustType.Partition
+                            cond.function.name == "aws.parseArn" -> RustType.Arn
+                            else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                        }
+                    refs[result.rustName()] = AnnotatedRef(result.rustName(), RefType.Variable, true, rustType)
+                }
+            }
+
+            return AnnotatedRefs(refs)
+        }
+    }
+}

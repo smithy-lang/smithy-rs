@@ -17,14 +17,11 @@ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.
 import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.AnnotatedRef
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.AnnotatedRefs
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.RefType
-import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.RustType
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
-import software.amazon.smithy.rust.codegen.core.rustlang.plus
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -38,12 +35,12 @@ class BddExpressionGenerator(
     private val condition: Condition,
     private val ownership: Ownership,
     private val context: Context,
-    private val refs: List<AnnotatedRef>,
-    private val knownSomeRefs: MutableSet<AnnotatedRef>,
+    private val refs: AnnotatedRefs,
+    private val knownSomeRefs: MutableSet<AnnotatedRefs.AnnotatedRef>,
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
-    private val documentRefNames = refs.filter { it.rustType == RustType.Document }.map { it.name }
+    private val documentRefNames = refs.filter { it.rustType == AnnotatedRefs.RustType.Document }.map { it.name }
 
     fun generateCondition(
         condition: Condition,
@@ -191,7 +188,7 @@ class BddExpressionGenerator(
                     BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
                 if (fn is Reference) {
                     // All references are in refs so safe to assert non-null
-                    knownSomeRefs.add(refs.find { it.name == fn.name.rustName() }!!)
+                    knownSomeRefs.add(refs.get(fn.name.rustName())!!)
                 }
                 rust("#W.is_some()", expressionGenerator.generateExpression(fn, idx))
             }
@@ -273,20 +270,20 @@ class BddExpressionGenerator(
             val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
             val lhsIsDocument = (
                 left is Reference && refs.filter { it -> it.name == left.name.rustName() }
-                    .get(0).rustType == RustType.Document
+                    .get(0).rustType == AnnotatedRefs.RustType.Document
             )
             val rhsIsDocument = (
                 right is Reference && refs.filter { it -> it.name == right.name.rustName() }
-                    .get(0).rustType == RustType.Document
+                    .get(0).rustType == AnnotatedRefs.RustType.Document
             )
             // Params are Option<String> while condition results are Option<&str>
             val lhsIsParameter = (
                 left is Reference && refs.filter { it -> it.name == left.name.rustName() }
-                    .get(0).refType == RefType.Parameter
+                    .get(0).refType == AnnotatedRefs.RefType.Parameter
             )
             val rhsIsParameter = (
                 right is Reference && refs.filter { it -> it.name == right.name.rustName() }
-                    .get(0).refType == RefType.Parameter
+                    .get(0).refType == AnnotatedRefs.RefType.Parameter
             )
 
             // References are always stored as String, but functions (GetAttr, coalesce, etc) often produce
