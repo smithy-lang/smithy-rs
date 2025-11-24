@@ -5,8 +5,11 @@
 
 //! Example demonstrating a custom accept loop with connection-level timeouts.
 //!
-//! This example shows how to implement your own accept loop instead of using
-//! the built-in `serve()` function. This gives you control over:
+//! **NOTE: This is a demonstration example only, not production-ready code.**
+//! For most use cases, use the built-in `serve()` function instead.
+//!
+//! This example shows how to implement your own custom accept loop if you need
+//! control over:
 //! - Overall connection duration limits
 //! - Connection-level configuration
 //! - Per-connection decision making
@@ -142,7 +145,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     warn!("error serving connection from {}: {:?}", remote_addr, e);
                 }
                 Err(_) => {
-                    info!("connection from {} exceeded 5 minute duration limit", remote_addr);
+                    info!("connection from {} exceeded 5 minutes duration limit", remote_addr);
                 }
             }
         });
