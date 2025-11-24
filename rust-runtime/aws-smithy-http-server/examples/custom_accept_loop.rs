@@ -22,15 +22,15 @@
 //! Test with curl:
 //! ```
 //! curl http://localhost:3000/
-//! curl http://localhost:3000/slow
+//! curl -X POST -d "Hello from client!" http://localhost:3000/slow
 //! ```
 
 use aws_smithy_http_server::{routing::IntoMakeService, serve::IncomingStream};
 use http::{Request, Response};
-use http_body_util::Full;
+use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper_util::{
-    rt::{TokioExecutor, TokioIo},
+    rt::{TokioExecutor, TokioIo, TokioTimer},
     server::conn::auto::Builder,
     service::TowerToHyperService,
 };
@@ -45,11 +45,28 @@ async fn hello_handler(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>,
     Ok(Response::new(Full::new(Bytes::from("Hello, World!\n"))))
 }
 
-/// Handler that simulates a slow response
-async fn slow_handler(_req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
-    info!("slow handler: sleeping for 45 seconds");
+/// Handler that simulates a slow response and echoes the request body
+async fn slow_handler(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, Infallible> {
+    let body = req.into_body();
+
+    // Collect all body frames into bytes
+    let bytes = match body.collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => {
+            warn!("slow handler: error reading body: {}", e);
+            return Ok(Response::new(Full::new(Bytes::from("Error reading body\n"))));
+        }
+    };
+
+    info!("slow handler: received {} bytes, sleeping for 45 seconds", bytes.len());
     tokio::time::sleep(Duration::from_secs(45)).await;
-    Ok(Response::new(Full::new(Bytes::from("Completed\n"))))
+
+    // Echo back the body, or send a completion message if empty
+    if bytes.is_empty() {
+        Ok(Response::new(Full::new(Bytes::from("Completed after 45 seconds\n"))))
+    } else {
+        Ok(Response::new(Full::new(bytes)))
+    }
 }
 
 /// Router that dispatches to handlers based on path
@@ -121,14 +138,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let hyper_service = TowerToHyperService::new(tower_service);
 
-            // Configure Hyper builder with timeouts
+            // Configure Hyper builder with timer for timeouts
             let mut builder = Builder::new(TokioExecutor::new());
             builder
                 .http1()
+                .timer(TokioTimer::new())
                 .header_read_timeout(Duration::from_secs(10))
                 .keep_alive(true);
             builder
                 .http2()
+                .timer(TokioTimer::new())
                 .keep_alive_interval(Duration::from_secs(60))
                 .keep_alive_timeout(Duration::from_secs(20));
 
