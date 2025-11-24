@@ -56,7 +56,7 @@ jobs:
       contents: read
     needs:
     - get-pr-info
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
