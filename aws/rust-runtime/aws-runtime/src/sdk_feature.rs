@@ -24,6 +24,8 @@ pub enum AwsSdkFeature {
     SsoLoginDevice,
     /// Calling an SSO-OIDC operation as part of the SSO login flow, when using the OAuth2.0 authorization code grant
     SsoLoginAuth,
+    /// Indicates that an AWS SDK client has been configured with an OpenTelemetry metrics provider
+    ObservabilityOtelMetrics,
 }
 
 impl Storable for AwsSdkFeature {

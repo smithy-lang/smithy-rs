@@ -23,6 +23,8 @@ aws-types = { path = "../aws-types" }
 aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features = ["rt-tokio"] }
 aws-smithy-checksums = { path = "../../../rust-runtime/aws-smithy-checksums" }
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
+aws-smithy-observability = { path = "../../../rust-runtime/aws-smithy-observability" }
+aws-smithy-observability-otel = { path = "../../../rust-runtime/aws-smithy-observability-otel" }
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-0-4-x"] }

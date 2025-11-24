@@ -17,6 +17,9 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 pub trait ProvideMeter: Send + Sync + Debug {
     /// Get or create a named [Meter].
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter;
+    
+    /// Returns a reference to `self` as `&dyn Any` for downcasting.
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.
