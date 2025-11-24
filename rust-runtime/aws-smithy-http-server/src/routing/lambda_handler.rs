@@ -94,6 +94,10 @@ fn convert_event(request: Request) -> ServiceRequest {
         lambda_http::Body::Empty => body::empty_sync(),
         lambda_http::Body::Text(s) => body::to_boxed_sync(s),
         lambda_http::Body::Binary(v) => body::to_boxed_sync(v),
+        _ => {
+            tracing::error!("Unknown `lambda_http::Body` variant encountered, falling back to empty body");
+            body::empty_sync()
+        }
     };
 
     http::Request::from_parts(parts, body)

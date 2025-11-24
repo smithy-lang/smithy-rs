@@ -11,6 +11,7 @@ description = """
 Server runtime for Smithy Rust Server Framework.
 """
 publish = true
+rust-version = "1.88"
 
 [features]
 default = []
@@ -45,7 +46,7 @@ hyper-util = { version = "0.1", features = [
 ] }
 http-body-util = "0.1"
 
-lambda_http = { version = "0.17", optional = true }
+lambda_http = { version = "1", optional = true }
 
 mime = "0.3.17"
 nom = "7.1.3"
