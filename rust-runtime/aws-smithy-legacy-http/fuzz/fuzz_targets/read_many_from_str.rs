@@ -6,7 +6,7 @@
 #![no_main]
 use libfuzzer_sys::fuzz_target;
 
-use aws_smithy_http::header::read_many_from_str;
+use aws_smithy_legacy_http::header::read_many_from_str;
 use http;
 
 fuzz_target!(|data: &[u8]| {
