@@ -13,7 +13,9 @@ use aws_smithy_types::body::SdkBody;
 use http::header::USER_AGENT;
 use std::sync::Arc;
 
-fn test_client(update_builder: fn(Builder) -> Builder) -> (aws_sdk_dynamodb::Client, StaticReplayClient) {
+fn test_client(
+    update_builder: fn(Builder) -> Builder,
+) -> (aws_sdk_dynamodb::Client, StaticReplayClient) {
     let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
         http::Request::builder()
             .uri("https://dynamodb.us-east-1.amazonaws.com/")
@@ -48,7 +50,7 @@ async fn observability_metrics_in_user_agent() {
         call_operation(client).await;
         let req = rx.expect_request();
         let user_agent = req.headers().get("x-amz-user-agent").unwrap();
-        
+
         // Should NOT contain observability metrics when using noop provider
         let ua_str = user_agent.to_str().unwrap();
         assert!(!ua_str.contains("m/4")); // OBSERVABILITY_TRACING = "4"

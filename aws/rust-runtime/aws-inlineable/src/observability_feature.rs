@@ -25,16 +25,15 @@ impl Intercept for ObservabilityFeatureTrackerInterceptor {
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         // Check if an OpenTelemetry meter provider is configured via the global provider
-        if let Ok(telemetry_provider) = aws_smithy_observability::global::get_telemetry_provider()
-        {
+        if let Ok(telemetry_provider) = aws_smithy_observability::global::get_telemetry_provider() {
             let meter_provider = telemetry_provider.meter_provider();
-            
+
             // Use downcast to check if it's specifically the OTel implementation
             // This is more reliable than string matching on type names
             if let Some(_otel_provider) = meter_provider
                 .as_any()
-                .downcast_ref::<aws_smithy_observability_otel::meter::OtelMeterProvider>()
-            {
+                .downcast_ref::<aws_smithy_observability_otel::meter::OtelMeterProvider>(
+            ) {
                 cfg.interceptor_state()
                     .store_append(AwsSdkFeature::ObservabilityOtelMetrics);
             }
