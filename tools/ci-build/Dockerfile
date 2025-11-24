@@ -195,7 +195,6 @@ ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
     yum -y install --allowerasing \
-        acl \
         bc \
         ca-certificates \
         clang \
@@ -225,11 +224,9 @@ RUN set -eux; \
     unzip awscliv2.zip && \
     ./aws/install && \
     rm -rf awscliv2.zip aws && \
-    pip3 install --no-cache-dir mypy==0.991 && \
-    mkdir -p /opt/cargo && chown -R build:build /opt/cargo && \
-    setfacl -d -m u:build:rwx /opt/cargo && setfacl -d -m g:build:rwx /opt/cargo
+    pip3 install --no-cache-dir mypy==0.991
 
-COPY --chown=build:build --from=local_tools /opt/cargo/bin /opt/cargo/bin
+COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
 COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
 COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/ /opt/cargo/bin/
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
