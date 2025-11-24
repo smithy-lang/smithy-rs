@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
-import software.amazon.smithy.rustsdk.InlineAwsDependency
 
 /**
  * Decorator that tracks endpoint override business metric when endpoint URL is configured.
