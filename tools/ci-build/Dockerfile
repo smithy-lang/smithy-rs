@@ -225,7 +225,8 @@ RUN set -eux; \
     ./aws/install && \
     rm -rf awscliv2.zip aws && \
     pip3 install --no-cache-dir mypy==0.991 && \
-    mkdir -p /opt/cargo && chown -R build:build /opt/cargo
+    mkdir -p /opt/cargo && chown -R build:build /opt/cargo && \
+    setfacl -d -m u:build:rwx /opt/cargo && setfacl -d -m g:build:rwx /opt/cargo
 
 COPY --chown=build:build --from=local_tools /opt/cargo/bin /opt/cargo/bin
 COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
