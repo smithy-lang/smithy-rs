@@ -51,7 +51,6 @@ RUN set -eux; \
 
 WORKDIR /root
 RUN yum -y install --allowerasing \
-        bc \
         autoconf \
         automake \
         binutils \
@@ -196,6 +195,7 @@ ARG rust_stable_version
 ARG rust_nightly_version
 RUN set -eux; \
     yum -y install --allowerasing \
+        bc \
         ca-certificates \
         clang \
         cmake \
