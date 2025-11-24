@@ -279,7 +279,7 @@ mod tests {
 
         let chunks = vec![
             Ok::<_, std::io::Error>(Bytes::from("chunk1")),
-            Err(std::io::Error::new(std::io::ErrorKind::Other, "test error")),
+            Err(std::io::Error::other("test error")),
         ];
 
         let stream = stream::iter(chunks);

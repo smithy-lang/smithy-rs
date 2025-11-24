@@ -48,7 +48,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
     // Start a slow request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/slow", addr);
+    let uri = format!("http://{addr}/slow");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
@@ -113,7 +113,7 @@ async fn test_graceful_shutdown_with_timeout() {
     // Start a very slow request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/very-slow", addr);
+    let uri = format!("http://{addr}/very-slow");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
@@ -186,7 +186,7 @@ async fn test_with_connect_info() {
     // Make a request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/test", addr);
+    let uri = format!("http://{addr}/test");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())

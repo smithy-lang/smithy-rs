@@ -101,7 +101,7 @@ where
                             if (self.label_marker)(index) {
                                 write!(f, "/{}", Sensitive(segment))?;
                             } else {
-                                write!(f, "/{}", segment)?;
+                                write!(f, "/{segment}")?;
                             }
                             // Add the segment length and the separator to the `greedy_start`.
                             let greedy_start = greedy_start + segment.len() + 1;
@@ -140,7 +140,7 @@ where
                 if (self.label_marker)(index) {
                     write!(f, "/{}", Sensitive(segment))?;
                 } else {
-                    write!(f, "/{}", segment)?;
+                    write!(f, "/{segment}")?;
                 }
             }
         }

@@ -86,8 +86,7 @@ impl<S> RpcV2CborRouter<S> {
         //   segment.
         static PATH_REGEX: LazyLock<Regex> = LazyLock::new(|| {
             Regex::new(&format!(
-                r#"/service/({}\.)*(?P<service>{})/operation/(?P<operation>{})$"#,
-                IDENTIFIER_PATTERN, IDENTIFIER_PATTERN, IDENTIFIER_PATTERN,
+                r#"/service/({IDENTIFIER_PATTERN}\.)*(?P<service>{IDENTIFIER_PATTERN})/operation/(?P<operation>{IDENTIFIER_PATTERN})$"#,
             ))
             .unwrap()
         });
@@ -269,7 +268,7 @@ mod tests {
         let valid_identifiers = vec!["a", "_a", "_0", "__0", "variable123", "_underscored_variable"];
 
         for id in &valid_identifiers {
-            assert!(identifier_regex().is_match(id), "'{}' is incorrectly rejected", id);
+            assert!(identifier_regex().is_match(id), "'{id}' is incorrectly rejected");
         }
     }
 
@@ -286,7 +285,7 @@ mod tests {
         ];
 
         for id in &invalid_identifiers {
-            assert!(!identifier_regex().is_match(id), "'{}' is incorrectly accepted", id);
+            assert!(!identifier_regex().is_match(id), "'{id}' is incorrectly accepted");
         }
     }
 
@@ -308,8 +307,8 @@ mod tests {
             "/service/namespace.Service/operation/Operation",
         ] {
             let captures = regex.captures(uri).unwrap();
-            assert_eq!("Service", &captures["service"], "uri: {}", uri);
-            assert_eq!("Operation", &captures["operation"], "uri: {}", uri);
+            assert_eq!("Service", &captures["service"], "uri: {uri}");
+            assert_eq!("Operation", &captures["operation"], "uri: {uri}");
         }
     }
 
@@ -329,7 +328,7 @@ mod tests {
             "/service/namespace-Service/operation/Operation",
             "/service/.Service/operation/Operation",
         ] {
-            assert!(regex.captures(uri).is_none(), "uri: {}", uri);
+            assert!(regex.captures(uri).is_none(), "uri: {uri}");
         }
     }
 

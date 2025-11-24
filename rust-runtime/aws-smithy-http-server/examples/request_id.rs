@@ -57,8 +57,7 @@ async fn handler(req: Request<Incoming>) -> Result<Response<BoxBody>, Infallible
     info!(request_id = %request_id, "Handling request");
 
     let body = boxed(Full::new(Bytes::from(format!(
-        "Request processed with ID: {}\n",
-        request_id
+        "Request processed with ID: {request_id}\n"
     ))));
 
     Ok(Response::new(body))

@@ -80,18 +80,15 @@ async fn test_configure_hyper_http1_keep_alive() {
     // With title_case_headers(true), Hyper writes headers like "Content-Type:" instead of "content-type:"
     assert!(
         response_text.contains("Content-Type:") || response_text.contains("Content-Type: "),
-        "Expected Title-Case 'Content-Type' header, got:\n{}",
-        response_text
+        "Expected Title-Case 'Content-Type' header, got:\n{response_text}"
     );
     assert!(
         response_text.contains("X-Custom-Header:") || response_text.contains("X-Custom-Header: "),
-        "Expected Title-Case 'X-Custom-Header' header, got:\n{}",
-        response_text
+        "Expected Title-Case 'X-Custom-Header' header, got:\n{response_text}"
     );
     assert!(
         response_text.contains("X-Another-Header:") || response_text.contains("X-Another-Header: "),
-        "Expected Title-Case 'X-Another-Header' header, got:\n{}",
-        response_text
+        "Expected Title-Case 'X-Another-Header' header, got:\n{response_text}"
     );
 
     // Verify it's NOT lowercase (which would be the default)
@@ -141,7 +138,7 @@ async fn test_tap_io_set_nodelay() {
     // Make a request to trigger connection
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/test", addr);
+    let uri = format!("http://{addr}/test");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
@@ -190,7 +187,7 @@ async fn test_tap_io_with_limit_connections() {
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
     for _ in 0..3 {
-        let uri = format!("http://{}/test", addr);
+        let uri = format!("http://{addr}/test");
         let request = http::Request::builder()
             .uri(&uri)
             .header("Connection", "close") // Force new connection each time
@@ -206,7 +203,7 @@ async fn test_tap_io_with_limit_connections() {
 
     // Verify tap_io was called at least once (may be 1-3 depending on connection reuse)
     let count = tap_count.load(Ordering::SeqCst);
-    assert!((1..=3).contains(&count), "tap_io was called {} times", count);
+    assert!((1..=3).contains(&count), "tap_io was called {count} times");
 
     shutdown_tx.send(()).unwrap();
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
@@ -253,7 +250,7 @@ async fn test_unix_listener() {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            eprintln!("Connection error: {:?}", err);
+            eprintln!("Connection error: {err:?}");
         }
     });
 
@@ -340,7 +337,7 @@ async fn test_http2_only_prior_knowledge() {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            eprintln!("HTTP/2 connection error: {:?}", err);
+            eprintln!("HTTP/2 connection error: {err:?}");
         }
     });
 
@@ -382,7 +379,7 @@ async fn test_http1_only() {
     // Use HTTP/1 client
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/test", addr);
+    let uri = format!("http://{addr}/test");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
@@ -419,7 +416,7 @@ async fn test_default_server_supports_both_http1_and_http2() {
     // Test 1: Make an HTTP/1.1 request
     let http1_client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
 
-    let uri = format!("http://{}/test", addr);
+    let uri = format!("http://{addr}/test");
     let request = http::Request::builder()
         .uri(&uri)
         .body(http_body_util::Empty::<bytes::Bytes>::new())
@@ -438,7 +435,7 @@ async fn test_default_server_supports_both_http1_and_http2() {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            eprintln!("HTTP/2 connection error: {:?}", err);
+            eprintln!("HTTP/2 connection error: {err:?}");
         }
     });
 
@@ -500,7 +497,7 @@ async fn test_mixed_protocol_concurrent_connections() {
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("HTTP/1 connection error: {:?}", e);
+                eprintln!("HTTP/1 connection error: {e:?}");
             }
         });
 
@@ -523,7 +520,7 @@ async fn test_mixed_protocol_concurrent_connections() {
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("HTTP/2 connection error: {:?}", e);
+                eprintln!("HTTP/2 connection error: {e:?}");
             }
         });
 
@@ -622,7 +619,7 @@ async fn test_limit_connections_blocks_excess() {
 
         tokio::spawn(async move {
             if let Err(e) = conn.await {
-                eprintln!("Connection error: {:?}", e);
+                eprintln!("Connection error: {e:?}");
             }
         });
 
@@ -752,7 +749,7 @@ async fn test_multiple_concurrent_http2_streams() {
 
     tokio::spawn(async move {
         if let Err(err) = conn.await {
-            eprintln!("HTTP/2 connection error: {:?}", err);
+            eprintln!("HTTP/2 connection error: {err:?}");
         }
     });
 
@@ -761,7 +758,7 @@ async fn test_multiple_concurrent_http2_streams() {
 
     for i in 0..5 {
         let request = http::Request::builder()
-            .uri(format!("/test{}", i))
+            .uri(format!("/test{i}"))
             .body(http_body_util::Empty::<bytes::Bytes>::new())
             .unwrap();
 
@@ -776,7 +773,7 @@ async fn test_multiple_concurrent_http2_streams() {
     for (i, handle) in handles.into_iter().enumerate() {
         let response = tokio::time::timeout(timeout, handle)
             .await
-            .unwrap_or_else(|_| panic!("Request {} timed out", i))
+            .unwrap_or_else(|_| panic!("Request {i} timed out"))
             .unwrap()
             .expect("request failed");
         assert_eq!(response.status(), 200);
