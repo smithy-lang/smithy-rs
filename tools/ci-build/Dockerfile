@@ -226,7 +226,7 @@ RUN set -eux; \
     rm -rf awscliv2.zip aws && \
     pip3 install --no-cache-dir mypy==0.991
 
-COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
+COPY --chown=build:build --from=local_tools /opt/cargo/bin /opt/cargo/bin
 COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
 COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/ /opt/cargo/bin/
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
