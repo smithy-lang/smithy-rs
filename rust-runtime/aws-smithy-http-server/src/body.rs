@@ -103,28 +103,6 @@ where
     boxed_sync(Full::new(body.into()))
 }
 
-// ============================================================================
-// Body Reading Functions
-// ============================================================================
-
-/// Collect all bytes from a body.
-///
-/// This uses `http_body_util::BodyExt::collect()` to read all body chunks
-/// into a single `Bytes` buffer.
-///
-/// This is primarily used for testing and internal utilities.
-#[doc(hidden)]
-pub async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
-where
-    B: HttpBody,
-    B::Error: Into<BoxError>,
-{
-    use http_body_util::BodyExt;
-
-    let collected = body.collect().await.map_err(Error::new)?;
-    Ok(collected.to_bytes())
-}
-
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
     boxed(Full::new(bytes))
@@ -189,6 +167,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Collect all bytes from a body (test utility).
+    ///
+    /// This uses `http_body_util::BodyExt::collect()` to read all body chunks
+    /// into a single `Bytes` buffer.
+    async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
+    where
+        B: HttpBody,
+        B::Error: Into<BoxError>,
+    {
+        use http_body_util::BodyExt;
+
+        let collected = body.collect().await.map_err(Error::new)?;
+        Ok(collected.to_bytes())
+    }
 
     #[tokio::test]
     async fn test_empty_body() {

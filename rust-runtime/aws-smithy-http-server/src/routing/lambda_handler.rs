@@ -106,7 +106,19 @@ fn convert_event(request: Request) -> ServiceRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use bytes::Bytes;
     use lambda_http::RequestExt;
+
+    /// Test utility to collect all bytes from a body.
+    async fn collect_bytes<B>(body: B) -> Result<Bytes, crate::Error>
+    where
+        B: http_body::Body,
+        B::Error: Into<crate::error::BoxError>,
+    {
+        use http_body_util::BodyExt;
+        let collected = body.collect().await.map_err(crate::Error::new)?;
+        Ok(collected.to_bytes())
+    }
 
     #[test]
     fn traits() {
@@ -142,7 +154,7 @@ mod tests {
         let (parts, _) = event.into_parts();
         let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Empty);
         let request = convert_event(event);
-        let bytes = crate::body::collect_bytes(request.into_body()).await.unwrap();
+        let bytes = collect_bytes(request.into_body()).await.unwrap();
         assert_eq!(bytes.len(), 0);
     }
 
@@ -155,7 +167,7 @@ mod tests {
         let (parts, _) = event.into_parts();
         let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Text("hello world".to_string()));
         let request = convert_event(event);
-        let bytes = crate::body::collect_bytes(request.into_body()).await.unwrap();
+        let bytes = collect_bytes(request.into_body()).await.unwrap();
         assert_eq!(bytes, "hello world");
     }
 
@@ -168,7 +180,7 @@ mod tests {
         let (parts, _) = event.into_parts();
         let event = lambda_http::Request::from_parts(parts, lambda_http::Body::Binary(vec![1, 2, 3, 4, 5]));
         let request = convert_event(event);
-        let bytes = crate::body::collect_bytes(request.into_body()).await.unwrap();
+        let bytes = collect_bytes(request.into_body()).await.unwrap();
         assert_eq!(bytes.as_ref(), &[1, 2, 3, 4, 5]);
     }
 
@@ -281,7 +293,7 @@ mod tests {
 
         // Verify response
         assert_eq!(response.status(), 200);
-        let body_bytes = crate::body::collect_bytes(response.into_body()).await.unwrap();
+        let body_bytes = collect_bytes(response.into_body()).await.unwrap();
         assert_eq!(body_bytes, "/test/path");
     }
 
@@ -291,7 +303,7 @@ mod tests {
 
         // Create a service that processes the request body
         let inner_service = tower::service_fn(|req: ServiceRequest| async move {
-            let body_bytes = crate::body::collect_bytes(req.into_body()).await.unwrap();
+            let body_bytes = collect_bytes(req.into_body()).await.unwrap();
             let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
 
             let response_body = format!("Received: {}", body_str);
@@ -321,7 +333,7 @@ mod tests {
         // Verify response
         assert_eq!(response.status(), 200);
         assert_eq!(response.headers().get("content-type").unwrap(), "text/plain");
-        let body_bytes = crate::body::collect_bytes(response.into_body()).await.unwrap();
+        let body_bytes = collect_bytes(response.into_body()).await.unwrap();
         assert_eq!(body_bytes, r#"Received: {"key":"value"}"#);
     }
 
@@ -359,7 +371,7 @@ mod tests {
         assert_eq!(response.headers().get("content-type").unwrap(), "application/json");
         assert_eq!(response.headers().get("x-request-id").unwrap(), "12345");
 
-        let body_bytes = crate::body::collect_bytes(response.into_body()).await.unwrap();
+        let body_bytes = collect_bytes(response.into_body()).await.unwrap();
         assert_eq!(body_bytes, r#"{"status":"created"}"#);
     }
 
@@ -391,7 +403,7 @@ mod tests {
 
         // Verify error response
         assert_eq!(response.status(), 404);
-        let body_bytes = crate::body::collect_bytes(response.into_body()).await.unwrap();
+        let body_bytes = collect_bytes(response.into_body()).await.unwrap();
         assert_eq!(body_bytes, r#"{"error":"not found"}"#);
     }
 }
