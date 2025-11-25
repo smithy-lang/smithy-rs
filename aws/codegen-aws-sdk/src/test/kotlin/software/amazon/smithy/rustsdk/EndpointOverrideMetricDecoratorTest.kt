@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
+import software.amazon.smithy.rust.codegen.core.testutil.tokioTest
 
 class EndpointOverrideMetricDecoratorTest {
     companion object {
@@ -96,15 +97,14 @@ class EndpointOverrideMetricDecoratorTest {
             rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
 
             rustCrate.integrationTest("endpoint_override_via_sdk_config") {
-                rustTemplate(
-                    """
-                    use $moduleName::config::Region;
-                    use $moduleName::Client;
-                    use #{capture_request};
-                    use #{assert_ua_contains_metric_values};
-
-                    ##[#{tokio}::test]
-                    async fn metric_tracked_when_endpoint_set_via_sdk_config() {
+                tokioTest("metric_tracked_when_endpoint_set_via_sdk_config") {
+                    rustTemplate(
+                        """
+                        use $moduleName::config::Region;
+                        use $moduleName::Client;
+                        use #{capture_request};
+                        use #{assert_ua_contains_metric_values};
+                        
                         let (http_client, rcvr) = capture_request(None);
                         
                         // Create SdkConfig with endpoint URL
@@ -138,14 +138,13 @@ class EndpointOverrideMetricDecoratorTest {
                             .expect("x-amz-user-agent header missing");
                         
                         assert_ua_contains_metric_values(user_agent, &["N"]);
-                    }
-                    """,
-                    *preludeScope,
-                    "capture_request" to RuntimeType.captureRequest(rc),
-                    "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
-                    "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
-                    "tokio" to CargoDependency.Tokio.toType(),
-                )
+                        """,
+                        *preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                        "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                        "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
+                    )
+                }
             }
         }
     }
@@ -166,15 +165,13 @@ class EndpointOverrideMetricDecoratorTest {
             rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
 
             rustCrate.integrationTest("no_endpoint_override") {
-                rustTemplate(
-                    """
-                    use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
-                    use $moduleName::{Config, Client};
-                    use #{capture_request};
-                    use #{assert_ua_contains_metric_values};
-
-                    ##[#{tokio}::test]
-                    async fn no_metric_when_endpoint_not_overridden() {
+                tokioTest("no_metric_when_endpoint_not_overridden") {
+                    rustTemplate(
+                        """
+                        use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
+                        use $moduleName::{Config, Client};
+                        use #{capture_request};
+                        
                         let (http_client, rcvr) = capture_request(None);
                         
                         // Create config WITHOUT endpoint override
@@ -205,15 +202,43 @@ class EndpointOverrideMetricDecoratorTest {
                             .get("x-amz-user-agent")
                             .expect("x-amz-user-agent header should be present");
 
-                        // This should panic if 'N' is found
-                        let result = std::panic::catch_unwind(|| {
-                            assert_ua_contains_metric_values(user_agent, &["N"]);
-                        });
-                        
+                        let user_agent_str = user_agent.to_str().unwrap();
                         assert!(
-                            result.is_err(),
+                            !user_agent_str.contains("m/N"),
                             "Metric 'N' should NOT be present when endpoint not overridden"
                         );
+                        """,
+                        *preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                    )
+                }
+                
+                // Add a should_panic test to verify assert_ua_contains_metric_values panics when metric is not present
+                rustTemplate(
+                    """
+                    ##[#{tokio}::test]
+                    ##[should_panic(expected = "not found")]
+                    async fn assert_panics_when_metric_not_present() {
+                        use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
+                        use $moduleName::{Config, Client};
+                        use #{capture_request};
+                        use #{assert_ua_contains_metric_values};
+                        
+                        let (http_client, rcvr) = capture_request(None);
+                        
+                        let config = Config::builder()
+                            .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .build();
+                        let client = Client::from_conf(config);
+
+                        let _ = client.some_operation().send().await;
+                        let request = rcvr.expect_request();
+                        let user_agent = request.headers().get("x-amz-user-agent").unwrap();
+                        
+                        // This should panic because 'N' is not present
+                        assert_ua_contains_metric_values(user_agent, &["N"]);
                     }
                     """,
                     *preludeScope,
