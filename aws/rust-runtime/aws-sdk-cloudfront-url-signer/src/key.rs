@@ -21,24 +21,28 @@ impl PrivateKey {
     pub fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
         let pem_str = std::str::from_utf8(bytes).map_err(SigningError::invalid_key)?;
 
-        // Try PKCS#1 RSA first (most common for RSA)
-        if let Ok(key) = RsaPrivateKey::from_pkcs1_pem(pem_str) {
+        // Detect key type from PEM header
+        if pem_str.contains("BEGIN RSA PRIVATE KEY") {
+            // PKCS#1 RSA format
+            let key = RsaPrivateKey::from_pkcs1_pem(pem_str).map_err(SigningError::invalid_key)?;
             return Ok(PrivateKey::Rsa(key));
         }
 
-        // Try PKCS#8 (supports both RSA and ECDSA)
-        if let Ok(key) = p256::ecdsa::SigningKey::from_pkcs8_pem(pem_str) {
-            return Ok(PrivateKey::Ecdsa(key));
-        }
+        if pem_str.contains("BEGIN PRIVATE KEY") {
+            // PKCS#8 format - could be RSA or ECDSA
+            // Try ECDSA first (P-256)
+            if let Ok(key) = p256::ecdsa::SigningKey::from_pkcs8_pem(pem_str) {
+                return Ok(PrivateKey::Ecdsa(key));
+            }
 
-        // Try PKCS#8 for RSA as fallback
-        use p256::pkcs8::DecodePrivateKey;
-        if let Ok(key) = RsaPrivateKey::from_pkcs8_pem(pem_str) {
+            // Try RSA
+            use p256::pkcs8::DecodePrivateKey;
+            let key = RsaPrivateKey::from_pkcs8_pem(pem_str).map_err(SigningError::invalid_key)?;
             return Ok(PrivateKey::Rsa(key));
         }
 
         Err(SigningError::invalid_key(
-            "Key must be RSA (PKCS#1 or PKCS#8) or ECDSA P-256 (PKCS#8)",
+            "Unsupported key format. Expected RSA (PKCS#1 or PKCS#8) or ECDSA P-256 (PKCS#8)",
         ))
     }
 
