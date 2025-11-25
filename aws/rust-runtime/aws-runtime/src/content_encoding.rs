@@ -4,6 +4,7 @@
  */
 
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
+use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use bytes::{Bytes, BytesMut};
 use pin_project_lite::pin_project;
 
@@ -25,7 +26,7 @@ pub mod header_value {
 }
 
 /// Options used when constructing an [`AwsChunkedBody`].
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Clone, Debug, Default)]
 #[non_exhaustive]
 pub struct AwsChunkedBodyOptions {
     /// The total size of the stream. Because we only support unsigned encoding
@@ -51,6 +52,7 @@ impl AwsChunkedBodyOptions {
             stream_length,
             trailer_lengths,
             disabled: false,
+            disabled: false,
         }
     }
 
@@ -67,9 +69,52 @@ impl AwsChunkedBodyOptions {
     }
 
     /// Append a trailer length to the options
+    /// Set the stream length in the options
+    pub fn with_stream_length(mut self, stream_length: u64) -> Self {
+        self.stream_length = stream_length;
+        self
+    }
+
+    /// Append a trailer length to the options
     pub fn with_trailer_len(mut self, trailer_len: u64) -> Self {
         self.trailer_lengths.push(trailer_len);
         self
+    }
+
+    /// Create a new [`AwsChunkedBodyOptions`] with aws-chunked encoding disabled.
+    ///
+    /// When the option is disabled, the body must not be wrapped in an `AwsChunkedBody`.
+    pub fn disable_chunked_encoding() -> Self {
+        Self {
+            disabled: true,
+            ..Default::default()
+        }
+    }
+
+    /// Return whether aws-chunked encoding is disabled.
+    pub fn disabled(&self) -> bool {
+        self.disabled
+    }
+
+    /// Return the length of the body after `aws-chunked` encoding is applied
+    pub fn encoded_length(&self) -> u64 {
+        let mut length = 0;
+        if self.stream_length != 0 {
+            length += get_unsigned_chunk_bytes_length(self.stream_length);
+        }
+
+        // End chunk
+        length += CHUNK_TERMINATOR.len() as u64;
+
+        // Trailers
+        for len in self.trailer_lengths.iter() {
+            length += len + CRLF.len() as u64;
+        }
+
+        // Encoding terminator
+        length += CRLF.len() as u64;
+
+        length
     }
 
     /// Create a new [`AwsChunkedBodyOptions`] with aws-chunked encoding disabled.
