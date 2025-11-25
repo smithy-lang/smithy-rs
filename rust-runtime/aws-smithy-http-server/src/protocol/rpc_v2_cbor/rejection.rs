@@ -47,7 +47,7 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-// Enable conversion from crate::Error for body::collect_bytes() error handling
+// Enable conversion from crate::Error for general body buffering error handling
 impl From<crate::Error> for RequestRejection {
     fn from(err: crate::Error) -> Self {
         Self::BufferHttpBodyBytes(err)

@@ -26,7 +26,7 @@
 //! ```
 
 use aws_smithy_http_server::{routing::IntoMakeService, serve::IncomingStream};
-use http::{Request, Response};
+use http::{Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper_util::{
@@ -97,7 +97,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build the service with request timeout layer
     let base_service = ServiceBuilder::new()
-        .layer(TimeoutLayer::new(Duration::from_secs(30)))
+        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
         .service(service_fn(router));
 
     let make_service = IntoMakeService::new(base_service);

@@ -5,8 +5,8 @@
 
 //! HTTP body utilities.
 //!
-//! This module provides a stable API for body handling regardless of the
-//! underlying HTTP version.
+//! This module provides body handling utilities for HTTP 1.x using the
+//! `http-body` and `http-body-util` crates.
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
@@ -23,8 +23,8 @@ pub use http_body::Body as HttpBody;
 
 /// The primary body type returned by the generated `smithy-rs` service.
 ///
-/// This provides a stable public API regardless of HTTP version.
-/// Internally it uses `UnsyncBoxBody` from the appropriate http-body version.
+/// This is a type-erased body that wraps `UnsyncBoxBody` from `http-body-util`.
+/// It is `Send` but not `Sync`, making it suitable for most HTTP handlers.
 pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Error>;
 
 /// A thread-safe body type for operations that require `Sync`.
@@ -81,7 +81,9 @@ pub fn empty_sync() -> BoxBodySync {
     boxed_sync(Empty::<Bytes>::new())
 }
 
-/// Convert bytes or similar types into a [`BoxBody`] for HTTP 1.x.
+/// Convert bytes or similar types into a [`BoxBody`].
+///
+/// This simplifies codegen a little bit.
 #[doc(hidden)]
 pub fn to_boxed<B>(body: B) -> BoxBody
 where
@@ -90,33 +92,15 @@ where
     boxed(Full::new(body.into()))
 }
 
-/// Convert bytes or similar types into a [`BoxBodySync`] for HTTP 1.x.
+/// Convert bytes or similar types into a [`BoxBodySync`].
+///
+/// This simplifies codegen a little bit.
 #[doc(hidden)]
 pub fn to_boxed_sync<B>(body: B) -> BoxBodySync
 where
     B: Into<Bytes>,
 {
     boxed_sync(Full::new(body.into()))
-}
-
-// ============================================================================
-// Body Reading Functions
-// ============================================================================
-
-/// Collect all bytes from a body.
-///
-/// This provides a version-agnostic way to read body contents.
-/// In HTTP 0.x, this uses `hyper::body::to_bytes()`.
-/// In HTTP 1.x, this uses `BodyExt::collect()`.
-pub async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
-where
-    B: HttpBody,
-    B::Error: Into<BoxError>,
-{
-    use http_body_util::BodyExt;
-
-    let collected = body.collect().await.map_err(Error::new)?;
-    Ok(collected.to_bytes())
 }
 
 /// Create a body from bytes.
@@ -183,6 +167,21 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Collect all bytes from a body (test utility).
+    ///
+    /// This uses `http_body_util::BodyExt::collect()` to read all body chunks
+    /// into a single `Bytes` buffer.
+    async fn collect_bytes<B>(body: B) -> Result<Bytes, Error>
+    where
+        B: HttpBody,
+        B::Error: Into<BoxError>,
+    {
+        use http_body_util::BodyExt;
+
+        let collected = body.collect().await.map_err(Error::new)?;
+        Ok(collected.to_bytes())
+    }
 
     #[tokio::test]
     async fn test_empty_body() {

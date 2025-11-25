@@ -487,11 +487,13 @@ where
 /// ```rust,ignore
 /// use tokio::net::TcpListener;
 /// use tower::Layer;
-/// use tower::timeout::TimeoutLayer;
+/// use tower_http::timeout::TimeoutLayer;
+/// use http::StatusCode;
+/// use std::time::Duration;
 /// use aws_smithy_http_server::routing::IntoMakeService;
 ///
 /// let app = /* ... build service ... */;
-/// let app = TimeoutLayer::new(Duration::from_secs(30)).layer(app);
+/// let app = TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)).layer(app);
 ///
 /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
 /// aws_smithy_http_server::serve(listener, IntoMakeService::new(app)).await.unwrap();
