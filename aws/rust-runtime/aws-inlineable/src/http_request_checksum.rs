@@ -181,48 +181,42 @@ where
             // Disable aws-chunked encoding since either the user has set a custom checksum
             cfg.interceptor_state()
                 .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
-            // If the user manually set a checksum header or if this is a presigned request, we short circuit
-            if user_set_checksum_value || is_presigned {
-                // Disable aws-chunked encoding since either the user has set a custom checksum
-                cfg.interceptor_state()
-                    .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
-                return Ok(());
-            }
 
-            let state = cfg
-                .get_mut_from_interceptor_state::<RequestChecksumInterceptorState>()
-                .expect("set in `read_before_serialization`");
-
-            // If the algorithm fails to parse it is not one we support and we error
-            let checksum_algorithm = state
-                .checksum_algorithm
-                .clone()
-                .map(|s| ChecksumAlgorithm::from_str(s.as_str()))
-                .transpose()?;
-
-            let mut state = std::mem::take(state);
-
-            if calculate_checksum(cfg, &state) {
-                state.calculate_checksum.store(true, Ordering::Release);
-
-                // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
-                // If we have made it this far without a checksum being set we set the default (currently Crc32)
-                let checksum_algorithm =
-                    incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
-                state.checksum_algorithm = Some(checksum_algorithm.as_str().to_owned());
-
-                // NOTE: We have to do this in modify_before_retry_loop since UA interceptor also runs
-                // in modify_before_signing but is registered before this interceptor (client level vs operation level).
-                track_metric_for_selected_checksum_algorithm(cfg, &checksum_algorithm);
-            } else {
-                // No checksum calculation needed so disable aws-chunked encoding
-                cfg.interceptor_state()
-                    .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
-            }
-
-            cfg.interceptor_state().store_put(state);
+            return Ok(());
         }
 
+        let state = cfg
+            .get_mut_from_interceptor_state::<RequestChecksumInterceptorState>()
+            .expect("set in `read_before_serialization`");
+
+        // If the algorithm fails to parse it is not one we support and we error
+        let checksum_algorithm = state
+            .checksum_algorithm
+            .clone()
+            .map(|s| ChecksumAlgorithm::from_str(s.as_str()))
+            .transpose()?;
+
+        let mut state = std::mem::take(state);
+
+        if calculate_checksum(cfg, &state) {
+            state.calculate_checksum.store(true, Ordering::Release);
+
+            // If a checksum override is set in the ConfigBag we use that instead (currently only used by S3Express)
+            // If we have made it this far without a checksum being set we set the default (currently Crc32)
+            let checksum_algorithm =
+                incorporate_custom_default(checksum_algorithm, cfg).unwrap_or_default();
+            state.checksum_algorithm = Some(checksum_algorithm.as_str().to_owned());
+
+            // NOTE: We have to do this in modify_before_retry_loop since UA interceptor also runs
+            // in modify_before_signing but is registered before this interceptor (client level vs operation level).
+            track_metric_for_selected_checksum_algorithm(cfg, &checksum_algorithm);
+        } else {
+            // No checksum calculation needed so disable aws-chunked encoding
+            cfg.interceptor_state()
+                .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
+        }
+
+        cfg.interceptor_state().store_put(state);
         Ok(())
     }
 
