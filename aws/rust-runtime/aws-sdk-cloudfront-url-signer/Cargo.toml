@@ -10,6 +10,7 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 [dependencies]
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api" }
+aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async" }
 time = { version = "0.3", features = ["macros"] }
 rsa = "0.9.9"
 sha1 = { version = "0.10.6", features = ["oid"] }

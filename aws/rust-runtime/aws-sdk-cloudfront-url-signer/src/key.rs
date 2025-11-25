@@ -11,13 +11,19 @@ use sha1::{Digest, Sha1};
 #[cfg(feature = "rt-tokio")]
 use std::path::Path;
 
+/// Private key for signing CloudFront URLs and cookies.
 #[derive(Debug, Clone)]
 pub enum PrivateKey {
-    Rsa(RsaPrivateKey),
+    /// RSA private key.
+    Rsa(Box<RsaPrivateKey>),
+    /// ECDSA P-256 private key.
     Ecdsa(p256::ecdsa::SigningKey),
 }
 
 impl PrivateKey {
+    /// Loads a private key from PEM-encoded bytes.
+    ///
+    /// Supports RSA keys in PKCS#1 or PKCS#8 format, and ECDSA P-256 keys in PKCS#8 format.
     pub fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
         let pem_str = std::str::from_utf8(bytes).map_err(SigningError::invalid_key)?;
 
@@ -25,7 +31,7 @@ impl PrivateKey {
         if pem_str.contains("BEGIN RSA PRIVATE KEY") {
             // PKCS#1 RSA format
             let key = RsaPrivateKey::from_pkcs1_pem(pem_str).map_err(SigningError::invalid_key)?;
-            return Ok(PrivateKey::Rsa(key));
+            return Ok(PrivateKey::Rsa(Box::new(key)));
         }
 
         if pem_str.contains("BEGIN PRIVATE KEY") {
@@ -38,7 +44,7 @@ impl PrivateKey {
             // Try RSA
             use p256::pkcs8::DecodePrivateKey;
             let key = RsaPrivateKey::from_pkcs8_pem(pem_str).map_err(SigningError::invalid_key)?;
-            return Ok(PrivateKey::Rsa(key));
+            return Ok(PrivateKey::Rsa(Box::new(key)));
         }
 
         Err(SigningError::invalid_key(
