@@ -16,18 +16,13 @@ enum Expiration {
 }
 
 #[derive(Debug, Clone)]
-struct CustomPolicyOptions {
-    active_date: Option<DateTime>,
-    ip_range: Option<String>,
-}
-
-#[derive(Debug, Clone)]
 pub struct SigningRequest {
     pub(crate) resource_url: String,
     pub(crate) key_pair_id: String,
     pub(crate) private_key: PrivateKey,
     pub(crate) expiration: DateTime,
-    pub(crate) custom_policy_options: Option<CustomPolicyOptions>,
+    pub(crate) active_date: Option<DateTime>,
+    pub(crate) ip_range: Option<String>,
 }
 
 impl SigningRequest {
@@ -35,8 +30,8 @@ impl SigningRequest {
         SigningRequestBuilder::default()
     }
 
-    pub(crate) fn is_custom_policy(&self) -> bool {
-        self.custom_policy_options.is_some()
+    fn is_custom_policy(&self) -> bool {
+        self.active_date.is_some() || self.ip_range.is_some()
     }
 }
 
@@ -99,9 +94,9 @@ impl SigningRequestBuilder {
             .private_key
             .ok_or_else(|| SigningError::invalid_input("private_key is required"))?;
 
-        let expiration = self
-            .expiration
-            .ok_or_else(|| SigningError::invalid_input("expiration is required (use expires_at or expires_in)"))?;
+        let expiration = self.expiration.ok_or_else(|| {
+            SigningError::invalid_input("expiration is required (use expires_at or expires_in)")
+        })?;
 
         let expiration = match expiration {
             Expiration::DateTime(dt) => dt,
@@ -116,21 +111,13 @@ impl SigningRequestBuilder {
             }
         };
 
-        let custom_policy_options = if self.active_date.is_some() || self.ip_range.is_some() {
-            Some(CustomPolicyOptions {
-                active_date: self.active_date,
-                ip_range: self.ip_range,
-            })
-        } else {
-            None
-        };
-
         Ok(SigningRequest {
             resource_url,
             key_pair_id,
             private_key,
             expiration,
-            custom_policy_options,
+            active_date: self.active_date,
+            ip_range: self.ip_range,
         })
     }
 }
@@ -260,13 +247,11 @@ impl SigningRequest {
             .resource(&self.resource_url)
             .expires_at(self.expiration);
 
-        if let Some(ref opts) = self.custom_policy_options {
-            if let Some(active) = opts.active_date {
-                builder = builder.starts_at(active);
-            }
-            if let Some(ref ip) = opts.ip_range {
-                builder = builder.ip_range(ip);
-            }
+        if let Some(active) = self.active_date {
+            builder = builder.starts_at(active);
+        }
+        if let Some(ref ip) = self.ip_range {
+            builder = builder.ip_range(ip);
         }
 
         builder.build()
