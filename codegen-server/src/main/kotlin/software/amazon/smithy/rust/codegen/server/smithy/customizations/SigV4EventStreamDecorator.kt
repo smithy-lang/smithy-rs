@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
+import software.amazon.smithy.aws.traits.auth.SigV4ATrait
 import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.knowledge.ServiceIndex
@@ -50,8 +51,10 @@ class SigV4EventStreamDecorator : ServerCodegenDecorator {
     }
 }
 
-internal fun RustSymbolProvider.usesSigAuth(): Boolean =
-    ServiceIndex.of(model).getAuthSchemes(moduleProviderContext.serviceShape!!).containsKey(SigV4Trait.ID)
+internal fun RustSymbolProvider.usesSigAuth(): Boolean {
+    val authSchemes = ServiceIndex.of(model).getAuthSchemes(moduleProviderContext.serviceShape!!)
+    return authSchemes.containsKey(SigV4Trait.ID) || authSchemes.containsKey(SigV4ATrait.ID)
+}
 
 // Goes from `T` to `SignedEvent<T>`
 fun wrapInSignedEvent(
