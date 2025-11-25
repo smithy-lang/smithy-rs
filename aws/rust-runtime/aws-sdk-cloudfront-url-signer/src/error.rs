@@ -60,14 +60,14 @@ impl fmt::Display for SigningError {
             ErrorKind::InvalidPolicy => {
                 write!(f, "invalid policy")?;
                 if let Some(ref msg) = self.message {
-                    write!(f, ": {}", msg)?;
+                    write!(f, ": {msg}")?;
                 }
                 Ok(())
             }
             ErrorKind::InvalidInput => {
                 write!(f, "invalid input")?;
                 if let Some(ref msg) = self.message {
-                    write!(f, ": {}", msg)?;
+                    write!(f, ": {msg}")?;
                 }
                 Ok(())
             }

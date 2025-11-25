@@ -16,6 +16,7 @@
     unreachable_pub
 )]
 
+/// Error types for CloudFront signing operations.
 pub mod error;
 mod key;
 mod policy;

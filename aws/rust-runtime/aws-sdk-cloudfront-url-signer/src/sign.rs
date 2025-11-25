@@ -7,7 +7,14 @@ use crate::error::SigningError;
 use crate::key::PrivateKey;
 use crate::policy::Policy;
 use aws_smithy_types::DateTime;
+use std::borrow::Cow;
+use std::fmt;
 use std::time::Duration;
+
+const COOKIE_POLICY: &str = "CloudFront-Policy";
+const COOKIE_SIGNATURE: &str = "CloudFront-Signature";
+const COOKIE_KEY_PAIR_ID: &str = "CloudFront-Key-Pair-Id";
+const COOKIE_EXPIRES: &str = "CloudFront-Expires";
 
 #[derive(Debug, Clone)]
 enum Expiration {
@@ -15,6 +22,7 @@ enum Expiration {
     Duration(Duration),
 }
 
+/// Request to sign a CloudFront URL or generate signed cookies.
 #[derive(Debug, Clone)]
 pub struct SigningRequest {
     pub(crate) resource_url: String,
@@ -26,16 +34,14 @@ pub struct SigningRequest {
 }
 
 impl SigningRequest {
+    /// Creates a new builder for constructing a signing request.
     pub fn builder() -> SigningRequestBuilder {
         SigningRequestBuilder::default()
     }
-
-    fn is_custom_policy(&self) -> bool {
-        self.active_date.is_some() || self.ip_range.is_some()
-    }
 }
 
-#[derive(Default)]
+/// Builder for [`SigningRequest`].
+#[derive(Default, Debug)]
 pub struct SigningRequestBuilder {
     resource_url: Option<String>,
     key_pair_id: Option<String>,
@@ -43,44 +49,53 @@ pub struct SigningRequestBuilder {
     expiration: Option<Expiration>,
     active_date: Option<DateTime>,
     ip_range: Option<String>,
+    time_source: Option<aws_smithy_async::time::SharedTimeSource>,
 }
 
 impl SigningRequestBuilder {
+    /// Sets the CloudFront resource URL to sign.
     pub fn resource_url(mut self, url: impl Into<String>) -> Self {
         self.resource_url = Some(url.into());
         self
     }
 
+    /// Sets the CloudFront key pair ID.
     pub fn key_pair_id(mut self, id: impl Into<String>) -> Self {
         self.key_pair_id = Some(id.into());
         self
     }
 
+    /// Sets the private key for signing.
     pub fn private_key(mut self, key: PrivateKey) -> Self {
         self.private_key = Some(key);
         self
     }
 
+    /// Sets an absolute expiration time.
     pub fn expires_at(mut self, time: DateTime) -> Self {
         self.expiration = Some(Expiration::DateTime(time));
         self
     }
 
+    /// Sets a relative expiration time from now.
     pub fn expires_in(mut self, duration: Duration) -> Self {
         self.expiration = Some(Expiration::Duration(duration));
         self
     }
 
+    /// Sets an activation time (not-before date) for custom policy.
     pub fn active_at(mut self, time: DateTime) -> Self {
         self.active_date = Some(time);
         self
     }
 
+    /// Sets an IP range restriction (CIDR notation) for custom policy.
     pub fn ip_range(mut self, cidr: impl Into<String>) -> Self {
         self.ip_range = Some(cidr.into());
         self
     }
 
+    /// Builds the signing request.
     pub fn build(self) -> Result<SigningRequest, SigningError> {
         let resource_url = self
             .resource_url
@@ -101,12 +116,8 @@ impl SigningRequestBuilder {
         let expiration = match expiration {
             Expiration::DateTime(dt) => dt,
             Expiration::Duration(dur) => {
-                let now = DateTime::from_secs(
-                    std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as i64,
-                );
+                let time_source = self.time_source.unwrap_or_default();
+                let now = DateTime::from(time_source.now());
                 DateTime::from_secs(now.secs() + dur.as_secs() as i64)
             }
         };
@@ -121,13 +132,8 @@ impl SigningRequestBuilder {
         })
     }
 }
-/*
- * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
- * SPDX-License-Identifier: Apache-2.0
- */
 
-use std::fmt;
-
+/// A signed CloudFront URL.
 #[derive(Debug, Clone)]
 pub struct SignedUrl {
     url: String,
@@ -138,6 +144,7 @@ impl SignedUrl {
         Self { url }
     }
 
+    /// Returns the complete signed URL as a string.
     pub fn url(&self) -> &str {
         &self.url
     }
@@ -149,20 +156,23 @@ impl fmt::Display for SignedUrl {
     }
 }
 
+/// Signed cookies for CloudFront.
 #[derive(Debug, Clone)]
 pub struct SignedCookies {
-    cookies: Vec<(String, String)>,
+    cookies: Vec<(Cow<'static, str>, String)>,
 }
 
 impl SignedCookies {
-    pub(crate) fn new(cookies: Vec<(String, String)>) -> Self {
+    pub(crate) fn new(cookies: Vec<(Cow<'static, str>, String)>) -> Self {
         Self { cookies }
     }
 
-    pub fn cookies(&self) -> &[(String, String)] {
+    /// Returns all cookies as name-value pairs.
+    pub fn cookies(&self) -> &[(Cow<'static, str>, String)] {
         &self.cookies
     }
 
+    /// Gets a specific cookie value by name.
     pub fn get(&self, name: &str) -> Option<&str> {
         self.cookies
             .iter()
@@ -170,8 +180,9 @@ impl SignedCookies {
             .map(|(_, v)| v.as_str())
     }
 
+    /// Returns an iterator over cookies.
     pub fn iter(&self) -> impl Iterator<Item = (&str, &str)> {
-        self.cookies.iter().map(|(n, v)| (n.as_str(), v.as_str()))
+        self.cookies.iter().map(|(n, v)| (n.as_ref(), v.as_str()))
     }
 }
 
@@ -218,24 +229,18 @@ impl SigningRequest {
         let cookies = if policy.is_canned() {
             vec![
                 (
-                    "CloudFront-Expires".to_string(),
+                    Cow::Borrowed(COOKIE_EXPIRES),
                     self.expiration.secs().to_string(),
                 ),
-                ("CloudFront-Signature".to_string(), signature_b64),
-                (
-                    "CloudFront-Key-Pair-Id".to_string(),
-                    self.key_pair_id.clone(),
-                ),
+                (Cow::Borrowed(COOKIE_SIGNATURE), signature_b64),
+                (Cow::Borrowed(COOKIE_KEY_PAIR_ID), self.key_pair_id.clone()),
             ]
         } else {
             let policy_b64 = policy.to_base64url();
             vec![
-                ("CloudFront-Policy".to_string(), policy_b64),
-                ("CloudFront-Signature".to_string(), signature_b64),
-                (
-                    "CloudFront-Key-Pair-Id".to_string(),
-                    self.key_pair_id.clone(),
-                ),
+                (Cow::Borrowed(COOKIE_POLICY), policy_b64),
+                (Cow::Borrowed(COOKIE_SIGNATURE), signature_b64),
+                (Cow::Borrowed(COOKIE_KEY_PAIR_ID), self.key_pair_id.clone()),
             ]
         };
 

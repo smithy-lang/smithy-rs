@@ -161,6 +161,7 @@ version = "1.1.12"
 name = "aws-sdk-cloudfront-url-signer"
 version = "0.1.0"
 dependencies = [
+ "aws-smithy-async",
  "aws-smithy-json",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
