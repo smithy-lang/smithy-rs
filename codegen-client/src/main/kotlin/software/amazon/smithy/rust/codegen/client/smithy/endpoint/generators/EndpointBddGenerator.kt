@@ -274,8 +274,6 @@ class EndpointBddGenerator(
                 ${(0 until resultCount).joinToString(",\n    ") { "ResultEndpoint::Result$it" }}
             ];
 
-
-
             //TODO(BDD) move this to endpoint_lib
             /// Helper trait to implement the coalesce! macro
             pub trait Coalesce {
@@ -415,9 +413,8 @@ class EndpointBddGenerator(
     private fun generateResultArms(context: Context) =
         writable {
             val visitor = RuleVisitor(context)
-            val results = bddTrait.results
             bddTrait.results.forEachIndexed { idx, rule ->
-                // Skip NoMatchRule (index 0) - it's a sentinel that doesn't support visitor pattern
+                // Skip NoMatchRule (index 0) - it doesn't support visitor pattern
                 if (rule is NoMatchRule) {
                     rustTemplate(
                         "Self::Result$idx => #{Err}(#{ResolveEndpointError}::message(\"No endpoint rule matched\")),\n",
@@ -526,7 +523,9 @@ class EndpointBddGenerator(
 private fun Condition.producesResult(): Boolean = this.result.isPresent
 
 /**
- * Container for annotated references with lookup by name.
+ * Container for annotated references, these are the variables the condition evaluation can potentially
+ * refer to. They come in two variants: Parameters (which are immutable), and Variables (which are all Optional
+ * and begin as None and might be set by a condition later during evaluation).
  */
 class AnnotatedRefs(
     private val refs: Map<String, AnnotatedRef>,
