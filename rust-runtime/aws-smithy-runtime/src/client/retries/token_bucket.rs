@@ -133,16 +133,10 @@ impl TokenBucket {
             self.retry_cost
         };
 
-        let result = self.semaphore
+        self.semaphore
             .clone()
             .try_acquire_many_owned(retry_cost)
-            .ok();
-
-        result
-    }
-
-    pub(crate) fn success_reward(&self) -> f32 {
-        self.success_reward
+            .ok()
     }
 
     pub(crate) fn success_reward(&self) -> f32 {
