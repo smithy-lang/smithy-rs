@@ -11,6 +11,7 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
+import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
@@ -53,6 +54,7 @@ class EndpointBddGenerator(
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
+    private val allRefs = AnnotatedRefs.from(bddTrait)
 
     fun generateBddResolver(): RuntimeType {
         return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
@@ -114,7 +116,7 @@ class EndpointBddGenerator(
         val dummyWriter = RustWriter.root()
         bddTrait.conditions.withIndex().forEach { (idx, cond) ->
             val bddExpressionGenerator =
-                BddExpressionGenerator(cond, Ownership.Borrowed, context, listAllRefs(), mutableSetOf())
+                BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
             bddExpressionGenerator.generateCondition(cond, 9999999)(
                 RustWriter.root(),
             )
@@ -134,7 +136,7 @@ class EndpointBddGenerator(
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
                 val bddExpressionGenerator =
-                    BddExpressionGenerator(cond, Ownership.Borrowed, context, listAllRefs(), mutableSetOf())
+                    BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
                 "cond_$idx" to bddExpressionGenerator.generateCondition(cond, idx)
             }
 
@@ -390,7 +392,6 @@ class EndpointBddGenerator(
 
     private fun generateParamBindingsForResults() =
         writable {
-            val allRefs = listAllRefs()
             bddTrait.parameters.toList().forEach {
                 if (it.isRequired) {
                     if (it.type == ParameterType.STRING || it.type == ParameterType.STRING_ARRAY) {
@@ -433,9 +434,9 @@ class EndpointBddGenerator(
     // All non-param references start as None
     private fun generateNonParamReferences() =
         writable {
-            val refs = extractNonParamReferences()
-            refs.forEach {
-                rust("let ${it.first.rustName()} = &mut context.${it.first.rustName()};")
+            val varRefs = allRefs.variableRefs()
+            varRefs.forEach {
+                rust("let ${it.value.name} = &mut context.${it.value.name};")
             }
         }
 
@@ -444,11 +445,10 @@ class EndpointBddGenerator(
     // all and just use the necessary ones.
     private fun generateNonParamReferencesForResult() =
         writable {
-            val refs = extractNonParamReferences()
-            val annotatedRefs = listAllRefs()
-            refs.forEachIndexed { idx, it ->
-                val rustName = it.first.rustName()
-                if (annotatedRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.Document }
+            val varRefs = allRefs.variableRefs()
+            varRefs.values.forEachIndexed { idx, it ->
+                val rustName = it.name
+                if (allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.Document }
                         .map { ref -> ref.name }.contains(rustName)
                 ) {
                     rust(
@@ -465,17 +465,18 @@ class EndpointBddGenerator(
 
     private fun generateContextStruct() =
         writable {
-            val refs = extractNonParamReferences()
+            val varRefs = allRefs.variableRefs()
 
             val memberDefs =
-                refs.map {
-                    val fnName = it.third.function.name?.toString()
-                    val fn = it.third.function
+                varRefs.map {
+                    val value = it.value
+                    val fnName = it.value.condition?.function?.name?.toString()
+                    val fn = it.value.condition?.function
                     val type =
-                        if (it.second is OptionalType) {
-                            (it.second as OptionalType).inner()
+                        if (it.value.type is OptionalType) {
+                            (it.value.type as OptionalType).inner()
                         } else {
-                            it.second
+                            it.value.type
                         }
                     // TODO(BDD) I should maybe use the fnRegistry for this?
                     val rustType =
@@ -489,7 +490,7 @@ class EndpointBddGenerator(
                             fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
-                    "pub(crate) ${it.first.rustName()}: Option<$rustType>"
+                    "pub(crate) ${it.value.name}: Option<$rustType>"
                 }.joinToString(",\n", postfix = ",\n")
 
             rustTemplate(
@@ -507,14 +508,6 @@ class EndpointBddGenerator(
             )
         }
 
-    private fun extractNonParamReferences() =
-        bddTrait.conditions.mapNotNull { cond ->
-            val result = cond.result.orElse(null)
-            val returnType = cond.function.functionDefinition.returnType
-
-            result?.let { Triple(it, returnType, cond) }
-        }
-
     private fun generateNodeArray(): String {
         val bdd = bddTrait.bdd
         val nodes = mutableListOf<String>()
@@ -525,8 +518,6 @@ class EndpointBddGenerator(
 
         return "const NODES: &[BddNode] = &[\n    ${nodes.joinToString(",\n    ")}\n];"
     }
-
-    private fun listAllRefs(): AnnotatedRefs = AnnotatedRefs.from(bddTrait.parameters, bddTrait.conditions)
 }
 
 /**
@@ -537,7 +528,9 @@ private fun Condition.producesResult(): Boolean = this.result.isPresent
 /**
  * Container for annotated references with lookup by name.
  */
-class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
+class AnnotatedRefs(
+    private val refs: Map<String, AnnotatedRef>,
+) {
     enum class RefType {
         Parameter,
         Variable,
@@ -558,6 +551,9 @@ class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
         val refType: RefType,
         val isOptional: Boolean,
         val rustType: RustType,
+        // These two are only present when RefType == Variable
+        val condition: Condition?,
+        val type: Type?,
     )
 
     operator fun get(name: String): AnnotatedRef? = refs[name]
@@ -566,14 +562,15 @@ class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
 
     fun map(transform: (AnnotatedRef) -> String): List<String> = refs.values.map(transform)
 
+    fun variableRefs(): Map<String, AnnotatedRef> = refs.filter { entry -> entry.value.refType == RefType.Variable }
+
+    fun paramRefs(): Map<String, AnnotatedRef> = refs.filter { entry -> entry.value.refType == RefType.Parameter }
+
     companion object {
-        fun from(
-            parameters: software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters,
-            conditions: List<Condition>,
-        ): AnnotatedRefs {
+        fun from(bddTrait: EndpointBddTrait): AnnotatedRefs {
             val refs = mutableMapOf<String, AnnotatedRef>()
 
-            parameters.forEach { param ->
+            bddTrait.parameters.forEach { param ->
                 val rustType =
                     when (param.type) {
                         ParameterType.STRING -> RustType.String
@@ -582,10 +579,10 @@ class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
                         null -> RustType.String
                     }
                 refs[param.memberName()] =
-                    AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType)
+                    AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType, null, null)
             }
 
-            conditions.forEach { cond ->
+            bddTrait.conditions.forEach { cond ->
                 val result = cond.result.orElse(null)
                 if (result !== null) {
                     val returnType =
@@ -610,7 +607,8 @@ class AnnotatedRefs(private val refs: Map<String, AnnotatedRef>) {
                             cond.function.name == "aws.parseArn" -> RustType.Arn
                             else -> throw IllegalArgumentException("Unsupported reference type $returnType")
                         }
-                    refs[result.rustName()] = AnnotatedRef(result.rustName(), RefType.Variable, true, rustType)
+                    refs[result.rustName()] =
+                        AnnotatedRef(result.rustName(), RefType.Variable, true, rustType, cond, returnType)
                 }
             }
 
