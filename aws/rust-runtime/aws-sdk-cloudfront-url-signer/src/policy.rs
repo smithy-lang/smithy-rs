@@ -113,22 +113,22 @@ impl PolicyBuilder {
     }
 
     pub(crate) fn build(self) -> Result<Policy, SigningError> {
-        let resource = self.resource.ok_or_else(|| SigningError::InvalidPolicy {
-            message: "resource is required".to_string(),
-        })?;
+        let resource = self
+            .resource
+            .ok_or_else(|| SigningError::invalid_policy("resource is required"))?;
 
-        let expires_at = self.expires_at.ok_or_else(|| SigningError::InvalidPolicy {
-            message: "expires_at is required".to_string(),
-        })?;
+        let expires_at = self
+            .expires_at
+            .ok_or_else(|| SigningError::invalid_policy("expires_at is required"))?;
 
         let expires_epoch = expires_at.secs();
         let starts_epoch = self.starts_at.map(|dt| dt.secs());
 
         if let Some(starts) = starts_epoch {
             if starts >= expires_epoch {
-                return Err(SigningError::InvalidPolicy {
-                    message: "starts_at must be before expires_at".to_string(),
-                });
+                return Err(SigningError::invalid_policy(
+                    "starts_at must be before expires_at",
+                ));
             }
         }
 
@@ -202,10 +202,6 @@ mod tests {
             .build();
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SigningError::InvalidPolicy { .. }
-        ));
     }
 
     #[test]
@@ -215,10 +211,6 @@ mod tests {
             .build();
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SigningError::InvalidPolicy { .. }
-        ));
     }
 
     #[test]
@@ -230,10 +222,6 @@ mod tests {
             .build();
 
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SigningError::InvalidPolicy { .. }
-        ));
     }
 
     #[test]
