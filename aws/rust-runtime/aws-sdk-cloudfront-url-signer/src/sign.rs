@@ -89,21 +89,19 @@ impl SigningRequestBuilder {
     pub fn build(self) -> Result<SigningRequest, SigningError> {
         let resource_url = self
             .resource_url
-            .ok_or_else(|| SigningError::InvalidInput {
-                message: "resource_url is required".to_string(),
-            })?;
+            .ok_or_else(|| SigningError::invalid_input("resource_url is required"))?;
 
-        let key_pair_id = self.key_pair_id.ok_or_else(|| SigningError::InvalidInput {
-            message: "key_pair_id is required".to_string(),
-        })?;
+        let key_pair_id = self
+            .key_pair_id
+            .ok_or_else(|| SigningError::invalid_input("key_pair_id is required"))?;
 
-        let private_key = self.private_key.ok_or_else(|| SigningError::InvalidInput {
-            message: "private_key is required".to_string(),
-        })?;
+        let private_key = self
+            .private_key
+            .ok_or_else(|| SigningError::invalid_input("private_key is required"))?;
 
-        let expiration = self.expiration.ok_or_else(|| SigningError::InvalidInput {
-            message: "expiration is required (use expires_at or expires_in)".to_string(),
-        })?;
+        let expiration = self
+            .expiration
+            .ok_or_else(|| SigningError::invalid_input("expiration is required (use expires_at or expires_in)"))?;
 
         let expiration = match expiration {
             Expiration::DateTime(dt) => dt,

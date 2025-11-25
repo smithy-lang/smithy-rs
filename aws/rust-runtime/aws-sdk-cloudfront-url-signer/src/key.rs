@@ -19,8 +19,7 @@ pub enum PrivateKey {
 
 impl PrivateKey {
     pub fn from_pem(bytes: &[u8]) -> Result<Self, SigningError> {
-        let pem_str = std::str::from_utf8(bytes)
-            .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
+        let pem_str = std::str::from_utf8(bytes).map_err(SigningError::invalid_key)?;
 
         // Try PKCS#1 RSA first (most common for RSA)
         if let Ok(key) = RsaPrivateKey::from_pkcs1_pem(pem_str) {
@@ -38,16 +37,16 @@ impl PrivateKey {
             return Ok(PrivateKey::Rsa(key));
         }
 
-        Err(SigningError::InvalidKey {
-            source: "Key must be RSA (PKCS#1 or PKCS#8) or ECDSA P-256 (PKCS#8)".into(),
-        })
+        Err(SigningError::invalid_key(
+            "Key must be RSA (PKCS#1 or PKCS#8) or ECDSA P-256 (PKCS#8)",
+        ))
     }
 
     #[cfg(feature = "rt-tokio")]
     pub async fn from_pem_file(path: impl AsRef<Path>) -> Result<Self, SigningError> {
         let bytes = tokio::fs::read(path.as_ref())
             .await
-            .map_err(|e| SigningError::InvalidKey { source: e.into() })?;
+            .map_err(SigningError::invalid_key)?;
 
         Self::from_pem(&bytes)
     }
@@ -61,7 +60,7 @@ impl PrivateKey {
 
                 let signature = key
                     .sign(rsa::Pkcs1v15Sign::new::<Sha1>(), &digest)
-                    .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
+                    .map_err(SigningError::signing_failure)?;
 
                 Ok(signature)
             }
@@ -75,7 +74,7 @@ impl PrivateKey {
 
                 let signature: p256::ecdsa::Signature = key
                     .try_sign(&digest)
-                    .map_err(|e| SigningError::SigningFailure { source: e.into() })?;
+                    .map_err(SigningError::signing_failure)?;
 
                 Ok(signature.to_vec())
             }
@@ -107,10 +106,6 @@ VORtjoydSpheKlsa+gE4PcFG88G2gE1Lilb8f6wEq/Lz+5kFa2S8gZmb
     fn test_from_pem_invalid() {
         let result = PrivateKey::from_pem(b"invalid pem data");
         assert!(result.is_err());
-        assert!(matches!(
-            result.unwrap_err(),
-            SigningError::InvalidKey { .. }
-        ));
     }
 
     #[test]
