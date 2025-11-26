@@ -28,7 +28,6 @@ use std::task::{Context, Poll};
 
 use futures_util::{Future, FutureExt};
 use http::StatusCode;
-use http_body::Body;
 use hyper::{Request, Response};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
@@ -48,7 +47,7 @@ pub struct AlbHealthCheckLayer<HealthCheckHandler> {
 impl AlbHealthCheckLayer<()> {
     /// Handle health check requests at `health_check_uri` with the specified handler.
     pub fn from_handler<
-        B: Body,
+        B: http_body::Body,
         HandlerFuture: Future<Output = StatusCode>,
         H: Fn(Request<B>) -> HandlerFuture + Clone,
     >(
