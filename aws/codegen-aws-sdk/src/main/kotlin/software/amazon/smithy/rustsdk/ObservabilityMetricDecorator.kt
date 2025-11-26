@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegen
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -41,6 +42,7 @@ private class ObservabilityFeatureTrackerInterceptor(private val codegenContext:
                             RuntimeType.forInlineDependency(
                                 InlineAwsDependency.forRustFile(
                                     "observability_feature",
+                                    Visibility.PRIVATE,
                                     CargoDependency.smithyObservability(runtimeConfig),
                                     CargoDependency.smithyObservabilityOtel(runtimeConfig),
                                 ),

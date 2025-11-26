@@ -24,6 +24,10 @@ impl ProvideMeter for NoopMeterProvider {
     fn get_meter(&self, _scope: &'static str, _attributes: Option<&Attributes>) -> Meter {
         Meter::new(Arc::new(NoopMeter))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[derive(Debug)]
