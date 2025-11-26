@@ -6,8 +6,8 @@
 package software.amazon.smithy.rustsdk
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Feature
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -213,18 +213,17 @@ class EndpointOverrideMetricDecoratorTest {
                 }
 
                 // Add a should_panic test to verify assert_ua_contains_metric_values panics when metric is not present
-                rustTemplate(
-                    """
-                    ##[#{tokio}::test]
-                    ##[should_panic(expected = "not found")]
-                    async fn assert_panics_when_metric_not_present() {
+                rust("##[should_panic(expected = \"metric values\")]")
+                tokioTest("assert_panics_when_metric_not_present") {
+                    rustTemplate(
+                        """
                         use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
                         use $moduleName::{Config, Client};
                         use #{capture_request};
                         use #{assert_ua_contains_metric_values};
-                        
+
                         let (http_client, rcvr) = capture_request(None);
-                        
+
                         let config = Config::builder()
                             .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
                             .region(Region::new("us-east-1"))
@@ -235,16 +234,15 @@ class EndpointOverrideMetricDecoratorTest {
                         let _ = client.some_operation().send().await;
                         let request = rcvr.expect_request();
                         let user_agent = request.headers().get("x-amz-user-agent").unwrap();
-                        
+
                         // This should panic because 'N' is not present
                         assert_ua_contains_metric_values(user_agent, &["N"]);
-                    }
-                    """,
-                    *preludeScope,
-                    "capture_request" to RuntimeType.captureRequest(rc),
-                    "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
-                    "tokio" to CargoDependency.Tokio.toType(),
-                )
+                        """,
+                        *preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                        "assert_ua_contains_metric_values" to AwsRuntimeType.awsRuntime(rc).resolve("user_agent::test_util::assert_ua_contains_metric_values"),
+                    )
+                }
             }
         }
     }
