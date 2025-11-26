@@ -356,6 +356,140 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_wrap_stream_custom_stream_type() {
+        use bytes::Bytes;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        // Custom stream type that implements futures_util::Stream
+        struct CustomStream {
+            chunks: Vec<Result<Bytes, std::io::Error>>,
+        }
+
+        impl CustomStream {
+            fn new(chunks: Vec<Result<Bytes, std::io::Error>>) -> Self {
+                Self { chunks }
+            }
+        }
+
+        impl futures_util::Stream for CustomStream {
+            type Item = Result<Bytes, std::io::Error>;
+
+            fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                if self.chunks.is_empty() {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Ready(Some(self.chunks.remove(0)))
+                }
+            }
+        }
+
+        let stream = CustomStream::new(vec![
+            Ok(Bytes::from("custom ")),
+            Ok(Bytes::from("stream")),
+        ]);
+
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("custom stream"));
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_custom_error_type() {
+        use bytes::Bytes;
+        use futures_util::stream;
+
+        // Custom error type that implements Into<BoxError>
+        #[derive(Debug, Clone)]
+        struct CustomError {
+            message: String,
+        }
+
+        impl std::fmt::Display for CustomError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "CustomError: {}", self.message)
+            }
+        }
+
+        impl std::error::Error for CustomError {}
+
+        // Test successful case with custom error type
+        let chunks = vec![
+            Ok::<_, CustomError>(Bytes::from("custom ")),
+            Ok(Bytes::from("error type")),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("custom error type"));
+
+        // Test error case with custom error type
+        let chunks = vec![
+            Ok::<_, CustomError>(Bytes::from("data")),
+            Err(CustomError {
+                message: "custom error".into(),
+            }),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let result = collect_bytes(body).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_incremental_consumption() {
+        use bytes::Bytes;
+        use http_body_util::BodyExt;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        struct IncrementalStream {
+            chunks: Vec<Result<Bytes, std::io::Error>>,
+        }
+
+        impl IncrementalStream {
+            fn new(chunks: Vec<Result<Bytes, std::io::Error>>) -> Self {
+                Self { chunks }
+            }
+        }
+
+        impl futures_util::Stream for IncrementalStream {
+            type Item = Result<Bytes, std::io::Error>;
+
+            fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                if self.chunks.is_empty() {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Ready(Some(self.chunks.remove(0)))
+                }
+            }
+        }
+
+        let stream = IncrementalStream::new(vec![
+            Ok(Bytes::from("chunk1")),
+            Ok(Bytes::from("chunk2")),
+            Ok(Bytes::from("chunk3")),
+        ]);
+
+        let mut body = wrap_stream(stream);
+
+        let frame1 = body.frame().await.unwrap().unwrap();
+        assert!(frame1.is_data());
+        assert_eq!(frame1.into_data().unwrap(), Bytes::from("chunk1"));
+
+        let frame2 = body.frame().await.unwrap().unwrap();
+        assert!(frame2.is_data());
+        assert_eq!(frame2.into_data().unwrap(), Bytes::from("chunk2"));
+
+        let frame3 = body.frame().await.unwrap().unwrap();
+        assert!(frame3.is_data());
+        assert_eq!(frame3.into_data().unwrap(), Bytes::from("chunk3"));
+
+        let frame4 = body.frame().await;
+        assert!(frame4.is_none());
+    }
+
+    #[tokio::test]
     async fn test_wrap_stream_sync_single_chunk() {
         use futures_util::stream;
 
