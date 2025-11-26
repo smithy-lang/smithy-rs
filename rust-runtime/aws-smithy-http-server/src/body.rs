@@ -11,8 +11,6 @@
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
 
-pub(crate) use http_body_util::{BodyExt, Empty, Full};
-
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
 pub use http_body::Body as HttpBody;
@@ -44,6 +42,8 @@ where
     B: http_body::Body<Data = Bytes> + Send + 'static,
     B::Error: Into<BoxError>,
 {
+    use http_body_util::BodyExt;
+
     try_downcast(body).unwrap_or_else(|body| body.map_err(Error::new).boxed_unsync())
 }
 
@@ -73,12 +73,12 @@ where
 
 /// Create an empty body.
 pub fn empty() -> BoxBody {
-    boxed(Empty::<Bytes>::new())
+    boxed(http_body_util::Empty::<Bytes>::new())
 }
 
 /// Create an empty sync body.
 pub fn empty_sync() -> BoxBodySync {
-    boxed_sync(Empty::<Bytes>::new())
+    boxed_sync(http_body_util::Empty::<Bytes>::new())
 }
 
 /// Convert bytes or similar types into a [`BoxBody`].
@@ -89,7 +89,7 @@ pub fn to_boxed<B>(body: B) -> BoxBody
 where
     B: Into<Bytes>,
 {
-    boxed(Full::new(body.into()))
+    boxed(http_body_util::Full::new(body.into()))
 }
 
 /// Convert bytes or similar types into a [`BoxBodySync`].
@@ -100,12 +100,12 @@ pub fn to_boxed_sync<B>(body: B) -> BoxBodySync
 where
     B: Into<Bytes>,
 {
-    boxed_sync(Full::new(body.into()))
+    boxed_sync(http_body_util::Full::new(body.into()))
 }
 
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
-    boxed(Full::new(bytes))
+    boxed(http_body_util::Full::new(bytes))
 }
 
 // ============================================================================
