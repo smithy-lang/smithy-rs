@@ -437,6 +437,59 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_wrap_stream_incremental_consumption() {
+        use bytes::Bytes;
+        use http_body_util::BodyExt;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        struct IncrementalStream {
+            chunks: Vec<Result<Bytes, std::io::Error>>,
+        }
+
+        impl IncrementalStream {
+            fn new(chunks: Vec<Result<Bytes, std::io::Error>>) -> Self {
+                Self { chunks }
+            }
+        }
+
+        impl futures_util::Stream for IncrementalStream {
+            type Item = Result<Bytes, std::io::Error>;
+
+            fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                if self.chunks.is_empty() {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Ready(Some(self.chunks.remove(0)))
+                }
+            }
+        }
+
+        let stream = IncrementalStream::new(vec![
+            Ok(Bytes::from("chunk1")),
+            Ok(Bytes::from("chunk2")),
+            Ok(Bytes::from("chunk3")),
+        ]);
+
+        let mut body = wrap_stream(stream);
+
+        let frame1 = body.frame().await.unwrap().unwrap();
+        assert!(frame1.is_data());
+        assert_eq!(frame1.into_data().unwrap(), Bytes::from("chunk1"));
+
+        let frame2 = body.frame().await.unwrap().unwrap();
+        assert!(frame2.is_data());
+        assert_eq!(frame2.into_data().unwrap(), Bytes::from("chunk2"));
+
+        let frame3 = body.frame().await.unwrap().unwrap();
+        assert!(frame3.is_data());
+        assert_eq!(frame3.into_data().unwrap(), Bytes::from("chunk3"));
+
+        let frame4 = body.frame().await;
+        assert!(frame4.is_none());
+    }
+
+    #[tokio::test]
     async fn test_wrap_stream_sync_single_chunk() {
         use futures_util::stream;
 
