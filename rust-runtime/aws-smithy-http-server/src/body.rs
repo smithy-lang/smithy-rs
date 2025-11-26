@@ -356,6 +356,87 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_wrap_stream_custom_stream_type() {
+        use bytes::Bytes;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        // Custom stream type that implements futures_util::Stream
+        struct CustomStream {
+            chunks: Vec<Result<Bytes, std::io::Error>>,
+        }
+
+        impl CustomStream {
+            fn new(chunks: Vec<Result<Bytes, std::io::Error>>) -> Self {
+                Self { chunks }
+            }
+        }
+
+        impl futures_util::Stream for CustomStream {
+            type Item = Result<Bytes, std::io::Error>;
+
+            fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+                if self.chunks.is_empty() {
+                    Poll::Ready(None)
+                } else {
+                    Poll::Ready(Some(self.chunks.remove(0)))
+                }
+            }
+        }
+
+        let stream = CustomStream::new(vec![
+            Ok(Bytes::from("custom ")),
+            Ok(Bytes::from("stream")),
+        ]);
+
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("custom stream"));
+    }
+
+    #[tokio::test]
+    async fn test_wrap_stream_custom_error_type() {
+        use bytes::Bytes;
+        use futures_util::stream;
+
+        // Custom error type that implements Into<BoxError>
+        #[derive(Debug, Clone)]
+        struct CustomError {
+            message: String,
+        }
+
+        impl std::fmt::Display for CustomError {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, "CustomError: {}", self.message)
+            }
+        }
+
+        impl std::error::Error for CustomError {}
+
+        // Test successful case with custom error type
+        let chunks = vec![
+            Ok::<_, CustomError>(Bytes::from("custom ")),
+            Ok(Bytes::from("error type")),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("custom error type"));
+
+        // Test error case with custom error type
+        let chunks = vec![
+            Ok::<_, CustomError>(Bytes::from("data")),
+            Err(CustomError {
+                message: "custom error".into(),
+            }),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let result = collect_bytes(body).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
     async fn test_wrap_stream_sync_single_chunk() {
         use futures_util::stream;
 
