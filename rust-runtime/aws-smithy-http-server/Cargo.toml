@@ -76,7 +76,7 @@ hyper-util = { version = "0.1", features = [
     "http2",
 ] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
-tower = { version = "0.4.13", features = ["util", "make", "limit"] }
+tower = { version = "0.5", features = ["util", "make", "limit"] }
 tower-http = { version = "0.6", features = ["timeout"] }
 
 [package.metadata.docs.rs]
