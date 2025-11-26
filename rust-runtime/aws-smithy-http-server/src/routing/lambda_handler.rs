@@ -306,7 +306,7 @@ mod tests {
             let body_bytes = collect_bytes(req.into_body()).await.unwrap();
             let body_str = String::from_utf8(body_bytes.to_vec()).unwrap();
 
-            let response_body = format!("Received: {}", body_str);
+            let response_body = format!("Received: {body_str}");
             let response = http::Response::builder()
                 .status(200)
                 .header("content-type", "text/plain")
