@@ -50,6 +50,7 @@ object CrateSet {
             "aws-runtime-api",
             "aws-sigv4",
             "aws-types",
+            "aws-sdk-cloudfront-url-signer",
         ).map { Crate(it, version(it)) }
 
     val SMITHY_RUNTIME_COMMON =
