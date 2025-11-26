@@ -10,7 +10,7 @@
 //!
 //! ```no_run
 //! use aws_smithy_http_server::layer::alb_health_check::AlbHealthCheckLayer;
-//! use aws_smithy_http_server::http::StatusCode;
+//! use http::StatusCode;
 //! use tower::Layer;
 //!
 //! // Handle all `/ping` health check requests by returning a `200 OK`.
@@ -27,15 +27,11 @@ use std::convert::Infallible;
 use std::task::{Context, Poll};
 
 use futures_util::{Future, FutureExt};
+use http::StatusCode;
+use http_body::Body;
+use hyper::{Request, Response};
 use pin_project_lite::pin_project;
 use tower::{service_fn, util::Oneshot, Layer, Service, ServiceExt};
-
-use hyper;
-
-use crate::http::StatusCode;
-use http_body::Body;
-
-use hyper::{Request, Response};
 
 use crate::body::BoxBody;
 

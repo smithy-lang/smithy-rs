@@ -117,7 +117,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::http::Uri;
+    use http::Uri;
 
     use crate::instrumentation::sensitivity::uri::tests::{
         ALL_KEYS_QUERY_STRING_EXAMPLES, ALL_PAIRS_QUERY_STRING_EXAMPLES, ALL_VALUES_QUERY_STRING_EXAMPLES, EXAMPLES,

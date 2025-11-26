@@ -10,8 +10,7 @@ mod query;
 
 use std::fmt::{Debug, Display, Error, Formatter};
 
-use crate::http;
-use crate::http::Uri;
+use http::Uri;
 
 pub use label::*;
 pub use query::*;
@@ -140,7 +139,7 @@ impl Default for MakeUri<MakeIdentity, MakeIdentity> {
 
 #[cfg(test)]
 mod tests {
-    use crate::http::Uri;
+    use http::Uri;
 
     use super::{QueryMarker, SensitiveUri};
 

@@ -14,7 +14,7 @@
 //! # use std::convert::Infallible;
 //! # use aws_smithy_http_server::instrumentation::{*, sensitivity::{*, headers::*, uri::*}};
 //! # use aws_smithy_http_server::shape_id::ShapeId;
-//! # use aws_smithy_http_server::http::{Request, Response};
+//! # use http::{Request, Response};
 //! # use tower::{util::service_fn, Service};
 //! # async fn service(request: Request<()>) -> Result<Response<()>, Infallible> {
 //! #   Ok(Response::new(()))
