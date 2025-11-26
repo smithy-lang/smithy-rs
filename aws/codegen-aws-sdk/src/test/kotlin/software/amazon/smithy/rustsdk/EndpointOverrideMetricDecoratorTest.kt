@@ -202,9 +202,8 @@ class EndpointOverrideMetricDecoratorTest {
                             .get("x-amz-user-agent")
                             .expect("x-amz-user-agent header should be present");
 
-                        let user_agent_str = user_agent.to_str().unwrap();
                         assert!(
-                            !user_agent_str.contains("m/N"),
+                            !user_agent.contains("m/N"),
                             "Metric 'N' should NOT be present when endpoint not overridden"
                         );
                         """,
