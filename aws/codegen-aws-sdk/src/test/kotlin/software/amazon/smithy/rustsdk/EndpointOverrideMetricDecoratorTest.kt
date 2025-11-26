@@ -211,7 +211,7 @@ class EndpointOverrideMetricDecoratorTest {
                         "capture_request" to RuntimeType.captureRequest(rc),
                     )
                 }
-                
+
                 // Add a should_panic test to verify assert_ua_contains_metric_values panics when metric is not present
                 rustTemplate(
                     """
