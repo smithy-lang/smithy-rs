@@ -19,7 +19,9 @@ pub trait ProvideMeter: Send + Sync + Debug {
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter;
 
     /// Returns a reference to `self` as `&dyn Any` for downcasting.
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 /// The entry point to creating instruments. A grouping of related metrics.

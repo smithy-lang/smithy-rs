@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_runtime::sdk_feature::AwsSdkFeature;
+use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::{
     box_error::BoxError,
     client::interceptors::{context::BeforeSerializationInterceptorContextRef, Intercept},
 };
 use aws_smithy_types::config_bag::ConfigBag;
 
-// Interceptor that tracks AWS SDK features for observability (tracing/metrics).
+// Interceptor that tracks Smithy SDK features for observability (tracing/metrics).
 #[derive(Debug, Default)]
 pub(crate) struct ObservabilityFeatureTrackerInterceptor;
 
@@ -35,7 +35,7 @@ impl Intercept for ObservabilityFeatureTrackerInterceptor {
                 .downcast_ref::<aws_smithy_observability_otel::meter::OtelMeterProvider>(
             ) {
                 cfg.interceptor_state()
-                    .store_append(AwsSdkFeature::ObservabilityOtelMetrics);
+                    .store_append(SmithySdkFeature::ObservabilityOtelMetrics);
             }
         }
 
