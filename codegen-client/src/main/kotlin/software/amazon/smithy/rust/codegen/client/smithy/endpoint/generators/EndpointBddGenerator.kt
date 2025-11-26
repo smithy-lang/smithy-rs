@@ -32,8 +32,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddEx
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
-import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -125,13 +123,6 @@ class EndpointBddGenerator(
         // Now get the functions that were actually used during condition generation
         val fnsUsed = registry.fnsUsed()
 
-        val endpointLib =
-            InlineDependency.forRustFile(
-                RustModule.pubCrate("bdd_interpreter"),
-                "/inlineable/src/endpoint_lib/bdd_interpreter.rs",
-                EndpointsLib.partitionResolver(runtimeConfig).dependency!!,
-            )
-
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
@@ -149,8 +140,6 @@ class EndpointBddGenerator(
 
         writer.rustTemplate(
             """
-            use #{EndpointLib}::{evaluate_bdd, BddNode,};
-
             ##[derive(Debug)]
             /// The default endpoint resolver.
             pub struct DefaultResolver {
@@ -194,7 +183,7 @@ class EndpointBddGenerator(
                 fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                     let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let mut condition_context = ConditionContext::default();
-                    let result = evaluate_bdd(
+                    let result = #{EvaluateBdd}(
                         NODES,
                         CONDITIONS,
                         RESULTS,
@@ -274,70 +263,12 @@ class EndpointBddGenerator(
                 ${(0 until resultCount).joinToString(",\n    ") { "ResultEndpoint::Result$it" }}
             ];
 
-            //TODO(BDD) move this to endpoint_lib
-            /// Helper trait to implement the coalesce! macro
-            pub trait Coalesce {
-                /// The first arg
-                type Arg1;
-                /// The second arg
-                type Arg2;
-                /// The result of comparing Arg1 and Arg1
-                type Result;
-
-                /// Evaluates arguments in order and returns the first non-empty result, otherwise returns the result of the last argument.
-                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result;
-            }
-
-            impl<T> Coalesce for &&&(&Option<T>, &Option<T>) {
-                type Arg1 = Option<T>;
-                type Arg2 = Option<T>;
-                type Result = Option<T>;
-
-                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
-                    |a: Option<T>, b: Option<T>| a.or(b)
-                }
-            }
-
-            impl<T> Coalesce for &&(&Option<T>, &T) {
-                type Arg1 = Option<T>;
-                type Arg2 = T;
-                type Result = T;
-
-                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
-                    |a: Option<T>, b: T| a.unwrap_or(b)
-                }
-            }
-
-            impl<T, U> Coalesce for &(&T, &U) {
-                type Arg1 = T;
-                type Arg2 = U;
-                type Result = T;
-
-                fn coalesce(&self) -> fn(Self::Arg1, Self::Arg2) -> Self::Result {
-                    |a: T, _b| a
-                }
-            }
-
-            /// Evaluates arguments in order and returns the first non-empty result, otherwise returns the result of the last argument.
-            ##[macro_export]
-            macro_rules! coalesce {
-                (${"$"}a:expr) => {${"$"}a};
-                (${"$"}a:expr, ${"$"}b:expr) => {{
-                    use Coalesce;
-                    let a = ${"$"}a;
-                    let b = ${"$"}b;
-                    (&&&(&a, &b)).coalesce()(a, b)
-                }};
-                (${"$"}a:expr, ${"$"}b:expr ${'$'}(, ${"$"}c:expr)* ${'$'}(,)?) => {
-                    ${"$"}crate::coalesce!(${"$"}crate::coalesce!(${"$"}a, ${"$"}b) ${'$'}(, ${"$"}c)*)
-                }
-            }
-
-            $nodes
+            #{nodes:W}
             """,
             *preludeScope,
             "Endpoint" to Types(runtimeConfig).smithyEndpoint,
-            "EndpointLib" to RuntimeType.forInlineDependency(endpointLib),
+            "EvaluateBdd" to EndpointsLib.evaluateBdd,
+            "BddNode" to EndpointsLib.bddNode,
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
             *Types(runtimeConfig).toArray(),
@@ -376,6 +307,7 @@ class EndpointBddGenerator(
                     }
                 },
             "result_arms" to generateResultArms(context),
+            "nodes" to nodes,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
             "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
         )
@@ -505,16 +437,20 @@ class EndpointBddGenerator(
             )
         }
 
-    private fun generateNodeArray(): String {
-        val bdd = bddTrait.bdd
-        val nodes = mutableListOf<String>()
+    private fun generateNodeArray() =
+        writable {
+            val bdd = bddTrait.bdd
+            val nodes = mutableListOf<String>()
 
-        bdd.getNodes { var_, high, low ->
-            nodes.add("BddNode { condition_index: $var_, high_ref: $high, low_ref: $low }")
+            bdd.getNodes { var_, high, low ->
+                nodes.add("#{BddNode} { condition_index: $var_, high_ref: $high, low_ref: $low }")
+            }
+
+            rustTemplate(
+                "const NODES: &[#{BddNode}] = &[\n${nodes.joinToString(",\n")}\n];",
+                "BddNode" to EndpointsLib.bddNode,
+            )
         }
-
-        return "const NODES: &[BddNode] = &[\n    ${nodes.joinToString(",\n    ")}\n];"
-    }
 }
 
 /**

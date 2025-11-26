@@ -266,24 +266,6 @@ class BddExpressionGenerator(
             args: MutableList<Expression>,
         ): Writable =
             writable {
-                if (fn.id == "coalesce") {
-                    val expressionGenerator =
-                        BddExpressionGenerator(condition, Ownership.Borrowed, context, refs, knownSomeRefs)
-                    val argWritables = args.map { expressionGenerator.generateExpression(it, idx) }
-
-                    // TODO(BDD) I could probably update the macro to handle no inputs
-                    if (argWritables.isEmpty()) {
-                        rust("None")
-                    } else {
-                        rust("crate::coalesce!(")
-                        for (i in 0 until argWritables.size) {
-                            rust("#W,", argWritables[i])
-                        }
-                        rust(")")
-                    }
-                    return@writable
-                }
-
                 val fnDefinition =
                     context.functionRegistry.fnFor(fn.id)
                         ?: PANIC(

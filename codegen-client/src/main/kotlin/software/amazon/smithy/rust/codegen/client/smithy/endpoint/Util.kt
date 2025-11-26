@@ -64,7 +64,11 @@ object EndpointsLib {
             .toType()
             .resolve("uri_encode")
     val coalesce =
-        endpointsLib("coalesce").toType().resolve("coalesce")
+        endpointsLib("coalesce").toType().resolve("coalesce!")
+    val evaluateBdd =
+        endpointsLib("bdd_interpreter").toType().resolve("evaluate_bdd")
+    val bddNode =
+        endpointsLib("bdd_interpreter").toType().resolve("BddNode")
 
     val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
     val awsIsVirtualHostableS3Bucket =

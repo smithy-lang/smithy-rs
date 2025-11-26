@@ -27,6 +27,7 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
         SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
         SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
         SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce),
+        SimpleRuntimeFunction("evaluate_bdd", EndpointsLib.evaluateBdd),
     )
 
 /**
@@ -74,7 +75,7 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
                             _ => {
                                 #{tracing}::debug!("loading default partitions");
                                 #{PartitionResolver}::new_from_json(b${
-                Node.printJson(partitionsDotJson).dq()
+                    Node.printJson(partitionsDotJson).dq()
                 }).expect("valid JSON")
                             }
                         }
