@@ -276,4 +276,54 @@ mod tests {
         let response = service.oneshot(request).await.unwrap();
         assert_eq!(response.status(), StatusCode::OK);
     }
+
+    #[tokio::test]
+    async fn test_works_with_custom_body_type() {
+        use bytes::Bytes;
+        use http_body::Frame;
+        use std::pin::Pin;
+        use std::task::{Context, Poll};
+
+        // Custom body type that implements http_body::Body
+        struct CustomBody {
+            data: Option<Bytes>,
+        }
+
+        impl CustomBody {
+            fn new(data: Bytes) -> Self {
+                Self { data: Some(data) }
+            }
+        }
+
+        impl http_body::Body for CustomBody {
+            type Data = Bytes;
+            type Error = std::io::Error;
+
+            fn poll_frame(
+                mut self: Pin<&mut Self>,
+                _cx: &mut Context<'_>,
+            ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+                if let Some(data) = self.data.take() {
+                    Poll::Ready(Some(Ok(Frame::data(data))))
+                } else {
+                    Poll::Ready(None)
+                }
+            }
+        }
+
+        let layer =
+            AlbHealthCheckLayer::from_handler("/health", |_req: Request<CustomBody>| async { StatusCode::OK });
+        let inner_service = service_fn(|_req: Request<CustomBody>| async {
+            Ok::<_, Infallible>(Response::new(crate::body::empty()))
+        });
+        let service = layer.layer(inner_service);
+
+        let request = Request::builder()
+            .uri("/health")
+            .body(CustomBody::new(Bytes::from("custom body")))
+            .unwrap();
+
+        let response = service.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
 }
