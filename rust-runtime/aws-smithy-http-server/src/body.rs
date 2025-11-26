@@ -292,12 +292,67 @@ mod tests {
         use futures_util::stream;
 
         // Test that Into<Bytes> works for various types
-        let chunks = vec![Ok::<_, std::io::Error>("string slice"), Ok("another string")];
 
+        // Test with &str
+        let chunks = vec![Ok::<_, std::io::Error>("string slice"), Ok("another string")];
         let stream = stream::iter(chunks);
         let body = wrap_stream(stream);
         let collected = collect_bytes(body).await.unwrap();
         assert_eq!(collected, Bytes::from("string sliceanother string"));
+
+        // Test with String
+        let chunks = vec![
+            Ok::<_, std::io::Error>(String::from("owned ")),
+            Ok(String::from("strings")),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("owned strings"));
+
+        // Test with Vec<u8>
+        let chunks = vec![
+            Ok::<_, std::io::Error>(vec![72u8, 101, 108, 108, 111]), // "Hello"
+            Ok(vec![32u8, 87, 111, 114, 108, 100]),                  // " World"
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("Hello World"));
+
+        // Test with &[u8]
+        let chunks = vec![
+            Ok::<_, std::io::Error>(&[98u8, 121, 116, 101] as &[u8]), // "byte"
+            Ok(&[115u8, 33] as &[u8]),                                 // "s!"
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("bytes!"));
+
+        // Test with custom struct implementing Into<Bytes>
+        struct CustomChunk {
+            data: String,
+        }
+
+        impl From<CustomChunk> for Bytes {
+            fn from(chunk: CustomChunk) -> Bytes {
+                Bytes::from(chunk.data)
+            }
+        }
+
+        let chunks = vec![
+            Ok::<_, std::io::Error>(CustomChunk {
+                data: "custom ".into(),
+            }),
+            Ok(CustomChunk {
+                data: "struct".into(),
+            }),
+        ];
+        let stream = stream::iter(chunks);
+        let body = wrap_stream(stream);
+        let collected = collect_bytes(body).await.unwrap();
+        assert_eq!(collected, Bytes::from("custom struct"));
     }
 
     #[tokio::test]
