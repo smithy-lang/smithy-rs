@@ -7,7 +7,6 @@ use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2_cbor::RpcV2Cbor};
 use bytes::Bytes;
-
 use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};

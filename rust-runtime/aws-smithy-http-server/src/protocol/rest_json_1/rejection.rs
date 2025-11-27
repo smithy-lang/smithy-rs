@@ -208,10 +208,9 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     }
 }
 
-// `[crate::body::Body]` is `[hyper::Body]`, whose associated `Error` type is `[hyper::Error]`. We
-// need this converter for when we convert the body into bytes in the framework, since protocol
-// tests use `[crate::body::Body]` as their body type when constructing requests (and almost
-// everyone will run a Hyper-based server in their services).
+// Hyper's HTTP server provides requests with `hyper::body::Incoming`, which has error type
+// `hyper::Error`. During request deserialization (FromRequest), body operations can produce
+// this error, so we need this conversion to handle it within the framework.
 convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
 
 // Useful in general, but it also required in order to accept Lambda HTTP requests using
