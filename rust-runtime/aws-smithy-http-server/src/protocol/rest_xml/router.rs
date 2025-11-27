@@ -4,8 +4,6 @@
  */
 
 use crate::body::empty;
-use crate::http;
-
 use crate::body::BoxBody;
 use crate::extension::RuntimeErrorExtension;
 use crate::response::IntoResponse;

@@ -16,8 +16,6 @@ use pin_project_lite::pin_project;
 use tower::{util::Oneshot, Service, ServiceExt};
 use tracing::error;
 
-use crate::http;
-
 use crate::{
     body::BoxBody, plugin::Plugin, request::FromRequest, response::IntoResponse,
     runtime_error::InternalFailureException, service::ServiceShape,

@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg_attr(
-    not(feature = "request-id"),
-    allow(unused_imports, dead_code, unreachable_code)
-)]
+#![cfg_attr(not(feature = "request-id"), allow(unused_imports, dead_code, unreachable_code))]
 
 //! Example showing how to use request IDs for tracing and observability.
 //!
@@ -32,7 +29,11 @@
 //!
 //! Look for the `x-request-id` header in the response.
 
-use aws_smithy_http_server::{body::{boxed, BoxBody}, routing::IntoMakeService, serve::serve};
+use aws_smithy_http_server::{
+    body::{boxed, BoxBody},
+    routing::IntoMakeService,
+    serve::serve,
+};
 
 #[cfg(feature = "request-id")]
 use aws_smithy_http_server::request::request_id::{ServerRequestId, ServerRequestIdProviderLayer};
