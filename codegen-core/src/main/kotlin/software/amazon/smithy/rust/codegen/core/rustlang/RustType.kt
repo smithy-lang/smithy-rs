@@ -598,6 +598,7 @@ class Attribute(val inner: Writable, val isDeriveHelper: Boolean = false) {
         val AllowIrrefutableLetPatterns = Attribute(allow("irrefutable_let_patterns"))
         val AllowMissingDocs = Attribute(allow("missing_docs"))
         val AllowNonSnakeCase = Attribute(allow("non_snake_case"))
+        val AllowUninlinedFormatArgs = Attribute(allow("clippy::uninlined_format_args"))
         val AllowUnreachableCode = Attribute(allow("unreachable_code"))
         val AllowUnreachablePatterns = Attribute(allow("unreachable_patterns"))
         val AllowUnused = Attribute(allow("unused"))

@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.StreamingShapeSymbolProvi
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolVisitor
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.CustomValidationExceptionWithReasonDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.ServerRequiredCustomizations
+import software.amazon.smithy.rust.codegen.server.smithy.customizations.SigV4EventStreamDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.UserProvidedValidationExceptionDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.customize.CombinedServerCodegenDecorator
@@ -54,6 +55,7 @@ class RustServerCodegenPlugin : ServerDecoratableBuildPlugin() {
                 UserProvidedValidationExceptionDecorator(),
                 SmithyValidationExceptionDecorator(),
                 CustomValidationExceptionWithReasonDecorator(),
+                SigV4EventStreamDecorator(),
                 *decorator,
             )
         logger.info("Loaded plugin to generate pure Rust bindings for the server SDK")

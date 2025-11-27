@@ -122,9 +122,7 @@ struct RuntimeCrate {
 impl RuntimeCrate {
     /// True if the runtime crate's next version exists in crates.io
     fn next_version_is_published(&self) -> bool {
-        self.published_versions
-            .iter()
-            .any(|version| self.next_release_version == *version)
+        self.published_versions.contains(&self.next_release_version)
     }
 
     /// True if this runtime crate changed since the given release tag.

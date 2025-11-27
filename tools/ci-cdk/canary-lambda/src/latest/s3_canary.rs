@@ -46,7 +46,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
     {
         Ok(_) => {
             return Err(
-                CanaryError(format!("Expected object {} to not exist in S3", test_key)).into(),
+                CanaryError(format!("Expected object {test_key} to not exist in S3")).into(),
             );
         }
         Err(err) => {
@@ -112,7 +112,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
         .text()
         .await?;
     if get_resp != "presigned_test" {
-        return Err(CanaryError(format!("presigned URL returned bad data: {:?}", get_resp)).into());
+        return Err(CanaryError(format!("presigned URL returned bad data: {get_resp:?}")).into());
     }
 
     let metadata_value = output
@@ -135,8 +135,7 @@ pub async fn s3_canary(client: s3::Client, s3_bucket_name: String) -> anyhow::Re
                 }
             } else {
                 Err(CanaryError(format!(
-                    "S3 metadata was incorrect. Expected `{}` but got `{}`.",
-                    METADATA_TEST_VALUE, value
+                    "S3 metadata was incorrect. Expected `{METADATA_TEST_VALUE}` but got `{value}`.",
                 ))
                 .into())
             }
@@ -201,8 +200,7 @@ pub async fn s3_mrap_canary(client: s3::Client, s3_mrap_bucket_arn: String) -> a
                 Ok(())
             } else {
                 Err(CanaryError(format!(
-                    "S3 metadata was incorrect. Expected `{}` but got `{}`.",
-                    METADATA_TEST_VALUE, value
+                    "S3 metadata was incorrect. Expected `{METADATA_TEST_VALUE}` but got `{value}`.",
                 ))
                 .into())
             }
@@ -294,7 +292,7 @@ pub async fn s3_express_canary(
         .text()
         .await?;
     if response != "test" {
-        return Err(CanaryError(format!("presigned URL returned bad data: {:?}", response)).into());
+        return Err(CanaryError(format!("presigned URL returned bad data: {response:?}")).into());
     }
 
     let metadata_value = output
@@ -317,8 +315,7 @@ pub async fn s3_express_canary(
                 }
             } else {
                 Err(CanaryError(format!(
-                    "S3 metadata was incorrect. Expected `{}` but got `{}`.",
-                    METADATA_TEST_VALUE, value
+                    "S3 metadata was incorrect. Expected `{METADATA_TEST_VALUE}` but got `{value}`.",
                 ))
                 .into())
             }
