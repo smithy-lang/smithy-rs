@@ -189,7 +189,8 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
-// Enable conversion from crate::Error for general body buffering error handling
+// Conversion from crate::Error is needed for custom body types and testing scenarios.
+// When using BoxBody or custom body implementations, errors are crate::Error, not hyper::Error.
 impl From<crate::Error> for RequestRejection {
     fn from(err: crate::Error) -> Self {
         Self::BufferHttpBodyBytes(err)
