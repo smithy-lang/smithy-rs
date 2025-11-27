@@ -298,7 +298,7 @@ data class CargoDependency(
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.17.5"))
         val Sha2: CargoDependency = CargoDependency("sha2", CratesIo("0.10"))
         val TokioStream: CargoDependency = CargoDependency("tokio-stream", CratesIo("0.1.7"))
-        val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.4"))
+        val Tower: CargoDependency = CargoDependency("tower", CratesIo("0.5"))
         val Tracing: CargoDependency = CargoDependency("tracing", CratesIo("0.1"))
         val Url: CargoDependency = CargoDependency("url", CratesIo("2.3.1"))
 
