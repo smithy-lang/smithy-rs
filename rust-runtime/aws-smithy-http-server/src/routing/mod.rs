@@ -36,10 +36,9 @@ use futures_util::{
 };
 use tower::{util::Oneshot, Service, ServiceExt};
 
-use crate::http;
 use http_body::Body as HttpBody;
 
-use crate::http::Response;
+use http::Response;
 
 use crate::{
     body::{boxed, BoxBody},

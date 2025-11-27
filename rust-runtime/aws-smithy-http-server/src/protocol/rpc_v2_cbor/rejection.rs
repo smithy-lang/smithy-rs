@@ -9,8 +9,6 @@ use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
 
-use crate::http;
-
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
     #[error("invalid bound HTTP status code; status codes must be inside the 100-999 range: {0}")]

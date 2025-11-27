@@ -53,14 +53,11 @@ use std::{
 };
 
 use futures_util::TryFuture;
+use http::request::Parts;
+use http::{header::HeaderName, HeaderValue, Response};
 use thiserror::Error;
 use tower::{Layer, Service};
 use uuid::Uuid;
-
-use crate::http;
-
-use crate::http::request::Parts;
-use crate::http::{header::HeaderName, HeaderValue, Response};
 
 use crate::{body::BoxBody, response::IntoResponse};
 

@@ -7,8 +7,6 @@ use crate::rejection::MissingContentTypeReason;
 use aws_smithy_runtime_api::http::HttpError;
 use thiserror::Error;
 
-use crate::http;
-
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
     #[error("error building HTTP response: {0}")]

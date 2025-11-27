@@ -8,9 +8,7 @@ use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_R
 use crate::{extension::RuntimeErrorExtension, protocol::rpc_v2_cbor::RpcV2Cbor};
 use bytes::Bytes;
 
-use crate::http;
-
-use crate::http::StatusCode;
+use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};
 

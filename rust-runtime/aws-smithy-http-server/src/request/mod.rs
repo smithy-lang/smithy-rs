@@ -55,9 +55,7 @@ use futures_util::{
     TryFutureExt,
 };
 
-use crate::http;
-
-use crate::http::{request::Parts, Request, StatusCode};
+use http::{request::Parts, Request, StatusCode};
 
 use crate::{
     body::{empty, BoxBody},

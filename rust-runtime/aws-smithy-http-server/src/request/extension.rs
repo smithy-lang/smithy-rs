@@ -52,8 +52,6 @@ use std::ops::Deref;
 
 use thiserror::Error;
 
-use crate::http;
-
 use crate::{body::BoxBody, request::FromParts, response::IntoResponse};
 
 use super::internal_server_error;

@@ -5,9 +5,7 @@
 
 use std::borrow::Cow;
 
-use crate::http;
-
-use crate::http::Request;
+use http::Request;
 use regex::Regex;
 
 #[derive(Debug, Clone)]

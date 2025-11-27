@@ -15,8 +15,6 @@ use tower::Service;
 
 use thiserror::Error;
 
-use crate::http;
-
 /// An AWS REST routing error.
 #[derive(Debug, Error, PartialEq)]
 pub enum Error {
@@ -112,8 +110,6 @@ impl<S> FromIterator<(RequestSpec, S)> for RestRouter<S> {
 mod tests {
     use super::*;
     use crate::{protocol::test_helpers::req, routing::request_spec::*};
-
-    use http;
 
     use http::Method;
 
