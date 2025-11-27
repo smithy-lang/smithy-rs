@@ -3,23 +3,21 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use http::uri;
+use lambda_http::{Request, RequestExt};
 use std::{
     fmt::Debug,
     task::{Context, Poll},
 };
 use tower::Service;
 
-use lambda_http::{Request, RequestExt};
-
-use crate::body::{self, BoxBodySync};
-
-type ServiceRequest = http::Request<BoxBodySync>;
+type ServiceRequest = http::Request<crate::body::BoxBodySync>;
 
 /// A [`Service`] that takes a `lambda_http::Request` and converts
 /// it to `http::Request<BoxBody>`.
 ///
 /// **This version is only guaranteed to be compatible with
-/// [`lambda_http`](https://docs.rs/lambda_http) ^0.17.** Please ensure that your service crate's
+/// [`lambda_http`](https://docs.rs/lambda_http) ^1.** Please ensure that your service crate's
 /// `Cargo.toml` depends on a compatible version.
 ///
 /// [`Service`]: tower::Service
@@ -52,7 +50,7 @@ where
     }
 }
 
-/// Converts a `lambda_http::Request` into a `http::Request<BoxBodySync>`
+/// Converts a `lambda_http::Request` into a `http::Request<crate::body::BoxBodySync>`
 /// Issue: <https://github.com/smithy-lang/smithy-rs/issues/1125>
 ///
 /// While converting the event the [API Gateway Stage] portion of the URI
@@ -67,7 +65,7 @@ fn convert_event(request: Request) -> ServiceRequest {
         let mut path = raw_path.to_owned(); // Clone only when we need to strip out the stage.
         let (mut parts, body) = request.into_parts();
 
-        let uri_parts: http::uri::Parts = parts.uri.into();
+        let uri_parts: uri::Parts = parts.uri.into();
         let path_and_query = uri_parts
             .path_and_query
             .expect("request URI does not have `PathAndQuery`");
@@ -77,7 +75,7 @@ fn convert_event(request: Request) -> ServiceRequest {
             path.push_str(query);
         }
 
-        parts.uri = http::Uri::builder()
+        parts.uri = uri::Uri::builder()
             .authority(uri_parts.authority.expect("request URI does not have authority set"))
             .scheme(uri_parts.scheme.expect("request URI does not have scheme set"))
             .path_and_query(path)
@@ -90,12 +88,12 @@ fn convert_event(request: Request) -> ServiceRequest {
     };
 
     let body = match body {
-        lambda_http::Body::Empty => body::empty_sync(),
-        lambda_http::Body::Text(s) => body::to_boxed_sync(s),
-        lambda_http::Body::Binary(v) => body::to_boxed_sync(v),
+        lambda_http::Body::Empty => crate::body::empty_sync(),
+        lambda_http::Body::Text(s) => crate::body::to_boxed_sync(s),
+        lambda_http::Body::Binary(v) => crate::body::to_boxed_sync(v),
         _ => {
             tracing::error!("Unknown `lambda_http::Body` variant encountered, falling back to empty body");
-            body::empty_sync()
+            crate::body::empty_sync()
         }
     };
 
