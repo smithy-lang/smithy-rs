@@ -14,7 +14,7 @@ hyper = {version = "1", features = ["server"] }
 tokio = "1.26.0"
 tracing = "0.1"
 
-lambda_http = "0.17"
+lambda_http = "1.0"
 
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["aws-lambda"] }
