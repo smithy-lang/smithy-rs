@@ -48,7 +48,7 @@ use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 use crate::request::connect_info::ConnectInfo;
 
-/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`Request`](crate::http::Request)s.
+/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`Request`](http::Request)s.
 ///
 /// The `T` must be derivable from the underlying IO resource using the [`Connected`] trait.
 ///
