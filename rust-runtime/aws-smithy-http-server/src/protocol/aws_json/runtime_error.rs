@@ -7,7 +7,6 @@ use crate::protocol::aws_json_11::AwsJson1_1;
 use crate::response::IntoResponse;
 use crate::runtime_error::{InternalFailureException, INVALID_HTTP_RESPONSE_FOR_RUNTIME_ERROR_PANIC_MESSAGE};
 use crate::{extension::RuntimeErrorExtension, protocol::aws_json_10::AwsJson1_0};
-
 use http::StatusCode;
 
 use super::rejection::{RequestRejection, ResponseRejection};

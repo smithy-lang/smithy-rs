@@ -84,6 +84,9 @@ impl From<nom::Err<nom::error::Error<&str>>> for RequestRejection {
     }
 }
 
+// Hyper's HTTP server provides requests with `hyper::body::Incoming`, which has error type
+// `hyper::Error`. During request deserialization (FromRequest), body operations can produce
+// this error, so we need this conversion to handle it within the framework.
 convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
 
 convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);
