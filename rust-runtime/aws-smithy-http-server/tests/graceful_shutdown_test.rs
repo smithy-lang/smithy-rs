@@ -35,7 +35,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
 
     // Start server in background
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(slow_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(slow_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -99,7 +99,7 @@ async fn test_graceful_shutdown_with_timeout() {
 
     // Start server with short timeout
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(very_slow_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(very_slow_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -170,7 +170,7 @@ async fn test_with_connect_info() {
     let server_handle = tokio::spawn(async move {
         use aws_smithy_http_server::routing::IntoMakeServiceWithConnectInfo;
 
-        aws_smithy_http_server::serve(
+        aws_smithy_http_server::serve::serve(
             listener,
             IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service_fn(service_with_connect_info)),
         )

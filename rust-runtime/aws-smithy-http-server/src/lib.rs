@@ -40,8 +40,6 @@ pub(crate) use self::error::Error;
 #[doc(inline)]
 pub use self::request::extension::Extension;
 #[doc(inline)]
-pub use self::serve::serve;
-#[doc(inline)]
 pub use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 #[cfg(test)]
