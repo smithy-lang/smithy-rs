@@ -207,14 +207,14 @@ impl FsBuilder {
             let body_loader = move || {
                 // If an offset was provided, seeking will be handled in `PathBody::poll_data` each
                 // time the file is loaded.
-                #[cfg(feature = "http-body-0-4-x")]
+                #[cfg(not(feature = "http-body-1-x"))]
                 return SdkBody::from_body_0_4_internal(PathBody::from_path(
                     path.clone(),
                     length,
                     buffer_size,
                     self.offset,
                 ));
-                #[cfg(not(feature = "http-body-0-4-x"))]
+                #[cfg(feature = "http-body-1-x")]
                 return SdkBody::from_body_1_x_internal(PathBody::from_path(
                     path.clone(),
                     length,
@@ -230,10 +230,10 @@ impl FsBuilder {
                 let _s = file.seek(io::SeekFrom::Start(offset)).await?;
             }
 
-            #[cfg(feature = "http-body-0-4-x")]
+            #[cfg(not(feature = "http-body-1-x"))]
             let body =
                 SdkBody::from_body_0_4_internal(PathBody::from_file(file, length, buffer_size));
-            #[cfg(not(feature = "http-body-0-4-x"))]
+            #[cfg(feature = "http-body-1-x")]
             let body =
                 SdkBody::from_body_1_x_internal(PathBody::from_file(file, length, buffer_size));
 
