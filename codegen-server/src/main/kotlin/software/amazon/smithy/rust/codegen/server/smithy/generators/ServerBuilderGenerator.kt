@@ -359,12 +359,10 @@ class ServerBuilderGenerator(
                                     rust("$maybeConstrainedVariant($varExpr)")
                                 }
                             }
-                        }
-                        else {
+                        } else {
                             if (symbol.isOptional()) {
                                 rust("input.map($maybeConstrainedVariant)")
-                            }
-                            else {
+                            } else {
                                 rust("$maybeConstrainedVariant(input)")
                             }
                         }
