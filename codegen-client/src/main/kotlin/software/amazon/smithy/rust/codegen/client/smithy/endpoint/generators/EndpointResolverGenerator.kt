@@ -92,6 +92,11 @@ abstract class CustomRuntimeFunction {
      * - &mut DiagnosticCollector
      */
     abstract fun usage(): Writable
+
+    /**
+     * The type returned by the function
+     */
+    abstract fun returnType(): Writable
 }
 
 class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {

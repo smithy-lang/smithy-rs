@@ -22,12 +22,13 @@ import software.amazon.smithy.rust.codegen.core.util.dq
  */
 internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
     listOf(
-        SimpleRuntimeFunction("substring", EndpointsLib.substring),
-        SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel),
-        SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl),
-        SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode),
-        SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce),
-        SimpleRuntimeFunction("evaluate_bdd", EndpointsLib.evaluateBdd),
+        SimpleRuntimeFunction("substring", EndpointsLib.substring, RuntimeType.lifetimeStr()),
+        SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel, RuntimeType.Bool),
+        SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl, EndpointsLib.url()),
+        SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode, RuntimeType.Cow),
+        // The runtime type for coalesce and evaluate_bdd is a bit of a lie since the return type is generic
+        SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce, RuntimeType.Option),
+        SimpleRuntimeFunction("evaluate_bdd", EndpointsLib.evaluateBdd, RuntimeType.Option),
     )
 
 /**
@@ -39,8 +40,8 @@ fun awsStandardLib(
     runtimeConfig: RuntimeConfig,
     partitionsDotJson: Node,
 ) = listOf(
-    SimpleRuntimeFunction("aws.parseArn", EndpointsLib.awsParseArn),
-    SimpleRuntimeFunction("aws.isVirtualHostableS3Bucket", EndpointsLib.awsIsVirtualHostableS3Bucket),
+    SimpleRuntimeFunction("aws.parseArn", EndpointsLib.awsParseArn, EndpointsLib.arn()),
+    SimpleRuntimeFunction("aws.isVirtualHostableS3Bucket", EndpointsLib.awsIsVirtualHostableS3Bucket, RuntimeType.Bool),
     AwsPartitionResolver(runtimeConfig, partitionsDotJson),
 )
 
@@ -49,11 +50,12 @@ fun awsStandardLib(
  *
  * A default `partitionsDotJson` node MUST be provided. The node MUST contain an AWS partition.
  */
-class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsDotJson: Node) :
+class AwsPartitionResolver(val runtimeConfig: RuntimeConfig, private val partitionsDotJson: Node) :
     CustomRuntimeFunction() {
     override val id: String = "aws.partition"
     private val codegenScope =
         arrayOf(
+            "Partition" to EndpointsLib.partition(runtimeConfig),
             "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
             "tracing" to RuntimeType.Tracing,
         )
@@ -132,6 +134,8 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
         }
 
     override fun usage() = writable { rust("partition_resolver.resolve_partition") }
+
+    override fun returnType(): Writable = writable { rustTemplate("#{Partition}", *codegenScope) }
 }
 
 /**
@@ -139,7 +143,11 @@ class AwsPartitionResolver(runtimeConfig: RuntimeConfig, private val partitionsD
  *
  * Currently, this is every runtime function other than `aws.partition`.
  */
-private class SimpleRuntimeFunction(override val id: String, private val runtimeType: RuntimeType) :
+private class SimpleRuntimeFunction(
+    override val id: String,
+    private val runtimeType: RuntimeType,
+    private val returnType: RuntimeType,
+) :
     CustomRuntimeFunction() {
     override fun structFieldInit(): Writable? = null
 
@@ -156,4 +164,6 @@ private class SimpleRuntimeFunction(override val id: String, private val runtime
     override fun structFieldBdd(): Writable? = null
 
     override fun usage() = writable { rust("#T", runtimeType) }
+
+    override fun returnType() = writable { rust("#T", returnType) }
 }

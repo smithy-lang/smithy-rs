@@ -40,7 +40,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.dq
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 
 /**
  * Generator for BDD-based endpoint resolvers
@@ -51,55 +50,11 @@ class EndpointBddGenerator(
     private val stdlib: List<CustomRuntimeFunction>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val serviceName = codegenContext.serviceShape.id.name.toPascalCase()
     private val allRefs = AnnotatedRefs.from(bddTrait)
 
-    fun generateBddResolver(): RuntimeType {
-        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
-            generateBddResolverImpl(this)
-        }
-    }
-
-    inner class RuleVisitor(private val context: Context) : RuleValueVisitor<Writable> {
-        override fun visitTreeRule(rules: List<Rule>): Writable {
-            throw UnsupportedOperationException("Tree rules not supported in BDD endpoint resolver")
-        }
-
-        override fun visitErrorRule(error: Expression): Writable =
-            writable {
-                rustTemplate(
-                    "#{Err}(#{ResolveEndpointError}::message(#{message:W}))",
-                    *preludeScope,
-                    "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
-                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
-                )
-            }
-
-        override fun visitEndpointRule(endpoint: Endpoint): Writable =
-            writable {
-                rustTemplate("#{Ok}(#{endpoint:W})", *preludeScope, "endpoint" to generateEndpoint(endpoint))
-            }
-    }
-
-    private fun generateEndpoint(endpoint: Endpoint): Writable {
-        val registry = FunctionRegistry(stdlib)
-        val context = Context(registry, runtimeConfig)
-        val generator = ExpressionGenerator(Ownership.Owned, context)
-        val url = generator.generate(endpoint.url)
-        val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
-        val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
-        return writable {
-            rustTemplate(
-                "#{SmithyEndpoint}::builder().url(#{url:W})",
-                "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
-                "url" to url,
-            )
-            headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
-            properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
-            rust(".build()")
-        }
-    }
-
+    /**
+     * Main entrypoint for creating a BDD based endpoint resolver
+     */
     private fun generateBddResolverImpl(writer: RustWriter) {
         val nodes = generateNodeArray()
         val conditionCount = bddTrait.conditions.size
@@ -109,9 +64,8 @@ class EndpointBddGenerator(
         val registry = FunctionRegistry(stdlib)
         val context = Context(registry, runtimeConfig)
 
-        // Render conditions to a dummy writer to populate the function registry
-        // This is the same trick used by EndpointResolverGenerator
-        val dummyWriter = RustWriter.root()
+        // Render conditions to a dummy writer to populate the function registry.
+        // This is the same trick used by EndpointResolverGenerator.
         bddTrait.conditions.withIndex().forEach { (idx, cond) ->
             val bddExpressionGenerator =
                 BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
@@ -123,6 +77,10 @@ class EndpointBddGenerator(
         // Now get the functions that were actually used during condition generation
         val fnsUsed = registry.fnsUsed()
 
+        // Build additional args for custom runtime functions
+        val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignatureBdd() }
+        val additionalArgsInvocation = fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
+
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
@@ -131,19 +89,12 @@ class EndpointBddGenerator(
                 "cond_$idx" to bddExpressionGenerator.generateCondition(cond, idx)
             }
 
-        // Identify which conditions produce results
-        val conditionProducesResult = bddTrait.conditions.map { it.producesResult() }
-
-        // Build additional args for custom runtime functions
-        val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignatureBdd() }
-        val additionalArgsInvocation = fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
-
         writer.rustTemplate(
             """
             ##[derive(Debug)]
             /// The default endpoint resolver.
             pub struct DefaultResolver {
-                #{custom_fields}
+                #{CustomFields}
             }
 
              impl Default for DefaultResolver {
@@ -156,7 +107,7 @@ class EndpointBddGenerator(
                 /// Create a new DefaultResolver
                 pub fn new() -> Self {
                     Self {
-                        #{custom_fields_init}
+                        #{CustomFieldsInit}
                     }
                 }
 
@@ -167,14 +118,14 @@ class EndpointBddGenerator(
                     &ConditionFn,
                     &'a Params,
                     &mut ConditionContext<'a>,
-                    &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
+                    &mut #{DiagnosticCollector},
                 ) -> bool
                        + '_ {
                     move |cond, params, context, _diagnostic_collector| {
                         cond.evaluate(
                             params,
                             context,
-                            #{custom_fields_args}
+                            #{CustomFieldsArgs}
                             _diagnostic_collector,
                         )
                     }
@@ -221,19 +172,17 @@ class EndpointBddGenerator(
                 ##[allow(unused_variables, unused_parens, clippy::double_parens,
                     clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
                     clippy::needless_borrow, clippy::useless_asref, )]
-                fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{additional_args_sig_prefix}#{additional_args_sig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
+                fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{AdditionalArgsSigPrefix}#{AdditionalArgsSig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
                     // Param bindings
-                    #{param_bindings:W}
+                    #{ParamBindings:W}
 
                     // Non-Param references
-                    #{non_param_ref_bindings:W}
+                    #{NonParamRefBindings:W}
                     match self {
                         ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
                     }
                 }
             }
-
-            #{ConditionContext:W}
 
             const CONDITIONS: &[ConditionFn] = &[
                 ${(0 until conditionCount).joinToString(",\n    ") { "ConditionFn::Cond$it" }}
@@ -248,13 +197,13 @@ class EndpointBddGenerator(
                 ##[allow(unused_variables, clippy::useless_asref)]
                 fn to_endpoint(&self, params: &'a Params, context: &ConditionContext<'a>) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
                     // Param bindings
-                    #{param_bindings_for_results:W}
+                    #{ParamBindingsForResults:W}
 
                     // Non-Param references
-                    #{non_param_ref_bindings_for_results:W}
+                    #{NonParamRefBindingsForResults:W}
 
                     match self {
-                        #{result_arms:W}
+                        #{ResultArms:W}
                     }
                 }
             }
@@ -263,56 +212,61 @@ class EndpointBddGenerator(
                 ${(0 until resultCount).joinToString(",\n    ") { "ResultEndpoint::Result$it" }}
             ];
 
-            #{nodes:W}
+            #{Nodes:W}
+
+            #{ConditionContext:W}
             """,
             *preludeScope,
-            "Endpoint" to Types(runtimeConfig).smithyEndpoint,
-            "EvaluateBdd" to EndpointsLib.evaluateBdd,
-            "BddNode" to EndpointsLib.bddNode,
-            "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
-            "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
-            *Types(runtimeConfig).toArray(),
-            "Params" to typeGenerator.paramsStruct(),
-            "ConditionContext" to generateContextStruct(),
-            "param_bindings" to generateParamBindings(),
-            "param_bindings_for_results" to generateParamBindingsForResults(),
-            "non_param_ref_bindings" to generateNonParamReferences(),
-            "non_param_ref_bindings_for_results" to generateNonParamReferencesForResult(),
-            *conditionScope.toList().toTypedArray(),
-            "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-            "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
-            "custom_fields" to writable { fnsUsed.mapNotNull { it.structFieldBdd() }.forEach { rust("#W,", it) } },
-            "custom_fields_init" to
-                writable {
-                    fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
-                },
-            "custom_fields_args" to
-                writable {
-                    fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.forEach { rust("#W,", it) }
-                },
-            "additional_args_sig_prefix" to writable { if (additionalArgsSignature.isNotEmpty()) rust(", ") },
-            "additional_args_sig" to
+            "AdditionalArgsSig" to
                 writable {
                     additionalArgsSignature.forEachIndexed { i, it ->
                         if (i > 0) rust(", ")
                         rust("#W", it)
                     }
                 },
-            "additional_args_invoke_prefix" to writable { if (additionalArgsInvocation.isNotEmpty()) rust(", ") },
-            "additional_args_invoke" to
-                writable {
-                    additionalArgsInvocation.forEachIndexed { i, it ->
-                        if (i > 0) rust(", ")
-                        rust("#W", it)
-                    }
-                },
-            "result_arms" to generateResultArms(context),
-            "nodes" to nodes,
+            "AdditionalArgsSigPrefix" to writable { if (additionalArgsSignature.isNotEmpty()) rust(", ") },
+            "BddNode" to EndpointsLib.bddNode,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "ConditionContext" to generateContextStruct(),
+            *conditionScope.toList().toTypedArray(),
+            "CustomFields" to writable { fnsUsed.mapNotNull { it.structFieldBdd() }.forEach { rust("#W,", it) } },
+            "CustomFieldsArgs" to
+                writable {
+                    fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.forEach { rust("#W,", it) }
+                },
+            "CustomFieldsInit" to
+                writable {
+                    fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
+                },
+            "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+            "Endpoint" to Types(runtimeConfig).smithyEndpoint,
+            "EvaluateBdd" to EndpointsLib.evaluateBdd,
+            "Nodes" to nodes,
+            "NonParamRefBindings" to generateNonParamReferences(),
+            "NonParamRefBindingsForResults" to generateNonParamReferencesForResult(),
+            "ParamBindings" to generateParamBindings(),
+            "ParamBindingsForResults" to generateParamBindingsForResults(),
+            "Params" to typeGenerator.paramsStruct(),
+            "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+            "ResultArms" to generateResultArms(context),
+            "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
+            *Types(runtimeConfig).toArray(),
+//            "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
+//            "AdditionalArgsInvokePrefix" to writable { if (additionalArgsInvocation.isNotEmpty()) rust(", ") },
+//            "additional_args_invoke" to
+//                writable {
+//                    additionalArgsInvocation.forEachIndexed { i, it ->
+//                        if (i > 0) rust(", ")
+//                        rust("#W", it)
+//                    }
+//                },
         )
     }
 
+    /**
+     * Generates bindings for the Params attached to the `endpointBddTrait`
+     */
     private fun generateParamBindings() =
         writable {
             bddTrait.parameters.toList().forEach {
@@ -320,6 +274,13 @@ class EndpointBddGenerator(
             }
         }
 
+    /**
+     * Generates bindings for the Params attached to the `endpointBddTrait` as they
+     * are used to generate `Result`s. This requires some cloning and unwrapping. The
+     * unwraps are all `unwrap_or_default`. This is safe since it will not panic, and
+     * thanks to the guarantees of BDD compilation we know that if a value is used to
+     * construct a Result it has a value, so default values will never be used.
+     */
     private fun generateParamBindingsForResults() =
         writable {
             bddTrait.parameters.toList().forEach {
@@ -342,25 +303,11 @@ class EndpointBddGenerator(
             }
         }
 
-    private fun generateResultArms(context: Context) =
-        writable {
-            val visitor = RuleVisitor(context)
-            bddTrait.results.forEachIndexed { idx, rule ->
-                // Skip NoMatchRule (index 0) - it doesn't support visitor pattern
-                if (rule is NoMatchRule) {
-                    rustTemplate(
-                        "Self::Result$idx => #{Err}(#{ResolveEndpointError}::message(\"No endpoint rule matched\")),\n",
-                        *preludeScope,
-                        "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
-                    )
-                } else {
-                    val ruleOutput = rule.accept(visitor)
-                    rustTemplate("Self::Result$idx => #{output:W},\n", "output" to ruleOutput)
-                }
-            }
-        }
-
-    // All non-param references start as None
+    /**
+     * Generates references that do not come from the trait params. These can be set
+     * as part of the evaluation of a Condition. They all start as `None` since they may
+     * never be set.
+     */
     private fun generateNonParamReferences() =
         writable {
             val varRefs = allRefs.variableRefs()
@@ -369,9 +316,11 @@ class EndpointBddGenerator(
             }
         }
 
-    // All non-param references are Option<>. When the BDD is compiled Smithy guarantees that
-    // the refs used to construct the result are Some, so it is same to unwrap_or_default them
-    // all and just use the necessary ones.
+    /**
+     * All non-param references are Option<>. When the BDD is compiled Smithy guarantees that
+     * the refs used to construct the result are Some, so it is safe to unwrap_or_default them
+     * all and just use the necessary ones.
+     */
     private fun generateNonParamReferencesForResult() =
         writable {
             val varRefs = allRefs.variableRefs()
@@ -392,34 +341,112 @@ class EndpointBddGenerator(
             }
         }
 
+    /**
+     * Generate the arms of the `Result` match statement.
+     */
+    private fun generateResultArms(context: Context) =
+        writable {
+            val visitor = RuleVisitor(context)
+            bddTrait.results.forEachIndexed { idx, rule ->
+                // Skip NoMatchRule (index 0) - it doesn't support visitor pattern
+                if (rule is NoMatchRule) {
+                    rustTemplate(
+                        "Self::Result$idx => #{Err}(#{ResolveEndpointError}::message(\"No endpoint rule matched\")),\n",
+                        *preludeScope,
+                        "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    )
+                } else {
+                    val ruleOutput = rule.accept(visitor)
+                    rustTemplate("Self::Result$idx => #{output:W},\n", "output" to ruleOutput)
+                }
+            }
+        }
+
+    /**
+     * The rule visitor used to construct the match arms for `ResultEndpoint`
+     */
+    inner class RuleVisitor(private val context: Context) : RuleValueVisitor<Writable> {
+        override fun visitTreeRule(rules: List<Rule>): Writable {
+            throw UnsupportedOperationException("Tree rules not supported in BDD endpoint resolver")
+        }
+
+        override fun visitErrorRule(error: Expression): Writable =
+            writable {
+                rustTemplate(
+                    "#{Err}(#{ResolveEndpointError}::message(#{message:W}))",
+                    *preludeScope,
+                    "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
+                )
+            }
+
+        override fun visitEndpointRule(endpoint: Endpoint): Writable =
+            writable {
+                rustTemplate("#{Ok}(#{endpoint:W})", *preludeScope, "endpoint" to generateEndpoint(endpoint))
+            }
+    }
+
+    /**
+     * Generates an `Endpoint` using an `Endpoint::builder()` and the same `Params`/`ConditionContext`
+     * used in Condition evalutaion.
+     */
+    private fun generateEndpoint(endpoint: Endpoint): Writable {
+        val registry = FunctionRegistry(stdlib)
+        val context = Context(registry, runtimeConfig)
+        val generator = ExpressionGenerator(Ownership.Owned, context)
+        val url = generator.generate(endpoint.url)
+        val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
+        val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
+        return writable {
+            rustTemplate(
+                "#{SmithyEndpoint}::builder().url(#{url:W})",
+                "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
+                "url" to url,
+            )
+            headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
+            properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
+            rust(".build()")
+        }
+    }
+
+    /**
+     * Generate the `ConditionContext` struct that is passed to each condition evaluation.
+     * This allows passing mutable state between the conditions.
+     */
     private fun generateContextStruct() =
         writable {
             val varRefs = allRefs.variableRefs()
+            val registry = FunctionRegistry(stdlib)
 
             val memberDefs =
                 varRefs.map {
-                    val value = it.value
-                    val fnName = it.value.condition?.function?.name?.toString()
-                    val fn = it.value.condition?.function
+                    val fn = it.value.condition?.function!!
+                    val fnDef = fn.functionDefinition
+                    val registeredFn = registry.fnFor(fnDef.id)
+                    val fnId = registeredFn?.id
                     val type =
                         if (it.value.type is OptionalType) {
                             (it.value.type as OptionalType).inner()
                         } else {
                             it.value.type
                         }
-                    // TODO(BDD) I should maybe use the fnRegistry for this?
                     val rustType =
                         when {
-                            type is StringType -> "String"
-                            type is BooleanType -> "bool"
-                            type is ArrayType -> "Vec<String>"
-                            fn is ParseUrl -> "crate::endpoint_lib::parse_url::Url<'a>"
-                            fn is GetAttr -> "aws_smithy_types::Document"
-                            fnName == "aws.partition" -> "crate::endpoint_lib::partition::Partition<'a>"
-                            fnName == "aws.parseArn" -> "crate::endpoint_lib::arn::Arn<'a>"
+                            // Simple types, doesn't matter what fn they come from
+                            type is StringType -> RuntimeType.String
+                            type is BooleanType -> RuntimeType.Bool
+                            type is ArrayType -> RuntimeType.typedVec(RuntimeType.String)
+                            // GetAttr is inlined, not a registered fn
+                            fn is GetAttr -> RuntimeType.document(runtimeConfig)
+                            // These types aren't easy to infer from the type of the reference.
+                            // It is basically just an unnamed struct so we would have to match
+                            // on the fields. Easier to key off of the function that sets it.
+                            fnId == "parseURL" -> EndpointsLib.url()
+                            fnId == "aws.partition" -> EndpointsLib.partition(runtimeConfig)
+                            fnId == "aws.parseArn" -> EndpointsLib.arn()
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
-                    "pub(crate) ${it.value.name}: Option<$rustType>"
+                    "pub(crate) ${it.value.name}: Option<${rustType.render()}>"
                 }.joinToString(",\n", postfix = ",\n")
 
             rustTemplate(
@@ -437,6 +464,9 @@ class EndpointBddGenerator(
             )
         }
 
+    /**
+     * Generate the array of `BddNode`s that model the evaluation DAG
+     */
     private fun generateNodeArray() =
         writable {
             val bdd = bddTrait.bdd
@@ -451,12 +481,16 @@ class EndpointBddGenerator(
                 "BddNode" to EndpointsLib.bddNode,
             )
         }
-}
 
-/**
- * Determines if a condition produces a result that should be stored in the context.
- */
-private fun Condition.producesResult(): Boolean = this.result.isPresent
+    /**
+     * Used for generating tests
+     */
+    fun generateBddResolver(): RuntimeType {
+        return RuntimeType.forInlineFun("DefaultResolver", ClientRustModule.Config.endpoint) {
+            generateBddResolverImpl(this)
+        }
+    }
+}
 
 /**
  * Container for annotated references, these are the variables the condition evaluation can potentially
@@ -511,7 +545,7 @@ class AnnotatedRefs(
                         ParameterType.STRING -> RustType.String
                         ParameterType.STRING_ARRAY -> RustType.StringArray
                         ParameterType.BOOLEAN -> RustType.Bool
-                        null -> RustType.String
+                        null -> throw IllegalArgumentException("Unsupported parameter type ${param.type}")
                     }
                 refs[param.memberName()] =
                     AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType, null, null)

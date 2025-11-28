@@ -3,9 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/// Coalesce function that returns the first non-None value.
-/// This is a placeholder that will be called by generated code.
-/// The actual implementation is generated inline based on the number of arguments.
+//! Coalesce function that returns the first non-None value.
+
+/*
+ * Implementation Note: Autoderef Specialization
+ *
+ * This implementation uses autoderef specialization to dispatch to different
+ * coalesce behaviors based on the types of the two arguments at compile time.
+ *
+ * The technique exploits Rust's method resolution, which automatically dereferences
+ * types to find matching method implementations. Method resolution prefers implementations
+ * that require fewer dereferences, creating a priority ordering.
+ *
+ * Three specialization levels (highest to lowest priority):
+ *
+ * 1. `&&&(&Option<T>, &Option<T>)` - Both args are Option
+ *    Returns: Option<T> via a.or(b)
+ *
+ * 2. `&&(&Option<T>, &T)` - First arg is Option, second is concrete
+ *    Returns: T via a.unwrap_or(b)
+ *
+ * 3. `&(&T, &U)` - Both args are concrete (or any other combination)
+ *    Returns: T (always returns first arg)
+ *
+ * The macro call `(&&&(&a, &b)).coalesce()` starts with three references. Method resolution
+ * tries each impl in order by dereferencing:
+ * - First tries `&&&(&Option<T>, &Option<T>)` (no deref needed) - matches if both are Option
+ * - Then tries `&&(&Option<T>, &T)` (one deref) - matches if first is Option, second isn't
+ * - Finally tries `&(&T, &U)` (two derefs) - matches everything else
+ *
+ * This allows the macro to handle Option/non-Option combinations without runtime checks,
+ * selecting the appropriate coalesce logic at compile time based on argument types.
+ */
 
 /// Helper trait to implement the coalesce! macro
 pub(crate) trait Coalesce {

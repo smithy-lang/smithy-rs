@@ -16,7 +16,7 @@ pub struct BddNode {
 /// Evaluates a BDD to resolve an endpoint result
 ///
 /// Arguments
-/// * `nodes` - Array of BDD nodes
+/// * `nodes` - Array of BddNodes
 /// * `conditions` - Array of conditions referenced by nodes
 /// * `results` - Array of possible results
 /// * `root_ref` - Root reference to start evaluation
@@ -27,7 +27,7 @@ pub struct BddNode {
 ///
 /// Returns
 /// * `Some(R)` - Result if evaluation succeeds
-/// * `None` - No match found (terminal reached)
+/// * `None` - No match found
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     nodes: &[BddNode],
@@ -47,33 +47,23 @@ pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     let mut current_ref = root_ref;
 
     loop {
-        println!("Current Ref: {current_ref}");
         match current_ref {
             // Result references (>= 100_000_000)
             ref_val if ref_val >= 100_000_000 => {
                 let result_index = (ref_val - 100_000_000) as usize;
-                println!("Result Idx: {result_index}");
                 return results.get(result_index).cloned();
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
-            1 | -1 => {
-                return {
-                    println!("Terminal Idx: {current_ref}");
-                    results.first().cloned()
-                }
-            } //TODO(BDD) should probably be results.get(0)?, but need to figure out the NoMatchRule thing
+            1 | -1 => return results.first().cloned(),
             // Node references
             ref_val => {
                 let is_complement = ref_val < 0;
                 let node_index = (ref_val.abs() - 1) as usize;
-                println!("Node Idx: {node_index}");
                 let node = nodes.get(node_index)?;
                 let condition_index = node.condition_index as usize;
-                println!("Condition Idx: {condition_index}");
                 let condition = conditions.get(condition_index)?;
                 let condition_result =
                     condition_evaluator(condition, params, context, diagnostic_collector);
-                println!("Condition Result: {condition_result}");
                 // Handle complement edges: complement inverts the branch selection
                 current_ref = if is_complement ^ condition_result {
                     node.high_ref

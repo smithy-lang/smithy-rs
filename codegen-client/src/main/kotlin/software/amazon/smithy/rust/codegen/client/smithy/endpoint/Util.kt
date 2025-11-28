@@ -51,6 +51,12 @@ object EndpointsLib {
         endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
             .resolve("PartitionResolver")
 
+    fun partition(
+        runtimeConfig: RuntimeConfig,
+        lifetimeName: String = "a",
+    ) = endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
+        .resolve("Partition<'$lifetimeName>")
+
     val substring =
         endpointsLib("substring", CargoDependency.Proptest).toType().resolve("substring")
     val isValidHostLabel =
@@ -59,6 +65,12 @@ object EndpointsLib {
         endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
             .toType()
             .resolve("parse_url")
+
+    fun url(lifetimeName: String = "a") =
+        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
+            .toType()
+            .resolve("Url<'$lifetimeName>")
+
     val uriEncode =
         endpointsLib("uri_encode", CargoDependency.PercentEncoding)
             .toType()
@@ -71,6 +83,9 @@ object EndpointsLib {
         endpointsLib("bdd_interpreter").toType().resolve("BddNode")
 
     val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
+
+    fun arn(lifetimeName: String = "a") = endpointsLib("arn").toType().resolve("Arn<'$lifetimeName>")
+
     val awsIsVirtualHostableS3Bucket =
         endpointsLib("s3", endpointsLib("host"), CargoDependency.RegexLite)
             .toType()
