@@ -167,11 +167,13 @@ impl SdkBody {
             InnerProj::Dyn { inner: body } => match body.get_mut() {
                 #[cfg(feature = "http-body-0-4-x")]
                 BoxBody::HttpBody04(box_body) => {
+                    println!("POLL_NEXT 0.x");
                     use http_body_0_4::Body;
                     Pin::new(box_body).poll_data(cx)
                 }
                 #[cfg(feature = "http-body-1-x")]
                 BoxBody::HttpBody1(box_body) => {
+                    println!("POLL_NEXT 1.x");
                     // If this is polled after the trailers have been cached end early
                     if this.trailers.is_some() {
                         return Poll::Ready(None);
@@ -273,6 +275,7 @@ impl SdkBody {
             InnerProj::Once { .. } => Poll::Ready(Ok(None)),
             InnerProj::Dyn { inner } => match inner.get_mut() {
                 BoxBody::HttpBody04(box_body) => {
+                    println!("POLL_NEXT_TRAILERS 0.x");
                     use http_body_0_4::Body;
                     let polled = Pin::new(box_body).poll_trailers(cx);
 
@@ -287,6 +290,7 @@ impl SdkBody {
                 }
                 #[cfg(feature = "http-body-1-x")]
                 BoxBody::HttpBody1(box_body) => {
+                    println!("POLL_NEXT_TRAILERS 1.x");
                     use http_body_1_0::Body;
                     // Return the cached trailers without polling
                     if let Some(trailer_buf) = this.trailers {
@@ -299,6 +303,7 @@ impl SdkBody {
                     match polled {
                         Poll::Ready(Some(Ok(maybe_trailers))) => {
                             if maybe_trailers.is_data() {
+                                println!("TRAILERS POLLED WHILE STILL DATA: {maybe_trailers:#?}");
                                 Poll::Ready(Err("Trailers polled while body still has data".into()))
                             } else {
                                 let trailers = maybe_trailers

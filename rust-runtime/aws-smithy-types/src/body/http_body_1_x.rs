@@ -28,6 +28,7 @@ impl SdkBody {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1_0::Frame<Bytes>, Error>>> {
+        println!("POLLING 1.X SDKBODY");
         match ready!(self.as_mut().poll_next(cx)) {
             // if there's no more data, try to return trailers
             None => match ready!(self.poll_next_trailers(cx)) {

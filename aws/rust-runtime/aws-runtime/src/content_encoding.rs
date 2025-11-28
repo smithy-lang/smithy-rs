@@ -180,13 +180,16 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        println!("POLLING 0.x VERSION OF AwsChunkedBody");
         tracing::trace!(state = ?self.state, "polling AwsChunkedBody");
         let mut this = self.project();
 
+        println!("AwsChunkedBody state: {:#?}", this.state);
         match *this.state {
             AwsChunkedBodyState::WritingChunkSize => {
                 if this.options.stream_length == 0 {
                     // If the stream is empty, we skip to writing trailers after writing the CHUNK_TERMINATOR.
+                    println!("SWITCHING TO WRITINGTRAILERS WHILE IN WritingChunkSize");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
                     tracing::trace!("stream is empty, writing chunk terminator");
                     Poll::Ready(Some(Ok(Bytes::from([CHUNK_TERMINATOR].concat()))))
@@ -217,6 +220,7 @@ where
                     };
 
                     tracing::trace!("no more chunk data, writing CRLF and chunk terminator");
+                    println!("SWITCHING TO WRITINGTRAILERS WHILE IN WritingChunk");
                     *this.state = AwsChunkedBodyState::WritingTrailers;
                     // Since we wrote chunk data, we end it with a CRLF and since we only write
                     // a single chunk, we write the CHUNK_TERMINATOR immediately after
@@ -228,6 +232,7 @@ where
             AwsChunkedBodyState::WritingTrailers => {
                 return match this.inner.poll_trailers(cx) {
                     Poll::Ready(Ok(trailers)) => {
+                        println!("AwsChunkedBodyState::WritingTrailers OK BRANCH: {trailers:#?}");
                         *this.state = AwsChunkedBodyState::Closed;
                         let expected_length =
                             http_02x_utils::total_rendered_length_of_trailers(trailers.as_ref());
@@ -251,8 +256,14 @@ where
 
                         Poll::Ready(Some(Ok(trailers.into())))
                     }
-                    Poll::Pending => Poll::Pending,
-                    Poll::Ready(Err(e)) => Poll::Ready(Some(Err(e))),
+                    Poll::Pending => {
+                        println!("AwsChunkedBodyState::WritingTrailers PENDING BRANCH");
+                        Poll::Pending
+                    }
+                    Poll::Ready(Err(e)) => {
+                        println!("AwsChunkedBodyState::WritingTrailers ERR BRANCH: {e:#?}");
+                        Poll::Ready(Some(Err(e)))
+                    }
                 };
             }
             AwsChunkedBodyState::Closed => Poll::Ready(None),
@@ -263,6 +274,7 @@ where
         self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http_02x::HeaderMap<http_02x::HeaderValue>>, Self::Error>> {
+        println!("POLLING 0.x VERSION OF AwsChunkedBody TRAILERS");
         // Trailers were already appended to the body because of the content encoding scheme
         Poll::Ready(Ok(None))
     }
@@ -362,6 +374,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<http_body_1x::Frame<Self::Data>, Self::Error>>> {
+        println!("POLLING 1.x VERSION OF AwsChunkedBody");
         tracing::trace!(state = ?self.state, "polling AwsChunkedBody");
         let mut this = self.project();
 
@@ -447,8 +460,8 @@ where
                             return Poll::Ready(Some(Err(err)));
                         }
 
-                        // Capacity = actual_length (in case all of the trailers specified in  come in AwsChunkedBodyOptions
-                        // come in the first trailer frame which is going to be the case most of the time in practice) + 7
+                        // Capacity = actual_length (in case all of the trailers specified in AwsChunkedBodyOptions
+                        // come in the first trailer frame which is going to be the case most of the time in practice) + 7.
                         // (2 + 3) for the initial CRLF + CHUNK_TERMINATOR to end the chunked data + 2 for the final CRLF
                         // ending the trailers section.
                         let mut buf = BytesMut::with_capacity(actual_length as usize + 7);
@@ -552,11 +565,11 @@ mod http_1x_utils {
                     buffer.extend_from_slice(CRLF_RAW);
                 }
             }
+        };
 
-            buffer
-        } else {
-            buffer
-        }
+        // Regardless of whether trailers exist or not we close out the trailer section with CRLF
+        buffer.extend_from_slice(CRLF_RAW);
+        buffer
     }
 
     /// Given an optional `HeaderMap`, calculate the total number of bytes required to represent the

@@ -38,6 +38,7 @@ impl http_body_0_4::Body for SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+        println!("POLLING 0.X SDKBODY");
         self.poll_next(cx)
     }
 
@@ -45,6 +46,7 @@ impl http_body_0_4::Body for SdkBody {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Result<Option<http::HeaderMap<http::HeaderValue>>, Self::Error>> {
+        println!("POLLING 0.X SDKBODY TRAILERS");
         let polled = self.poll_next_trailers(cx);
         match polled {
             Poll::Ready(Ok(Some(headers))) => Poll::Ready(Ok(Some(convert_headers_1x_0x(headers)))),

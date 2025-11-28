@@ -10,8 +10,6 @@ members = [
     "aws-smithy-eventstream",
     "aws-smithy-http",
     "aws-smithy-http-client",
-    "aws-smithy-http-server",
-    "aws-smithy-http-server-python",
     "aws-smithy-json",
     "aws-smithy-protocol-test",
     "aws-smithy-query",
