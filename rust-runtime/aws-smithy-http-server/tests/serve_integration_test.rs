@@ -44,7 +44,7 @@ async fn test_configure_hyper_http1_keep_alive() {
 
     // Start server with custom Hyper configuration including title_case_headers
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(service_with_custom_headers)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(service_with_custom_headers)))
             .configure_hyper(|mut builder| {
                 // Configure HTTP/1 settings
                 builder.http1().keep_alive(true).title_case_headers(true);
@@ -126,7 +126,7 @@ async fn test_tap_io_set_nodelay() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -173,7 +173,7 @@ async fn test_tap_io_with_limit_connections() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -226,7 +226,7 @@ async fn test_unix_listener() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -277,7 +277,7 @@ async fn test_local_addr() {
 
     let expected_addr = listener.local_addr().unwrap();
 
-    let serve = aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)));
+    let serve = aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)));
 
     let actual_addr = serve.local_addr().expect("failed to get local_addr");
 
@@ -295,7 +295,7 @@ async fn test_local_addr_with_graceful_shutdown() {
 
     let (_shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let serve = aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+    let serve = aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
         .with_graceful_shutdown(async {
             shutdown_rx.await.ok();
         });
@@ -317,7 +317,7 @@ async fn test_http2_only_prior_knowledge() {
 
     // Start server with HTTP/2 only (prior knowledge mode)
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .configure_hyper(|builder| builder.http2_only())
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -366,7 +366,7 @@ async fn test_http1_only() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .configure_hyper(|builder| builder.http1_only())
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -404,7 +404,7 @@ async fn test_default_server_supports_both_http1_and_http2() {
 
     // Start server with DEFAULT configuration (no configure_hyper call)
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -479,7 +479,7 @@ async fn test_mixed_protocol_concurrent_connections() {
 
     // Start server with default configuration (supports both protocols)
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -601,7 +601,7 @@ async fn test_limit_connections_blocks_excess() {
     };
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(semaphore_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(semaphore_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -676,7 +676,7 @@ async fn test_immediate_graceful_shutdown() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(ok_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
             })
@@ -726,7 +726,7 @@ async fn test_multiple_concurrent_http2_streams() {
 
     // Start server with HTTP/2 only and configure max concurrent streams
     let server_handle = tokio::spawn(async move {
-        aws_smithy_http_server::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
             .configure_hyper(|mut builder| {
                 builder.http2().max_concurrent_streams(5);
                 builder.http2_only()
