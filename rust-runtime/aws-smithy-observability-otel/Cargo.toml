@@ -13,6 +13,7 @@ rust-version = "1.88"
 [dependencies]
 aws-smithy-observability = { path = "../aws-smithy-observability" }
 opentelemetry = {version = "0.26.0", features = ["metrics"]}
+thiserror = "2.0"  # Required by opentelemetry 0.26.0 but not declared
 # The following dependencies are transitive and pinned for build
 # compatability purposes
 value-bag = "1.10.0"
