@@ -347,10 +347,16 @@ class ServerBuilderGenerator(
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
 
                     var varExpr = if (symbol.isOptional()) "v" else "input"
-                    if (hasBox) varExpr = "*$varExpr"
-                    if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
+                    var needsTransformation = false
 
-                    val needsTransformation = hasBox || !constrainedTypeHoldsFinalType(member)
+                    if (hasBox) {
+                        varExpr = "*$varExpr"
+                        needsTransformation = true
+                    }
+                    if (!constrainedTypeHoldsFinalType(member)) {
+                        varExpr = "($varExpr).into()"
+                        needsTransformation = true
+                    }
 
                     if (wrapInMaybeConstrained) {
                         if (needsTransformation) {
@@ -363,7 +369,7 @@ class ServerBuilderGenerator(
                             if (symbol.isOptional()) {
                                 rust("input.map($maybeConstrainedVariant)")
                             } else {
-                                rust("$maybeConstrainedVariant(input)")
+                                rust("$maybeConstrainedVariant($varExpr)")
                             }
                         }
                     } else {
