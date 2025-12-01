@@ -75,7 +75,9 @@ mod mock_otel {
             &self,
             _builder: aws_smithy_observability::instruments::AsyncInstrumentBuilder<
                 '_,
-                std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = f64>>,
+                std::sync::Arc<
+                    dyn aws_smithy_observability::instruments::AsyncMeasure<Value = f64>,
+                >,
                 f64,
             >,
         ) -> std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = f64>>
@@ -97,7 +99,9 @@ mod mock_otel {
             &self,
             _builder: aws_smithy_observability::instruments::AsyncInstrumentBuilder<
                 '_,
-                std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = i64>>,
+                std::sync::Arc<
+                    dyn aws_smithy_observability::instruments::AsyncMeasure<Value = i64>,
+                >,
                 i64,
             >,
         ) -> std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = i64>>
@@ -119,7 +123,9 @@ mod mock_otel {
             &self,
             _builder: aws_smithy_observability::instruments::AsyncInstrumentBuilder<
                 '_,
-                std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = u64>>,
+                std::sync::Arc<
+                    dyn aws_smithy_observability::instruments::AsyncMeasure<Value = u64>,
+                >,
                 u64,
             >,
         ) -> std::sync::Arc<dyn aws_smithy_observability::instruments::AsyncMeasure<Value = u64>>
@@ -198,7 +204,10 @@ async fn observability_metrics_in_user_agent() {
         let (client, http_client) = test_client(std::convert::identity);
         call_operation(client).await;
         let req = http_client.actual_requests().last().expect("request");
-        let user_agent = req.headers().get("x-amz-user-agent").expect("user-agent header");
+        let user_agent = req
+            .headers()
+            .get("x-amz-user-agent")
+            .expect("user-agent header");
 
         // Should NOT contain observability metrics when using noop provider
         assert!(!user_agent.contains("m/7")); // OBSERVABILITY_OTEL_METRICS = "7"
@@ -210,13 +219,13 @@ async fn observability_metrics_in_user_agent() {
 
         // Create mock OTel meter provider
         let sdk_mp = Arc::new(OtelMeterProvider);
-        
+
         // Debug: Check what the type name actually is
         let type_name = std::any::type_name_of_val(&sdk_mp);
         eprintln!("Mock OTel provider Arc type name: {}", type_name);
         let type_name2 = std::any::type_name_of_val(sdk_mp.as_ref());
         eprintln!("Mock OTel provider as_ref type name: {}", type_name2);
-        
+
         let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
 
         // Set global telemetry provider
@@ -225,7 +234,10 @@ async fn observability_metrics_in_user_agent() {
         let (client, http_client) = test_client(std::convert::identity);
         call_operation(client).await;
         let req = http_client.actual_requests().last().expect("request");
-        let user_agent = req.headers().get("x-amz-user-agent").expect("user-agent header");
+        let user_agent = req
+            .headers()
+            .get("x-amz-user-agent")
+            .expect("user-agent header");
 
         eprintln!("User-Agent: {}", user_agent);
 

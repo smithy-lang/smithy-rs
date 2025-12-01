@@ -551,7 +551,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "aws-smithy-runtime-api",
  "serial_test",
@@ -568,7 +568,6 @@ dependencies = [
  "opentelemetry",
  "opentelemetry_sdk",
  "stats_alloc",
- "thiserror 2.0.17",
  "tokio",
  "value-bag",
 ]
