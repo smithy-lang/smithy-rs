@@ -36,6 +36,7 @@ jobs:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
       uses: actions/checkout@v4
+    - uses: ./.github/actions/free-disk-space
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:
