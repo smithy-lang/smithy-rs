@@ -79,7 +79,11 @@ class RpcV2CborHttpBindingResolver(
      */
     override fun requestContentType(operationShape: OperationShape): String? =
         if (OperationNormalizer.hadUserModeledOperationInput(operationShape, model)) {
-            contentTypes.requestDocument
+            if (operationShape.isInputEventStream(model)) {
+                contentTypes.eventStreamContentType
+            } else {
+                contentTypes.requestDocument
+            }
         } else {
             null
         }
@@ -164,7 +168,12 @@ open class RpcV2Cbor(
 
     // The accept header is required by the spec (and by all of the protocol tests)
     override fun additionalRequestHeaders(operationShape: OperationShape): List<Pair<String, String>> =
-        listOf("smithy-protocol" to "rpc-v2-cbor", "accept" to "application/cbor")
+        listOf(
+            "smithy-protocol" to "rpc-v2-cbor",
+            // Empty input/output still requires the "Accept" header to be set to "application/cbor"
+            // https://github.com/smithy-lang/smithy/blob/085ad738ef2acf7a8a7f13db5aecd5a8bb8b58dc/smithy-protocol-tests/model/rpcv2Cbor/empty-input-output.smithy#L17
+            "accept" to (httpBindingResolver.responseContentType(operationShape) ?: "application/cbor"),
+        )
 
     override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
         listOf("smithy-protocol" to "rpc-v2-cbor")

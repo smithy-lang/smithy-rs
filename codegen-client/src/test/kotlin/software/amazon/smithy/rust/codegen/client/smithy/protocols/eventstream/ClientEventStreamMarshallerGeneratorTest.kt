@@ -77,6 +77,16 @@ class ClientEventStreamMarshallerGeneratorTest {
 
                 let mut request = rx.expect_request();
 
+                let headers = request.headers();
+                assert!(headers
+                    .get("content-type")
+                    .map(|hdr| hdr == ${rpcEventStreamTestCase.inner.requestContentType.dq()})
+                    .unwrap_or(true));
+                assert!(headers
+                    .get("accept")
+                    .map(|hdr| hdr == ${rpcEventStreamTestCase.inner.accept.dq()})
+                    .unwrap_or(true));
+
                 let mut body = ::aws_smithy_types::body::SdkBody::taken();
                 std::mem::swap(&mut body, request.body_mut());
 
