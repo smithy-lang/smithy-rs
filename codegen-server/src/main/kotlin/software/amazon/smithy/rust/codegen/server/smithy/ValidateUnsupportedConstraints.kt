@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.orNull
 import java.util.logging.Level
+import java.util.stream.Collectors
 
 private sealed class UnsupportedConstraintMessageKind {
     private val constraintTraitsUberIssue = "https://github.com/smithy-lang/smithy-rs/issues/1401"
@@ -330,7 +331,7 @@ fun validateModelHasAtMostOneValidationException(
         model
             .shapes()
             .filter { it.hasTrait(ValidationExceptionTrait.ID) && it.isReachableFromOperationErrors(model) }
-            .toList()
+            .collect(Collectors.toList())
 
     val messages = mutableListOf<LogMessage>()
 
