@@ -44,7 +44,6 @@ private class ObservabilityFeatureTrackerInterceptor(private val codegenContext:
                                     "observability_feature",
                                     Visibility.PRIVATE,
                                     CargoDependency.smithyObservability(runtimeConfig),
-                                    CargoDependency.smithyObservabilityOtel(runtimeConfig),
                                 ),
                             ).resolve("ObservabilityFeatureTrackerInterceptor"),
                     )

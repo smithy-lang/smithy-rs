@@ -28,6 +28,10 @@ impl ProvideMeter for NoopMeterProvider {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn provider_name(&self) -> &'static str {
+        "noop"
+    }
 }
 
 #[derive(Debug)]

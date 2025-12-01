@@ -290,6 +290,10 @@ impl ProvideMeter for OtelMeterProvider {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
+
+    fn provider_name(&self) -> &'static str {
+        "otel"
+    }
 }
 
 #[cfg(test)]
