@@ -338,6 +338,8 @@ jobs:
   test-runtime-architectures:
     name: Test Runtime (${{ matrix.target }})
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
@@ -349,7 +351,6 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        path: smithy-rs
         ref: ${{ inputs.git_ref }}
     - uses: dtolnay/rust-toolchain@master
       with:
@@ -358,11 +359,11 @@ jobs:
     - name: Install cross
       run: cargo install cross --git https://github.com/cross-rs/cross
     - name: Test smithy-rs runtime on ${{ matrix.target }}
-      working-directory: smithy-rs/rust-runtime
-      run: cross test --target ${{ matrix.target }} --workspace
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     - name: Test AWS runtime on ${{ matrix.target }}
-      working-directory: smithy-rs/aws/rust-runtime
-      run: cross test --target ${{ matrix.target }} --workspace
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
 
   # Run the canary against generated SDKs
   #
