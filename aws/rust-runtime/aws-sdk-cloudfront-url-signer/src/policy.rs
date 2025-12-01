@@ -19,10 +19,6 @@ impl Policy {
         PolicyBuilder::default()
     }
 
-    pub(crate) fn is_canned(&self) -> bool {
-        self.date_greater_than.is_none() && self.ip_address.is_none()
-    }
-
     pub(crate) fn to_json(&self) -> String {
         let mut out = String::new();
         let mut root = aws_smithy_json::serialize::JsonObjectWriter::new(&mut out);
@@ -138,7 +134,6 @@ mod tests {
             .build()
             .expect("valid canned policy");
 
-        assert!(policy.is_canned());
         let json = policy.to_json();
         assert!(json.contains("\"Resource\":\"https://d111111abcdef8.cloudfront.net/image.jpg\""));
         assert!(json.contains("\"AWS:EpochTime\":1767290400"));
@@ -155,7 +150,6 @@ mod tests {
             .build()
             .expect("valid custom policy");
 
-        assert!(!policy.is_canned());
         let json = policy.to_json();
         assert!(json.contains("DateGreaterThan"));
         assert!(json.contains("\"AWS:EpochTime\":1767200000"));
@@ -170,7 +164,6 @@ mod tests {
             .build()
             .expect("valid custom policy");
 
-        assert!(!policy.is_canned());
         let json = policy.to_json();
         assert!(json.contains("IpAddress"));
         assert!(json.contains("\"AWS:SourceIp\":\"192.0.2.0/24\""));

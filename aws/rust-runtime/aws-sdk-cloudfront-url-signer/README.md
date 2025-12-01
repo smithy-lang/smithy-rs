@@ -182,12 +182,13 @@ let request = SigningRequest::builder()
 ### Custom Policy
 
 A custom policy is used when you specify any of:
+- `resource_pattern()` - Wildcard pattern for the policy (different from the signed URL)
 - `active_at()` - URL becomes valid at this time (not-before)
 - `ip_range()` - Restrict access to an IPv4 CIDR range
 
 ```rust,ignore
 let request = SigningRequest::builder()
-    .resource_url("https://example.cloudfront.net/premium/*")
+    .resource_url("https://example.cloudfront.net/premium/video.mp4")
     .key_pair_id("APKAEXAMPLE")
     .private_key(key)
     .expires_at(DateTime::from_secs(1767290400))
@@ -198,21 +199,31 @@ let request = SigningRequest::builder()
 
 ## Wildcard Patterns
 
-Custom policies support wildcards in the resource URL:
+Custom policies support wildcards in the resource pattern. Use `resource_pattern()` to specify
+a wildcard pattern that grants access to multiple resources, while `resource_url()` specifies
+the actual URL being signed:
 
 - `*` matches zero or more characters
 - `?` matches exactly one character
 
 ```rust,ignore
-// Access to all files under /videos/
-.resource_url("https://d111111abcdef8.cloudfront.net/videos/*")
+// Sign a specific URL but grant access to all files under /videos/
+let request = SigningRequest::builder()
+    .resource_url("https://d111111abcdef8.cloudfront.net/videos/intro.mp4")
+    .resource_pattern("https://d111111abcdef8.cloudfront.net/videos/*")
+    .key_pair_id("APKAEXAMPLE")
+    .private_key(key)
+    .expires_at(DateTime::from_secs(1767290400))
+    .build()?;
 
-// Access to all .mp4 files
-.resource_url("https://d111111abcdef8.cloudfront.net/*.mp4")
-
-// Access to files matching pattern
-.resource_url("https://d111111abcdef8.cloudfront.net/video-?.mp4")
+// The signed URL points to intro.mp4, but the policy grants access to all /videos/*
 ```
+
+Common wildcard patterns:
+- `https://example.cloudfront.net/videos/*` - All files under /videos/
+- `https://example.cloudfront.net/*.mp4` - All .mp4 files
+- `https://example.cloudfront.net/video-?.mp4` - video-1.mp4, video-2.mp4, etc.
+- `*` - All resources (use with caution)
 
 ## Error Handling
 
