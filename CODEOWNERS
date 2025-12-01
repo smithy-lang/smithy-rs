@@ -4,6 +4,7 @@
 /codegen-server-test/                               @smithy-lang/smithy-rs-server
 /codegen-server/                                    @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-http-server/               @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-legacy-http-server/        @smithy-lang/smithy-rs-server
 
 # Python Server
 /codegen-server-test/python/                        @smithy-lang/smithy-rs-server
