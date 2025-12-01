@@ -11,6 +11,16 @@ use std::borrow::Cow;
 use std::fmt;
 use std::time::Duration;
 
+/// CloudFront-specific base64 encoding.
+/// Standard base64 with: `+` → `-`, `=` → `_`, `/` → `~`
+fn cloudfront_base64(data: &[u8]) -> String {
+    base64_simd::STANDARD
+        .encode_to_string(data)
+        .replace('+', "-")
+        .replace('=', "_")
+        .replace('/', "~")
+}
+
 const COOKIE_POLICY: &str = "CloudFront-Policy";
 const COOKIE_SIGNATURE: &str = "CloudFront-Signature";
 const COOKIE_KEY_PAIR_ID: &str = "CloudFront-Key-Pair-Id";
@@ -192,7 +202,7 @@ impl SigningRequest {
         let policy = self.build_policy()?;
         let policy_json = policy.to_json();
         let signature = self.private_key.sign(policy_json.as_bytes())?;
-        let signature_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(&signature);
+        let signature_b64 = cloudfront_base64(&signature);
 
         let separator = if self.resource_url.contains('?') {
             "&"
@@ -210,7 +220,7 @@ impl SigningRequest {
                 self.key_pair_id
             )
         } else {
-            let policy_b64 = policy.to_base64url();
+            let policy_b64 = policy.to_cloudfront_base64();
             format!(
                 "{}{}Policy={}&Signature={}&Key-Pair-Id={}",
                 self.resource_url, separator, policy_b64, signature_b64, self.key_pair_id
@@ -224,7 +234,7 @@ impl SigningRequest {
         let policy = self.build_policy()?;
         let policy_json = policy.to_json();
         let signature = self.private_key.sign(policy_json.as_bytes())?;
-        let signature_b64 = base64_simd::URL_SAFE_NO_PAD.encode_to_string(&signature);
+        let signature_b64 = cloudfront_base64(&signature);
 
         let cookies = if policy.is_canned() {
             vec![
@@ -236,7 +246,7 @@ impl SigningRequest {
                 (Cow::Borrowed(COOKIE_KEY_PAIR_ID), self.key_pair_id.clone()),
             ]
         } else {
-            let policy_b64 = policy.to_base64url();
+            let policy_b64 = policy.to_cloudfront_base64();
             vec![
                 (Cow::Borrowed(COOKIE_POLICY), policy_b64),
                 (Cow::Borrowed(COOKIE_SIGNATURE), signature_b64),
