@@ -13,7 +13,7 @@ aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-sdk-s3 = "1"
 clap = { version = "4.3.2", default-features = false, features = ["derive", "std", "help"] }
 tokio = { version = "1.28.2", features = ["full"] }
-tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 tracing = "0.1"
 async-trait = "0.1.74"
 hyper = { version = "0.14.27", features = ["client"] }
