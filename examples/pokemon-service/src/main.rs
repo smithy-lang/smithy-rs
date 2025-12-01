@@ -9,13 +9,16 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use clap::Parser;
-use pokemon_service_server_sdk::server::{
-    extension::OperationExtensionExt,
-    instrumentation::InstrumentExt,
-    layer::alb_health_check::AlbHealthCheckLayer,
-    plugin::{HttpPlugins, ModelPlugins, Scoped},
-    request::request_id::ServerRequestIdProviderLayer,
-    serve, AddExtensionLayer,
+use pokemon_service_server_sdk::{
+    serve,
+    server::{
+        extension::OperationExtensionExt,
+        instrumentation::InstrumentExt,
+        layer::alb_health_check::AlbHealthCheckLayer,
+        plugin::{HttpPlugins, ModelPlugins, Scoped},
+        request::request_id::ServerRequestIdProviderLayer,
+        AddExtensionLayer,
+    },
 };
 use tokio::net::TcpListener;
 
