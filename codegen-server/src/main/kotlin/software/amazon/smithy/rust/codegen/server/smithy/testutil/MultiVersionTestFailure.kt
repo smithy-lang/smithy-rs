@@ -25,17 +25,9 @@ class MultiVersionTestFailure(
      * Represents a test failure for a specific HTTP version.
      */
     data class HttpVersionFailure(
-        val version: HttpVersion,
+        val version: HttpTestVersion,
         val exception: Throwable,
     )
-
-    /**
-     * HTTP version identifier for dual-version testing.
-     */
-    enum class HttpVersion(val displayName: String) {
-        HTTP_0_X("HTTP 0.x"),
-        HTTP_1_X("HTTP 1.x"),
-    }
 
     /**
      * Returns true if all failures are of the specified exception type.
@@ -51,12 +43,12 @@ class MultiVersionTestFailure(
     /**
      * Returns true if there is a failure for the specified HTTP version.
      */
-    fun hasFailureFor(version: HttpVersion): Boolean = failures.any { it.version == version }
+    fun hasFailureFor(version: HttpTestVersion): Boolean = failures.any { it.version == version }
 
     /**
      * Returns the failure for the specified HTTP version, or null if none exists.
      */
-    fun getFailureFor(version: HttpVersion): HttpVersionFailure? = failures.find { it.version == version }
+    fun getFailureFor(version: HttpTestVersion): HttpVersionFailure? = failures.find { it.version == version }
 
     companion object {
         private fun buildMessage(failures: List<HttpVersionFailure>): String =

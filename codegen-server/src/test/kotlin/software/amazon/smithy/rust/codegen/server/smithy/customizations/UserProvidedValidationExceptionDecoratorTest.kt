@@ -310,7 +310,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
 
     @Test
     fun `code compiles with custom validation exception`() {
-        serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.AS_CONFIGURED)
+        serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.AsConfigured)
     }
 
     private val completeTestModelWithOptionals =
@@ -383,7 +383,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
 
     @Test
     fun `code compiles with custom validation exception using optionals`() {
-        serverIntegrationTest(completeTestModelWithOptionals, testCoverage = HttpTestType.AS_CONFIGURED)
+        serverIntegrationTest(completeTestModelWithOptionals, testCoverage = HttpTestType.AsConfigured)
     }
 
     private val completeTestModelWithImplicitNamesWithoutFieldMessage =

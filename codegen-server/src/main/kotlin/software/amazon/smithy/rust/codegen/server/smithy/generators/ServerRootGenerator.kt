@@ -64,7 +64,7 @@ open class ServerRootGenerator(
                         //! ## use std::net::SocketAddr;
                         //! ## async fn dummy() {
                         //! use $crateName::{$serviceName, ${serviceName}Config};
-                        //! use $crateName::server::serve;
+                        //! use $crateName::serve;
                         //! use #{Tokio}::net::TcpListener;
                         //!
                         //! ## let app = $serviceName::builder(
@@ -126,7 +126,7 @@ open class ServerRootGenerator(
                         //! ```rust,no_run
                         //! ## use std::net::SocketAddr;
                         //! use $crateName::{$serviceName, ${serviceName}Config};
-                        //! use $crateName::server::serve;
+                        //! use $crateName::serve;
                         //! use #{Tokio}::net::TcpListener;
                         //!
                         //! ##[#{Tokio}::main]
@@ -378,7 +378,7 @@ open class ServerRootGenerator(
             HttpVersion.Http1x -> {
                 rustTemplate(
                     """
-                        //! [`serve`]: $crateName::server::serve
+                        //! [`serve`]: crate::serve
                         //! [hyper server]: https://docs.rs/hyper/latest/hyper/server/index.html
                         """,
                 )
@@ -412,5 +412,14 @@ open class ServerRootGenerator(
             };
             """,
         )
+
+        // Re-export serve function for HTTP 1.x
+        if (codegenContext.settings.runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            rustWriter.rust(
+                """
+                pub use crate::server::serve::serve;
+                """,
+            )
+        }
     }
 }

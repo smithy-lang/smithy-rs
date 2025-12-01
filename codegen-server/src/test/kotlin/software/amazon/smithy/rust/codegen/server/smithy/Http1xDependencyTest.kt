@@ -13,7 +13,6 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.CratesIo
-import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
@@ -22,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.ServerAdditionalSetting
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 
@@ -221,7 +221,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.HTTP_1_ONLY,
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -275,7 +275,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.AS_CONFIGURED,
+            testCoverage = HttpTestType.AsConfigured,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -296,7 +296,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.HTTP_1_ONLY,
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_1_X),
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -349,7 +349,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.AS_CONFIGURED,
+            testCoverage = HttpTestType.AsConfigured,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -414,7 +414,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.HTTP_0_ONLY,
+            testCoverage = HttpTestType.Only(HttpTestVersion.HTTP_0_X),
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)

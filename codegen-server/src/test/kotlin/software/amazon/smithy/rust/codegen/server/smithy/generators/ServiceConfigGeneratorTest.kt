@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.MultiVersionTestFailure
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
@@ -98,7 +99,7 @@ internal class ServiceConfigGeneratorTest {
         serverIntegrationTest(
             model,
             additionalDecorators = listOf(decorator),
-            testCoverage = HttpTestType.BOTH,
+            testCoverage = HttpTestType.ALL,
         ) { context, rustCrate ->
             val smithyServer = ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType()
             rustCrate.testModule {
@@ -220,7 +221,7 @@ internal class ServiceConfigGeneratorTest {
         serverIntegrationTest(
             model,
             additionalDecorators = listOf(decorator),
-            testCoverage = HttpTestType.BOTH,
+            testCoverage = HttpTestType.ALL,
         ) { context, rustCrate ->
             val smithyServer = ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType()
             rustCrate.testModule {
@@ -304,14 +305,14 @@ internal class ServiceConfigGeneratorTest {
                 serverIntegrationTest(
                     model,
                     additionalDecorators = listOf(decorator),
-                    testCoverage = HttpTestType.BOTH,
+                    testCoverage = HttpTestType.ALL,
                 ) { _, _ -> }
             }
 
         // Verify both HTTP versions failed
         failure.failures.size shouldBe 2
-        failure.hasFailureFor(MultiVersionTestFailure.HttpVersion.HTTP_0_X) shouldBe true
-        failure.hasFailureFor(MultiVersionTestFailure.HttpVersion.HTTP_1_X) shouldBe true
+        failure.hasFailureFor(HttpTestVersion.HTTP_0_X) shouldBe true
+        failure.hasFailureFor(HttpTestVersion.HTTP_1_X) shouldBe true
 
         // Verify all failures are CodegenExceptions
         failure.allFailuresAreOfType(CodegenException::class) shouldBe true

@@ -67,7 +67,7 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
             serverIntegrationTest(
                 testModelWithValidationExceptionImported,
                 IntegrationTestParams(),
-                testCoverage = HttpTestType.AS_CONFIGURED,
+                testCoverage = HttpTestType.AsConfigured,
             )
         }
     }
@@ -82,7 +82,7 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
                         .addValidationExceptionToConstrainedOperations()
                         .toObjectNode(),
             ),
-            testCoverage = HttpTestType.AS_CONFIGURED,
+            testCoverage = HttpTestType.AsConfigured,
         )
     }
 }

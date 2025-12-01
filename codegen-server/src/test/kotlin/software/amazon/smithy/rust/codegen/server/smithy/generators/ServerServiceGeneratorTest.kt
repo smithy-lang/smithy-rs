@@ -39,8 +39,8 @@ internal class ServerServiceGeneratorTest {
             }
 
         // test the generated metadata for all generated projects (both HTTP 0.x and HTTP 1.x)
-        testDirs.forEach { testDir ->
-            val cargoToml = testDir.resolve("Cargo.toml").readText()
+        testDirs.forEach { generatedServer ->
+            val cargoToml = generatedServer.path.resolve("Cargo.toml").readText()
             assert(cargoToml.contains("codegen-version =")) { cargoToml }
             assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
         }

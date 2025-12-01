@@ -71,7 +71,7 @@ class UnconstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
 
-        serverIntegrationTest(model, testCoverage = HttpTestType.AS_CONFIGURED) { _, rustCrate ->
+        serverIntegrationTest(model, testCoverage = HttpTestType.AsConfigured) { _, rustCrate ->
             rustCrate.testModule {
                 TestUtility.generateIsDisplay().invoke(this)
                 TestUtility.generateIsError().invoke(this)

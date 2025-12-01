@@ -22,32 +22,34 @@ import java.util.concurrent.CompletableFuture
 /**
  * Specifies which HTTP version(s) to test in [serverIntegrationTest].
  */
-enum class HttpTestType {
+sealed class HttpTestType {
     /**
-     * Run the test twice: once with http-1x=false (HTTP 0.x) and once with http-1x=true (HTTP 1.x).
+     * Run the test for all HTTP versions: HTTP 0.x and HTTP 1.x.
      * This is the default to ensure comprehensive coverage across both HTTP versions.
      */
-    BOTH,
+    object ALL : HttpTestType()
 
     /**
-     * Run the test once with http-1x=false (HTTP 0.x only).
-     * Use this for tests that are specific to HTTP 0.x behavior.
+     * Run the test only for a specific HTTP version.
+     * Use this for tests that are specific to either HTTP 0.x or HTTP 1.x behavior.
      */
-    HTTP_0_ONLY,
-
-    /**
-     * Run the test once with http-1x=true (HTTP 1.x only).
-     * Use this for tests that are specific to HTTP 1.x behavior.
-     */
-    HTTP_1_ONLY,
+    data class Only(val version: HttpTestVersion) : HttpTestType()
 
     /**
      * Run the test once with whatever http-1x value is provided in the params.
      * The framework will not override the http-1x flag.
      * Use this when you want to explicitly control the http-1x setting or test default behavior.
      */
-    AS_CONFIGURED,
+    object AsConfigured : HttpTestType()
 }
+
+/**
+ * Represents a generated server with its associated HTTP test version.
+ */
+data class GeneratedServer(
+    val path: Path,
+    val httpVersion: HttpTestVersion,
+)
 
 /**
  * This file is entirely analogous to [software.amazon.smithy.rust.codegen.client.testutil.ClientCodegenIntegrationTest.kt].
@@ -57,9 +59,9 @@ fun serverIntegrationTest(
     model: Model,
     params: IntegrationTestParams = IntegrationTestParams(),
     additionalDecorators: List<ServerCodegenDecorator> = listOf(),
-    testCoverage: HttpTestType = HttpTestType.BOTH,
+    testCoverage: HttpTestType = HttpTestType.ALL,
     test: (ServerCodegenContext, RustCrate) -> Unit = { _, _ -> },
-): List<Path> {
+): List<GeneratedServer> {
     fun invokeRustCodegenPlugin(ctx: PluginContext) {
         val codegenDecorator =
             object : ServerCodegenDecorator {
@@ -79,22 +81,43 @@ fun serverIntegrationTest(
     }
 
     // Handle AS_CONFIGURED case separately - run once without modifying params
-    if (testCoverage == HttpTestType.AS_CONFIGURED) {
-        return listOf(codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin))
+    if (testCoverage is HttpTestType.AsConfigured) {
+        val path = codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)
+        // Determine version from params - check if http-1x is enabled
+        val http1xNode =
+            params.additionalSettings
+                .expectObjectNode()
+                .getMember("codegen")
+                .orElse(Node.objectNode())
+                .expectObjectNode()
+                .getBooleanMember(ServerCodegenConfig.HTTP_1X_CONFIG_KEY)
+        val http1xEnabled = http1xNode.map { it.value }.orElse(false)
+        val version = if (http1xEnabled) HttpTestVersion.HTTP_1_X else HttpTestVersion.HTTP_0_X
+        return listOf(GeneratedServer(path, version))
     }
 
     // Determine which HTTP versions to test
-    val shouldTestHttp0 = testCoverage == HttpTestType.BOTH || testCoverage == HttpTestType.HTTP_0_ONLY
-    val shouldTestHttp1 = testCoverage == HttpTestType.BOTH || testCoverage == HttpTestType.HTTP_1_ONLY
+    val shouldTestHttp0 =
+        when (testCoverage) {
+            is HttpTestType.ALL -> true
+            is HttpTestType.Only -> testCoverage.version == HttpTestVersion.HTTP_0_X
+            is HttpTestType.AsConfigured -> false // Already handled above
+        }
+    val shouldTestHttp1 =
+        when (testCoverage) {
+            is HttpTestType.ALL -> true
+            is HttpTestType.Only -> testCoverage.version == HttpTestVersion.HTTP_1_X
+            is HttpTestType.AsConfigured -> false // Already handled above
+        }
 
     // Check if parallel execution is enabled via environment variable
     val runInParallel = System.getenv("PARALLEL_HTTP_TESTS")?.toBoolean() ?: false
 
-    val paths = mutableListOf<Path>()
+    val generatedServers = mutableListOf<GeneratedServer>()
     val errors = mutableListOf<MultiVersionTestFailure.HttpVersionFailure>()
 
     // Helper function to run test for a specific HTTP version
-    val runTestForVersion: (MultiVersionTestFailure.HttpVersion, Boolean) -> Result<Path> = { version, http1xEnabled ->
+    val runTestForVersion: (HttpTestVersion, Boolean) -> Result<Path> = { version, http1xEnabled ->
         try {
             // Deep merge the codegen settings to preserve existing keys
             val existingCodegenSettings =
@@ -125,8 +148,8 @@ fun serverIntegrationTest(
     }
 
     // Helper function to handle test results
-    val handleResult: (MultiVersionTestFailure.HttpVersion, Result<Path>) -> Unit = { version, result ->
-        result.onSuccess { paths.add(it) }
+    val handleResult: (HttpTestVersion, Result<Path>) -> Unit = { version, result ->
+        result.onSuccess { generatedServers.add(GeneratedServer(it, version)) }
             .onFailure { errors.add(MultiVersionTestFailure.HttpVersionFailure(version, it)) }
     }
 
@@ -135,7 +158,7 @@ fun serverIntegrationTest(
         val http0Future =
             if (shouldTestHttp0) {
                 CompletableFuture.supplyAsync {
-                    runTestForVersion(MultiVersionTestFailure.HttpVersion.HTTP_0_X, false)
+                    runTestForVersion(HttpTestVersion.HTTP_0_X, false)
                 }
             } else {
                 null
@@ -144,23 +167,23 @@ fun serverIntegrationTest(
         val http1Future =
             if (shouldTestHttp1) {
                 CompletableFuture.supplyAsync {
-                    runTestForVersion(MultiVersionTestFailure.HttpVersion.HTTP_1_X, true)
+                    runTestForVersion(HttpTestVersion.HTTP_1_X, true)
                 }
             } else {
                 null
             }
 
         // Wait for all futures to complete and collect results
-        http0Future?.get()?.let { handleResult(MultiVersionTestFailure.HttpVersion.HTTP_0_X, it) }
-        http1Future?.get()?.let { handleResult(MultiVersionTestFailure.HttpVersion.HTTP_1_X, it) }
+        http0Future?.get()?.let { handleResult(HttpTestVersion.HTTP_0_X, it) }
+        http1Future?.get()?.let { handleResult(HttpTestVersion.HTTP_1_X, it) }
     } else {
         // Run tests sequentially (original behavior)
         if (shouldTestHttp0) {
-            handleResult(MultiVersionTestFailure.HttpVersion.HTTP_0_X, runTestForVersion(MultiVersionTestFailure.HttpVersion.HTTP_0_X, false))
+            handleResult(HttpTestVersion.HTTP_0_X, runTestForVersion(HttpTestVersion.HTTP_0_X, false))
         }
 
         if (shouldTestHttp1) {
-            handleResult(MultiVersionTestFailure.HttpVersion.HTTP_1_X, runTestForVersion(MultiVersionTestFailure.HttpVersion.HTTP_1_X, true))
+            handleResult(HttpTestVersion.HTTP_1_X, runTestForVersion(HttpTestVersion.HTTP_1_X, true))
         }
     }
 
@@ -169,7 +192,7 @@ fun serverIntegrationTest(
         throw MultiVersionTestFailure(errors)
     }
 
-    return paths.ifEmpty { throw IllegalStateException("No tests were run") }
+    return generatedServers.ifEmpty { throw IllegalStateException("No tests were run") }
 }
 
 abstract class ServerDecoratableBuildPlugin : SmithyBuildPlugin {
