@@ -25,8 +25,9 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
         SimpleRuntimeFunction("substring", EndpointsLib.substring, RuntimeType.lifetimeStr()),
         SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel, RuntimeType.Bool),
         SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl, EndpointsLib.url()),
-        SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode, RuntimeType.Cow),
-        // The runtime type for coalesce and evaluate_bdd is a bit of a lie since the return type is generic
+        SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode, RuntimeType.lifetimeCow()),
+        // The runtime types for coalesce and evaluate_bdd are a bit of a lie since the return type is generic.
+        // In practice they aren't actually used.
         SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce, RuntimeType.Option),
         SimpleRuntimeFunction("evaluate_bdd", EndpointsLib.evaluateBdd, RuntimeType.Option),
     )
@@ -135,7 +136,7 @@ class AwsPartitionResolver(val runtimeConfig: RuntimeConfig, private val partiti
 
     override fun usage() = writable { rust("partition_resolver.resolve_partition") }
 
-    override fun returnType(): Writable = writable { rustTemplate("#{Partition}", *codegenScope) }
+    override fun returnType(): RuntimeType = EndpointsLib.partition(runtimeConfig)
 }
 
 /**
@@ -146,7 +147,7 @@ class AwsPartitionResolver(val runtimeConfig: RuntimeConfig, private val partiti
 private class SimpleRuntimeFunction(
     override val id: String,
     private val runtimeType: RuntimeType,
-    private val returnType: RuntimeType,
+    val returnType: RuntimeType,
 ) :
     CustomRuntimeFunction() {
     override fun structFieldInit(): Writable? = null
@@ -165,5 +166,5 @@ private class SimpleRuntimeFunction(
 
     override fun usage() = writable { rust("#T", runtimeType) }
 
-    override fun returnType() = writable { rust("#T", returnType) }
+    override fun returnType() = returnType
 }

@@ -26,7 +26,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
  * BuiltInResolver enables potentially external codegen stages to provide sources for `builtIn` parameters.
- * For example, this allows AWS to provide the value for the region builtIn in separate codegen.
+ * For example, this allows AWS to provide the value for the region builtIn
+ * in separate codegen.
  *
  * If this resolver does not recognize the value, it MUST return `null`.
  */

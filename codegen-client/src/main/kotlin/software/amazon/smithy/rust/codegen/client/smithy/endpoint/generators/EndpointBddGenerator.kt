@@ -69,7 +69,7 @@ class EndpointBddGenerator(
         bddTrait.conditions.withIndex().forEach { (idx, cond) ->
             val bddExpressionGenerator =
                 BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
-            bddExpressionGenerator.generateCondition(cond, 9999999)(
+            bddExpressionGenerator.generateCondition(cond)(
                 RustWriter.root(),
             )
         }
@@ -79,14 +79,13 @@ class EndpointBddGenerator(
 
         // Build additional args for custom runtime functions
         val additionalArgsSignature = fnsUsed.mapNotNull { it.additionalArgsSignatureBdd() }
-        val additionalArgsInvocation = fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
 
         // Build the scope with condition evaluations
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
                 val bddExpressionGenerator =
                     BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
-                "cond_$idx" to bddExpressionGenerator.generateCondition(cond, idx)
+                "cond_$idx" to bddExpressionGenerator.generateCondition(cond)
             }
 
         writer.rustTemplate(
@@ -252,15 +251,6 @@ class EndpointBddGenerator(
             "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
             "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
             *Types(runtimeConfig).toArray(),
-//            "PartitionResolver" to EndpointsLib.partitionResolver(runtimeConfig),
-//            "AdditionalArgsInvokePrefix" to writable { if (additionalArgsInvocation.isNotEmpty()) rust(", ") },
-//            "additional_args_invoke" to
-//                writable {
-//                    additionalArgsInvocation.forEachIndexed { i, it ->
-//                        if (i > 0) rust(", ")
-//                        rust("#W", it)
-//                    }
-//                },
         )
     }
 
@@ -348,7 +338,7 @@ class EndpointBddGenerator(
         writable {
             val visitor = RuleVisitor(context)
             bddTrait.results.forEachIndexed { idx, rule ->
-                // Skip NoMatchRule (index 0) - it doesn't support visitor pattern
+                // Skip NoMatchRule (index 0), it doesn't support visitor pattern
                 if (rule is NoMatchRule) {
                     rustTemplate(
                         "Self::Result$idx => #{Err}(#{ResolveEndpointError}::message(\"No endpoint rule matched\")),\n",
@@ -388,7 +378,7 @@ class EndpointBddGenerator(
 
     /**
      * Generates an `Endpoint` using an `Endpoint::builder()` and the same `Params`/`ConditionContext`
-     * used in Condition evalutaion.
+     * used in Condition evaluation.
      */
     private fun generateEndpoint(endpoint: Endpoint): Writable {
         val registry = FunctionRegistry(stdlib)
@@ -423,7 +413,6 @@ class EndpointBddGenerator(
                     val fn = it.value.condition?.function!!
                     val fnDef = fn.functionDefinition
                     val registeredFn = registry.fnFor(fnDef.id)
-                    val fnId = registeredFn?.id
                     val type =
                         if (it.value.type is OptionalType) {
                             (it.value.type as OptionalType).inner()
@@ -441,9 +430,7 @@ class EndpointBddGenerator(
                             // These types aren't easy to infer from the type of the reference.
                             // It is basically just an unnamed struct so we would have to match
                             // on the fields. Easier to key off of the function that sets it.
-                            fnId == "parseURL" -> EndpointsLib.url()
-                            fnId == "aws.partition" -> EndpointsLib.partition(runtimeConfig)
-                            fnId == "aws.parseArn" -> EndpointsLib.arn()
+                            registeredFn != null -> registeredFn.returnType()
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
                     "pub(crate) ${it.value.name}: Option<${rustType.render()}>"
@@ -451,7 +438,7 @@ class EndpointBddGenerator(
 
             rustTemplate(
                 """
-                // These are all optional since they are set by condition and will
+                // These are all optional since they are set by conditions and will
                 // all be unset when we start evaluation
                 ##[derive(Default)]
                 ##[allow(unused_lifetimes)]
@@ -472,8 +459,8 @@ class EndpointBddGenerator(
             val bdd = bddTrait.bdd
             val nodes = mutableListOf<String>()
 
-            bdd.getNodes { var_, high, low ->
-                nodes.add("#{BddNode} { condition_index: $var_, high_ref: $high, low_ref: $low }")
+            bdd.getNodes { condIdx, high, low ->
+                nodes.add("#{BddNode} { condition_index: $condIdx, high_ref: $high, low_ref: $low }")
             }
 
             rustTemplate(
@@ -494,8 +481,8 @@ class EndpointBddGenerator(
 
 /**
  * Container for annotated references, these are the variables the condition evaluation can potentially
- * refer to. They come in two variants: Parameters (which are immutable), and Variables (which are all Optional
- * and begin as None and might be set by a condition later during evaluation).
+ * refer to. They come in two variants: Parameters (which are immutable), and Variables (which are all Optional,
+ * begin as None, and might be set by a condition during evaluation).
  */
 class AnnotatedRefs(
     private val refs: Map<String, AnnotatedRef>,
@@ -568,13 +555,13 @@ class AnnotatedRefs(
                             returnType is ArrayType ->
                                 when (returnType.member) {
                                     is StringType -> RustType.StringArray
-                                    else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                                    else -> throw IllegalArgumentException("Unsupported reference type inside an ArrayType: $returnType")
                                 }
 
                             cond.function is ParseUrl -> RustType.Url
                             cond.function.name == "aws.partition" -> RustType.Partition
                             cond.function.name == "aws.parseArn" -> RustType.Arn
-                            else -> throw IllegalArgumentException("Unsupported reference type $returnType")
+                            else -> throw IllegalArgumentException("Unsupported reference type: $returnType")
                         }
                     refs[result.rustName()] =
                         AnnotatedRef(result.rustName(), RefType.Variable, true, rustType, cond, returnType)

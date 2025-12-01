@@ -45,6 +45,11 @@ import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 abstract class CustomRuntimeFunction {
     abstract val id: String
 
+    /**
+     * The type returned by the function
+     */
+    abstract fun returnType(): RuntimeType
+
     /** Initialize the struct field to a default value */
     abstract fun structFieldInit(): Writable?
 
@@ -92,11 +97,6 @@ abstract class CustomRuntimeFunction {
      * - &mut DiagnosticCollector
      */
     abstract fun usage(): Writable
-
-    /**
-     * The type returned by the function
-     */
-    abstract fun returnType(): Writable
 }
 
 class FunctionRegistry(private val functions: List<CustomRuntimeFunction>) {

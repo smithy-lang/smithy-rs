@@ -252,6 +252,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val ByteSlab = std.resolve("vec::Vec<u8>")
         val Clone = std.resolve("clone::Clone")
         val Cow = std.resolve("borrow::Cow")
+
+        fun lifetimeCow(lifetimeName: String = "a") = std.resolve("borrow::Cow<'$lifetimeName>")
+
         val Debug = stdFmt.resolve("Debug")
         val Default = std.resolve("default::Default")
         val Display = stdFmt.resolve("Display")
