@@ -6,8 +6,7 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
 /* End of automatically managed default lints */
-//! CloudFront URL and cookie signing utilities for AWS SDK.
-
+#![doc = include_str!("../README.md")]
 #![warn(
     missing_docs,
     rustdoc::missing_crate_level_docs,

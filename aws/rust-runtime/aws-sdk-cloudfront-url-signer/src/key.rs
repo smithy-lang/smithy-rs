@@ -8,6 +8,7 @@ use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
 use sha1::{Digest, Sha1};
 
+use p256::ecdsa::signature::SignatureEncoding;
 #[cfg(feature = "rt-tokio")]
 use std::path::Path;
 
@@ -75,18 +76,18 @@ impl PrivateKey {
                 Ok(signature)
             }
             PrivateKey::Ecdsa(key) => {
-                use p256::ecdsa::signature::Signer;
-                use sha2::Sha256;
+                use p256::ecdsa::signature::DigestSigner;
 
-                let mut hasher = Sha256::new();
+                // CloudFront uses SHA1 for all signature types
+                let mut hasher = Sha1::new();
                 hasher.update(message);
-                let digest = hasher.finalize();
 
-                let signature: p256::ecdsa::Signature = key
-                    .try_sign(&digest)
+                let (signature, _recovery_id): (p256::ecdsa::Signature, _) = key
+                    .try_sign_digest(hasher)
                     .map_err(SigningError::signing_failure)?;
 
-                Ok(signature.to_vec())
+                // CloudFront expects DER-encoded signatures
+                Ok(signature.to_der().to_vec())
             }
         }
     }
