@@ -322,6 +322,7 @@ mod tests {
             package("aws-smithy-http-server", &[]),
             package("aws-smithy-http-server-python", &[]),
             package("aws-smithy-http-server-typescript", &[]),
+            package("aws-smithy-legacy-http-server", &[]),
         ];
         for pkg in server_packages {
             assert_eq!(&["aws-sdk-rust-ci"], pkg.expected_owners());
