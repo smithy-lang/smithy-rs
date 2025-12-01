@@ -9,7 +9,7 @@ use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
 use eventstreams::{ManualEventStreamClient, RecvError};
 use rpcv2cbor_extras::model::{Event, Events};
-use rpcv2cbor_extras::server::serve;
+use rpcv2cbor_extras::server::{request::Extension, serve, AddExtensionLayer};
 use rpcv2cbor_extras::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -51,29 +51,15 @@ struct TestServer {
 impl TestServer {
     async fn start() -> Self {
         let state = Arc::new(Mutex::new(ServerState::default()));
-        let handler_state = state.clone();
-        let handler_state2 = state.clone();
-        let handler_state3 = state.clone();
-        let handler_state4 = state.clone();
 
-        let config = RpcV2CborServiceConfig::builder().build();
+        let config = RpcV2CborServiceConfig::builder()
+            .layer(AddExtensionLayer::new(state.clone()))
+            .build();
         let app = RpcV2CborService::builder(config)
-            .streaming_operation(move |input| {
-                let state = handler_state.clone();
-                streaming_operation_handler(input, state)
-            })
-            .streaming_operation_with_initial_data(move |input| {
-                let state = handler_state2.clone();
-                streaming_operation_with_initial_data_handler(input, state)
-            })
-            .streaming_operation_with_initial_response(move |input| {
-                let state = handler_state3.clone();
-                streaming_operation_with_initial_response_handler(input, state)
-            })
-            .streaming_operation_with_optional_data(move |input| {
-                let state = handler_state4.clone();
-                streaming_operation_with_optional_data_handler(input, state)
-            })
+            .streaming_operation(streaming_operation_handler)
+            .streaming_operation_with_initial_data(streaming_operation_with_initial_data_handler)
+            .streaming_operation_with_initial_response(streaming_operation_with_initial_response_handler)
+            .streaming_operation_with_optional_data(streaming_operation_with_optional_data_handler)
             .build_unchecked();
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -138,7 +124,7 @@ impl TestServer {
 
 async fn streaming_operation_handler(
     mut input: input::StreamingOperationInput,
-    state: Arc<Mutex<ServerState>>,
+    Extension(state): Extension<Arc<Mutex<ServerState>>>,
 ) -> Result<output::StreamingOperationOutput, error::StreamingOperationError> {
     state.lock().unwrap().streaming_operation.num_calls += 1;
     let ev = input.events.recv().await;
@@ -162,7 +148,7 @@ async fn streaming_operation_handler(
 
 async fn streaming_operation_with_initial_data_handler(
     mut input: input::StreamingOperationWithInitialDataInput,
-    state: Arc<Mutex<ServerState>>,
+    Extension(state): Extension<Arc<Mutex<ServerState>>>,
 ) -> Result<
     output::StreamingOperationWithInitialDataOutput,
     error::StreamingOperationWithInitialDataError,
@@ -195,7 +181,7 @@ async fn streaming_operation_with_initial_data_handler(
 
 async fn streaming_operation_with_initial_response_handler(
     mut input: input::StreamingOperationWithInitialResponseInput,
-    _state: Arc<Mutex<ServerState>>,
+    Extension(_state): Extension<Arc<Mutex<ServerState>>>,
 ) -> Result<
     output::StreamingOperationWithInitialResponseOutput,
     error::StreamingOperationWithInitialResponseError,
@@ -213,7 +199,7 @@ async fn streaming_operation_with_initial_response_handler(
 
 async fn streaming_operation_with_optional_data_handler(
     mut input: input::StreamingOperationWithOptionalDataInput,
-    state: Arc<Mutex<ServerState>>,
+    Extension(state): Extension<Arc<Mutex<ServerState>>>,
 ) -> Result<
     output::StreamingOperationWithOptionalDataOutput,
     error::StreamingOperationWithOptionalDataError,
