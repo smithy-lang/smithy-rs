@@ -333,6 +333,37 @@ jobs:
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
+  # Test runtime crates on multiple architectures to catch architecture-specific issues
+  # like crc-fast 1.4 SIGILL on ARM before merge
+  test-runtime-architectures:
+    name: Test Runtime (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - x86_64-unknown-linux-gnu
+          - x86_64-unknown-linux-musl
+          - aarch64-unknown-linux-gnu
+          - aarch64-unknown-linux-musl
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        targets: ${{ matrix.target }}
+    - name: Install cross
+      run: cargo install cross --git https://github.com/cross-rs/cross
+    - name: Test smithy-rs runtime on ${{ matrix.target }}
+      working-directory: smithy-rs/rust-runtime
+      run: cross test --target ${{ matrix.target }} --workspace
+    - name: Test AWS runtime on ${{ matrix.target }}
+      working-directory: smithy-rs/aws/rust-runtime
+      run: cross test --target ${{ matrix.target }} --workspace
+
   # Run the canary against generated SDKs
   #
   # In addition to Matrix Success, this job will also be required to pass for merge.
@@ -391,6 +422,7 @@ jobs:
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support
+    - test-runtime-architectures
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
