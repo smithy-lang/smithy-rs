@@ -61,9 +61,13 @@ impl Policy {
         out
     }
 
-    pub(crate) fn to_base64url(&self) -> String {
+    pub(crate) fn to_cloudfront_base64(&self) -> String {
         let json = self.to_json();
-        base64_simd::URL_SAFE_NO_PAD.encode_to_string(json.as_bytes())
+        base64_simd::STANDARD
+            .encode_to_string(json.as_bytes())
+            .replace('+', "-")
+            .replace('=', "_")
+            .replace('/', "~")
     }
 }
 
@@ -202,16 +206,17 @@ mod tests {
     }
 
     #[test]
-    fn test_base64url_encoding() {
+    fn test_cloudfront_base64_encoding() {
         let policy = Policy::builder()
             .resource("https://example.com/test")
             .expires_at(DateTime::from_secs(1767290400))
             .build()
             .expect("valid policy");
 
-        let encoded = policy.to_base64url();
-        assert!(!encoded.contains('='));
+        let encoded = policy.to_cloudfront_base64();
+        // CloudFront encoding uses ~ for / and _ for =
         assert!(!encoded.contains('+'));
         assert!(!encoded.contains('/'));
+        assert!(!encoded.contains('='));
     }
 }
