@@ -135,7 +135,7 @@ fun serverTestCodegenContext(
 fun loadServerProtocol(model: Model): ServerProtocol {
     val codegenContext = serverTestCodegenContext(model)
     val (_, protocolGeneratorFactory) =
-        ServerProtocolLoader(ServerProtocolLoader.defaultProtocols()).protocolFor(model, codegenContext.serviceShape)
+        ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(model, codegenContext.serviceShape)
     return protocolGeneratorFactory.buildProtocolGenerator(codegenContext).protocol
 }
 
