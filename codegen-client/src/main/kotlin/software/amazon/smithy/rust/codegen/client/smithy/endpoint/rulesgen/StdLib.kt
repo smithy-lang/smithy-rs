@@ -51,7 +51,7 @@ fun awsStandardLib(
  *
  * A default `partitionsDotJson` node MUST be provided. The node MUST contain an AWS partition.
  */
-class AwsPartitionResolver(val runtimeConfig: RuntimeConfig, private val partitionsDotJson: Node) :
+class AwsPartitionResolver(private val runtimeConfig: RuntimeConfig, private val partitionsDotJson: Node) :
     CustomRuntimeFunction() {
     override val id: String = "aws.partition"
     private val codegenScope =

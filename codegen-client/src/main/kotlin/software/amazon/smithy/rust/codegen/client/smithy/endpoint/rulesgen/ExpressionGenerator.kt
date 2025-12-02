@@ -59,7 +59,7 @@ class ExpressionGenerator(
                             else -> rust("${ref.name.rustName()}.to_owned()")
                         }
                     } catch (_: RuntimeException) {
-                        // Typechecking was never invoked - default to .to_owned()
+                        // Typechecking was never invoked, default to .to_owned()
                         rust("${ref.name.rustName()}.to_owned()")
                     }
                 } else {
@@ -105,7 +105,7 @@ class ExpressionGenerator(
                                 }
                             }
                         } catch (_: RuntimeException) {
-                            // Typechecking not available - default to .to_owned()
+                            // Typechecking was never invoked, default to .to_owned()
                             rust(".to_owned()")
                         }
                     }
@@ -145,26 +145,6 @@ class ExpressionGenerator(
             args: MutableList<Expression>,
         ): Writable =
             writable {
-                // Special handling for coalesce - inline the logic
-                if (fn.id == "coalesce") {
-                    // Use Borrowed ownership to avoid type checks
-                    val expressionGenerator = ExpressionGenerator(Ownership.Borrowed, context)
-                    val argWritables = args.map { expressionGenerator.generate(it) }
-
-                    // Generate: arg1.or(arg2).or(arg3)...
-                    if (argWritables.isEmpty()) {
-                        rust("None")
-                    } else if (argWritables.size == 1) {
-                        rust("#W", argWritables[0])
-                    } else {
-                        rust("(#W)", argWritables[0])
-                        for (i in 1 until argWritables.size) {
-                            rust(".or(#W)", argWritables[i])
-                        }
-                    }
-                    return@writable
-                }
-
                 val fnDefinition =
                     context.functionRegistry.fnFor(fn.id)
                         ?: PANIC(

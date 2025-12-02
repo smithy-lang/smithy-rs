@@ -7,7 +7,7 @@
 //TODO(bdd): Should this just be an [i32; 3]? Might make it easier to make things const?
 /// Binary Decision Diagram node representation
 #[derive(Debug, Clone, Copy)]
-pub struct BddNode {
+pub(crate) struct BddNode {
     pub condition_index: i32,
     pub high_ref: i32,
     pub low_ref: i32,
@@ -29,7 +29,7 @@ pub struct BddNode {
 /// * `Some(R)` - Result if evaluation succeeds
 /// * `None` - No match found
 #[allow(clippy::too_many_arguments)]
-pub fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
+pub(crate) fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     nodes: &[BddNode],
     conditions: &[Cond],
     results: &[Res],

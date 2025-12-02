@@ -66,7 +66,11 @@ class EndpointTypesGenerator(
     fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsBuilder()
 
     fun defaultResolver(): RuntimeType? =
-        rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
+        defaultResolverBdd() ?: rules?.let {
+            EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(
+                it,
+            )
+        }
 
     fun defaultResolverBdd(): RuntimeType? =
         endpointIndex.getEndpointBddTrait(codegenContext.serviceShape)?.let {

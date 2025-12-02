@@ -118,8 +118,7 @@ fun generateSmithyBuild(services: AwsServices): String {
                                 "awsConfigVersion": "$awsConfigVersion",
                                 "defaultConfigPath": $defaultConfigPath,
                                 "partitionsConfigPath": $partitionsConfigPath,
-                                "integrationTestPath": $integrationTestPath,
-                                "requireEndpointResolver": false
+                                "integrationTestPath": $integrationTestPath
                             }
                         }
                         ${service.extraConfig ?: ""}
