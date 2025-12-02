@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-legacy-http"
-version = "0.62.5"
+version = "0.62.6"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -9,6 +9,7 @@ description = "Smithy HTTP-0x logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 [features]
 event-stream = ["aws-smithy-eventstream"]

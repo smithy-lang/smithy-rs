@@ -26,7 +26,7 @@ pub fn fmt_timestamp(t: &DateTime, format: Format) -> Result<String, DateTimeFor
 /// Simple abstraction to enable appending params to a string as query params.
 ///
 /// ```rust
-/// use aws_smithy_http::query::Writer;
+/// use aws_smithy_legacy_http::query::Writer;
 /// let mut s = String::from("www.example.com");
 /// let mut q = Writer::new(&mut s);
 /// q.push_kv("key", "value");
