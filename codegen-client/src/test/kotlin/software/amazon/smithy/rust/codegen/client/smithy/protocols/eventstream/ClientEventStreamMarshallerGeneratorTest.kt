@@ -77,15 +77,7 @@ class ClientEventStreamMarshallerGeneratorTest {
 
                 let mut request = rx.expect_request();
 
-                let headers = request.headers();
-                assert!(headers
-                    .get("content-type")
-                    .map(|hdr| hdr == ${rpcEventStreamTestCase.inner.requestContentType.dq()})
-                    .unwrap_or(true));
-                assert!(headers
-                    .get("accept")
-                    .map(|hdr| hdr == ${rpcEventStreamTestCase.inner.accept.dq()})
-                    .unwrap_or(true));
+                #{check_headers:W}
 
                 let mut body = ::aws_smithy_types::body::SdkBody::taken();
                 std::mem::swap(&mut body, request.body_mut());
@@ -110,6 +102,7 @@ class ClientEventStreamMarshallerGeneratorTest {
                 """,
                 "assert_initial_request" to initialRequestAssertion,
                 "capture_request" to RuntimeType.captureRequest(codegenContext.runtimeConfig),
+                "check_headers" to checkHeaders(rpcEventStreamTestCase.headersToCheck),
                 "futures_util" to CargoDependency.FuturesUtil.toType(),
                 "set_input" to setInput,
             )
@@ -213,6 +206,7 @@ enum class NonEventStreamMemberInOutput {
 data class RpcEventStreamTestCase(
     val inner: EventStreamTestModels.TestCase,
     val nonEventStreamMember: NonEventStreamMemberInOutput,
+    val headersToCheck: Map<String, String>,
     val expectedInInitialRequest: String = "",
     val expectedInInitialResponse: String = "",
 )
@@ -243,14 +237,27 @@ class RpcEventStreamTestCasesProvider : ArgumentsProvider {
                 } else {
                     jsonString
                 }
+
+            val headersToCheck: Map<String, String> =
+                if (testCase.protocolShapeId == "smithy.protocols#rpcv2Cbor") {
+                    mapOf(
+                        "content-type" to testCase.requestContentType,
+                        "accept" to testCase.accept,
+                    )
+                } else {
+                    emptyMap()
+                }
+
             listOf(
                 RpcEventStreamTestCase(
                     inner = testCase,
+                    headersToCheck = headersToCheck,
                     nonEventStreamMember = NonEventStreamMemberInOutput.NONE,
                 ),
                 RpcEventStreamTestCase(
                     inner =
                         testCase.withNonEventStreamMembers("""@httpHeader("X-Test-String")$key: String,"""),
+                    headersToCheck = headersToCheck,
                     nonEventStreamMember = NonEventStreamMemberInOutput.OPTIONAL_UNSET,
                     expectedInInitialRequest = payload("{}"),
                 ),
@@ -258,6 +265,7 @@ class RpcEventStreamTestCasesProvider : ArgumentsProvider {
                     inner =
                         testCase.withNonEventStreamMembers("""@httpHeader("X-Test-String")$key: String,""")
                             .copy(eventStreamInitialResponsePayload = payload("""{"$key":"$value"}""")),
+                    headersToCheck = headersToCheck,
                     nonEventStreamMember = NonEventStreamMemberInOutput.OPTIONAL_SET,
                     expectedInInitialRequest = payload("""{"$key":"$value"}"""),
                     expectedInInitialResponse = "Some(${value.dq()})",
@@ -266,6 +274,7 @@ class RpcEventStreamTestCasesProvider : ArgumentsProvider {
                     inner =
                         testCase.withNonEventStreamMembers("""@required@httpHeader("X-Test-String")$key: String,""")
                             .copy(eventStreamInitialResponsePayload = payload("""{"$key":"$value"}""")),
+                    headersToCheck = headersToCheck,
                     nonEventStreamMember = NonEventStreamMemberInOutput.REQUIRED,
                     expectedInInitialRequest = payload("""{"$key":"$value"}"""),
                     expectedInInitialResponse = value.dq(),
@@ -273,3 +282,20 @@ class RpcEventStreamTestCasesProvider : ArgumentsProvider {
             )
         }.map { Arguments.of(it) }.stream()
 }
+
+private fun checkHeaders(headersToCheck: Map<String, String>) =
+    writable {
+        headersToCheck.forEach { (name, value) ->
+            rust(
+                """
+                assert!(
+                    request
+                        .headers()
+                        .get(${name.dq()})
+                        .map(|hdr| hdr == ${value.dq()})
+                        .unwrap_or(false)
+                );
+                """,
+            )
+        }
+    }
