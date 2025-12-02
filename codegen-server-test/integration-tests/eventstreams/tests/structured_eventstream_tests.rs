@@ -9,7 +9,7 @@ use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
 use eventstreams::{ManualEventStreamClient, RecvError};
 use rpcv2cbor_extras::model::{Event, Events};
-use rpcv2cbor_extras::server::{request::Extension, serve, AddExtensionLayer};
+use rpcv2cbor_extras::server::{AddExtensionLayer, Extension};
 use rpcv2cbor_extras::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
@@ -58,7 +58,9 @@ impl TestServer {
         let app = RpcV2CborService::builder(config)
             .streaming_operation(streaming_operation_handler)
             .streaming_operation_with_initial_data(streaming_operation_with_initial_data_handler)
-            .streaming_operation_with_initial_response(streaming_operation_with_initial_response_handler)
+            .streaming_operation_with_initial_response(
+                streaming_operation_with_initial_response_handler,
+            )
             .streaming_operation_with_optional_data(streaming_operation_with_optional_data_handler)
             .build_unchecked();
 
@@ -67,7 +69,7 @@ impl TestServer {
 
         tokio::spawn(async move {
             let make_service = app.into_make_service();
-            serve(listener, make_service)
+            rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
                 .configure_hyper(|builder| builder.http2_only())
                 .await
                 .unwrap();
@@ -502,7 +504,7 @@ async fn test_server_no_initial_response_when_disabled() {
 
     tokio::spawn(async move {
         let make_service = app.into_make_service();
-        rpcv2cbor_extras_no_initial_response::server::serve(listener, make_service)
+        rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
             .configure_hyper(|builder| builder.http2_only())
             .await
             .unwrap();
