@@ -66,9 +66,9 @@ class EndpointBddGenerator(
 
         // Render conditions to a dummy writer to populate the function registry.
         // This is the same trick used by EndpointResolverGenerator.
-        bddTrait.conditions.withIndex().forEach { (idx, cond) ->
+        bddTrait.conditions.forEach { cond ->
             val bddExpressionGenerator =
-                BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
+                BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs)
             bddExpressionGenerator.generateCondition(cond)(
                 RustWriter.root(),
             )
@@ -84,7 +84,7 @@ class EndpointBddGenerator(
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
                 val bddExpressionGenerator =
-                    BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, mutableSetOf())
+                    BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs)
                 "cond_$idx" to bddExpressionGenerator.generateCondition(cond)
             }
 
@@ -134,9 +134,9 @@ class EndpointBddGenerator(
                     let mut diagnostic_collector = #{DiagnosticCollector}::new();
                     let mut condition_context = ConditionContext::default();
                     let result = #{EvaluateBdd}(
-                        NODES,
-                        CONDITIONS,
-                        RESULTS,
+                        &NODES,
+                        &CONDITIONS,
+                        &RESULTS,
                         ${bddTrait.bdd.rootRef},
                         params,
                         &mut condition_context,
@@ -183,7 +183,7 @@ class EndpointBddGenerator(
                 }
             }
 
-            const CONDITIONS: &[ConditionFn] = &[
+            const CONDITIONS: [ConditionFn; $conditionCount] = [
                 ${(0 until conditionCount).joinToString(",\n    ") { "ConditionFn::Cond$it" }}
             ];
 
@@ -207,7 +207,7 @@ class EndpointBddGenerator(
                 }
             }
 
-            const RESULTS: &[ResultEndpoint] = &[
+            const RESULTS: [ResultEndpoint; $resultCount] = [
                 ${(0 until resultCount).joinToString(",\n    ") { "ResultEndpoint::Result$it" }}
             ];
 
@@ -330,6 +330,9 @@ class EndpointBddGenerator(
                 }
             }
         }
+
+    // TODO(BDD) there are numerous strings repeated throughout the arms of the Result statement, we should iterate
+    // through the rules, pull out any string literals that are used more than once, and set them as consts
 
     /**
      * Generate the arms of the `Result` match statement.
@@ -458,13 +461,14 @@ class EndpointBddGenerator(
         writable {
             val bdd = bddTrait.bdd
             val nodes = mutableListOf<String>()
+            val length = bdd.nodeCount
 
             bdd.getNodes { condIdx, high, low ->
                 nodes.add("#{BddNode} { condition_index: $condIdx, high_ref: $high, low_ref: $low }")
             }
 
             rustTemplate(
-                "const NODES: &[#{BddNode}] = &[\n${nodes.joinToString(",\n")}\n];",
+                "const NODES: [#{BddNode}; $length] = [\n${nodes.joinToString(",\n")}\n];",
                 "BddNode" to EndpointsLib.bddNode,
             )
         }

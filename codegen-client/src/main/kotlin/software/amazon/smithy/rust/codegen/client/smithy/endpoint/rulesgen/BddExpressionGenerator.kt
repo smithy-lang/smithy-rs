@@ -37,7 +37,7 @@ class BddExpressionGenerator(
     private val ownership: Ownership,
     private val context: Context,
     private val refs: AnnotatedRefs,
-    private val knownSomeRefs: MutableSet<AnnotatedRefs.AnnotatedRef>,
+    private val knownSomeRefs: MutableSet<AnnotatedRefs.AnnotatedRef> = mutableSetOf(),
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
