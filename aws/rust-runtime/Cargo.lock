@@ -163,7 +163,6 @@ dependencies = [
  "p256 0.13.2",
  "rsa",
  "sha1",
- "sha2",
  "tokio",
 ]
 
@@ -277,7 +276,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.7"
+version = "0.61.8"
 dependencies = [
  "aws-smithy-types",
 ]
