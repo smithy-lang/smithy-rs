@@ -1,0 +1,495 @@
+warning: `aws-smithy-http-server` (lib) generated 1 warning (run `cargo clippy --fix --lib -p aws-smithy-http-server` to apply 1 suggestion)
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/examples/request_id.rs:59:44
+   |
+59 |       let body = boxed(Full::new(Bytes::from(format!(
+   |  ____________________________________________^
+60 | |         "Request processed with ID: {}\n",
+61 | |         request_id
+62 | |     ))));
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+   = note: `#[warn(clippy::uninlined_format_args)]` on by default
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/tests/graceful_shutdown_test.rs:51:15
+   |
+51 |     let uri = format!("http://{}/slow", addr);
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+   = note: `#[warn(clippy::uninlined_format_args)]` on by default
+help: change this to
+   |
+51 -     let uri = format!("http://{}/slow", addr);
+51 +     let uri = format!("http://{addr}/slow");
+   |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/graceful_shutdown_test.rs:116:15
+    |
+116 |     let uri = format!("http://{}/very-slow", addr);
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+116 -     let uri = format!("http://{}/very-slow", addr);
+116 +     let uri = format!("http://{addr}/very-slow");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/graceful_shutdown_test.rs:189:15
+    |
+189 |     let uri = format!("http://{}/test", addr);
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+189 -     let uri = format!("http://{}/test", addr);
+189 +     let uri = format!("http://{addr}/test");
+    |
+
+warning: this can be `std::io::Error::other(_)`
+   --> aws-smithy-http-server/src/body.rs:282:17
+    |
+282 |             Err(std::io::Error::new(std::io::ErrorKind::Other, "test error")),
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#io_other_error
+    = note: `#[warn(clippy::io_other_error)]` on by default
+help: use `std::io::Error::other`
+    |
+282 -             Err(std::io::Error::new(std::io::ErrorKind::Other, "test error")),
+282 +             Err(std::io::Error::other("test error")),
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/instrumentation/sensitivity/headers.rs:193:9
+    |
+193 |         assert_eq!(format!("{:?}", output), format!("{:?}", original));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+    = note: `#[warn(clippy::uninlined_format_args)]` on by default
+help: change this to
+    |
+193 -         assert_eq!(format!("{:?}", output), format!("{:?}", original));
+193 +         assert_eq!(format!("{output:?}"), format!("{:?}", original));
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/instrumentation/sensitivity/headers.rs:215:9
+    |
+215 |         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+215 -         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+215 +         assert_eq!(format!("{output:?}"), format!("{:?}", expected));
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/instrumentation/sensitivity/headers.rs:237:9
+    |
+237 |         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+237 -         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+237 +         assert_eq!(format!("{output:?}"), format!("{:?}", expected));
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/instrumentation/sensitivity/headers.rs:264:9
+    |
+264 |         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+264 -         assert_eq!(format!("{:?}", output), format!("{:?}", expected));
+264 +         assert_eq!(format!("{output:?}"), format!("{:?}", expected));
+    |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/src/instrumentation/sensitivity/sensitive.rs:81:22
+   |
+81 |         let actual = format!("{:?}", sensitive);
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+   |
+81 -         let actual = format!("{:?}", sensitive);
+81 +         let actual = format!("{sensitive:?}");
+   |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/src/instrumentation/sensitivity/sensitive.rs:83:13
+   |
+83 |             format!("{:?}", inner)
+   |             ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+   |
+83 -             format!("{:?}", inner)
+83 +             format!("{inner:?}")
+   |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/src/instrumentation/sensitivity/sensitive.rs:85:13
+   |
+85 |             format!("{:?}", REDACTED)
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+   |
+85 -             format!("{:?}", REDACTED)
+85 +             format!("{REDACTED:?}")
+   |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/src/instrumentation/sensitivity/sensitive.rs:94:22
+   |
+94 |         let actual = format!("{}", sensitive);
+   |                      ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+   |
+94 -         let actual = format!("{}", sensitive);
+94 +         let actual = format!("{sensitive}");
+   |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:88:25
+   |
+88 |               Regex::new(&format!(
+   |  _________________________^
+89 | |                 r#"/service/({}\.)*(?P<service>{})/operation/(?P<operation>{})$"#,
+90 | |                 IDENTIFIER_PATTERN, IDENTIFIER_PATTERN, IDENTIFIER_PATTERN,
+91 | |             ))
+   | |_____________^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:272:13
+    |
+272 |             assert!(identifier_regex().is_match(id), "'{}' is incorrectly rejected", id);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+272 -             assert!(identifier_regex().is_match(id), "'{}' is incorrectly rejected", id);
+272 +             assert!(identifier_regex().is_match(id), "'{id}' is incorrectly rejected");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:289:13
+    |
+289 |             assert!(!identifier_regex().is_match(id), "'{}' is incorrectly accepted", id);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+289 -             assert!(!identifier_regex().is_match(id), "'{}' is incorrectly accepted", id);
+289 +             assert!(!identifier_regex().is_match(id), "'{id}' is incorrectly accepted");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:311:13
+    |
+311 |             assert_eq!("Service", &captures["service"], "uri: {}", uri);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+311 -             assert_eq!("Service", &captures["service"], "uri: {}", uri);
+311 +             assert_eq!("Service", &captures["service"], "uri: {uri}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:312:13
+    |
+312 |             assert_eq!("Operation", &captures["operation"], "uri: {}", uri);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+312 -             assert_eq!("Operation", &captures["operation"], "uri: {}", uri);
+312 +             assert_eq!("Operation", &captures["operation"], "uri: {uri}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/rpc_v2_cbor/router.rs:332:13
+    |
+332 |             assert!(regex.captures(uri).is_none(), "uri: {}", uri);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+332 -             assert!(regex.captures(uri).is_none(), "uri: {}", uri);
+332 +             assert!(regex.captures(uri).is_none(), "uri: {uri}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/protocol/mod.rs:184:22
+    |
+184 |                 _ => panic!("unexpected `MissingContentTypeReason`: {}", e),
+    |                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+184 -                 _ => panic!("unexpected `MissingContentTypeReason`: {}", e),
+184 +                 _ => panic!("unexpected `MissingContentTypeReason`: {e}"),
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/src/routing/lambda_handler.rs:297:33
+    |
+297 |             let response_body = format!("Received: {}", body_str);
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+297 -             let response_body = format!("Received: {}", body_str);
+297 +             let response_body = format!("Received: {body_str}");
+    |
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/tests/serve_integration_test.rs:81:5
+   |
+81 | /     assert!(
+82 | |         response_text.contains("Content-Type:") || response_text.contains("Content-Type...
+83 | |         "Expected Title-Case 'Content-Type' header, got:\n{}",
+84 | |         response_text
+85 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+   = note: `#[warn(clippy::uninlined_format_args)]` on by default
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/tests/serve_integration_test.rs:86:5
+   |
+86 | /     assert!(
+87 | |         response_text.contains("X-Custom-Header:") || response_text.contains("X-Custom-...
+88 | |         "Expected Title-Case 'X-Custom-Header' header, got:\n{}",
+89 | |         response_text
+90 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+
+warning: variables can be used directly in the `format!` string
+  --> aws-smithy-http-server/tests/serve_integration_test.rs:91:5
+   |
+91 | /     assert!(
+92 | |         response_text.contains("X-Another-Header:") || response_text.contains("X-Anothe...
+93 | |         "Expected Title-Case 'X-Another-Header' header, got:\n{}",
+94 | |         response_text
+95 | |     );
+   | |_____^
+   |
+   = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:144:15
+    |
+144 |     let uri = format!("http://{}/test", addr);
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+144 -     let uri = format!("http://{}/test", addr);
+144 +     let uri = format!("http://{addr}/test");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:193:19
+    |
+193 |         let uri = format!("http://{}/test", addr);
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+193 -         let uri = format!("http://{}/test", addr);
+193 +         let uri = format!("http://{addr}/test");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:209:5
+    |
+209 |     assert!((1..=3).contains(&count), "tap_io was called {} times", count);
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+209 -     assert!((1..=3).contains(&count), "tap_io was called {} times", count);
+209 +     assert!((1..=3).contains(&count), "tap_io was called {count} times");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:256:13
+    |
+256 |             eprintln!("Connection error: {:?}", err);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+256 -             eprintln!("Connection error: {:?}", err);
+256 +             eprintln!("Connection error: {err:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:343:13
+    |
+343 |             eprintln!("HTTP/2 connection error: {:?}", err);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+343 -             eprintln!("HTTP/2 connection error: {:?}", err);
+343 +             eprintln!("HTTP/2 connection error: {err:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:385:15
+    |
+385 |     let uri = format!("http://{}/test", addr);
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+385 -     let uri = format!("http://{}/test", addr);
+385 +     let uri = format!("http://{addr}/test");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:422:15
+    |
+422 |     let uri = format!("http://{}/test", addr);
+    |               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+422 -     let uri = format!("http://{}/test", addr);
+422 +     let uri = format!("http://{addr}/test");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:441:13
+    |
+441 |             eprintln!("HTTP/2 connection error: {:?}", err);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+441 -             eprintln!("HTTP/2 connection error: {:?}", err);
+441 +             eprintln!("HTTP/2 connection error: {err:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:503:17
+    |
+503 |                 eprintln!("HTTP/1 connection error: {:?}", e);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+503 -                 eprintln!("HTTP/1 connection error: {:?}", e);
+503 +                 eprintln!("HTTP/1 connection error: {e:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:526:17
+    |
+526 |                 eprintln!("HTTP/2 connection error: {:?}", e);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+526 -                 eprintln!("HTTP/2 connection error: {:?}", e);
+526 +                 eprintln!("HTTP/2 connection error: {e:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:625:17
+    |
+625 |                 eprintln!("Connection error: {:?}", e);
+    |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+625 -                 eprintln!("Connection error: {:?}", e);
+625 +                 eprintln!("Connection error: {e:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:755:13
+    |
+755 |             eprintln!("HTTP/2 connection error: {:?}", err);
+    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+755 -             eprintln!("HTTP/2 connection error: {:?}", err);
+755 +             eprintln!("HTTP/2 connection error: {err:?}");
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:764:18
+    |
+764 |             .uri(format!("/test{}", i))
+    |                  ^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+764 -             .uri(format!("/test{}", i))
+764 +             .uri(format!("/test{i}"))
+    |
+
+warning: variables can be used directly in the `format!` string
+   --> aws-smithy-http-server/tests/serve_integration_test.rs:779:33
+    |
+779 |             .unwrap_or_else(|_| panic!("Request {} timed out", i))
+    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/master/index.html#uninlined_format_args
+help: change this to
+    |
+779 -             .unwrap_or_else(|_| panic!("Request {} timed out", i))
+779 +             .unwrap_or_else(|_| panic!("Request {i} timed out"))
+    |
+
