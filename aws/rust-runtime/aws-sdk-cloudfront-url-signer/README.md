@@ -4,7 +4,7 @@ A library for generating signed URLs and cookies for Amazon CloudFront private c
 
 This crate provides utilities to create cryptographically signed URLs and cookies that grant
 time-limited access to private CloudFront distributions. It supports both RSA-SHA1 and
-ECDSA-SHA256 signing algorithms with canned (simple) and custom (advanced) policies.
+ECDSA-SHA1 signing algorithms with canned (simple) and custom (advanced) policies.
 
 ## Key Features
 
@@ -25,6 +25,24 @@ ECDSA-SHA256 signing algorithms with canned (simple) and custom (advanced) polic
 - Providing access to multiple restricted files (e.g., all files in a subscriber area)
 - You don't want to change your existing URLs
 - You're building a web application where cookies are naturally handled
+-
+## Feature Flags
+
+| Feature | Description |
+|---------|-------------|
+| `rt-tokio` | Enables async file loading with `PrivateKey::from_pem_file()` |
+
+## CloudFront Setup
+
+Before using this library, you need to:
+
+1. Create a CloudFront key pair in the AWS Console or via CLI
+2. Upload the public key to CloudFront
+3. Create a key group containing your public key
+4. Configure your CloudFront distribution to use the key group for restricted content
+5. Keep the private key secure for use with this library
+
+See the [CloudFront Developer Guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html) for detailed setup instructions.
 
 ## Basic Usage
 
@@ -162,7 +180,7 @@ let key = PrivateKey::from_pem_file("private_key.pem").await?;
 | PKCS#1 | `-----BEGIN RSA PRIVATE KEY-----` | RSA only |
 | PKCS#8 | `-----BEGIN PRIVATE KEY-----` | RSA or ECDSA P-256 |
 
-RSA keys use SHA-1 signatures (required by CloudFront for RSA). ECDSA P-256 keys use SHA-256 signatures.
+Both RSA and ECDSA keys use SHA-1 signatures (required by CloudFront).
 
 ## Policy Types
 
@@ -264,24 +282,6 @@ let request = SigningRequest::builder()
 let signed_url = sign_url(request)?;
 // Result: https://...?quality=hd&Expires=...&Signature=...&Key-Pair-Id=...
 ```
-
-## Feature Flags
-
-| Feature | Description |
-|---------|-------------|
-| `rt-tokio` | Enables async file loading with `PrivateKey::from_pem_file()` |
-
-## CloudFront Setup
-
-Before using this library, you need to:
-
-1. Create a CloudFront key pair in the AWS Console or via CLI
-2. Upload the public key to CloudFront
-3. Create a key group containing your public key
-4. Configure your CloudFront distribution to use the key group for restricted content
-5. Keep the private key secure for use with this library
-
-See the [CloudFront Developer Guide](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/private-content-signed-urls.html) for detailed setup instructions.
 
 <!-- anchor_start:footer -->
 This crate is part of the [AWS SDK for Rust](https://awslabs.github.io/aws-sdk-rust/) and the [smithy-rs](https://github.com/smithy-lang/smithy-rs) code generator.
