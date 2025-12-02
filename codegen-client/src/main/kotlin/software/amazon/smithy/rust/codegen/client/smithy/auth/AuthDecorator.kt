@@ -113,6 +113,8 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
         arrayOf(
             *preludeScope,
             "AuthScheme" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::auth::AuthScheme"),
+            "NoAuthRuntimePluginV2" to
+                RuntimeType.smithyRuntime(codegenContext.runtimeConfig).resolve("client::auth::no_auth::NoAuthRuntimePluginV2"),
             "ResolveAuthSchemeOptions" to AuthTypesGenerator(codegenContext).serviceSpecificResolveAuthSchemeTrait(),
             "SharedAuthScheme" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::auth::SharedAuthScheme"),
             "SharedAuthSchemeOptionResolver" to RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig).resolve("client::auth::SharedAuthSchemeOptionResolver"),
@@ -279,6 +281,22 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                         /// See an example for [`Self::auth_scheme_resolver`].
                         pub fn set_auth_scheme_resolver(&mut self, auth_scheme_resolver: impl #{ResolveAuthSchemeOptions} + 'static) -> &mut Self {
                             self.runtime_components.set_auth_scheme_option_resolver(#{Some}(auth_scheme_resolver.into_shared_resolver()));
+                            self
+                        }
+
+                        /// Add [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback for operations that don't require authentication
+                        ///
+                        /// The auth scheme resolver will use this when no other auth schemes are applicable.
+                        pub fn allow_no_auth(mut self) -> Self {
+                            self.set_allow_no_auth();
+                            self
+                        }
+
+                        /// Add [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback for operations that don't require authentication
+                        ///
+                        /// The auth scheme resolver will use this when no other auth schemes are applicable.
+                        pub fn set_allow_no_auth(&mut self) -> &mut Self {
+                            self.push_runtime_plugin(#{NoAuthRuntimePluginV2}::new().into_shared());
                             self
                         }
                         """,
