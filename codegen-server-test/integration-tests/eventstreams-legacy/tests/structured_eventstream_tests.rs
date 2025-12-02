@@ -8,8 +8,8 @@ use aws_smithy_runtime::test_util::capture_test_logs::show_filtered_test_logs;
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
 use eventstreams_legacy::{ManualEventStreamClient, RecvError};
-use rpcv2cbor_extras_http0::model::{Event, Events};
-use rpcv2cbor_extras_http0::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
+use rpcv2cbor_extras_http0x::model::{Event, Events};
+use rpcv2cbor_extras_http0x::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -459,7 +459,7 @@ async fn test_streaming_operation_with_initial_data() {
 #[tokio::test]
 async fn test_streaming_operation_with_initial_data_missing() {
     let _logs = show_filtered_test_logs(
-        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras=trace",
+        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras_http0x=trace",
     );
     let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
 
@@ -497,15 +497,15 @@ async fn test_sigv4_signed_event_stream() {
 /// Test that when alwaysSendEventStreamInitialResponse is disabled, no initial-response is sent
 #[tokio::test]
 async fn test_server_no_initial_response_when_disabled() {
-    use rpcv2cbor_extras_no_initial_response::output;
-    use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
+    use rpcv2cbor_extras_no_initial_response_http0x::output;
+    use rpcv2cbor_extras_no_initial_response_http0x::{RpcV2CborService, RpcV2CborServiceConfig};
 
     let config = RpcV2CborServiceConfig::builder().build();
     let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
-        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
+        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response_http0x::input::StreamingOperationWithInitialDataInput| async move {
             let _ev = input.events.recv().await;
             Ok(output::StreamingOperationWithInitialDataOutput::builder()
-                .events(aws_smithy_http::event_stream::EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response::model::Events::A(rpcv2cbor_extras_no_initial_response::model::Event {}))))
+                .events(aws_smithy_legacy_http::event_stream::EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response_http0x::model::Events::A(rpcv2cbor_extras_no_initial_response_http0x::model::Event {}))))
                 .build()
                 .unwrap())
         })
