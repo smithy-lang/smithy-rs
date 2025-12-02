@@ -28,8 +28,9 @@ impl Intercept for ObservabilityFeatureTrackerInterceptor {
         if let Ok(telemetry_provider) = aws_smithy_observability::global::get_telemetry_provider() {
             let meter_provider = telemetry_provider.meter_provider();
 
-            // Check the provider name to detect OpenTelemetry without importing the otel crate
-            // This avoids compilation issues with the opentelemetry dependency
+            // Use provider_name() to detect OpenTelemetry without importing the otel crate.
+            // This avoids adding aws-smithy-observability-otel as a dependency.
+            // Note: as_any() is available for type-based checking if stronger guarantees are needed.
             if meter_provider.provider_name() == "otel" {
                 cfg.interceptor_state()
                     .store_append(SmithySdkFeature::ObservabilityOtelMetrics);

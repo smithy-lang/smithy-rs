@@ -19,13 +19,8 @@ pub trait ProvideMeter: Send + Sync + Debug {
     fn get_meter(&self, scope: &'static str, attributes: Option<&Attributes>) -> Meter;
 
     /// Returns a reference to `self` as `&dyn Any` for downcasting.
-    ///
-    /// The default implementation returns a reference to the unit type,
-    /// which will fail any downcast attempts. Implementations should override
-    /// this to return `self` for proper type inspection.
-    fn as_any(&self) -> &dyn std::any::Any {
-        &()
-    }
+    /// This allows type-based identification of meter providers.
+    fn as_any(&self) -> &dyn std::any::Any;
 
     /// Returns the name of this provider implementation.
     /// This is used for feature tracking without requiring type imports.
