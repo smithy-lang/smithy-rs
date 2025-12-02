@@ -174,7 +174,6 @@ dependencies = [
  "p256 0.13.2",
  "rsa",
  "sha1",
- "sha2",
  "tokio",
 ]
 
