@@ -202,8 +202,9 @@ object EventStreamTestModels {
             restJsonTestCase.copy(
                 protocolShapeId = "smithy.protocols#rpcv2Cbor",
                 model = rpcv2Cbor(),
-                // model has an output shape containing event stream member
-                accept = "application/vnd.amazon.eventstream",
+                // application/cbor is appended for backward compatibility with servers that only handle application/cbor
+                // https://github.com/smithy-lang/smithy-rs/pull/4427#issuecomment-3602558313
+                accept = "application/vnd.amazon.eventstream, application/cbor",
                 mediaType = "application/cbor",
                 requestContentType = "application/vnd.amazon.eventstream",
                 responseContentType = "application/cbor",

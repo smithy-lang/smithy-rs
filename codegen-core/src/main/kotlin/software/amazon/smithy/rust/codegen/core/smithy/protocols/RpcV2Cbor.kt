@@ -172,7 +172,12 @@ open class RpcV2Cbor(
             "smithy-protocol" to "rpc-v2-cbor",
             // Empty input/output still requires the "Accept" header to be set to "application/cbor"
             // https://github.com/smithy-lang/smithy/blob/085ad738ef2acf7a8a7f13db5aecd5a8bb8b58dc/smithy-protocol-tests/model/rpcv2Cbor/empty-input-output.smithy#L17
-            "accept" to (httpBindingResolver.responseContentType(operationShape) ?: "application/cbor"),
+            "accept" to (
+                httpBindingResolver.responseContentType(operationShape)?.let {
+                    // Append application/cbor for backward compatibility with servers that only handle application/cbor
+                    if (it == "application/vnd.amazon.eventstream") "$it, application/cbor" else it
+                } ?: "application/cbor"
+            ),
         )
 
     override fun additionalResponseHeaders(operationShape: OperationShape): List<Pair<String, String>> =
