@@ -6,7 +6,6 @@
 package software.amazon.smithy.rust.codegen.server.smithy.customizations
 
 import org.junit.jupiter.api.Test
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
@@ -19,7 +18,7 @@ class SigV4EventStreamSupportStructuresTest {
     @Test
     fun `support structures compile`() {
         val project = TestWorkspace.testProject()
-        project.withModule(RustModule.private("sigv4_event_stream")) {
+        project.lib {
             val codegenScope = SigV4EventStreamSupportStructures.codegenScope(runtimeConfig)
 
             // Generate the support structures - RuntimeType.forInlineFun automatically generates the code
