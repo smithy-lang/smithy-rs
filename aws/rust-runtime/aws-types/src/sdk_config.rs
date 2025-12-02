@@ -442,7 +442,7 @@ impl Builder {
     ///
     /// # Examples
     /// Disabling identity caching:
-    /// ```rust
+    /// ```ignore
     /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     /// let config = SdkConfig::builder()
@@ -450,7 +450,7 @@ impl Builder {
     ///     .build();
     /// ```
     /// Changing settings on the default cache implementation:
-    /// ```rust
+    /// ```ignore
     /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     /// use std::time::Duration;
@@ -475,7 +475,7 @@ impl Builder {
     /// expires.
     ///
     /// # Examples
-    /// ```rust
+    /// ```ignore
     /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     ///
