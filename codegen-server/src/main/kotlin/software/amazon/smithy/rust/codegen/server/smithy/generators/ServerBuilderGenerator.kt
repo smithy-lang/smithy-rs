@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.generators.lifetimeDeclaration
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.makeMaybeConstrained
@@ -45,7 +46,6 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
-import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShape
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
@@ -151,7 +151,12 @@ class ServerBuilderGenerator(
     private val builderSymbol = shape.serverBuilderSymbol(codegenContext)
     private val isBuilderFallible = hasFallibleBuilder(shape, model, symbolProvider, takeInUnconstrainedTypes)
     private val serverBuilderConstraintViolations =
-        ServerBuilderConstraintViolations(codegenContext, shape, takeInUnconstrainedTypes, customValidationExceptionWithReasonConversionGenerator)
+        ServerBuilderConstraintViolations(
+            codegenContext,
+            shape,
+            takeInUnconstrainedTypes,
+            customValidationExceptionWithReasonConversionGenerator,
+        )
     private val lifetime = shape.lifetimeDeclaration(symbolProvider)
 
     private val codegenScope =
@@ -236,7 +241,9 @@ class ServerBuilderGenerator(
             #{Converter:W}
             """,
             "Converter" to
-                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
+                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(
+                    protocol,
+                ),
         )
     }
 
@@ -326,7 +333,8 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isRustBoxed()
-        val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
+        val wrapInMaybeConstrained =
+            takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
@@ -351,7 +359,11 @@ class ServerBuilderGenerator(
                     if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
 
                     if (wrapInMaybeConstrained) {
-                        conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
+                        conditionalBlock(
+                            "input.map(##[allow(clippy::redundant_closure)] |v| ",
+                            ")",
+                            conditional = symbol.isOptional(),
+                        ) {
                             conditionalBlock("Box::new(", ")", conditional = hasBox) {
                                 rust("$maybeConstrainedVariant($varExpr)")
                             }
@@ -408,8 +420,7 @@ class ServerBuilderGenerator(
         val memberName = symbolProvider.toMemberName(member)
 
         writer.documentShape(member, model)
-        // Setter names will never hit a reserved word and therefore never need escaping.
-        writer.rustBlock("pub(crate) fn set_${member.memberName.toSnakeCase()}(mut self, input: $inputType) -> Self") {
+        writer.rustBlock("pub(crate) fn ${member.setterName(symbolProvider)}(mut self, input: $inputType) -> Self") {
             rust(
                 """
                 self.$memberName = ${
@@ -531,9 +542,10 @@ class ServerBuilderGenerator(
                     // Write the modifier(s).
 
                     // 1. Enforce constraint traits of data from incoming requests.
-                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
-                        enforceConstraints(this, member, constraintViolation)
-                    }
+                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)
+                        ?.also { constraintViolation ->
+                            enforceConstraints(this, member, constraintViolation)
+                        }
 
                     if (member.hasNonNullDefault()) {
                         // 2a. If a `@default` value is modeled and the user did not set a value, fall back to using the
@@ -610,7 +622,11 @@ class ServerBuilderGenerator(
         // We've just checked the constraints hold by going through the non-public
         // constrained type, but the user wants to work with the unconstrained type, so we have to
         // unwrap it.
-        if (!publicConstrainedTypes && member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(model)) {
+        if (!publicConstrainedTypes &&
+            member.wouldHaveConstrainedWrapperTupleTypeWerePublicConstrainedTypesEnabled(
+                model,
+            )
+        ) {
             writer.rust(
                 ".map(|v: #T| v.into())",
                 constrainedShapeSymbolProvider.toSymbol(model.expectShape(member.target)),
