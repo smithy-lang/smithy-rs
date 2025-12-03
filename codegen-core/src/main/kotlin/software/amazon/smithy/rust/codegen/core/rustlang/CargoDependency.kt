@@ -370,7 +370,6 @@ data class CargoDependency(
             CargoDependency("http-body-1x", CratesIo("1"), `package` = "http-body")
         val HttpBodyUtil01x: CargoDependency =
             CargoDependency("http-body-util", CratesIo("0.1.3"))
-        private val Hyper1x: CargoDependency = CargoDependency("hyper-1x", CratesIo("1"), `package` = "hyper")
 
         fun hyper(runtimeConfig: RuntimeConfig) =
             when (runtimeConfig.httpVersion) {
