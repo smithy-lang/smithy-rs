@@ -411,7 +411,7 @@ class EndpointBddGenerator(
             val varRefs = allRefs.variableRefs()
             val registry = FunctionRegistry(stdlib)
 
-            val memberDefs =
+            var memberDefs =
                 varRefs.map {
                     val fn = it.value.condition?.function!!
                     val fnDef = fn.functionDefinition
@@ -437,7 +437,11 @@ class EndpointBddGenerator(
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
                     "pub(crate) ${it.value.name}: Option<${rustType.render()}>"
-                }.joinToString(",\n", postfix = ",\n")
+                }.joinToString(",\n")
+
+            if (memberDefs.length != 0) {
+                memberDefs += ","
+            }
 
             rustTemplate(
                 """
