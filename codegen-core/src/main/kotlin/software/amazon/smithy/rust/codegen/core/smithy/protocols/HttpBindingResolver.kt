@@ -123,6 +123,11 @@ interface HttpBindingResolver {
      * Determines whether event stream initial-response needs to be handled for given [shape]
      */
     fun handlesEventStreamInitialResponse(shape: Shape): Boolean
+
+    /**
+     * Returns true if this is an RPC protocol (e.g., awsJson, rpcv2Cbor), false for RESTful protocols
+     */
+    fun isRpcProtocol(): Boolean
 }
 
 /**
@@ -223,6 +228,8 @@ open class HttpTraitHttpBindingResolver(
     override fun handlesEventStreamInitialRequest(shape: Shape) = false
 
     override fun handlesEventStreamInitialResponse(shape: Shape) = false
+
+    override fun isRpcProtocol() = false
 }
 
 /**
@@ -262,4 +269,6 @@ open class StaticHttpBindingResolver(
     override fun handlesEventStreamInitialRequest(shape: Shape) = false
 
     override fun handlesEventStreamInitialResponse(shape: Shape) = false
+
+    override fun isRpcProtocol() = false
 }

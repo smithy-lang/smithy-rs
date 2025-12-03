@@ -49,6 +49,8 @@ class AwsQueryCompatibleHttpBindingResolver(
 
     override fun handlesEventStreamInitialResponse(shape: Shape): Boolean =
         targetProtocolHttpBinding.handlesEventStreamInitialResponse(shape)
+
+    override fun isRpcProtocol() = targetProtocolHttpBinding.isRpcProtocol()
 }
 
 data class ParseErrorMetadataParams(

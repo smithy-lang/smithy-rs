@@ -912,32 +912,49 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 } else {
                                     writable { }
                                 }
+                            val readInitialRequest =
+                                writable {
+                                    if (httpBindingResolver.isRpcProtocol()) {
+                                        rustTemplate(
+                                            """
+                                            {
+                                                let mut receiver = receiver;
+                                                if let Some(_initial_event) = receiver
+                                                    .try_recv_initial(#{InitialMessageType}::Request)
+                                                    .await
+                                                    .map_err(
+                                                        |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                    )? {
+                                                    #{parseInitialRequest}
+                                                }
+                                            }
+                                            """,
+                                            "Deserializer" to deserializer,
+                                            "InitialMessageType" to
+                                                RuntimeType.smithyHttp(runtimeConfig)
+                                                    .resolve("event_stream::InitialMessageType"),
+                                            "parseInitialRequest" to parseInitialRequest,
+                                            "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                            *codegenScope,
+                                        )
+                                    }
+                                }
                             // TODO(https://github.com/smithy-lang/smithy-rs/issues/4343): The error
                             //   returned below is not actually accessible to the caller because it has
                             //   already started reading from the event stream at the time the error was sent.
                             rustTemplate(
                                 """
                                 {
-                                    let mut receiver = #{Deserializer}(&mut body.into().into_inner())?;
-                                    if let Some(_initial_event) = receiver
-                                        .try_recv_initial(#{InitialMessageType}::Request)
-                                        .await
-                                        .map_err(
-                                            |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                #{AllowUselessConversion}
-                                                format!("{ev_error}").into()
-                                            )
-                                        )? {
-                                        #{parseInitialRequest}
-                                    }
+                                    let receiver = #{Deserializer}(&mut body.into().into_inner())?;
+                                    #{readInitialRequest}
                                     Some(receiver)
                                 }
                                 """,
                                 "Deserializer" to deserializer,
-                                "InitialMessageType" to
-                                    RuntimeType.smithyHttp(runtimeConfig)
-                                        .resolve("event_stream::InitialMessageType"),
-                                "parseInitialRequest" to parseInitialRequest,
+                                "readInitialRequest" to readInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                 *codegenScope,
                             )

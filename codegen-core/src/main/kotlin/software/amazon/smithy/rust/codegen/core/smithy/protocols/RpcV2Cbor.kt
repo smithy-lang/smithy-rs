@@ -136,6 +136,8 @@ class RpcV2CborHttpBindingResolver(
             else -> false
         }
     }
+
+    override fun isRpcProtocol() = true
 }
 
 open class RpcV2Cbor(
