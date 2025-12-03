@@ -8,7 +8,7 @@ set -eux
 
 # Generate the minimal subset of the sdk needed for the perf test
 cd smithy-rs
-./gradlew -Paws.services=+dynamodb,+sso,+ssooidc,+sts :aws:sdk:assemble
+./gradlew -Paws.services=+dynamodb,+sso,+ssooidc,+sts,+signin :aws:sdk:assemble
 
 # Build the perf test binary and move it to the artifacts dir
 cd aws/sdk/benchmarks/sdk-perf

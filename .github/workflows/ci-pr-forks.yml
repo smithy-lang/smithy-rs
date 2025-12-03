@@ -27,8 +27,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 90
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

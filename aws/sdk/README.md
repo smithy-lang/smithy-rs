@@ -23,8 +23,8 @@ Controlling service generation
 You can use gradle properties to opt/out of generating specific services:
 ```bash
 # Generate only S3,EC2
-# sts, sso, and ssooidc must be included, as they are internally used by S3 and EC2
-./gradlew -Paws.services=+s3,+ec2,+sts,+sso,+ssooidc :aws:sdk:assemble
+# sts, sso, ssooidc, and signin must be included, as they are internally used by S3 and EC2
+./gradlew -Paws.services=+s3,+ec2,+sts,+sso,+ssooidc,+signin :aws:sdk:assemble
 
 # Generate all AWS services using models from the aws-sdk-rust repo
 ./gradlew \
@@ -32,10 +32,10 @@ You can use gradle properties to opt/out of generating specific services:
   :aws:sdk:assemble
 
 # Generate only S3 from using the model from the aws-sdk-rust repo
-# sts, sso, and ssooidc must be included, as they are internally used by S3
+# sts, sso, ssooidc, and signin must be included, as they are internally used by S3
 ./gradlew \
   -Paws.sdk.models.path=<absolute path to the aws-sdk-rust repo>/aws-models \
-  -Paws.services=+s3,+sts,+sso,+ssooidc \
+  -Paws.services=+s3,+sts,+sso,+ssooidc,+signin \
   :aws:sdk:assemble
 
 # Start with a clean slate

@@ -111,11 +111,11 @@ jobs:
         toolchain: ${{ env.rust_nightly_version }}
     - name: Generate doc preview
       id: generate-preview
-      # Only generate three of the smallest services since the doc build can be very large. STS and SSO must be
+      # Only generate three of the smallest services since the doc build can be very large. STS, SSO, and SignIn must be
       # included since aws-config depends on them. Transcribe Streaming and DynamoDB (paginators/waiters) were chosen
       # below to stay small while still representing most features. Combined, they are about ~20MB at time of writing.
       run: |
-        ./gradlew -Paws.services=+sts,+sso,+ssooidc,+transcribestreaming,+dynamodb :aws:sdk:assemble
+        ./gradlew -Paws.services=+sts,+sso,+ssooidc,+signin,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
         cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python rust-runtime/aws-smithy-http-server-typescript aws/sdk/build/aws-sdk/sdk

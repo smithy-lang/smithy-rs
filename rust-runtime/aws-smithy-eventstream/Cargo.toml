@@ -1,13 +1,14 @@
 [package]
 name = "aws-smithy-eventstream"
 # <IMPORTANT> Only patch releases can be made to this runtime crate until https://github.com/smithy-lang/smithy-rs/issues/3370 is resolved
-version = "0.60.13"
+version = "0.60.14"
 # </IMPORTANT>
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 description = "Event stream logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 [features]
 derive-arbitrary = ["dep:arbitrary", "dep:derive_arbitrary", "arbitrary?/derive"]

@@ -4,6 +4,8 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+
+C_RED='\033[1;31m'
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
@@ -15,6 +17,19 @@ cd smithy-rs
 
 echo -e "# ${C_YELLOW}Auditing runtime crate version numbers...${C_RESET}"
 runtime-versioner audit --no-fetch
+
+# Compute MSRV from channel, ignoring patch version
+MAIN_MSRV=$(sed -rn 's/channel = "(1[.][0-9]+)([.][0-9]+)?"/\1/p' rust-toolchain.toml)
+
+if [ -z "$MAIN_MSRV" ]; then
+    echo -e "# ${C_RED}Unable to detect MSRV in rust-toolchain.toml${C_RESET}"
+    exit 1
+else
+    echo -e "# ${C_YELLOW}MSRV is ${MAIN_MSRV}${C_RESET}"
+fi
+
+# Array to collect MSRV mismatches
+msrv_mismatches=()
 
 for runtime_path in \
     "rust-runtime" \
@@ -41,6 +56,14 @@ do
     cargo +"${RUST_NIGHTLY_VERSION}" minimal-versions check --direct --all-features
 
     for crate_path in *; do
+        if [[ -f "${crate_path}/Cargo.toml" ]]; then
+        #s
+            # verify that the MSRV is the main MSRV
+            package_msrv=$(sed -rn 's/rust-version = "([^"]+)"/\1/p' "${crate_path}/Cargo.toml")
+            if [[ "${package_msrv}" != "${MAIN_MSRV}" ]]; then
+                msrv_mismatches+=("${runtime_path}/${crate_path}: toolchain MSRV is ${MAIN_MSRV}, crate MSRV is ${package_msrv}")
+            fi
+        fi
         if [[ -f "${crate_path}/external-types.toml" ]]; then
             # Skip `aws-config` since it has its own checks in `check-aws-config`
             if [[ "${crate_path}" != "aws-config" ]]; then
@@ -58,3 +81,12 @@ do
     echo -e "${C_YELLOW}Running additional per-crate checks for ${runtime_path}...${C_RESET}"
     ./tools/ci-scripts/additional-per-crate-checks.sh "${runtime_path}"
 done
+
+# Report MSRV mismatches if any were found
+if [ ${#msrv_mismatches[@]} -ne 0 ]; then
+    echo -e "# ${C_RED}MSRV mismatches found:${C_RESET}"
+    for mismatch in "${msrv_mismatches[@]}"; do
+        echo -e "## ${C_RED}${mismatch}${C_RESET}"
+    done
+    exit 1
+fi

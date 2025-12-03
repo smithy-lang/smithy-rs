@@ -181,6 +181,7 @@ where
             // Disable aws-chunked encoding since either the user has set a custom checksum
             cfg.interceptor_state()
                 .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
+
             return Ok(());
         }
 
@@ -216,7 +217,6 @@ where
         }
 
         cfg.interceptor_state().store_put(state);
-
         Ok(())
     }
 
@@ -515,5 +515,16 @@ mod tests {
             Some(&expected_checksum),
             "expected checksum '{header_value:?}' to match '{expected_checksum}'"
         );
+
+        let collected_body = body.collect().await.unwrap();
+        while let Some(trailer) = collected_body.trailers() {
+            if let Some(header_value) = trailer.get("x-amz-checksum-crc32c") {
+                let header_value = header_value.to_str().unwrap();
+                assert_eq!(
+                    header_value, expected_checksum,
+                    "expected checksum '{header_value}' to match '{expected_checksum}'"
+                );
+            }
+        }
     }
 }
