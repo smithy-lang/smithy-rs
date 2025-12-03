@@ -284,17 +284,19 @@ private class AuthDecoratorConfigCustomizations(private val codegenContext: Clie
                             self
                         }
 
-                        /// Add [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback for operations that don't require authentication
+                        /// Enable no authentication regardless of what authentication mechanisms operations support
                         ///
-                        /// The auth scheme resolver will use this when no other auth schemes are applicable.
+                        /// This adds [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback
+                        /// and the auth scheme resolver will use it when no other auth schemes are applicable.
                         pub fn allow_no_auth(mut self) -> Self {
                             self.set_allow_no_auth();
                             self
                         }
 
-                        /// Add [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback for operations that don't require authentication
+                        /// Enable no authentication regardless of what authentication mechanisms operations support
                         ///
-                        /// The auth scheme resolver will use this when no other auth schemes are applicable.
+                        /// This adds [NoAuthScheme](aws_smithy_runtime::client::auth::no_auth::NoAuthScheme) as a fallback
+                        /// and the auth scheme resolver will use it when no other auth schemes are applicable.
                         pub fn set_allow_no_auth(&mut self) -> &mut Self {
                             self.push_runtime_plugin(#{NoAuthRuntimePluginV2}::new().into_shared());
                             self
