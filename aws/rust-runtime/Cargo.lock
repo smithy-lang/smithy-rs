@@ -162,6 +162,8 @@ dependencies = [
  "base64-simd",
  "p256 0.13.2",
  "rsa",
+ "serde",
+ "serde_json",
  "sha1",
  "tokio",
 ]
