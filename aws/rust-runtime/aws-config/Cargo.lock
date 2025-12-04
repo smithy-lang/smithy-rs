@@ -75,7 +75,7 @@ dependencies = [
 
 [[package]]
 name = "aws-credential-types"
-version = "1.2.10"
+version = "1.2.11"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -108,7 +108,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.5.16"
+version = "1.5.17"
 dependencies = [
  "aws-credential-types",
  "aws-sigv4",
@@ -212,7 +212,7 @@ dependencies = [
 
 [[package]]
 name = "aws-sigv4"
-version = "1.3.6"
+version = "1.3.7"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-http",
@@ -232,7 +232,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.6"
+version = "1.2.7"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -241,7 +241,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.5"
+version = "0.62.6"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -260,7 +260,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.4"
+version = "1.1.5"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -292,21 +292,21 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.7"
+version = "0.61.8"
 dependencies = [
  "aws-smithy-types",
 ]
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.6"
+version = "0.63.7"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.60.8"
+version = "0.60.9"
 dependencies = [
  "aws-smithy-types",
  "urlencoding",
@@ -354,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.9.2"
+version = "1.9.3"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -369,7 +369,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.3.4"
+version = "1.3.5"
 dependencies = [
  "base64-simd",
  "bytes",
@@ -390,14 +390,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.12"
+version = "0.60.13"
 dependencies = [
  "xmlparser",
 ]
 
 [[package]]
 name = "aws-types"
-version = "1.3.10"
+version = "1.3.11"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",

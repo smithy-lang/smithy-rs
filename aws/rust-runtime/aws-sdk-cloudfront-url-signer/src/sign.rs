@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use crate::error::SigningError;
+use crate::error::{ErrorKind, SigningError};
 use crate::key::PrivateKey;
 use crate::policy::Policy;
 use aws_smithy_types::DateTime;
@@ -180,23 +180,74 @@ impl SigningRequestBuilder {
 /// A signed CloudFront URL.
 #[derive(Debug, Clone)]
 pub struct SignedUrl {
-    url: String,
+    url: url::Url,
 }
 
 impl SignedUrl {
-    pub(crate) fn new(url: String) -> Self {
-        Self { url }
+    pub(crate) fn new(url: String) -> Result<Self, SigningError> {
+        let url = url::Url::parse(&url).map_err(|e| {
+            SigningError::new(
+                ErrorKind::InvalidInput,
+                Some(Box::new(e)),
+                Some("failed to parse URL".into()),
+            )
+        })?;
+        Ok(Self { url })
     }
 
     /// Returns the complete signed URL as a string.
-    pub fn url(&self) -> &str {
+    pub fn as_str(&self) -> &str {
+        self.url.as_str()
+    }
+
+    /// Returns a reference to the parsed URL.
+    pub fn as_url(&self) -> &url::Url {
         &self.url
+    }
+
+    /// Consumes self and returns the parsed URL.
+    pub fn into_url(self) -> url::Url {
+        self.url
     }
 }
 
 impl fmt::Display for SignedUrl {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.url)
+    }
+}
+
+impl AsRef<str> for SignedUrl {
+    fn as_ref(&self) -> &str {
+        self.url.as_str()
+    }
+}
+
+impl AsRef<url::Url> for SignedUrl {
+    fn as_ref(&self) -> &url::Url {
+        &self.url
+    }
+}
+
+#[cfg(feature = "http-1x")]
+impl TryFrom<SignedUrl> for http::Request<()> {
+    type Error = http::Error;
+
+    fn try_from(signed_url: SignedUrl) -> Result<Self, Self::Error> {
+        http::Request::builder()
+            .uri(signed_url.url.as_str())
+            .body(())
+    }
+}
+
+#[cfg(feature = "http-1x")]
+impl TryFrom<&SignedUrl> for http::Request<()> {
+    type Error = http::Error;
+
+    fn try_from(signed_url: &SignedUrl) -> Result<Self, Self::Error> {
+        http::Request::builder()
+            .uri(signed_url.url.as_str())
+            .body(())
     }
 }
 
@@ -267,7 +318,7 @@ impl SigningRequest {
             )
         };
 
-        Ok(SignedUrl::new(signed_url))
+        SignedUrl::new(signed_url)
     }
 
     pub(crate) fn sign_cookies(&self) -> Result<SignedCookies, SigningError> {
@@ -342,7 +393,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
             .unwrap();
 
         let signed_url = request.sign_url().unwrap();
-        let url = signed_url.url();
+        let url = signed_url.as_str();
 
         assert!(url.contains("Expires=1767290400"));
         assert!(url.contains("Signature="));
@@ -363,7 +414,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
             .unwrap();
 
         let signed_url = request.sign_url().unwrap();
-        let url = signed_url.url();
+        let url = signed_url.as_str();
 
         assert!(url.contains("Policy="));
         assert!(url.contains("Signature="));
@@ -383,7 +434,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
             .unwrap();
 
         let signed_url = request.sign_url().unwrap();
-        let url = signed_url.url();
+        let url = signed_url.as_str();
 
         assert!(url.contains("size=large"));
         assert!(url.contains("&Expires="));
@@ -441,7 +492,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
             .unwrap();
 
         let signed_url = request.sign_url().unwrap();
-        let url = signed_url.url();
+        let url = signed_url.as_str();
 
         // Should use custom policy format (Policy param) because resource_pattern is set
         assert!(url.contains("Policy="));
@@ -471,5 +522,72 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
         assert!(cookies.get("CloudFront-Signature").is_some());
         assert_eq!(cookies.get("CloudFront-Key-Pair-Id"), Some("APKAEXAMPLE"));
         assert!(cookies.get("CloudFront-Expires").is_none());
+    }
+
+    #[test]
+    fn test_signed_url_accessors() {
+        let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
+        let request = SigningRequest::builder()
+            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+            .key_pair_id("APKAEXAMPLE")
+            .private_key(key)
+            .expires_at(DateTime::from_secs(1767290400))
+            .build()
+            .unwrap();
+
+        let signed_url = request.sign_url().unwrap();
+
+        // Test as_str()
+        let url_str = signed_url.as_str();
+        assert!(url_str.starts_with("https://d111111abcdef8.cloudfront.net/image.jpg"));
+        assert!(url_str.contains("Expires="));
+
+        // Test as_url()
+        let url_ref = signed_url.as_url();
+        assert_eq!(url_ref.scheme(), "https");
+        assert_eq!(url_ref.host_str(), Some("d111111abcdef8.cloudfront.net"));
+        assert_eq!(url_ref.path(), "/image.jpg");
+
+        // Test Display
+        let displayed = format!("{}", signed_url);
+        assert_eq!(displayed, url_str);
+
+        // Test AsRef<str>
+        let as_ref_str: &str = signed_url.as_ref();
+        assert_eq!(as_ref_str, url_str);
+
+        // Test AsRef<url::Url>
+        let as_ref_url: &url::Url = signed_url.as_ref();
+        assert_eq!(as_ref_url, url_ref);
+
+        // Test into_url()
+        let url = signed_url.into_url();
+        assert_eq!(url.scheme(), "https");
+        assert_eq!(url.host_str(), Some("d111111abcdef8.cloudfront.net"));
+    }
+
+    #[cfg(feature = "http-1x")]
+    #[test]
+    fn test_signed_url_to_http_request() {
+        let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
+        let request = SigningRequest::builder()
+            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+            .key_pair_id("APKAEXAMPLE")
+            .private_key(key)
+            .expires_at(DateTime::from_secs(1767290400))
+            .build()
+            .unwrap();
+
+        let signed_url = request.sign_url().unwrap();
+
+        // Test TryFrom<SignedUrl>
+        let http_req: http::Request<()> = signed_url.clone().try_into().unwrap();
+        assert_eq!(http_req.method(), http::Method::GET);
+        assert!(http_req.uri().to_string().contains("Expires="));
+
+        // Test TryFrom<&SignedUrl>
+        let http_req: http::Request<()> = (&signed_url).try_into().unwrap();
+        assert_eq!(http_req.method(), http::Method::GET);
+        assert!(http_req.uri().to_string().contains("Expires="));
     }
 }

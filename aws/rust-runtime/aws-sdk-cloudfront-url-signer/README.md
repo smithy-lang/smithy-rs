@@ -25,12 +25,54 @@ ECDSA-SHA1 signing algorithms with canned (simple) and custom (advanced) policie
 - Providing access to multiple restricted files (e.g., all files in a subscriber area)
 - You don't want to change your existing URLs
 - You're building a web application where cookies are naturally handled
--
+
+## Using Signed URLs with HTTP Clients
+
+The `SignedUrl` type provides multiple ways to access the signed URL for use with HTTP clients:
+
+```rust,ignore
+let signed_url = sign_url(request)?;
+
+// As a string slice
+let url_str: &str = signed_url.as_str();
+
+// As a parsed url::Url
+let url: &url::Url = signed_url.as_url();
+
+// Convert to owned url::Url
+let url: url::Url = signed_url.into_url();
+
+// Use with reqwest (reqwest re-exports url::Url)
+let response = reqwest::get(signed_url.as_url()).await?;
+
+// Display trait
+println!("Signed URL: {}", signed_url);
+```
+
+### HTTP 1.x Integration
+
+With the `http-1x` feature enabled, you can convert signed URLs directly to `http::Request`:
+
+```rust,ignore
+use http::Request;
+
+let signed_url = sign_url(request)?;
+
+// Convert to http::Request
+let http_request: Request<()> = signed_url.try_into()?;
+
+// Or from a reference
+let http_request: Request<()> = (&signed_url).try_into()?;
+```
+
+This is useful when working with HTTP clients that use the `http` crate types.
+
 ## Feature Flags
 
 | Feature | Description |
 |---------|-------------|
 | `rt-tokio` | Enables async file loading with `PrivateKey::from_pem_file()` |
+| `http-1x` | Enables conversion to `http::Request` types |
 
 ## CloudFront Setup
 
