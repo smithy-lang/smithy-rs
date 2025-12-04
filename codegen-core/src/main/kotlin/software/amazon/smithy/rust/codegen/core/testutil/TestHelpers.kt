@@ -150,6 +150,7 @@ fun String.asSmithyModel(
     sourceLocation: String? = null,
     smithyVersion: String = SMITHY_VERSION,
     disableValidation: Boolean = false,
+    additionalDeniedModels: Array<String> = emptyArray(),
 ): Model {
     val processed = letIf(!this.trimStart().startsWith("\$version")) { "\$version: ${smithyVersion.dq()}\n$it" }
     val denyModelsContaining =
@@ -157,7 +158,7 @@ fun String.asSmithyModel(
             // If Smithy protocol test models are in our classpath, don't load them, since they are fairly large and we
             // almost never need them.
             "smithy-protocol-tests",
-        )
+        ) + additionalDeniedModels
     val urls =
         ModelDiscovery.findModels().filter { modelUrl ->
             denyModelsContaining.none {
