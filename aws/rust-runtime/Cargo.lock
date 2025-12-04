@@ -160,12 +160,14 @@ dependencies = [
  "aws-smithy-json",
  "aws-smithy-types",
  "base64-simd",
+ "http 1.4.0",
  "p256 0.13.2",
  "rsa",
  "serde",
  "serde_json",
  "sha1",
  "tokio",
+ "url",
 ]
 
 [[package]]

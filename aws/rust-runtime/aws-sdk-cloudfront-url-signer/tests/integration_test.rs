@@ -34,7 +34,7 @@ fn test_sign_url_with_rsa_key() {
         .unwrap();
 
     let signed_url = sign_url(request).unwrap();
-    assert!(signed_url.url().contains("Signature="));
+    assert!(signed_url.as_str().contains("Signature="));
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn test_sign_url_with_ecdsa_key() {
         .unwrap();
 
     let signed_url = sign_url(request).unwrap();
-    assert!(signed_url.url().contains("Signature="));
+    assert!(signed_url.as_str().contains("Signature="));
 }
 
 #[test]
