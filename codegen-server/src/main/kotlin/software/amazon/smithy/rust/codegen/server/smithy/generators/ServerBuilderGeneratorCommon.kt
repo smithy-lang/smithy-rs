@@ -84,34 +84,40 @@ fun generateFallbackCodeToDefaultValue(
     symbolProvider: RustSymbolProvider,
     publicConstrainedTypes: Boolean,
 ) {
-    var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
+    val node = member.expectTrait<DefaultTrait>().toNode()!!
     val targetShape = model.expectShape(member.target)
-    val targetSymbol = symbolProvider.toSymbol(targetShape)
-    // We need an .into() conversion to create defaults for the server types. A larger scale refactoring could store this information in the
-    // symbol, however, retrieving it in this manner works for the moment.
-    if (targetSymbol.rustType().qualifiedName().startsWith("::aws_smithy_http_server_python")) {
-        defaultValue = defaultValue.map { rust("#T.into()", it) }
-    }
 
-    if (member.isStreaming(model)) {
+    val useUnwrapOrDefault =
+        (targetShape is ListShape && node is ArrayNode && node.isEmpty) ||
+            (targetShape is MapShape && node is ObjectNode && node.isEmpty)
+
+    if (member.isStreaming(model) || useUnwrapOrDefault) {
         writer.rust(".unwrap_or_default()")
-    } else if (targetShape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)) {
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/2134): Instead of panicking here, which will ungracefully
-        //  shut down the service, perform the `try_into()` check _once_ at service startup time, perhaps
-        //  storing the result in a `OnceCell` that could be reused.
-        writer.rustTemplate(
-            """
-            .unwrap_or_else(||
-                #{DefaultValue:W}
-                    .try_into()
-                    .expect("this check should have failed at generation time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
-            )
-            """,
-            "DefaultValue" to defaultValue,
-        )
     } else {
-        val node = member.expectTrait<DefaultTrait>().toNode()!!
-        if ((targetShape is DocumentShape && (node is BooleanNode || node is NumberNode)) ||
+        // Compute defaultValue only when we actually need it
+        var defaultValue = defaultValue(model, runtimeConfig, symbolProvider, member)
+        val targetSymbol = symbolProvider.toSymbol(targetShape)
+        // We need an .into() conversion to create defaults for the server types. A larger scale refactoring could store this information in the
+        // symbol, however, retrieving it in this manner works for the moment.
+        if (targetSymbol.rustType().qualifiedName().startsWith("::aws_smithy_http_server_python")) {
+            defaultValue = defaultValue.map { rust("#T.into()", it) }
+        }
+
+        if (targetShape.hasPublicConstrainedWrapperTupleType(model, publicConstrainedTypes)) {
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/2134): Instead of panicking here, which will ungracefully
+            //  shut down the service, perform the `try_into()` check _once_ at service startup time, perhaps
+            //  storing the result in a `OnceCell` that could be reused.
+            writer.rustTemplate(
+                """
+                .unwrap_or_else(||
+                    #{DefaultValue:W}
+                        .try_into()
+                        .expect("this check should have failed at generation time; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
+                )
+                """,
+                "DefaultValue" to defaultValue,
+            )
+        } else if ((targetShape is DocumentShape && (node is BooleanNode || node is NumberNode)) ||
             targetShape is BooleanShape ||
             targetShape is NumberShape ||
             targetShape is EnumShape
@@ -120,7 +126,7 @@ fun generateFallbackCodeToDefaultValue(
         } else {
             // Values for the Rust types of the rest of the shapes might require heap allocations,
             // so we calculate them in a (lazily-executed) closure for minimal performance gains.
-            writer.rustTemplate(".unwrap_or_else(##[allow(clippy::redundant_closure)] || #{DefaultValue:W})", "DefaultValue" to defaultValue)
+            writer.rustTemplate(".unwrap_or_else(|| #{DefaultValue:W})", "DefaultValue" to defaultValue)
         }
     }
 }
