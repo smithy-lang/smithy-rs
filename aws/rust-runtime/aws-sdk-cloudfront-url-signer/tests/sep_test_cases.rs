@@ -168,7 +168,7 @@ fn test_sep_test_cases() {
             let signed_url = sign_url(request)
                 .unwrap_or_else(|e| panic!("Failed to sign URL for test {}: {}", test_case.id, e));
 
-            let query_params = parse_url_query_params(signed_url.url());
+            let query_params = parse_url_query_params(signed_url.as_str());
 
             // Verify expected query parameters
             if let Some(expected_params) = &test_case.expected.query_params {

@@ -53,7 +53,11 @@ impl PrivateKey {
         ))
     }
 
+    /// Loads a private key from a PEM file asynchronously.
+    ///
+    /// Requires the `rt-tokio` feature.
     #[cfg(feature = "rt-tokio")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "rt-tokio")))]
     pub async fn from_pem_file(path: impl AsRef<Path>) -> Result<Self, SigningError> {
         let bytes = tokio::fs::read(path.as_ref())
             .await
