@@ -178,6 +178,134 @@ class ClientEventStreamMarshallerGeneratorTest {
             }
         }
     }
+
+    @ParameterizedTest
+    @ArgumentsSource(RpcEventStreamTestCasesProvider::class)
+    fun signedInitialMessageTest(rpcEventStreamTestCase: RpcEventStreamTestCase) {
+        val testCase = rpcEventStreamTestCase.inner
+        // Filter out tests that do not have initial message
+        if (rpcEventStreamTestCase.nonEventStreamMember != NonEventStreamMemberInOutput.NONE) {
+            clientIntegrationTest(
+                testCase.model,
+                IntegrationTestParams(service = "test#TestService"),
+            ) { codegenContext, rustCrate ->
+                rustCrate.testModule {
+                    tokioTest("initial_message_and_event_are_signed") {
+                        rustTemplate(
+                            """
+                            use crate::types::*;
+                            use aws_smithy_eventstream::frame::{DeferredSignerSender, SignMessage, SignMessageError};
+                            use aws_smithy_http::event_stream::EventStreamSender;
+                            use aws_smithy_runtime_api::box_error::BoxError;
+                            use aws_smithy_runtime_api::client::interceptors::Intercept;
+                            use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+                            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+                            use aws_smithy_types::config_bag::ConfigBag;
+                            use aws_smithy_types::event_stream::Message;
+
+                            const FAKE_SIGNATURE: &str = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+
+                            ##[derive(Debug)]
+                            struct TestSigner;
+
+                            impl SignMessage for TestSigner {
+                                fn sign(&mut self, message: Message) -> Result<Message, SignMessageError> {
+                                    let mut new_payload = message.payload().to_vec();
+                                    new_payload.extend_from_slice(FAKE_SIGNATURE.as_bytes());
+
+                                    let mut signed_msg = Message::new(bytes::Bytes::from(new_payload));
+                                    for header in message.headers() {
+                                        signed_msg = signed_msg.add_header(header.clone());
+                                    }
+                                    Ok(signed_msg)
+                                }
+
+                                fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>> {
+                                    None
+                                }
+                            }
+
+                            ##[derive(Debug)]
+                            struct TestSignerInterceptor;
+
+                            impl Intercept for TestSignerInterceptor {
+                                fn name(&self) -> &'static str {
+                                    "TestSignerInterceptor"
+                                }
+
+                                fn modify_before_signing(
+                                    &self,
+                                    _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+                                    _runtime_components: &RuntimeComponents,
+                                    cfg: &mut ConfigBag,
+                                ) -> Result<(), BoxError> {
+                                    if let Some(signer_sender) = cfg.load::<DeferredSignerSender>() {
+                                        signer_sender
+                                            .send(Box::new(TestSigner))
+                                            .expect("failed to send test signer");
+                                    }
+                                    Ok(())
+                                }
+                            }
+
+                            let (http_client, rx) = #{capture_request}(None);
+                            let conf = crate::Config::builder()
+                                .endpoint_url("http://localhost:1234")
+                                .http_client(http_client.clone())
+                                .interceptor(TestSignerInterceptor)
+                                .behavior_version_latest()
+                                .build();
+                            let client = crate::Client::from_conf(conf);
+
+                            let event = TestStream::MessageWithString(
+                                MessageWithString::builder().data("hello, world!").build(),
+                            );
+                            let stream = ::futures_util::stream::iter(vec![Ok(event)]);
+                            let _ = client
+                                .test_stream_op()
+                                .test_string("this is test")
+                                .value(EventStreamSender::from(stream))
+                                .send()
+                                .await
+                                .unwrap();
+
+                            let mut request = rx.expect_request();
+
+                            let mut body = ::aws_smithy_types::body::SdkBody::taken();
+                            std::mem::swap(&mut body, request.body_mut());
+
+                            let unmarshaller = crate::event_stream_serde::TestStreamUnmarshaller::new();
+                            let mut event_receiver = crate::event_receiver::EventReceiver::new(
+                                ::aws_smithy_http::event_stream::Receiver::new(unmarshaller, body),
+                            );
+
+                            // Check initial message has signature
+                            let initial_msg = event_receiver
+                                .try_recv_initial_request()
+                                .await
+                                .unwrap()
+                                .expect("should receive initial-request");
+                            assert!(initial_msg.payload().ends_with(FAKE_SIGNATURE.as_bytes()));
+
+                            // Check event payload has signature
+                            if let Some(event) = event_receiver.recv().await.unwrap() {
+                                match event {
+                                    TestStream::MessageWithString(message_with_string) => {
+                                        assert!(message_with_string.data().unwrap().ends_with(FAKE_SIGNATURE));
+                                    }
+                                    otherwise => panic!("matched on unexpected variant {otherwise:?}"),
+                                }
+                            } else {
+                                panic!("should receive at least one frame");
+                            }
+                            """,
+                            "capture_request" to RuntimeType.captureRequest(codegenContext.runtimeConfig),
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
 
 class TestCasesProvider : ArgumentsProvider {
