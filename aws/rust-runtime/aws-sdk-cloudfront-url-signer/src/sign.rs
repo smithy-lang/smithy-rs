@@ -156,6 +156,15 @@ impl SigningRequestBuilder {
             }
         };
 
+        // Validate that activeDate is before expirationDate
+        if let Some(active) = self.active_date {
+            if active.secs() >= expiration.secs() {
+                return Err(SigningError::invalid_input(
+                    "active_at must be before expiration",
+                ));
+            }
+        }
+
         Ok(SigningRequest {
             resource_url,
             resource_pattern: self.resource_pattern,

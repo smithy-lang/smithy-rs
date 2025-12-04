@@ -1,0 +1,184 @@
+[
+  {
+    "id": "canned-policy-url-basic",
+    "documentation": "Sign a URL with canned policy (expiration only)",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/image.jpg\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "queryParams": {
+        "Expires": "1767290400",
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "iONoMLnhiCy9q1~WB9GkR2DiHz18I85i3o6kZ64REf-fCSOg-AyXEZiq7fJuS~DT-kbZXjVpgIQqI4sCTcBW9XpO6dyJ5sh8Igk3V~OVncS9acGVnI~ZhHBWiGhU8GmkEMAhn6R2RGO-wKGClrXdJGEUE26XoALdHUzHbmU6AGI_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "canned-policy-url-existing-params",
+    "documentation": "Sign a URL that already has query parameters",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg?size=large",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/image.jpg?size=large\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "queryParams": {
+        "size": "large",
+        "Expires": "1767290400",
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "kx5dxV5cSW50EuCMtYi9JI0D5H97if~zNqwKxZtS7FPc3NV5oi~zCb45ti8ve-YDYw45hzN4lceF6zhW~STVWa7r7fC9wi5XBG1T6ZT2b9R0wMWmGxsy9uVGXFn6JqcjQMsq09MnWrPezK0qFQ2X6pV1nGQqLQZ2sgO~FSlEoCo_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "custom-policy-url-with-active-date",
+    "documentation": "Sign a URL with custom policy including activation date",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/video.mp4",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400,
+      "activeDate": 1767200000
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/video.mp4\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400},\"DateGreaterThan\":{\"AWS:EpochTime\":1767200000}}}]}",
+      "queryParams": {
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "aF0WSOV6dkNn-D0HJ~-EwLG69-4QZZ9dv1PgAZEsER~WXkaNa1pBM2aTVXrskBWVHUU6hc1nD6ZKYgBS5Sb9JluFVT0MbQWR~DrtUGu8ugCsnfzUe6ov38nFPBwQICY~jnoQZEXxO2ZkQrluOO4~jWOpqAGrCw5tkdHAnb9gHYQ_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "custom-policy-url-with-ip-range",
+    "documentation": "Sign a URL with custom policy including IP restriction",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/document.pdf",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400,
+      "ipRange": "192.168.0.0/24"
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/document.pdf\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400},\"IpAddress\":{\"AWS:SourceIp\":\"192.168.0.0/24\"}}}]}",
+      "queryParams": {
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "fq~vePR~kmc5kWDveZOJ3j6PSYRsHSSanN1shBBpj2rQwvVQPU8e9MRwUDizOYHLnuAXQG89Xm7kXL03HIX0uzELcY2Q6Bw68BcGQHq-nyC2U6h0Uv277pg~FIwatR84y1FZiswIVmZwfPmpkvR0X~1skuooCPGiztAXREe-hsg_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "custom-policy-url-with-wildcard",
+    "documentation": "Sign a URL with wildcard resource pattern",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/images/photo1.jpg",
+      "resourceUrlPattern": "https://d111111abcdef8.cloudfront.net/images/*",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/images/*\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "queryParams": {
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "nP~GtuBVUSEUDMXW1ZTGTx~BUQfjl7FsWBQBKwnTNhHlBAeYlzdbMGMphViPQbjawdYt1Z~iBHDr0ctooQyhEdsXwZPQKmRJQm3yIxmbvnuCzB2qdMDVGRKH8l3PnfAJErrgUVIzb6m3KUdtIDvSkLV~Mb0tyQJwZ6QE4BdlEmQ_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "canned-policy-cookies",
+    "documentation": "Generate signed cookies with canned policy",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/*",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/*\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "cookies": {
+        "CloudFront-Expires": "1767290400",
+        "CloudFront-Key-Pair-Id": "K1TESTKEY",
+        "CloudFront-Signature": "e0yIAbSak8fgGDJfX0bwVT0uDrzdr6fV3kzHuZOGYxeitO8H-tvFuce7~aOGFNReoi6LNhYpvr0wP99~2KKbrbetwLmIdUnTToOabNamMDJSGZgVK31XPWmuxq~TGUB-4v338iQhpP5qk8rkUe3meE5VXlchIb4vvnzph83X~Z8_"
+      },
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "custom-policy-cookies",
+    "documentation": "Generate signed cookies with custom policy",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/*",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400,
+      "ipRange": "10.0.0.0/8"
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/*\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400},\"IpAddress\":{\"AWS:SourceIp\":\"10.0.0.0/8\"}}}]}",
+      "cookies": {
+        "CloudFront-Key-Pair-Id": "K1TESTKEY",
+        "CloudFront-Policy": "eyJTdGF0ZW1lbnQiOlt7IlJlc291cmNlIjoiaHR0cHM6Ly9kMTExMTExYWJjZGVmOC5jbG91ZGZyb250Lm5ldC8qIiwiQ29uZGl0aW9uIjp7IkRhdGVMZXNzVGhhbiI6eyJBV1M6RXBvY2hUaW1lIjoxNzY3MjkwNDAwfSwiSXBBZGRyZXNzIjp7IkFXUzpTb3VyY2VJcCI6IjEwLjAuMC4wLzgifX19XX0_",
+        "CloudFront-Signature": "r28Jnd0t9aq7cu0k9jGWl4L0YsRxgueZtGRw5oEEspU9-eIPGM~ZGMQh36~5HpKC5c67cZjDgJcsqrCacmTHMZZx613gbeYAsx2-hEatU8URiuNHnVp4hPV3HqtbuZ6Din9iEZUpOBYVg6DWGEFJRCQ7SPouBhhJdYDZZOPHGpA_"
+      },
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "ecdsa-canned-policy-url",
+    "documentation": "Sign a URL with ECDSA key and canned policy",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/video.mp4",
+      "keyPairId": "K2ECDSATEST",
+      "privateKeyFile": "test-ecdsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/video.mp4\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "queryParams": {
+        "Expires": "1767290400",
+        "Key-Pair-Id": "K2ECDSATEST"
+      },
+      "signature": "MEQCIDS3JTjLLIRne5G3fDjf6MwgCmckmYVlJhqGVMl0Q4reAiBjXw1FMf9j03wqAHeE4LfRPjOVkp-jWhmDfHVwd7kkpA__",
+      "signatureAlgorithm": "ECDSA-SHA1"
+    }
+  },
+  {
+    "id": "error-missing-expiration",
+    "documentation": "Error when expiration date is not provided",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/file.txt",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem"
+    },
+    "expected": {
+      "error": true,
+      "errorContains": ["expiration", "required"]
+    }
+  },
+  {
+    "id": "error-active-after-expiration",
+    "documentation": "Error when activeDate is after expirationDate",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/file.txt",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767200000,
+      "activeDate": 1767290400
+    },
+    "expected": {
+      "error": true,
+      "errorContains": ["active", "before", "expiration"]
+    }
+  }
+]
