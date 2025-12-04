@@ -9,6 +9,7 @@ use std::fmt;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const DEFAULT_CAPACITY: usize = 500;
@@ -32,6 +33,9 @@ pub struct TokenBucket {
     retry_cost: u32,
     success_reward: f32,
     fractional_tokens: Arc<AtomicF32>,
+    refill_rate: f32,
+    creation_time: Instant,
+    last_refill_age_secs: Arc<AtomicU32>,
 }
 
 struct AtomicF32 {
@@ -85,6 +89,9 @@ impl Default for TokenBucket {
             retry_cost: DEFAULT_RETRY_COST,
             success_reward: DEFAULT_SUCCESS_REWARD,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
+            refill_rate: 0.0,
+            creation_time: Instant::now(),
+            last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 }
@@ -108,6 +115,9 @@ impl TokenBucket {
             retry_cost: 0,
             success_reward: 0.0,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
+            refill_rate: 0.0,
+            creation_time: Instant::now(),
+            last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -117,15 +127,11 @@ impl TokenBucket {
     }
 
     pub(crate) fn acquire(&self, err: &ErrorKind) -> Option<OwnedSemaphorePermit> {
-        // We have to handle the case where the number of permits in the semaphore exceeds the intended
-        // max. This can occur when the bucket is already at max capacity (success reward > 0) and then an
-        // OwnedSemaphorePermit gets dropped (destroyed), automatically returning its permits to the
-        // semaphore and causing it to exceed max_permits.
-        let available_permits = self.semaphore.available_permits();
-        if available_permits > self.max_permits {
-            self.semaphore
-                .forget_permits(available_permits - self.max_permits);
-        }
+        // Add time-based tokens to fractional accumulator
+        self.refill_tokens_based_on_time();
+        
+        // Convert accumulated fractional tokens to whole tokens
+        self.convert_fractional_tokens();
 
         let retry_cost = if err == &ErrorKind::TransientError {
             self.timeout_retry_cost
@@ -147,7 +153,11 @@ impl TokenBucket {
         self.add_permits(PERMIT_REGENERATION_AMOUNT);
     }
 
-    pub(crate) fn reward_success(&self) {
+    /// Converts accumulated fractional tokens to whole tokens and adds them as permits.
+    /// Stores the remaining fractional amount back.
+    /// This is shared by both time-based refill and success rewards.
+    #[inline]
+    fn convert_fractional_tokens(&self) {
         let mut calc_fractional_tokens = self.fractional_tokens.load();
         // Verify that fractional tokens have not become corrupted - if they have, reset to zero
         if !calc_fractional_tokens.is_finite() {
@@ -159,10 +169,6 @@ impl TokenBucket {
             return;
         }
 
-        if self.success_reward > 0.0 {
-            calc_fractional_tokens += self.success_reward;
-        }
-
         let full_tokens_accumulated = calc_fractional_tokens.floor();
         if full_tokens_accumulated >= 1.0 {
             self.add_permits(full_tokens_accumulated as usize);
@@ -170,6 +176,71 @@ impl TokenBucket {
         }
         // Always store the updated fractional tokens back, even if no conversion happened
         self.fractional_tokens.store(calc_fractional_tokens);
+    }
+
+    /// Refills tokens based on elapsed time since last refill.
+    /// This method implements lazy evaluation - tokens are only calculated when accessed.
+    /// Uses a single compare-and-swap to ensure only one thread processes each time window.
+    #[inline]
+    fn refill_tokens_based_on_time(&self) {
+        if self.refill_rate > 0.0 {
+            let last_refill_secs = self.last_refill_age_secs.load(Ordering::Relaxed);
+            let current_age_secs = self.creation_time.elapsed().as_secs() as u32;
+            
+            // Early exit if no time elapsed - most threads take this path
+            if current_age_secs == last_refill_secs {
+                return;
+            }
+            
+            // Try to atomically claim this time window with a single CAS
+            // If we lose, another thread is handling the refill, so we can exit
+            if self
+                .last_refill_age_secs
+                .compare_exchange(
+                    last_refill_secs,
+                    current_age_secs,
+                    Ordering::Relaxed,
+                    Ordering::Relaxed,
+                )
+                .is_err()
+            {
+                // Another thread claimed this time window, we're done
+                return;
+            }
+            
+            // We won the CAS - we're responsible for adding tokens for this time window
+            let current_fractional = self.fractional_tokens.load();
+            let max_fractional = self.max_permits as f32;
+            
+            // Skip token addition if already at cap
+            if current_fractional >= max_fractional {
+                return;
+            }
+            
+            let elapsed_secs = current_age_secs - last_refill_secs;
+            let tokens_to_add = elapsed_secs as f32 * self.refill_rate;
+            
+            // Add tokens to fractional accumulator, capping at max_permits to prevent unbounded growth
+            let new_fractional = (current_fractional + tokens_to_add).min(max_fractional);
+            self.fractional_tokens.store(new_fractional);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn reward_success(&self) {
+        if self.success_reward > 0.0 {
+            let current = self.fractional_tokens.load();
+            let max_fractional = self.max_permits as f32;
+            
+            // Early exit if already at cap - no point calculating
+            if current >= max_fractional {
+                return;
+            }
+            
+            // Cap fractional tokens at max_permits to prevent unbounded growth
+            let new_fractional = (current + self.success_reward).min(max_fractional);
+            self.fractional_tokens.store(new_fractional);
+        }
     }
 
     pub(crate) fn add_permits(&self, amount: usize) {
@@ -194,6 +265,7 @@ pub struct TokenBucketBuilder {
     retry_cost: Option<u32>,
     timeout_retry_cost: Option<u32>,
     success_reward: Option<f32>,
+    refill_rate: Option<f32>,
 }
 
 impl TokenBucketBuilder {
@@ -229,6 +301,20 @@ impl TokenBucketBuilder {
         self
     }
 
+    /// Sets the refill rate (tokens per second) for time-based token regeneration.
+    ///
+    /// Negative values are clamped to 0.0. A refill rate of 0.0 disables time-based regeneration.
+    /// Non-finite values (NaN, infinity) are treated as 0.0.
+    pub fn refill_rate(mut self, rate: f32) -> Self {
+        let validated_rate = if rate.is_finite() {
+            rate.max(0.0)
+        } else {
+            0.0
+        };
+        self.refill_rate = Some(validated_rate);
+        self
+    }
+
     /// Builds a `TokenBucket`.
     pub fn build(self) -> TokenBucket {
         TokenBucket {
@@ -240,6 +326,9 @@ impl TokenBucketBuilder {
                 .unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
             success_reward: self.success_reward.unwrap_or(DEFAULT_SUCCESS_REWARD),
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
+            refill_rate: self.refill_rate.unwrap_or(0.0),
+            creation_time: Instant::now(),
+            last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 }
@@ -307,14 +396,17 @@ mod tests {
 
         // First success: 0.4 fractional tokens
         bucket.reward_success();
+        bucket.convert_fractional_tokens();
         assert_eq!(bucket.semaphore.available_permits(), 0);
 
         // Second success: 0.8 fractional tokens
         bucket.reward_success();
+        bucket.convert_fractional_tokens();
         assert_eq!(bucket.semaphore.available_permits(), 0);
 
         // Third success: 1.2 fractional tokens -> 1 full token added
         bucket.reward_success();
+        bucket.convert_fractional_tokens();
         assert_eq!(bucket.semaphore.available_permits(), 1);
     }
 
@@ -332,6 +424,33 @@ mod tests {
         assert!(bucket.semaphore.available_permits() == 10);
     }
 
+    #[test]
+    fn test_convert_fractional_tokens() {
+        // (input, expected_permits_added, expected_remaining)
+        let test_cases = [
+            (0.7, 0, 0.7),
+            (1.0, 1, 0.0),
+            (2.3, 2, 0.3),
+            (5.8, 5, 0.8),
+            (10.0, 10, 0.0),
+            // verify that if fractional permits are corrupted, we reset to 0 gracefully
+            (f32::NAN, 0, 0.0),
+            (f32::INFINITY, 0, 0.0),
+        ];
+
+        for (input, expected_permits, expected_remaining) in test_cases {
+            let bucket = TokenBucket::builder().capacity(10).build();
+            let _hold_permit = bucket.acquire(&ErrorKind::TransientError);
+            let initial = bucket.semaphore.available_permits();
+
+            bucket.fractional_tokens.store(input);
+            bucket.convert_fractional_tokens();
+
+            assert_eq!(bucket.semaphore.available_permits() - initial, expected_permits);
+            assert!((bucket.fractional_tokens.load() - expected_remaining).abs() < 0.0001);
+        }
+    }
+
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_builder_with_custom_values() {
@@ -340,12 +459,29 @@ mod tests {
             .retry_cost(10)
             .timeout_retry_cost(20)
             .success_reward(0.5)
+            .refill_rate(2.5)
             .build();
 
         assert_eq!(bucket.max_permits, 100);
         assert_eq!(bucket.retry_cost, 10);
         assert_eq!(bucket.timeout_retry_cost, 20);
         assert_eq!(bucket.success_reward, 0.5);
+        assert_eq!(bucket.refill_rate, 2.5);
+    }
+
+    #[test]
+    fn test_builder_refill_rate_validation() {
+        // Test negative values are clamped to 0.0
+        let bucket = TokenBucket::builder().refill_rate(-5.0).build();
+        assert_eq!(bucket.refill_rate, 0.0);
+
+        // Test valid positive value
+        let bucket = TokenBucket::builder().refill_rate(1.5).build();
+        assert_eq!(bucket.refill_rate, 1.5);
+
+        // Test zero is valid
+        let bucket = TokenBucket::builder().refill_rate(0.0).build();
+        assert_eq!(bucket.refill_rate, 0.0);
     }
 
     #[test]
@@ -553,4 +689,160 @@ mod tests {
         );
         assert_eq!(original.load(), 999.0, "Original should have new value");
     }
+
+    #[test]
+    fn test_combined_time_and_success_rewards() {
+        let bucket = TokenBucket {
+            refill_rate: 1.0,
+            success_reward: 0.5,
+            creation_time: Instant::now() - std::time::Duration::from_secs(2),
+            semaphore: Arc::new(Semaphore::new(0)),
+            max_permits: 100,
+            ..Default::default()
+        };
+
+        // Add success rewards: 2 * 0.5 = 1.0 token
+        bucket.reward_success();
+        bucket.reward_success();
+
+        // Trigger time-based refill: 2 sec * 1.0 = 2.0 tokens
+        // Total: 1.0 + 2.0 = 3.0 tokens
+        bucket.refill_tokens_based_on_time();
+        bucket.convert_fractional_tokens();
+
+        assert_eq!(bucket.available_permits(), 3);
+        assert!(bucket.fractional_tokens.load().abs() < 0.0001);
+    }
+
+    #[test]
+    fn test_refill_rates() {
+        // (refill_rate, elapsed_secs, expected_permits, expected_fractional)
+        let test_cases = [
+            (10.0, 2, 20, 0.0),      // Basic: 2 sec * 10 tokens/sec = 20 tokens
+            (0.001, 1100, 1, 0.1),   // Small: 1100 * 0.001 = 1.1 tokens
+            (0.0001, 11000, 1, 0.1), // Tiny: 11000 * 0.0001 = 1.1 tokens
+            (0.001, 1200, 1, 0.2),   // 1200 * 0.001 = 1.2 tokens
+            (0.0001, 10000, 1, 0.0), // 10000 * 0.0001 = 1.0 tokens
+            (0.001, 500, 0, 0.5),    // Fractional only: 500 * 0.001 = 0.5 tokens
+        ];
+
+        for (refill_rate, elapsed_secs, expected_permits, expected_fractional) in test_cases {
+            let bucket = TokenBucket {
+                refill_rate,
+                creation_time: Instant::now() - std::time::Duration::from_secs(elapsed_secs),
+                semaphore: Arc::new(Semaphore::new(0)),
+                max_permits: 100,
+                ..Default::default()
+            };
+
+            bucket.refill_tokens_based_on_time();
+            bucket.convert_fractional_tokens();
+            
+            assert_eq!(
+                bucket.available_permits(),
+                expected_permits,
+                "Rate {}: After {}s expected {} permits",
+                refill_rate,
+                elapsed_secs,
+                expected_permits
+            );
+            assert!(
+                (bucket.fractional_tokens.load() - expected_fractional).abs() < 0.0001,
+                "Rate {}: After {}s expected {} fractional, got {}",
+                refill_rate,
+                elapsed_secs,
+                expected_fractional,
+                bucket.fractional_tokens.load()
+            );
+        }
+    }
+
+    #[test]
+    fn test_rewards_capped_at_max_capacity() {
+        let bucket = TokenBucket {
+            refill_rate: 50.0,
+            success_reward: 2.0,
+            creation_time: Instant::now() - std::time::Duration::from_secs(100),
+            semaphore: Arc::new(Semaphore::new(5)),
+            max_permits: 10,
+            ..Default::default()
+        };
+
+        // Add success rewards: 50 * 2.0 = 100 tokens (without cap)
+        for _ in 0..50 {
+            bucket.reward_success();
+        }
+        
+        // Fractional tokens capped at 10 from success rewards
+        assert_eq!(bucket.fractional_tokens.load(), 10.0);
+
+        // Time-based refill: 100 * 50 = 5000 tokens (without cap)
+        // But fractional is already at 10, so it stays at 10
+        bucket.refill_tokens_based_on_time();
+
+        // Fractional tokens should be capped at max_permits (10)
+        assert_eq!(
+            bucket.fractional_tokens.load(),
+            10.0,
+            "Fractional tokens should be capped at max_permits"
+        );
+        
+        // Convert should add 5 tokens (bucket at 5, can add 5 more to reach max 10)
+        bucket.convert_fractional_tokens();
+        assert_eq!(bucket.available_permits(), 10);
+    }
+
+    #[test]
+    fn test_concurrent_time_based_refill_no_over_generation() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        // Create bucket with 1 token/sec refill, backdated by 10 seconds
+        let bucket = Arc::new(TokenBucket {
+            refill_rate: 1.0,
+            creation_time: Instant::now() - std::time::Duration::from_secs(10),
+            semaphore: Arc::new(Semaphore::new(0)),
+            max_permits: 100,
+            ..Default::default()
+        });
+
+        // Launch 100 threads that all try to refill simultaneously
+        let barrier = Arc::new(Barrier::new(100));
+        let mut handles = Vec::new();
+
+        for _ in 0..100 {
+            let bucket_clone = Arc::clone(&bucket);
+            let barrier_clone = Arc::clone(&barrier);
+            
+            let handle = thread::spawn(move || {
+                // Wait for all threads to be ready
+                barrier_clone.wait();
+                
+                // All threads call refill at the same time
+                bucket_clone.refill_tokens_based_on_time();
+            });
+            
+            handles.push(handle);
+        }
+
+        // Wait for all threads to complete
+        for handle in handles {
+            handle.join().unwrap();
+        }
+
+        // Convert fractional tokens to whole tokens
+        bucket.convert_fractional_tokens();
+
+        // Should have exactly 10 tokens (10 seconds * 1 token/sec)
+        // Not 1000 tokens (100 threads * 10 tokens each)
+        assert_eq!(
+            bucket.available_permits(),
+            10,
+            "Only one thread should have added tokens, not all 100"
+        );
+        
+        // Fractional should be 0 after conversion
+        assert!(bucket.fractional_tokens.load().abs() < 0.0001);
+    }
+
 }
