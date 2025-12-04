@@ -20,7 +20,9 @@ pub trait ProvideMeter: Send + Sync + Debug {
 
     /// Returns a reference to `self` as `&dyn Any` for downcasting.
     /// This allows type-based identification of meter providers.
-    fn as_any(&self) -> &dyn std::any::Any;
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 
     /// Returns the name of this provider implementation.
     /// This is used for feature tracking without requiring type imports.
