@@ -138,7 +138,7 @@ impl TokenBucket {
     pub(crate) fn acquire(&self, err: &ErrorKind) -> Option<OwnedSemaphorePermit> {
         // Add time-based tokens to fractional accumulator
         self.refill_tokens_based_on_time();
-        
+
         // Convert accumulated fractional tokens to whole tokens
         self.convert_fractional_tokens();
 
@@ -194,19 +194,19 @@ impl TokenBucket {
     fn refill_tokens_based_on_time(&self) {
         if self.refill_rate > 0.0 {
             let last_refill_secs = self.last_refill_age_secs.load(Ordering::Relaxed);
-            
+
             // Get current time from TimeSource and calculate current age
             let current_time = self.time_source.now();
             let current_age_secs = current_time
                 .duration_since(self.creation_time)
                 .unwrap_or(Duration::ZERO)
                 .as_secs() as u32;
-            
+
             // Early exit if no time elapsed - most threads take this path
             if current_age_secs == last_refill_secs {
                 return;
             }
-            
+
             // Try to atomically claim this time window with a single CAS
             // If we lose, another thread is handling the refill, so we can exit
             if self
@@ -222,19 +222,19 @@ impl TokenBucket {
                 // Another thread claimed this time window, we're done
                 return;
             }
-            
+
             // We won the CAS - we're responsible for adding tokens for this time window
             let current_fractional = self.fractional_tokens.load();
             let max_fractional = self.max_permits as f32;
-            
+
             // Skip token addition if already at cap
             if current_fractional >= max_fractional {
                 return;
             }
-            
+
             let elapsed_secs = current_age_secs - last_refill_secs;
             let tokens_to_add = elapsed_secs as f32 * self.refill_rate;
-            
+
             // Add tokens to fractional accumulator, capping at max_permits to prevent unbounded growth
             let new_fractional = (current_fractional + tokens_to_add).min(max_fractional);
             self.fractional_tokens.store(new_fractional);
@@ -246,12 +246,12 @@ impl TokenBucket {
         if self.success_reward > 0.0 {
             let current = self.fractional_tokens.load();
             let max_fractional = self.max_permits as f32;
-            
+
             // Early exit if already at cap - no point calculating
             if current >= max_fractional {
                 return;
             }
-            
+
             // Cap fractional tokens at max_permits to prevent unbounded growth
             let new_fractional = (current + self.success_reward).min(max_fractional);
             self.fractional_tokens.store(new_fractional);
@@ -266,7 +266,6 @@ impl TokenBucket {
         self.semaphore
             .add_permits(amount.min(self.max_permits - available));
     }
-
 }
 
 /// Builder for constructing a `TokenBucket`.
@@ -318,11 +317,7 @@ impl TokenBucketBuilder {
     /// Negative values are clamped to 0.0. A refill rate of 0.0 disables time-based regeneration.
     /// Non-finite values (NaN, infinity) are treated as 0.0.
     pub fn refill_rate(mut self, rate: f32) -> Self {
-        let validated_rate = if rate.is_finite() {
-            rate.max(0.0)
-        } else {
-            0.0
-        };
+        let validated_rate = if rate.is_finite() { rate.max(0.0) } else { 0.0 };
         self.refill_rate = Some(validated_rate);
         self
     }
@@ -330,7 +325,10 @@ impl TokenBucketBuilder {
     /// Sets the time source for the token bucket.
     ///
     /// If not set, defaults to `SystemTimeSource`.
-    pub fn time_source(mut self, time_source: impl aws_smithy_async::time::TimeSource + 'static) -> Self {
+    pub fn time_source(
+        mut self,
+        time_source: impl aws_smithy_async::time::TimeSource + 'static,
+    ) -> Self {
         self.time_source = Some(SharedTimeSource::new(time_source));
         self
     }
@@ -469,7 +467,10 @@ mod tests {
             bucket.fractional_tokens.store(input);
             bucket.convert_fractional_tokens();
 
-            assert_eq!(bucket.semaphore.available_permits() - initial, expected_permits);
+            assert_eq!(
+                bucket.semaphore.available_permits() - initial,
+                expected_permits
+            );
             assert!((bucket.fractional_tokens.load() - expected_remaining).abs() < 0.0001);
         }
     }
@@ -510,20 +511,23 @@ mod tests {
     #[test]
     fn test_builder_default_time_source() {
         // Test that TokenBucket uses SystemTimeSource by default when builder doesn't specify one
-        let bucket = TokenBucket::builder()
-            .capacity(100)
-            .build();
+        let bucket = TokenBucket::builder().capacity(100).build();
 
         // Verify the bucket was created successfully with default time source
         assert_eq!(bucket.max_permits, 100);
-        
+
         // Verify creation_time is set (should be close to now)
         let now = SystemTimeSource::new().now();
-        let creation_age = now.duration_since(bucket.creation_time).unwrap_or(Duration::ZERO);
-        
+        let creation_age = now
+            .duration_since(bucket.creation_time)
+            .unwrap_or(Duration::ZERO);
+
         // Creation time should be very recent (within 1 second)
-        assert!(creation_age < Duration::from_secs(1), 
-            "Creation time should be recent, but was {:?} ago", creation_age);
+        assert!(
+            creation_age < Duration::from_secs(1),
+            "Creation time should be recent, but was {:?} ago",
+            creation_age
+        );
     }
 
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
@@ -542,13 +546,13 @@ mod tests {
 
         // Verify the bucket uses the manual time source
         assert_eq!(bucket.creation_time, UNIX_EPOCH);
-        
+
         // Advance time and verify tokens are added based on manual time
         manual_time.advance(Duration::from_secs(5));
-        
+
         bucket.refill_tokens_based_on_time();
         bucket.convert_fractional_tokens();
-        
+
         // Should have 5 tokens (5 seconds * 1 token/sec)
         assert_eq!(bucket.available_permits(), 5);
     }
@@ -824,7 +828,7 @@ mod tests {
 
             bucket.refill_tokens_based_on_time();
             bucket.convert_fractional_tokens();
-            
+
             assert_eq!(
                 bucket.available_permits(),
                 expected_permits,
@@ -865,7 +869,7 @@ mod tests {
         for _ in 0..50 {
             bucket.reward_success();
         }
-        
+
         // Fractional tokens capped at 10 from success rewards
         assert_eq!(bucket.fractional_tokens.load(), 10.0);
 
@@ -882,7 +886,7 @@ mod tests {
             10.0,
             "Fractional tokens should be capped at max_permits"
         );
-        
+
         // Convert should add 5 tokens (bucket at 5, can add 5 more to reach max 10)
         bucket.convert_fractional_tokens();
         assert_eq!(bucket.available_permits(), 10);
@@ -897,7 +901,7 @@ mod tests {
         use std::time::UNIX_EPOCH;
 
         let time_source = ManualTimeSource::new(UNIX_EPOCH);
-        
+
         // Create bucket with 1 token/sec refill
         let bucket = Arc::new(TokenBucket {
             refill_rate: 1.0,
@@ -918,15 +922,15 @@ mod tests {
         for _ in 0..100 {
             let bucket_clone = Arc::clone(&bucket);
             let barrier_clone = Arc::clone(&barrier);
-            
+
             let handle = thread::spawn(move || {
                 // Wait for all threads to be ready
                 barrier_clone.wait();
-                
+
                 // All threads call refill at the same time
                 bucket_clone.refill_tokens_based_on_time();
             });
-            
+
             handles.push(handle);
         }
 
@@ -945,9 +949,8 @@ mod tests {
             10,
             "Only one thread should have added tokens, not all 100"
         );
-        
+
         // Fractional should be 0 after conversion
         assert!(bucket.fractional_tokens.load().abs() < 0.0001);
     }
-
 }
