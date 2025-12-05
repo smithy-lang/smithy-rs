@@ -21,7 +21,7 @@ internal class ServerServiceGeneratorTest {
     fun `one should be able to return a built service from a function`() {
         val model = File("../codegen-core/common-test-models/simple.smithy").readText().asSmithyModel()
 
-        var testDir =
+        val testDirs =
             serverIntegrationTest(model) { _, rustCrate ->
                 rustCrate.testModule {
                     // No actual tests: we just want to check that this compiles.
@@ -38,9 +38,11 @@ internal class ServerServiceGeneratorTest {
                 }
             }
 
-        // test the generated metadata
-        val cargoToml = testDir.resolve("Cargo.toml").readText()
-        assert(cargoToml.contains("codegen-version =")) { cargoToml }
-        assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
+        // test the generated metadata for all generated projects (both HTTP 0.x and HTTP 1.x)
+        testDirs.forEach { generatedServer ->
+            val cargoToml = generatedServer.path.resolve("Cargo.toml").readText()
+            assert(cargoToml.contains("codegen-version =")) { cargoToml }
+            assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
+        }
     }
 }

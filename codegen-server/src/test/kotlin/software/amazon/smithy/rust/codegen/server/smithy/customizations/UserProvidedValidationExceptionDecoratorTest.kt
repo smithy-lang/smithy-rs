@@ -16,6 +16,7 @@ import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -309,7 +310,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
 
     @Test
     fun `code compiles with custom validation exception`() {
-        serverIntegrationTest(completeTestModel)
+        serverIntegrationTest(completeTestModel, testCoverage = HttpTestType.AsConfigured)
     }
 
     private val completeTestModelWithOptionals =
@@ -382,7 +383,7 @@ internal class UserProvidedValidationExceptionDecoratorTest {
 
     @Test
     fun `code compiles with custom validation exception using optionals`() {
-        serverIntegrationTest(completeTestModelWithOptionals)
+        serverIntegrationTest(completeTestModelWithOptionals, testCoverage = HttpTestType.AsConfigured)
     }
 
     private val completeTestModelWithImplicitNamesWithoutFieldMessage =

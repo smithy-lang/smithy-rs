@@ -55,7 +55,7 @@ regex = "1.12.2"
 serde_urlencoded = "0.7"
 thiserror = "2"
 tokio = { version = "1.40.0", features = ["full"] }
-tower = { version = "0.5", features = [
+tower = { version = "0.4.13", features = [
     "util",
     "make",
 ], default-features = false }
@@ -76,7 +76,7 @@ hyper-util = { version = "0.1", features = [
     "http2",
 ] }
 tracing-subscriber = { version = "0.3", features = ["fmt"] }
-tower = { version = "0.5", features = ["util", "make", "limit"] }
+tower = { version = "0.4.13", features = ["util", "make", "limit"] }
 tower-http = { version = "0.6", features = ["timeout"] }
 
 [package.metadata.docs.rs]

@@ -19,7 +19,7 @@
 //! The `serve` function creates a connection acceptance loop that:
 //!
 //! 1. **Accepts connections** via the [`Listener`] trait (e.g., [`TcpListener`](tokio::net::TcpListener))
-//! 2. **Creates per-connection services** by calling your `make_service` with [`IncomingStream`]
+//! 2. **Creates per-connection services** by calling the `make_service` with [`IncomingStream`]
 //! 3. **Converts Tower services to Hyper** using `TowerToHyperService`
 //! 4. **Spawns a task** for each connection to handle HTTP requests
 //!
@@ -30,7 +30,7 @@
 //! └─────────┘      └──────────────┘      └──────────────┘      └────────┘
 //! ```
 //!
-//! The [`IncomingStream`] provides connection metadata to your service factory,
+//! The [`IncomingStream`] provides connection metadata to the service factory,
 //! allowing per-connection customization based on remote address or IO type
 //!
 //! ## HTTP Protocol Selection
@@ -317,6 +317,13 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 //
 //   This is the core Tower Service trait. It means:
 //   * **Input**: Takes an HTTP request with a streaming body (`Incoming` from Hyper)
+//
+//     **Why `Incoming` specifically?** This is a constraint imposed by Hyper's architecture.
+//     When Hyper's connection builders (`serve_connection`, `serve_connection_with_upgrades`)
+//     parse HTTP requests from the wire, they produce `http::Request<Incoming>`. This type
+//     is not customizable - services must accept what Hyper provides. The request body type
+//     is fixed, but the response body type `B` is generic since services control what they return.
+//
 //   * **Output**: Returns an HTTP response with body type `B`
 //   * **Error**: Must be `Infallible`, meaning the service never returns errors at the
 //     Tower level. Any application errors must be converted into HTTP responses
@@ -338,7 +345,7 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 // ## MakeService Bounds (M)
 //
 // The `M` type parameter represents a **service factory** - a Tower service that
-// creates a new `S` service for each incoming connection. This allows us to customize
+// creates a new `S` service for each incoming connection. This allows customizing
 // services based on connection metadata (remote address, TLS info, etc.).
 //
 // Connection Info → Service Factory → Per-Connection Service
@@ -406,7 +413,7 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 /// # Lifetime Safety
 ///
 /// The lifetime `'a` ensures the reference to IO remains valid only during the
-/// `make_service.call()` invocation. After your service is created, the IO is
+/// `make_service.call()` invocation. After the service is created, the IO is
 /// moved into a spawned task to handle the connection. This is safe because:
 ///
 /// ```text
@@ -493,7 +500,7 @@ where
 /// use aws_smithy_http_server::routing::IntoMakeService;
 ///
 /// let app = /* ... build service ... */;
-/// let app = TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)).layer(app);
+/// let app = TimeoutLayer::new(Duration::from_secs(30)).layer(app);
 ///
 /// let listener = TcpListener::bind("0.0.0.0:3000").await.unwrap();
 /// aws_smithy_http_server::serve(listener, IntoMakeService::new(app)).await.unwrap();

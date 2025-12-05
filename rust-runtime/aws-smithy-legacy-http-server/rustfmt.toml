@@ -1,0 +1,4 @@
+edition = "2021"
+max_width = 120
+# Prevent carriage returns
+newline_style = "Unix"

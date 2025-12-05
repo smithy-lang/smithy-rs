@@ -17,6 +17,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.printGeneratedFiles
 import software.amazon.smithy.rust.codegen.core.util.runCommand
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 class FuzzHarnessBuildPluginTest() {
@@ -44,12 +46,26 @@ class FuzzHarnessBuildPluginTest() {
         val testPath = testDir.toPath()
         val manifest = FileManifest.create(testPath)
         val service = "com.example#HelloService"
-        val generatedServer =
+        // Only generate server for http@1 as `aws-smithy-fuzz` only supports http@1.
+        val generatedServers =
             serverIntegrationTest(
                 minimalModel,
                 IntegrationTestParams(service = service, command = { dir -> println("generated $dir") }),
+                testCoverage =
+                    HttpTestType.Only(
+                        HttpTestVersion.HTTP_1_X,
+                    ),
             ) { _, _ ->
             }
+
+        // Create target crates for each generated server (only HTTP 1.x for fuzz testing)
+        val targetCrates =
+            generatedServers.map { server ->
+                ObjectNode.objectNode()
+                    .withMember("relativePath", server.path.toString())
+                    .withMember("name", "a")
+            }
+
         val context =
             PluginContext.builder()
                 .model(minimalModel)
@@ -59,10 +75,7 @@ class FuzzHarnessBuildPluginTest() {
                         .withMember("service", "com.example#HelloService")
                         .withMember(
                             "targetCrates",
-                            ArrayNode.arrayNode(
-                                ObjectNode.objectNode().withMember("relativePath", generatedServer.toString())
-                                    .withMember("name", "a"),
-                            ),
+                            ArrayNode.fromNodes(targetCrates),
                         )
                         .withMember(
                             "runtimeConfig",

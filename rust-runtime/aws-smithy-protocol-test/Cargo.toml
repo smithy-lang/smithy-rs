@@ -13,6 +13,11 @@ default = ["http-02x"]
 http-02x = ["dep:http-0x"]
 http-1x = ["dep:http-1x"]
 
+[features]
+default = ["http-02x"]
+http-02x = ["dep:http-0x"]
+http-1x = ["dep:http-1x"]
+
 [dependencies]
 # Not perfect for our needs, but good for now
 assert-json-diff = "2"

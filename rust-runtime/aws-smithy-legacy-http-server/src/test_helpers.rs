@@ -3,6 +3,5 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-fn main() {
-    println!("Hello, world!");
-}
+pub(crate) fn assert_send<T: Send>() {}
+pub(crate) fn assert_sync<T: Sync>() {}

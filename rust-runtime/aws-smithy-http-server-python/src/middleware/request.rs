@@ -8,7 +8,7 @@
 use std::mem;
 use std::sync::Arc;
 
-use aws_smithy_http_server::body::Body;
+use aws_smithy_legacy_http_server::body::Body;
 use http::{request::Parts, Request};
 use pyo3::{
     exceptions::{PyRuntimeError, PyValueError},
