@@ -476,6 +476,54 @@ async fn test_streaming_operation_with_initial_data() {
     assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
 }
 
+/// Test that operations without modeled initial messages don't hang.
+/// This verifies the fix for issue #4435 where recv() would block waiting
+/// for an initial message that was never modeled.
+#[tokio::test]
+async fn test_no_hang_without_initial_message() {
+    let mut harness = TestHarness::new("StreamingOperation").await;
+
+    // Wait for the response to be ready without sending any messages
+    // This should not hang because StreamingOperation has no modeled initial-request
+    harness.client.wait_for_response_ready().await;
+
+    // Now send an event and verify we can receive it
+    harness.send_event("A").await;
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+}
+
+/// Test that operations WITH modeled initial messages DO wait for them.
+/// This verifies that try_recv_initial() blocks and the response doesn't become ready
+/// until the initial-request is sent.
+#[tokio::test]
+async fn test_waits_for_initial_message_when_modeled() {
+    let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
+
+    // Try to wait for response with a timeout - it should timeout because we haven't sent initial data
+    let result = tokio::time::timeout(
+        tokio::time::Duration::from_millis(100),
+        harness.client.wait_for_response_ready(),
+    )
+    .await;
+    assert!(
+        result.is_err(),
+        "Response should not be ready without initial data"
+    );
+
+    // Now send the initial data
+    harness.send_initial_data("test-data").await;
+
+    // Now the response should become ready
+    harness.client.wait_for_response_ready().await;
+
+    // Send an event and verify it works
+    harness.send_event("A").await;
+    let resp = harness.expect_message().await;
+    assert_eq!(get_event_type(&resp), "A");
+    assert_eq!(harness.server.initial_data(), Some("test-data".to_string()));
+}
+
 /// StreamingOperationWithInitialData has a mandatory initial data field.
 /// If we don't send this field, we'll never hit the handler.
 #[tokio::test]

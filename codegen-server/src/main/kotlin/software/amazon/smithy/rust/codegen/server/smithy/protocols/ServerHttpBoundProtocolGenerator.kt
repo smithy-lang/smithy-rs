@@ -895,50 +895,50 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     if (binding.member.isStreaming(model)) {
                         if (binding.member.isEventStream(model)) {
                             val parser = structuredDataParser.serverInputParser(operationShape)
-                            val parseInitialRequest =
-                                if (parser != null &&
+                            val hasInitialRequest =
+                                parser != null &&
                                     httpBindingResolver.handlesEventStreamInitialRequest(
                                         operationShape,
                                     )
-                                ) {
-                                    writable {
-                                        rustTemplate(
-                                            """
-                                            input = #{parser}(_initial_event.payload(), input)?;
-                                            """,
-                                            "parser" to parser,
-                                        )
-                                    }
-                                } else {
-                                    writable { }
-                                }
                             // TODO(https://github.com/smithy-lang/smithy-rs/issues/4343): The error
                             //   returned below is not actually accessible to the caller because it has
                             //   already started reading from the event stream at the time the error was sent.
                             rustTemplate(
                                 """
                                 {
-                                    let mut receiver = #{Deserializer}(&mut body.into().into_inner())?;
-                                    if let Some(_initial_event) = receiver
-                                        .try_recv_initial(#{InitialMessageType}::Request)
-                                        .await
-                                        .map_err(
-                                            |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                #{AllowUselessConversion}
-                                                format!("{ev_error}").into()
-                                            )
-                                        )? {
-                                        #{parseInitialRequest}
-                                    }
+                                    let receiver = #{Deserializer}(&mut body.into().into_inner())?;
+                                    #{maybeReadInitialRequest:W}
                                     Some(receiver)
                                 }
                                 """,
                                 "Deserializer" to deserializer,
-                                "InitialMessageType" to
-                                    RuntimeType.smithyHttp(runtimeConfig)
-                                        .resolve("event_stream::InitialMessageType"),
-                                "parseInitialRequest" to parseInitialRequest,
-                                "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                "maybeReadInitialRequest" to
+                                    writable {
+                                        if (hasInitialRequest) {
+                                            rustTemplate(
+                                                """
+                                                let mut receiver = receiver;
+                                                if let Some(_initial_event) = receiver
+                                                    .try_recv_initial(#{InitialMessageType}::Request)
+                                                    .await
+                                                    .map_err(
+                                                        |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                            #{AllowUselessConversion}
+                                                            format!("{ev_error}").into()
+                                                        )
+                                                    )? {
+                                                    input = #{parser}(_initial_event.payload(), input)?;
+                                                }
+                                                """,
+                                                "InitialMessageType" to
+                                                    RuntimeType.smithyHttp(runtimeConfig)
+                                                        .resolve("event_stream::InitialMessageType"),
+                                                "parser" to parser,
+                                                "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                                *codegenScope,
+                                            )
+                                        }
+                                    },
                                 *codegenScope,
                             )
                         } else {

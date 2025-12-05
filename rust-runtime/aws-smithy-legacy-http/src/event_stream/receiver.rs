@@ -6,7 +6,7 @@
 use aws_smithy_eventstream::frame::{
     DecodedFrame, MessageFrameDecoder, UnmarshallMessage, UnmarshalledMessage,
 };
-use aws_smithy_runtime_api::client::result::{ConnectorError, SdkError};
+use aws_smithy_runtime_api::client::result::{ConnectorError, ResponseError, SdkError};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::event_stream::{Message, RawMessage};
 use bytes::Buf;
@@ -120,6 +120,9 @@ pub struct Receiver<T, E> {
     /// initial response, then the message will be stored in `buffered_message` so that it can
     /// be returned with the next call of `recv()`.
     buffered_message: Option<Message>,
+    /// Stores initial-request or initial-response messages that were filtered out by `recv()`.
+    /// These are only returned when `try_recv_initial()` is explicitly called.
+    buffered_initial_message: Option<Message>,
     _phantom: PhantomData<E>,
 }
 
@@ -152,8 +155,20 @@ impl<T, E> Receiver<T, E> {
             buffer: RecvBuf::Empty,
             body,
             buffered_message: None,
+            buffered_initial_message: None,
             _phantom: Default::default(),
         }
+    }
+
+    /// Checks if a message is an initial-request or initial-response message.
+    fn is_initial_message(message: &Message) -> bool {
+        message
+            .headers()
+            .iter()
+            .find(|h| h.name().as_str() == ":event-type")
+            .and_then(|h| h.value().as_string().ok())
+            .map(|s| s.as_str() == "initial-request" || s.as_str() == "initial-response")
+            .unwrap_or(false)
     }
 
     fn unmarshall(&self, message: Message) -> Result<Option<T>, SdkError<E, RawMessage>> {
@@ -229,24 +244,59 @@ impl<T, E> Receiver<T, E> {
         &mut self,
         message_type: InitialMessageType,
     ) -> Result<Option<Message>, SdkError<E, RawMessage>> {
-        if let Some(message) = self.next_message().await? {
-            if let Some(event_type) = message
-                .headers()
-                .iter()
-                .find(|h| h.name().as_str() == ":event-type")
-            {
-                if event_type
-                    .value()
-                    .as_string()
-                    .map(|s| s.as_str() == message_type.as_str())
-                    .unwrap_or(false)
-                {
-                    return Ok(Some(message));
-                }
+        self.try_recv_initial_with_preprocessor(message_type, |msg| Ok((msg, ())))
+            .await
+            .map(|opt| opt.map(|(msg, _)| msg))
+    }
+
+    /// Tries to receive the initial response message with preprocessing support.
+    ///
+    /// The preprocessor function can transform the raw message (e.g., unwrap envelopes)
+    /// and return metadata alongside the transformed message. If the transformed message
+    /// matches the expected `message_type`, both the message and metadata are returned.
+    /// Otherwise, the transformed message is buffered and `Ok(None)` is returned.
+    ///
+    /// This method will block waiting for a message if no initial message has been buffered yet.
+    #[doc(hidden)]
+    pub async fn try_recv_initial_with_preprocessor<F, M>(
+        &mut self,
+        message_type: InitialMessageType,
+        preprocessor: F,
+    ) -> Result<Option<(Message, M)>, SdkError<E, RawMessage>>
+    where
+        F: FnOnce(Message) -> Result<(Message, M), ResponseError<RawMessage>>,
+    {
+        // Check if we already have a buffered initial message from recv()
+        let message = if let Some(buffered) = self.buffered_initial_message.take() {
+            buffered
+        } else {
+            // Otherwise, block waiting for the next message
+            match self.next_message().await? {
+                Some(msg) => msg,
+                None => return Ok(None),
             }
-            // Buffer the message so that it can be returned by the next call to `recv()`
-            self.buffered_message = Some(message);
+        };
+
+        let (processed_message, metadata) =
+            preprocessor(message.clone()).map_err(|err| SdkError::ResponseError(err))?;
+
+        if let Some(event_type) = processed_message
+            .headers()
+            .iter()
+            .find(|h| h.name().as_str() == ":event-type")
+        {
+            if event_type
+                .value()
+                .as_string()
+                .ok()
+                .map(|s| s.as_str() == message_type.as_str())
+                .unwrap_or(false)
+            {
+                return Ok(Some((processed_message, metadata)));
+            }
         }
+        // Buffer the original message so that it can be returned by the next call to `recv()`
+        self.buffered_message = Some(message);
         Ok(None)
     }
 
@@ -254,26 +304,36 @@ impl<T, E> Receiver<T, E> {
     /// it returns an `Ok(None)`. If there is a transport layer error, it will return
     /// `Err(SdkError::DispatchFailure)`. Service-modeled errors will be a part of the returned
     /// messages.
+    ///
+    /// This method filters out initial-request and initial-response messages. Those messages
+    /// are only returned when `try_recv_initial()` is explicitly called.
     pub async fn recv(&mut self) -> Result<Option<T>, SdkError<E, RawMessage>> {
-        if let Some(buffered) = self.buffered_message.take() {
-            return match self.unmarshall(buffered) {
-                Ok(message) => Ok(message),
-                Err(error) => {
-                    self.buffer = RecvBuf::Terminated;
-                    Err(error)
-                }
-            };
-        }
-        if let Some(message) = self.next_message().await? {
-            match self.unmarshall(message) {
-                Ok(message) => Ok(message),
-                Err(error) => {
-                    self.buffer = RecvBuf::Terminated;
-                    Err(error)
-                }
+        loop {
+            if let Some(buffered) = self.buffered_message.take() {
+                return match self.unmarshall(buffered) {
+                    Ok(message) => Ok(message),
+                    Err(error) => {
+                        self.buffer = RecvBuf::Terminated;
+                        Err(error)
+                    }
+                };
             }
-        } else {
-            Ok(None)
+            if let Some(message) = self.next_message().await? {
+                // Filter out initial messages - store them separately
+                if Self::is_initial_message(&message) {
+                    self.buffered_initial_message = Some(message);
+                    continue;
+                }
+                match self.unmarshall(message) {
+                    Ok(message) => return Ok(message),
+                    Err(error) => {
+                        self.buffer = RecvBuf::Terminated;
+                        return Err(error);
+                    }
+                }
+            } else {
+                return Ok(None);
+            }
         }
     }
 }

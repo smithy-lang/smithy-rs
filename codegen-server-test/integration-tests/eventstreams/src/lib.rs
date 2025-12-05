@@ -18,8 +18,9 @@ use hyper::{
 };
 use hyper_util::{client::legacy::Client, rt::TokioExecutor};
 use std::net::SocketAddr;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, Notify};
 use tokio::time::timeout;
 use tokio_stream::wrappers::ReceiverStream;
 
@@ -33,6 +34,7 @@ pub enum RecvError {
 pub struct ManualEventStreamClient {
     message_sender: mpsc::Sender<Message>,
     response_receiver: mpsc::Receiver<Result<Message, RecvError>>,
+    response_ready: Arc<Notify>,
     _handle: tokio::task::JoinHandle<()>,
 }
 
@@ -83,11 +85,17 @@ impl ManualEventStreamClient {
         let body = StreamBody::new(stream);
 
         let request = req.body(body).expect("failed to construct request");
+        let response_ready = Arc::new(Notify::new());
+        let response_ready_clone = response_ready.clone();
         let handle = tokio::spawn(async move {
             let response = timeout(Duration::from_secs(1), client.request(request))
                 .await
                 .expect("timeout making initial request")
                 .expect("failed to make initial contact with server");
+
+            // Notify that the response is ready
+            response_ready_clone.notify_one();
+
             let mut body = response.into_body();
             let mut decoder = MessageFrameDecoder::new();
 
@@ -122,8 +130,14 @@ impl ManualEventStreamClient {
         Ok(Self {
             message_sender,
             response_receiver,
+            response_ready,
             _handle: handle,
         })
+    }
+
+    /// Waits for the response stream to be ready (server has accepted the connection).
+    pub async fn wait_for_response_ready(&self) {
+        self.response_ready.notified().await;
     }
 
     /// Sends a message.

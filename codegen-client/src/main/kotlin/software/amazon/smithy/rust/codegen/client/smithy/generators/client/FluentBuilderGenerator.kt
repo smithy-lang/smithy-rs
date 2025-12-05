@@ -194,55 +194,55 @@ class FluentBuilderGenerator(
 
         return writable {
             val eventStreamMemberName = symbolProvider.toMemberName(eventStreamMember)
+            val structuredDataParser = codegenContext.protocolImpl?.structuredDataParser()
+            val parser = structuredDataParser?.operationParser(operation)
+
             rustTemplate(
                 """
-                let mut output =
+                let output =
                     #{Operation}::orchestrate(
                         &runtime_plugins,
                         input,
                     )
                     .await?;
 
-                // Converts any error encountered beyond this point into an `SdkError` response error
-                // with an `HttpResponse`. However, since we have already exited the `orchestrate`
-                // function, the original `HttpResponse` is no longer available and cannot be restored.
-                // This means that header information from the original response has been lost.
-                //
-                // Note that the response body would have been consumed by the deserializer
-                // regardless, even if the initial message was hypothetically processed during
-                // the orchestrator's deserialization phase but later resulted in an error.
-                fn response_error(
-                    err: impl #{Into}<#{BoxError}>
-                ) -> #{SdkError}<#{OperationError}, #{HttpResponse}> {
-                    #{SdkError}::response_error(err, #{HttpResponse}::new(
-                        #{StatusCode}::try_from(200).expect("valid successful code"),
-                        #{SdkBody}::empty()))
-                }
-
-                let message = output.$eventStreamMemberName.try_recv_initial_response().await.map_err(response_error)?;
-
-                match message {
-                    #{Some}(_message) => {
-                        #{maybeRecreateOutputWithNonEventStreamMembers:W}
-                        #{Ok}(output)
-                    }
-                    #{None} => #{Ok}(output),
-                }
+                #{maybeReadInitialResponse:W}
+                #{Ok}(output)
                 """,
                 *scope,
-                "maybeRecreateOutputWithNonEventStreamMembers" to
+                "maybeReadInitialResponse" to
                     writable {
-                        val structuredDataParser = codegenContext.protocolImpl?.structuredDataParser()
-                        structuredDataParser?.operationParser(operation)?.also { parser ->
+                        if (parser != null) {
                             rustTemplate(
                                 """
-                                let mut builder = output.into_builder();
-                                builder = #{parser}(
-                                    _message.payload(),
-                                    builder
-                                )
-                                .map_err(response_error)?;
-                                let output = builder.build().map_err(response_error)?;
+                                // Converts any error encountered beyond this point into an `SdkError` response error
+                                // with an `HttpResponse`. However, since we have already exited the `orchestrate`
+                                // function, the original `HttpResponse` is no longer available and cannot be restored.
+                                // This means that header information from the original response has been lost.
+                                //
+                                // Note that the response body would have been consumed by the deserializer
+                                // regardless, even if the initial message was hypothetically processed during
+                                // the orchestrator's deserialization phase but later resulted in an error.
+                                fn response_error(
+                                    err: impl #{Into}<#{BoxError}>
+                                ) -> #{SdkError}<#{OperationError}, #{HttpResponse}> {
+                                    #{SdkError}::response_error(err, #{HttpResponse}::new(
+                                        #{StatusCode}::try_from(200).expect("valid successful code"),
+                                        #{SdkBody}::empty()))
+                                }
+                                let mut output = output;
+
+                                let message = output.$eventStreamMemberName.try_recv_initial_response().await.map_err(response_error)?;
+
+                                if let #{Some}(_message) = message {
+                                    let mut builder = output.into_builder();
+                                    builder = #{parser}(
+                                        _message.payload(),
+                                        builder
+                                    )
+                                    .map_err(response_error)?;
+                                    output = builder.build().map_err(response_error)?;
+                                }
                                 """,
                                 "parser" to parser,
                                 *scope,
