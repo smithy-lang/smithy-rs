@@ -21100,6 +21100,14 @@
     "com.amazonaws.s3#GetObjectOutput": {
       "type": "structure",
       "members": {
+        "Body": {
+          "target": "com.amazonaws.s3#StreamingBlob",
+          "traits": {
+            "smithy.api#default": "",
+            "smithy.api#documentation": "<p>Object data.</p>",
+            "smithy.api#httpPayload": {}
+          }
+        },
         "DeleteMarker": {
           "target": "com.amazonaws.s3#DeleteMarker",
           "traits": {
@@ -29088,6 +29096,14 @@
             "smithy.api#httpHeader": "x-amz-acl"
           }
         },
+        "Body": {
+          "target": "com.amazonaws.s3#StreamingBlob",
+          "traits": {
+            "smithy.api#default": "",
+            "smithy.api#documentation": "<p>Object data.</p>",
+            "smithy.api#httpPayload": {}
+          }
+        },
         "Bucket": {
           "target": "com.amazonaws.s3#BucketName",
           "traits": {
@@ -31048,6 +31064,12 @@
         }
       }
     },
+    "com.amazonaws.s3#StreamingBlob": {
+      "type": "blob",
+      "traits": {
+        "smithy.api#streaming": {}
+      }
+    },
     "com.amazonaws.s3#Suffix": {
       "type": "string"
     },
@@ -31803,6 +31825,14 @@
     "com.amazonaws.s3#UploadPartRequest": {
       "type": "structure",
       "members": {
+        "Body": {
+          "target": "com.amazonaws.s3#StreamingBlob",
+          "traits": {
+            "smithy.api#default": "",
+            "smithy.api#documentation": "<p>Object data.</p>",
+            "smithy.api#httpPayload": {}
+          }
+        },
         "Bucket": {
           "target": "com.amazonaws.s3#BucketName",
           "traits": {
