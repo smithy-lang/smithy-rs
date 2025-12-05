@@ -28,11 +28,15 @@ impl Intercept for ObservabilityFeatureTrackerInterceptor {
         if let Ok(telemetry_provider) = aws_smithy_observability::global::get_telemetry_provider() {
             let meter_provider = telemetry_provider.meter_provider();
 
+            let is_otel = meter_provider
+                .as_any()
+                .downcast_ref::<aws_smithy_observability_otel::meter::OtelMeterProvider>()
+                .is_some();
             // Use provider_name() to detect OpenTelemetry without importing the otel crate.
             // We cannot use as_any() here because meter_provider is a trait object (&dyn ProvideMeter),
             // and as_any() requires Self: Sized, which trait objects don't satisfy.
             // The as_any() method is available for concrete types when stronger type guarantees are needed.
-            if meter_provider.provider_name() == "otel" {
+            if is_otel {
                 cfg.interceptor_state()
                     .store_append(SmithySdkFeature::ObservabilityOtelMetrics);
             }
