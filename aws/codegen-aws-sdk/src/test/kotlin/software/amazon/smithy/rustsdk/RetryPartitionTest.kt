@@ -114,6 +114,7 @@ class RetryPartitionTest {
                     "RetryPartition" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::RetryPartition"),
                     "RuntimeComponents" to RuntimeType.runtimeComponents(ctx.runtimeConfig),
                     "TokenBucket" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::TokenBucket"),
+                    "MAXIMUM_CAPACITY" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::token_bucket::MAXIMUM_CAPACITY"),
                 )
             crate.integrationTest("custom_retry_partition") {
                 tokioTest("test_custom_token_bucket") {
@@ -139,7 +140,8 @@ class RetryPartitionTest {
                             ) -> Result<(), #{BoxError}> {
                                 self.called.fetch_add(1, Ordering::Relaxed);
                                 let token_bucket = cfg.load::<#{TokenBucket}>().unwrap();
-                                let expected = format!("permits: {}", tokio::sync::Semaphore::MAX_PERMITS);
+                                let max_capacity = #{MAXIMUM_CAPACITY};
+                                let expected = format!("permits: {}", max_capacity);
                                 assert!(
                                     format!("{token_bucket:?}").contains(&expected),
                                     "Expected debug output to contain `{expected}`, but got: {token_bucket:?}"
