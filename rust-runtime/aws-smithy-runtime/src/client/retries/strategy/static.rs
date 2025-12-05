@@ -78,7 +78,7 @@ impl Default for StaticRetryStrategy {
                 fractional_tokens: 0.0,
                 last_refill_time: None,
             })),
-            refill_rate: 0.0,  // no time-based refill by default (static behavior)
+            refill_rate: 0.0,   // no time-based refill by default (static behavior)
             success_award: 1.0, // default to 1 token per success
         }
     }
@@ -130,7 +130,7 @@ impl StaticRetryStrategyBuilder {
         }
     }
 }
-    
+
 impl StaticRetryStrategy {
     /// Creates a new `StaticRetryStrategy` with default settings.
     pub fn new() -> Self {
@@ -164,10 +164,10 @@ impl StaticRetryStrategy {
         let mut old_retry_permit = self.retry_permit.lock().unwrap();
         if let Some(p) = old_retry_permit.replace(new_retry_permit) {
             // CRITICAL: We must "forget" the old permit instead of dropping it.
-            // 
+            //
             // When a retry attempt is made, tokens are "spent" from the bucket and should
             // not be returned. If we drop() the permit, those tokens would go back to the
-            // bucket, incorrectly making them available for future retries. 
+            // bucket, incorrectly making them available for future retries.
             p.forget()
         }
     }
@@ -227,11 +227,11 @@ impl StaticRetryStrategy {
         // Pre-calculate all values outside the lock to minimize contention
         let (tokens_to_add, new_fractional, new_last_time) = {
             let state = self.refill_state.lock().unwrap();
-            
+
             // Do calculations with current values
             let mut fractional = state.fractional_tokens;
             let mut last_time = state.last_refill_time;
-            
+
             // Time-based refill (if enabled)
             if self.refill_rate > 0.0 {
                 if let Some(lt) = last_time {
@@ -240,18 +240,18 @@ impl StaticRetryStrategy {
                 }
                 last_time = Some(seconds_since_unix_epoch);
             }
-            
+
             let whole_tokens = fractional.floor() as usize;
             let new_fractional = fractional - whole_tokens as f64;
-            
+
             (whole_tokens, new_fractional, last_time)
         }; // Lock released here
-        
+
         // Add tokens to bucket outside of lock
         if tokens_to_add > 0 {
             token_bucket.add_permits(tokens_to_add);
         }
-        
+
         // Quick update with pre-calculated values
         {
             let mut state = self.refill_state.lock().unwrap();
@@ -333,7 +333,7 @@ impl RetryStrategy for StaticRetryStrategy {
         match token_bucket.acquire(&error_kind) {
             Some(permit) => {
                 self.set_retry_permit(permit);
-                
+
                 let backoff = match self.calculate_backoff(cfg, retry_cfg, &classifier_result) {
                     Ok(value) => value,
                     Err(value) => return Ok(value),
@@ -364,8 +364,10 @@ mod tests {
         Input, InterceptorContext, Output,
     };
     use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
-    use aws_smithy_runtime_api::client::retries::classifiers::{SharedRetryClassifier};
-    use aws_smithy_runtime_api::client::retries::{AlwaysRetry, RequestAttempts, RetryStrategy, ShouldAttempt};
+    use aws_smithy_runtime_api::client::retries::classifiers::SharedRetryClassifier;
+    use aws_smithy_runtime_api::client::retries::{
+        AlwaysRetry, RequestAttempts, RetryStrategy, ShouldAttempt,
+    };
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::retry::{ErrorKind, RetryConfig};
@@ -402,7 +404,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(SystemTimeSource::new()))
             .build()
             .unwrap();
@@ -430,7 +434,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .build()
             .unwrap();
 
@@ -462,7 +468,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .build()
             .unwrap();
 
@@ -493,7 +501,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .build()
             .unwrap();
 
@@ -517,7 +527,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .build()
             .unwrap();
 
@@ -564,7 +576,9 @@ mod tests {
         // Start at time T=0
         let time_source = StaticTimeSource::new(SystemTime::UNIX_EPOCH);
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(time_source.clone()))
             .build()
             .unwrap();
@@ -611,7 +625,9 @@ mod tests {
 
         let time_source = StaticTimeSource::new(SystemTime::UNIX_EPOCH);
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(time_source.clone()))
             .build()
             .unwrap();
@@ -639,8 +655,8 @@ mod tests {
 
         let result2 = strategy.should_attempt_retry(&ctx, &rc, &cfg2).unwrap();
         assert_eq!(result2, ShouldAttempt::No); // Success = no retry
-        
-        // Should have: 45 (remaining) + 5 (time refill) + 3 (success award) = 53, 
+
+        // Should have: 45 (remaining) + 5 (time refill) + 3 (success award) = 53,
         // but capped at bucket max of 50
         assert_eq!(token_bucket.available_permits(), 50);
     }
@@ -662,7 +678,9 @@ mod tests {
 
         let time_source = StaticTimeSource::new(SystemTime::UNIX_EPOCH);
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(time_source.clone()))
             .build()
             .unwrap();
@@ -720,7 +738,9 @@ mod tests {
 
         let time_source = StaticTimeSource::new(SystemTime::UNIX_EPOCH);
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(time_source.clone()))
             .build()
             .unwrap();
@@ -750,7 +770,7 @@ mod tests {
 
         let result2 = strategy.should_attempt_retry(&ctx, &rc, &cfg2).unwrap();
         assert_eq!(result2, ShouldAttempt::No); // Success = no retry
-        
+
         // Should be capped at bucket maximum despite huge fractional accumulation
         assert_eq!(token_bucket.available_permits(), 1000); // Capped at bucket max
     }
@@ -762,7 +782,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::TransientError))) // Use TransientError
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::TransientError,
+            ))) // Use TransientError
             .with_time_source(Some(SystemTimeSource::new()))
             .build()
             .unwrap();
@@ -790,7 +812,9 @@ mod tests {
 
         // Change to ServerError for next attempt
         let rc2 = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(SystemTimeSource::new()))
             .build()
             .unwrap();
@@ -812,7 +836,9 @@ mod tests {
         ctx.set_output_or_error(Err(OrchestratorError::other("test error")));
 
         let rc = RuntimeComponentsBuilder::for_tests()
-            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(ErrorKind::ServerError)))
+            .with_retry_classifier(SharedRetryClassifier::new(AlwaysRetry(
+                ErrorKind::ServerError,
+            )))
             .with_time_source(Some(SystemTimeSource::new()))
             .build()
             .unwrap();

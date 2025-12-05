@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource};
+use aws_smithy_async::time::{SharedTimeSource};
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
@@ -194,22 +194,14 @@ impl TokenBucket {
     fn refill_tokens_based_on_time(&self) {
         if self.refill_rate > 0.0 {
             let last_refill_secs = self.last_refill_age_secs.load(Ordering::Relaxed);
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
             // Get current time from TimeSource and calculate current age
             let current_time = self.time_source.now();
             let current_age_secs = current_time
                 .duration_since(self.creation_time)
                 .unwrap_or(Duration::ZERO)
                 .as_secs() as u32;
-<<<<<<< HEAD
 
-=======
-            
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
             // Early exit if no time elapsed - most threads take this path
             if current_age_secs == last_refill_secs {
                 return;
@@ -275,26 +267,11 @@ impl TokenBucket {
             .add_permits(amount.min(self.max_permits - available));
     }
 
-<<<<<<< HEAD
-    /// Add tokens back to the bucket (called by retry strategies)
-    pub(crate) fn add_permits(&self, amount: usize) {
-        let available = self.semaphore.available_permits();
-        if available < self.max_permits {
-            let space_available = self.max_permits - available;
-            let to_add = amount.min(space_available);
-            if to_add > 0 {
-                trace!("adding {to_add} permits back into the bucket");
-                self.semaphore.add_permits(to_add);
-            }
-        }
-    }
-=======
     #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
 
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
 }
 
 /// Builder for constructing a `TokenBucket`.
@@ -354,14 +331,10 @@ impl TokenBucketBuilder {
     /// Sets the time source for the token bucket.
     ///
     /// If not set, defaults to `SystemTimeSource`.
-<<<<<<< HEAD
     pub fn time_source(
         mut self,
         time_source: impl aws_smithy_async::time::TimeSource + 'static,
     ) -> Self {
-=======
-    pub fn time_source(mut self, time_source: impl aws_smithy_async::time::TimeSource + 'static) -> Self {
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
         self.time_source = Some(SharedTimeSource::new(time_source));
         self
     }
@@ -544,8 +517,9 @@ mod tests {
     #[test]
     fn test_builder_default_time_source() {
         // Test that TokenBucket uses SystemTimeSource by default when builder doesn't specify one
-<<<<<<< HEAD
-        let bucket = TokenBucket::builder().capacity(100).build();
+        let bucket = TokenBucket::builder()
+            .capacity(100)
+            .build();
 
         // Verify the bucket was created successfully with default time source
         assert_eq!(bucket.max_permits, 100);
@@ -557,27 +531,8 @@ mod tests {
             .unwrap_or(Duration::ZERO);
 
         // Creation time should be very recent (within 1 second)
-        assert!(
-            creation_age < Duration::from_secs(1),
-            "Creation time should be recent, but was {:?} ago",
-            creation_age
-        );
-=======
-        let bucket = TokenBucket::builder()
-            .capacity(100)
-            .build();
-
-        // Verify the bucket was created successfully with default time source
-        assert_eq!(bucket.max_permits, 100);
-        
-        // Verify creation_time is set (should be close to now)
-        let now = SystemTimeSource::new().now();
-        let creation_age = now.duration_since(bucket.creation_time).unwrap_or(Duration::ZERO);
-        
-        // Creation time should be very recent (within 1 second)
         assert!(creation_age < Duration::from_secs(1), 
             "Creation time should be recent, but was {:?} ago", creation_age);
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
     }
 
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
@@ -596,7 +551,6 @@ mod tests {
 
         // Verify the bucket uses the manual time source
         assert_eq!(bucket.creation_time, UNIX_EPOCH);
-<<<<<<< HEAD
 
         // Advance time and verify tokens are added based on manual time
         manual_time.advance(Duration::from_secs(5));
@@ -604,15 +558,9 @@ mod tests {
         bucket.refill_tokens_based_on_time();
         bucket.convert_fractional_tokens();
 
-=======
-        
         // Advance time and verify tokens are added based on manual time
         manual_time.advance(Duration::from_secs(5));
-        
-        bucket.refill_tokens_based_on_time();
-        bucket.convert_fractional_tokens();
-        
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
+
         // Should have 5 tokens (5 seconds * 1 token/sec)
         assert_eq!(bucket.available_permits(), 5);
     }
@@ -961,11 +909,7 @@ mod tests {
         use std::time::UNIX_EPOCH;
 
         let time_source = ManualTimeSource::new(UNIX_EPOCH);
-<<<<<<< HEAD
 
-=======
-        
->>>>>>> 2f0cb1cf3 (Adding time based refill support. Extracted fractional token management to be shared.)
         // Create bucket with 1 token/sec refill
         let bucket = Arc::new(TokenBucket {
             refill_rate: 1.0,

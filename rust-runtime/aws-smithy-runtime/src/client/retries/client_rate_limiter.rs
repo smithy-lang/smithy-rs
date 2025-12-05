@@ -196,7 +196,7 @@ trait ClientRateLimiterOps {
         if !self.enabled() {
             return Ok(());
         }
-        
+
         let amount = match kind {
             RequestReason::Retry => self.retry_cost(),
             RequestReason::RetryTimeout => self.retry_timeout_cost(),
@@ -251,7 +251,7 @@ impl ClientRateLimiter {
         kind: RequestReason,
     ) -> Result<(), Duration> {
         let mut impl_lock = self.inner.lock().unwrap();
-        
+
         match &mut *impl_lock {
             RateLimiterImpl::Dynamic(inner) => {
                 inner.acquire_permission(seconds_since_unix_epoch, kind)
@@ -268,33 +268,50 @@ impl ClientRateLimiter {
         is_throttling_error: bool,
     ) {
         let mut impl_lock = self.inner.lock().unwrap();
-        
+
         match &mut *impl_lock {
             RateLimiterImpl::Dynamic(inner) => {
                 inner.update_rate_limiter(seconds_since_unix_epoch, is_throttling_error)
             }
-            RateLimiterImpl::Static(inner) => {
-                inner.update_rate_limiter(is_throttling_error)
-            }
+            RateLimiterImpl::Static(inner) => inner.update_rate_limiter(is_throttling_error),
         }
     }
 }
 
 impl ClientRateLimiterOps for DynamicInner {
-    fn enabled(&self) -> bool { self.enabled }
-    fn fill_rate(&self) -> f64 { self.fill_rate }
-    fn max_capacity(&self) -> f64 { self.max_capacity }
-    fn current_capacity(&self) -> f64 { self.current_capacity }
-    fn current_capacity_mut(&mut self) -> &mut f64 { &mut self.current_capacity }
-    fn last_timestamp(&self) -> Option<f64> { self.last_timestamp }
-    fn last_timestamp_mut(&mut self) -> &mut Option<f64> { &mut self.last_timestamp }
-    fn initial_request_cost(&self) -> f64 { self.initial_request_cost }
-    fn retry_cost(&self) -> f64 { self.retry_cost }
-    fn retry_timeout_cost(&self) -> f64 { self.retry_timeout_cost }
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+    fn fill_rate(&self) -> f64 {
+        self.fill_rate
+    }
+    fn max_capacity(&self) -> f64 {
+        self.max_capacity
+    }
+    fn current_capacity(&self) -> f64 {
+        self.current_capacity
+    }
+    fn current_capacity_mut(&mut self) -> &mut f64 {
+        &mut self.current_capacity
+    }
+    fn last_timestamp(&self) -> Option<f64> {
+        self.last_timestamp
+    }
+    fn last_timestamp_mut(&mut self) -> &mut Option<f64> {
+        &mut self.last_timestamp
+    }
+    fn initial_request_cost(&self) -> f64 {
+        self.initial_request_cost
+    }
+    fn retry_cost(&self) -> f64 {
+        self.retry_cost
+    }
+    fn retry_timeout_cost(&self) -> f64 {
+        self.retry_timeout_cost
+    }
 }
 
 impl DynamicInner {
-
     fn update_bucket_refill_rate(&mut self, seconds_since_unix_epoch: f64, new_fill_rate: f64) {
         // Refill based on our current rate before we update to the new fill rate.
         self.refill(seconds_since_unix_epoch);
@@ -373,27 +390,46 @@ impl DynamicInner {
 }
 
 impl ClientRateLimiterOps for StaticInner {
-    fn enabled(&self) -> bool { self.enabled }
-    fn fill_rate(&self) -> f64 { self.fill_rate }
-    fn max_capacity(&self) -> f64 { self.max_capacity }
-    fn current_capacity(&self) -> f64 { self.current_capacity }
-    fn current_capacity_mut(&mut self) -> &mut f64 { &mut self.current_capacity }
-    fn last_timestamp(&self) -> Option<f64> { self.last_timestamp }
-    fn last_timestamp_mut(&mut self) -> &mut Option<f64> { &mut self.last_timestamp }
-    fn initial_request_cost(&self) -> f64 { self.initial_request_cost }
-    fn retry_cost(&self) -> f64 { self.retry_cost }
-    fn retry_timeout_cost(&self) -> f64 { self.retry_timeout_cost }
+    fn enabled(&self) -> bool {
+        self.enabled
+    }
+    fn fill_rate(&self) -> f64 {
+        self.fill_rate
+    }
+    fn max_capacity(&self) -> f64 {
+        self.max_capacity
+    }
+    fn current_capacity(&self) -> f64 {
+        self.current_capacity
+    }
+    fn current_capacity_mut(&mut self) -> &mut f64 {
+        &mut self.current_capacity
+    }
+    fn last_timestamp(&self) -> Option<f64> {
+        self.last_timestamp
+    }
+    fn last_timestamp_mut(&mut self) -> &mut Option<f64> {
+        &mut self.last_timestamp
+    }
+    fn initial_request_cost(&self) -> f64 {
+        self.initial_request_cost
+    }
+    fn retry_cost(&self) -> f64 {
+        self.retry_cost
+    }
+    fn retry_timeout_cost(&self) -> f64 {
+        self.retry_timeout_cost
+    }
 }
 
 impl StaticInner {
-
     fn update_rate_limiter(&mut self, is_throttling_error: bool) {
         // Enable bucket on first throttle
         if is_throttling_error && !self.enabled {
             self.enabled = true;
             debug!("client rate limiting has been enabled");
         }
-        
+
         // Add tokens for successful requests (if configured)
         if !is_throttling_error && self.success_token_reward > 0.0 && self.enabled {
             self.current_capacity = f64::min(
@@ -647,7 +683,7 @@ impl ClientRateLimiterBuilder {
     /// Build the ClientRateLimiter.
     pub fn build(self) -> ClientRateLimiter {
         let use_dynamic = self.use_dynamic_rate_adjustment.unwrap_or(true);
-        
+
         let inner = if use_dynamic {
             RateLimiterImpl::Dynamic(DynamicInner {
                 fill_rate: self.token_refill_rate.unwrap_or(MIN_FILL_RATE),
@@ -662,9 +698,13 @@ impl ClientRateLimiterBuilder {
                     .tokens_retrieved_per_second_at_time_of_last_throttle
                     .unwrap_or_default(),
                 time_of_last_throttle: self.time_of_last_throttle.unwrap_or_default(),
-                initial_request_cost: self.initial_request_cost.unwrap_or(DEFAULT_INITIAL_REQUEST_COST),
+                initial_request_cost: self
+                    .initial_request_cost
+                    .unwrap_or(DEFAULT_INITIAL_REQUEST_COST),
                 retry_cost: self.retry_cost.unwrap_or(DEFAULT_RETRY_COST),
-                retry_timeout_cost: self.retry_timeout_cost.unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
+                retry_timeout_cost: self
+                    .retry_timeout_cost
+                    .unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
             })
         } else {
             RateLimiterImpl::Static(StaticInner {
@@ -673,13 +713,17 @@ impl ClientRateLimiterBuilder {
                 current_capacity: self.current_bucket_capacity.unwrap_or_default(),
                 last_timestamp: self.time_of_last_refill,
                 enabled: self.enable_throttling.unwrap_or_default(),
-                initial_request_cost: self.initial_request_cost.unwrap_or(DEFAULT_INITIAL_REQUEST_COST),
+                initial_request_cost: self
+                    .initial_request_cost
+                    .unwrap_or(DEFAULT_INITIAL_REQUEST_COST),
                 retry_cost: self.retry_cost.unwrap_or(DEFAULT_RETRY_COST),
-                retry_timeout_cost: self.retry_timeout_cost.unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
+                retry_timeout_cost: self
+                    .retry_timeout_cost
+                    .unwrap_or(DEFAULT_RETRY_TIMEOUT_COST),
                 success_token_reward: self.success_token_reward.unwrap_or_default(),
             })
         };
-        
+
         ClientRateLimiter {
             inner: Arc::new(Mutex::new(inner)),
         }
@@ -733,14 +777,17 @@ mod tests {
             RateLimiterImpl::Static(inner) => inner.enabled,
         };
         assert!(!enabled, "rate_limiter should be disabled by default");
-        
+
         rate_limiter.update_rate_limiter(0.0, true);
-        
+
         let enabled = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Dynamic(inner) => inner.enabled,
             RateLimiterImpl::Static(inner) => inner.enabled,
         };
-        assert!(enabled, "rate_limiter should be enabled after throttling error");
+        assert!(
+            enabled,
+            "rate_limiter should be enabled after throttling error"
+        );
     }
 
     #[tokio::test]
@@ -1010,7 +1057,7 @@ mod tests {
             );
 
             rate_limiter.update_rate_limiter(attempt.seconds_since_unix_epoch, attempt.throttled);
-            
+
             let inner = rate_limiter.inner.lock().unwrap();
             match &*inner {
                 RateLimiterImpl::Dynamic(inner) => {
@@ -1018,10 +1065,7 @@ mod tests {
                         attempt.expected_tokens_retrieved_per_second,
                         inner.measured_tx_rate
                     );
-                    assert_relative_eq!(
-                        attempt.expected_token_refill_rate,
-                        inner.fill_rate
-                    );
+                    assert_relative_eq!(attempt.expected_token_refill_rate, inner.fill_rate);
                 }
                 RateLimiterImpl::Static(_) => panic!("Expected dynamic rate limiter"),
             }
@@ -1118,9 +1162,10 @@ mod tests {
             .build();
 
         // Make an initial request - should consume 0.5 tokens
-        let result = rate_limiter.acquire_permission_to_send_a_request(0.0, RequestReason::InitialRequest);
+        let result =
+            rate_limiter.acquire_permission_to_send_a_request(0.0, RequestReason::InitialRequest);
         assert!(result.is_ok());
-        
+
         let capacity = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Dynamic(inner) => inner.current_capacity,
             RateLimiterImpl::Static(inner) => inner.current_capacity,
@@ -1147,7 +1192,7 @@ mod tests {
 
         // Successful request should add 1.0 token
         rate_limiter.update_rate_limiter(0.0, false);
-        
+
         let new_capacity = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Static(inner) => inner.current_capacity,
             RateLimiterImpl::Dynamic(_) => panic!("Expected static rate limiter"),
@@ -1168,7 +1213,7 @@ mod tests {
 
         // Successful request should add 1.0 token but cap at max_capacity
         rate_limiter.update_rate_limiter(0.0, false);
-        
+
         let capacity = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Static(inner) => inner.current_capacity,
             RateLimiterImpl::Dynamic(_) => panic!("Expected static rate limiter"),
@@ -1195,7 +1240,7 @@ mod tests {
 
         // Any error (including throttling) should NOT add tokens
         rate_limiter.update_rate_limiter(0.0, true);
-        
+
         let capacity = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Static(inner) => inner.current_capacity,
             RateLimiterImpl::Dynamic(_) => panic!("Expected static rate limiter"),
@@ -1216,7 +1261,7 @@ mod tests {
 
         // Successful request should NOT add tokens when rate limiter is disabled
         rate_limiter.update_rate_limiter(0.0, false);
-        
+
         let capacity = match &*rate_limiter.inner.lock().unwrap() {
             RateLimiterImpl::Static(inner) => inner.current_capacity,
             RateLimiterImpl::Dynamic(_) => panic!("Expected static rate limiter"),
