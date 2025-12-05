@@ -53,9 +53,14 @@ class ExpressionGenerator(
         override fun visitRef(ref: Reference) =
             writable {
                 if (ownership == Ownership.Owned) {
-                    when (ref.type()) {
-                        is BooleanType -> rust("*${ref.name.rustName()}")
-                        else -> rust("${ref.name.rustName()}.to_owned()")
+                    try {
+                        when (ref.type()) {
+                            is BooleanType -> rust("*${ref.name.rustName()}")
+                            else -> rust("${ref.name.rustName()}.to_owned()")
+                        }
+                    } catch (_: RuntimeException) {
+                        // Typechecking was never invoked, default to .to_owned()
+                        rust("${ref.name.rustName()}.to_owned()")
                     }
                 } else {
                     try {
@@ -90,10 +95,17 @@ class ExpressionGenerator(
                             }
                         }
                     }
-                    if (ownership == Ownership.Owned && getAttr.type() != Type.booleanType()) {
-                        if (getAttr.type() is OptionalType) {
-                            rust(".map(|t|t.to_owned())")
-                        } else {
+                    if (ownership == Ownership.Owned) {
+                        try {
+                            if (getAttr.type() != Type.booleanType()) {
+                                if (getAttr.type() is OptionalType) {
+                                    rust(".map(|t|t.to_owned())")
+                                } else {
+                                    rust(".to_owned()")
+                                }
+                            }
+                        } catch (_: RuntimeException) {
+                            // Typechecking was never invoked, default to .to_owned()
                             rust(".to_owned()")
                         }
                     }

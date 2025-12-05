@@ -11,6 +11,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.CustomRuntimeFunction
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointBddGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.endpointTestsModule
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.serviceSpecificEndpointResolver
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.SmithyEndpointsStdLib
@@ -25,7 +26,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 
 /**
  * BuiltInResolver enables potentially external codegen stages to provide sources for `builtIn` parameters.
- * For example, this allows AWS to provide the value for the region builtIn in separate codegen.
+ * For example, this allows AWS to provide the value for the region builtIn
+ * in separate codegen.
  *
  * If this resolver does not recognize the value, it MUST return `null`.
  */
@@ -229,6 +231,29 @@ class EndpointsDecorator : ClientCodegenDecorator {
  * If no endpoint rules are provided, `null` will be returned.
  */
 private fun ClientCodegenContext.defaultEndpointResolver(): Writable? {
+    val index = EndpointRulesetIndex.of(this.model)
+
+    // Prioritize BDD trait
+    if (index.hasEndpointBddTrait(this.serviceShape)) {
+        val bddTrait = index.getEndpointBddTrait(this.serviceShape) ?: return null
+        val customizations = this.rootDecorator.endpointCustomizations(this)
+        val stdlib = SmithyEndpointsStdLib + customizations.flatMap { it.customRuntimeFunctions(this) }
+        val bddGenerator = EndpointBddGenerator(this, bddTrait, stdlib)
+        val bddResolver = bddGenerator.generateBddResolver()
+
+        return writable {
+            rustTemplate(
+                """{
+                use #{ServiceSpecificResolver};
+                #{BddResolver}::new().into_shared_resolver()
+                }""",
+                "ServiceSpecificResolver" to serviceSpecificEndpointResolver(),
+                "BddResolver" to bddResolver,
+            )
+        }
+    }
+
+    // Fall back to rule-based generation
     val generator = EndpointTypesGenerator.fromContext(this)
     val defaultResolver = generator.defaultResolver() ?: return null
     val ctx =

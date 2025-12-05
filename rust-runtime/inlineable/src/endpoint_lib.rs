@@ -4,6 +4,8 @@
  */
 
 mod arn;
+mod bdd_interpreter;
+mod coalesce;
 mod diagnostic;
 mod host;
 mod parse_url;
