@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -422,6 +424,16 @@ class JsonSerializerGenerator(
         when (target) {
             is StringShape -> rust("$writer.string(${value.name}.as_str());")
             is BooleanShape -> rust("$writer.boolean(${value.asValue()});")
+            is BigIntegerShape ->
+                rustTemplate(
+                    "$writer.write_raw_value(${value.name}.as_ref());",
+                    *codegenScope,
+                )
+            is BigDecimalShape ->
+                rustTemplate(
+                    "$writer.write_raw_value(${value.name}.as_ref());",
+                    *codegenScope,
+                )
             is NumberShape -> {
                 val numberType =
                     when (target) {
