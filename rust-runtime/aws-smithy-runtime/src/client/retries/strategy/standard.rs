@@ -321,11 +321,7 @@ fn check_rate_limiter_for_delay(
     None
 }
 
-<<<<<<< HEAD
-pub(crate) fn calculate_exponential_backoff(
-=======
 pub(super) fn calculate_exponential_backoff(
->>>>>>> 9950eecc6 (Adding static retry strategy)
     base: f64,
     initial_backoff: f64,
     retry_attempts: u32,
