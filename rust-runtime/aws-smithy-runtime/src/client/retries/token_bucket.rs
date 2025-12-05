@@ -3,13 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource};
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Duration, SystemTime};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const DEFAULT_CAPACITY: usize = 500;
@@ -34,7 +35,8 @@ pub struct TokenBucket {
     success_reward: f32,
     fractional_tokens: Arc<AtomicF32>,
     refill_rate: f32,
-    creation_time: Instant,
+    time_source: SharedTimeSource,
+    creation_time: SystemTime,
     last_refill_age_secs: Arc<AtomicU32>,
 }
 
@@ -82,6 +84,7 @@ impl Storable for TokenBucket {
 
 impl Default for TokenBucket {
     fn default() -> Self {
+        let time_source = SharedTimeSource::default();
         Self {
             semaphore: Arc::new(Semaphore::new(DEFAULT_CAPACITY)),
             max_permits: DEFAULT_CAPACITY,
@@ -90,7 +93,8 @@ impl Default for TokenBucket {
             success_reward: DEFAULT_SUCCESS_REWARD,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
-            creation_time: Instant::now(),
+            time_source: time_source.clone(),
+            creation_time: time_source.now(),
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -99,15 +103,19 @@ impl Default for TokenBucket {
 impl TokenBucket {
     /// Creates a new `TokenBucket` with the given initial quota.
     pub fn new(initial_quota: usize) -> Self {
+        let time_source = SharedTimeSource::default();
         Self {
             semaphore: Arc::new(Semaphore::new(initial_quota)),
             max_permits: initial_quota,
+            time_source: time_source.clone(),
+            creation_time: time_source.now(),
             ..Default::default()
         }
     }
 
     /// A token bucket with unlimited capacity that allows retries at no cost.
     pub fn unlimited() -> Self {
+        let time_source = SharedTimeSource::default();
         Self {
             semaphore: Arc::new(Semaphore::new(MAXIMUM_CAPACITY)),
             max_permits: MAXIMUM_CAPACITY,
@@ -116,7 +124,8 @@ impl TokenBucket {
             success_reward: 0.0,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
-            creation_time: Instant::now(),
+            time_source: time_source.clone(),
+            creation_time: time_source.now(),
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -185,7 +194,13 @@ impl TokenBucket {
     fn refill_tokens_based_on_time(&self) {
         if self.refill_rate > 0.0 {
             let last_refill_secs = self.last_refill_age_secs.load(Ordering::Relaxed);
-            let current_age_secs = self.creation_time.elapsed().as_secs() as u32;
+            
+            // Get current time from TimeSource and calculate current age
+            let current_time = self.time_source.now();
+            let current_age_secs = current_time
+                .duration_since(self.creation_time)
+                .unwrap_or(Duration::ZERO)
+                .as_secs() as u32;
             
             // Early exit if no time elapsed - most threads take this path
             if current_age_secs == last_refill_secs {
@@ -252,10 +267,6 @@ impl TokenBucket {
             .add_permits(amount.min(self.max_permits - available));
     }
 
-    #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
-    pub(crate) fn available_permits(&self) -> usize {
-        self.semaphore.available_permits()
-    }
 }
 
 /// Builder for constructing a `TokenBucket`.
@@ -266,6 +277,7 @@ pub struct TokenBucketBuilder {
     timeout_retry_cost: Option<u32>,
     success_reward: Option<f32>,
     refill_rate: Option<f32>,
+    time_source: Option<SharedTimeSource>,
 }
 
 impl TokenBucketBuilder {
@@ -315,8 +327,17 @@ impl TokenBucketBuilder {
         self
     }
 
+    /// Sets the time source for the token bucket.
+    ///
+    /// If not set, defaults to `SystemTimeSource`.
+    pub fn time_source(mut self, time_source: impl aws_smithy_async::time::TimeSource + 'static) -> Self {
+        self.time_source = Some(SharedTimeSource::new(time_source));
+        self
+    }
+
     /// Builds a `TokenBucket`.
     pub fn build(self) -> TokenBucket {
+        let time_source = self.time_source.unwrap_or_default();
         TokenBucket {
             semaphore: Arc::new(Semaphore::new(self.capacity.unwrap_or(DEFAULT_CAPACITY))),
             max_permits: self.capacity.unwrap_or(DEFAULT_CAPACITY),
@@ -327,7 +348,8 @@ impl TokenBucketBuilder {
             success_reward: self.success_reward.unwrap_or(DEFAULT_SUCCESS_REWARD),
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: self.refill_rate.unwrap_or(0.0),
-            creation_time: Instant::now(),
+            time_source: time_source.clone(),
+            creation_time: time_source.now(),
             last_refill_age_secs: Arc::new(AtomicU32::new(0)),
         }
     }
@@ -336,6 +358,7 @@ impl TokenBucketBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_smithy_async::time::TimeSource;
 
     #[test]
     fn test_unlimited_token_bucket() {
@@ -482,6 +505,52 @@ mod tests {
         // Test zero is valid
         let bucket = TokenBucket::builder().refill_rate(0.0).build();
         assert_eq!(bucket.refill_rate, 0.0);
+    }
+
+    #[test]
+    fn test_builder_default_time_source() {
+        // Test that TokenBucket uses SystemTimeSource by default when builder doesn't specify one
+        let bucket = TokenBucket::builder()
+            .capacity(100)
+            .build();
+
+        // Verify the bucket was created successfully with default time source
+        assert_eq!(bucket.max_permits, 100);
+        
+        // Verify creation_time is set (should be close to now)
+        let now = SystemTimeSource::new().now();
+        let creation_age = now.duration_since(bucket.creation_time).unwrap_or(Duration::ZERO);
+        
+        // Creation time should be very recent (within 1 second)
+        assert!(creation_age < Duration::from_secs(1), 
+            "Creation time should be recent, but was {:?} ago", creation_age);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn test_builder_custom_time_source() {
+        use aws_smithy_async::test_util::ManualTimeSource;
+        use std::time::UNIX_EPOCH;
+
+        // Test that TokenBucket uses provided TimeSource when specified via builder
+        let manual_time = ManualTimeSource::new(UNIX_EPOCH);
+        let bucket = TokenBucket::builder()
+            .capacity(100)
+            .refill_rate(1.0)
+            .time_source(manual_time.clone())
+            .build();
+
+        // Verify the bucket uses the manual time source
+        assert_eq!(bucket.creation_time, UNIX_EPOCH);
+        
+        // Advance time and verify tokens are added based on manual time
+        manual_time.advance(Duration::from_secs(5));
+        
+        bucket.refill_tokens_based_on_time();
+        bucket.convert_fractional_tokens();
+        
+        // Should have 5 tokens (5 seconds * 1 token/sec)
+        assert_eq!(bucket.available_permits(), 5);
     }
 
     #[test]
@@ -690,12 +759,18 @@ mod tests {
         assert_eq!(original.load(), 999.0, "Original should have new value");
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_combined_time_and_success_rewards() {
+        use aws_smithy_async::test_util::ManualTimeSource;
+        use std::time::UNIX_EPOCH;
+
+        let time_source = ManualTimeSource::new(UNIX_EPOCH);
         let bucket = TokenBucket {
             refill_rate: 1.0,
             success_reward: 0.5,
-            creation_time: Instant::now() - std::time::Duration::from_secs(2),
+            time_source: time_source.clone().into(),
+            creation_time: time_source.now(),
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
@@ -704,6 +779,9 @@ mod tests {
         // Add success rewards: 2 * 0.5 = 1.0 token
         bucket.reward_success();
         bucket.reward_success();
+
+        // Advance time by 2 seconds
+        time_source.advance(Duration::from_secs(2));
 
         // Trigger time-based refill: 2 sec * 1.0 = 2.0 tokens
         // Total: 1.0 + 2.0 = 3.0 tokens
@@ -714,8 +792,12 @@ mod tests {
         assert!(bucket.fractional_tokens.load().abs() < 0.0001);
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_refill_rates() {
+        use aws_smithy_async::test_util::ManualTimeSource;
+        use std::time::UNIX_EPOCH;
+
         // (refill_rate, elapsed_secs, expected_permits, expected_fractional)
         let test_cases = [
             (10.0, 2, 20, 0.0),      // Basic: 2 sec * 10 tokens/sec = 20 tokens
@@ -727,13 +809,18 @@ mod tests {
         ];
 
         for (refill_rate, elapsed_secs, expected_permits, expected_fractional) in test_cases {
+            let time_source = ManualTimeSource::new(UNIX_EPOCH);
             let bucket = TokenBucket {
                 refill_rate,
-                creation_time: Instant::now() - std::time::Duration::from_secs(elapsed_secs),
+                time_source: time_source.clone().into(),
+                creation_time: time_source.now(),
                 semaphore: Arc::new(Semaphore::new(0)),
                 max_permits: 100,
                 ..Default::default()
             };
+
+            // Advance time by the specified duration
+            time_source.advance(Duration::from_secs(elapsed_secs));
 
             bucket.refill_tokens_based_on_time();
             bucket.convert_fractional_tokens();
@@ -757,12 +844,18 @@ mod tests {
         }
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_rewards_capped_at_max_capacity() {
+        use aws_smithy_async::test_util::ManualTimeSource;
+        use std::time::UNIX_EPOCH;
+
+        let time_source = ManualTimeSource::new(UNIX_EPOCH);
         let bucket = TokenBucket {
             refill_rate: 50.0,
             success_reward: 2.0,
-            creation_time: Instant::now() - std::time::Duration::from_secs(100),
+            time_source: time_source.clone().into(),
+            creation_time: time_source.now(),
             semaphore: Arc::new(Semaphore::new(5)),
             max_permits: 10,
             ..Default::default()
@@ -775,6 +868,9 @@ mod tests {
         
         // Fractional tokens capped at 10 from success rewards
         assert_eq!(bucket.fractional_tokens.load(), 10.0);
+
+        // Advance time by 100 seconds
+        time_source.advance(Duration::from_secs(100));
 
         // Time-based refill: 100 * 50 = 5000 tokens (without cap)
         // But fractional is already at 10, so it stays at 10
@@ -792,19 +888,28 @@ mod tests {
         assert_eq!(bucket.available_permits(), 10);
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     #[test]
     fn test_concurrent_time_based_refill_no_over_generation() {
+        use aws_smithy_async::test_util::ManualTimeSource;
         use std::sync::{Arc, Barrier};
         use std::thread;
+        use std::time::UNIX_EPOCH;
 
-        // Create bucket with 1 token/sec refill, backdated by 10 seconds
+        let time_source = ManualTimeSource::new(UNIX_EPOCH);
+        
+        // Create bucket with 1 token/sec refill
         let bucket = Arc::new(TokenBucket {
             refill_rate: 1.0,
-            creation_time: Instant::now() - std::time::Duration::from_secs(10),
+            time_source: time_source.clone().into(),
+            creation_time: time_source.now(),
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
         });
+
+        // Advance time by 10 seconds
+        time_source.advance(Duration::from_secs(10));
 
         // Launch 100 threads that all try to refill simultaneously
         let barrier = Arc::new(Barrier::new(100));
