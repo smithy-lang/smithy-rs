@@ -286,6 +286,14 @@ impl ProvideMeter for OtelMeterProvider {
     fn get_meter(&self, scope: &'static str, _attributes: Option<&Attributes>) -> Meter {
         Meter::new(Arc::new(MeterWrap(self.meter_provider.meter(scope))))
     }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn provider_name(&self) -> &'static str {
+        "otel"
+    }
 }
 
 #[cfg(test)]
