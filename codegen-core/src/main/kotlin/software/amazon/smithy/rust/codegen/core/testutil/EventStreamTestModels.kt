@@ -120,6 +120,7 @@ object EventStreamTestModels {
         val protocolShapeId: String,
         val model: Model,
         val mediaType: String,
+        val accept: String,
         val requestContentType: String,
         val responseContentType: String,
         val eventStreamMessageContentType: String,
@@ -177,6 +178,7 @@ object EventStreamTestModels {
         TestCase(
             protocolShapeId = "aws.protocols#restJson1",
             model = restJson1(),
+            accept = "application/json",
             mediaType = "application/json",
             requestContentType = "application/vnd.amazon.eventstream",
             responseContentType = "application/json",
@@ -200,7 +202,11 @@ object EventStreamTestModels {
             restJsonTestCase.copy(
                 protocolShapeId = "smithy.protocols#rpcv2Cbor",
                 model = rpcv2Cbor(),
+                // application/cbor is appended for backward compatibility with servers that only handle application/cbor
+                // https://github.com/smithy-lang/smithy-rs/pull/4427#issuecomment-3602558313
+                accept = "application/vnd.amazon.eventstream, application/cbor",
                 mediaType = "application/cbor",
+                requestContentType = "application/vnd.amazon.eventstream",
                 responseContentType = "application/cbor",
                 eventStreamMessageContentType = "application/cbor",
                 validTestStruct = base64EncodeJson(restJsonTestCase.validTestStruct),
@@ -227,6 +233,7 @@ object EventStreamTestModels {
             TestCase(
                 protocolShapeId = "aws.protocols#restXml",
                 model = restXml(),
+                accept = "application/xml",
                 mediaType = "application/xml",
                 requestContentType = "application/vnd.amazon.eventstream",
                 responseContentType = "application/xml",
