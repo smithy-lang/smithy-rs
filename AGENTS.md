@@ -50,14 +50,18 @@ operation MyOperation {
 
 ### httpQueryParams Bug Investigation
 
-When investigating the `@httpQueryParams` bug (where query parameters weren't appearing in requests), the issue was in `RequestBindingGenerator.kt` line 173. The bug occurred when:
+When investigating the `@httpQueryParams` bug (where query parameters weren't appearing in requests), the issue was in
+`RequestBindingGenerator.kt` line 173. The bug occurred when:
 
 1. An operation had ONLY `@httpQueryParams` (no regular `@httpQuery` parameters)
-2. The condition `if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty())` would skip generating the `uri_query` function
+2. The condition `if (dynamicParams.isEmpty() && literalParams.isEmpty() && mapParams.isEmpty())` would skip generating
+   the `uri_query` function
 
-The fix was to ensure `mapParams.isEmpty()` was included in the condition check. The current implementation correctly generates query parameters for `@httpQueryParams` even when no other query parameters exist.
+The fix was to ensure `mapParams.isEmpty()` was included in the condition check. The current implementation correctly
+generates query parameters for `@httpQueryParams` even when no other query parameters exist.
 
-**Testing httpQueryParams**: Create operations with only `@httpQueryParams` to ensure they generate proper query strings in requests.
+**Testing httpQueryParams**: Create operations with only `@httpQueryParams` to ensure they generate proper query strings
+in requests.
 
 ## rustTemplate Formatting
 
@@ -82,6 +86,28 @@ rustTemplate(
 
 ❌ Wrong: `"let result: Result<String, Error> = Ok(value);"`
 ✅ Correct: Use `*preludeScope` in templates
+
+## Conditional Mutability Pattern
+
+When a variable needs to be mutable only in certain codegen branches, use the rebinding pattern:
+
+```kotlin
+rustTemplate(
+    """
+    let receiver = create_receiver();
+    #{maybeModifyReceiver:W}
+    use_receiver(receiver);
+    """,
+    "maybeModifyReceiver" to writable {
+        if (needsMutability) {
+            rust("let mut receiver = receiver;")
+            rust("receiver.modify();")
+        }
+    }
+)
+```
+
+This avoids unused `mut` warnings when the modification code isn't generated.
 
 ## RuntimeType and Dependencies
 
@@ -176,6 +202,7 @@ gh issue comment <number> --repo smithy-lang/smithy-rs --body 'markdown content 
 ```
 
 **Comment Guidelines:**
+
 - Always ask for confirmation before posting comments
 - Always start comments with `*Comment from Claude*` in italics
 
@@ -215,12 +242,14 @@ gh workflow run "Invoke Canary as Maintainer" --repo smithy-lang/smithy-rs \
 Client changes often show the pattern for server-side implementation
 
 **Configuration Debugging:**
+
 - Server codegen settings go under `"codegen"` not `"codegenConfig"` in smithy-build.json
 - When settings aren't working, check the generated smithy-build.json structure first
 - Settings placement matters - wrong nesting means settings are ignored silently
 - Always verify actual generated configuration matches expectations
 
 **Testing Configuration Settings:**
+
 - Create separate services with different settings to test configuration behavior
 - Use integration tests that verify actual generated code behavior, not just compilation
 - Test both enabled and disabled states to ensure the setting actually controls behavior
