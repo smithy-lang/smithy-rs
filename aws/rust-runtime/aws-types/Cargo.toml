@@ -22,7 +22,7 @@ tracing = "0.1.40"
 # cargo does not support optional test dependencies, so to completely disable rustls
 # we need to add the webpki-roots feature here.
 # https://github.com/rust-lang/cargo/issues/1596
-hyper-rustls = { version = "0.24", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
+hyper-rustls = { version = "0.24.2", optional = true, features = ["rustls-native-certs", "http2", "webpki-roots"] }
 
 [dev-dependencies]
 http = "0.2.4"
