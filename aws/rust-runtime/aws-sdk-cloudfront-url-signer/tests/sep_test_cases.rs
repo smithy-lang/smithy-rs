@@ -140,7 +140,7 @@ fn test_sep_test_cases() {
 
         if is_cookie_test {
             // Test signed cookies
-            let cookies = sign_cookies(request).unwrap_or_else(|e| {
+            let cookies = sign_cookies(&request).unwrap_or_else(|e| {
                 panic!("Failed to sign cookies for test {}: {}", test_case.id, e)
             });
 
@@ -165,7 +165,7 @@ fn test_sep_test_cases() {
             }
         } else {
             // Test signed URL
-            let signed_url = sign_url(request)
+            let signed_url = sign_url(&request)
                 .unwrap_or_else(|e| panic!("Failed to sign URL for test {}: {}", test_case.id, e));
 
             let query_params = parse_url_query_params(signed_url.as_str());

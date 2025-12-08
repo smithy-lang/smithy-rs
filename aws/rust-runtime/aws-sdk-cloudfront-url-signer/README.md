@@ -67,7 +67,7 @@ let request = SigningRequest::builder()
     .build()?;
 
 // Generate the signed URL
-let signed_url = sign_url(request)?;
+let signed_url = sign_url(&request)?;
 println!("Signed URL: {}", signed_url);
 ```
 
@@ -107,7 +107,7 @@ let request = SigningRequest::builder()
     .ip_range("192.0.2.0/24")                    // Restrict to IP range
     .build()?;
 
-let signed_url = sign_url(request)?;
+let signed_url = sign_url(&request)?;
 ```
 
 Custom policy URLs include a `Policy` parameter (base64-encoded JSON) instead of `Expires`.
@@ -129,7 +129,7 @@ let request = SigningRequest::builder()
     .expires_at(DateTime::from_secs(1767290400))
     .build()?;
 
-let cookies = sign_cookies(request)?;
+let cookies = sign_cookies(&request)?;
 
 // Set cookies in your HTTP response
 for (name, value) in cookies.iter() {
@@ -249,7 +249,7 @@ Common wildcard patterns:
 The `SignedUrl` type provides multiple ways to access the signed URL for use with HTTP clients:
 
 ```rust,ignore
-let signed_url = sign_url(request)?;
+let signed_url = sign_url(&request)?;
 
 // As a string slice
 let url_str: &str = signed_url.as_str();
@@ -274,7 +274,7 @@ With the `http-1x` feature enabled, you can convert signed URLs directly to `htt
 ```rust,ignore
 use http::Request;
 
-let signed_url = sign_url(request)?;
+let signed_url = sign_url(&request)?;
 
 // Convert to http::Request
 let http_request: Request<()> = signed_url.try_into()?;
@@ -291,7 +291,7 @@ All operations return `Result<T, SigningError>`:
 ```rust,ignore
 use aws_sdk_cloudfront_url_signer::{sign_url, SigningRequest, PrivateKey, error::SigningError};
 
-let result = sign_url(request);
+let result = sign_url(&request);
 match result {
     Ok(signed_url) => println!("Success: {}", signed_url),
     Err(e) => {
@@ -320,7 +320,7 @@ let request = SigningRequest::builder()
     .expires_at(DateTime::from_secs(1767290400))
     .build()?;
 
-let signed_url = sign_url(request)?;
+let signed_url = sign_url(&request)?;
 // Result: https://...?quality=hd&Expires=...&Signature=...&Key-Pair-Id=...
 ```
 
