@@ -1,0 +1,39 @@
+[package]
+name = "pokemon-service-client-usage"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[features]
+
+
+[dependencies]
+# The generated client utilizes types defined in other crates, such as `aws_smithy_types`
+# and `aws_smithy_http`. However, most of these types are re-exported by the generated client,
+# eliminating the need to directly depend on the crates that provide them. In rare instances,
+# you may still need to include one of these crates as a dependency. Examples that require this
+# are specifically noted in comments above the corresponding dependency in this file.
+pokemon-service-client = { path = "../pokemon-service-client/", package = "pokemon-service-client-http0x", features = ["behavior-version-latest"] }
+
+# Required for getting the operation name from the `Metadata`.
+aws-smithy-legacy-http = { path = "../../../rust-runtime/aws-smithy-legacy-http/" }
+
+# Required for `Storable` and `StoreReplace` in `response-header-interceptor` example.
+aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types/" }
+
+# Required for `HyperClientBuilder` in `client-connector` example.
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime/", features=["test-util"] }
+
+# Required for `Metadata` in `custom-header-using-interceptor` example.
+aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api/", features=["client"] }
+
+
+hyper = { version = "0.14.25", features = ["client", "full"] }
+tokio = {version = "1.26.0", features=["full"]}
+tracing = "0.1.37"
+tracing-subscriber = { version = "0.3.17", features = ["env-filter"] }
+rustls = "0.21.8"
+hyper-rustls = "0.24.1"
+http = "0.2.9"
+uuid = {version="1.4.1", features = ["v4"]}
+thiserror = "1.0.49"
