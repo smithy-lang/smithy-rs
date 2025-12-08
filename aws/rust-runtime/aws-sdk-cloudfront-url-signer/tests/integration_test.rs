@@ -33,7 +33,7 @@ fn test_sign_url_with_rsa_key() {
         .build()
         .unwrap();
 
-    let signed_url = sign_url(request).unwrap();
+    let signed_url = sign_url(&request).unwrap();
     assert!(signed_url.as_str().contains("Signature="));
 }
 
@@ -48,7 +48,7 @@ fn test_sign_url_with_ecdsa_key() {
         .build()
         .unwrap();
 
-    let signed_url = sign_url(request).unwrap();
+    let signed_url = sign_url(&request).unwrap();
     assert!(signed_url.as_str().contains("Signature="));
 }
 
@@ -63,7 +63,7 @@ fn test_sign_cookies_with_rsa_key() {
         .build()
         .unwrap();
 
-    let cookies = sign_cookies(request).unwrap();
+    let cookies = sign_cookies(&request).unwrap();
     assert!(cookies.get("CloudFront-Signature").is_some());
 }
 
@@ -78,6 +78,6 @@ fn test_sign_cookies_with_ecdsa_key() {
         .build()
         .unwrap();
 
-    let cookies = sign_cookies(request).unwrap();
+    let cookies = sign_cookies(&request).unwrap();
     assert!(cookies.get("CloudFront-Signature").is_some());
 }
