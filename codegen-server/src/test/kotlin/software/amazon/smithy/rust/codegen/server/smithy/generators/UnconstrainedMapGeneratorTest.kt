@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverTestCodegenContext
 
@@ -70,7 +71,7 @@ class UnconstrainedMapGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider, CoreCodegenConfig(debugMode = true))
 
-        serverIntegrationTest(model) { _, rustCrate ->
+        serverIntegrationTest(model, testCoverage = HttpTestType.AsConfigured) { _, rustCrate ->
             rustCrate.testModule {
                 TestUtility.generateIsDisplay().invoke(this)
                 TestUtility.generateIsError().invoke(this)

@@ -19,6 +19,7 @@ import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseBodyDefi
 import software.amazon.smithy.protocoltests.traits.HttpMalformedResponseDefinition
 import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -29,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
@@ -281,17 +283,34 @@ class ServerProtocolTestGenerator(
 
     private val instantiator = ServerInstantiator(codegenContext, withinTest = true)
 
+    /**
+     * Returns the protocol test dependency with the correct HTTP version feature.
+     * For HTTP 0.x: uses http-02x feature (default).
+     * For HTTP 1.x: uses http-1x feature.
+     */
+    private val protocolTestRuntimeType =
+        when (codegenContext.runtimeConfig.httpVersion) {
+            HttpVersion.Http1x ->
+                CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig)
+                    .withFeature("http-1x")
+                    .toType()
+
+            HttpVersion.Http0x ->
+                CargoDependency.smithyProtocolTestHelpers(codegenContext.runtimeConfig).toType()
+        }
+
     private val codegenScope =
         arrayOf(
             "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
             "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
-            "Hyper" to RuntimeType.Hyper,
-            "MediaType" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
+            "Http" to RuntimeType.httpForConfig(codegenContext.runtimeConfig),
+            "Hyper" to RuntimeType.hyperForConfig(codegenContext.runtimeConfig),
+            "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType(),
-            "decode_body_data" to RuntimeType.protocolTest(codegenContext.runtimeConfig, "decode_body_data"),
+            "decode_body_data" to protocolTestRuntimeType.resolve("decode_body_data"),
         )
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
@@ -432,7 +451,7 @@ class ServerProtocolTestGenerator(
         rustTemplate(
             """
             ##[allow(unused_mut)]
-            let mut http_request = http::Request::builder()
+            let mut http_request = #{Http}::Request::builder()
                 .uri("$uri")
                 .method("$method")
             """,
@@ -441,34 +460,40 @@ class ServerProtocolTestGenerator(
         for (header in headers) {
             rust(".header(${header.key.dq()}, ${header.value.dq()})")
         }
+
+        // Determine if we need Sync bounds for the body (streaming operations)
+        val needsSync = operationShape.inputShape(model).hasStreamingMember(model)
+
+        val bodyCode =
+            if (body != null) {
+                // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
+                // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
+                //
+                // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
+                // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
+                // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
+                // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
+                //
+                // We also escape to avoid interactions with templating in the case where the body contains `#`.
+                val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
+
+                val encodedBodyTemplate = """
+                #{Bytes}::copy_from_slice(
+                    &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
+                )
+                """
+
+                requestBodyConstructor(encodedBodyTemplate, needsSync)
+            } else {
+                requestBodyConstructor(null, needsSync)
+            }
+
         rustTemplate(
             """
-            .body(${
-                if (body != null) {
-                    // The `replace` is necessary to fix the malformed request test `RestJsonInvalidJsonBody`.
-                    // https://github.com/awslabs/smithy/blob/887ae4f6d118e55937105583a07deb90d8fabe1c/smithy-aws-protocol-tests/model/restJson1/malformedRequests/malformed-request-body.smithy#L47
-                    //
-                    // Smithy is written in Java, which parses `\u000c` within a `String` as a single char given by the
-                    // corresponding Unicode code point. That is the "form feed" 0x0c character. When printing it,
-                    // it gets written as "\f", which is an invalid Rust escape sequence: https://static.rust-lang.org/doc/master/reference.html#literals
-                    // So we need to write the corresponding Rust Unicode escape sequence to make the program compile.
-                    //
-                    // We also escape to avoid interactions with templating in the case where the body contains `#`.
-                    val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
-
-                    val encodedBody = """
-                        #{Bytes}::copy_from_slice(
-                            &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
-                        )
-                        """
-
-                    "#{SmithyHttpServer}::body::Body::from($encodedBody)"
-                } else {
-                    "#{SmithyHttpServer}::body::Body::empty()"
-                }
-            }).unwrap();
-                        """,
+             .body(#{BodyCode}).unwrap();
+             """,
             *codegenScope,
+            "BodyCode" to bodyCode,
         )
         if (queryParams.isNotEmpty()) {
             val queryParamsString = queryParams.joinToString(separator = "&")
@@ -476,6 +501,61 @@ class ServerProtocolTestGenerator(
         }
         if (host != null) {
             rust("""todo!("endpoint trait not supported yet");""")
+        }
+    }
+
+    /**
+     * Returns code for creating an HTTP request body in protocol tests.
+     * For HTTP 0.x: uses Body::from(bytes) or Body::empty()
+     * For HTTP 1.x: boxes the body since protocol tests need type erasure
+     *               to unify different body implementations (Full, Empty, etc.)
+     *               Note: While hyper::body::Incoming exists for receiving bodies,
+     *               protocol tests construct bodies from test data.
+     *
+     * @param bytesExpr Expression for the bytes to put in the body, or null for empty body
+     * @param needsSync If true, uses boxed_sync for operations that require Sync bounds
+     */
+    private fun requestBodyConstructor(
+        bytesExpr: String?,
+        needsSync: Boolean = false,
+    ) = writable {
+        val runtimeConfig = codegenContext.runtimeConfig
+        val serverCrate = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+
+        if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
+            val bodyUtil = software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType()
+
+            val boxFn = if (needsSync) "boxed_sync" else "boxed"
+            if (bytesExpr != null) {
+                rustTemplate(
+                    "#{BoxFn}(#{Full}::new($bytesExpr))",
+                    "BoxFn" to serverCrate.resolve("body::$boxFn"),
+                    "Full" to bodyUtil.resolve("Full"),
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    "#{BoxFn}(#{Empty}::new())",
+                    "BoxFn" to serverCrate.resolve("body::$boxFn"),
+                    "Empty" to bodyUtil.resolve("Empty"),
+                    *codegenScope,
+                )
+            }
+        } else {
+            // HTTP 0.x: use Body::from or Body::empty
+            if (bytesExpr != null) {
+                rustTemplate(
+                    "#{BodyFrom}($bytesExpr)",
+                    "BodyFrom" to serverCrate.resolve("body::Body::from"),
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    "#{Empty}()",
+                    "Empty" to serverCrate.resolve("body::Body::empty"),
+                    *codegenScope,
+                )
+            }
         }
     }
 
@@ -515,12 +595,16 @@ class ServerProtocolTestGenerator(
     ) {
         val (inputT, _) = operationInputOutputTypes[operationShape]!!
         val operationName = RustReservedWords.escapeIfNeeded(operationSymbol.name.toSnakeCase())
+
+        val inputShape = operationShape.inputShape(model)
+        val needsSync = inputShape.hasStreamingMember(model)
+
         rustWriter.rustTemplate(
             """
             ##[allow(unused_mut)]
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
-            let service = crate::service::$serviceName::builder::<#{Hyper}::body::Body, _, _, _>(config)
+            let service = crate::service::$serviceName::builder::<#{BodyType}, _, _, _>(config)
                 .$operationName(move |input: $inputT| {
                     let sender = sender.clone();
                     async move {
@@ -535,6 +619,7 @@ class ServerProtocolTestGenerator(
                 .expect("unable to make an HTTP request");
             """,
             "Body" to body,
+            "BodyType" to serviceBuilderBodyType(needsSync),
             *codegenScope,
         )
     }
@@ -589,7 +674,7 @@ class ServerProtocolTestGenerator(
                     when (codegenContext.model.expectShape(member.target)) {
                         is DoubleShape, is FloatShape -> {
                             rustWriter.addUseImports(
-                                RuntimeType.protocolTest(codegenContext.runtimeConfig, "FloatEquals")
+                                protocolTestRuntimeType.resolve("FloatEquals")
                                     .toSymbol(),
                             )
                             rustWriter.rust(
@@ -672,17 +757,61 @@ class ServerProtocolTestGenerator(
         }
     }
 
+    /**
+     * Returns the body type to use for service builder in protocol tests.
+     * For HTTP 0.x: uses hyper::body::Body (concrete type).
+     * For HTTP 1.x: uses smithy BoxBody (no Sync requirement for protocol tests).
+     */
+    private fun serviceBuilderBodyType(needsSync: Boolean): RuntimeType =
+        when (codegenContext.runtimeConfig.httpVersion) {
+            HttpVersion.Http1x ->
+                // HTTP 1.x: use BoxBodySync for streaming operations that need Sync
+                if (needsSync) {
+                    ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("body::BoxBodySync")
+                } else {
+                    ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType().resolve("body::BoxBody")
+                }
+
+            HttpVersion.Http0x ->
+                // HTTP 0.x: use hyper::body::Body (concrete type)
+                RuntimeType.Hyper.resolve("body::Body")
+        }
+
+    /**
+     * Returns a Writable that generates version-appropriate code for reading HTTP response body to bytes.
+     * For HTTP 1.x: Uses http_body_util::BodyExt::collect()
+     * For HTTP 0.x: Uses hyper::body::to_bytes()
+     *
+     * @param responseVarName The name of the HTTP response variable (e.g., "http_response")
+     */
+    private fun httpBodyToBytes(): Writable =
+        writable {
+            when (codegenContext.runtimeConfig.httpVersion) {
+                HttpVersion.Http1x ->
+                    rustTemplate(
+                        """
+                        use #{HttpBodyUtil}::BodyExt;
+                        let body = http_response.into_body().collect().await.expect("unable to collect body").to_bytes();
+                        """,
+                        "HttpBodyUtil" to CargoDependency.HttpBodyUtil01x.toType(),
+                    )
+
+                HttpVersion.Http0x ->
+                    rustTemplate(
+                        """
+                        let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
+                        """,
+                        "Hyper" to RuntimeType.Hyper,
+                    )
+            }
+        }
+
     private fun checkBody(
         rustWriter: RustWriter,
         body: String,
         mediaType: String?,
     ) {
-        rustWriter.rustTemplate(
-            """
-            let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
-            """,
-            *codegenScope,
-        )
+        httpBodyToBytes().invoke(rustWriter)
         if (body == "") {
             rustWriter.rustTemplate(
                 """
@@ -697,8 +826,8 @@ class ServerProtocolTestGenerator(
                     "#T(&body, ${
                         rustWriter.escape(body).dq()
                     }, #T::from(${(mediaType ?: "unknown").dq()}))",
-                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "validate_body"),
-                    RuntimeType.protocolTest(codegenContext.runtimeConfig, "MediaType"),
+                    protocolTestRuntimeType.resolve("validate_body"),
+                    protocolTestRuntimeType.resolve("MediaType"),
                 )
             }
         }
@@ -711,7 +840,7 @@ class ServerProtocolTestGenerator(
         rustWriter.rustTemplate(
             """
             #{AssertEq}(
-                http::StatusCode::from_u16($statusCode).expect("invalid expected HTTP status code"),
+                #{Http}::StatusCode::from_u16($statusCode).expect("invalid expected HTTP status code"),
                 http_response.status()
             );
             """,

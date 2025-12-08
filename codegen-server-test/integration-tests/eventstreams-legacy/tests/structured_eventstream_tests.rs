@@ -3,14 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http::event_stream::EventStreamSender;
+use aws_smithy_legacy_http::event_stream::EventStreamSender;
 use aws_smithy_runtime::test_util::capture_test_logs::show_filtered_test_logs;
 use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
 use bytes::Bytes;
-use eventstreams::{ManualEventStreamClient, RecvError};
-use rpcv2cbor_extras::model::{Event, Events};
-use rpcv2cbor_extras::server::{AddExtensionLayer, Extension};
-use rpcv2cbor_extras::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
+use eventstreams_legacy::{ManualEventStreamClient, RecvError};
+use rpcv2cbor_extras_http0x::model::{Event, Events};
+use rpcv2cbor_extras_http0x::{error, input, output, RpcV2CborService, RpcV2CborServiceConfig};
 use std::sync::{Arc, Mutex};
 use tokio::net::TcpListener;
 
@@ -51,17 +50,29 @@ struct TestServer {
 impl TestServer {
     async fn start() -> Self {
         let state = Arc::new(Mutex::new(ServerState::default()));
+        let handler_state = state.clone();
+        let handler_state2 = state.clone();
+        let handler_state3 = state.clone();
+        let handler_state4 = state.clone();
 
-        let config = RpcV2CborServiceConfig::builder()
-            .layer(AddExtensionLayer::new(state.clone()))
-            .build();
-        let app = RpcV2CborService::builder(config)
-            .streaming_operation(streaming_operation_handler)
-            .streaming_operation_with_initial_data(streaming_operation_with_initial_data_handler)
-            .streaming_operation_with_initial_response(
-                streaming_operation_with_initial_response_handler,
-            )
-            .streaming_operation_with_optional_data(streaming_operation_with_optional_data_handler)
+        let config = RpcV2CborServiceConfig::builder().build();
+        let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+            .streaming_operation(move |input| {
+                let state = handler_state.clone();
+                streaming_operation_handler(input, state)
+            })
+            .streaming_operation_with_initial_data(move |input| {
+                let state = handler_state2.clone();
+                streaming_operation_with_initial_data_handler(input, state)
+            })
+            .streaming_operation_with_initial_response(move |input| {
+                let state = handler_state3.clone();
+                streaming_operation_with_initial_response_handler(input, state)
+            })
+            .streaming_operation_with_optional_data(move |input| {
+                let state = handler_state4.clone();
+                streaming_operation_with_optional_data_handler(input, state)
+            })
             .build_unchecked();
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -69,10 +80,11 @@ impl TestServer {
 
         tokio::spawn(async move {
             let make_service = app.into_make_service();
-            rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
-                .configure_hyper(|builder| builder.http2_only())
-                .await
-                .unwrap();
+            let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+                .unwrap()
+                .http2_only(true)
+                .serve(make_service);
+            server.await.unwrap();
         });
 
         Self { addr, state }
@@ -126,7 +138,7 @@ impl TestServer {
 
 async fn streaming_operation_handler(
     mut input: input::StreamingOperationInput,
-    Extension(state): Extension<Arc<Mutex<ServerState>>>,
+    state: Arc<Mutex<ServerState>>,
 ) -> Result<output::StreamingOperationOutput, error::StreamingOperationError> {
     state.lock().unwrap().streaming_operation.num_calls += 1;
     let ev = input.events.recv().await;
@@ -150,7 +162,7 @@ async fn streaming_operation_handler(
 
 async fn streaming_operation_with_initial_data_handler(
     mut input: input::StreamingOperationWithInitialDataInput,
-    Extension(state): Extension<Arc<Mutex<ServerState>>>,
+    state: Arc<Mutex<ServerState>>,
 ) -> Result<
     output::StreamingOperationWithInitialDataOutput,
     error::StreamingOperationWithInitialDataError,
@@ -183,7 +195,7 @@ async fn streaming_operation_with_initial_data_handler(
 
 async fn streaming_operation_with_initial_response_handler(
     mut input: input::StreamingOperationWithInitialResponseInput,
-    Extension(_state): Extension<Arc<Mutex<ServerState>>>,
+    _state: Arc<Mutex<ServerState>>,
 ) -> Result<
     output::StreamingOperationWithInitialResponseOutput,
     error::StreamingOperationWithInitialResponseError,
@@ -201,7 +213,7 @@ async fn streaming_operation_with_initial_response_handler(
 
 async fn streaming_operation_with_optional_data_handler(
     mut input: input::StreamingOperationWithOptionalDataInput,
-    Extension(state): Extension<Arc<Mutex<ServerState>>>,
+    state: Arc<Mutex<ServerState>>,
 ) -> Result<
     output::StreamingOperationWithOptionalDataOutput,
     error::StreamingOperationWithOptionalDataError,
@@ -447,7 +459,7 @@ async fn test_streaming_operation_with_initial_data() {
 #[tokio::test]
 async fn test_streaming_operation_with_initial_data_missing() {
     let _logs = show_filtered_test_logs(
-        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras=trace",
+        "aws_smithy_http_server=trace,hyper_util=debug,rpcv2cbor_extras_http0x=trace",
     );
     let mut harness = TestHarness::new("StreamingOperationWithInitialData").await;
 
@@ -485,15 +497,15 @@ async fn test_sigv4_signed_event_stream() {
 /// Test that when alwaysSendEventStreamInitialResponse is disabled, no initial-response is sent
 #[tokio::test]
 async fn test_server_no_initial_response_when_disabled() {
-    use rpcv2cbor_extras_no_initial_response::output;
-    use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
+    use rpcv2cbor_extras_no_initial_response_http0x::output;
+    use rpcv2cbor_extras_no_initial_response_http0x::{RpcV2CborService, RpcV2CborServiceConfig};
 
     let config = RpcV2CborServiceConfig::builder().build();
-    let app = RpcV2CborService::builder(config)
-        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
+    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response_http0x::input::StreamingOperationWithInitialDataInput| async move {
             let _ev = input.events.recv().await;
             Ok(output::StreamingOperationWithInitialDataOutput::builder()
-                .events(EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response::model::Events::A(rpcv2cbor_extras_no_initial_response::model::Event {}))))
+                .events(aws_smithy_legacy_http::event_stream::EventStreamSender::once(Ok(rpcv2cbor_extras_no_initial_response_http0x::model::Events::A(rpcv2cbor_extras_no_initial_response_http0x::model::Event {}))))
                 .build()
                 .unwrap())
         })
@@ -504,10 +516,11 @@ async fn test_server_no_initial_response_when_disabled() {
 
     tokio::spawn(async move {
         let make_service = app.into_make_service();
-        rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
-            .configure_hyper(|builder| builder.http2_only())
-            .await
-            .unwrap();
+        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
+            .unwrap()
+            .http2_only(true)
+            .serve(make_service);
+        server.await.unwrap();
     });
 
     let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";

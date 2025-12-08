@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.generators
 
 import io.kotest.assertions.throwables.shouldThrow
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.CodegenException
@@ -19,6 +20,9 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestVersion
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.MultiVersionTestFailure
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 
@@ -92,14 +96,20 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
+        serverIntegrationTest(
+            model,
+            additionalDecorators = listOf(decorator),
+            testCoverage = HttpTestType.ALL,
+        ) { context, rustCrate ->
+            val smithyServer = ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType()
             rustCrate.testModule {
-                rust(
+                rustTemplate(
                     """
                     use crate::{SimpleServiceConfig, SimpleServiceConfigError};
-                    use aws_smithy_http_server::plugin::IdentityPlugin;
+                    use #{SmithyHttpServer}::plugin::IdentityPlugin;
                     use crate::server::plugin::PluginStack;
                     """,
+                    "SmithyHttpServer" to smithyServer,
                 )
 
                 unitTest("successful_config_initialization") {
@@ -208,10 +218,15 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, rustCrate ->
+        serverIntegrationTest(
+            model,
+            additionalDecorators = listOf(decorator),
+            testCoverage = HttpTestType.ALL,
+        ) { context, rustCrate ->
+            val smithyServer = ServerCargoDependency.smithyHttpServer(context.runtimeConfig).toType()
             rustCrate.testModule {
                 unitTest("successful_config_initialization_applying_the_three_layers") {
-                    rust(
+                    rustTemplate(
                         """
                         let _: crate::SimpleServiceConfig<
                             // Three Tower layers have been applied.
@@ -225,12 +240,13 @@ internal class ServiceConfigGeneratorTest {
                                     >,
                                 >,
                             >,
-                            aws_smithy_http_server::plugin::IdentityPlugin,
-                            aws_smithy_http_server::plugin::IdentityPlugin,
+                            #{SmithyHttpServer}::plugin::IdentityPlugin,
+                            #{SmithyHttpServer}::plugin::IdentityPlugin,
                         > = crate::SimpleServiceConfig::builder()
                             .three_non_required_layers()
                             .build();
                         """,
+                        "SmithyHttpServer" to smithyServer,
                     )
                 }
 
@@ -283,11 +299,30 @@ internal class ServiceConfigGeneratorTest {
                 }
             }
 
-        val codegenException =
-            shouldThrow<CodegenException> {
-                serverIntegrationTest(model, additionalDecorators = listOf(decorator)) { _, _ -> }
+        // When running for both HTTP versions, the framework throws MultiVersionTestFailure
+        val failure =
+            shouldThrow<MultiVersionTestFailure> {
+                serverIntegrationTest(
+                    model,
+                    additionalDecorators = listOf(decorator),
+                    testCoverage = HttpTestType.ALL,
+                ) { _, _ -> }
             }
 
-        codegenException.message.shouldContain("Injected config method `invalid_generic_bindings` has generic bindings that use `L`, `H`, or `M` to refer to the generic types. This is not allowed. Invalid generic bindings:")
+        // Verify both HTTP versions failed
+        failure.failures.size shouldBe 2
+        failure.hasFailureFor(HttpTestVersion.HTTP_0_X) shouldBe true
+        failure.hasFailureFor(HttpTestVersion.HTTP_1_X) shouldBe true
+
+        // Verify all failures are CodegenExceptions
+        failure.allFailuresAreOfType(CodegenException::class) shouldBe true
+
+        // Verify each failure has the expected error message
+        failure.failures.forEach { (version, exception) ->
+            val codegenException = exception as CodegenException
+            codegenException.message.shouldContain(
+                "Injected config method `invalid_generic_bindings` has generic bindings that use `L`, `H`, or `M` to refer to the generic types. This is not allowed. Invalid generic bindings:",
+            )
+        }
     }
 }

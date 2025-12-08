@@ -14,7 +14,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -66,7 +65,6 @@ class HttpBoundProtocolPayloadGenerator(
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope =
         arrayOf(
-            "hyper" to CargoDependency.HyperWithStream.toType(),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "BuildError" to runtimeConfig.operationBuildError(),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
