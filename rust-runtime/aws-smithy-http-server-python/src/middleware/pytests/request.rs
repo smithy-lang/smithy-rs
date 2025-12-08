@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_legacy_http_server_python::PyRequest;
+use aws_smithy_http_server_python::PyRequest;
 use http::{Request, Version};
 use hyper::Body;
 use pyo3::{exceptions::PyValueError, prelude::*, py_run};

@@ -10,7 +10,7 @@ use futures_util::stream;
 use hyper::Body;
 use pyo3::{prelude::*, py_run};
 
-use aws_smithy_legacy_http_server_python::types::ByteStream;
+use aws_smithy_http_server_python::types::ByteStream;
 use aws_smithy_types::body::SdkBody;
 
 #[pyo3_asyncio::tokio::test]

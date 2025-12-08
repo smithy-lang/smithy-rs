@@ -353,7 +353,7 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///     use std::convert::Infallible;
     ///     use std::collections::HashMap;
     ///     use pyo3::prelude::*;
-    ///     use aws_smithy_legacy_http_server_python::{PyApp, PyHandler};
+    ///     use aws_smithy_http_server_python::{PyApp, PyHandler};
     ///     use aws_smithy_legacy_http_server::body::{Body, BoxBody};
     ///     use parking_lot::Mutex;
     ///     use http::{Request, Response};
@@ -376,9 +376,9 @@ event_loop.add_signal_handler(signal.SIGINT,
     ///         pub fn start_worker(
     ///             &mut self,
     ///             py: pyo3::Python,
-    ///             socket: &pyo3::PyCell<aws_smithy_legacy_http_server_python::PySocket>,
+    ///             socket: &pyo3::PyCell<aws_smithy_http_server_python::PySocket>,
     ///             worker_number: isize,
-    ///             tls: Option<aws_smithy_legacy_http_server_python::tls::PyTlsConfig>,
+    ///             tls: Option<aws_smithy_http_server_python::tls::PyTlsConfig>,
     ///         ) -> pyo3::PyResult<()> {
     ///             let event_loop = self.configure_python_event_loop(py)?;
     ///             let service = self.build_service(event_loop)?;
