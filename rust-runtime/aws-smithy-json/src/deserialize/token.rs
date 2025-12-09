@@ -772,10 +772,10 @@ pub mod test {
 
         // Test large integer that fits in u64 but would lose precision in f64
         // f64 has 53 bits of precision, so numbers > 2^53 lose precision
-        let input = b"9007199254740993"; // 2^53 + 1, loses precision in f64
+        let input = b"18450000000000000000"; // 2^53 + 1, loses precision in f64
         let mut iter = json_token_iter(input);
         let result = expect_number_as_string_or_null(iter.next(), input).unwrap();
-        assert_eq!(result, Some("9007199254740993"));
+        assert_eq!(result, Some("18450000000000000000"));
 
         // Test large negative integer
         let input = b"-9007199254740993";
@@ -847,5 +847,67 @@ pub mod test {
         let mut iter = json_token_iter(input);
         let result = expect_number_as_string_or_null(iter.next(), input);
         assert!(result.is_err());
+    }
+
+    // Property-based tests to validate with random inputs
+    mod proptest_tests {
+        use super::*;
+        use crate::deserialize::json_token_iter;
+        use proptest::prelude::*;
+
+        proptest! {
+            #[test]
+            fn extracted_large_integer_matches_input(
+                // Generate 20-100 digit numbers (way bigger than i64 max: 19 digits)
+                num_str in "[1-9][0-9]{19,99}"
+            ) {
+                let input_bytes = num_str.as_bytes();
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+
+                prop_assert_eq!(result, Some(num_str.as_str()));
+            }
+
+            #[test]
+            fn extracted_large_negative_integer_matches_input(
+                // Generate negative numbers with 20-100 digits
+                num_str in "-[1-9][0-9]{19,99}"
+            ) {
+                let input_bytes = num_str.as_bytes();
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+
+                prop_assert_eq!(result, Some(num_str.as_str()));
+            }
+
+            #[test]
+            fn extracted_scientific_notation_matches_input(
+                mantissa in -999999999i64..999999999i64,
+                exponent in -100i32..100i32
+            ) {
+                let input = format!("{}e{}", mantissa, exponent);
+                let input_bytes = input.as_bytes();
+
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+
+                prop_assert_eq!(result, Some(input.as_str()));
+            }
+
+            #[test]
+            fn null_always_returns_none(
+                // Generate random whitespace/formatting around null
+                prefix in "[ \t\n\r]*",
+                suffix in "[ \t\n\r]*"
+            ) {
+                let input = format!("{}null{}", prefix, suffix);
+                let input_bytes = input.as_bytes();
+
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+
+                prop_assert_eq!(result, None);
+            }
+        }
     }
 }
