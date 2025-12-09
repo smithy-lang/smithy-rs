@@ -6,6 +6,7 @@ description = "CloudFront URL and cookie signing utilities for AWS SDK for Rust"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 [dependencies]
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
