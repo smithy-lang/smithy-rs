@@ -26,6 +26,7 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
         SimpleRuntimeFunction("isValidHostLabel", EndpointsLib.isValidHostLabel, RuntimeType.Bool),
         SimpleRuntimeFunction("parseURL", EndpointsLib.parseUrl, EndpointsLib.url()),
         SimpleRuntimeFunction("uriEncode", EndpointsLib.uriEncode, RuntimeType.lifetimeCow()),
+        SimpleRuntimeFunction("split", EndpointsLib.split, RuntimeType.typedVec(RuntimeType.lifetimeStr())),
         // The runtime types for coalesce and evaluate_bdd are a bit of a lie since the return type is generic.
         // In practice they aren't actually used.
         SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce, RuntimeType.Option),

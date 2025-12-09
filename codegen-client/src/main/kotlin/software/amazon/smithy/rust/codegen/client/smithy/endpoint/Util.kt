@@ -65,6 +65,8 @@ object EndpointsLib {
         endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
             .toType()
             .resolve("parse_url")
+    val split =
+        endpointsLib("split", CargoDependency.Proptest).toType().resolve("split")
 
     fun url(lifetimeName: String = "a") =
         endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)

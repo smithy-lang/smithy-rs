@@ -11,5 +11,6 @@ mod host;
 mod parse_url;
 mod partition;
 mod s3;
+mod split;
 mod substring;
 mod uri_encode;
