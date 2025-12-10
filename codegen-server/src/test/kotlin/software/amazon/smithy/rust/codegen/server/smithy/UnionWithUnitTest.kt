@@ -73,6 +73,6 @@ class UnionWithUnitTest {
             """.asSmithyModel()
 
         // Ensure the generated SDK compiles.
-        serverIntegrationTest(model, testCoverage = HttpTestType.AsConfigured) { _, _ -> }
+        serverIntegrationTest(model, testCoverage = HttpTestType.Default) { _, _ -> }
     }
 }

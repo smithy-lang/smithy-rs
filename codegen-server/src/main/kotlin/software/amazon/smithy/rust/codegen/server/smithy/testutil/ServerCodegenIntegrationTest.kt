@@ -39,7 +39,7 @@ sealed class HttpTestType {
      * The framework will not override the http-1x flag.
      * Use this when you want to explicitly control the http-1x setting or test default behavior.
      */
-    object AsConfigured : HttpTestType()
+    object Default : HttpTestType()
 }
 
 /**
@@ -80,7 +80,7 @@ fun serverIntegrationTest(
     }
 
     // Handle AS_CONFIGURED case separately - run once without modifying params
-    if (testCoverage is HttpTestType.AsConfigured) {
+    if (testCoverage is HttpTestType.Default) {
         val path = codegenIntegrationTest(model, params, invokePlugin = ::invokeRustCodegenPlugin)
         // Determine version from params - check if http-1x is enabled
         val http1xNode =
@@ -100,13 +100,13 @@ fun serverIntegrationTest(
         when (testCoverage) {
             is HttpTestType.ALL -> true
             is HttpTestType.Only -> testCoverage.version == HttpTestVersion.HTTP_0_X
-            is HttpTestType.AsConfigured -> false // Already handled above
+            is HttpTestType.Default -> false // Already handled above
         }
     val shouldTestHttp1 =
         when (testCoverage) {
             is HttpTestType.ALL -> true
             is HttpTestType.Only -> testCoverage.version == HttpTestVersion.HTTP_1_X
-            is HttpTestType.AsConfigured -> false // Already handled above
+            is HttpTestType.Default -> false // Already handled above
         }
 
     val generatedServers = mutableListOf<GeneratedServer>()

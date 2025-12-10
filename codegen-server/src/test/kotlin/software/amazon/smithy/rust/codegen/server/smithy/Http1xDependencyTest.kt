@@ -275,7 +275,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.AsConfigured,
+            testCoverage = HttpTestType.Default,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)
@@ -349,7 +349,7 @@ internal class Http1xDependencyTest {
                 additionalSettings = buildAdditionalSettings(publicConstrainedTypes = false),
                 cargoCommand = "cargo test --all-features",
             ),
-            testCoverage = HttpTestType.AsConfigured,
+            testCoverage = HttpTestType.Default,
         ) { _, rustCrate ->
             rustCrate.lib {
                 define_util_functions().invoke(this)

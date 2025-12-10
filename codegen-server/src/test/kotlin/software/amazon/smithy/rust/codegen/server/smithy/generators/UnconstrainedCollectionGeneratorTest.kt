@@ -56,7 +56,7 @@ class UnconstrainedCollectionGeneratorTest {
             }
             """.asSmithyModel()
 
-        serverIntegrationTest(model, testCoverage = HttpTestType.AsConfigured) { _, rustCrate ->
+        serverIntegrationTest(model, testCoverage = HttpTestType.Default) { _, rustCrate ->
             rustCrate.testModule {
                 unitTest("list_a_unconstrained_fail_to_constrain_with_first_error") {
                     rust(

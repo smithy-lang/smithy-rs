@@ -306,7 +306,7 @@ class ConstraintsMemberShapeTest {
                 service = "constrainedMemberShape#ConstrainedService",
                 additionalSettings = ServerAdditionalSettings.builder().generateCodegenComments(true).toObjectNode(),
             ),
-            testCoverage = HttpTestType.AsConfigured,
+            testCoverage = HttpTestType.Default,
         ) { _, rustCrate ->
             fun RustWriter.testTypeExistsInBuilderModule(typeName: String) {
                 unitTest(

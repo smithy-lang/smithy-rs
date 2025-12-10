@@ -69,7 +69,7 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
                 serverIntegrationTest(
                     model,
                     additionalDecorators = listOf(validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator),
-                    testCoverage = HttpTestType.AsConfigured,
+                    testCoverage = HttpTestType.Default,
                 )
             }
         val exceptionCause = (exception.cause!! as ValidationResult)

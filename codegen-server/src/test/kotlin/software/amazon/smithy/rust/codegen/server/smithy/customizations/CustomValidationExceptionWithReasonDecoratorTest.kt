@@ -108,7 +108,7 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
                             .build(),
                     ).build(),
             ),
-            testCoverage = HttpTestType.AsConfigured,
+            testCoverage = HttpTestType.Default,
         )
     }
 }
