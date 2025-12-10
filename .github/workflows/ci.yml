@@ -88,7 +88,7 @@ jobs:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-sdk-adhoc-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
@@ -101,31 +101,31 @@ jobs:
         - action: check-sdk-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-fuzzgen
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests-python
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-unit-tests-python
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-serde-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-e2e-test
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-python-e2e-test
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-style-and-lints
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-book
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-tools
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
         - action: check-codegen-version
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -166,7 +166,7 @@ jobs:
     name: Test the SDK
     needs: generate
     runs-on: ${{ matrix.test.runner }}
-    timeout-minutes: 30
+    timeout-minutes: 45
     # To avoid repeating setup boilerplate, we have the actual test commands
     # in a matrix strategy. These commands get run in the steps after all the setup.
     strategy:
@@ -177,9 +177,9 @@ jobs:
         - action: check-aws-config
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-cargo-deny
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-only-aws-sdk-services
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
@@ -187,9 +187,9 @@ jobs:
         - action: check-aws-sdk-smoketest-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-standalone-integration-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-benchmarks
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

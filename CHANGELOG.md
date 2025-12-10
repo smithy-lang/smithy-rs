@@ -1,4 +1,35 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 8th, 2025
+==================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#4400](https://github.com/smithy-lang/smithy-rs/issues/4400), [smithy-rs#4397](https://github.com/smithy-lang/smithy-rs/issues/4397)) Fix issue where SigV4 envelopes for EventStreams did not support the initial message. This is _technically_ a breaking change but should not break consumers in practice since the
+    resulting type has the same methods.
+
+**New this release:**
+- :tada: (client, @annahay) Added methods in token bucket to indicate if bucket is full or empty
+- :bug: (client, [smithy-rs#4427](https://github.com/smithy-lang/smithy-rs/issues/4427)) Fix Content-Type and Accept headers for event streams in RPC v2 CBOR to set `application/vnd.amazon.eventstream`
+- :bug: (client, [aws-sdk-rust#1390](https://github.com/awslabs/aws-sdk-rust/issues/1390), @arielb1) In `legacy-rustls-ring`, polyfill `with_native_roots` to use `rustls_native_certs 0.8` to avoid
+    RUSTSEC-2025-0134.
+- :bug: (all, @arielby) Publish an MSRV for all packages
+
+
+**Contributors**
+Thank you for your contributions! ❤
+- @annahay
+- @arielb1 ([aws-sdk-rust#1390](https://github.com/awslabs/aws-sdk-rust/issues/1390))
+- @arielby
+
+
+November 20th, 2025
+===================
+**New this release:**
+- (client, [smithy-rs#4388](https://github.com/smithy-lang/smithy-rs/issues/4388), @greenwoodcm) Add `then_compute_response` to Smithy mock
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4388](https://github.com/smithy-lang/smithy-rs/issues/4388))
+
+
 November 6th, 2025
 ==================
 **New this release:**
