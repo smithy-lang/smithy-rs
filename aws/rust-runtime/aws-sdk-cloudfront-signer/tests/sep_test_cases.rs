@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_cloudfront_url_signer::{sign_cookies, sign_url, PrivateKey, SigningRequest};
+use aws_sdk_cloudfront_signer::{sign_cookies, sign_url, PrivateKey, SigningRequest};
 use aws_smithy_types::DateTime;
 use serde::Deserialize;
 use std::collections::HashMap;
