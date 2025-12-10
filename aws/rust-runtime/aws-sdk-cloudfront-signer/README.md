@@ -1,4 +1,4 @@
-# aws-sdk-cloudfront-url-signer
+# aws-sdk-cloudfront-signer
 
 A library for generating signed URLs and cookies for Amazon CloudFront private content.
 
@@ -52,7 +52,7 @@ See the [CloudFront Developer Guide](https://docs.aws.amazon.com/AmazonCloudFron
 Canned policies provide simple time-based access control with just an expiration time:
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::{sign_url, SigningRequest, PrivateKey};
+use aws_sdk_cloudfront_signer::{sign_url, SigningRequest, PrivateKey};
 use aws_smithy_types::DateTime;
 
 // Load your CloudFront private key
@@ -93,7 +93,7 @@ let request = SigningRequest::builder()
 Custom policies enable advanced access control with activation dates, IP restrictions, and wildcard patterns:
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::{sign_url, SigningRequest, PrivateKey};
+use aws_sdk_cloudfront_signer::{sign_url, SigningRequest, PrivateKey};
 use aws_smithy_types::DateTime;
 
 let private_key = PrivateKey::from_pem(include_bytes!("private_key.pem"))?;
@@ -117,7 +117,7 @@ Custom policy URLs include a `Policy` parameter (base64-encoded JSON) instead of
 Signed cookies work similarly but return cookie name-value pairs:
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::{sign_cookies, SigningRequest, PrivateKey};
+use aws_sdk_cloudfront_signer::{sign_cookies, SigningRequest, PrivateKey};
 use aws_smithy_types::DateTime;
 
 let private_key = PrivateKey::from_pem(include_bytes!("private_key.pem"))?;
@@ -154,7 +154,7 @@ For custom policies, cookies include:
 Load a key from bytes (useful when loading from AWS Secrets Manager or environment variables):
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::PrivateKey;
+use aws_sdk_cloudfront_signer::PrivateKey;
 
 // From a byte slice
 let key = PrivateKey::from_pem(include_bytes!("private_key.pem"))?;
@@ -169,7 +169,7 @@ let key = PrivateKey::from_pem(pem_string.as_bytes())?;
 With the `rt-tokio` feature enabled, you can load keys directly from files:
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::PrivateKey;
+use aws_sdk_cloudfront_signer::PrivateKey;
 
 let key = PrivateKey::from_pem_file("private_key.pem").await?;
 ```
@@ -289,7 +289,7 @@ This is useful when working with HTTP clients that use the `http` crate types.
 All operations return `Result<T, SigningError>`:
 
 ```rust,ignore
-use aws_sdk_cloudfront_url_signer::{sign_url, SigningRequest, PrivateKey, error::SigningError};
+use aws_sdk_cloudfront_signer::{sign_url, SigningRequest, PrivateKey, error::SigningError};
 
 let result = sign_url(&request);
 match result {

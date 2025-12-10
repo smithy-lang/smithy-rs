@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_cloudfront_url_signer::{sign_cookies, sign_url, PrivateKey, SigningRequest};
+use aws_sdk_cloudfront_signer::{sign_cookies, sign_url, PrivateKey, SigningRequest};
 use aws_smithy_types::DateTime;
 
 const TEST_RSA_KEY: &[u8] = b"-----BEGIN RSA PRIVATE KEY-----

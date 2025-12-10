@@ -1,5 +1,5 @@
 [package]
-name = "aws-sdk-cloudfront-url-signer"
+name = "aws-sdk-cloudfront-signer"
 version = "0.1.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "CloudFront URL and cookie signing utilities for AWS SDK for Rust"

@@ -14,7 +14,7 @@ const CRATES_TO_BE_USED_DIRECTLY: &[&str] = [
     "aws-smithy-mocks",
     "aws-smithy-mocks-experimental",
     "aws-smithy-experimental",
-    "aws-sdk-cloudfront-url-signer",
+    "aws-sdk-cloudfront-signer",
 ]
 .as_slice();
 
