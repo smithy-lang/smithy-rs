@@ -76,7 +76,7 @@ data class RuntimeConfig(
     val cratePrefix: String = "aws",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.path("../"),
     /**
-     * HTTP version to use for code generation. Defaults to Http1x as that is the default for Clients..
+     * HTTP version to use for code generation. Defaults to Http1x as that is the default for Clients.
      */
     val httpVersion: HttpVersion = HttpVersion.Http1x,
 ) {
