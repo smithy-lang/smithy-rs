@@ -46,8 +46,8 @@ class CborServiceShapePreservesCasing {
                 arrayOf(
                     "SerdeJson" to CargoDependency.SerdeJson.toDevDependency().toType(),
                     "Ciborium" to CargoDependency.Ciborium.toDevDependency().toType(),
-                    "Hyper" to RuntimeType.hyperForConfig(codegenContext.runtimeConfig),
-                    "Http" to RuntimeType.httpForConfig(codegenContext.runtimeConfig),
+                    "Hyper" to RuntimeType.hyperAuto(codegenContext.runtimeConfig),
+                    "Http" to RuntimeType.httpAuto(codegenContext.runtimeConfig),
                     "Tower" to RuntimeType.Tower,
                     "HashMap" to RuntimeType.HashMap,
                     *RuntimeType.preludeScope,

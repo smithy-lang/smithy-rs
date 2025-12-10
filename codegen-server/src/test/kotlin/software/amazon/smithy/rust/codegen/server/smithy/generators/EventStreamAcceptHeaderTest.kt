@@ -94,7 +94,7 @@ internal class EventStreamAcceptHeaderTest {
         testName: String = acceptHeader.toSnakeCase(),
     ) {
         val smithyHttpServer = ServerCargoDependency.smithyHttpServer(codegenContext.runtimeConfig).toType()
-        val httpModule = RuntimeType.httpForConfig(codegenContext.runtimeConfig)
+        val httpModule = RuntimeType.httpAuto(codegenContext.runtimeConfig)
         tokioTest("test_header_$testName") {
             rustTemplate(
                 """

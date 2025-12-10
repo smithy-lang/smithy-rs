@@ -135,7 +135,7 @@ sealed class HeaderSensitivity(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-            "Http" to RuntimeType.httpForConfig(runtimeConfig),
+            "Http" to RuntimeType.httpAuto(runtimeConfig),
         )
 
     /** The case where `prefixHeaders` value is not sensitive. */
@@ -348,7 +348,7 @@ class ServerHttpSensitivityGenerator(
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
-            "Http" to RuntimeType.httpForConfig(runtimeConfig),
+            "Http" to RuntimeType.httpAuto(runtimeConfig),
         )
 
     /** Constructs `StatusCodeSensitivity` of a `Shape` */

@@ -34,7 +34,7 @@ object ServerHttpTestHelpers {
             }
         return arrayOf(
             "Http" to httpModule.toType(),
-            "Hyper" to RuntimeType.hyperForConfig(codegenContext.runtimeConfig),
+            "Hyper" to RuntimeType.hyperAuto(codegenContext.runtimeConfig),
             "Tower" to RuntimeType.Tower,
             *RuntimeType.preludeScope,
         )

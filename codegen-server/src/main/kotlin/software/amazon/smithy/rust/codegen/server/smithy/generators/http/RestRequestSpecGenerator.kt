@@ -87,7 +87,7 @@ class RestRequestSpecGenerator(
                 *extraCodegenScope,
                 "PathSegmentsVec" to pathSegmentsVec,
                 "QuerySegmentsVec" to querySegmentsVec,
-                "Method" to RuntimeType.httpForConfig(runtimeConfig).resolve("Method"),
+                "Method" to RuntimeType.httpAuto(runtimeConfig).resolve("Method"),
             )
         }
     }

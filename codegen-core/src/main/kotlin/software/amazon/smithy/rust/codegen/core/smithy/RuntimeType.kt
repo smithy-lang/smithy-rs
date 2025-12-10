@@ -315,7 +315,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x crate
          * For HTTP 0.x: returns http@0.2.x crate
          */
-        fun httpForConfig(runtimeConfig: RuntimeConfig): RuntimeType =
+        fun httpAuto(runtimeConfig: RuntimeConfig): RuntimeType =
             when (runtimeConfig.httpVersion) {
                 HttpVersion.Http1x -> Http1x
                 HttpVersion.Http0x -> Http
@@ -327,8 +327,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x request::Builder
          * For HTTP 0.x: returns http@0.2.x request::Builder
          */
-        fun httpRequestBuilderForConfig(runtimeConfig: RuntimeConfig): RuntimeType =
-            httpForConfig(runtimeConfig).resolve("request::Builder")
+        fun httpRequestBuilderAuto(runtimeConfig: RuntimeConfig): RuntimeType =
+            httpAuto(runtimeConfig).resolve("request::Builder")
 
         /**
          * Returns the appropriate http::response::Builder based on HTTP version.
@@ -336,8 +336,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x response::Builder
          * For HTTP 0.x: returns http@0.2.x response::Builder
          */
-        fun httpResponseBuilderForConfig(runtimeConfig: RuntimeConfig): RuntimeType =
-            httpForConfig(runtimeConfig).resolve("response::Builder")
+        fun httpResponseBuilderAuto(runtimeConfig: RuntimeConfig): RuntimeType =
+            httpAuto(runtimeConfig).resolve("response::Builder")
 
         /**
          * Returns the appropriate http-body crate module based on HTTP version.
@@ -345,13 +345,13 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http-body@1.x crate
          * For HTTP 0.x: returns http-body@0.4.x crate
          */
-        fun httpBodyForConfig(runtimeConfig: RuntimeConfig): RuntimeType =
+        fun httpBodyAuto(runtimeConfig: RuntimeConfig): RuntimeType =
             when (runtimeConfig.httpVersion) {
                 HttpVersion.Http1x -> HttpBody1x
                 HttpVersion.Http0x -> HttpBody
             }
 
-        fun hyperForConfig(runtimeConfig: RuntimeConfig) = CargoDependency.hyper(runtimeConfig).toType()
+        fun hyperAuto(runtimeConfig: RuntimeConfig) = CargoDependency.hyper(runtimeConfig).toType()
 
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
