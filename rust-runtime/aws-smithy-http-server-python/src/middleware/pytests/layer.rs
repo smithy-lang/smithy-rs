@@ -5,7 +5,7 @@
 
 use std::convert::Infallible;
 
-use aws_smithy_http_server::{
+use aws_smithy_legacy_http_server::{
     body::{to_boxed, Body, BoxBody},
     protocol::rest_json_1::RestJson1,
 };
