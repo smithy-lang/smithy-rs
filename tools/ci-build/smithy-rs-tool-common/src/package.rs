@@ -17,23 +17,32 @@ use std::{
 pub const SMITHY_PREFIX: &str = "aws-smithy-";
 pub const SDK_PREFIX: &str = "aws-sdk-";
 
+// AWS SDK High Level Libraries
+pub(crate) static AWS_SDK_HLL_PACKAGES: &[&str] = &["aws-sdk-cloudfront-signer"];
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Deserialize, Serialize)]
 pub enum PackageCategory {
     SmithyRuntime,
     AwsRuntime,
     AwsSdk,
+    AwsSdkHll,
     Unknown,
 }
 
 impl PackageCategory {
     /// Returns true if the category is `AwsRuntime` or `AwsSdk`
     pub fn is_sdk(&self) -> bool {
-        matches!(self, PackageCategory::AwsRuntime | PackageCategory::AwsSdk)
+        matches!(
+            self,
+            PackageCategory::AwsRuntime | PackageCategory::AwsSdk | PackageCategory::AwsSdkHll
+        )
     }
 
     /// Categorizes a package based on its name
     pub fn from_package_name(name: &str) -> PackageCategory {
-        if name.starts_with(SMITHY_PREFIX) {
+        if AWS_SDK_HLL_PACKAGES.contains(&name) {
+            PackageCategory::AwsSdkHll
+        } else if name.starts_with(SMITHY_PREFIX) {
             PackageCategory::SmithyRuntime
         } else if name.starts_with(SDK_PREFIX) {
             PackageCategory::AwsSdk

@@ -28,11 +28,16 @@ pub struct PackageStats {
     pub aws_runtime_crates: usize,
     /// Number of AWS service crates
     pub aws_sdk_crates: usize,
+    /// Number of high level library crates
+    pub aws_sdk_hll_crates: usize,
 }
 
 impl PackageStats {
     pub fn total(&self) -> usize {
-        self.smithy_runtime_crates + self.aws_runtime_crates + self.aws_sdk_crates
+        self.smithy_runtime_crates
+            + self.aws_runtime_crates
+            + self.aws_sdk_crates
+            + self.aws_sdk_hll_crates
     }
 
     fn calculate(batches: &[PackageBatch]) -> PackageStats {
@@ -43,6 +48,7 @@ impl PackageStats {
                     PackageCategory::SmithyRuntime => stats.smithy_runtime_crates += 1,
                     PackageCategory::AwsRuntime => stats.aws_runtime_crates += 1,
                     PackageCategory::AwsSdk => stats.aws_sdk_crates += 1,
+                    PackageCategory::AwsSdkHll => stats.aws_sdk_hll_crates += 1,
                     PackageCategory::Unknown => {
                         warn!("Unrecognized crate: {}", package.handle.name);
                     }

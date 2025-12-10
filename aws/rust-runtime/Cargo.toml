@@ -9,6 +9,7 @@ members = [
     "aws-runtime-api",
     "aws-sigv4",
     "aws-types",
+    "aws-sdk-cloudfront-signer"
 ]
 
 exclude = ["aws-config"]
