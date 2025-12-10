@@ -15,6 +15,13 @@ export RUST_LOG=debug
 
 SDK_PATH="$(pwd)/aws-sdk/sdk"
 
+# Delete workspace Cargo.lock files to ensure fresh dependency resolution.
+# This ensures the canary uses the exact dependency versions from the PR,
+# not stale versions from a committed lock file.
+# See: https://github.com/smithy-lang/smithy-rs/issues/3981
+rm -f smithy-rs/rust-runtime/Cargo.lock
+rm -f smithy-rs/aws/rust-runtime/Cargo.lock
+
 cd smithy-rs/tools/ci-cdk/canary-runner
 aws s3 cp s3://"${CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME}"/cdk-outputs.json .
 cargo run -- \
