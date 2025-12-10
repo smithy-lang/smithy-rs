@@ -11,13 +11,15 @@ use pokemon_service_client::{
     operation::get_storage::GetStorageError,
     types::error::StorageAccessNotAuthorized,
 };
+use serial_test::serial;
 
 pub mod common;
 
 #[tokio::test]
+#[serial]
 async fn simple_integration_test() {
-    let server = common::run_server().await;
-    let client = common::client(server.port);
+    let _child = common::run_server().await;
+    let client = common::client();
 
     let service_statistics_out = client.get_server_statistics().send().await.unwrap();
     assert_eq!(0, service_statistics_out.calls_count);
@@ -84,7 +86,7 @@ async fn simple_integration_test() {
     assert_eq!(2, service_statistics_out.calls_count);
 
     let hyper_client = Client::builder(TokioExecutor::new()).build_http();
-    let health_check_url = format!("{}/ping", common::base_url(server.port));
+    let health_check_url = format!("{}/ping", common::base_url());
     let health_check_url = hyper::Uri::try_from(health_check_url).unwrap();
     let request = hyper::Request::builder()
         .uri(health_check_url)
@@ -96,10 +98,12 @@ async fn simple_integration_test() {
 }
 
 #[tokio::test]
+#[serial]
 async fn health_check() {
-    let server = common::run_server().await;
+    let _child = common::run_server().await;
 
-    let url = common::base_url(server.port) + "/ping";
+    use pokemon_service::{DEFAULT_ADDRESS, DEFAULT_PORT};
+    let url = format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}/ping");
     let uri = url.parse::<hyper::Uri>().expect("invalid URL");
 
     // Since the `/ping` route is not modeled in Smithy, we use a regular

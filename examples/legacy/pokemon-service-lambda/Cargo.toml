@@ -9,13 +9,15 @@ description = "A smithy Rust service to retrieve information about Pokémon via 
 [dependencies]
 async-stream = "0.3.4"
 clap = { version = "4.1.11", features = ["derive"] }
-http = "1"
-hyper = {version = "1", features = ["server"] }
+hyper = {version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
 tracing = "0.1"
 
-lambda_http = "1.0"
+# `aws-smithy-legacy-http-server` is only guaranteed to be compatible with this
+# version of `lambda_http`, or semver-compatible versions of this version.
+# Depending on other versions of `lambda_http` may not work.
+lambda_http = "0.8.0"
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["aws-lambda"] }
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", package = "pokemon-service-server-sdk-http0x", features = ["aws-lambda"] }
 pokemon-service-common = { path = "../pokemon-service-common/" }
