@@ -330,7 +330,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                lengthTrait.validationErrorMessage().dq()
+                                                    lengthTrait.validationErrorMessage().dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -353,7 +353,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                patternTrait.validationErrorMessage().dq()
+                                                    patternTrait.validationErrorMessage().dq()
                                                 }, &path, ${patternTrait.pattern.toString().dq()})""",
                                             ),
                                     )
@@ -397,7 +397,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     fieldAssignments(
                                         "path.clone()",
                                         """format!(${
-                                        blobLength.lengthTrait.validationErrorMessage().dq()
+                                            blobLength.lengthTrait.validationErrorMessage().dq()
                                         }, length, &path)""",
                                     ),
                             )
@@ -574,8 +574,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                collectionTraitInfo.lengthTrait.validationErrorMessage()
-                                                    .dq()
+                                                    collectionTraitInfo.lengthTrait.validationErrorMessage()
+                                                        .dq()
                                                 }, length, &path)""",
                                             ),
                                     )
@@ -593,8 +593,8 @@ class UserProvidedValidationExceptionConversionGenerator(
                                             fieldAssignments(
                                                 "path.clone()",
                                                 """format!(${
-                                                collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
-                                                    .dq()
+                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
+                                                        .dq()
                                                 }, &duplicate_indices, &path)""",
                                             ),
                                     )

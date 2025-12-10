@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenConfig
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
 import java.nio.file.Path
-import java.util.concurrent.CompletableFuture
 
 /**
  * Specifies which HTTP version(s) to test in [serverIntegrationTest].
@@ -110,15 +109,14 @@ fun serverIntegrationTest(
             is HttpTestType.AsConfigured -> false // Already handled above
         }
 
-    // Check if parallel execution is enabled via environment variable
-    val runInParallel = System.getenv("PARALLEL_HTTP_TESTS")?.toBoolean() ?: false
-
     val generatedServers = mutableListOf<GeneratedServer>()
     val errors = mutableListOf<MultiVersionTestFailure.HttpVersionFailure>()
 
     // Helper function to run test for a specific HTTP version
-    val runTestForVersion: (HttpTestVersion, Boolean) -> Result<Path> = { version, http1xEnabled ->
+    val runTestForVersion: (HttpTestVersion) -> Result<Path> = { version ->
         try {
+            val http1xEnabled = version == HttpTestVersion.HTTP_1_X
+
             // Deep merge the codegen settings to preserve existing keys
             val existingCodegenSettings =
                 params.additionalSettings
@@ -153,38 +151,13 @@ fun serverIntegrationTest(
             .onFailure { errors.add(MultiVersionTestFailure.HttpVersionFailure(version, it)) }
     }
 
-    if (runInParallel) {
-        // Run tests in parallel
-        val http0Future =
-            if (shouldTestHttp0) {
-                CompletableFuture.supplyAsync {
-                    runTestForVersion(HttpTestVersion.HTTP_0_X, false)
-                }
-            } else {
-                null
-            }
+    // Run tests sequentially (original behavior)
+    if (shouldTestHttp0) {
+        handleResult(HttpTestVersion.HTTP_0_X, runTestForVersion(HttpTestVersion.HTTP_0_X))
+    }
 
-        val http1Future =
-            if (shouldTestHttp1) {
-                CompletableFuture.supplyAsync {
-                    runTestForVersion(HttpTestVersion.HTTP_1_X, true)
-                }
-            } else {
-                null
-            }
-
-        // Wait for all futures to complete and collect results
-        http0Future?.get()?.let { handleResult(HttpTestVersion.HTTP_0_X, it) }
-        http1Future?.get()?.let { handleResult(HttpTestVersion.HTTP_1_X, it) }
-    } else {
-        // Run tests sequentially (original behavior)
-        if (shouldTestHttp0) {
-            handleResult(HttpTestVersion.HTTP_0_X, runTestForVersion(HttpTestVersion.HTTP_0_X, false))
-        }
-
-        if (shouldTestHttp1) {
-            handleResult(HttpTestVersion.HTTP_1_X, runTestForVersion(HttpTestVersion.HTTP_1_X, true))
-        }
+    if (shouldTestHttp1) {
+        handleResult(HttpTestVersion.HTTP_1_X, runTestForVersion(HttpTestVersion.HTTP_1_X))
     }
 
     // If there were any errors, throw a combined exception with clear version information
