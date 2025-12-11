@@ -272,6 +272,7 @@ private fun baseClientRuntimePluginsFn(
 
                     let scope = ${codegenContext.moduleName.dq()};
 
+                    ##[allow(deprecated)]
                     let mut plugins = #{RuntimePlugins}::new()
                         // defaults
                         .with_client_plugins(#{default_plugins}(
