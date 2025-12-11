@@ -55,6 +55,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationFieldName
 import software.amazon.smithy.rust.codegen.server.smithy.util.isValidationMessage
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
+import java.util.stream.Collectors
 
 /**
  * Decorator for user provided validation exception codegen
@@ -84,7 +85,7 @@ class UserProvidedValidationExceptionDecorator : ServerCodegenDecorator {
     internal fun firstStructureShapeWithValidationExceptionTrait(model: Model): StructureShape? =
         model
             .shapes(StructureShape::class.java)
-            .toList()
+            .collect(Collectors.toList())
             // Defining multiple validation exceptions is unsupported. See `ValidateUnsupportedConstraints`
             .firstOrNull({ it.hasTrait(ValidationExceptionTrait.ID) })
 
@@ -320,7 +321,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         ##[allow(unused_variables)]
-                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -329,9 +329,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!(${
-                                                    lengthTrait.validationErrorMessage().dq()
-                                                }, length, &path)""",
+                                                "format!(${lengthTrait.validationErrorMessage().dq()}, length, &path)",
                                             ),
                                     )
                                 }
@@ -352,9 +350,9 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!(${
+                                                "format!(${
                                                     patternTrait.validationErrorMessage().dq()
-                                                }, &path, ${patternTrait.pattern.toString().dq()})""",
+                                                }, &path, ${patternTrait.pattern.toString().dq()})",
                                             ),
                                     )
                                 }
@@ -387,7 +385,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                             rustTemplate(
                                 """
                                 ##[allow(unused_variables)]
-                                ##[allow(unused_variables)]
                                 Self::Length(length) => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
@@ -396,9 +393,9 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 "FieldAssignments" to
                                     fieldAssignments(
                                         "path.clone()",
-                                        """format!(${
+                                        "format!(${
                                             blobLength.lengthTrait.validationErrorMessage().dq()
-                                        }, length, &path)""",
+                                        }, length, &path)",
                                     ),
                             )
                         }
@@ -428,7 +425,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                     shape.getTrait<LengthTrait>()?.also {
                         rustTemplate(
                             """
-                            ##[allow(unused_variables)]
                             ##[allow(unused_variables)]
                             Self::Length(length) => #{ValidationExceptionField} {
                                 #{FieldAssignments}
@@ -522,7 +518,7 @@ class UserProvidedValidationExceptionConversionGenerator(
                                 ConstraintViolation::${it.name()} => #{ValidationExceptionField} {
                                     #{FieldAssignments}
                                 },
-                                """.trimIndent(),
+                                """,
                                 *codegenScope,
                                 "FieldAssignments" to
                                     fieldAssignments(
@@ -564,7 +560,6 @@ class UserProvidedValidationExceptionConversionGenerator(
                                     rustTemplate(
                                         """
                                         ##[allow(unused_variables)]
-                                        ##[allow(unused_variables)]
                                         Self::Length(length) => #{ValidationExceptionField} {
                                             #{FieldAssignments}
                                         },
@@ -573,10 +568,10 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!(${
+                                                "format!(${
                                                     collectionTraitInfo.lengthTrait.validationErrorMessage()
                                                         .dq()
-                                                }, length, &path)""",
+                                                }, length, &path)",
                                             ),
                                     )
                                 }
@@ -592,10 +587,15 @@ class UserProvidedValidationExceptionConversionGenerator(
                                         "FieldAssignments" to
                                             fieldAssignments(
                                                 "path.clone()",
-                                                """format!(${
-                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage()
-                                                        .dq()
-                                                }, &duplicate_indices, &path)""",
+                                                """
+                                                format!(
+                                                    ${
+                                                    collectionTraitInfo.uniqueItemsTrait.validationErrorMessage().dq()
+                                                },
+                                                    &duplicate_indices,
+                                                    &path
+                                                )
+                                                """,
                                             ),
                                     )
                                 }
@@ -648,13 +648,11 @@ class UserProvidedValidationExceptionConversionGenerator(
                         val pathExpression = member.wrapValueIfOptional(rawPathExpression)
                         val messageExpression = member.wrapValueIfOptional(rawMessageExpression)
                         when {
-                            member.isValidationFieldName() -> {
+                            member.isValidationFieldName() ->
                                 "$memberName: $pathExpression"
-                            }
 
-                            member.hasTrait(ValidationFieldMessageTrait.ID) -> {
+                            member.hasTrait(ValidationFieldMessageTrait.ID) ->
                                 "$memberName: $messageExpression"
-                            }
 
                             else -> {
                                 "$memberName: ${defaultFieldAssignment(member)}"
@@ -683,21 +681,10 @@ class UserProvidedValidationExceptionConversionGenerator(
                     "$enumSymbol::$variantName"
                 }
 
-                node.isStringNode -> {
-                    """"${node.expectStringNode().value}".to_string()"""
-                }
-
-                node.isBooleanNode -> {
-                    node.expectBooleanNode().value.toString()
-                }
-
-                node.isNumberNode -> {
-                    node.expectNumberNode().value.toString()
-                }
-
-                else -> {
-                    "Default::default()"
-                }
+                node.isStringNode -> """"${node.expectStringNode().value}".to_string()"""
+                node.isBooleanNode -> node.expectBooleanNode().value.toString()
+                node.isNumberNode -> node.expectNumberNode().value.toString()
+                else -> "Default::default()"
             }
         } ?: "Default::default()"
     }

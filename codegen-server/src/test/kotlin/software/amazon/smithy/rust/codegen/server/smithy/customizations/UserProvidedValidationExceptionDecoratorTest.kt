@@ -442,4 +442,61 @@ internal class UserProvidedValidationExceptionDecoratorTest {
     fun `code compiles with implicit message and field name and without field message`() {
         serverIntegrationTest(completeTestModelWithImplicitNamesWithoutFieldMessage)
     }
+
+    private val completeTestModelWithImplicitNamesWithoutFieldMessage =
+        """
+        namespace com.aws.example
+
+        use aws.protocols#restJson1
+        use smithy.framework.rust#validationException
+        use smithy.framework.rust#validationFieldList
+
+        @restJson1
+        service CustomValidationExample {
+            version: "1.0.0"
+            operations: [
+                TestOperation
+            ]
+            errors: [
+                MyCustomValidationException
+            ]
+        }
+
+        @http(method: "POST", uri: "/test")
+        operation TestOperation {
+            input: TestInput
+        }
+
+        structure TestInput {
+            @required
+            @length(min: 1, max: 10)
+            name: String
+
+            @range(min: 1, max: 100)
+            age: Integer
+        }
+
+        @error("client")
+        @httpError(400)
+        @validationException
+        structure MyCustomValidationException {
+            message: String
+
+            @validationFieldList
+            customFieldList: CustomValidationFieldList
+        }
+
+        structure CustomValidationField {
+            name: String,
+        }
+
+        list CustomValidationFieldList {
+            member: CustomValidationField
+        }
+        """.asSmithyModel(smithyVersion = "2.0")
+
+    @Test
+    fun `code compiles with implicit message and field name and without field message`() {
+        serverIntegrationTest(completeTestModelWithImplicitNamesWithoutFieldMessage)
+    }
 }

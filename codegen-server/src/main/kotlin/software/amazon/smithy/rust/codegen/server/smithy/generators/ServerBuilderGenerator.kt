@@ -347,12 +347,28 @@ class ServerBuilderGenerator(
                         "${symbol.makeMaybeConstrained().rustType().namespace}::MaybeConstrained::Constrained"
 
                     var varExpr = if (symbol.isOptional()) "v" else "input"
-                    if (hasBox) varExpr = "*$varExpr"
-                    if (!constrainedTypeHoldsFinalType(member)) varExpr = "($varExpr).into()"
+                    var needsTransformation = false
+
+                    if (hasBox) {
+                        varExpr = "*$varExpr"
+                        needsTransformation = true
+                    }
+                    if (!constrainedTypeHoldsFinalType(member)) {
+                        varExpr = "($varExpr).into()"
+                        needsTransformation = true
+                    }
 
                     if (wrapInMaybeConstrained) {
-                        conditionalBlock("input.map(##[allow(clippy::redundant_closure)] |v| ", ")", conditional = symbol.isOptional()) {
-                            conditionalBlock("Box::new(", ")", conditional = hasBox) {
+                        if (needsTransformation) {
+                            conditionalBlock("input.map(|v| ", ")", conditional = symbol.isOptional()) {
+                                conditionalBlock("Box::new(", ")", conditional = hasBox) {
+                                    rust("$maybeConstrainedVariant($varExpr)")
+                                }
+                            }
+                        } else {
+                            if (symbol.isOptional()) {
+                                rust("input.map($maybeConstrainedVariant)")
+                            } else {
                                 rust("$maybeConstrainedVariant($varExpr)")
                             }
                         }

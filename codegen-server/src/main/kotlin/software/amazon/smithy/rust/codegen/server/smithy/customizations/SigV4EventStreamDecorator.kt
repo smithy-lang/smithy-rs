@@ -44,9 +44,11 @@ class SigV4EventStreamDecorator : ServerCodegenDecorator {
     }
 
     override fun symbolProvider(base: RustSymbolProvider): RustSymbolProvider {
-        // We need access to the service shape to check for SigV4 trait, but the base interface doesn't provide it.
-        // For now, we'll wrap all event streams and let the runtime code handle the detection.
-        return SigV4EventStreamSymbolProvider(base)
+        if (base.usesSigAuth()) {
+            return SigV4EventStreamSymbolProvider(base)
+        } else {
+            return base
+        }
     }
 }
 
