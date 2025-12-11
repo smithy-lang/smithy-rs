@@ -331,7 +331,7 @@ dependencies = [
  "bytes-utils",
  "crc-fast",
  "hex",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "md-5",
@@ -354,7 +354,7 @@ dependencies = [
  "bytes-utils",
  "flate2",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
@@ -404,7 +404,7 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "futures-util",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.8.1",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.65.10"
+version = "0.66.0"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-http",
@@ -469,10 +469,12 @@ dependencies = [
  "aws-smithy-xml",
  "bytes",
  "futures-util",
- "http 0.2.12",
- "http-body 0.4.6",
- "hyper 0.14.32",
- "lambda_http",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "lambda_http 1.0.1",
  "mime",
  "nom",
  "pin-project-lite",
@@ -482,8 +484,9 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.6.8",
  "tracing",
+ "tracing-subscriber",
  "uuid",
 ]
 
@@ -492,8 +495,8 @@ name = "aws-smithy-http-server-python"
 version = "0.66.6"
 dependencies = [
  "aws-smithy-http",
- "aws-smithy-http-server",
  "aws-smithy-json",
+ "aws-smithy-legacy-http-server",
  "aws-smithy-types",
  "aws-smithy-xml",
  "bytes",
@@ -502,7 +505,7 @@ dependencies = [
  "http 0.2.12",
  "hyper 0.14.32",
  "hyper-rustls 0.24.2",
- "lambda_http",
+ "lambda_http 0.8.4",
  "num_cpus",
  "parking_lot",
  "pin-project-lite",
@@ -537,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.6"
+version = "0.62.7"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -574,7 +577,7 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.32",
- "lambda_http",
+ "lambda_http 0.8.4",
  "mime",
  "nom",
  "pin-project-lite",
@@ -584,7 +587,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.3.5",
  "tracing",
  "uuid",
 ]
@@ -635,6 +638,7 @@ dependencies = [
  "cbor-diag",
  "ciborium",
  "http 0.2.12",
+ "http 1.4.0",
  "pretty_assertions",
  "regex-lite",
  "roxmltree",
@@ -773,7 +777,23 @@ dependencies = [
  "bytes",
  "http 0.2.12",
  "http-body 0.4.6",
- "http-serde",
+ "http-serde 1.1.3",
+ "query_map",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "aws_lambda_events"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ac59c9b189a3bd75146633e1c87f35fb727f53b03c7f331af789ff1293a9f350"
+dependencies = [
+ "base64 0.22.1",
+ "bytes",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-serde 2.1.1",
  "query_map",
  "serde",
  "serde_json",
@@ -1785,6 +1805,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "http-serde"
+version = "2.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0f056c8559e3757392c8d091e796416e4649d8e49e88b8d76df6c002f05027fd"
+dependencies = [
+ "http 1.4.0",
+ "serde",
+]
+
+[[package]]
 name = "httparse"
 version = "1.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2051,7 +2081,7 @@ dependencies = [
  "fastrand",
  "futures-util",
  "http 0.2.12",
- "http 1.3.1",
+ "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
@@ -2182,7 +2212,7 @@ version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cfba45269ac18740ba882b09d1617c1f05eb4bdc026a5149b593bf77dab12e6b"
 dependencies = [
- "aws_lambda_events",
+ "aws_lambda_events 0.12.1",
  "base64 0.21.7",
  "bytes",
  "encoding_rs",
@@ -2190,9 +2220,34 @@ dependencies = [
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.32",
- "lambda_runtime",
+ "lambda_runtime 0.8.3",
  "mime",
  "percent-encoding",
+ "serde",
+ "serde_json",
+ "serde_urlencoded",
+ "tokio-stream",
+ "url",
+]
+
+[[package]]
+name = "lambda_http"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a106755a9079a3ed20b4262e32c9a5efa127c97546cb2ecf69bbf3d17dbf970b"
+dependencies = [
+ "aws_lambda_events 1.0.1",
+ "bytes",
+ "encoding_rs",
+ "futures-util",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.8.1",
+ "lambda_runtime 1.0.1",
+ "mime",
+ "percent-encoding",
+ "pin-project-lite",
  "serde",
  "serde_json",
  "serde_urlencoded",
@@ -2212,15 +2267,40 @@ dependencies = [
  "futures",
  "http 0.2.12",
  "http-body 0.4.6",
- "http-serde",
+ "http-serde 1.1.3",
  "hyper 0.14.32",
- "lambda_runtime_api_client",
+ "lambda_runtime_api_client 0.8.0",
  "serde",
  "serde_json",
  "serde_path_to_error",
  "tokio",
  "tokio-stream",
  "tower 0.4.13",
+ "tracing",
+]
+
+[[package]]
+name = "lambda_runtime"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46e566d19773ae483b0d32cc6045c5420d7b3eec6192ecb1c26ffa4e0091388a"
+dependencies = [
+ "async-stream",
+ "base64 0.22.1",
+ "bytes",
+ "futures",
+ "http 1.4.0",
+ "http-body-util",
+ "http-serde 2.1.1",
+ "hyper 1.8.1",
+ "lambda_runtime_api_client 1.0.1",
+ "pin-project",
+ "serde",
+ "serde_json",
+ "serde_path_to_error",
+ "tokio",
+ "tokio-stream",
+ "tower 0.5.2",
  "tracing",
 ]
 
@@ -2234,6 +2314,25 @@ dependencies = [
  "hyper 0.14.32",
  "tokio",
  "tower-service",
+]
+
+[[package]]
+name = "lambda_runtime_api_client"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2c039f06329949692a81a993ede4cfaa6abab3ac8e72590cf7c5e6a64a9ec7b1"
+dependencies = [
+ "bytes",
+ "futures-channel",
+ "futures-util",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.8.1",
+ "hyper-util",
+ "tower 0.5.2",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
@@ -3616,6 +3715,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync_wrapper"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263"
+
+[[package]]
 name = "synstructure"
 version = "0.13.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3912,6 +4017,7 @@ dependencies = [
  "pin-project",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -3923,6 +4029,10 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
+ "futures-core",
+ "futures-util",
+ "pin-project-lite",
+ "sync_wrapper",
  "tower-layer",
  "tower-service",
 ]
@@ -3941,6 +4051,22 @@ dependencies = [
  "http-body 0.4.6",
  "http-range-header",
  "pin-project-lite",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d4e6559d53cc268e5031cd8429d05415bc4cb4aefc4aa5d6cc35fbf5b924a1f8"
+dependencies = [
+ "bitflags 2.10.0",
+ "bytes",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "pin-project-lite",
+ "tokio",
  "tower-layer",
  "tower-service",
 ]
