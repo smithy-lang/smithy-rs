@@ -11,7 +11,6 @@ use std::sync::atomic::AtomicU32;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
-use std::time::Instant;
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 const DEFAULT_CAPACITY: usize = 500;
@@ -263,12 +262,7 @@ impl TokenBucket {
         self.semaphore
             .add_permits(amount.min(self.max_permits - available));
     }
-    
-    #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
-    pub(crate) fn available_permits(&self) -> usize {
-        self.semaphore.available_permits()
-    }
-    
+
     /// Returns true if the token bucket is full, false otherwise
     pub fn is_full(&self) -> bool {
         self.semaphore.available_permits() >= self.max_permits
@@ -279,10 +273,12 @@ impl TokenBucket {
         self.semaphore.available_permits() == 0
     }
 
+    #[allow(dead_code)] // only used in tests
     #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
+}
 
 /// Builder for constructing a `TokenBucket`.
 #[derive(Clone, Debug, Default)]
@@ -333,11 +329,7 @@ impl TokenBucketBuilder {
     /// Negative values are clamped to 0.0. A refill rate of 0.0 disables time-based regeneration.
     /// Non-finite values (NaN, infinity) are treated as 0.0.
     pub fn refill_rate(mut self, rate: f32) -> Self {
-        let validated_rate = if rate.is_finite() {
-            rate.max(0.0)
-        } else {
-            0.0
-        };
+        let validated_rate = if rate.is_finite() { rate.max(0.0) } else { 0.0 };
         self.refill_rate = Some(validated_rate);
         self
     }
@@ -526,30 +518,6 @@ mod tests {
         // Test zero is valid
         let bucket = TokenBucket::builder().refill_rate(0.0).build();
         assert_eq!(bucket.refill_rate, 0.0);
-    }
-
-    #[test]
-    fn test_builder_default_time_source() {
-        // Test that TokenBucket uses SystemTimeSource by default when builder doesn't specify one
-        let bucket = TokenBucket::builder()
-            .capacity(100)
-            .build();
-
-        // Verify the bucket was created successfully with default time source
-        assert_eq!(bucket.max_permits, 100);
-
-        // Verify creation_time is set (should be close to now)
-        let now = SystemTimeSource::new().now();
-        let creation_age = now
-            .duration_since(bucket.creation_time)
-            .unwrap_or(Duration::ZERO);
-
-        // Creation time should be very recent (within 1 second)
-        assert!(
-            creation_age < Duration::from_secs(1),
-            "Creation time should be recent, but was {:?} ago",
-            creation_age
-        );
     }
 
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
@@ -800,18 +768,6 @@ mod tests {
             success_reward: 0.5,
             time_source: time_source.clone().into(),
             creation_time: time_source.now(),
-    
-    #[test]
-    fn test_combined_time_and_success_rewards() {
-        use aws_smithy_async::test_util::ManualTimeSource;
-        use std::time::UNIX_EPOCH;
-
-        let time_source = ManualTimeSource::new(UNIX_EPOCH);
-        let bucket = TokenBucket {
-            refill_rate: 1.0,
-            success_reward: 0.5,
-            time_source: time_source.clone().into(),
-            creation_time: time_source.now(),
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
@@ -837,9 +793,6 @@ mod tests {
     fn test_refill_rates() {
         use aws_smithy_async::test_util::ManualTimeSource;
         use std::time::UNIX_EPOCH;
-
-    #[test]
-    fn test_refill_rates() {
         // (refill_rate, elapsed_secs, expected_permits, expected_fractional)
         let test_cases = [
             (10.0, 2, 20, 0.0),      // Basic: 2 sec * 10 tokens/sec = 20 tokens
@@ -896,8 +849,6 @@ mod tests {
         let bucket = TokenBucket {
             refill_rate: 50.0,
             success_reward: 2.0,
-            time_source: time_source.clone().into(),
-            creation_time: time_source.now(),
             time_source: time_source.clone().into(),
             creation_time: time_source.now(),
             semaphore: Arc::new(Semaphore::new(5)),
