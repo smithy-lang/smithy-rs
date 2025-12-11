@@ -525,6 +525,7 @@ fn must_not_be_finite(f: f64) -> Result<f64, ()> {
 #[cfg(test)]
 mod tests {
     use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
+    use crate::deserialize::token::expect_number_as_string_or_null;
     use crate::deserialize::token::test::{
         end_array, end_object, object_key, start_array, start_object, value_bool, value_null,
         value_number, value_string,
@@ -1046,6 +1047,11 @@ mod tests {
                         ));
                     }
                 }
+
+                // Validate expect_number_as_string_or_null extracts the correct string
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+                prop_assert_eq!(result, Some(num_str.as_str()));
             }
         }
     }

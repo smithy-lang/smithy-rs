@@ -225,7 +225,8 @@ pub fn expect_number_as_string_or_null<'a>(
             }
 
             let number_slice = &input[start..end];
-            let number_str = unsafe { std::str::from_utf8_unchecked(number_slice) };
+            let number_str = std::str::from_utf8(number_slice)
+                .map_err(|_| Error::custom("invalid UTF-8 in number"))?;
             Ok(Some(number_str))
         }
         _ => Err(Error::custom("expected ValueNumber or ValueNull")),
