@@ -124,6 +124,7 @@ const SERVER_SPECIFIC_RUNTIMES: &[&str] = &[
     "aws-smithy-http-server",
     "aws-smithy-http-server-python",
     "aws-smithy-http-typescript",
+    "aws-smithy-legacy-http-server",
 ];
 
 fn new_dependency_for_aws_sdk(crate_name: &str) -> bool {

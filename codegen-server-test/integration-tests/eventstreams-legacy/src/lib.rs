@@ -57,7 +57,7 @@ impl ManualEventStreamClient {
         tokio::spawn(async move {
             while let Some(message) = message_receiver.recv().await {
                 let mut buffer = Vec::new();
-                if let Err(_) = write_message_to(&message, &mut buffer) {
+                if write_message_to(&message, &mut buffer).is_err() {
                     break;
                 }
                 let _ = frame_sender
@@ -131,7 +131,7 @@ impl ManualEventStreamClient {
         self.message_sender
             .send(message)
             .await
-            .map_err(|e| format!("Send failed: {}", e))
+            .map_err(|e| format!("Send failed: {e}"))
     }
 
     /// Receives the next response message.

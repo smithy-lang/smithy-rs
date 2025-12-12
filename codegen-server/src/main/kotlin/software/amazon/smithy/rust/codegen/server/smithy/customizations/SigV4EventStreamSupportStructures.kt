@@ -17,7 +17,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 
 object SigV4EventStreamSupportStructures {
-    private val supportModule = RustModule.private("sigv4_event_stream")
+    internal val supportModule =
+        RustModule.public(
+            "sigv4_event_stream",
+            documentationOverride = "Support structures for SigV4 signed event streams",
+        )
 
     fun codegenScope(runtimeConfig: RuntimeConfig) =
         arrayOf(
@@ -25,42 +29,30 @@ object SigV4EventStreamSupportStructures {
             "ExtractionError" to extractionError(runtimeConfig),
             "SignedEventError" to signedEventError(runtimeConfig),
             "SignedEvent" to signedEvent(runtimeConfig),
+            "SigV4Receiver" to sigV4Receiver(runtimeConfig),
             "SigV4Unmarshaller" to sigV4Unmarshaller(runtimeConfig),
             "extract_signed_message" to extractSignedMessage(runtimeConfig),
         )
 
     /**
-     * Wraps an event stream Receiver type to handle SigV4 signed messages.
-     * Transforms: Receiver<T, E> -> Receiver<SignedEvent<T>, SignedEventError<E>>
+     * Wraps an event stream Receiver type with SigV4Receiver.
+     * Transforms: Receiver<T, E> -> SigV4Receiver<T, E>
      */
     fun wrapInEventStreamSigV4(
         symbol: Symbol,
         runtimeConfig: RuntimeConfig,
     ): Symbol {
-        val signedEvent = signedEvent(runtimeConfig)
-        val signedEventError = signedEventError(runtimeConfig)
-        return symbol.mapRustType(signedEvent, signedEventError) { rustType ->
+        val sigV4Receiver = sigV4Receiver(runtimeConfig)
+        return symbol.mapRustType(sigV4Receiver) { rustType ->
             // Expect Application(Receiver, [T, E])
             if (rustType is RustType.Application && rustType.name == "Receiver" && rustType.args.size == 2) {
                 val eventType = rustType.args[0]
                 val errorType = rustType.args[1]
 
-                // Create SignedEvent<T> and SignedEventError<E>
-                val wrappedEventType =
-                    RustType.Application(
-                        signedEvent.toSymbol().rustType(),
-                        listOf(eventType),
-                    )
-                val wrappedErrorType =
-                    RustType.Application(
-                        signedEventError.toSymbol().rustType(),
-                        listOf(errorType),
-                    )
-
-                // Create new Receiver<SignedEvent<T>, SignedEventError<E>>
+                // Create SigV4Receiver<T, E>
                 RustType.Application(
-                    rustType.type,
-                    listOf(wrappedEventType, wrappedErrorType),
+                    sigV4Receiver.toSymbol().rustType(),
+                    listOf(eventType, errorType),
                 )
             } else {
                 PANIC("Called wrap in EventStreamSigV4 on ${symbol.rustType()} which was not an event stream receiver")
@@ -74,7 +66,7 @@ object SigV4EventStreamSupportStructures {
                 """
                 /// Information extracted from a signed event stream message
                 ##[non_exhaustive]
-                ##[derive(Debug, Clone)]
+                ##[derive(Debug, Clone, PartialEq)]
                 pub struct SignatureInfo {
                     /// The chunk signature bytes from the `:chunk-signature` header
                     pub chunk_signature: Vec<u8>,
@@ -103,8 +95,35 @@ object SigV4EventStreamSupportStructures {
                     ##[non_exhaustive]
                     InvalidTimestamp,
                 }
+
+                impl #{Display} for ExtractionError {
+                    fn fmt(&self, f: &mut #{Formatter}<'_>) -> #{fmt_Result} {
+                        match self {
+                            ExtractionError::InvalidPayload { error } => {
+                                write!(f, "invalid payload: {}", error)
+                            }
+                            ExtractionError::InvalidTimestamp => {
+                                write!(f, "invalid or missing timestamp header")
+                            }
+                        }
+                    }
+                }
+
+                impl #{Error} for ExtractionError {
+                    fn source(&self) -> #{Option}<&(dyn #{Error} + 'static)> {
+                        match self {
+                            ExtractionError::InvalidPayload { error } => #{Some}(error),
+                            ExtractionError::InvalidTimestamp => #{None},
+                        }
+                    }
+                }
                 """,
                 "EventStreamError" to CargoDependency.smithyEventStream(runtimeConfig).toType().resolve("error::Error"),
+                "Display" to RuntimeType.Display,
+                "Formatter" to RuntimeType.std.resolve("fmt::Formatter"),
+                "fmt_Result" to RuntimeType.std.resolve("fmt::Result"),
+                "Error" to RuntimeType.StdError,
+                *RuntimeType.preludeScope,
             )
         }
 
@@ -136,7 +155,7 @@ object SigV4EventStreamSupportStructures {
             rustTemplate(
                 """
                 /// Wrapper for event stream messages that may be signed
-                ##[derive(Debug)]
+                ##[derive(Debug, Clone)]
                 pub struct SignedEvent<T> {
                     /// The actual event message
                     pub message: T,
@@ -175,41 +194,41 @@ object SigV4EventStreamSupportStructures {
                     fn unmarshall(&self, message: &#{Message}) -> #{Result}<#{UnmarshalledMessage}<Self::Output, Self::Error>, #{EventStreamError}> {
                         // First, try to extract the signed message
                         match #{extract_signed_message}(message) {
-                            Ok(MaybeSignedMessage::Signed { message: inner_message, signature }) => {
+                            #{Ok}(MaybeSignedMessage::Signed { message: inner_message, signature }) => {
                                 // Process the inner message with the base unmarshaller
                                 match self.inner.unmarshall(&inner_message) {
-                                    Ok(unmarshalled) => match unmarshalled {
+                                    #{Ok}(unmarshalled) => match unmarshalled {
                                         #{UnmarshalledMessage}::Event(event) => {
-                                            Ok(#{UnmarshalledMessage}::Event(#{SignedEvent} {
+                                            #{Ok}(#{UnmarshalledMessage}::Event(#{SignedEvent} {
                                                 message: event,
-                                                signature: Some(signature),
+                                                signature: #{Some}(signature),
                                             }))
                                         }
                                         #{UnmarshalledMessage}::Error(err) => {
-                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
+                                            #{Ok}(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
                                         }
                                     },
-                                    Err(err) => Err(err),
+                                    #{Err}(err) => #{Err}(err),
                                 }
                             }
-                            Ok(MaybeSignedMessage::Unsigned) => {
+                            #{Ok}(MaybeSignedMessage::Unsigned) => {
                                 // Process unsigned message directly
                                 match self.inner.unmarshall(message) {
-                                    Ok(unmarshalled) => match unmarshalled {
+                                    #{Ok}(unmarshalled) => match unmarshalled {
                                         #{UnmarshalledMessage}::Event(event) => {
-                                            Ok(#{UnmarshalledMessage}::Event(#{SignedEvent} {
+                                            #{Ok}(#{UnmarshalledMessage}::Event(#{SignedEvent} {
                                                 message: event,
-                                                signature: None,
+                                                signature: #{None},
                                             }))
                                         }
                                         #{UnmarshalledMessage}::Error(err) => {
-                                            Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
+                                            #{Ok}(#{UnmarshalledMessage}::Error(#{SignedEventError}::Event(err)))
                                         }
                                     },
-                                    Err(err) => Err(err),
+                                    #{Err}(err) => #{Err}(err),
                                 }
                             }
-                            Err(extraction_err) => Ok(#{UnmarshalledMessage}::Error(#{SignedEventError}::InvalidSignedEvent(extraction_err))),
+                            #{Err}(extraction_err) => #{Ok}(#{UnmarshalledMessage}::Error(#{SignedEventError}::InvalidSignedEvent(extraction_err))),
                         }
                     }
                 }
@@ -224,6 +243,95 @@ object SigV4EventStreamSupportStructures {
                 "EventStreamError" to CargoDependency.smithyEventStream(runtimeConfig).toType().resolve("error::Error"),
                 "SignedEvent" to signedEvent(runtimeConfig),
                 "SignedEventError" to signedEventError(runtimeConfig),
+                "extract_signed_message" to extractSignedMessage(runtimeConfig),
+                *RuntimeType.preludeScope,
+            )
+        }
+
+    private fun sigV4Receiver(runtimeConfig: RuntimeConfig): RuntimeType =
+        RuntimeType.forInlineFun("SigV4Receiver", supportModule) {
+            rustTemplate(
+                """
+                /// Receiver wrapper that handles SigV4 signed event stream messages
+                ##[derive(Debug)]
+                pub struct SigV4Receiver<T, E> {
+                    inner: #{Receiver}<#{SignedEvent}<T>, #{SignedEventError}<E>>,
+                    initial_signature: #{Option}<#{SignatureInfo}>,
+                }
+
+                impl<T, E> SigV4Receiver<T, E> {
+                    pub fn new(
+                        unmarshaller: impl #{UnmarshallMessage}<Output = T, Error = E> + #{Send} + #{Sync} + 'static,
+                        body: #{SdkBody},
+                    ) -> Self {
+                        let sigv4_unmarshaller = #{SigV4Unmarshaller}::new(unmarshaller);
+                        Self {
+                            inner: #{Receiver}::new(sigv4_unmarshaller, body),
+                            initial_signature: #{None},
+                        }
+                    }
+
+                    /// Get the signature from the initial message, if it was signed
+                    pub fn initial_signature(&self) -> #{Option}<&#{SignatureInfo}> {
+                        self.initial_signature.as_ref()
+                    }
+
+                    /// Try to receive an initial message of the given type.
+                    /// Handles SigV4-wrapped messages by extracting the inner message first.
+                    pub async fn try_recv_initial(
+                        &mut self,
+                        message_type: #{event_stream}::InitialMessageType,
+                    ) -> #{Result}<#{Option}<#{Message}>, #{SdkError}<#{SignedEventError}<E>, #{RawMessage}>>
+                    where
+                        E: std::error::Error + 'static,
+                    {
+                        let result = self
+                            .inner
+                            .try_recv_initial_with_preprocessor(message_type, |message| {
+                                match #{extract_signed_message}(&message) {
+                                    #{Ok}(MaybeSignedMessage::Signed { message: inner, signature }) => {
+                                        #{Ok}((inner, #{Some}(signature)))
+                                    }
+                                    #{Ok}(MaybeSignedMessage::Unsigned) => #{Ok}((message, #{None})),
+                                    #{Err}(err) => #{Err}(#{ResponseError}::builder().raw(#{RawMessage}::Decoded(message)).source(err).build()),
+                                }
+                            })
+                            .await?;
+                        match result {
+                            #{Some}((message, signature)) => {
+                                self.initial_signature = signature;
+                                #{Ok}(#{Some}(message))
+                            }
+                            #{None} => #{Ok}(#{None}),
+                        }
+                    }
+
+                    /// Receive the next event from the stream
+                    /// The SigV4Unmarshaller handles unwrapping, so we just pass through
+                    pub async fn recv(&mut self) -> #{Result}<#{Option}<#{SignedEvent}<T>>, #{SdkError}<#{SignedEventError}<E>, #{RawMessage}>>
+                    where
+                        E: std::error::Error + 'static,
+                    {
+                        self.inner.recv().await
+                    }
+                }
+                """,
+                "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+                "SigV4Unmarshaller" to sigV4Unmarshaller(runtimeConfig),
+                "event_stream" to RuntimeType.smithyHttp(runtimeConfig).resolve("event_stream"),
+                "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+                "Message" to CargoDependency.smithyTypes(runtimeConfig).toType().resolve("event_stream::Message"),
+                "RawMessage" to CargoDependency.smithyTypes(runtimeConfig).toType().resolve("event_stream::RawMessage"),
+                "SdkError" to RuntimeType.sdkError(runtimeConfig),
+                "ResponseError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        .resolve("client::result::ResponseError"),
+                "UnmarshallMessage" to
+                    CargoDependency.smithyEventStream(runtimeConfig).toType()
+                        .resolve("frame::UnmarshallMessage"),
+                "SignedEvent" to signedEvent(runtimeConfig),
+                "SignedEventError" to signedEventError(runtimeConfig),
+                "SignatureInfo" to signatureInfo(),
                 "extract_signed_message" to extractSignedMessage(runtimeConfig),
                 *RuntimeType.preludeScope,
             )

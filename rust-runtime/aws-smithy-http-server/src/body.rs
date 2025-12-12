@@ -323,7 +323,7 @@ mod tests {
         // Test with &[u8]
         let chunks = vec![
             Ok::<_, std::io::Error>(&[98u8, 121, 116, 101] as &[u8]), // "byte"
-            Ok(&[115u8, 33] as &[u8]),                                 // "s!"
+            Ok(&[115u8, 33] as &[u8]),                                // "s!"
         ];
         let stream = stream::iter(chunks);
         let body = wrap_stream(stream);
@@ -342,12 +342,8 @@ mod tests {
         }
 
         let chunks = vec![
-            Ok::<_, std::io::Error>(CustomChunk {
-                data: "custom ".into(),
-            }),
-            Ok(CustomChunk {
-                data: "struct".into(),
-            }),
+            Ok::<_, std::io::Error>(CustomChunk { data: "custom ".into() }),
+            Ok(CustomChunk { data: "struct".into() }),
         ];
         let stream = stream::iter(chunks);
         let body = wrap_stream(stream);
@@ -384,10 +380,7 @@ mod tests {
             }
         }
 
-        let stream = CustomStream::new(vec![
-            Ok(Bytes::from("custom ")),
-            Ok(Bytes::from("stream")),
-        ]);
+        let stream = CustomStream::new(vec![Ok(Bytes::from("custom ")), Ok(Bytes::from("stream"))]);
 
         let body = wrap_stream(stream);
         let collected = collect_bytes(body).await.unwrap();

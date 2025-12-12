@@ -97,7 +97,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Build the service with request timeout layer
     let base_service = ServiceBuilder::new()
-        .layer(TimeoutLayer::with_status_code(StatusCode::REQUEST_TIMEOUT, Duration::from_secs(30)))
+        .layer(TimeoutLayer::with_status_code(
+            StatusCode::REQUEST_TIMEOUT,
+            Duration::from_secs(30),
+        ))
         .service(service_fn(router));
 
     let make_service = IntoMakeService::new(base_service);

@@ -775,7 +775,10 @@ mod tests {
     #[test]
     #[cfg(feature = "http-02x")]
     fn test_validate_headers_http0x() {
-        let request = http_0x::Request::builder().header("a", "b").body(()).unwrap();
+        let request = http_0x::Request::builder()
+            .header("a", "b")
+            .body(())
+            .unwrap();
         validate_headers(request.headers(), [("a", "b")]).unwrap()
     }
 

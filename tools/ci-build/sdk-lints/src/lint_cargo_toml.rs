@@ -60,6 +60,7 @@ const SERVER_CRATES: &[&str] = &[
     "aws-smithy-http-server",
     "aws-smithy-http-server-python",
     "aws-smithy-http-server-typescript",
+    "aws-smithy-legacy-http-server",
 ];
 
 /// Check crate licensing
