@@ -102,7 +102,6 @@ impl Default for TokenBucket {
     }
 }
 
-
 impl TokenBucket {
     /// Creates a new `TokenBucket` with the given initial quota.
     pub fn new(initial_quota: usize) -> Self {
