@@ -1,4 +1,14 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 14th, 2025
+===================
+**New this release:**
+- :tada: (all, [smithy-rs#4418](https://github.com/smithy-lang/smithy-rs/issues/4418), @AmitKulkarni23) Add `expect_number_as_string_or_null` function to `aws-smithy-json` that extracts JSON numbers as strings without converting to u64/i64/f64. This preserves arbitrary precision for BigInteger and BigDecimal support, preventing precision loss for numbers larger than standard numeric types can represent.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @AmitKulkarni23 ([smithy-rs#4418](https://github.com/smithy-lang/smithy-rs/issues/4418))
+
+
 December 8th, 2025
 ==================
 **Breaking Changes:**
