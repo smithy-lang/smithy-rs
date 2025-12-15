@@ -19,7 +19,7 @@ const DEFAULT_CAPACITY: usize = 500;
 // identical across platforms.
 // This also allows room for slight bucket overfill in the case where a bucket
 // is at maximum capacity and another thread drops a permit it was holding.
-const MAXIMUM_CAPACITY: usize = 500_000_000;
+pub const MAXIMUM_CAPACITY: usize = 500_000_000;
 const DEFAULT_RETRY_COST: u32 = 5;
 const DEFAULT_RETRY_TIMEOUT_COST: u32 = DEFAULT_RETRY_COST * 2;
 const PERMIT_REGENERATION_AMOUNT: usize = 1;
