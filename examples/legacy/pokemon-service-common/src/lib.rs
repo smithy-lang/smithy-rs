@@ -18,7 +18,7 @@ use async_stream::stream;
 use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
-use pokemon_service_server_sdk::{
+use pokemon_service_server_sdk_http0x::{
     error, input, model,
     model::CapturingPayload,
     output,

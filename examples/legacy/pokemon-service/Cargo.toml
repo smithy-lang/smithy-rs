@@ -15,7 +15,7 @@ tower = "0.4"
 tracing = "0.1"
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", package = "pokemon-service-server-sdk-http0x", features = ["request-id"]}
+pokemon-service-server-sdk-http0x = { path = "../pokemon-service-server-sdk-http0x/", features = ["request-id"]}
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]

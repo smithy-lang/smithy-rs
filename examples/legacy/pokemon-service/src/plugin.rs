@@ -5,7 +5,7 @@
 
 //! Provides an example [`Plugin`] implementation - [`PrintPlugin`].
 
-use pokemon_service_server_sdk::server::{
+use pokemon_service_server_sdk_http0x::server::{
     operation::OperationShape,
     plugin::{HttpMarker, HttpPlugins, Plugin, PluginStack},
     service::ServiceShape,

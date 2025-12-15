@@ -21,7 +21,7 @@ aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api"
 pokemon-service-client = { path = "../pokemon-service-client/", package = "pokemon-service-client", features = [
     "behavior-version-latest",
 ] }
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk", package = "pokemon-service-server-sdk-http0x" }
+pokemon-service-server-sdk-http0x = { path = "../pokemon-service-server-sdk-http0x" }
 
 [dev-dependencies]
 aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["test-util"] }

@@ -9,7 +9,7 @@ mod plugin;
 use std::{net::SocketAddr, sync::Arc};
 
 use clap::Parser;
-use pokemon_service_server_sdk::server::{
+use pokemon_service_server_sdk_http0x::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
     layer::alb_health_check::AlbHealthCheckLayer,
@@ -28,7 +28,7 @@ use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing,
     stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
+use pokemon_service_server_sdk_http0x::{scope, PokemonService, PokemonServiceConfig};
 
 use crate::authz::AuthorizationPlugin;
 

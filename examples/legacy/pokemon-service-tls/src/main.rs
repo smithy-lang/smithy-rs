@@ -35,7 +35,7 @@ use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics, get_storage,
     setup_tracing, stream_pokemon_radio, State,
 };
-use pokemon_service_server_sdk::{
+use pokemon_service_server_sdk_http0x::{
     input, output,
     server::{request::connect_info::ConnectInfo, routing::Connected, AddExtensionLayer},
     PokemonService, PokemonServiceConfig,

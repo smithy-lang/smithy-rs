@@ -21,7 +21,7 @@ rustls-pemfile = "1"
 futures-util = { version = "0.3.29", default-features = false }
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", package = "pokemon-service-server-sdk-http0x" }
+pokemon-service-server-sdk-http0x = { path = "../pokemon-service-server-sdk-http0x/" }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 
 [dev-dependencies]

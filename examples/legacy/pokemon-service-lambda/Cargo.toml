@@ -19,5 +19,5 @@ tracing = "0.1"
 lambda_http = "0.8.0"
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", package = "pokemon-service-server-sdk-http0x", features = ["aws-lambda"] }
+pokemon-service-server-sdk-http0x = { path = "../pokemon-service-server-sdk-http0x/", features = ["aws-lambda"] }
 pokemon-service-common = { path = "../pokemon-service-common/" }

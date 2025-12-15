@@ -5,7 +5,7 @@
 
 use std::net::{IpAddr, SocketAddr};
 
-use pokemon_service_server_sdk::{
+use pokemon_service_server_sdk_http0x::{
     error::{GetStorageError, StorageAccessNotAuthorized},
     input::{DoNothingInput, GetStorageInput},
     output::{DoNothingOutput, GetStorageOutput},

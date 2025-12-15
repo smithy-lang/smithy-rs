@@ -1,7 +1,7 @@
 SRC_DIR := $(shell git rev-parse --show-toplevel)
 CUR_DIR := $(shell pwd)
 GRADLE := $(SRC_DIR)/gradlew
-SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk
+SERVER_SDK_DST := $(CUR_DIR)/pokemon-service-server-sdk-http0x
 CLIENT_SDK_DST := $(CUR_DIR)/pokemon-service-client
 SERVER_SDK_SRC := $(SRC_DIR)/codegen-server-test/build/smithyprojections/codegen-server-test/pokemon-service-server-sdk-http0x/rust-server-codegen
 CLIENT_SDK_SRC := $(SRC_DIR)/codegen-client-test/build/smithyprojections/codegen-client-test/pokemon-service-client/rust-client-codegen

@@ -10,7 +10,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use pokemon_service_server_sdk::{
+use pokemon_service_server_sdk_http0x::{
     server::plugin::{HttpMarker, HttpPlugins, Plugin},
     PokemonService, PokemonServiceConfig,
 };
