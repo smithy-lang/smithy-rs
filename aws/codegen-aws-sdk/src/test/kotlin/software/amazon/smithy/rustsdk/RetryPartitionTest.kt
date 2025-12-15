@@ -114,7 +114,7 @@ class RetryPartitionTest {
                     "RetryPartition" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::RetryPartition"),
                     "RuntimeComponents" to RuntimeType.runtimeComponents(ctx.runtimeConfig),
                     "TokenBucket" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::TokenBucket"),
-                    "MAXIMUM_CAPACITY" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::token_bucket::MAXIMUM_CAPACITY"),
+                    "MAXIMUM_CAPACITY" to RuntimeType.smithyRuntime(ctx.runtimeConfig).resolve("client::retries::MAXIMUM_CAPACITY"),
                 )
             crate.integrationTest("custom_retry_partition") {
                 tokioTest("test_custom_token_bucket") {
