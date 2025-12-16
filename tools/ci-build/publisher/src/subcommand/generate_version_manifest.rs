@@ -151,9 +151,7 @@ fn generate_release_metadata(
 fn parse_version(name: &str, value: &str) -> Result<Version> {
     match Version::parse(value) {
         Ok(version) => Ok(version),
-        Err(err) => bail!(
-            "Failed to parse version number `{value}` from `{name}`: {err}"
-        ),
+        Err(err) => bail!("Failed to parse version number `{value}` from `{name}`: {err}"),
     }
 }
 
