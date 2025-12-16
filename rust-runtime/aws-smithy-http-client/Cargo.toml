@@ -78,7 +78,7 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["clie
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = true }
 h2 = { version = "0.4.11", default-features = false }
-tokio = { version = "1.40", features = [] }
+tokio = { version = "1.46", features = [] }
 pin-project-lite = "0.2.14"
 tracing = "0.1.40"
 
