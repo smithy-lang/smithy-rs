@@ -125,9 +125,10 @@ pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
     )
 }
 
-/// Runtime plugin that sets the default retry strategy, config (disabled), and partition.
+/// Runtime plugin that sets the default retry strategy, config, and partition.
 pub fn default_retry_config_plugin(
     default_partition_name: impl Into<Cow<'static, str>>,
+    behavior_version: BehaviorVersion,
 ) -> Option<SharedRuntimePlugin> {
     let retry_partition = RetryPartition::new(default_partition_name);
     Some(
@@ -140,7 +141,13 @@ pub fn default_retry_config_plugin(
                 .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
-            layer.store_put(RetryConfig::disabled());
+            #[allow(deprecated)]
+            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                RetryConfig::standard()
+            } else {
+                RetryConfig::disabled()
+            };
+            layer.store_put(retry_config);
             layer.store_put(retry_partition);
         }))
         .into_shared(),
@@ -166,8 +173,10 @@ fn validate_retry_config(
     }
 }
 
-/// Runtime plugin that sets the default timeout config (no timeouts).
-pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
+/// Runtime plugin that sets the default timeout config.
+pub fn default_timeout_config_plugin(
+    behavior_version: BehaviorVersion,
+) -> Option<SharedRuntimePlugin> {
     Some(
         default_plugin("default_timeout_config_plugin", |components| {
             components.with_config_validator(SharedConfigValidator::base_client_config_fn(
@@ -175,7 +184,15 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            layer.store_put(TimeoutConfig::disabled());
+            #[allow(deprecated)]
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_millis(3100))
+                    .build()
+            } else {
+                TimeoutConfig::disabled()
+            };
+            layer.store_put(timeout_config);
         }))
         .into_shared(),
     )
@@ -324,10 +341,11 @@ pub fn default_plugins(
             params
                 .retry_partition_name
                 .expect("retry_partition_name is required"),
+            behavior_version,
         ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
-        default_timeout_config_plugin(),
+        default_timeout_config_plugin(behavior_version),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
