@@ -152,7 +152,8 @@ class FluentBuilderGenerator(
                 ///
                 /// By default, any retryable failures will be retried twice. Retry behavior
                 /// is configurable with the [RetryConfig](aws_smithy_types::retry::RetryConfig), which can be
-                /// set when configuring the client.
+                /// set when configuring the client. Note: retries are enabled by default when using
+                /// `aws_config::load_from_env()` or when using `BehaviorVersion::v2025_01_17()` or later.
                 pub async fn send(self) -> #{Result}<#{OperationOutput}, #{SdkError}<#{OperationError}, #{HttpResponse}>> {
                     let input = self.inner.build().map_err(#{SdkError}::construction_failure)?;
                     let runtime_plugins = #{Operation}::operation_runtime_plugins(
