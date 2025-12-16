@@ -17,7 +17,7 @@ hickory-dns = ["dep:hickory-resolver", "dep:tokio", "tokio/rt"]
 
 [dependencies]
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"]}
-tokio = { version = "1.46.0", features = [], optional = true}
+tokio = { version = "1.40.0", features = [], optional = true}
 
 
 # hickory-resolver enables some tokio features that break in wasm
