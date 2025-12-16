@@ -185,6 +185,28 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
     )
 }
 
+/// Runtime plugin that sets the default timeout config (no timeouts).
+pub fn default_timeout_config_plugin_v2() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_timeout_config_plugin", |components| {
+            components.with_config_validator(SharedConfigValidator::base_client_config_fn(
+                validate_timeout_config,
+            ))
+        })
+        .with_config(layer("default_timeout_config", |layer| {
+            let timeout_config = if default_sleep_impl_plugin().is_some() {
+                TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_millis(3100))
+                    .build()
+            } else {
+                TimeoutConfig::disabled()
+            };
+            layer.store_put(timeout_config);
+        }))
+        .into_shared(),
+    )
+}
+
 fn validate_timeout_config(
     components: &RuntimeComponentsBuilder,
     cfg: &ConfigBag,
@@ -331,7 +353,7 @@ pub fn default_plugins(
         ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
-        default_timeout_config_plugin(),
+        default_timeout_config_plugin_v2(),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
