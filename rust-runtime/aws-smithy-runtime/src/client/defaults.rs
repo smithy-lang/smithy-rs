@@ -175,7 +175,11 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            layer.store_put(TimeoutConfig::disabled());
+            layer.store_put(
+                TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_millis(3100))
+                    .build(),
+            );
         }))
         .into_shared(),
     )
