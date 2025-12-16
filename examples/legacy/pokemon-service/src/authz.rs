@@ -109,7 +109,9 @@ where
             AuthorizeServiceError::InnerServiceError(e) => e.into_response(),
             AuthorizeServiceError::AuthorizeError { message } => http::Response::builder()
                 .status(http::StatusCode::UNAUTHORIZED)
-                .body(pokemon_service_server_sdk_http0x::server::body::to_boxed(message))
+                .body(pokemon_service_server_sdk_http0x::server::body::to_boxed(
+                    message,
+                ))
                 .expect("attempted to build an invalid HTTP response; please file a bug report"),
         }
     }
