@@ -175,11 +175,7 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            layer.store_put(
-                TimeoutConfig::builder()
-                    .connect_timeout(Duration::from_millis(3100))
-                    .build(),
-            );
+            layer.store_put(TimeoutConfig::disabled());
         }))
         .into_shared(),
     )
@@ -197,6 +193,8 @@ pub fn default_timeout_config_plugin_v2() -> Option<SharedRuntimePlugin> {
             let timeout_config = if default_sleep_impl_plugin().is_some() {
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
+                    .disable_operation_attempt_timeout()
+                    .disable_operation_timeout()
                     .build()
             } else {
                 TimeoutConfig::disabled()
