@@ -108,13 +108,12 @@ impl FromStr for Reference {
     fn from_str(reference: &str) -> std::result::Result<Self, Self::Err> {
         match reference.split_once('#') {
             None => bail!(
-                "Reference must of the form `repo#number` but found {}",
-                reference
+                "Reference must of the form `repo#number` but found {reference}"
             ),
             Some((repo, number)) => {
                 let number = number.parse::<usize>()?;
                 if !matches!(repo, "smithy-rs" | "aws-sdk-rust" | "aws-sdk") {
-                    bail!("unexpected repo: {}", repo);
+                    bail!("unexpected repo: {repo}");
                 }
                 Ok(Reference {
                     number,
@@ -489,7 +488,7 @@ Fix typos in module documentation for generated crates
         let res = changelog.validate(ValidationSet::Development);
         assert_eq!(
             2,
-            res.err().expect("changelog validation should fail").len()
+            res.expect_err("changelog validation should fail").len()
         );
     }
 
