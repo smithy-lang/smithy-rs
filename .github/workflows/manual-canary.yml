@@ -63,6 +63,7 @@ jobs:
             # the `docker-build` action won't find the built Docker image.
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image
