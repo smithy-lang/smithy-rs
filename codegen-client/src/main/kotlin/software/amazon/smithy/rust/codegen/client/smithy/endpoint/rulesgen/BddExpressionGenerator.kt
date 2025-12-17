@@ -5,9 +5,11 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.AnyType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
@@ -15,7 +17,9 @@ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.LibraryFunction
 import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.StringLiteral
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.AnnotatedRefs
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
@@ -37,6 +41,7 @@ class BddExpressionGenerator(
     private val ownership: Ownership,
     private val context: Context,
     private val refs: AnnotatedRefs,
+    private val codegenContext: ClientCodegenContext,
     private val knownSomeRefs: MutableSet<AnnotatedRefs.AnnotatedRef> = mutableSetOf(),
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
@@ -75,7 +80,14 @@ class BddExpressionGenerator(
 
         override fun visitGetAttr(getAttr: GetAttr): Writable {
             val target =
-                BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs).generateExpression(
+                BddExpressionGenerator(
+                    condition,
+                    ownership,
+                    context,
+                    refs,
+                    codegenContext,
+                    knownSomeRefs,
+                ).generateExpression(
                     getAttr.target,
                 )
             val targetIsOptionalRef =
@@ -132,7 +144,7 @@ class BddExpressionGenerator(
         override fun visitIsSet(fn: Expression) =
             writable {
                 val expressionGenerator =
-                    BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+                    BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
                 if (fn is Reference) {
                     // All references are in refs so safe to assert non-null
                     knownSomeRefs.add(refs.get(fn.name.rustName())!!)
@@ -149,6 +161,7 @@ class BddExpressionGenerator(
                         ownership,
                         context,
                         refs,
+                        codegenContext,
                         knownSomeRefs,
                     ).generateExpression(not),
                 )
@@ -158,7 +171,8 @@ class BddExpressionGenerator(
             left: Expression,
             right: Expression,
         ) = writable {
-            val expressionGenerator = BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+            val expressionGenerator =
+                BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
             val lhsIsRef = left is Reference
             val rhsIsRef = right is Reference
             val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
@@ -199,7 +213,7 @@ class BddExpressionGenerator(
             right: Expression,
         ) = writable {
             val expressionGenerator =
-                BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+                BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
             val lhsIsOptionalRef = (left is Reference && optionalRefNames.contains(left.name.rustName()))
             val rhsIsOptionalRef = (right is Reference && optionalRefNames.contains(right.name.rustName()))
 
@@ -249,11 +263,29 @@ class BddExpressionGenerator(
                                 "on the classpath)",
                         )
                 val expressionGenerator =
-                    BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+                    BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
+
+                if (fn.id == "coalesce") {
+                    val variadic = fn.variadicArguments.get()
+                    println("FunctionDefinition.id: ${fn.id}")
+                    println("FunctionDefinition.returnType: ${fn.returnType}")
+                    println("FunctionDefinition.arguments: ${fn.arguments}")
+                    println(
+                        "FunctionDefinition.variadicArguments: ${fn.variadicArguments.get() as Array<AnyType>}",
+                    )
+                    println("COALESCE args in visitLibraryFunction: $args")
+                }
 
                 val argWritables =
                     args.map { arg ->
-                        if ((arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
+                        if (
+                            (arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
+                            (
+                                arg is StringLiteral &&
+                                    optionalRefNames.contains(
+                                        Identifier.of(arg.value().toString()).rustName(),
+                                    )
+                            ) ||
                             (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
                         ) {
                             val param =
@@ -300,7 +332,7 @@ class BddExpressionGenerator(
         override fun visitGetAttr(getAttr: GetAttr): Writable =
             writable {
                 val innerExpressionGenerator =
-                    BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+                    BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
                 val pathContainsIdx = getAttr.path.toList().filter { it is GetAttr.Part.Index }.isNotEmpty()
 
                 // Condition performs an assignment to a field on ConditionContext
@@ -346,7 +378,7 @@ class BddExpressionGenerator(
         ): Writable =
             writable {
                 val innerExpressionGenerator =
-                    BddExpressionGenerator(condition, ownership, context, refs, knownSomeRefs)
+                    BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
                 val fnReturnTypeOptional = condition.function.functionDefinition.returnType is OptionalType
                 val fnReturnTypeIsBoolean = condition.function.functionDefinition.returnType is BooleanType
 

@@ -279,6 +279,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun typedVec(inner: RuntimeType) = std.resolve("vec::Vec<${inner.render()}>")
 
+        fun typedOption(inner: RuntimeType) = std.resolve("option::Option<${inner.render()}>")
+
         // primitive types
         val Bool = std.resolve("primitive::bool")
 

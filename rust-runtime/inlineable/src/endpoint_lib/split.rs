@@ -3,6 +3,8 @@
  *  SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::endpoint_lib::diagnostic::DiagnosticCollector;
+
 /// Splits a string into an array of substrings based on a delimiter.
 /// Specification for this function can be found in the [Smithy spec](https://smithy.io/2.0/additional-specs/rules-engine/standard-library.html#split-function).
 ///
@@ -10,20 +12,21 @@
 /// * `value` - The input string to split
 /// * `delimiter` - The separator (must be non-empty)
 /// * `limit` - Controls split behavior:
-///   - `0`: Split all occurrences (unlimited)
+///   - `0`: Split all occurrences
 ///   - `1`: No split (returns original string as single element)
-///   - `>1`: Split into at most 'limit' parts (performs limit-1 splits)
+///   - `>1`: Split into at most 'limit' parts
 ///
 /// ### Returns
 /// `Vec<&str>` containing the split parts
 //TODO(BDD): Might be better to return Vec<String>, will play with it when I get some codegen tests that actually use this function
-pub(crate) fn split<'a>(value: &'a str, delimiter: &str, limit: usize) -> Vec<&'a str> {
+pub(crate) fn split<'a>(
+    value: &'a str,
+    delimiter: &str,
+    limit: usize,
+    _dc: &mut DiagnosticCollector,
+) -> Vec<&'a str> {
     if limit == 0 {
         return value.split(delimiter).collect();
-    }
-
-    if limit == 1 {
-        return vec![value];
     }
 
     value.splitn(limit, delimiter).collect()
@@ -37,46 +40,83 @@ mod tests {
 
     #[test]
     fn test_split_unlimited() {
-        assert_eq!(split("a--b--c", "--", 0), vec!["a", "b", "c"]);
         assert_eq!(
-            split("--x-s3--azid--suffix", "--", 0),
+            split("a--b--c", "--", 0, &mut DiagnosticCollector::new()),
+            vec!["a", "b", "c"]
+        );
+        assert_eq!(
+            split(
+                "--x-s3--azid--suffix",
+                "--",
+                0,
+                &mut DiagnosticCollector::new()
+            ),
             vec!["", "x-s3", "azid", "suffix"]
         );
     }
 
     #[test]
     fn test_split_with_limit() {
-        assert_eq!(split("a--b--c", "--", 2), vec!["a", "b--c"]);
         assert_eq!(
-            split("--x-s3--azid--suffix", "--", 2),
+            split("a--b--c", "--", 2, &mut DiagnosticCollector::new()),
+            vec!["a", "b--c"]
+        );
+        assert_eq!(
+            split(
+                "--x-s3--azid--suffix",
+                "--",
+                2,
+                &mut DiagnosticCollector::new()
+            ),
             vec!["", "x-s3--azid--suffix"]
         );
     }
 
     #[test]
     fn test_split_no_split() {
-        assert_eq!(split("a--b--c", "--", 1), vec!["a--b--c"]);
-        assert_eq!(split("mybucket", "--", 1), vec!["mybucket"]);
+        assert_eq!(
+            split("a--b--c", "--", 1, &mut DiagnosticCollector::new()),
+            vec!["a--b--c"]
+        );
+        assert_eq!(
+            split("mybucket", "--", 1, &mut DiagnosticCollector::new()),
+            vec!["mybucket"]
+        );
     }
 
     #[test]
     fn test_split_empty_string() {
-        assert_eq!(split("", "--", 0), vec![""]);
+        assert_eq!(
+            split("", "--", 0, &mut DiagnosticCollector::new()),
+            vec![""]
+        );
     }
 
     #[test]
     fn test_split_delimiter_only() {
-        assert_eq!(split("--", "--", 0), vec!["", ""]);
-        assert_eq!(split("----", "--", 0), vec!["", "", ""]);
+        assert_eq!(
+            split("--", "--", 0, &mut DiagnosticCollector::new()),
+            vec!["", ""]
+        );
+        assert_eq!(
+            split("----", "--", 0, &mut DiagnosticCollector::new()),
+            vec!["", "", ""]
+        );
     }
 
     #[test]
     fn test_split_with_empty_parts() {
-        assert_eq!(split("--b--", "--", 0), vec!["", "b", ""]);
+        assert_eq!(
+            split("--b--", "--", 0, &mut DiagnosticCollector::new()),
+            vec!["", "b", ""]
+        );
     }
 
     #[test]
     fn test_split_no_delimiter_found() {
-        assert_eq!(split("abc", "x", 0), vec!["abc"]);
+        assert_eq!(
+            split("abc", "x", 0, &mut DiagnosticCollector::new()),
+            vec!["abc"]
+        );
     }
 }

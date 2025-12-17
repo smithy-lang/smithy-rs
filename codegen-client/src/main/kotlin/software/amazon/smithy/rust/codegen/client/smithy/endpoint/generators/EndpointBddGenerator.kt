@@ -13,6 +13,7 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
@@ -68,7 +69,7 @@ class EndpointBddGenerator(
         // This is the same trick used by EndpointResolverGenerator.
         bddTrait.conditions.forEach { cond ->
             val bddExpressionGenerator =
-                BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs)
+                BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, codegenContext)
             bddExpressionGenerator.generateCondition(cond)(
                 RustWriter.root(),
             )
@@ -84,7 +85,7 @@ class EndpointBddGenerator(
         val conditionScope =
             bddTrait.conditions.withIndex().associate { (idx, cond) ->
                 val bddExpressionGenerator =
-                    BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs)
+                    BddExpressionGenerator(cond, Ownership.Borrowed, context, allRefs, codegenContext)
                 "cond_$idx" to bddExpressionGenerator.generateCondition(cond)
             }
 
@@ -414,6 +415,7 @@ class EndpointBddGenerator(
             var memberDefs =
                 varRefs.map {
                     val fn = it.value.condition?.function!!
+
                     val fnDef = fn.functionDefinition
                     val registeredFn = registry.fnFor(fnDef.id)
                     val type =
@@ -422,6 +424,10 @@ class EndpointBddGenerator(
                         } else {
                             it.value.type
                         }
+
+                    if (fn is Coalesce) {
+                        println("LNJ COALESCE: ${it.value} - ${it.value.type}")
+                    }
                     val rustType =
                         when {
                             // Simple types, doesn't matter what fn they come from
@@ -430,6 +436,23 @@ class EndpointBddGenerator(
                             type is ArrayType -> RuntimeType.typedVec(RuntimeType.String)
                             // GetAttr is inlined, not a registered fn
                             fn is GetAttr -> RuntimeType.document(runtimeConfig)
+                            fn is Coalesce -> {
+                                println("LNJ COALESCE ARGS IN CONTEXT: ${fnDef.arguments}")
+                                val input = fnDef.arguments.first()
+                                val inputType =
+                                    if (input is OptionalType) {
+                                        input.inner()
+                                    } else {
+                                        input
+                                    }
+                                when {
+                                    inputType is StringType -> RuntimeType.String
+                                    inputType is BooleanType -> RuntimeType.Bool
+                                    else -> {
+                                        throw UnsupportedOperationException("Invalid input type for Coalesce")
+                                    }
+                                }
+                            }
                             // These types aren't easy to infer from the type of the reference.
                             // It is basically just an unnamed struct so we would have to match
                             // on the fields. Easier to key off of the function that sets it.
@@ -529,6 +552,8 @@ class AnnotatedRefs(
     fun variableRefs(): Map<String, AnnotatedRef> = refs.filter { entry -> entry.value.refType == RefType.Variable }
 
     fun paramRefs(): Map<String, AnnotatedRef> = refs.filter { entry -> entry.value.refType == RefType.Parameter }
+
+    fun allRefs(): Map<String, AnnotatedRef> = refs
 
     companion object {
         fun from(bddTrait: EndpointBddTrait): AnnotatedRefs {

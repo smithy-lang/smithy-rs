@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.EndpointTestDiscovery
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 
@@ -31,7 +32,12 @@ class EndpointResolverGeneratorTest {
 
         @JvmStatic
         fun testSuites(): List<Model> {
-            return EndpointTestDiscovery().testCases()
+            return EndpointTestDiscovery().testCases("ruleset-")
+        }
+
+        @JvmStatic
+        fun testSuitesBdd(): List<Model> {
+            return EndpointTestDiscovery().testCases("bdd-")
         }
     }
 
@@ -55,7 +61,29 @@ class EndpointResolverGeneratorTest {
         // if (!suite.toString().contains("hostable")) {
         // return
         // }
+
         clientIntegrationTest(suite)
+    }
+
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("testSuitesBdd")
+    fun `generate all BDD tests`(suite: Model) {
+        // snippet to only run one ruleset during tests
+        // if (!suite.toString().contains("hostable")) {
+        // return
+        // }
+
+        val namespace =
+            suite.getShapeIds().stream()
+                .map { obj: ShapeId -> obj.namespace.toString() }
+                .filter { it.contains("endpointrules") }
+                .toList()
+                .distinct()
+
+        if (namespace[0].contains("split")) {
+            println("NAMESPACE: $namespace")
+            clientIntegrationTest(suite)
+        }
     }
 
     /*
