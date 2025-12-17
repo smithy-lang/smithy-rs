@@ -23,7 +23,6 @@ pub enum SmithySdkFeature {
     FlexibleChecksumsReqWhenRequired,
     FlexibleChecksumsResWhenSupported,
     FlexibleChecksumsResWhenRequired,
-    /// Indicates that a Smithy SDK client has been configured with an OpenTelemetry metrics provider
     ObservabilityOtelMetrics,
 }
 

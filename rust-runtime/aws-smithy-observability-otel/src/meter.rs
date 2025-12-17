@@ -287,12 +287,8 @@ impl ProvideMeter for OtelMeterProvider {
         Meter::new(Arc::new(MeterWrap(self.meter_provider.meter(scope))))
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn provider_name(&self) -> &'static str {
-        "otel"
+        "AwsSmithyObservabilityOtelProvider"
     }
 }
 

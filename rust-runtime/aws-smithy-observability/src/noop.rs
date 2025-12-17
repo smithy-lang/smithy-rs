@@ -25,10 +25,6 @@ impl ProvideMeter for NoopMeterProvider {
         Meter::new(Arc::new(NoopMeter))
     }
 
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
     fn provider_name(&self) -> &'static str {
         "noop"
     }

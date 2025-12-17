@@ -4,6 +4,9 @@
  */
 
 use aws_config::Region;
+use aws_runtime::user_agent::test_util::{
+    assert_ua_contains_metric_values, assert_ua_does_not_contain_metric_values,
+};
 use aws_sdk_s3::config::{Credentials, SharedCredentialsProvider};
 use aws_smithy_observability::TelemetryProvider;
 use aws_smithy_runtime::client::http::test_util::{ReplayEvent, StaticReplayClient};
@@ -51,12 +54,7 @@ async fn observability_otel_metrics_feature_tracked_in_user_agent() {
         .expect("should have user-agent header");
 
     // Should contain OBSERVABILITY_OTEL_METRICS metric (value "7")
-    // The metric appears in the m/ section, e.g. "m/E,b,7"
-    assert!(
-        user_agent.contains(",7") || user_agent.ends_with("/7") || user_agent.contains("7,"),
-        "User-Agent should contain observability OTel metrics feature (7), got: {}",
-        user_agent
-    );
+    assert_ua_contains_metric_values(user_agent, &["7"]);
 
     meter_provider.flush().unwrap();
 
@@ -100,10 +98,5 @@ async fn noop_provider_does_not_track_observability_metrics() {
         .expect("should have user-agent header");
 
     // Should NOT contain OBSERVABILITY_OTEL_METRICS metric when using noop provider
-    // The metric value is "7"
-    assert!(
-        !user_agent.contains(",7") && !user_agent.ends_with("/7") && !user_agent.contains("7,"),
-        "User-Agent should not contain observability OTel metrics feature (7) with noop provider, got: {}",
-        user_agent
-    );
+    assert_ua_does_not_contain_metric_values(user_agent, &["7"]);
 }
