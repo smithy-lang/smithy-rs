@@ -120,7 +120,8 @@ RUN cargo install --locked --path tools/ci-build/changelogger && \
     cargo install --locked --path tools/ci-build/sdk-versioner && \
     chmod g+rw -R /opt/cargo/registry && \
     rm -rf /opt/cargo/registry/src && \
-    rm -rf /opt/cargo/git/db
+    rm -rf /opt/cargo/git/db && \
+    rm -rf /root/.cargo/registry/cache
 
 FROM install_rust AS cargo_tools
 ARG cargo_deny_version=0.16.4
@@ -149,7 +150,8 @@ RUN cargo install cargo-deny --locked --version ${cargo_deny_version} && \
     cargo install mdbook --locked --version ${cargo_mdbook_version} && \
     cargo install mdbook-mermaid --locked --version ${cargo_mdbook_mermaid_version} && \
     rm -rf /opt/cargo/registry/src && \
-    rm -rf /opt/cargo/git/db
+    rm -rf /opt/cargo/git/db && \
+    rm -rf /root/.cargo/registry/cache
 
 # nodejs needed by internal release process
 FROM install_rust AS nodejs
@@ -196,6 +198,7 @@ RUN set -eux; \
         bc \
         ca-certificates \
         clang \
+        cmake \
         gcc \
         git \
         glibc-langpack-en \
@@ -209,7 +212,6 @@ RUN set -eux; \
         python3-devel \
         python3-pip \
         shadow-utils \
-        cmake \
         tar \
         unzip && \
     yum clean all && \
@@ -224,23 +226,12 @@ RUN set -eux; \
     rm -rf awscliv2.zip aws && \
     pip3 install --no-cache-dir mypy==0.991
 
+COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
 COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-deny /opt/cargo/bin/cargo-deny
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-udeps /opt/cargo/bin/cargo-udeps
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-hack /opt/cargo/bin/cargo-hack
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-minimal-versions /opt/cargo/bin/cargo-minimal-versions
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-check-external-types /opt/cargo/bin/cargo-check-external-types
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/maturin /opt/cargo/bin/maturin
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/wasm-pack /opt/cargo/bin/wasm-pack
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/wasmtime /opt/cargo/bin/wasmtime
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-component /opt/cargo/bin/cargo-component
+COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/ /opt/cargo/bin/
 COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/cargo-semver-checks /opt/cargo/bin/cargo-semver-checks
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/mdbook /opt/cargo/bin/mdbook
-COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/mdbook-mermaid /opt/cargo/bin/mdbook-mermaid
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
-COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
     NODE_HOME=/opt/nodejs \
     CARGO_HOME=/opt/cargo \

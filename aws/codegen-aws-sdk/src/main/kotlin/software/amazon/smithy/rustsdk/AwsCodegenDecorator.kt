@@ -46,6 +46,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             CredentialsProviderDecorator(),
             RegionDecorator(),
             RequireEndpointRules(),
+            EndpointOverrideMetricDecorator(),
             UserAgentDecorator(),
             SigV4AuthDecorator(),
             HttpRequestChecksumDecorator(),

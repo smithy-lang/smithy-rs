@@ -100,9 +100,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             builder
         })
         .with_graceful_shutdown(async {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("failed to listen for Ctrl+C");
+            tokio::signal::ctrl_c().await.expect("failed to listen for Ctrl+C");
             info!("Received Ctrl+C, shutting down gracefully...");
         })
         .await?;

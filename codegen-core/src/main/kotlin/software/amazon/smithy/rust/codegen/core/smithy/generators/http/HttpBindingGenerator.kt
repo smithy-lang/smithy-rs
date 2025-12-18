@@ -296,7 +296,8 @@ class HttpBindingGenerator(
         rustTemplate(
             """
             let body = std::mem::replace(body, #{SdkBody}::taken());
-            Ok(#{receiver:W})
+            let receiver = #{receiver:W};
+            Ok(receiver)
             """,
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "receiver" to

@@ -307,7 +307,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         // Http1x types
         val Http1x = CargoDependency.Http1x.toType()
         val HttpBody1x = CargoDependency.HttpBody1x.toType()
+        val HttpRequest1x = Http1x.resolve("Request")
         val HttpRequestBuilder1x = Http1x.resolve("request::Builder")
+        val HttpResponse1x = Http1x.resolve("Response")
 
         /**
          * Returns the appropriate http crate based on HTTP version.
