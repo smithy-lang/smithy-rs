@@ -359,10 +359,10 @@ data class CargoDependency(
             )
 
         // Hyper 0.x types
-        val Http: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
-        val HttpBody: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
-        val Hyper: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
-        val HyperWithStream: CargoDependency = Hyper.withFeature("stream")
+        val Http0x: CargoDependency = CargoDependency("http", CratesIo("0.2.9"))
+        val HttpBody0x: CargoDependency = CargoDependency("http-body", CratesIo("0.4.4"))
+        val Hyper0x: CargoDependency = CargoDependency("hyper", CratesIo("0.14.26"))
+        val HyperWithStream0x: CargoDependency = Hyper0x.withFeature("stream")
 
         // Hyper 1.x types
         val Http1x: CargoDependency = CargoDependency("http-1x", CratesIo("1"), `package` = "http")

@@ -125,7 +125,7 @@ class ClientProtocolTestGenerator(
         arrayOf(
             "AssertEq" to RT.PrettyAssertions.resolve("assert_eq!"),
             "Bytes" to RT.Bytes,
-            "Uri" to RT.Http.resolve("Uri"),
+            "Uri" to RT.Http0x.resolve("Uri"),
         )
 
     override fun RustWriter.renderAllTestCases(allTests: List<TestCase>) {
@@ -267,7 +267,7 @@ class ClientProtocolTestGenerator(
         rustTemplate(
             "let mut http_response = #{Response}::try_from(#{HttpResponseBuilder}::new()",
             "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
-            "HttpResponseBuilder" to RT.HttpResponseBuilder,
+            "HttpResponseBuilder" to RT.HttpResponseBuilder0x,
         )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")

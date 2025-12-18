@@ -304,8 +304,8 @@ class ServerProtocolTestGenerator(
             "AssertEq" to RuntimeType.PrettyAssertions.resolve("assert_eq!"),
             "Base64SimdDev" to ServerCargoDependency.Base64SimdDev.toType(),
             "Bytes" to RuntimeType.Bytes,
-            "Http" to RuntimeType.httpAuto(codegenContext.runtimeConfig),
-            "Hyper" to RuntimeType.hyperAuto(codegenContext.runtimeConfig),
+            "Http" to RuntimeType.http(codegenContext.runtimeConfig),
+            "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
             "MediaType" to protocolTestRuntimeType.resolve("MediaType"),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to RuntimeType.Tower,
@@ -774,7 +774,7 @@ class ServerProtocolTestGenerator(
 
             HttpVersion.Http0x ->
                 // HTTP 0.x: use hyper::body::Body (concrete type)
-                RuntimeType.Hyper.resolve("body::Body")
+                RuntimeType.Hyper0x.resolve("body::Body")
         }
 
     /**
@@ -801,7 +801,7 @@ class ServerProtocolTestGenerator(
                         """
                         let body = #{Hyper}::body::to_bytes(http_response.into_body()).await.expect("unable to extract body to bytes");
                         """,
-                        "Hyper" to RuntimeType.Hyper,
+                        "Hyper" to RuntimeType.Hyper0x,
                     )
             }
         }

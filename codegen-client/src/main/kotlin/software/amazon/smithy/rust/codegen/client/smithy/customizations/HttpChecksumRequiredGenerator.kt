@@ -46,7 +46,7 @@ class HttpChecksumRequiredGenerator(
                                     "/inlineable/src/client_http_checksum_required.rs",
                                     CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
                                     CargoDependency.smithyTypes(codegenContext.runtimeConfig),
-                                    CargoDependency.Http,
+                                    CargoDependency.Http0x,
                                     CargoDependency.Md5,
                                 ).toType().resolve("HttpChecksumRequiredRuntimePlugin"),
                         )

@@ -41,8 +41,8 @@ internal fun RuntimeConfig.awsInlineableHttpRequestChecksum() =
         InlineAwsDependency.forRustFile(
             "http_request_checksum", visibility = Visibility.PUBCRATE,
             CargoDependency.Bytes,
-            CargoDependency.Http,
-            CargoDependency.HttpBody,
+            CargoDependency.Http0x,
+            CargoDependency.HttpBody0x,
             CargoDependency.Http1x,
             CargoDependency.HttpBody1x,
             CargoDependency.HttpBodyUtil01x.toDevDependency(),
