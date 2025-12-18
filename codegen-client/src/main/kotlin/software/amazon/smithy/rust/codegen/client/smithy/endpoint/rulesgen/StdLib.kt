@@ -29,7 +29,7 @@ internal val SmithyEndpointsStdLib: List<CustomRuntimeFunction> =
         SimpleRuntimeFunction("split", EndpointsLib.split, RuntimeType.typedVec(RuntimeType.lifetimeStr())),
         // The runtime types for coalesce and evaluate_bdd are a bit of a lie since the return type is generic.
         // In practice they aren't actually used.
-        SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce, RuntimeType.Option),
+        SimpleRuntimeFunction("coalesce", EndpointsLib.coalesce, RuntimeType.String),
         SimpleRuntimeFunction("evaluate_bdd", EndpointsLib.evaluateBdd, RuntimeType.Option),
     )
 

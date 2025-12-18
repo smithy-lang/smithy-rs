@@ -46,7 +46,8 @@ class BddExpressionGenerator(
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
-    private val documentRefNames = refs.filter { it.rustType == AnnotatedRefs.RustType.Document }.map { it.name }
+    private val documentRefNames =
+        refs.filter { it.rustType == AnnotatedRefs.AnnotatedRustType.Document }.map { it.name }
 
     fun generateCondition(condition: Condition): Writable {
         return condition.function.accept(OuterExprGeneratorVisitor(ownership))
@@ -265,16 +266,16 @@ class BddExpressionGenerator(
                 val expressionGenerator =
                     BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
 
-                if (fn.id == "coalesce") {
-                    val variadic = fn.variadicArguments.get()
-                    println("FunctionDefinition.id: ${fn.id}")
-                    println("FunctionDefinition.returnType: ${fn.returnType}")
-                    println("FunctionDefinition.arguments: ${fn.arguments}")
-                    println(
-                        "FunctionDefinition.variadicArguments: ${fn.variadicArguments.get() as Array<AnyType>}",
-                    )
-                    println("COALESCE args in visitLibraryFunction: $args")
-                }
+//                if (fn.id == "coalesce") {
+//                    val variadic = fn.variadicArguments.get()
+//                    println("FunctionDefinition.id: ${fn.id}")
+//                    println("FunctionDefinition.returnType: ${fn.returnType}")
+//                    println("FunctionDefinition.arguments: ${fn.arguments}")
+//                    println(
+//                        "FunctionDefinition.variadicArguments: ${variadic}",
+//                    )
+//                    println("COALESCE args in visitLibraryFunction: $args")
+//                }
 
                 val argWritables =
                     args.map { arg ->
@@ -285,7 +286,7 @@ class BddExpressionGenerator(
                                     optionalRefNames.contains(
                                         Identifier.of(arg.value().toString()).rustName(),
                                     )
-                            ) ||
+                                ) ||
                             (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
                         ) {
                             val param =

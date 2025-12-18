@@ -12,10 +12,18 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.LibraryFunction
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
 import software.amazon.smithy.rulesengine.language.syntax.rule.NoMatchRule
@@ -28,11 +36,13 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointTypesGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointsLib
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Types
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.AnnotatedRefs.AnnotatedRef
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.memberName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -40,6 +50,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.unknownVariantError
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
@@ -283,7 +294,8 @@ class EndpointBddGenerator(
                     }
                 } else {
                     val stringRefs =
-                        allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.String }.map { ref -> ref.name }
+                        allRefs.filter { ref -> ref.rustType == AnnotatedRefs.AnnotatedRustType.String }
+                            .map { ref -> ref.name }
 
                     if (stringRefs.contains(it.memberName())) {
                         rust("let ${it.memberName()} = params.${it.memberName()}.as_ref().map(|s| s.clone()).unwrap_or_default();")
@@ -317,9 +329,10 @@ class EndpointBddGenerator(
             val varRefs = allRefs.variableRefs()
             varRefs.values.forEachIndexed { idx, it ->
                 val rustName = it.name
-                if (allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.Document }
+                if (allRefs.filter { ref -> ref.rustType == AnnotatedRefs.AnnotatedRustType.Document }
                         .map { ref -> ref.name }.contains(rustName)
                 ) {
+                    println("RUSTNAME IS DOCUMENT: ${rustName}")
                     rust(
                         """
                         let binding_$idx = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();
@@ -424,10 +437,6 @@ class EndpointBddGenerator(
                         } else {
                             it.value.type
                         }
-
-                    if (fn is Coalesce) {
-                        println("LNJ COALESCE: ${it.value} - ${it.value.type}")
-                    }
                     val rustType =
                         when {
                             // Simple types, doesn't matter what fn they come from
@@ -436,23 +445,9 @@ class EndpointBddGenerator(
                             type is ArrayType -> RuntimeType.typedVec(RuntimeType.String)
                             // GetAttr is inlined, not a registered fn
                             fn is GetAttr -> RuntimeType.document(runtimeConfig)
-                            fn is Coalesce -> {
-                                println("LNJ COALESCE ARGS IN CONTEXT: ${fnDef.arguments}")
-                                val input = fnDef.arguments.first()
-                                val inputType =
-                                    if (input is OptionalType) {
-                                        input.inner()
-                                    } else {
-                                        input
-                                    }
-                                when {
-                                    inputType is StringType -> RuntimeType.String
-                                    inputType is BooleanType -> RuntimeType.Bool
-                                    else -> {
-                                        throw UnsupportedOperationException("Invalid input type for Coalesce")
-                                    }
-                                }
-                            }
+                            // TODO(BDD): This is currently hard coded due to a limitation in Smithy
+                            // tracking at https://github.com/smithy-lang/smithy/issues/2901
+                            fn is Coalesce -> RuntimeType.String
                             // These types aren't easy to infer from the type of the reference.
                             // It is basically just an unnamed struct so we would have to match
                             // on the fields. Easier to key off of the function that sets it.
@@ -523,7 +518,7 @@ class AnnotatedRefs(
         Variable,
     }
 
-    enum class RustType {
+    enum class AnnotatedRustType {
         Document,
         String,
         StringArray,
@@ -537,7 +532,7 @@ class AnnotatedRefs(
         val name: String,
         val refType: RefType,
         val isOptional: Boolean,
-        val rustType: RustType,
+        val rustType: AnnotatedRustType,
         // These two are only present when RefType == Variable
         val condition: Condition?,
         val type: Type?,
@@ -558,13 +553,15 @@ class AnnotatedRefs(
     companion object {
         fun from(bddTrait: EndpointBddTrait): AnnotatedRefs {
             val refs = mutableMapOf<String, AnnotatedRef>()
+            // These must be processed after the other assignments since they need access to refs
+            val coalesceAssignments = mutableListOf<Condition>()
 
             bddTrait.parameters.forEach { param ->
                 val rustType =
                     when (param.type) {
-                        ParameterType.STRING -> RustType.String
-                        ParameterType.STRING_ARRAY -> RustType.StringArray
-                        ParameterType.BOOLEAN -> RustType.Bool
+                        ParameterType.STRING -> AnnotatedRustType.String
+                        ParameterType.STRING_ARRAY -> AnnotatedRustType.StringArray
+                        ParameterType.BOOLEAN -> AnnotatedRustType.Bool
                         null -> throw IllegalArgumentException("Unsupported parameter type ${param.type}")
                     }
                 refs[param.memberName()] =
@@ -580,20 +577,26 @@ class AnnotatedRefs(
                         } else {
                             cond.function.functionDefinition.returnType
                         }
+                    val fnDef = cond.function.functionDefinition
                     val rustType =
                         when {
-                            returnType is AnyType -> RustType.Document
-                            returnType is StringType -> RustType.String
-                            returnType is BooleanType -> RustType.Bool
+                            fnDef.id == "coalesce" -> {
+                                coalesceAssignments.add(cond)
+                                return@forEach
+                            }
+
+                            returnType is AnyType -> AnnotatedRustType.Document
+                            returnType is StringType -> AnnotatedRustType.String
+                            returnType is BooleanType -> AnnotatedRustType.Bool
                             returnType is ArrayType ->
                                 when (returnType.member) {
-                                    is StringType -> RustType.StringArray
+                                    is StringType -> AnnotatedRustType.StringArray
                                     else -> throw IllegalArgumentException("Unsupported reference type inside an ArrayType: $returnType")
                                 }
 
-                            cond.function is ParseUrl -> RustType.Url
-                            cond.function.name == "aws.partition" -> RustType.Partition
-                            cond.function.name == "aws.parseArn" -> RustType.Arn
+                            cond.function is ParseUrl -> AnnotatedRustType.Url
+                            cond.function.name == "aws.partition" -> AnnotatedRustType.Partition
+                            cond.function.name == "aws.parseArn" -> AnnotatedRustType.Arn
                             else -> throw IllegalArgumentException("Unsupported reference type: $returnType")
                         }
                     refs[result.rustName()] =
@@ -601,7 +604,171 @@ class AnnotatedRefs(
                 }
             }
 
+            coalesceAssignments.forEach { cond ->
+                val result = cond.result.orElse(null)
+                if (result !== null) {
+                    val returnType =
+                        if (cond.function.functionDefinition.returnType is OptionalType) {
+                            (cond.function.functionDefinition.returnType as OptionalType).inner()
+                        } else {
+                            cond.function.functionDefinition.returnType
+                        }
+
+
+                    println("About to call getCoalesceReturnType() on ${result.rustName()} with fn id ${cond.function.functionDefinition.id}")
+                    val rt = CoalesceTypeExtractor(refs).getCoalesceReturnType(cond.function)
+
+                    val anno = AnnotatedRef(
+                        result.rustName(),
+                        RefType.Variable,
+                        rt.optional,
+                        rt.innerType,
+                        cond,
+                        returnType,
+                    )
+
+                    println("COLESCE: ${result.rustName()} is $anno")
+                    refs[result.rustName()] =
+                        anno
+                }
+
+
+            }
+
             return AnnotatedRefs(refs)
         }
     }
+}
+
+class CoalesceTypeExtractor(private val refs: Map<String, AnnotatedRef>) {
+
+
+    fun getCoalesceReturnType(fn: LibraryFunction): CoalesceReturnType {
+        var rt = CoalesceReturnType(false, AnnotatedRefs.AnnotatedRustType.String)
+        return fn.accept(CoalesceTypeVisitor(rt))
+    }
+
+    data class CoalesceReturnType(
+        var optional: Boolean,
+        var innerType: AnnotatedRefs.AnnotatedRustType,
+    )
+
+    fun matchType(fnRetType: Type, rt: CoalesceReturnType): CoalesceReturnType {
+        when (fnRetType) {
+            is OptionalType -> {
+                rt.optional = true
+                rt.innerType = matchType(fnRetType.inner()!!, rt).innerType
+            }
+
+            is StringType -> {
+                rt.innerType = AnnotatedRefs.AnnotatedRustType.String
+            }
+
+            is BooleanType -> {
+                rt.innerType = AnnotatedRefs.AnnotatedRustType.Bool
+            }
+
+            else -> {
+                throw UnsupportedOperationException("Only String and Bool currently supported in Coalesce")
+            }
+        }
+
+        return rt
+    }
+
+    private open inner class CoalesceTypeVisitor(private var rt: CoalesceReturnType) :
+        ExpressionVisitor<CoalesceReturnType> {
+        override fun visitCoalesce(expressions: MutableList<Expression>): CoalesceReturnType {
+            println("visiting coalesce")
+            val types = expressions.map { it.accept(CoalesceTypeVisitor(rt)) }
+
+            // Return type is only optional if all inputs are optional
+            rt.optional = types.all { it.optional }
+            // Inner types will all be the same (guaranteed by BDD compilation
+            rt.innerType = types[0].innerType
+
+            return rt
+        }
+
+        override fun visitNot(p0: Expression?): CoalesceReturnType {
+            println("visiting not")
+            TODO("Not yet implemented")
+        }
+
+        override fun visitBoolEquals(p0: Expression?, p1: Expression?): CoalesceReturnType {
+            println("visiting bool equals")
+            TODO("Not yet implemented")
+        }
+
+        override fun visitStringEquals(p0: Expression?, p1: Expression?): CoalesceReturnType {
+            println("visiting string equals")
+            TODO("Not yet implemented")
+        }
+
+        override fun visitLibraryFunction(fn: FunctionDefinition, args: MutableList<Expression>): CoalesceReturnType {
+            println("visiting lib func")
+            return matchType(fn.returnType, rt)
+        }
+
+        override fun visitRef(reference: Reference): CoalesceReturnType {
+            println("visiting ref")
+            val annotatedRef = refs[reference.name.rustName()]!!
+
+            rt.optional = annotatedRef.isOptional
+            rt.innerType = annotatedRef.rustType
+
+            return rt
+        }
+
+        override fun visitGetAttr(p0: GetAttr?): CoalesceReturnType {
+            println("visiting getattr")
+            TODO("Not yet implemented")
+        }
+
+        override fun visitIsSet(p0: Expression?): CoalesceReturnType {
+            println("visiting isset")
+            TODO("Not yet implemented")
+        }
+
+        override fun visitLiteral(literal: Literal): CoalesceReturnType {
+            println("visiting literal")
+            return literal.accept(CoalesceLiteralVisitor(rt))
+        }
+
+//        override fun getDefault(): CoalesceReturnType {
+//            println("in default now")
+//            throw UnsupportedOperationException("This visitor is only meant for Coalesce")
+//        }
+
+    }
+
+    private open inner class CoalesceLiteralVisitor(private var rt: CoalesceReturnType) :
+        LiteralVisitor<CoalesceReturnType> {
+        override fun visitBoolean(p0: Boolean): CoalesceReturnType {
+            rt.innerType = AnnotatedRefs.AnnotatedRustType.Bool
+
+            return rt
+        }
+
+        override fun visitString(p0: Template?): CoalesceReturnType {
+            rt.innerType = AnnotatedRefs.AnnotatedRustType.String
+
+            return rt
+        }
+
+        override fun visitRecord(p0: MutableMap<Identifier, Literal>?): CoalesceReturnType {
+            throw IllegalArgumentException("Only String and Boolean currently supported for coalesce")
+        }
+
+        override fun visitTuple(p0: MutableList<Literal>?): CoalesceReturnType {
+            throw IllegalArgumentException("Only String and Boolean currently supported for coalesce")
+        }
+
+        override fun visitInteger(p0: Int): CoalesceReturnType {
+            throw IllegalArgumentException("Only String and Boolean currently supported for coalesce")
+        }
+
+    }
+
+
 }
