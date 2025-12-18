@@ -8,6 +8,7 @@ mod bdd_interpreter;
 mod coalesce;
 mod diagnostic;
 mod host;
+mod ite;
 mod parse_url;
 mod partition;
 mod s3;
