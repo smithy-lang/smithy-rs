@@ -107,9 +107,7 @@ impl FromStr for Reference {
 
     fn from_str(reference: &str) -> std::result::Result<Self, Self::Err> {
         match reference.split_once('#') {
-            None => bail!(
-                "Reference must of the form `repo#number` but found {reference}"
-            ),
+            None => bail!("Reference must of the form `repo#number` but found {reference}"),
             Some((repo, number)) => {
                 let number = number.parse::<usize>()?;
                 if !matches!(repo, "smithy-rs" | "aws-sdk-rust" | "aws-sdk") {
@@ -486,10 +484,7 @@ Fix typos in module documentation for generated crates
         changelog.merge(loader.parse_str(ENTRY).unwrap());
         // two errors should be produced, missing authors x 2
         let res = changelog.validate(ValidationSet::Development);
-        assert_eq!(
-            2,
-            res.expect_err("changelog validation should fail").len()
-        );
+        assert_eq!(2, res.expect_err("changelog validation should fail").len());
     }
 
     #[test]
