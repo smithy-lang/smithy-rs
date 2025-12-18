@@ -319,7 +319,7 @@ class AwsPresignedFluentBuilderMethod(
                 AwsRuntimeType.presigningInterceptor(runtimeConfig)
                     .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-            "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
+            "USER_AGENT" to CargoDependency.Http0x.toType().resolve("header::USER_AGENT"),
             "alternate_presigning_serializer" to
                 writable {
                     if (presignableOp.hasModelTransforms()) {

@@ -37,7 +37,7 @@ object AwsRuntimeType {
             InlineAwsDependency.forRustFile(
                 "presigning", visibility = Visibility.PUBLIC,
                 // Requires http_02x because of existing pub *_http_02x_request methods
-                CargoDependency.Http,
+                CargoDependency.Http0x,
                 CargoDependency.Http1x,
                 CargoDependency.HttpBody1x,
             ),

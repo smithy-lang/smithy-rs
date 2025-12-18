@@ -81,8 +81,8 @@ private fun RuntimeConfig.awsChunked() =
         InlineAwsDependency.forRustFile(
             "aws_chunked", visibility = Visibility.PUBCRATE,
             CargoDependency.Bytes,
-            CargoDependency.Http,
-            CargoDependency.HttpBody,
+            CargoDependency.Http0x,
+            CargoDependency.HttpBody0x,
             CargoDependency.Tracing,
             AwsCargoDependency.awsRuntime(this).withFeature("http-02x"),
             CargoDependency.smithyRuntimeApiClient(this),

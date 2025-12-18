@@ -40,9 +40,9 @@ class ServerServiceGenerator(
     private val codegenScope =
         arrayOf(
             "Bytes" to RuntimeType.Bytes,
-            "Http" to RuntimeType.httpAuto(runtimeConfig),
+            "Http" to RuntimeType.http(runtimeConfig),
             "SmithyHttp" to RuntimeType.smithyHttp(runtimeConfig),
-            "HttpBody" to RuntimeType.httpBodyAuto(runtimeConfig),
+            "HttpBody" to RuntimeType.httpBody(runtimeConfig),
             "SmithyHttpServer" to smithyHttpServer,
             "Tower" to RuntimeType.Tower,
             *RuntimeType.preludeScope,
