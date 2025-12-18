@@ -311,11 +311,9 @@ mod tests {
             }
         }
 
-        let layer =
-            AlbHealthCheckLayer::from_handler("/health", |_req: Request<CustomBody>| async { StatusCode::OK });
-        let inner_service = service_fn(|_req: Request<CustomBody>| async {
-            Ok::<_, Infallible>(Response::new(crate::body::empty()))
-        });
+        let layer = AlbHealthCheckLayer::from_handler("/health", |_req: Request<CustomBody>| async { StatusCode::OK });
+        let inner_service =
+            service_fn(|_req: Request<CustomBody>| async { Ok::<_, Infallible>(Response::new(crate::body::empty())) });
         let service = layer.layer(inner_service);
 
         let request = Request::builder()

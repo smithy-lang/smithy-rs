@@ -32,10 +32,10 @@ aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.10.0"
 futures-util = { version = "0.3.29", default-features = false }
 
-http = "1.4"
-http-body = "1.0"
-hyper = { version = "1.8", features = ["server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = [
+http = "1.3.1"
+http-body = "1.0.1"
+hyper = { version = "1.6", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1.16", features = [
     "tokio",
     "server",
     "server-auto",
@@ -44,7 +44,7 @@ hyper-util = { version = "0.1", features = [
     "http1",
     "http2",
 ] }
-http-body-util = "0.1"
+http-body-util = "0.1.3"
 
 lambda_http = { version = "1", optional = true }
 
@@ -54,7 +54,7 @@ pin-project-lite = "0.2.14"
 regex = "1.12.2"
 serde_urlencoded = "0.7"
 thiserror = "2"
-tokio = { version = "1.40.0", features = ["full"] }
+tokio = { version = "1.46.0", features = ["full"] }
 tower = { version = "0.4.13", features = [
     "util",
     "make",
