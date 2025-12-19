@@ -356,14 +356,17 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
         targets: ${{ matrix.target }}
+    - uses: Swatinem/rust-cache@v2
+      with:
+        key: ${{ matrix.target }}
     - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross
-    - name: Test smithy-rs runtime on ${{ matrix.target }}
+      run: cargo install cross --git https://github.com/cross-rs/cross --locked
+    - name: Build smithy-rs runtime on ${{ matrix.target }}
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-    - name: Test AWS runtime on ${{ matrix.target }}
+      run: cross build --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+    - name: Build AWS runtime on ${{ matrix.target }}
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
+      run: cross build --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
 
   # Run the canary against generated SDKs
   #
