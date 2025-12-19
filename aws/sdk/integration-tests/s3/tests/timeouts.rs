@@ -166,25 +166,20 @@ async fn test_read_timeout() {
     server_handle.await.unwrap();
 }
 
-#[tokio::test]
-async fn test_connect_timeout() {
-    let config = Config::builder()
+async fn run_connect_timeout_test(timeout_config: Option<TimeoutConfig>, expected_timeout_ms: u64) {
+    let mut config_builder = Config::builder()
         .with_test_defaults()
         .region(Region::new("us-east-1"))
-        .timeout_config(
-            TimeoutConfig::builder()
-                .connect_timeout(Duration::from_millis(300))
-                .build(),
-        )
-        .endpoint_url(
-            // Emulate a connect timeout error by hitting an unroutable IP
-            "http://172.255.255.0:18104",
-        )
-        .build();
-    let client = Client::from_conf(config);
+        .endpoint_url("http://172.255.255.0:18104");
+
+    if let Some(tc) = timeout_config {
+        config_builder = config_builder.timeout_config(tc);
+    }
+
+    let client = Client::from_conf(config_builder.build());
 
     if let Ok(result) = timeout(
-        Duration::from_millis(1000),
+        Duration::from_millis(expected_timeout_ms + 1000),
         client.get_object().bucket("test").key("test").send(),
     )
     .await
@@ -194,7 +189,82 @@ async fn test_connect_timeout() {
             Err(err) => {
                 let message = format!("{}", DisplayErrorContext(&err));
                 let expected =
-                    "timeout: client error (Connect): HTTP connect timeout occurred after 300ms";
+                    "timeout: client error (Connect): HTTP connect timeout occurred after";
+                assert!(
+                    message.contains(expected),
+                    "expected '{message}' to contain '{expected}'"
+                );
+            }
+        }
+    } else {
+        panic!("the client didn't timeout");
+    }
+}
+
+#[tokio::test]
+async fn test_connect_timeout_explicit() {
+    run_connect_timeout_test(
+        Some(
+            TimeoutConfig::builder()
+                .connect_timeout(Duration::from_millis(300))
+                .build(),
+        ),
+        300,
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_connect_timeout_default() {
+    run_connect_timeout_test(None, 3100).await;
+}
+
+#[tokio::test]
+async fn test_connect_timeout_disabled() {
+    let config = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-1"))
+        .timeout_config(TimeoutConfig::disabled())
+        .endpoint_url("http://172.255.255.0:18104")
+        .build();
+    let client = Client::from_conf(config);
+
+    if let Err(_) = timeout(
+        Duration::from_secs(5),
+        client.get_object().bucket("test").key("test").send(),
+    )
+    .await
+    {
+        // Expected: the operation should not complete within 5 seconds when timeout is disabled
+    } else {
+        panic!("operation completed unexpectedly when timeout was disabled");
+    }
+}
+
+// this behavior is surprising—I would have expected this to fail, but it seems like the default
+// runtime plugin always is providing a sleep impl. In any case, this pattern does not seem to exist
+// in real life
+#[tokio::test]
+async fn test_connect_timeout_with_sleep_impl_none() {
+    let mut builder = Config::builder()
+        .with_test_defaults()
+        .region(Region::new("us-east-1"))
+        .endpoint_url("http://172.255.255.0:18104");
+    builder.set_sleep_impl(None);
+    let client = Client::from_conf(builder.build());
+
+    if let Ok(result) = timeout(
+        Duration::from_millis(4100),
+        client.get_object().bucket("test").key("test").send(),
+    )
+    .await
+    {
+        match result {
+            Ok(_) => panic!("should not have succeeded"),
+            Err(err) => {
+                let message = format!("{}", DisplayErrorContext(&err));
+                let expected =
+                    "timeout: client error (Connect): HTTP connect timeout occurred after";
                 assert!(
                     message.contains(expected),
                     "expected '{message}' to contain '{expected}'"
