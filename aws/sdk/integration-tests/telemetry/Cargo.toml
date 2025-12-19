@@ -12,6 +12,7 @@ publish = false
 
 [dev-dependencies]
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["test-util", "behavior-version-latest"] }
+aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["test-util", "behavior-version-latest"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", features = ["test-util", "behavior-version-latest"] }
 aws-smithy-observability = { path = "../../build/aws-sdk/sdk/aws-smithy-observability" }
