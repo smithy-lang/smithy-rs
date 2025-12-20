@@ -14,6 +14,8 @@ import software.amazon.smithy.model.node.NullNode
 import software.amazon.smithy.model.node.NumberNode
 import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.model.node.StringNode
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -544,6 +546,20 @@ class PrimitiveInstantiator(
                     }
 
                 is StringShape -> renderString(shape, data as StringNode)(this)
+                is BigIntegerShape -> {
+                    val value = data.toString()
+                    rustTemplate(
+                        "<#{BigInteger} as ::std::str::FromStr>::from_str(${value.dq()}).unwrap()",
+                        "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                    )
+                }
+                is BigDecimalShape -> {
+                    val value = data.toString()
+                    rustTemplate(
+                        "<#{BigDecimal} as ::std::str::FromStr>::from_str(${value.dq()}).unwrap()",
+                        "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
+                    )
+                }
                 is NumberShape ->
                     when (data) {
                         is StringNode -> {
