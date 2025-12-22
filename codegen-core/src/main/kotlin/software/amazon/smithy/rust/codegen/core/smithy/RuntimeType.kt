@@ -297,12 +297,12 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val StaticStr = RuntimeType("&'static str")
 
         // Http0x types
-        val Http = CargoDependency.Http.toType()
-        val HttpBody = CargoDependency.HttpBody.toType()
-        val HttpRequest = Http.resolve("Request")
-        val HttpRequestBuilder = Http.resolve("request::Builder")
-        val HttpResponse = Http.resolve("Response")
-        val HttpResponseBuilder = Http.resolve("response::Builder")
+        val Http0x = CargoDependency.Http0x.toType()
+        val HttpBody0x = CargoDependency.HttpBody0x.toType()
+        val HttpRequest0x = Http0x.resolve("Request")
+        val HttpRequestBuilder0x = Http0x.resolve("request::Builder")
+        val HttpResponse0x = Http0x.resolve("Response")
+        val HttpResponseBuilder0x = Http0x.resolve("response::Builder")
 
         // Http1x types
         val Http1x = CargoDependency.Http1x.toType()
@@ -317,10 +317,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x crate
          * For HTTP 0.x: returns http@0.2.x crate
          */
-        fun httpAuto(runtimeConfig: RuntimeConfig): RuntimeType =
+        fun http(runtimeConfig: RuntimeConfig): RuntimeType =
             when (runtimeConfig.httpVersion) {
                 HttpVersion.Http1x -> Http1x
-                HttpVersion.Http0x -> Http
+                HttpVersion.Http0x -> Http0x
             }
 
         /**
@@ -329,8 +329,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x request::Builder
          * For HTTP 0.x: returns http@0.2.x request::Builder
          */
-        fun httpRequestBuilderAuto(runtimeConfig: RuntimeConfig): RuntimeType =
-            httpAuto(runtimeConfig).resolve("request::Builder")
+        fun httpRequestBuilder(runtimeConfig: RuntimeConfig): RuntimeType =
+            http(runtimeConfig).resolve("request::Builder")
 
         /**
          * Returns the appropriate http::response::Builder based on HTTP version.
@@ -338,8 +338,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http@1.x response::Builder
          * For HTTP 0.x: returns http@0.2.x response::Builder
          */
-        fun httpResponseBuilderAuto(runtimeConfig: RuntimeConfig): RuntimeType =
-            httpAuto(runtimeConfig).resolve("response::Builder")
+        fun httpResponseBuilder(runtimeConfig: RuntimeConfig): RuntimeType =
+            http(runtimeConfig).resolve("response::Builder")
 
         /**
          * Returns the appropriate http-body crate module based on HTTP version.
@@ -347,18 +347,18 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
          * For HTTP 1.x: returns http-body@1.x crate
          * For HTTP 0.x: returns http-body@0.4.x crate
          */
-        fun httpBodyAuto(runtimeConfig: RuntimeConfig): RuntimeType =
+        fun httpBody(runtimeConfig: RuntimeConfig): RuntimeType =
             when (runtimeConfig.httpVersion) {
                 HttpVersion.Http1x -> HttpBody1x
-                HttpVersion.Http0x -> HttpBody
+                HttpVersion.Http0x -> HttpBody0x
             }
 
-        fun hyperAuto(runtimeConfig: RuntimeConfig) = CargoDependency.hyper(runtimeConfig).toType()
+        fun hyper(runtimeConfig: RuntimeConfig) = CargoDependency.hyper(runtimeConfig).toType()
 
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
         val FastRand = CargoDependency.FastRand.toType()
-        val Hyper = CargoDependency.Hyper.toType()
+        val Hyper0x = CargoDependency.Hyper0x.toType()
         val LazyStatic = CargoDependency.LazyStatic.toType()
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()

@@ -558,8 +558,8 @@ class HttpBindingGenerator(
             val codegenScope =
                 arrayOf(
                     "BuildError" to runtimeConfig.operationBuildError(),
-                    HttpMessageType.REQUEST.name to RuntimeType.httpRequestBuilderAuto(runtimeConfig),
-                    HttpMessageType.RESPONSE.name to RuntimeType.httpResponseBuilderAuto(runtimeConfig),
+                    HttpMessageType.REQUEST.name to RuntimeType.httpRequestBuilder(runtimeConfig),
+                    HttpMessageType.RESPONSE.name to RuntimeType.httpResponseBuilder(runtimeConfig),
                     "Shape" to shapeSymbol,
                 )
             rustBlockTemplate(
@@ -735,7 +735,7 @@ class HttpBindingGenerator(
                     builder = builder.header("$headerName", header_value);
 
                     """,
-                    "HeaderValue" to RuntimeType.httpAuto(runtimeConfig).resolve("HeaderValue"),
+                    "HeaderValue" to RuntimeType.http(runtimeConfig).resolve("HeaderValue"),
                     "invalid_field_error" to renderErrorMessage("header_value"),
                 )
             }
@@ -790,8 +790,8 @@ class HttpBindingGenerator(
                 }
 
                 """,
-                "HeaderValue" to RuntimeType.httpAuto(runtimeConfig).resolve("HeaderValue"),
-                "HeaderName" to RuntimeType.httpAuto(runtimeConfig).resolve("HeaderName"),
+                "HeaderValue" to RuntimeType.http(runtimeConfig).resolve("HeaderValue"),
+                "HeaderName" to RuntimeType.http(runtimeConfig).resolve("HeaderName"),
                 "invalid_header_name" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
                         rust("""format!("`{k}` cannot be used as a header name: {err}")""")

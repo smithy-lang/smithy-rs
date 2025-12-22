@@ -28,13 +28,13 @@ object ServerHttpTestHelpers {
     fun getHttpRuntimeTypeScope(codegenContext: ServerCodegenContext): Array<Pair<String, RuntimeType>> {
         val httpModule =
             if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http0x) {
-                CargoDependency.Http
+                CargoDependency.Http0x
             } else {
                 CargoDependency.Http1x
             }
         return arrayOf(
             "Http" to httpModule.toType(),
-            "Hyper" to RuntimeType.hyperAuto(codegenContext.runtimeConfig),
+            "Hyper" to RuntimeType.hyper(codegenContext.runtimeConfig),
             "Tower" to RuntimeType.Tower,
             *RuntimeType.preludeScope,
         )
@@ -97,7 +97,7 @@ object ServerHttpTestHelpers {
                         """
                         let $bodyVarName = #{Hyper}::body::to_bytes($responseVarName.into_body()).await.expect("unable to extract body to bytes");
                         """,
-                        "Hyper" to RuntimeType.Hyper,
+                        "Hyper" to RuntimeType.Hyper0x,
                     )
             }
         }
@@ -118,7 +118,7 @@ object ServerHttpTestHelpers {
                 if (codegenContext.runtimeConfig.httpVersion == HttpVersion.Http1x) {
                     CargoDependency.Http1x.toType()
                 } else {
-                    CargoDependency.Http.toType()
+                    CargoDependency.Http0x.toType()
                 }
             rustTemplate(
                 """

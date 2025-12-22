@@ -25,7 +25,7 @@ class ServerHttpSensitivityGeneratorTest {
     private val codegenScope =
         arrayOf(
             "SmithyHttpServer" to ServerCargoDependency.smithyHttpServer(ServerTestRuntimeConfig).toType(),
-            "Http" to CargoDependency.Http.toType(),
+            "Http" to CargoDependency.Http0x.toType(),
         )
 
     @Test
