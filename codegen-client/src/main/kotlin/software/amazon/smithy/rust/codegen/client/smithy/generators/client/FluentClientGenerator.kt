@@ -278,6 +278,7 @@ private fun baseClientRuntimePluginsFn(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(default_retry_partition)
                                 .with_behavior_version(config.behavior_version.expect(${behaviorVersionError.dq()}))
+                                .with_time_source(config.runtime_components.time_source().unwrap_or_default())
                         ))
                         // user config
                         .with_client_plugin(

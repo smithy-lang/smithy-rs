@@ -281,6 +281,11 @@ impl TokenBucket {
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
+
+    // Allows us to create a default client but still update the time_source
+    pub(crate) fn update_time_source(&mut self, new_time_source: SharedTimeSource) {
+        self.time_source = new_time_source;
+    }
 }
 
 /// Builder for constructing a `TokenBucket`.
