@@ -4,6 +4,9 @@ on:
     - cron: "0 0 * * *"  # Daily at midnight UTC
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: canary-scheduled-${{ github.ref }}
   cancel-in-progress: true
