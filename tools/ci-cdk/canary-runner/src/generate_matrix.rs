@@ -30,12 +30,17 @@ pub struct GenerateMatrixArgs {
     /// Versions of Rust to compile against
     #[clap(short, long, multiple_values = true)]
     rust_versions: Vec<String>,
+
+    /// Target architectures to test
+    #[clap(short, long, multiple_values = true)]
+    architectures: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
 struct Output {
     sdk_release_tag: Vec<String>,
     rust_version: Vec<String>,
+    target_arch: Vec<String>,
 }
 
 // Use a trait to make unit testing the GitHub API pagination easier
@@ -114,6 +119,7 @@ pub async fn generate_matrix(opt: GenerateMatrixArgs) -> Result<()> {
             .map(|t| t.to_string())
             .collect(),
         rust_version: opt.rust_versions,
+        target_arch: opt.architectures,
     };
     println!("{}", serde_json::to_string(&output)?);
     Ok(())
