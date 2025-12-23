@@ -125,8 +125,32 @@ pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
     )
 }
 
-/// Runtime plugin that sets the default retry strategy, config, and partition.
+/// Runtime plugin that sets the default retry strategy, config (disabled), and partition.
 pub fn default_retry_config_plugin(
+    default_partition_name: impl Into<Cow<'static, str>>,
+) -> Option<SharedRuntimePlugin> {
+    let retry_partition = RetryPartition::new(default_partition_name);
+    Some(
+        default_plugin("default_retry_config_plugin", |components| {
+            components
+                .with_retry_strategy(Some(StandardRetryStrategy::new()))
+                .with_config_validator(SharedConfigValidator::base_client_config_fn(
+                    validate_retry_config,
+                ))
+                .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
+        })
+        .with_config(layer("default_retry_config", |layer| {
+            layer.store_put(RetryConfig::disabled());
+            layer.store_put(retry_partition);
+        }))
+        .into_shared(),
+    )
+}
+
+/// Runtime plugin that sets the default retry strategy, config, and partition.
+/// 
+/// This version respects the behavior version to enable retries by default for newer versions.
+pub fn default_retry_config_plugin_v2(
     default_partition_name: impl Into<Cow<'static, str>>,
     behavior_version: BehaviorVersion,
 ) -> Option<SharedRuntimePlugin> {
@@ -173,8 +197,25 @@ fn validate_retry_config(
     }
 }
 
+/// Runtime plugin that sets the default timeout config (no timeouts).
+pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_timeout_config_plugin", |components| {
+            components.with_config_validator(SharedConfigValidator::base_client_config_fn(
+                validate_timeout_config,
+            ))
+        })
+        .with_config(layer("default_timeout_config", |layer| {
+            layer.store_put(TimeoutConfig::disabled());
+        }))
+        .into_shared(),
+    )
+}
+
 /// Runtime plugin that sets the default timeout config.
-pub fn default_timeout_config_plugin(
+/// 
+/// This version respects the behavior version to enable connection timeout by default for newer versions.
+pub fn default_timeout_config_plugin_v2(
     behavior_version: BehaviorVersion,
 ) -> Option<SharedRuntimePlugin> {
     Some(
@@ -337,7 +378,7 @@ pub fn default_plugins(
     [
         default_http_client_plugin_v2(behavior_version),
         default_identity_cache_plugin(),
-        default_retry_config_plugin(
+        default_retry_config_plugin_v2(
             params
                 .retry_partition_name
                 .expect("retry_partition_name is required"),
@@ -345,7 +386,7 @@ pub fn default_plugins(
         ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
-        default_timeout_config_plugin(behavior_version),
+        default_timeout_config_plugin_v2(behavior_version),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
