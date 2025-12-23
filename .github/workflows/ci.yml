@@ -336,18 +336,22 @@ jobs:
   # Test runtime crates on multiple architectures to catch architecture-specific issues
   # like crc-fast 1.4 SIGILL on ARM before merge
   test-runtime-architectures:
-    name: Test Runtime (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    name: Test Runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
     steps:
     - uses: actions/checkout@v4
       with:
@@ -356,14 +360,12 @@ jobs:
       with:
         toolchain: ${{ env.rust_version }}
         targets: ${{ matrix.target }}
-    - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross
     - name: Test smithy-rs runtime on ${{ matrix.target }}
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+      run: cargo test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     - name: Test AWS runtime on ${{ matrix.target }}
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
+      run: cargo test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
 
   # Run the canary against generated SDKs
   #
