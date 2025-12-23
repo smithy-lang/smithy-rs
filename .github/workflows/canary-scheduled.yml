@@ -1,0 +1,98 @@
+name: Scheduled Canary with Architecture Matrix
+on:
+  schedule:
+    - cron: "0 0 * * *"  # Daily at midnight UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: canary-scheduled-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-matrix:
+    name: Generate Canary Matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Generate matrix
+        id: generate
+        working-directory: tools/ci-cdk/canary-runner
+        run: |
+          cargo build
+          echo "matrix=$(cargo run -- generate-matrix \
+            --sdk-versions 1 \
+            --rust-versions stable \
+            --architectures x86_64-unknown-linux-gnu x86_64-unknown-linux-musl aarch64-unknown-linux-gnu aarch64-unknown-linux-musl)" >> "${GITHUB_OUTPUT}"
+    outputs:
+      matrix: ${{ steps.generate.outputs.matrix }}
+
+  acquire-base-image:
+    name: Acquire Base Image
+    permissions:
+      id-token: write
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: smithy-rs
+          fetch-depth: 0
+      - uses: ./smithy-rs/.github/actions/free-disk-space
+      - name: Acquire base image
+        id: acquire
+        run: ./smithy-rs/.github/scripts/acquire-build-image
+      - name: Upload base image
+        uses: actions/upload-artifact@v4
+        with:
+          name: smithy-rs-base-image
+          path: smithy-rs-base-image
+          retention-days: 1
+
+  generate:
+    name: Generate SDKs
+    needs: acquire-base-image
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: smithy-rs
+      - name: Generate SDKs for canary
+        uses: ./smithy-rs/.github/actions/docker-build
+        with:
+          action: generate-aws-sdk-for-canary
+
+  canary:
+    name: Canary (${{ matrix.target_arch }}, ${{ matrix.rust_version }}, ${{ matrix.sdk_release_tag }})
+    needs: [generate-matrix, generate]
+    runs-on: ${{ contains(matrix.target_arch, 'aarch64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: smithy-rs
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust_version }}
+          targets: ${{ matrix.target_arch }}
+      - name: Install musl-tools
+        if: contains(matrix.target_arch, 'musl')
+        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-region: us-west-2
+          role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      - name: Run canary
+        uses: ./smithy-rs/.github/actions/docker-build
+        with:
+          action: run-canary
+          action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
