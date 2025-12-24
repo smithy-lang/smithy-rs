@@ -286,6 +286,14 @@ impl TokenBucket {
     pub(crate) fn update_time_source(&mut self, new_time_source: SharedTimeSource) {
         self.time_source = new_time_source;
     }
+
+    #[allow(dead_code)]
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
+    /// This method should only be used for internal testing
+    pub fn time_source(&self) -> &SharedTimeSource {
+        &self.time_source
+    }
 }
 
 /// Builder for constructing a `TokenBucket`.
