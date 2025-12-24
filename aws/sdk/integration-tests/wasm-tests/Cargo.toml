@@ -1,0 +1,30 @@
+[package]
+name = "wasm-tests"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wit-bindgen = "0.44.0"
+wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = [
+    "rt-tokio",
+    "behavior-version-latest"
+] }
+aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
+# Right now the test-util feature causes this crate to fail to compile for WASM. 
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", default-features = false}#, features = ["test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", default-features = false }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types", default-features = false}
+aws-smithy-wasm = { path = "../../build/aws-sdk/sdk/aws-smithy-wasm" }
+tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", default-features = false, features = ["test-util"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", default-features = false, features = ["test-util"] }
+http-1x = { package = "http", version = "1" }
+
+[lib]
+crate-type = ["cdylib"]
+
+[package.metadata.component]
+package = "wasm:tests"
+
+[package.metadata.component.dependencies]

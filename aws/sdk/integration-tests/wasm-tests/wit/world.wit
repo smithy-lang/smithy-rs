@@ -1,0 +1,10 @@
+package wasm:tests;
+
+interface tests {
+    run: func() -> result;
+}
+
+world main {
+    export tests;
+}
+
