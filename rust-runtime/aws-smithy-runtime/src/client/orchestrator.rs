@@ -346,6 +346,17 @@ async fn try_op(
             }
         }
     }
+
+    // After the retry loop exits, ensure we don't silently succeed if an error occurred.
+    // This prevents the bug where a timeout error is set via continue_on_err! but then
+    // the retry strategy returns ShouldAttempt::No, causing the loop to exit with break.
+    // Without this check, the orchestrator would return Ok() even though no successful
+    // HTTP response was received. See: https://github.com/smithy-lang/smithy-rs/issues/XXXX
+    if ctx.is_failed() {
+        debug!("retry loop exited but context has failed state, operation will return error");
+        // Early return here ensures invoke() will see the failed context and return Err
+        return;
+    }
 }
 
 async fn try_attempt(
