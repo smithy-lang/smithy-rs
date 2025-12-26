@@ -4,8 +4,8 @@
  */
 
 //! Test that SDK correctly returns error when timeout occurs without successful HTTP response
-//! 
-//! This test verifies the fix for customer issue P358713763 where Lambda timeout during 
+//!
+//! This test verifies the fix for customer issue P358713763 where Lambda timeout during
 //! ELB delete_rule() incorrectly returned Ok() even though rule still existed.
 
 #![cfg(all(feature = "client", feature = "test-util"))]
@@ -54,7 +54,7 @@ async fn test_timeout_returns_error_not_ok() {
         .timeout_config(
             TimeoutConfig::builder()
                 .operation_attempt_timeout(Duration::from_millis(100)) // Very short timeout
-                .build()
+                .build(),
         )
         .serializer(|_body: ()| Ok(HttpRequest::new(SdkBody::empty())))
         .deserializer_impl(Deserializer)
