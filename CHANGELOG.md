@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+December 27th, 2025
+===================
+**New this release:**
+- (client) Add support for tracking observability business metrics (OBSERVABILITY_TRACING, OBSERVABILITY_OTEL_TRACING, OBSERVABILITY_OTEL_METRICS) in User-Agent headers when telemetry providers are configured.
+
+
 December 16th, 2025
 ===================
 **New this release:**
