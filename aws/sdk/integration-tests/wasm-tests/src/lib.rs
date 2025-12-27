@@ -26,8 +26,8 @@ bindings::export!(Component with_types_in bindings);
  */
 
 use aws_config::retry::RetryConfig;
-use aws_sdk_s3::Client;
 use aws_sdk_s3::operation::list_objects_v2::builders::ListObjectsV2FluentBuilder;
+use aws_sdk_s3::Client;
 use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
 use std::sync::LazyLock;
@@ -80,14 +80,14 @@ fn test_operation_construction() {
     );
 }
 
-use aws_sdk_s3::{Config, config::Region};
+use aws_sdk_s3::{config::Region, Config};
 use aws_smithy_async::test_util::ManualTimeSource;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
 use aws_smithy_runtime::client::retries::TokenBucket;
 use aws_smithy_runtime_api::box_error::BoxError;
-use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;

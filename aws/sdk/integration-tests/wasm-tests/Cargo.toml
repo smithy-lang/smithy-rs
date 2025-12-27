@@ -4,14 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-wit-bindgen = "0.44.0"
+wit-bindgen = "0.50.0"
 wit-bindgen-rt = { version = "0.44.0", features = ["bitflags"] }
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config", default-features = false, features = [
     "rt-tokio",
     "behavior-version-latest"
 ] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3", default-features = false }
-# Right now the test-util feature causes this crate to fail to compile for WASM. 
+# Right now the test-util feature causes this crate to fail to compile for WASM.
 aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", default-features = false}#, features = ["test-util"] }
 aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", default-features = false }
 aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types", default-features = false}
