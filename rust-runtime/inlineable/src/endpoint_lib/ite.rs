@@ -20,7 +20,7 @@ pub(crate) trait Ite {
     type Result;
 
     /// Evaluates arguments, returns Arg1 if the boolean is true, and Arg2 if it is false
-    fn ite(&self) -> fn(bool, Self::Arg1, Self::Arg2) -> Self::Result;
+    fn ite(&self) -> fn(&bool, Self::Arg1, Self::Arg2) -> Self::Result;
 }
 
 impl<T> Ite for &&&&(&Option<T>, &Option<T>) {
@@ -28,9 +28,9 @@ impl<T> Ite for &&&&(&Option<T>, &Option<T>) {
     type Arg2 = Option<T>;
     type Result = Option<T>;
 
-    fn ite(&self) -> fn(bool, Self::Arg1, Self::Arg2) -> Self::Result {
-        |b: bool, true_val: Option<T>, false_val: Option<T>| {
-            if b {
+    fn ite(&self) -> fn(&bool, Self::Arg1, Self::Arg2) -> Self::Result {
+        |b: &bool, true_val: Option<T>, false_val: Option<T>| {
+            if *b {
                 true_val
             } else {
                 false_val
@@ -44,9 +44,9 @@ impl<T> Ite for &&&(&Option<T>, &T) {
     type Arg2 = T;
     type Result = Option<T>;
 
-    fn ite(&self) -> fn(bool, Self::Arg1, Self::Arg2) -> Self::Result {
-        |b: bool, true_val: Option<T>, false_val: T| {
-            if b {
+    fn ite(&self) -> fn(&bool, Self::Arg1, Self::Arg2) -> Self::Result {
+        |b: &bool, true_val: Option<T>, false_val: T| {
+            if *b {
                 true_val
             } else {
                 Some(false_val)
@@ -60,9 +60,9 @@ impl<T> Ite for &&(&T, &Option<T>) {
     type Arg2 = Option<T>;
     type Result = Option<T>;
 
-    fn ite(&self) -> fn(bool, Self::Arg1, Self::Arg2) -> Self::Result {
-        |b: bool, true_val: T, false_val: Option<T>| {
-            if b {
+    fn ite(&self) -> fn(&bool, Self::Arg1, Self::Arg2) -> Self::Result {
+        |b: &bool, true_val: T, false_val: Option<T>| {
+            if *b {
                 Some(true_val)
             } else {
                 false_val
@@ -76,9 +76,9 @@ impl<T> Ite for &(&T, &T) {
     type Arg2 = T;
     type Result = T;
 
-    fn ite(&self) -> fn(bool, Self::Arg1, Self::Arg2) -> Self::Result {
-        |b: bool, true_val: T, false_val: T| {
-            if b {
+    fn ite(&self) -> fn(&bool, Self::Arg1, Self::Arg2) -> Self::Result {
+        |b: &bool, true_val: T, false_val: T| {
+            if *b {
                 true_val
             } else {
                 false_val
@@ -93,7 +93,7 @@ macro_rules! ite {
         let b = $b;
         let true_val = $true_val;
         let false_val = $false_val;
-        (&&&&(&true_val, &false_val)).ite()(b, true_val, false_val)
+        (&&&&(&true_val, &false_val)).ite()(&b, true_val, false_val)
     }};
 }
 

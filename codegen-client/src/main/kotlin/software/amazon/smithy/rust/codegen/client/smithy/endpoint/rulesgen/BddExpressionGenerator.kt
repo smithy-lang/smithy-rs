@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
-import software.amazon.smithy.rulesengine.language.evaluation.type.AnyType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
@@ -30,6 +29,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import java.lang.RuntimeException
 
@@ -46,7 +46,8 @@ class BddExpressionGenerator(
 ) {
     private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
-    private val documentRefNames = refs.filter { it.rustType == AnnotatedRefs.RustType.Document }.map { it.name }
+    private val documentRefNames =
+        refs.filter { it.runtimeType == RuntimeType.document(codegenContext.runtimeConfig) }.map { it.name }
 
     fun generateCondition(condition: Condition): Writable {
         return condition.function.accept(OuterExprGeneratorVisitor(ownership))
@@ -265,16 +266,16 @@ class BddExpressionGenerator(
                 val expressionGenerator =
                     BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
 
-                if (fn.id == "coalesce") {
-                    val variadic = fn.variadicArguments.get()
-                    println("FunctionDefinition.id: ${fn.id}")
-                    println("FunctionDefinition.returnType: ${fn.returnType}")
-                    println("FunctionDefinition.arguments: ${fn.arguments}")
-                    println(
-                        "FunctionDefinition.variadicArguments: ${fn.variadicArguments.get() as Array<AnyType>}",
-                    )
-                    println("COALESCE args in visitLibraryFunction: $args")
-                }
+//                if (fn.id == "coalesce") {
+//                    val variadic = fn.variadicArguments.get()
+//                    println("FunctionDefinition.id: ${fn.id}")
+//                    println("FunctionDefinition.returnType: ${fn.returnType}")
+//                    println("FunctionDefinition.arguments: ${fn.arguments}")
+//                    println(
+//                        "FunctionDefinition.variadicArguments: ${fn.variadicArguments.get() as Array<AnyType>}",
+//                    )
+//                    println("COALESCE args in visitLibraryFunction: $args")
+//                }
 
                 val argWritables =
                     args.map { arg ->
@@ -311,11 +312,21 @@ class BddExpressionGenerator(
                         }
                     }
 
-                rustTemplate(
-                    "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
-                    "fn" to fnDefinition.usage(),
-                    "args" to argWritables.join(","),
-                )
+                // The macro stdlib fns don't take the diagnostic_collector
+                if (fn.id == "coalesce" || fn.id == "ite") {
+                    rustTemplate(
+                        "#{fn}(#{args})",
+                        "fn" to fnDefinition.usage(),
+                        "args" to argWritables.join(","),
+                    )
+                } else {
+                    rustTemplate(
+                        "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
+                        "fn" to fnDefinition.usage(),
+                        "args" to argWritables.join(","),
+                    )
+                }
+
                 if (ownership == Ownership.Owned) {
                     rust(".to_owned()")
                 }

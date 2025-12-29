@@ -79,6 +79,8 @@ object EndpointsLib {
             .resolve("uri_encode")
     val coalesce =
         endpointsLib("coalesce").toType().resolve("coalesce!")
+    val ite =
+        endpointsLib("ite").toType().resolve("ite!")
     val evaluateBdd =
         endpointsLib("bdd_interpreter").toType().resolve("evaluate_bdd")
     val bddNode =

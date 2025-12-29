@@ -15,6 +15,7 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Ite
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
@@ -38,6 +39,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -51,7 +53,7 @@ class EndpointBddGenerator(
     private val stdlib: List<CustomRuntimeFunction>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
-    private val allRefs = AnnotatedRefs.from(bddTrait)
+    private val allRefs = AnnotatedRefs.from(bddTrait, runtimeConfig)
 
     /**
      * Main entrypoint for creating a BDD based endpoint resolver
@@ -179,7 +181,7 @@ class EndpointBddGenerator(
                     // Non-Param references
                     #{NonParamRefBindings:W}
                     match self {
-                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => #{cond_$idx:W}" }}
+                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => {println!(\"Evaluating Condition $idx\");#{cond_$idx:W}}" }}
                     }
                 }
             }
@@ -283,7 +285,8 @@ class EndpointBddGenerator(
                     }
                 } else {
                     val stringRefs =
-                        allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.String }.map { ref -> ref.name }
+                        allRefs.filter { ref -> ref.runtimeType == RuntimeType.String }
+                            .map { ref -> ref.name }
 
                     if (stringRefs.contains(it.memberName())) {
                         rust("let ${it.memberName()} = params.${it.memberName()}.as_ref().map(|s| s.clone()).unwrap_or_default();")
@@ -317,7 +320,7 @@ class EndpointBddGenerator(
             val varRefs = allRefs.variableRefs()
             varRefs.values.forEachIndexed { idx, it ->
                 val rustName = it.name
-                if (allRefs.filter { ref -> ref.rustType == AnnotatedRefs.RustType.Document }
+                if (allRefs.filter { ref -> ref.runtimeType == RuntimeType.document(runtimeConfig) }
                         .map { ref -> ref.name }.contains(rustName)
                 ) {
                     rust(
@@ -425,34 +428,20 @@ class EndpointBddGenerator(
                             it.value.type
                         }
 
-                    if (fn is Coalesce) {
-                        println("LNJ COALESCE: ${it.value} - ${it.value.type}")
-                    }
                     val rustType =
                         when {
+                            // GetAttr is inlined, not a registered fn
+                            fn is GetAttr -> RuntimeType.document(runtimeConfig)
+                            // Coalesce and Ite have generic return types so we can't source the
+                            // type from the function definition
+                            fn is Coalesce -> matchRuleTypeToRustType(fn.type(), runtimeConfig)
+                            fn is Ite -> matchRuleTypeToRustType(fn.type(), runtimeConfig)
+
                             // Simple types, doesn't matter what fn they come from
                             type is StringType -> RuntimeType.String
                             type is BooleanType -> RuntimeType.Bool
                             type is ArrayType -> RuntimeType.typedVec(RuntimeType.String)
-                            // GetAttr is inlined, not a registered fn
-                            fn is GetAttr -> RuntimeType.document(runtimeConfig)
-                            fn is Coalesce -> {
-                                println("LNJ COALESCE ARGS IN CONTEXT: ${fnDef.arguments}")
-                                val input = fnDef.arguments.first()
-                                val inputType =
-                                    if (input is OptionalType) {
-                                        input.inner()
-                                    } else {
-                                        input
-                                    }
-                                when {
-                                    inputType is StringType -> RuntimeType.String
-                                    inputType is BooleanType -> RuntimeType.Bool
-                                    else -> {
-                                        throw UnsupportedOperationException("Invalid input type for Coalesce")
-                                    }
-                                }
-                            }
+
                             // These types aren't easy to infer from the type of the reference.
                             // It is basically just an unnamed struct so we would have to match
                             // on the fields. Easier to key off of the function that sets it.
@@ -510,6 +499,20 @@ class EndpointBddGenerator(
     }
 }
 
+fun matchRuleTypeToRustType(
+    ruleType: Type,
+    runtimeConfig: RuntimeConfig,
+): RuntimeType {
+    return when (ruleType) {
+        is StringType -> RuntimeType.String
+        is BooleanType -> RuntimeType.Bool
+        is ArrayType -> RuntimeType.typedVec(matchRuleTypeToRustType(ruleType.member, runtimeConfig))
+        is OptionalType -> RuntimeType.typedOption(matchRuleTypeToRustType(ruleType.inner(), runtimeConfig))
+        is AnyType -> RuntimeType.document(runtimeConfig)
+        else -> throw IllegalArgumentException("Unsupported rules type: $ruleType")
+    }
+}
+
 /**
  * Container for annotated references, these are the variables the condition evaluation can potentially
  * refer to. They come in two variants: Parameters (which are immutable), and Variables (which are all Optional,
@@ -523,21 +526,11 @@ class AnnotatedRefs(
         Variable,
     }
 
-    enum class RustType {
-        Document,
-        String,
-        StringArray,
-        Bool,
-        Arn,
-        Partition,
-        Url,
-    }
-
     data class AnnotatedRef(
         val name: String,
         val refType: RefType,
         val isOptional: Boolean,
-        val rustType: RustType,
+        val runtimeType: RuntimeType,
         // These two are only present when RefType == Variable
         val condition: Condition?,
         val type: Type?,
@@ -556,19 +549,30 @@ class AnnotatedRefs(
     fun allRefs(): Map<String, AnnotatedRef> = refs
 
     companion object {
-        fun from(bddTrait: EndpointBddTrait): AnnotatedRefs {
+        fun from(
+            bddTrait: EndpointBddTrait,
+            runtimeConfig: RuntimeConfig,
+        ): AnnotatedRefs {
             val refs = mutableMapOf<String, AnnotatedRef>()
 
             bddTrait.parameters.forEach { param ->
-                val rustType =
+
+                val runtimeType =
                     when (param.type) {
-                        ParameterType.STRING -> RustType.String
-                        ParameterType.STRING_ARRAY -> RustType.StringArray
-                        ParameterType.BOOLEAN -> RustType.Bool
+                        ParameterType.STRING -> RuntimeType.String
+                        ParameterType.STRING_ARRAY -> RuntimeType.typedVec(RuntimeType.String)
+                        ParameterType.BOOLEAN -> RuntimeType.Bool
                         null -> throw IllegalArgumentException("Unsupported parameter type ${param.type}")
                     }
                 refs[param.memberName()] =
-                    AnnotatedRef(param.memberName(), RefType.Parameter, !param.isRequired, rustType, null, null)
+                    AnnotatedRef(
+                        param.memberName(),
+                        RefType.Parameter,
+                        !param.isRequired,
+                        runtimeType,
+                        null,
+                        null,
+                    )
             }
 
             bddTrait.conditions.forEach { cond ->
@@ -580,24 +584,24 @@ class AnnotatedRefs(
                         } else {
                             cond.function.functionDefinition.returnType
                         }
-                    val rustType =
-                        when {
-                            returnType is AnyType -> RustType.Document
-                            returnType is StringType -> RustType.String
-                            returnType is BooleanType -> RustType.Bool
-                            returnType is ArrayType ->
-                                when (returnType.member) {
-                                    is StringType -> RustType.StringArray
-                                    else -> throw IllegalArgumentException("Unsupported reference type inside an ArrayType: $returnType")
-                                }
 
-                            cond.function is ParseUrl -> RustType.Url
-                            cond.function.name == "aws.partition" -> RustType.Partition
-                            cond.function.name == "aws.parseArn" -> RustType.Arn
-                            else -> throw IllegalArgumentException("Unsupported reference type: $returnType")
+                    if (cond.function is Ite) {
+                        println("ITE RETURNTYPE: $returnType")
+                        println("ITE TYPE: ${cond.function.type()}")
+                    }
+
+                    val runtimeType =
+                        when {
+                            cond.function is Coalesce -> matchRuleTypeToRustType(cond.function.type(), runtimeConfig)
+                            cond.function is Ite -> matchRuleTypeToRustType(cond.function.type(), runtimeConfig)
+                            cond.function is ParseUrl -> EndpointsLib.url()
+                            cond.function.name == "aws.partition" -> EndpointsLib.partition(runtimeConfig)
+                            cond.function.name == "aws.parseArn" -> EndpointsLib.arn()
+                            else -> matchRuleTypeToRustType(returnType, runtimeConfig)
                         }
+
                     refs[result.rustName()] =
-                        AnnotatedRef(result.rustName(), RefType.Variable, true, rustType, cond, returnType)
+                        AnnotatedRef(result.rustName(), RefType.Variable, true, runtimeType, cond, returnType)
                 }
             }
 

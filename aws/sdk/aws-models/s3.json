@@ -1964,57 +1964,7 @@
               "fn": "isSet",
               "argv": [
                 {
-                  "ref": "Endpoint"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "Accelerate"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
                   "ref": "Bucket"
-                }
-              ]
-            },
-            {
-              "fn": "aws.partition",
-              "argv": [
-                {
-                  "ref": "Region"
-                }
-              ],
-              "assign": "partitionResult"
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "UseFIPS"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "aws-cn",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "partitionResult"
-                    },
-                    "name"
-                  ]
                 }
               ]
             },
@@ -2055,6 +2005,23 @@
               ]
             },
             {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "UseS3ExpressControlEndpoint"
+                }
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseS3ExpressControlEndpoint"
+                },
+                true
+              ]
+            },
+            {
               "fn": "stringEquals",
               "argv": [
                 "--xa-s3",
@@ -2081,15 +2048,32 @@
               "fn": "isSet",
               "argv": [
                 {
-                  "ref": "UseS3ExpressControlEndpoint"
+                  "ref": "DisableS3ExpressSessionAuth"
                 }
               ]
+            },
+            {
+              "fn": "ite",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "DisableS3ExpressSessionAuth"
+                    },
+                    false
+                  ]
+                },
+                "sigv4",
+                "sigv4-s3express"
+              ],
+              "assign": "s3e_auth"
             },
             {
               "fn": "booleanEquals",
               "argv": [
                 {
-                  "ref": "UseS3ExpressControlEndpoint"
+                  "ref": "DisableS3ExpressSessionAuth"
                 },
                 true
               ]
@@ -2104,33 +2088,28 @@
                 7,
                 true
               ],
-              "assign": "accessPointSuffix"
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "DisableS3ExpressSessionAuth"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "DisableS3ExpressSessionAuth"
-                },
-                true
-              ]
+              "assign": "bucketAliasSuffix"
             },
             {
               "fn": "stringEquals",
               "argv": [
                 {
-                  "ref": "accessPointSuffix"
+                  "ref": "bucketAliasSuffix"
                 },
                 "--op-s3"
               ]
+            },
+            {
+              "fn": "substring",
+              "argv": [
+                {
+                  "ref": "Bucket"
+                },
+                8,
+                12,
+                true
+              ],
+              "assign": "regionPrefix"
             },
             {
               "fn": "substring",
@@ -2157,16 +2136,61 @@
               "assign": "hardwareType"
             },
             {
-              "fn": "substring",
+              "fn": "ite",
               "argv": [
                 {
-                  "ref": "Bucket"
+                  "ref": "UseFIPS"
                 },
-                8,
-                12,
-                true
+                "-fips",
+                ""
               ],
-              "assign": "regionPrefix"
+              "assign": "s3e_fips"
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "regionPartition"
+            },
+            {
+              "fn": "ite",
+              "argv": [
+                {
+                  "ref": "UseDualStack"
+                },
+                ".dualstack",
+                ""
+              ],
+              "assign": "s3e_ds"
+            },
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Endpoint"
+                }
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseFIPS"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "Accelerate"
+                },
+                true
+              ]
             },
             {
               "fn": "isSet",
@@ -2191,6 +2215,38 @@
               ]
             },
             {
+              "fn": "aws.parseArn",
+              "argv": [
+                {
+                  "ref": "Bucket"
+                }
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "partitionResult"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "aws-cn",
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "partitionResult"
+                    },
+                    "name"
+                  ]
+                }
+              ]
+            },
+            {
               "fn": "isValidHostLabel",
               "argv": [
                 {
@@ -2200,11 +2256,12 @@
               ]
             },
             {
-              "fn": "aws.parseArn",
+              "fn": "aws.isVirtualHostableS3Bucket",
               "argv": [
                 {
                   "ref": "Bucket"
-                }
+                },
+                false
               ]
             },
             {
@@ -2215,15 +2272,6 @@
                 }
               ],
               "assign": "url"
-            },
-            {
-              "fn": "aws.isVirtualHostableS3Bucket",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                false
-              ]
             },
             {
               "fn": "aws.isVirtualHostableS3Bucket",
@@ -2257,6 +2305,38 @@
                 }
               ],
               "assign": "bucketArn"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "arn:",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        0,
+                        4,
+                        false
+                      ]
+                    },
+                    ""
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "isValidHostLabel",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                false
+              ]
             },
             {
               "fn": "booleanEquals",
@@ -2320,76 +2400,6 @@
             {
               "fn": "stringEquals",
               "argv": [
-                {
-                  "ref": "regionPrefix"
-                },
-                "beta"
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "DisableAccessPoints"
-                }
-              ]
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                6,
-                14,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_1"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "hardwareType"
-                },
-                "e"
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "DisableAccessPoints"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "hardwareType"
-                },
-                "o"
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "resourceId[4]"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
                 "--",
                 {
                   "fn": "coalesce",
@@ -2400,161 +2410,12 @@
                         {
                           "ref": "Bucket"
                         },
-                        14,
-                        16,
+                        21,
+                        23,
                         true
                       ]
                     },
                     ""
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "resourceId[2]"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "ref": "bucketArn"
-                },
-                "resourceId[0]"
-              ],
-              "assign": "arnType"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "arnType"
-                },
-                ""
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "arnType"
-                },
-                "accesspoint"
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "s3-object-lambda",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "service"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "aws.partition",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
-              ],
-              "assign": "bucketPartition"
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                7,
-                15,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_6"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        15,
-                        17,
-                        true
-                      ]
-                    },
-                    ""
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                7,
-                16,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_7"
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                false,
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "url"
-                    },
-                    "isIp"
                   ]
                 }
               ]
@@ -2583,162 +2444,32 @@
               ]
             },
             {
-              "fn": "substring",
+              "fn": "isSet",
               "argv": [
                 {
-                  "ref": "Bucket"
-                },
-                7,
-                20,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_8"
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                6,
-                15,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_2"
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "ref": "bucketArn"
-                },
-                "resourceId[1]"
-              ],
-              "assign": "accessPointName_ssa_1"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "accessPointName_ssa_1"
-                },
-                ""
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "arn:",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        0,
-                        4,
-                        false
-                      ]
-                    },
-                    ""
-                  ]
+                  "ref": "DisableAccessPoints"
                 }
               ]
             },
             {
-              "fn": "substring",
+              "fn": "booleanEquals",
               "argv": [
                 {
-                  "ref": "Bucket"
+                  "ref": "DisableAccessPoints"
                 },
-                6,
-                19,
                 true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_3"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        19,
-                        21,
-                        true
-                      ]
-                    },
-                    ""
-                  ]
-                }
               ]
             },
             {
-              "fn": "stringEquals",
+              "fn": "isSet",
               "argv": [
-                "s3-outposts",
                 {
                   "fn": "getAttr",
                   "argv": [
                     {
                       "ref": "bucketArn"
                     },
-                    "service"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "ref": "bucketArn"
-                },
-                "resourceId[1]"
-              ],
-              "assign": "outpostId_ssa_1"
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                6,
-                20,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_4"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        20,
-                        22,
-                        true
-                      ]
-                    },
-                    ""
+                    "resourceId[4]"
                   ]
                 }
               ]
@@ -2747,86 +2478,15 @@
               "fn": "isSet",
               "argv": [
                 {
-                  "ref": "UseArnRegion"
-                }
-              ]
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                7,
-                21,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_9"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
-                {
-                  "fn": "coalesce",
+                  "fn": "getAttr",
                   "argv": [
                     {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        21,
-                        23,
-                        true
-                      ]
+                      "ref": "bucketArn"
                     },
-                    ""
+                    "resourceId[2]"
                   ]
                 }
               ]
-            },
-            {
-              "fn": "isValidHostLabel",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                false
-              ]
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                7,
-                27,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_10"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                "aws-global"
-              ]
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
-                6,
-                26,
-                true
-              ],
-              "assign": "s3expressAvailabilityZoneId_ssa_5"
             },
             {
               "fn": "stringEquals",
@@ -2864,8 +2524,293 @@
                         {
                           "ref": "Bucket"
                         },
+                        19,
+                        21,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "hardwareType"
+                },
+                "e"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "hardwareType"
+                },
+                "o"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "--",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
                         26,
                         28,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[0]"
+              ],
+              "assign": "arnType"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "arnType"
+                },
+                ""
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "arnType"
+                },
+                "accesspoint"
+              ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[1]"
+              ],
+              "assign": "accessPointName_ssa_1"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "accessPointName_ssa_1"
+                },
+                ""
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "s3-object-lambda",
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "service"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "s3-outposts",
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "service"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[1]"
+              ],
+              "assign": "outpostId_ssa_1"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "",
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "region"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "region"
+                  ]
+                }
+              ],
+              "assign": "bucketPartition"
+            },
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "UseArnRegion"
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "region"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "isValidHostLabel",
+              "argv": [
+                {
+                  "ref": "accessPointName_ssa_1"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                false,
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "url"
+                    },
+                    "isIp"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "--",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        14,
+                        16,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "aws-global"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "--",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        20,
+                        22,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "--",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        15,
+                        17,
                         true
                       ]
                     },
@@ -2884,15 +2829,6 @@
               ]
             },
             {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                "us-east-1"
-              ]
-            },
-            {
               "fn": "booleanEquals",
               "argv": [
                 {
@@ -2908,23 +2844,6 @@
                   "ref": "outpostId_ssa_1"
                 },
                 false
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
               ]
             },
             {
@@ -2968,16 +2887,10 @@
             {
               "fn": "stringEquals",
               "argv": [
-                "",
                 {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "accountId"
-                  ]
-                }
+                  "ref": "Region"
+                },
+                "us-east-1"
               ]
             },
             {
@@ -2996,6 +2909,47 @@
               ]
             },
             {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "fn": "split",
+                  "argv": [
+                    {
+                      "ref": "Bucket"
+                    },
+                    "--",
+                    0
+                  ]
+                },
+                "[1]"
+              ],
+              "assign": "s3expressAvailabilityZoneId"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                "",
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "accountId"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "DisableMultiRegionAccessPoints"
+                },
+                true
+              ]
+            },
+            {
               "fn": "isValidHostLabel",
               "argv": [
                 {
@@ -3017,47 +2971,6 @@
                   "ref": "accessPointName_ssa_1"
                 },
                 false
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "DisableMultiRegionAccessPoints"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "isValidHostLabel",
-              "argv": [
-                {
-                  "ref": "accessPointName_ssa_1"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "partition"
-                  ]
-                },
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "partitionResult"
-                    },
-                    "name"
-                  ]
-                }
               ]
             },
             {
@@ -3081,12 +2994,53 @@
               "assign": "accessPointName_ssa_2"
             },
             {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "mrapPartition"
+            },
+            {
               "fn": "stringEquals",
               "argv": [
                 {
                   "ref": "outpostType"
                 },
                 "accesspoint"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "partition"
+                  ]
+                },
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "mrapPartition"
+                    },
+                    "name"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "regionPrefix"
+                },
+                "beta"
               ]
             }
           ],
@@ -3130,7 +3084,7 @@
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "sigv4",
+                      "name": "{s3e_auth}",
                       "signingName": "s3express",
                       "signingRegion": "{Region}"
                     }
@@ -3149,7 +3103,7 @@
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "sigv4",
+                      "name": "{s3e_auth}",
                       "signingName": "s3express",
                       "signingRegion": "{Region}"
                     }
@@ -3167,45 +3121,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "{url#scheme}://{url#authority}/{uri_encoded_bucket}{url#path}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "{url#scheme}://{Bucket}.{url#authority}{url#path}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3express-control{s3e_fips}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
@@ -3224,431 +3140,13 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://{Bucket}.s3express{s3e_fips}-{s3expressAvailabilityZoneId}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_1}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_1}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_1}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_1}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_2}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_2}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_2}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_2}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_3}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_3}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_3}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_3}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_4}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_4}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_4}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_4}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_5}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_5}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_5}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_5}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
+                      "name": "{s3e_auth}",
                       "signingName": "s3express",
                       "signingRegion": "{Region}"
                     }
@@ -3666,1153 +3164,13 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_1}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_1}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_1}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_1}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_2}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_2}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_2}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_2}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_3}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_3}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_3}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_3}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_4}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_4}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_4}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_4}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_5}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_5}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_5}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_5}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_6}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_6}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_6}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_6}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_7}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_7}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_7}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_7}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_8}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_8}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_8}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_8}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_9}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_9}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_9}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_9}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_10}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_10}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_10}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_10}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_6}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_6}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_6}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_6}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_7}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_7}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_7}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_7}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_8}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_8}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_8}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_8}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_9}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_9}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_9}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_9}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_10}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-fips-{s3expressAvailabilityZoneId_ssa_10}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_10}.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3express-{s3expressAvailabilityZoneId_ssa_10}.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4-s3express",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
                 "url": "{url#scheme}://{url#authority}{url#path}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "sigv4",
+                      "name": "{s3e_auth}",
                       "signingName": "s3express",
                       "signingRegion": "{Region}"
                     }
@@ -4825,64 +3183,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3express-control-fips.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control-fips.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "backend": "S3Express",
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3express",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3express-control.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://s3express-control{s3e_fips}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
@@ -4930,7 +3231,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.ec2.s3-outposts.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -4978,7 +3279,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.op-{outpostId_ssa_2}.s3-outposts.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.op-{outpostId_ssa_2}.s3-outposts.{Region}.{regionPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -5572,7 +3873,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}.accesspoint.s3-global.{partitionResult#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}.accesspoint.s3-global.{mrapPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -5589,7 +3890,7 @@
             },
             {
               "conditions": [],
-              "error": "Client was configured for partition `{partitionResult#name}` but bucket referred to partition `{bucketArn#partition}`",
+              "error": "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`",
               "type": "error"
             },
             {
@@ -6172,8 +4473,8 @@
             }
           ],
           "root": 2,
-          "nodeCount": 959,
-          "nodes": "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"
+          "nodeCount": 709,
+          "nodes": "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"
         },
         "smithy.rules#endpointTests": {
           "testCases": [
