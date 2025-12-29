@@ -280,32 +280,46 @@ class BddExpressionGenerator(
                 val argWritables =
                     args.map { arg ->
                         if (
-                            (arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
                             (
-                                arg is StringLiteral &&
-                                    optionalRefNames.contains(
-                                        Identifier.of(arg.value().toString()).rustName(),
-                                    )
-                            ) ||
-                            (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+                                (arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
+                                    (
+                                        arg is StringLiteral &&
+                                            optionalRefNames.contains(
+                                                Identifier.of(arg.value().toString()).rustName(),
+                                            )
+                                    ) ||
+                                    (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+                            )
                         ) {
-                            val param =
-                                if (arg is Reference && documentRefNames.contains(arg.name.rustName())) {
-                                    """&param.as_string().expect("Document was string type.")"""
-                                } else {
-                                    "param"
+                            if ((fn.id == "coalesce" || fn.id == "ite") && !(arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)) {
+                                writable {
+                                    rust(
+                                        """
+                                        *#W
+                                        """.trimMargin(),
+                                        expressionGenerator.generateExpression(arg),
+                                    )
                                 }
-                            writable {
-                                rust(
-                                    """
-                                    if let Some(param) = #W{
-                                        $param
+                            } else {
+                                val param =
+                                    if (arg is Reference && documentRefNames.contains(arg.name.rustName())) {
+                                        """&param.as_string().expect("Document was string type.")"""
                                     } else {
-                                        return false
+                                        "param"
                                     }
-                                    """.trimMargin(),
-                                    expressionGenerator.generateExpression(arg),
-                                )
+
+                                writable {
+                                    rust(
+                                        """
+                                        if let Some(param) = #W{
+                                            $param
+                                        } else {
+                                            return false
+                                        }
+                                        """.trimMargin(),
+                                        expressionGenerator.generateExpression(arg),
+                                    )
+                                }
                             }
                         } else {
                             expressionGenerator.generateExpression(arg)
