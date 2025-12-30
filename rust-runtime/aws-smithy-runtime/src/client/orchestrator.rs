@@ -1366,4 +1366,41 @@ mod tests {
             .read_after_execution_called
             .load(Ordering::Relaxed));
     }
+
+    #[test]
+    fn rewind_preserves_error_state() {
+        use aws_smithy_runtime_api::client::interceptors::context::{
+            InterceptorContext, RewindResult,
+        };
+        use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+        use aws_smithy_types::config_bag::ConfigBag;
+
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        let mut cfg = ConfigBag::base();
+
+        // Set a request so rewind can occur
+        ctx.set_request(HttpRequest::empty());
+        ctx.save_checkpoint();
+
+        // First rewind marks as tainted
+        let _ = ctx.rewind(&mut cfg);
+
+        // Simulate a timeout error
+        ctx.fail(OrchestratorError::timeout("timeout occurred".into()));
+        assert!(ctx.is_failed(), "context should be failed after timeout");
+
+        // Second rewind should occur and preserve error
+        let rewind_result = ctx.rewind(&mut cfg);
+
+        // Bug: rewind() was clearing the error state
+        // Fix: rewind() now preserves error state
+        assert!(
+            ctx.is_failed(),
+            "context should still be failed after rewind to preserve timeout error"
+        );
+        assert!(
+            matches!(rewind_result, RewindResult::Occurred),
+            "rewind should have occurred"
+        );
+    }
 }
