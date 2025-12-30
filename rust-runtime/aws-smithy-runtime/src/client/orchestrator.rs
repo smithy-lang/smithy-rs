@@ -1369,7 +1369,9 @@ mod tests {
 
     #[test]
     fn rewind_preserves_error_state() {
-        use aws_smithy_runtime_api::client::interceptors::context::{InterceptorContext, RewindResult};
+        use aws_smithy_runtime_api::client::interceptors::context::{
+            InterceptorContext, RewindResult,
+        };
         use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
         use aws_smithy_types::config_bag::ConfigBag;
 
@@ -1389,7 +1391,7 @@ mod tests {
 
         // Second rewind should occur and preserve error
         let rewind_result = ctx.rewind(&mut cfg);
-        
+
         // Bug: rewind() was clearing the error state
         // Fix: rewind() now preserves error state
         assert!(
