@@ -346,17 +346,6 @@ async fn try_op(
             }
         }
     }
-
-    // After the retry loop exits, ensure we don't silently succeed if an error occurred.
-    // This prevents the bug where a timeout error is set via continue_on_err! but then
-    // the retry strategy returns ShouldAttempt::No, causing the loop to exit with break.
-    // Without this check, the orchestrator would return Ok() even though no successful
-    // HTTP response was received. See: https://github.com/smithy-lang/smithy-rs/issues/XXXX
-    if ctx.is_failed() {
-        debug!("retry loop exited but context has failed state, operation will return error");
-        // Early return here ensures invoke() will see the failed context and return Err
-        return;
-    }
 }
 
 async fn try_attempt(
@@ -1376,5 +1365,40 @@ mod tests {
             .inner
             .read_after_execution_called
             .load(Ordering::Relaxed));
+    }
+
+    #[test]
+    fn rewind_preserves_error_state() {
+        use aws_smithy_runtime_api::client::interceptors::context::{InterceptorContext, RewindResult};
+        use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+        use aws_smithy_types::config_bag::ConfigBag;
+
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        let mut cfg = ConfigBag::base();
+
+        // Set a request so rewind can occur
+        ctx.set_request(HttpRequest::empty());
+        ctx.save_checkpoint();
+
+        // First rewind marks as tainted
+        let _ = ctx.rewind(&mut cfg);
+
+        // Simulate a timeout error
+        ctx.fail(OrchestratorError::timeout("timeout occurred".into()));
+        assert!(ctx.is_failed(), "context should be failed after timeout");
+
+        // Second rewind should occur and preserve error
+        let rewind_result = ctx.rewind(&mut cfg);
+        
+        // Bug: rewind() was clearing the error state
+        // Fix: rewind() now preserves error state
+        assert!(
+            ctx.is_failed(),
+            "context should still be failed after rewind to preserve timeout error"
+        );
+        assert!(
+            matches!(rewind_result, RewindResult::Occurred),
+            "rewind should have occurred"
+        );
     }
 }
