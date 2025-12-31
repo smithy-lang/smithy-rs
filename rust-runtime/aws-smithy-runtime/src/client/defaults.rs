@@ -148,7 +148,7 @@ pub fn default_retry_config_plugin(
 }
 
 /// Runtime plugin that sets the default retry strategy, config, and partition.
-/// 
+///
 /// This version respects the behavior version to enable retries by default for newer versions.
 pub fn default_retry_config_plugin_v2(
     default_partition_name: impl Into<Cow<'static, str>>,
@@ -213,7 +213,7 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 }
 
 /// Runtime plugin that sets the default timeout config.
-/// 
+///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
 pub fn default_timeout_config_plugin_v2(
     behavior_version: BehaviorVersion,
@@ -435,6 +435,51 @@ mod tests {
                 .unwrap()
                 .upload_enabled(),
             "stalled stream protection on uploads MUST NOT be enabled before v2024_03_28"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn v2025_01_17_retry_config_enabled_by_default() {
+        let latest = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::latest(),
+        )));
+        let v2024 = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::v2024_03_28(),
+        )));
+
+        assert!(
+            latest.load::<RetryConfig>().unwrap().has_retry(),
+            "retries MUST be enabled by default for v2025_01_17 and later"
+        );
+        assert!(
+            !v2024.load::<RetryConfig>().unwrap().has_retry(),
+            "retries MUST be disabled by default before v2025_01_17"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn v2025_01_17_connection_timeout_enabled_by_default() {
+        let latest = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::latest(),
+        )));
+        let v2024 = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::v2024_03_28(),
+        )));
+
+        let latest_timeout = latest.load::<TimeoutConfig>().unwrap();
+        assert_eq!(
+            latest_timeout.connect_timeout(),
+            Some(Duration::from_millis(3100)),
+            "connection timeout MUST be 3.1s by default for v2025_01_17 and later"
+        );
+
+        let v2024_timeout = v2024.load::<TimeoutConfig>().unwrap();
+        assert_eq!(
+            v2024_timeout.connect_timeout(),
+            None,
+            "connection timeout MUST be disabled by default before v2025_01_17"
         );
     }
 }

@@ -40,11 +40,16 @@ mod with_service_config {
     use aws_sdk_s3 as s3;
 
     #[test]
+    #[allow(deprecated)]
     fn manual_config_construction_all_defaults() {
-        // When manually constructing `Config` with everything unset,
-        // it should work since there will be no timeouts or retries enabled,
+        // When manually constructing `Config` with everything unset and using an older
+        // behavior version, it should work since there will be no timeouts or retries enabled,
         // and thus, no sleep impl is required.
-        let config = s3::Config::builder().build();
+        let config = s3::Config::builder()
+            .behavior_version(
+                aws_smithy_runtime_api::client::behavior_version::BehaviorVersion::v2024_03_28(),
+            )
+            .build();
         let _s3 = s3::Client::from_conf(config);
     }
 }
