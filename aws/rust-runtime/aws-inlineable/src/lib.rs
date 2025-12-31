@@ -26,6 +26,10 @@
 #[allow(dead_code)]
 pub mod account_id_endpoint;
 
+/// Supporting code for tracking observability features (tracing/metrics).
+#[allow(dead_code)]
+pub mod observability_feature;
+
 /// Supporting code for the aws-chunked content encoding.
 pub mod aws_chunked;
 
