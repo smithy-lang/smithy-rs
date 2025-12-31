@@ -147,6 +147,37 @@ pub fn default_retry_config_plugin(
     )
 }
 
+/// Runtime plugin that sets the default retry strategy, config, and partition.
+///
+/// This version respects the behavior version to enable retries by default for newer versions.
+pub fn default_retry_config_plugin_v2(
+    default_partition_name: impl Into<Cow<'static, str>>,
+    behavior_version: BehaviorVersion,
+) -> Option<SharedRuntimePlugin> {
+    let retry_partition = RetryPartition::new(default_partition_name);
+    Some(
+        default_plugin("default_retry_config_plugin", |components| {
+            components
+                .with_retry_strategy(Some(StandardRetryStrategy::new()))
+                .with_config_validator(SharedConfigValidator::base_client_config_fn(
+                    validate_retry_config,
+                ))
+                .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
+        })
+        .with_config(layer("default_retry_config", |layer| {
+            #[allow(deprecated)]
+            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                RetryConfig::standard()
+            } else {
+                RetryConfig::disabled()
+            };
+            layer.store_put(retry_config);
+            layer.store_put(retry_partition);
+        }))
+        .into_shared(),
+    )
+}
+
 fn validate_retry_config(
     components: &RuntimeComponentsBuilder,
     cfg: &ConfigBag,
@@ -176,6 +207,33 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
         })
         .with_config(layer("default_timeout_config", |layer| {
             layer.store_put(TimeoutConfig::disabled());
+        }))
+        .into_shared(),
+    )
+}
+
+/// Runtime plugin that sets the default timeout config.
+///
+/// This version respects the behavior version to enable connection timeout by default for newer versions.
+pub fn default_timeout_config_plugin_v2(
+    behavior_version: BehaviorVersion,
+) -> Option<SharedRuntimePlugin> {
+    Some(
+        default_plugin("default_timeout_config_plugin", |components| {
+            components.with_config_validator(SharedConfigValidator::base_client_config_fn(
+                validate_timeout_config,
+            ))
+        })
+        .with_config(layer("default_timeout_config", |layer| {
+            #[allow(deprecated)]
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                TimeoutConfig::builder()
+                    .connect_timeout(Duration::from_millis(3100))
+                    .build()
+            } else {
+                TimeoutConfig::disabled()
+            };
+            layer.store_put(timeout_config);
         }))
         .into_shared(),
     )
@@ -320,14 +378,15 @@ pub fn default_plugins(
     [
         default_http_client_plugin_v2(behavior_version),
         default_identity_cache_plugin(),
-        default_retry_config_plugin(
+        default_retry_config_plugin_v2(
             params
                 .retry_partition_name
                 .expect("retry_partition_name is required"),
+            behavior_version,
         ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
-        default_timeout_config_plugin(),
+        default_timeout_config_plugin_v2(behavior_version),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
@@ -376,6 +435,51 @@ mod tests {
                 .unwrap()
                 .upload_enabled(),
             "stalled stream protection on uploads MUST NOT be enabled before v2024_03_28"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn v2025_01_17_retry_config_enabled_by_default() {
+        let latest = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::latest(),
+        )));
+        let v2024 = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::v2024_03_28(),
+        )));
+
+        assert!(
+            latest.load::<RetryConfig>().unwrap().has_retry(),
+            "retries MUST be enabled by default for v2025_01_17 and later"
+        );
+        assert!(
+            !v2024.load::<RetryConfig>().unwrap().has_retry(),
+            "retries MUST be disabled by default before v2025_01_17"
+        );
+    }
+
+    #[test]
+    #[allow(deprecated)]
+    fn v2025_01_17_connection_timeout_enabled_by_default() {
+        let latest = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::latest(),
+        )));
+        let v2024 = config_for(default_plugins(test_plugin_params(
+            BehaviorVersion::v2024_03_28(),
+        )));
+
+        let latest_timeout = latest.load::<TimeoutConfig>().unwrap();
+        assert_eq!(
+            latest_timeout.connect_timeout(),
+            Some(Duration::from_millis(3100)),
+            "connection timeout MUST be 3.1s by default for v2025_01_17 and later"
+        );
+
+        let v2024_timeout = v2024.load::<TimeoutConfig>().unwrap();
+        assert_eq!(
+            v2024_timeout.connect_timeout(),
+            None,
+            "connection timeout MUST be disabled by default before v2025_01_17"
         );
     }
 }
