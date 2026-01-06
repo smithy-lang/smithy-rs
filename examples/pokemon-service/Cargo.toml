@@ -14,9 +14,22 @@ tokio = "1.26.0"
 tower = "0.4"
 tracing = "0.1"
 
+metrique = { version = "=0.1.9", features = ["emf"] }
+metrique-writer-core = "=0.1.7"
+metrique-macro = "=0.1.6"
+metrique-core = "=0.1.8"
+metrique-writer = "=0.1.10"
+metrique-service-metrics = "=0.1.9"
+metrique-timesource = "=0.1.5"
+metrique-writer-macro = "=0.1.4"
+metrique-writer-format-emf = "=0.1.9"
+
+tracing-appender = "0.2"
+
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
 pokemon-service-common = { path = "../pokemon-service-common/" }
+aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
@@ -31,7 +44,7 @@ hyper = { version = "0.14.26", features = ["server", "client"] }
 hyper-rustls = { version = "0.24", features = ["http2"] }
 
 # Local paths
-aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
+aws-smithy-http = { version = "*" }
 pokemon-service-client = { path = "../pokemon-service-client/", features = [
     "behavior-version-latest",
 ] }
