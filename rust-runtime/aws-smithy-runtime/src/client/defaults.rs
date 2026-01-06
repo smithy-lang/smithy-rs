@@ -148,12 +148,10 @@ pub fn default_retry_config_plugin(
 }
 
 /// Runtime plugin that sets the default retry strategy, config, and partition.
-/// 
+///
 /// This version respects the behavior version to enable retries by default for newer versions.
 /// For AWS SDK clients, retries are enabled by default.
-pub fn default_retry_config_plugin_v2(
-    params: &DefaultPluginParams,
-) -> Option<SharedRuntimePlugin> {
+pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<SharedRuntimePlugin> {
     let default_partition_name = params.retry_partition_name.as_ref()?.clone();
     let is_aws_sdk = params.is_aws_sdk;
     let retry_partition = RetryPartition::new(default_partition_name);
@@ -214,12 +212,15 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 }
 
 /// Runtime plugin that sets the default timeout config.
-/// 
+///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
 /// For AWS SDK clients, connection timeout is enabled by default.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
+    let behavior_version = params
+        .behavior_version
+        .unwrap_or_else(BehaviorVersion::latest);
     let is_aws_sdk = params.is_aws_sdk;
     Some(
         default_plugin("default_timeout_config_plugin", |components| {
@@ -228,17 +229,19 @@ pub fn default_timeout_config_plugin_v2(
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            let timeout_config = if is_aws_sdk {
-                // AWS SDK: Set connect_timeout, explicitly disable operation timeouts
-                TimeoutConfig::builder()
-                    .connect_timeout(Duration::from_millis(3100))
-                    .disable_operation_timeout()
-                    .disable_operation_attempt_timeout()
-                    .build()
-            } else {
-                // Non-AWS SDK: All timeouts disabled
-                TimeoutConfig::disabled()
-            };
+            #[allow(deprecated)]
+            let timeout_config =
+                if is_aws_sdk && behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                    // AWS SDK with new behavior version: Set connect_timeout, explicitly disable operation timeouts
+                    TimeoutConfig::builder()
+                        .connect_timeout(Duration::from_millis(3100))
+                        .disable_operation_timeout()
+                        .disable_operation_attempt_timeout()
+                        .build()
+                } else {
+                    // Old behavior versions or non-AWS SDK: All timeouts disabled
+                    TimeoutConfig::disabled()
+                };
             layer.store_put(timeout_config);
         }))
         .into_shared(),
@@ -452,8 +455,7 @@ mod tests {
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
             .with_is_aws_sdk(true);
-        let plugin = default_retry_config_plugin_v2(&params)
-            .expect("plugin should be created");
+        let plugin = default_retry_config_plugin_v2(&params).expect("plugin should be created");
 
         let config = plugin.config().expect("config should exist");
         let retry_config = config
@@ -472,8 +474,7 @@ mod tests {
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
             .with_is_aws_sdk(false);
-        let plugin = default_retry_config_plugin_v2(&params)
-            .expect("plugin should be created");
+        let plugin = default_retry_config_plugin_v2(&params).expect("plugin should be created");
 
         let config = plugin.config().expect("config should exist");
         let retry_config = config

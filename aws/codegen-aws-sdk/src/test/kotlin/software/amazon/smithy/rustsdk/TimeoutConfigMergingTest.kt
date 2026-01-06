@@ -159,6 +159,8 @@ class TimeoutConfigMergingTest {
                             &TimeoutConfig::builder()
                                 .read_timeout(Duration::from_secs(10))
                                 .connect_timeout(connect_timeout)
+                                .disable_operation_timeout()
+                                .disable_operation_attempt_timeout()
                                 .build(),
                             "read timeout overridden"
                         );
