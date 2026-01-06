@@ -15,7 +15,7 @@
 pub(crate) mod macros;
 
 pub mod body;
-pub(crate) mod error;
+pub mod error;
 pub mod extension;
 pub mod instrumentation;
 pub mod layer;
