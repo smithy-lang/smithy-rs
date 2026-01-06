@@ -6,7 +6,6 @@
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime};
 
-use aws_smithy_async::time::SharedTimeSource;
 use tokio::sync::OwnedSemaphorePermit;
 use tracing::{debug, trace};
 
@@ -257,7 +256,10 @@ impl RetryStrategy for StandardRetryStrategy {
 
         //  acquire permit for retry
         let error_kind = error_kind.expect("result was classified retryable");
-        match token_bucket.acquire(&error_kind) {
+        match token_bucket.acquire(
+            &error_kind,
+            &runtime_components.time_source().unwrap_or_default(),
+        ) {
             Some(permit) => self.set_retry_permit(permit),
             None => {
                 debug!("attempt #{request_attempts} failed with {error_kind:?}; However, not enough retry quota is available for another attempt so no retry will be attempted.");
@@ -372,12 +374,8 @@ impl TokenBucketProvider {
     ///
     /// NOTE: This partition should be the one used for every operation on a client
     /// unless config is overridden.
-    pub(crate) fn new(default_partition: RetryPartition, time_source: SharedTimeSource) -> Self {
-        let token_bucket = TOKEN_BUCKET.get_or_init(default_partition.clone(), || {
-            let mut tb = TokenBucket::default();
-            tb.update_time_source(time_source);
-            tb
-        });
+    pub(crate) fn new(default_partition: RetryPartition) -> Self {
+        let token_bucket = TOKEN_BUCKET.get_or_init_default(default_partition.clone());
         Self {
             default_partition,
             token_bucket,
@@ -393,7 +391,7 @@ impl Intercept for TokenBucketProvider {
     fn modify_before_retry_loop(
         &self,
         _context: &mut BeforeTransmitInterceptorContextMut<'_>,
-        runtime_components: &RuntimeComponents,
+        _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
         let retry_partition = cfg.load::<RetryPartition>().expect("set in default config");
@@ -407,11 +405,7 @@ impl Intercept for TokenBucketProvider {
                     // avoid contention on the global lock
                     self.token_bucket.clone()
                 } else {
-                    TOKEN_BUCKET.get_or_init(retry_partition.clone(), || {
-                        let mut tb = TokenBucket::default();
-                        tb.update_time_source(runtime_components.time_source().unwrap_or_default());
-                        tb
-                    })
+                    TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
                 }
             }
             RetryPartitionInner::Custom { token_bucket, .. } => token_bucket.clone(),
