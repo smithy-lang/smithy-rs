@@ -66,7 +66,7 @@ class TimeoutConfigMergingTest {
                         let operation = Duration::from_secs(4);
                         let http_client = infallible_client_fn(|_req| http::Response::builder().body(SdkBody::empty()).unwrap());
                         let sdk_config = SdkConfig::builder()
-                            .behavior_version(aws_smithy_runtime_api::client::behavior_version::BehaviorVersion::v2024_03_28())
+                            .behavior_version(aws_smithy_runtime_api::client::behavior_version::BehaviorVersion::v2025_01_17())
                             .timeout_config(
                                 TimeoutConfig::builder()
                                     .connect_timeout(connect_timeout)

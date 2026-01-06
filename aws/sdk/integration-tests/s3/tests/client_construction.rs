@@ -50,12 +50,11 @@ mod with_service_config {
     }
 
     #[test]
-    #[allow(deprecated)]
     fn test_client_with_new_behavior_version_builds_successfully() {
-        // With v2025_01_17, retries are enabled by default
+        // With v2025_08_07, retries are enabled by default
         // This test verifies the client builds without panicking about missing sleep impl
         let config = s3::Config::builder()
-            .behavior_version(BehaviorVersion::v2025_01_17())
+            .behavior_version(BehaviorVersion::v2025_08_07())
             .region(aws_types::region::Region::new("us-east-1"))
             .credentials_provider(aws_credential_types::Credentials::for_tests())
             .build();
@@ -68,9 +67,9 @@ mod with_service_config {
     #[test]
     #[allow(deprecated)]
     fn test_client_with_old_behavior_version_builds_successfully() {
-        // With v2024_03_28, retries are disabled by default
+        // With v2025_01_17, retries are disabled by default
         let config = s3::Config::builder()
-            .behavior_version(BehaviorVersion::v2024_03_28())
+            .behavior_version(BehaviorVersion::v2025_01_17())
             .region(aws_types::region::Region::new("us-east-1"))
             .credentials_provider(aws_credential_types::Credentials::for_tests())
             .build();

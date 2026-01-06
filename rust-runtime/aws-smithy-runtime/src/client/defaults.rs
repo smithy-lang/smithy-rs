@@ -151,9 +151,10 @@ pub fn default_retry_config_plugin(
 /// 
 /// This version respects the behavior version to enable retries by default for newer versions.
 pub fn default_retry_config_plugin_v2(
-    default_partition_name: impl Into<Cow<'static, str>>,
-    behavior_version: BehaviorVersion,
+    params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
+    let default_partition_name = params.retry_partition_name.as_ref()?.clone();
+    let behavior_version = params.behavior_version.unwrap_or_else(BehaviorVersion::latest);
     let retry_partition = RetryPartition::new(default_partition_name);
     Some(
         default_plugin("default_retry_config_plugin", |components| {
@@ -166,7 +167,7 @@ pub fn default_retry_config_plugin_v2(
         })
         .with_config(layer("default_retry_config", |layer| {
             #[allow(deprecated)]
-            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
                 RetryConfig::standard()
             } else {
                 RetryConfig::disabled()
@@ -216,8 +217,9 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// 
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
 pub fn default_timeout_config_plugin_v2(
-    behavior_version: BehaviorVersion,
+    params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
+    let behavior_version = params.behavior_version.unwrap_or_else(BehaviorVersion::latest);
     Some(
         default_plugin("default_timeout_config_plugin", |components| {
             components.with_config_validator(SharedConfigValidator::base_client_config_fn(
@@ -226,7 +228,7 @@ pub fn default_timeout_config_plugin_v2(
         })
         .with_config(layer("default_timeout_config", |layer| {
             #[allow(deprecated)]
-            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
                 // New behavior: Set connect_timeout, leave others unset
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
@@ -380,15 +382,10 @@ pub fn default_plugins(
     [
         default_http_client_plugin_v2(behavior_version),
         default_identity_cache_plugin(),
-        default_retry_config_plugin_v2(
-            params
-                .retry_partition_name
-                .expect("retry_partition_name is required"),
-            behavior_version,
-        ),
+        default_retry_config_plugin_v2(&params),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
-        default_timeout_config_plugin_v2(behavior_version),
+        default_timeout_config_plugin_v2(&params),
         enforce_content_length_runtime_plugin(),
         default_stalled_stream_protection_config_plugin_v2(behavior_version),
     ]
@@ -441,13 +438,12 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_retry_enabled_for_v2025_01_17() {
-        let plugin = default_retry_config_plugin_v2(
-            "test-partition",
-            BehaviorVersion::v2025_01_17(),
-        )
-        .expect("plugin should be created");
+    fn test_retry_enabled_for_v2025_08_07() {
+        let params = DefaultPluginParams::new()
+            .with_retry_partition_name("test-partition")
+            .with_behavior_version(BehaviorVersion::v2025_08_07());
+        let plugin = default_retry_config_plugin_v2(&params)
+            .expect("plugin should be created");
 
         let config = plugin.config().expect("config should exist");
         let retry_config = config
@@ -457,18 +453,18 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             3,
-            "retries should be enabled with max_attempts=3 for v2025_01_17"
+            "retries should be enabled with max_attempts=3 for v2025_08_07"
         );
     }
 
     #[test]
     #[allow(deprecated)]
     fn test_retry_disabled_for_old_behavior_version() {
-        let plugin = default_retry_config_plugin_v2(
-            "test-partition",
-            BehaviorVersion::v2024_03_28(),
-        )
-        .expect("plugin should be created");
+        let params = DefaultPluginParams::new()
+            .with_retry_partition_name("test-partition")
+            .with_behavior_version(BehaviorVersion::v2025_01_17());
+        let plugin = default_retry_config_plugin_v2(&params)
+            .expect("plugin should be created");
 
         let config = plugin.config().expect("config should exist");
         let retry_config = config
@@ -478,7 +474,7 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             1,
-            "retries should be disabled with max_attempts=1 for v2024_03_28"
+            "retries should be disabled with max_attempts=1 for v2025_01_17"
         );
     }
 }
