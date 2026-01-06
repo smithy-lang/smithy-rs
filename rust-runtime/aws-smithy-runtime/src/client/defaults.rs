@@ -227,10 +227,12 @@ pub fn default_timeout_config_plugin_v2(
         .with_config(layer("default_timeout_config", |layer| {
             #[allow(deprecated)]
             let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                // New behavior: Set connect_timeout, leave others unset
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
                     .build()
             } else {
+                // Old behavior: All timeouts disabled
                 TimeoutConfig::disabled()
             };
             layer.store_put(timeout_config);
