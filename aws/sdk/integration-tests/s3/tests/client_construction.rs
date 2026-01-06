@@ -50,6 +50,7 @@ mod with_service_config {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_client_with_new_behavior_version_builds_successfully() {
         // With v2025_01_17, retries are enabled by default
         // This test verifies the client builds without panicking about missing sleep impl
@@ -65,6 +66,7 @@ mod with_service_config {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_client_with_old_behavior_version_builds_successfully() {
         // With v2024_03_28, retries are disabled by default
         let config = s3::Config::builder()

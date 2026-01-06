@@ -441,6 +441,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_retry_enabled_for_v2025_01_17() {
         let plugin = default_retry_config_plugin_v2(
             "test-partition",
@@ -461,6 +462,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_retry_disabled_for_old_behavior_version() {
         let plugin = default_retry_config_plugin_v2(
             "test-partition",
