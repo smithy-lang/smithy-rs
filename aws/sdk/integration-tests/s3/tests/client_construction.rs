@@ -38,6 +38,7 @@ mod with_sdk_config {
 
 mod with_service_config {
     use aws_sdk_s3 as s3;
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 
     #[test]
     fn manual_config_construction_all_defaults() {
@@ -46,5 +47,33 @@ mod with_service_config {
         // and thus, no sleep impl is required.
         let config = s3::Config::builder().build();
         let _s3 = s3::Client::from_conf(config);
+    }
+
+    #[test]
+    fn test_client_with_new_behavior_version_builds_successfully() {
+        // With v2025_01_17, retries are enabled by default
+        // This test verifies the client builds without panicking about missing sleep impl
+        let config = s3::Config::builder()
+            .behavior_version(BehaviorVersion::v2025_01_17())
+            .region(aws_types::region::Region::new("us-east-1"))
+            .credentials_provider(aws_credential_types::Credentials::for_tests())
+            .build();
+
+        // Should build successfully even though retries are enabled
+        // (sleep impl is provided by default)
+        let _client = s3::Client::from_conf(config);
+    }
+
+    #[test]
+    fn test_client_with_old_behavior_version_builds_successfully() {
+        // With v2024_03_28, retries are disabled by default
+        let config = s3::Config::builder()
+            .behavior_version(BehaviorVersion::v2024_03_28())
+            .region(aws_types::region::Region::new("us-east-1"))
+            .credentials_provider(aws_credential_types::Credentials::for_tests())
+            .build();
+
+        // Should build successfully with retries disabled
+        let _client = s3::Client::from_conf(config);
     }
 }

@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_codecatalyst::config::Token;
+use aws_sdk_codecatalyst::config::retry::RetryConfig;
 
 #[tokio::test]
 async fn sso_bearer_auth() {
@@ -16,6 +17,7 @@ async fn sso_bearer_auth() {
         .with_test_defaults()
         .http_client(replay.clone())
         .token_provider(Token::new("sso_bearer_auth_test", None))
+        .retry_config(RetryConfig::disabled())
         .build();
     let client = aws_sdk_codecatalyst::Client::from_conf(config);
 

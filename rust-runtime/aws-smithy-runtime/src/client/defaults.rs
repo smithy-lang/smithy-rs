@@ -398,7 +398,7 @@ pub fn default_plugins(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
+    use aws_smithy_runtime_api::client::runtime_plugin::{RuntimePlugin, RuntimePlugins};
 
     fn test_plugin_params(version: BehaviorVersion) -> DefaultPluginParams {
         DefaultPluginParams::new()
@@ -435,6 +435,46 @@ mod tests {
                 .unwrap()
                 .upload_enabled(),
             "stalled stream protection on uploads MUST NOT be enabled before v2024_03_28"
+        );
+    }
+
+    #[test]
+    fn test_retry_enabled_for_v2025_01_17() {
+        let plugin = default_retry_config_plugin_v2(
+            "test-partition",
+            BehaviorVersion::v2025_01_17(),
+        )
+        .expect("plugin should be created");
+
+        let config = plugin.config().expect("config should exist");
+        let retry_config = config
+            .load::<RetryConfig>()
+            .expect("retry config should exist");
+
+        assert_eq!(
+            retry_config.max_attempts(),
+            3,
+            "retries should be enabled with max_attempts=3 for v2025_01_17"
+        );
+    }
+
+    #[test]
+    fn test_retry_disabled_for_old_behavior_version() {
+        let plugin = default_retry_config_plugin_v2(
+            "test-partition",
+            BehaviorVersion::v2024_03_28(),
+        )
+        .expect("plugin should be created");
+
+        let config = plugin.config().expect("config should exist");
+        let retry_config = config
+            .load::<RetryConfig>()
+            .expect("retry config should exist");
+
+        assert_eq!(
+            retry_config.max_attempts(),
+            1,
+            "retries should be disabled with max_attempts=1 for v2024_03_28"
         );
     }
 }
