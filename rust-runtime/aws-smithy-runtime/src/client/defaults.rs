@@ -229,9 +229,11 @@ pub fn default_timeout_config_plugin_v2(
         })
         .with_config(layer("default_timeout_config", |layer| {
             let timeout_config = if is_aws_sdk {
-                // AWS SDK: Set connect_timeout, leave others unset
+                // AWS SDK: Set connect_timeout, explicitly disable operation timeouts
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
+                    .disable_operation_timeout()
+                    .disable_operation_attempt_timeout()
                     .build()
             } else {
                 // Non-AWS SDK: All timeouts disabled
