@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::config::{timeout::TimeoutConfig, Region};
+use aws_sdk_s3::config::{retry::RetryConfig, timeout::TimeoutConfig, Region};
 use aws_sdk_s3::error::DisplayErrorContext;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::types::{
@@ -132,6 +132,7 @@ async fn test_read_timeout() {
     let config = Config::builder()
         .with_test_defaults()
         .region(Region::new("us-east-1"))
+        .retry_config(RetryConfig::disabled())
         .timeout_config(
             TimeoutConfig::builder()
                 .read_timeout(Duration::from_millis(300))
@@ -171,6 +172,7 @@ async fn test_connect_timeout() {
     let config = Config::builder()
         .with_test_defaults()
         .region(Region::new("us-east-1"))
+        .retry_config(RetryConfig::disabled())
         .timeout_config(
             TimeoutConfig::builder()
                 .connect_timeout(Duration::from_millis(300))

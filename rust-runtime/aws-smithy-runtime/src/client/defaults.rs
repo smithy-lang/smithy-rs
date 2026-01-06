@@ -150,11 +150,12 @@ pub fn default_retry_config_plugin(
 /// Runtime plugin that sets the default retry strategy, config, and partition.
 /// 
 /// This version respects the behavior version to enable retries by default for newer versions.
+/// For AWS SDK clients, retries are enabled by default.
 pub fn default_retry_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
     let default_partition_name = params.retry_partition_name.as_ref()?.clone();
-    let behavior_version = params.behavior_version.unwrap_or_else(BehaviorVersion::latest);
+    let is_aws_sdk = params.is_aws_sdk;
     let retry_partition = RetryPartition::new(default_partition_name);
     Some(
         default_plugin("default_retry_config_plugin", |components| {
@@ -166,8 +167,7 @@ pub fn default_retry_config_plugin_v2(
                 .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
-            #[allow(deprecated)]
-            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
+            let retry_config = if is_aws_sdk {
                 RetryConfig::standard()
             } else {
                 RetryConfig::disabled()
@@ -216,10 +216,11 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// Runtime plugin that sets the default timeout config.
 /// 
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
+/// For AWS SDK clients, connection timeout is enabled by default.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
-    let behavior_version = params.behavior_version.unwrap_or_else(BehaviorVersion::latest);
+    let is_aws_sdk = params.is_aws_sdk;
     Some(
         default_plugin("default_timeout_config_plugin", |components| {
             components.with_config_validator(SharedConfigValidator::base_client_config_fn(
@@ -227,14 +228,13 @@ pub fn default_timeout_config_plugin_v2(
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            #[allow(deprecated)]
-            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
-                // New behavior: Set connect_timeout, leave others unset
+            let timeout_config = if is_aws_sdk {
+                // AWS SDK: Set connect_timeout, leave others unset
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
                     .build()
             } else {
-                // Old behavior: All timeouts disabled
+                // Non-AWS SDK: All timeouts disabled
                 TimeoutConfig::disabled()
             };
             layer.store_put(timeout_config);
@@ -350,6 +350,7 @@ fn validate_stalled_stream_protection_config(
 pub struct DefaultPluginParams {
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
+    is_aws_sdk: bool,
 }
 
 impl DefaultPluginParams {
@@ -367,6 +368,12 @@ impl DefaultPluginParams {
     /// Sets the behavior major version.
     pub fn with_behavior_version(mut self, version: BehaviorVersion) -> Self {
         self.behavior_version = Some(version);
+        self
+    }
+
+    /// Marks this as an AWS SDK client (enables retries by default for newer behavior versions).
+    pub fn with_is_aws_sdk(mut self, is_aws_sdk: bool) -> Self {
+        self.is_aws_sdk = is_aws_sdk;
         self
     }
 }
@@ -403,6 +410,7 @@ mod tests {
         DefaultPluginParams::new()
             .with_behavior_version(version)
             .with_retry_partition_name("dontcare")
+            .with_is_aws_sdk(false) // Default to non-AWS SDK for existing tests
     }
     fn config_for(plugins: impl IntoIterator<Item = SharedRuntimePlugin>) -> ConfigBag {
         let mut config = ConfigBag::base();
@@ -438,10 +446,10 @@ mod tests {
     }
 
     #[test]
-    fn test_retry_enabled_for_v2025_08_07() {
+    fn test_retry_enabled_for_aws_sdk() {
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
-            .with_behavior_version(BehaviorVersion::v2025_08_07());
+            .with_is_aws_sdk(true);
         let plugin = default_retry_config_plugin_v2(&params)
             .expect("plugin should be created");
 
@@ -453,16 +461,15 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             3,
-            "retries should be enabled with max_attempts=3 for v2025_08_07"
+            "retries should be enabled with max_attempts=3 for AWS SDK"
         );
     }
 
     #[test]
-    #[allow(deprecated)]
-    fn test_retry_disabled_for_old_behavior_version() {
+    fn test_retry_disabled_for_non_aws_sdk() {
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
-            .with_behavior_version(BehaviorVersion::v2025_01_17());
+            .with_is_aws_sdk(false);
         let plugin = default_retry_config_plugin_v2(&params)
             .expect("plugin should be created");
 
@@ -474,7 +481,7 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             1,
-            "retries should be disabled with max_attempts=1 for v2025_01_17"
+            "retries should be disabled for non-AWS SDK clients"
         );
     }
 }
