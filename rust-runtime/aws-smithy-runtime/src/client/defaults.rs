@@ -15,7 +15,7 @@ use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
-use aws_smithy_async::time::{SharedTimeSource, SystemTimeSource, TimeSource};
+use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -126,7 +126,6 @@ pub fn default_time_source_plugin() -> Option<SharedRuntimePlugin> {
 }
 
 /// Runtime plugin that sets the default retry strategy, config (disabled), and partition.
-#[deprecated = "Use default_retry_config_plugin_v2 to get a TokenBucket that respects the user provided TimeSource."]
 pub fn default_retry_config_plugin(
     default_partition_name: impl Into<Cow<'static, str>>,
 ) -> Option<SharedRuntimePlugin> {
@@ -138,43 +137,7 @@ pub fn default_retry_config_plugin(
                 .with_config_validator(SharedConfigValidator::base_client_config_fn(
                     validate_retry_config,
                 ))
-                .with_interceptor(TokenBucketProvider::new(
-                    retry_partition.clone(),
-                    SharedTimeSource::default(), // Replicates previous behavior
-                ))
-        })
-        .with_config(layer("default_retry_config", |layer| {
-            layer.store_put(RetryConfig::disabled());
-            layer.store_put(retry_partition);
-        }))
-        .into_shared(),
-    )
-}
-
-/// Runtime plugin that sets the default retry strategy, config (disabled), and partition.
-pub fn default_retry_config_plugin_v2(
-    default_plugin_params: &DefaultPluginParams,
-) -> Option<SharedRuntimePlugin> {
-    let retry_partition = RetryPartition::new(
-        default_plugin_params
-            .retry_partition_name()
-            .clone()
-            .expect("retry_partition_name is required"),
-    );
-    Some(
-        default_plugin("default_retry_config_plugin", |components| {
-            components
-                .with_retry_strategy(Some(StandardRetryStrategy::new()))
-                .with_config_validator(SharedConfigValidator::base_client_config_fn(
-                    validate_retry_config,
-                ))
-                .with_interceptor(TokenBucketProvider::new(
-                    retry_partition.clone(),
-                    default_plugin_params
-                        .time_source
-                        .clone()
-                        .unwrap_or_default(),
-                ))
+                .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
             layer.store_put(RetryConfig::disabled());
@@ -325,7 +288,6 @@ fn validate_stalled_stream_protection_config(
 pub struct DefaultPluginParams {
     retry_partition_name: Option<Cow<'static, str>>,
     behavior_version: Option<BehaviorVersion>,
-    time_source: Option<SharedTimeSource>,
 }
 
 impl DefaultPluginParams {
@@ -340,31 +302,10 @@ impl DefaultPluginParams {
         self
     }
 
-    /// Gets the retry partition name.
-    pub fn retry_partition_name(&self) -> &Option<Cow<'static, str>> {
-        &self.retry_partition_name
-    }
-
     /// Sets the behavior major version.
     pub fn with_behavior_version(mut self, version: BehaviorVersion) -> Self {
         self.behavior_version = Some(version);
         self
-    }
-
-    /// Gets the behavior major version.
-    pub fn behavior_version(&self) -> &Option<BehaviorVersion> {
-        &self.behavior_version
-    }
-
-    /// Sets the time_source.
-    pub fn with_time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
-        self.time_source = Some(SharedTimeSource::new(time_source));
-        self
-    }
-
-    /// Gets the time_source.
-    pub fn time_source(&self) -> &Option<SharedTimeSource> {
-        &self.time_source
     }
 }
 
@@ -379,7 +320,11 @@ pub fn default_plugins(
     [
         default_http_client_plugin_v2(behavior_version),
         default_identity_cache_plugin(),
-        default_retry_config_plugin_v2(&params),
+        default_retry_config_plugin(
+            params
+                .retry_partition_name
+                .expect("retry_partition_name is required"),
+        ),
         default_sleep_impl_plugin(),
         default_time_source_plugin(),
         default_timeout_config_plugin(),
