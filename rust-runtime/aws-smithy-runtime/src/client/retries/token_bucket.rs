@@ -186,6 +186,7 @@ impl TokenBucket {
     /// Refills tokens based on elapsed time since last refill.
     /// This method implements lazy evaluation - tokens are only calculated when accessed.
     /// Uses a single compare-and-swap to ensure only one thread processes each time window.
+    #[inline]
     fn refill_tokens_based_on_time(&self, time_source: &impl TimeSource) {
         if self.refill_rate > 0.0 {
             let current_time_secs = time_source
@@ -274,6 +275,14 @@ impl TokenBucket {
     pub(crate) fn available_permits(&self) -> usize {
         self.semaphore.available_permits()
     }
+
+    /// Only used in tests
+    #[allow(dead_code)]
+    #[doc(hidden)]
+    #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
+    pub fn last_refill_time_secs(&self) -> Arc<AtomicU64> {
+        self.last_refill_time_secs.clone()
+    }
 }
 
 /// Builder for constructing a `TokenBucket`.
@@ -350,7 +359,7 @@ impl TokenBucketBuilder {
 mod tests {
 
     use super::*;
-    use aws_smithy_async::{test_util::ManualTimeSource, time::SharedTimeSource};
+    use aws_smithy_async::test_util::ManualTimeSource;
     use std::{sync::LazyLock, time::UNIX_EPOCH};
 
     static TIME_SOURCE: LazyLock<ManualTimeSource> =
@@ -907,7 +916,7 @@ mod tests {
 
         // Advance time by 10 seconds
         time_source.advance(Duration::from_secs(10));
-        let shared_time_source = SharedTimeSource::new(time_source);
+        let shared_time_source = aws_smithy_async::time::SharedTimeSource::new(time_source);
 
         // Launch 100 threads that all try to refill simultaneously
         let barrier = Arc::new(Barrier::new(100));
