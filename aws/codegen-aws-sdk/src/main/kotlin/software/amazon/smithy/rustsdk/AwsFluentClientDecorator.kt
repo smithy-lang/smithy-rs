@@ -202,15 +202,16 @@ private class AwsFluentClientRetryPartition(private val codegenContext: ClientCo
 }
 
 /**
- * Enables retries by default for AWS SDK clients when awsSdkBuild is true
+ * Enables retries by default for AWS SDK clients when awsSdkBuild is true.
+ *
+ * Only applies to real AWS SDK builds (controlled by awsSdkBuild in JSON settings).
  */
 private class AwsFluentClientEnableRetries(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
     override fun section(section: FluentClientSection): Writable {
-        // Only enable for real AWS SDK builds (controlled by awsSdkBuild in JSON settings)
         if (!codegenContext.sdkSettings().awsSdkBuild) {
             return emptySection
         }
-        
+
         return when (section) {
             is FluentClientSection.CustomizeDefaultPluginParams -> {
                 writable {

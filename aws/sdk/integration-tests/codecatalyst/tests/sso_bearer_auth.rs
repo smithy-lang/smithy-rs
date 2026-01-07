@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_codecatalyst::config::Token;
 use aws_sdk_codecatalyst::config::retry::RetryConfig;
+use aws_sdk_codecatalyst::config::Token;
 
 #[tokio::test]
 async fn sso_bearer_auth() {

@@ -3,7 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_sdk_s3::{config::Region, config::retry::RetryConfig, error::DisplayErrorContext, Client, Config};
+use aws_sdk_s3::{
+    config::retry::RetryConfig, config::Region, error::DisplayErrorContext, Client, Config,
+};
 use aws_smithy_http_client::test_util::dvr::ReplayingClient;
 
 #[tokio::test]
