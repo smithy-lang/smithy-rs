@@ -8,7 +8,6 @@ use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_smithy_types::retry::ErrorKind;
 use std::fmt;
 use std::sync::atomic::AtomicU32;
-use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime};
@@ -37,7 +36,9 @@ pub struct TokenBucket {
     success_reward: f32,
     fractional_tokens: Arc<AtomicF32>,
     refill_rate: f32,
-    last_refill_time_secs: Arc<AtomicU64>,
+    // Note this value is only an AtomicU32 so it works on 32bit powerpc architectures.
+    // If we ever remove the need for that compatibility it should become an AtomicU64
+    last_refill_time_secs: Arc<AtomicU32>,
 }
 
 impl std::panic::UnwindSafe for AtomicF32 {}
@@ -94,7 +95,7 @@ impl Default for TokenBucket {
             success_reward: DEFAULT_SUCCESS_REWARD,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
-            last_refill_time_secs: Arc::new(AtomicU64::new(0)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 }
@@ -119,7 +120,7 @@ impl TokenBucket {
             success_reward: 0.0,
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: 0.0,
-            last_refill_time_secs: Arc::new(AtomicU64::new(0)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 
@@ -189,11 +190,12 @@ impl TokenBucket {
     #[inline]
     fn refill_tokens_based_on_time(&self, time_source: &impl TimeSource) {
         if self.refill_rate > 0.0 {
+            // The cast to u32 here is safe until 2106, and I will be long dead then so ¯\_(ツ)_/¯
             let current_time_secs = time_source
                 .now()
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap_or(Duration::ZERO)
-                .as_secs();
+                .as_secs() as u32;
 
             let last_refill_secs = self.last_refill_time_secs.load(Ordering::Relaxed);
 
@@ -280,7 +282,7 @@ impl TokenBucket {
     #[allow(dead_code)]
     #[doc(hidden)]
     #[cfg(any(test, feature = "test-util", feature = "legacy-test-util"))]
-    pub fn last_refill_time_secs(&self) -> Arc<AtomicU64> {
+    pub fn last_refill_time_secs(&self) -> Arc<AtomicU32> {
         self.last_refill_time_secs.clone()
     }
 }
@@ -350,7 +352,7 @@ impl TokenBucketBuilder {
             success_reward: self.success_reward.unwrap_or(DEFAULT_SUCCESS_REWARD),
             fractional_tokens: Arc::new(AtomicF32::new(0.0)),
             refill_rate: self.refill_rate.unwrap_or(0.0),
-            last_refill_time_secs: Arc::new(AtomicU64::new(0)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(0)),
         }
     }
 }
@@ -763,12 +765,12 @@ mod tests {
         let current_time_secs = UNIX_EPOCH
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as u32;
 
         let bucket = TokenBucket {
             refill_rate: 1.0,
             success_reward: 0.5,
-            last_refill_time_secs: Arc::new(AtomicU64::new(current_time_secs)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(current_time_secs)),
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
@@ -809,11 +811,11 @@ mod tests {
             let current_time_secs = UNIX_EPOCH
                 .duration_since(SystemTime::UNIX_EPOCH)
                 .unwrap()
-                .as_secs();
+                .as_secs() as u32;
 
             let bucket = TokenBucket {
                 refill_rate,
-                last_refill_time_secs: Arc::new(AtomicU64::new(current_time_secs)),
+                last_refill_time_secs: Arc::new(AtomicU32::new(current_time_secs)),
                 semaphore: Arc::new(Semaphore::new(0)),
                 max_permits: 100,
                 ..Default::default()
@@ -854,12 +856,12 @@ mod tests {
         let current_time_secs = UNIX_EPOCH
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as u32;
 
         let bucket = TokenBucket {
             refill_rate: 50.0,
             success_reward: 2.0,
-            last_refill_time_secs: Arc::new(AtomicU64::new(current_time_secs)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(current_time_secs)),
             semaphore: Arc::new(Semaphore::new(5)),
             max_permits: 10,
             ..Default::default()
@@ -903,12 +905,12 @@ mod tests {
         let current_time_secs = UNIX_EPOCH
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs() as u32;
 
         // Create bucket with 1 token/sec refill
         let bucket = Arc::new(TokenBucket {
             refill_rate: 1.0,
-            last_refill_time_secs: Arc::new(AtomicU64::new(current_time_secs)),
+            last_refill_time_secs: Arc::new(AtomicU32::new(current_time_secs)),
             semaphore: Arc::new(Semaphore::new(0)),
             max_permits: 100,
             ..Default::default()
