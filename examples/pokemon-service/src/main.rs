@@ -8,9 +8,8 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server_metrics::layer::{DefaultMetrics, BuildMetricsLayer, MetricsLayer};
+use aws_smithy_http_server_metrics::layer::MetricsLayer;
 use clap::Parser;
-use metrique_writer::{sink::DevNullSink, GlobalEntrySink};
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
