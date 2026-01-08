@@ -11,16 +11,16 @@ use metrique::ServiceMetrics;
 use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
 use metrique_writer::GlobalEntrySink;
+use tower::Layer;
 
 use crate::ReqBody;
 use crate::ResBody;
 use crate::default::DefaultMetrics;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
-use crate::layer::inner::MetricsLayer as MetricsLayerInner;
+use crate::service::MetricsLayerService;
 
 pub mod builder;
-pub mod inner;
 
 pub struct MetricsLayer<
     E = DefaultMetrics,
@@ -29,26 +29,22 @@ pub struct MetricsLayer<
     Rq = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>),
     Rs = fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>),
 > where
+    E: CloseEntry + Send + Sync + 'static,
+    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
     I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
-    _close_entry: PhantomData<E>,
-    _entry_sink: PhantomData<S>,
-    _init_fn: PhantomData<I>,
-    _req_fn: PhantomData<Rq>,
-    _res_fn: PhantomData<Rs>,
+    pub(crate) init_metrics: I,
+    pub(crate) set_default_request_metrics:
+        Option<fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    pub(crate) set_default_response_metrics:
+        Option<fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    pub(crate) set_request_metrics: Option<Rq>,
+    pub(crate) set_response_metrics: Option<Rs>,
 }
 impl MetricsLayer {
-    pub fn new() -> MetricsLayerInner<
-        fn() -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
-        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
-        DefaultMetrics,
-        DefaultSink,
-    > {
+    pub fn new() -> Self {
         Self::builder()
             .init_metrics(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink()))
             .build()
@@ -63,7 +59,7 @@ where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
-    pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, I, Rq, Rs, E, S> {
+    pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S, I, Rq, Rs> {
         MetricsLayerBuilder {
             init_metrics: None,
             set_request_metrics: None,
@@ -78,5 +74,26 @@ where
             with_http_status_code: true,
             _state: PhantomData,
         }
+    }
+}
+
+impl<Ser, E, S, I, Rq, Rs> Layer<Ser> for MetricsLayer<E, S, I, Rq, Rs>
+where
+    Ser: Clone,
+    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: CloseEntry + Send + Sync + 'static,
+    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+{
+    type Service = MetricsLayerService<Ser, I, Rq, Rs, E, S>;
+
+    fn layer(&self, inner: Ser) -> Self::Service {
+        MetricsLayerService::builder(inner, self.init_metrics.clone())
+            .set_default_request_metrics(self.set_default_request_metrics)
+            .set_default_response_metrics(self.set_default_response_metrics)
+            .set_request_metrics(self.set_request_metrics.clone())
+            .set_response_metrics(self.set_response_metrics.clone())
+            .build()
     }
 }
