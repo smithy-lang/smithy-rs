@@ -87,6 +87,10 @@ pub async fn main() {
     let config = PokemonServiceConfig::builder()
         // Set up shared state and middlewares.
         .layer(AddExtensionLayer::new(Arc::new(State::default())))
+        // Handle `/ping` health check requests.
+        .layer(AlbHealthCheckLayer::from_handler("/ping", |_req| async {
+            StatusCode::OK
+        }))
         // Add server request IDs.
         .layer(ServerRequestIdProviderLayer::new())
         .http_plugin(http_plugins)
@@ -101,24 +105,14 @@ pub async fn main() {
         .get_storage(get_storage_with_local_approved)
         .get_server_statistics(get_server_statistics)
         .capture_pokemon(capture_pokemon)
-        .check_health(check_health)
         .do_nothing(do_nothing_but_log_request_ids)
+        .check_health(check_health)
         .stream_pokemon_radio(stream_pokemon_radio)
         .build()
         .expect("failed to build an instance of PokemonService");
 
-    // layer the health check outside the application, to avoid requiring a Smithy model for the health check route
-    let health_check_layer =
-        AlbHealthCheckLayer::from_handler("/ping", |_req| async { StatusCode::OK });
-    let service = health_check_layer.layer(app);
-
-    // let metrics_layer = MetricsLayer::builder()
-    //     .init_metrics(|| DefaultMetrics::default().append_on_drop(DevNullSink::new()))
-    //     .build();
-
     let metrics_layer = MetricsLayer::new();
-
-    let service = metrics_layer.layer(service);
+    let service = metrics_layer.layer(app);
 
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
@@ -137,8 +131,6 @@ pub async fn main() {
 
     // Signal that the server is ready to accept connections, including the actual port
     eprintln!("SERVER_READY:{}", actual_addr.port());
-
-    println!("Listening on {}", bind);
 
     // Run forever-ish...
     if let Err(err) = serve(listener, make_app).await {
