@@ -286,7 +286,7 @@ data class CargoDependency(
         val Hex: CargoDependency = CargoDependency("hex", CratesIo("0.4.3"))
         val Hmac: CargoDependency = CargoDependency("hmac", CratesIo("0.12"))
         val LazyStatic: CargoDependency = CargoDependency("lazy_static", CratesIo("1.4.0"))
-        val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.12.2"))
+        val Lru: CargoDependency = CargoDependency("lru", CratesIo("0.16.3"))
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency =
             CargoDependency("percent-encoding", CratesIo("2.0.0"))
@@ -412,6 +412,11 @@ data class CargoDependency(
 
         fun smithyMocks(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-mocks", scope = DependencyScope.Dev)
+
+        fun smithyObservability(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-observability")
+
+        fun smithyObservabilityOtel(runtimeConfig: RuntimeConfig) =
+            runtimeConfig.smithyRuntimeCrate("smithy-observability-otel")
 
         // behind feature-gate
         val Serde =
