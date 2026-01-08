@@ -384,7 +384,11 @@ impl<I, O, E> InterceptorContext<I, O, E> {
             "if the request wasn't cloneable, then we should have already returned from this method."
         );
         self.response = None;
-        self.output_or_error = None;
+        // Only clear output_or_error if it's Ok. If it's Err (e.g., from a timeout),
+        // preserve it so that is_failed() returns true after the retry loop exits.
+        if let Some(Ok(_)) = self.output_or_error {
+            self.output_or_error = None;
+        }
         RewindResult::Occurred
     }
 }
