@@ -43,8 +43,7 @@ async fn main() {
 
     // Call an operation `get_server_statistics` on the Pokémon service.
     let response = client
-        .get_pokemon_species()
-        .name("pikachu")
+        .get_server_statistics()
         .send()
         .await
         .expect("operation failed");
