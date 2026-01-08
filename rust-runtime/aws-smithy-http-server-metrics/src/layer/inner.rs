@@ -1,7 +1,3 @@
-use crate::layer::ReqBody;
-use crate::layer::ResBody;
-use crate::service::MetricsLayerService;
-
 use http::Request;
 use http::Response;
 use metrique::AppendAndCloseOnDrop;
@@ -9,6 +5,10 @@ use metrique::RootEntry;
 use metrique_core::CloseEntry;
 use metrique_writer::EntrySink;
 use tower::Layer;
+
+use crate::layer::ReqBody;
+use crate::layer::ResBody;
+use crate::service::MetricsLayerService;
 
 pub struct MetricsLayer<I, Rq, Rs, E, S>
 where
