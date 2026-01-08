@@ -819,6 +819,18 @@ pub mod test {
         let mut iter = json_token_iter(input);
         let result = expect_number_as_string_or_null(iter.next(), input).unwrap();
         assert_eq!(result, Some("0"));
+
+        // Test lowercase e in scientific notation is preserved
+        let input = b"2.5e-8";
+        let mut iter = json_token_iter(input);
+        let result = expect_number_as_string_or_null(iter.next(), input).unwrap();
+        assert_eq!(result, Some("2.5e-8"));
+
+        // Test uppercase E in scientific notation is preserved
+        let input = b"2.5E-8";
+        let mut iter = json_token_iter(input);
+        let result = expect_number_as_string_or_null(iter.next(), input).unwrap();
+        assert_eq!(result, Some("2.5E-8"));
     }
 
     #[test]

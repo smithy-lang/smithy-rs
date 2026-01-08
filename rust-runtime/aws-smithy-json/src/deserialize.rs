@@ -322,12 +322,13 @@ impl<'a> JsonTokenIterator<'a> {
         Ok(Token::ValueNumber {
             offset,
             value: if floating {
+                // For BigInteger/BigDecimal support: Use NaN for f64 validation when the number
+                // exceeds f64 range (e.g., 1.8e308 > f64::MAX), allowing tokenization to succeed
+                // while preserving the original string for arbitrary precision types.
                 Number::Float(
                     f64::from_str(number_str)
                         .map_err(|_| self.error_at(start, InvalidNumber))
-                        .and_then(|f| {
-                            must_be_finite(f).map_err(|_| self.error_at(start, InvalidNumber))
-                        })?,
+                        .map(|f| if f.is_finite() { f } else { f64::NAN })?,
                 )
             } else if negative {
                 // If the negative value overflows, then stuff it into an f64
@@ -506,14 +507,6 @@ impl<'a> Iterator for JsonTokenIterator<'a> {
     }
 }
 
-fn must_be_finite(f: f64) -> Result<f64, ()> {
-    if f.is_finite() {
-        Ok(f)
-    } else {
-        Err(())
-    }
-}
-
 fn must_not_be_finite(f: f64) -> Result<f64, ()> {
     if !f.is_finite() {
         Ok(f)
@@ -670,6 +663,32 @@ mod tests {
             Number::Float(-18446744073709551615.0),
             b"-18446744073709551615",
         );
+    }
+
+    #[test]
+    fn out_of_range_floats_use_nan() {
+        // Values exceeding f64::MAX should tokenize successfully with NaN
+        // to support BigInteger/BigDecimal arbitrary precision types
+        let expect_nan = |input| {
+            let token = json_token_iter(input).next().unwrap().unwrap();
+            if let Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            } = token
+            {
+                assert!(f.is_nan(), "Expected NaN for out-of-range value, got {}", f);
+            } else {
+                panic!("Expected Float token, got {:?}", token);
+            }
+        };
+
+        // Values > f64::MAX
+        expect_nan(b"1.8e308");
+        expect_nan(b"9.9e999");
+
+        // Negative values < -f64::MAX
+        expect_nan(b"-1.8e308");
+        expect_nan(b"-9.9e999");
     }
 
     // These cases actually shouldn't parse according to the spec, but it's easier

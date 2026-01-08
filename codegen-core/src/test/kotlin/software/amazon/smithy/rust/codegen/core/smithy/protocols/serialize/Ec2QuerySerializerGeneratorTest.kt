@@ -347,10 +347,11 @@ class Ec2QuerySerializerGeneratorTest {
                 "big_number_serializer",
                 """
                 use aws_smithy_types::{BigInteger, BigDecimal};
+                use std::str::FromStr;
 
                 let input = crate::test_model::OpInput::builder()
-                    .big_int(BigInteger::from("12345678901234567890".to_string()))
-                    .big_dec(BigDecimal::from("123.456".to_string()))
+                    .big_int(BigInteger::from_str("12345678901234567890").unwrap())
+                    .big_dec(BigDecimal::from_str("123.456").unwrap())
                     .build();
                 let serialized = ${format(operationGenerator!!)}(&input).unwrap();
                 let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();

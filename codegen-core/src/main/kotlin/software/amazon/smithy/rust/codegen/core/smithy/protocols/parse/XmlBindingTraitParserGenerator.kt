@@ -684,25 +684,31 @@ class XmlBindingTraitParserGenerator(
 
             is BigIntegerShape -> {
                 rustBlock("") {
-                    rust("Ok(")
                     rustTemplate(
                         "<#{BigInteger} as ::std::str::FromStr>::from_str(",
                         "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
+                        *codegenScope,
                     )
                     provider()
-                    rust(").expect(\"infallible\"))")
+                    rustTemplate(
+                        ").map_err(|e| #{XmlDecodeError}::custom(format!(\"invalid BigInteger: {}\", e)))",
+                        *codegenScope,
+                    )
                 }
             }
 
             is BigDecimalShape -> {
                 rustBlock("") {
-                    rust("Ok(")
                     rustTemplate(
                         "<#{BigDecimal} as ::std::str::FromStr>::from_str(",
                         "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
+                        *codegenScope,
                     )
                     provider()
-                    rust(").expect(\"infallible\"))")
+                    rustTemplate(
+                        ").map_err(|e| #{XmlDecodeError}::custom(format!(\"invalid BigDecimal: {}\", e)))",
+                        *codegenScope,
+                    )
                 }
             }
 

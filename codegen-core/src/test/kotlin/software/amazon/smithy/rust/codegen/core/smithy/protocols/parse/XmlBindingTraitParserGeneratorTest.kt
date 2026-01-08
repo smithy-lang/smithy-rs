@@ -254,13 +254,27 @@ internal class XmlBindingTraitParserGeneratorTest {
                 rustTemplate(
                     """
                     let xml = br##"<BigNumberData>
-                        <bigInt>12345678901234567890</bigInt>
-                        <bigDec>3.141592653589793238</bigDec>
+                        <bigInt>99999999999999999999999999</bigInt>
+                        <bigDec>3.141592653589793238462643383279502884197</bigDec>
                     </BigNumberData>
                     "##;
                     let output = ${format(operationParser)}(xml, test_output::BigNumberOpOutput::builder()).unwrap().build();
-                    assert_eq!(output.big_int.as_ref().map(|v| v.as_ref()), Some("12345678901234567890"));
-                    assert_eq!(output.big_dec.as_ref().map(|v| v.as_ref()), Some("3.141592653589793238"));
+                    assert_eq!(output.big_int.as_ref().map(|v| v.as_ref()), Some("99999999999999999999999999"));
+                    assert_eq!(output.big_dec.as_ref().map(|v| v.as_ref()), Some("3.141592653589793238462643383279502884197"));
+                    """,
+                )
+            }
+            unitTest(name = "parse_big_numbers_exceeding_f64_max") {
+                rustTemplate(
+                    """
+                    let xml = br##"<BigNumberData>
+                        <bigInt>99999999999999999999999999</bigInt>
+                        <bigDec>1.8e308</bigDec>
+                    </BigNumberData>
+                    "##;
+                    let output = ${format(operationParser)}(xml, test_output::BigNumberOpOutput::builder()).unwrap().build();
+                    assert_eq!(output.big_int.as_ref().map(|v| v.as_ref()), Some("99999999999999999999999999"));
+                    assert_eq!(output.big_dec.as_ref().map(|v| v.as_ref()), Some("1.8e308"));
                     """,
                 )
             }

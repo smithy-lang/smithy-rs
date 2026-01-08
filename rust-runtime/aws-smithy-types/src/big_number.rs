@@ -8,14 +8,41 @@
 //! These types are simple string wrappers that allow users to parse and format
 //! big numbers using their preferred library.
 
+/// Error type for BigInteger and BigDecimal parsing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum BigNumberError {
+    /// The input string is not a valid number format.
+    InvalidFormat(String),
+}
+
+impl std::fmt::Display for BigNumberError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BigNumberError::InvalidFormat(s) => write!(f, "invalid number format: {}", s),
+        }
+    }
+}
+
+impl std::error::Error for BigNumberError {}
+
+/// Validates that a string contains only valid JSON number characters.
+/// Prevents JSON injection by rejecting strings with quotes, commas, braces, etc.
+fn is_valid_number_string(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+
+    s.chars()
+        .all(|c| matches!(c, '0'..='9' | '-' | '+' | '.' | 'e' | 'E'))
+}
+
 /// A BigInteger represented as a string.
 ///
 /// This type does not perform arithmetic operations. Users should parse the string
 /// with their preferred big integer library.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BigInteger(String);
-
-impl BigInteger {}
 
 impl Default for BigInteger {
     fn default() -> Self {
@@ -24,17 +51,13 @@ impl Default for BigInteger {
 }
 
 impl std::str::FromStr for BigInteger {
-    // Infallible because any string is valid - we just store it without validation
-    type Err = std::convert::Infallible;
+    type Err = BigNumberError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !is_valid_number_string(s) {
+            return Err(BigNumberError::InvalidFormat(s.to_string()));
+        }
         Ok(Self(s.to_string()))
-    }
-}
-
-impl From<String> for BigInteger {
-    fn from(value: String) -> Self {
-        Self(value)
     }
 }
 
@@ -51,8 +74,6 @@ impl AsRef<str> for BigInteger {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct BigDecimal(String);
 
-impl BigDecimal {}
-
 impl Default for BigDecimal {
     fn default() -> Self {
         Self("0.0".to_string())
@@ -60,17 +81,13 @@ impl Default for BigDecimal {
 }
 
 impl std::str::FromStr for BigDecimal {
-    // Infallible because any string is valid - we just store it without validation
-    type Err = std::convert::Infallible;
+    type Err = BigNumberError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        if !is_valid_number_string(s) {
+            return Err(BigNumberError::InvalidFormat(s.to_string()));
+        }
         Ok(Self(s.to_string()))
-    }
-}
-
-impl From<String> for BigDecimal {
-    fn from(value: String) -> Self {
-        Self(value)
     }
 }
 
@@ -107,5 +124,53 @@ mod tests {
     fn big_decimal_default() {
         let bd = BigDecimal::default();
         assert_eq!(bd.as_ref(), "0.0");
+    }
+
+    #[test]
+    fn big_integer_negative() {
+        let bi = BigInteger::from_str("-12345").unwrap();
+        assert_eq!(bi.as_ref(), "-12345");
+    }
+
+    #[test]
+    fn big_decimal_scientific() {
+        let bd = BigDecimal::from_str("1.23e10").unwrap();
+        assert_eq!(bd.as_ref(), "1.23e10");
+
+        let bd = BigDecimal::from_str("1.23E-10").unwrap();
+        assert_eq!(bd.as_ref(), "1.23E-10");
+    }
+
+    #[test]
+    fn big_integer_rejects_json_injection() {
+        // Reject strings with JSON special characters
+        assert!(BigInteger::from_str("123, \"injected\": true").is_err());
+        assert!(BigInteger::from_str("123}").is_err());
+        assert!(BigInteger::from_str("{\"hacked\": 1}").is_err());
+        assert!(BigInteger::from_str("123\"").is_err());
+        assert!(BigInteger::from_str("123\\n456").is_err());
+    }
+
+    #[test]
+    fn big_decimal_rejects_json_injection() {
+        assert!(BigDecimal::from_str("123.45, \"injected\": true").is_err());
+        assert!(BigDecimal::from_str("123.45}").is_err());
+        assert!(BigDecimal::from_str("{\"hacked\": 1.0}").is_err());
+    }
+
+    #[test]
+    fn big_integer_rejects_invalid_chars() {
+        assert!(BigInteger::from_str("abc").is_err());
+        assert!(BigInteger::from_str("123abc").is_err());
+        assert!(BigInteger::from_str("12 34").is_err());
+        assert!(BigInteger::from_str("").is_err());
+    }
+
+    #[test]
+    fn big_decimal_rejects_invalid_chars() {
+        assert!(BigDecimal::from_str("abc").is_err());
+        assert!(BigDecimal::from_str("123.45abc").is_err());
+        assert!(BigDecimal::from_str("12.34 56").is_err());
+        assert!(BigDecimal::from_str("").is_err());
     }
 }
