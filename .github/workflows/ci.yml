@@ -360,13 +360,18 @@ jobs:
       with:
         key: ${{ matrix.target }}
     - name: Install cross
-      run: cargo install cross --git https://github.com/cross-rs/cross --locked
-    - name: Build smithy-rs runtime on ${{ matrix.target }}
+      run: cargo install cross --locked --version 0.2.4
+    # Run tests instead of just building to catch runtime issues like SIGILL
+    - name: Test smithy-rs runtime on ${{ matrix.target }}
       shell: bash
-      run: cross build --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
-    - name: Build AWS runtime on ${{ matrix.target }}
+      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental
+    - name: Test AWS runtime on ${{ matrix.target }}
       shell: bash
-      run: cross build --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
+    # Specifically test checksums crate which uses crc-fast
+    - name: Test checksums on ${{ matrix.target }}
+      shell: bash
+      run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" -p aws-smithy-checksums
 
   # Run the canary against generated SDKs
   #
@@ -375,16 +380,24 @@ jobs:
   # this skipped job will report its status as "Success".
   # https://docs.github.com/en/actions/using-jobs/using-conditions-to-control-job-execution#overview
   canary:
-    name: Canary
+    name: Canary (${{ matrix.arch }})
     if: ${{ inputs.run_canary }}
     needs: generate
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     permissions:
       id-token: write
       contents: read
       actions: read
       pull-requests: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: smithy_ubuntu-latest_8-core
+          - arch: aarch64
+            runner: smithy_ubuntu-latest_8-core-arm
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
