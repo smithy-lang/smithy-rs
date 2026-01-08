@@ -21,7 +21,6 @@ use crate::layer::builder::NeedsInitialization;
 use crate::layer::inner::MetricsLayer as MetricsLayerInner;
 
 pub mod builder;
-#[doc(hidden)]
 pub mod inner;
 
 pub trait BuildMetricsLayer {

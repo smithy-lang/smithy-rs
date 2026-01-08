@@ -6,14 +6,9 @@ edition = "2024"
 [dependencies]
 # Pinning these to versions with MSRV 1.88.0
 metrique = "=0.1.9"
-metrique-writer-core = "=0.1.7"
 metrique-macro = "=0.1.6"
 metrique-core = "=0.1.8"
 metrique-writer = "=0.1.10"
-metrique-service-metrics = "=0.1.9"
-metrique-timesource = "=0.1.5"
-metrique-writer-macro = "=0.1.4"
-metrique-writer-format-emf = "=0.1.9"
 
 tower = "0.5"
 futures = "0.3"
