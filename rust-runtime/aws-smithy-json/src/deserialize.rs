@@ -322,13 +322,8 @@ impl<'a> JsonTokenIterator<'a> {
         Ok(Token::ValueNumber {
             offset,
             value: if floating {
-                // For BigInteger/BigDecimal support: Use NaN for f64 validation when the number
-                // exceeds f64 range (e.g., 1.8e308 > f64::MAX), allowing tokenization to succeed
-                // while preserving the original string for arbitrary precision types.
                 Number::Float(
-                    f64::from_str(number_str)
-                        .map_err(|_| self.error_at(start, InvalidNumber))
-                        .map(|f| if f.is_finite() { f } else { f64::NAN })?,
+                    f64::from_str(number_str).map_err(|_| self.error_at(start, InvalidNumber))?,
                 )
             } else if negative {
                 // If the negative value overflows, then stuff it into an f64
@@ -666,29 +661,38 @@ mod tests {
     }
 
     #[test]
-    fn out_of_range_floats_use_nan() {
-        // Values exceeding f64::MAX should tokenize successfully with NaN
-        // to support BigInteger/BigDecimal arbitrary precision types
-        let expect_nan = |input| {
+    fn out_of_range_floats_produce_infinity() {
+        // Values exceeding f64::MAX should tokenize as infinity
+        // The consumer layer (token.rs) will convert to NaN for BigInteger/BigDecimal
+        let expect_infinity = |input, should_be_positive| {
             let token = json_token_iter(input).next().unwrap().unwrap();
             if let Token::ValueNumber {
                 value: Number::Float(f),
                 ..
             } = token
             {
-                assert!(f.is_nan(), "Expected NaN for out-of-range value, got {}", f);
+                assert!(
+                    f.is_infinite(),
+                    "Expected infinity for out-of-range value, got {}",
+                    f
+                );
+                if should_be_positive {
+                    assert!(f.is_sign_positive(), "Expected positive infinity");
+                } else {
+                    assert!(f.is_sign_negative(), "Expected negative infinity");
+                }
             } else {
                 panic!("Expected Float token, got {:?}", token);
             }
         };
 
         // Values > f64::MAX
-        expect_nan(b"1.8e308");
-        expect_nan(b"9.9e999");
+        expect_infinity(b"1.8e308", true);
+        expect_infinity(b"9.9e999", true);
 
         // Negative values < -f64::MAX
-        expect_nan(b"-1.8e308");
-        expect_nan(b"-9.9e999");
+        expect_infinity(b"-1.8e308", false);
+        expect_infinity(b"-9.9e999", false);
     }
 
     // These cases actually shouldn't parse according to the spec, but it's easier

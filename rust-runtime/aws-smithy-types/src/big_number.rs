@@ -26,9 +26,28 @@ impl std::fmt::Display for BigNumberError {
 
 impl std::error::Error for BigNumberError {}
 
-/// Validates that a string contains only valid JSON number characters.
-/// Prevents JSON injection by rejecting strings with quotes, commas, braces, etc.
-fn is_valid_number_string(s: &str) -> bool {
+/// Validates that a string is a valid BigInteger format.
+/// Only allows digits and an optional leading sign.
+fn is_valid_big_integer(s: &str) -> bool {
+    if s.is_empty() {
+        return false;
+    }
+
+    let mut chars = s.chars();
+
+    // Check first character (can be sign or digit)
+    match chars.next() {
+        Some('-') | Some('+') | Some('0'..='9') => {}
+        _ => return false,
+    }
+
+    // Rest must be digits only
+    chars.all(|c| matches!(c, '0'..='9'))
+}
+
+/// Validates that a string is a valid BigDecimal format.
+/// Allows digits, sign, decimal point, and scientific notation.
+fn is_valid_big_decimal(s: &str) -> bool {
     if s.is_empty() {
         return false;
     }
@@ -54,7 +73,7 @@ impl std::str::FromStr for BigInteger {
     type Err = BigNumberError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !is_valid_number_string(s) {
+        if !is_valid_big_integer(s) {
             return Err(BigNumberError::InvalidFormat(s.to_string()));
         }
         Ok(Self(s.to_string()))
@@ -84,7 +103,7 @@ impl std::str::FromStr for BigDecimal {
     type Err = BigNumberError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if !is_valid_number_string(s) {
+        if !is_valid_big_decimal(s) {
             return Err(BigNumberError::InvalidFormat(s.to_string()));
         }
         Ok(Self(s.to_string()))
@@ -164,6 +183,25 @@ mod tests {
         assert!(BigInteger::from_str("123abc").is_err());
         assert!(BigInteger::from_str("12 34").is_err());
         assert!(BigInteger::from_str("").is_err());
+    }
+
+    #[test]
+    fn big_integer_rejects_decimal_and_scientific() {
+        // BigInteger should reject decimal points
+        assert!(BigInteger::from_str("123.45").is_err());
+        assert!(BigInteger::from_str("123.0").is_err());
+
+        // BigInteger should reject scientific notation
+        assert!(BigInteger::from_str("1e10").is_err());
+        assert!(BigInteger::from_str("1E10").is_err());
+        assert!(BigInteger::from_str("1.23e10").is_err());
+    }
+
+    #[test]
+    fn big_integer_accepts_signs() {
+        assert!(BigInteger::from_str("+123").is_ok());
+        assert!(BigInteger::from_str("-123").is_ok());
+        assert_eq!(BigInteger::from_str("+123").unwrap().as_ref(), "+123");
     }
 
     #[test]

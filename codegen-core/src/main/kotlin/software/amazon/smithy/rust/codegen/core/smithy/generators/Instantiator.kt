@@ -549,14 +549,14 @@ class PrimitiveInstantiator(
                 is BigIntegerShape -> {
                     val value = data.toString()
                     rustTemplate(
-                        "<#{BigInteger} as ::std::str::FromStr>::from_str(${value.dq()}).unwrap()",
+                        "<#{BigInteger} as ::std::str::FromStr>::from_str(${value.dq()}).expect(\"Invalid string for BigInteger\")",
                         "BigInteger" to RuntimeType.bigInteger(runtimeConfig),
                     )
                 }
                 is BigDecimalShape -> {
                     val value = data.toString()
                     rustTemplate(
-                        "<#{BigDecimal} as ::std::str::FromStr>::from_str(${value.dq()}).unwrap()",
+                        "<#{BigDecimal} as ::std::str::FromStr>::from_str(${value.dq()}).expect(\"invalid string for BigDecimal\")",
                         "BigDecimal" to RuntimeType.bigDecimal(runtimeConfig),
                     )
                 }

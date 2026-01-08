@@ -163,7 +163,15 @@ pub fn expect_number_or_null(
 ) -> Result<Option<Number>, Error> {
     match token.transpose()? {
         Some(Token::ValueNull { .. }) => Ok(None),
-        Some(Token::ValueNumber { value, .. }) => Ok(Some(value)),
+        Some(Token::ValueNumber { value, offset, .. }) => {
+            // Validate finite numbers - error on infinity/NaN
+            match value {
+                Number::Float(f) if !f.is_finite() => {
+                    Err(Error::custom("number must be finite").with_offset(offset.0))
+                }
+                _ => Ok(Some(value)),
+            }
+        }
         Some(Token::ValueString { value, offset }) => match value.to_unescaped() {
             Err(err) => Err(Error::custom_source( "expected a valid string, escape was invalid", err).with_offset(offset.0)),
             Ok(v) => f64::parse_smithy_primitive(v.as_ref())
@@ -616,6 +624,10 @@ pub mod test {
                 panic!("expected nan, found: {not_ok:?}")
             }
         }
+
+        // Test that infinity in ValueNumber token returns an error
+        let result = expect_number_or_null(value_number(0, Number::Float(f64::INFINITY)));
+        assert!(result.is_err(), "Expected error for infinity token");
     }
 
     #[test]

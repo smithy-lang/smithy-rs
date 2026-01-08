@@ -587,11 +587,13 @@ class CborParserGenerator(
                 // (binary bignum representation), but aws-smithy-cbor doesn't implement these tags yet.
                 is BigIntegerShape ->
                     throw CodegenException(
-                        "BigInteger is not supported with Concise Binary Object Representation (CBOR) protocol",
+                        "BigInteger is not supported with Concise Binary Object Representation (CBOR) protocol. " +
+                            "See https://github.com/smithy-lang/smithy-rs/issues/4473",
                     )
                 is BigDecimalShape ->
                     throw CodegenException(
-                        "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol",
+                        "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol. " +
+                            "See https://github.com/smithy-lang/smithy-rs/issues/4473",
                     )
 
                 // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
