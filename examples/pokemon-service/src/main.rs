@@ -8,7 +8,7 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server_metrics::layer::{DefaultMetrics, InitMetricsLayer, MetricsLayer};
+use aws_smithy_http_server_metrics::layer::{DefaultMetrics, BuildMetricsLayer, MetricsLayer};
 use clap::Parser;
 use metrique_writer::{sink::DevNullSink, GlobalEntrySink};
 use pokemon_service_server_sdk::server::{
@@ -111,8 +111,11 @@ pub async fn main() {
         AlbHealthCheckLayer::from_handler("/ping", |_req| async { StatusCode::OK });
     let service = health_check_layer.layer(app);
 
-    let metrics_layer =
-        MetricsLayer::new(|| DefaultMetrics::default().append_on_drop(DevNullSink::new()));
+    // let metrics_layer = MetricsLayer::builder()
+    //     .init_metrics(|| DefaultMetrics::default().append_on_drop(DevNullSink::new()))
+    //     .build();
+
+    let metrics_layer = MetricsLayer::new();
 
     let service = metrics_layer.layer(service);
 
