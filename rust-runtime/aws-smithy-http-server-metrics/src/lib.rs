@@ -1,7 +1,5 @@
 #![allow(missing_docs)]
 
-use crate::layer::MetricsLayer;
-
 pub mod layer;
 pub mod service;
 
