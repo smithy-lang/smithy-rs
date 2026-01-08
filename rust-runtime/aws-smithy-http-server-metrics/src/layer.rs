@@ -78,7 +78,7 @@ pub trait InitMetricsLayer {
     >;
 }
 
-pub struct MetricsLayer<E = DefaultMetrics, S = DefaultSink>
+pub struct MetricsLayer<S, E = DefaultMetrics>
 where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
@@ -86,14 +86,15 @@ where
     _close_entry: PhantomData<E>,
     _entry_sink: PhantomData<S>,
 }
-impl InitMetricsLayer for MetricsLayer {
-    type InitMetrics = fn() -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>;
-    type SetReqMetrics =
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>);
-    type SetResMetrics =
-        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>);
+impl<S> InitMetricsLayer for MetricsLayer<S, DefaultMetrics>
+where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Send + Sync + 'static,
+{
+    type InitMetrics = fn() -> AppendAndCloseOnDrop<DefaultMetrics, S>;
+    type SetReqMetrics = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>);
+    type SetResMetrics = fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>);
     type E = DefaultMetrics;
-    type S = DefaultSink;
+    type S = S;
 
     fn new(
         init_metrics: Self::InitMetrics,
@@ -153,42 +154,47 @@ where
     with_service_version_metric: bool,
     with_http_status_code: bool,
 }
-impl
+impl<S>
     MetricsLayerBuilder<
-        fn() -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
-        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
+        fn() -> AppendAndCloseOnDrop<DefaultMetrics, S>,
+        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
+        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
         DefaultMetrics,
-        DefaultSink,
+        S,
     >
+where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Send + Sync + 'static,
 {
     pub fn build(
         self,
     ) -> MetricsLayerInner<
-        fn() -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
-        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>),
+        fn() -> AppendAndCloseOnDrop<DefaultMetrics, S>,
+        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
+        fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
         DefaultMetrics,
-        DefaultSink,
+        S,
     > {
-        let set_default_request_metrics =
-            |req: &mut Request<ReqBody>, metrics: &mut DefaultMetricsGuard| {
-                metrics.request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
+        let set_default_request_metrics = |req: &mut Request<ReqBody>,
+                                           metrics: &mut AppendAndCloseOnDrop<
+            DefaultMetrics,
+            S,
+        >| {
+            metrics.request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
 
-                let mut default_req_metrics_slotguard = metrics
+            let mut default_req_metrics_slotguard = metrics
                     .request_metrics
                     .as_mut()
                     .expect("unreachable: the option is set to some in this scope")
                     .open(OnParentDrop::Discard)
                     .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-                default_req_metrics_slotguard.request_id = Some("test_request_id".to_string());
+            default_req_metrics_slotguard.request_id = Some("test_request_id".to_string());
 
-                req.extensions_mut().insert(default_req_metrics_slotguard);
-            };
+            req.extensions_mut().insert(default_req_metrics_slotguard);
+        };
 
         let set_default_response_metrics =
-            |res: &Response<ResBody>, metrics: &mut DefaultMetricsGuard| {
+            |res: &Response<ResBody>, metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>| {
                 let default_res_metrics = DefaultResponseMetrics {
                     http_status_code: Some(res.status().as_u16()),
                 };

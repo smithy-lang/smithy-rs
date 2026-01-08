@@ -10,7 +10,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use aws_smithy_http_server_metrics::layer::{DefaultMetrics, InitMetricsLayer, MetricsLayer};
 use clap::Parser;
-use metrique_writer::GlobalEntrySink;
+use metrique_writer::{sink::DevNullSink, GlobalEntrySink};
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
@@ -113,7 +113,7 @@ pub async fn main() {
     let service = health_check_layer.layer(app);
 
     let metrics_layer =
-        MetricsLayer::new(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink()));
+        MetricsLayer::new(|| DefaultMetrics::default().append_on_drop(DevNullSink::new()));
 
     let service = metrics_layer.layer(service);
 
