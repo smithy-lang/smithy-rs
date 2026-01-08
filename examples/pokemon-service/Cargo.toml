@@ -14,18 +14,8 @@ hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "s
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
 tower = "0.4"
 tracing = "0.1"
-
-metrique = { version = "=0.1.9", features = ["emf"] }
-metrique-writer-core = "=0.1.7"
-metrique-macro = "=0.1.6"
-metrique-core = "=0.1.8"
-metrique-writer = "=0.1.10"
-metrique-service-metrics = "=0.1.9"
-metrique-timesource = "=0.1.5"
-metrique-writer-macro = "=0.1.4"
-metrique-writer-format-emf = "=0.1.9"
-
 tracing-appender = "0.2"
+metrique = { version = "=0.1.9", features = ["emf"] }
 
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
@@ -49,7 +39,7 @@ hyper-rustls = { version = "0.27", features = ["http2"] }
 
 # Local paths
 aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime" }
-aws-smithy-http = { version = "*" }
+aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 pokemon-service-client = { path = "../pokemon-service-client/", features = [
     "behavior-version-latest",
 ] }
