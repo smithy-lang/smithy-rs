@@ -2,11 +2,8 @@
 
 use std::marker::PhantomData;
 
-use aws_smithy_http_server::error::Error;
 use http::Request;
 use http::Response;
-use http_body::combinators::UnsyncBoxBody;
-use hyper::body::Bytes;
 use metrique::AppendAndCloseOnDrop;
 use metrique::CloseValue;
 use metrique::DefaultSink;
@@ -16,18 +13,16 @@ use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
 use metrique_writer::GlobalEntrySink;
 
-use builder::MetricsLayerBuilder;
-use inner::MetricsLayer as MetricsLayerInner;
-
+use crate::ReqBody;
+use crate::ResBody;
 use crate::default::DefaultMetrics;
+use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
+use crate::layer::inner::MetricsLayer as MetricsLayerInner;
 
 pub mod builder;
 #[doc(hidden)]
 pub mod inner;
-
-type ReqBody = hyper::body::Body;
-type ResBody = UnsyncBoxBody<Bytes, Error>;
 
 pub trait BuildMetricsLayer {
     type InitMetrics: Fn() -> AppendAndCloseOnDrop<Self::E, Self::S> + Clone;

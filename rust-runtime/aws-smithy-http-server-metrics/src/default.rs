@@ -13,6 +13,9 @@ pub struct DefaultMetrics {
 #[metrics]
 #[derive(Default)]
 pub struct DefaultRequestMetrics {
+    pub(crate) service_name: Option<String>,
+    pub(crate) service_version: Option<String>,
+    pub(crate) operation_name: Option<String>,
     pub(crate) request_id: Option<String>,
 }
 
