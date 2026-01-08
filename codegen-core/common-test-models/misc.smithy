@@ -95,12 +95,11 @@ structure InnermostShape {
     @required
     aDouble: Double,
 
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/312)
-    // @required
-    // aBigInteger: BigInteger,
+     @required
+     aBigInteger: BigInteger,
 
-    // @required
-    // aBigDecimal: BigDecimal,
+     @required
+     aBigDecimal: BigDecimal,
 
     @required
     aTimestamp: Timestamp,
