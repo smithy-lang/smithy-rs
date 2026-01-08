@@ -5,7 +5,6 @@ use std::marker::PhantomData;
 use http::Request;
 use http::Response;
 use metrique::AppendAndCloseOnDrop;
-use metrique::CloseValue;
 use metrique::DefaultSink;
 use metrique::RootEntry;
 use metrique::ServiceMetrics;
@@ -23,34 +22,24 @@ use crate::layer::inner::MetricsLayer as MetricsLayerInner;
 pub mod builder;
 pub mod inner;
 
-pub trait BuildMetricsLayer {
-    type InitMetrics: Fn() -> AppendAndCloseOnDrop<Self::E, Self::S> + Clone;
-    type SetReqMetrics: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<Self::E, Self::S>)
-        + Clone;
-    type SetResMetrics: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<Self::E, Self::S>) + Clone;
-    type E: CloseEntry + Send + Sync + 'static;
-    type S: EntrySink<RootEntry<<<Self as BuildMetricsLayer>::E as CloseValue>::Closed>>
-        + Send
-        + Sync
-        + 'static;
-
-    fn builder() -> MetricsLayerBuilder<
-        NeedsInitialization,
-        Self::InitMetrics,
-        Self::SetReqMetrics,
-        Self::SetResMetrics,
-        Self::E,
-        Self::S,
-    >;
-}
-
-pub struct MetricsLayer<E = DefaultMetrics, S = DefaultSink>
-where
+pub struct MetricsLayer<
+    E = DefaultMetrics,
+    S = DefaultSink,
+    I = fn() -> AppendAndCloseOnDrop<E, S>,
+    Rq = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>),
+    Rs = fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>),
+> where
+    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
     _close_entry: PhantomData<E>,
     _entry_sink: PhantomData<S>,
+    _init_fn: PhantomData<I>,
+    _req_fn: PhantomData<Rq>,
+    _res_fn: PhantomData<Rs>,
 }
 impl MetricsLayer {
     pub fn new() -> MetricsLayerInner<
@@ -66,25 +55,15 @@ impl MetricsLayer {
     }
 }
 
-impl<E, S> BuildMetricsLayer for MetricsLayer<E, S>
+impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
 where
+    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
-    type InitMetrics = fn() -> AppendAndCloseOnDrop<E, S>;
-    type SetReqMetrics = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>);
-    type SetResMetrics = fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>);
-    type E = E;
-    type S = S;
-
-    fn builder() -> MetricsLayerBuilder<
-        NeedsInitialization,
-        Self::InitMetrics,
-        Self::SetReqMetrics,
-        Self::SetResMetrics,
-        Self::E,
-        Self::S,
-    > {
+    pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, I, Rq, Rs, E, S> {
         MetricsLayerBuilder {
             init_metrics: None,
             set_request_metrics: None,
