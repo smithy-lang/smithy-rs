@@ -25,8 +25,8 @@ where
 {
     inner: Ser,
     init_metrics: I,
-    set_default_request_metrics: Option<Rq>,
-    set_default_response_metrics: Option<Rs>,
+    set_default_request_metrics: Option<fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    set_default_response_metrics: Option<fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)>,
     set_request_metrics: Option<Rq>,
     set_response_metrics: Option<Rs>,
 }
@@ -43,8 +43,8 @@ where
         Self {
             inner: self.inner.clone(),
             init_metrics: self.init_metrics.clone(),
-            set_default_request_metrics: self.set_default_request_metrics.clone(),
-            set_default_response_metrics: self.set_default_response_metrics.clone(),
+            set_default_request_metrics: self.set_default_request_metrics,
+            set_default_response_metrics: self.set_default_response_metrics,
             set_request_metrics: self.set_request_metrics.clone(),
             set_response_metrics: self.set_response_metrics.clone(),
         }
@@ -138,8 +138,8 @@ where
 {
     inner: Ser,
     init_metrics: I,
-    set_default_request_metrics: Option<Rq>,
-    set_default_response_metrics: Option<Rs>,
+    set_default_request_metrics: Option<fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    set_default_response_metrics: Option<fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)>,
     set_request_metrics: Option<Rq>,
     set_response_metrics: Option<Rs>,
 }
@@ -152,12 +152,18 @@ where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
-    pub(crate) fn set_default_request_metrics(mut self, f: Option<Rq>) -> Self {
+    pub(crate) fn set_default_request_metrics(
+        mut self,
+        f: Option<fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    ) -> Self {
         self.set_default_request_metrics = f;
         self
     }
 
-    pub(crate) fn set_default_response_metrics(mut self, f: Option<Rs>) -> Self {
+    pub(crate) fn set_default_response_metrics(
+        mut self,
+        f: Option<fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)>,
+    ) -> Self {
         self.set_default_response_metrics = f;
         self
     }
