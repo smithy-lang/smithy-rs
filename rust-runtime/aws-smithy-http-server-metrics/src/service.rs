@@ -25,6 +25,8 @@ where
 {
     inner: Ser,
     init_metrics: I,
+    set_default_request_metrics: Option<Rq>,
+    set_default_response_metrics: Option<Rs>,
     set_request_metrics: Option<Rq>,
     set_response_metrics: Option<Rs>,
 }
@@ -41,6 +43,8 @@ where
         Self {
             inner: self.inner.clone(),
             init_metrics: self.init_metrics.clone(),
+            set_default_request_metrics: self.set_default_request_metrics.clone(),
+            set_default_response_metrics: self.set_default_response_metrics.clone(),
             set_request_metrics: self.set_request_metrics.clone(),
             set_response_metrics: self.set_response_metrics.clone(),
         }
@@ -69,11 +73,16 @@ where
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
         let mut metrics = (self.init_metrics)();
 
+        if let Some(set_default_request_metrics) = &self.set_default_request_metrics {
+            (set_default_request_metrics)(&mut req, &mut metrics);
+        }
+
         if let Some(set_request_metrics) = &self.set_request_metrics {
             (set_request_metrics)(&mut req, &mut metrics);
         }
 
         let future = self.inner.call(req);
+        let set_default_response_metrics = self.set_default_response_metrics.clone();
         let set_response_metrics = self.set_response_metrics.clone();
 
         futures::FutureExt::boxed(async move {
@@ -82,6 +91,10 @@ where
                 // if there was an error inside ssdk, short circuit
                 Err(e) => return Err(e),
             };
+
+            if let Some(set_default_response_metrics) = &set_default_response_metrics {
+                (set_default_response_metrics)(&response, &mut metrics);
+            }
 
             if let Some(set_response_metrics) = &set_response_metrics {
                 (set_response_metrics)(&response, &mut metrics);
@@ -107,6 +120,8 @@ where
         MetricsLayerServiceBuilder {
             inner,
             init_metrics,
+            set_default_request_metrics: Default::default(),
+            set_default_response_metrics: Default::default(),
             set_request_metrics: Default::default(),
             set_response_metrics: Default::default(),
         }
@@ -123,6 +138,8 @@ where
 {
     inner: Ser,
     init_metrics: I,
+    set_default_request_metrics: Option<Rq>,
+    set_default_response_metrics: Option<Rs>,
     set_request_metrics: Option<Rq>,
     set_response_metrics: Option<Rs>,
 }
@@ -135,6 +152,16 @@ where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
 {
+    pub(crate) fn set_default_request_metrics(mut self, f: Option<Rq>) -> Self {
+        self.set_default_request_metrics = f;
+        self
+    }
+
+    pub(crate) fn set_default_response_metrics(mut self, f: Option<Rs>) -> Self {
+        self.set_default_response_metrics = f;
+        self
+    }
+
     pub(crate) fn set_request_metrics(mut self, f: Option<Rq>) -> Self {
         self.set_request_metrics = f;
         self
@@ -149,6 +176,8 @@ where
         MetricsLayerService {
             inner: self.inner,
             init_metrics: self.init_metrics,
+            set_default_request_metrics: self.set_default_request_metrics,
+            set_default_response_metrics: self.set_default_response_metrics,
             set_request_metrics: self.set_request_metrics,
             set_response_metrics: self.set_response_metrics,
         }
