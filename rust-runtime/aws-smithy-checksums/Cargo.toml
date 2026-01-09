@@ -17,8 +17,8 @@ rust-version = "1.88"
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1.10.0"
-# FIXME(https://github.com/smithy-lang/smithy-rs/issues/3981): Keep pinned until we have more comprehensive testing in place
-crc-fast = "~1.6.0"
+# TEMPORARY: Testing that architecture tests would catch crc-fast 1.4 SIGILL on ARM
+crc-fast = "=1.4.0"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"

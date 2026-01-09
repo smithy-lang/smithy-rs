@@ -333,6 +333,43 @@ jobs:
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
 
+  # Test runtime crates on multiple architectures to catch architecture-specific issues
+  # like crc-fast 1.4 SIGILL on ARM before merge
+  test-runtime-architectures:
+    name: Test Runtime (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-musl
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.git_ref }}
+    - name: Install musl tools
+      if: contains(matrix.target, 'musl')
+      run: sudo apt-get update && sudo apt-get install -y musl-tools musl-dev
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        targets: ${{ matrix.target }}
+    - name: Test smithy-rs runtime on ${{ matrix.target }}
+      shell: bash
+      run: cargo test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" --workspace --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+    - name: Test AWS runtime on ${{ matrix.target }}
+      shell: bash
+      run: cargo test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" --workspace
+
   # Run the canary against generated SDKs
   #
   # In addition to Matrix Success, this job will also be required to pass for merge.
@@ -391,6 +428,7 @@ jobs:
     - test-sdk
     - test-rust-windows
     - test-exotic-platform-support
+    - test-runtime-architectures
     # Run this job even if its dependency jobs fail
     if: always()
     runs-on: ubuntu-latest
