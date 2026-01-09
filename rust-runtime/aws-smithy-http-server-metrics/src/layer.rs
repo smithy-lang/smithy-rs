@@ -66,12 +66,6 @@ where
             set_response_metrics: None,
             with_default_request_metrics: true,
             with_default_response_metrics: true,
-            with_request_id_metric: true,
-            with_start_metric: true,
-            with_operation_name_metric: true,
-            with_service_name_metric: true,
-            with_service_version_metric: true,
-            with_http_status_code: true,
             _state: PhantomData,
         }
     }
