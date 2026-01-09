@@ -34,12 +34,6 @@ where
 
     pub(crate) with_default_request_metrics: bool,
     pub(crate) with_default_response_metrics: bool,
-    pub(crate) with_request_id_metric: bool,
-    pub(crate) with_start_metric: bool,
-    pub(crate) with_operation_name_metric: bool,
-    pub(crate) with_service_name_metric: bool,
-    pub(crate) with_service_version_metric: bool,
-    pub(crate) with_http_status_code: bool,
 
     pub(crate) _state: PhantomData<State>,
 }
@@ -60,12 +54,6 @@ where
             set_response_metrics: self.set_response_metrics,
             with_default_request_metrics: self.with_default_request_metrics,
             with_default_response_metrics: self.with_default_response_metrics,
-            with_request_id_metric: self.with_request_id_metric,
-            with_start_metric: self.with_start_metric,
-            with_operation_name_metric: self.with_operation_name_metric,
-            with_service_name_metric: self.with_service_name_metric,
-            with_service_version_metric: self.with_service_version_metric,
-            with_http_status_code: self.with_http_status_code,
             _state: PhantomData,
         }
     }
@@ -86,36 +74,6 @@ where
 
     pub fn without_default_response_metrics(mut self) -> Self {
         self.with_default_response_metrics = false;
-        self
-    }
-
-    pub fn without_request_id_metric(mut self) -> Self {
-        self.with_request_id_metric = false;
-        self
-    }
-
-    pub fn without_start_metric(mut self) -> Self {
-        self.with_start_metric = false;
-        self
-    }
-
-    pub fn without_operation_name_metric(mut self) -> Self {
-        self.with_operation_name_metric = false;
-        self
-    }
-
-    pub fn without_service_name_metric(mut self) -> Self {
-        self.with_service_name_metric = false;
-        self
-    }
-
-    pub fn without_service_version_metric(mut self) -> Self {
-        self.with_service_version_metric = false;
-        self
-    }
-
-    pub fn without_http_status_code(mut self) -> Self {
-        self.with_http_status_code = false;
         self
     }
 
