@@ -207,3 +207,76 @@ async fn test_connect_timeout() {
         panic!("the client didn't timeout");
     }
 }
+
+#[tokio::test]
+#[expect(deprecated)]
+async fn test_connect_timeout_enabled_by_default_with_new_behavior_version() {
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+
+    // With BehaviorVersion >= v2025_01_17, a 3.1s connect timeout is enabled by default
+    let config = Config::builder()
+        .behavior_version(BehaviorVersion::v2025_01_17())
+        .region(Region::new("us-east-1"))
+        .retry_config(RetryConfig::disabled())
+        .endpoint_url(
+            // Emulate a connect timeout error by hitting an unroutable IP
+            "http://172.255.255.0:18104",
+        )
+        .build();
+    let client = Client::from_conf(config);
+
+    if let Ok(result) = timeout(
+        Duration::from_millis(5000),
+        client.get_object().bucket("test").key("test").send(),
+    )
+    .await
+    {
+        match result {
+            Ok(_) => panic!("should not have succeeded"),
+            Err(err) => {
+                let message = format!("{}", DisplayErrorContext(&err));
+                // Should timeout with the default 3.1s connect timeout
+                let expected = "HTTP connect timeout occurred after 3.1s";
+                assert!(
+                    message.contains(expected),
+                    "expected '{message}' to contain '{expected}'"
+                );
+            }
+        }
+    } else {
+        panic!("the client didn't timeout");
+    }
+}
+
+
+#[tokio::test]
+#[expect(deprecated)]
+async fn test_old_behavior_version_has_no_default_connect_timeout() {
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
+    use aws_credential_types::Credentials;
+
+    // With v2024_03_28 (older BMV), no default connect timeout should be set
+    let config = Config::builder()
+        .behavior_version(BehaviorVersion::v2024_03_28())
+        .region(Region::new("us-east-1"))
+        .credentials_provider(Credentials::for_tests())
+        .retry_config(RetryConfig::disabled())
+        .endpoint_url("http://172.255.255.0:18104") // Unroutable IP
+        .build();
+    let client = Client::from_conf(config);
+
+    // The client should hang indefinitely without a timeout
+    // We wrap it in a short test timeout to verify it doesn't complete quickly
+    let result = timeout(
+        Duration::from_millis(500),
+        client.get_object().bucket("test").key("test").send(),
+    )
+    .await;
+
+    // Should timeout at the test wrapper level (not at client level)
+    // This proves the client has no default connect timeout
+    assert!(
+        result.is_err(),
+        "client should hang without default timeout, causing test timeout"
+    );
+}

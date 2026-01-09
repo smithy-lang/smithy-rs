@@ -57,7 +57,7 @@ where
     note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
 )]
 pub fn default_http_client_plugin() -> Option<SharedRuntimePlugin> {
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     default_http_client_plugin_v2(BehaviorVersion::v2024_03_28())
 }
 
@@ -67,7 +67,7 @@ pub fn default_http_client_plugin_v2(
 ) -> Option<SharedRuntimePlugin> {
     let mut _default: Option<SharedHttpClient> = None;
 
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
         // the latest https stack takes precedence if the config flag
         // is enabled otherwise try to fall back to the legacy connector
@@ -168,7 +168,7 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                 .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
-            #[allow(deprecated)]
+            #[expect(deprecated)]
             let retry_config =
                 if is_aws_sdk && behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
                     RetryConfig::standard()
@@ -219,14 +219,13 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// Runtime plugin that sets the default timeout config.
 ///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
-/// For AWS SDK clients, connection timeout is enabled by default.
+/// For all clients with BehaviorVersion >= v2025_01_17, a 3.1s connection timeout is set.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
     let behavior_version = params
         .behavior_version
         .unwrap_or_else(BehaviorVersion::latest);
-    let is_aws_sdk = params.is_aws_sdk;
     Some(
         default_plugin("default_timeout_config_plugin", |components| {
             components.with_config_validator(SharedConfigValidator::base_client_config_fn(
@@ -234,17 +233,15 @@ pub fn default_timeout_config_plugin_v2(
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            #[allow(deprecated)]
+            #[expect(deprecated)]
             let timeout_config =
-                if is_aws_sdk && behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
-                    // AWS SDK with new behavior version: Set connect_timeout, explicitly disable operation timeouts
+                if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                    // All clients with new behavior version: Set connect_timeout only
                     TimeoutConfig::builder()
                         .connect_timeout(Duration::from_millis(3100))
-                        .disable_operation_timeout()
-                        .disable_operation_attempt_timeout()
                         .build()
                 } else {
-                    // Old behavior versions or non-AWS SDK: All timeouts disabled
+                    // Old behavior versions: All timeouts disabled
                     TimeoutConfig::disabled()
                 };
             layer.store_put(timeout_config);
@@ -291,7 +288,7 @@ pub fn default_identity_cache_plugin() -> Option<SharedRuntimePlugin> {
     note = "This function wasn't intended to be public, and didn't take the behavior major version as an argument, so it couldn't be evolved over time."
 )]
 pub fn default_stalled_stream_protection_config_plugin() -> Option<SharedRuntimePlugin> {
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     default_stalled_stream_protection_config_plugin_v2(BehaviorVersion::v2023_11_09())
 }
 fn default_stalled_stream_protection_config_plugin_v2(
@@ -310,7 +307,7 @@ fn default_stalled_stream_protection_config_plugin_v2(
             let mut config =
                 StalledStreamProtectionConfig::enabled().grace_period(Duration::from_secs(5));
             // Before v2024_03_28, upload streams did not have stalled stream protection by default
-            #[allow(deprecated)]
+            #[expect(deprecated)]
             if !behavior_version.is_at_least(BehaviorVersion::v2024_03_28()) {
                 config = config.upload_enabled(false);
             }
@@ -430,7 +427,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn v2024_03_28_stalled_stream_protection_difference() {
         let latest = config_for(default_plugins(test_plugin_params(
             BehaviorVersion::latest(),
@@ -476,7 +473,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn test_retry_disabled_for_aws_sdk_old_behavior_version() {
         // Any version before v2025_01_17 should have retries disabled
         let params = DefaultPluginParams::new()
@@ -498,7 +495,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn test_retry_enabled_at_cutoff_version() {
         // v2025_01_17 is the cutoff - retries should be enabled from this version onwards
         let params = DefaultPluginParams::new()
@@ -540,7 +537,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn test_behavior_version_gates_retry_for_aws_sdk() {
         // This test demonstrates the complete behavior:
         // AWS SDK clients get retries enabled ONLY when BehaviorVersion >= v2025_01_17
@@ -576,7 +573,7 @@ mod tests {
     }
 
     #[test]
-    #[allow(deprecated)]
+    #[expect(deprecated)]
     fn test_complete_default_plugins_integration() {
         // This test simulates the complete flow as it would happen in a real AWS SDK client
         // It verifies that default_plugins() correctly applies retry config based on

@@ -51,7 +51,7 @@ mod with_service_config {
 
     #[test]
     fn test_client_with_new_behavior_version_builds_successfully() {
-        // With v2025_08_07, retries are enabled by default
+        // With v2025_01_17 and later, retries are enabled by default for AWS SDK clients
         // This test verifies the client builds without panicking about missing sleep impl
         let config = s3::Config::builder()
             .behavior_version(BehaviorVersion::v2025_08_07())
@@ -67,14 +67,14 @@ mod with_service_config {
     #[test]
     #[allow(deprecated)]
     fn test_client_with_old_behavior_version_builds_successfully() {
-        // With v2025_01_17, retries are disabled by default
+        // With v2024_03_28 (older than v2025_01_17), retries are disabled by default
         let config = s3::Config::builder()
-            .behavior_version(BehaviorVersion::v2025_01_17())
+            .behavior_version(BehaviorVersion::v2024_03_28())
             .region(aws_types::region::Region::new("us-east-1"))
             .credentials_provider(aws_credential_types::Credentials::for_tests())
             .build();
 
-        // Should build successfully with retries disabled
+        // Should build successfully with retries disabled (no sleep impl needed)
         let _client = s3::Client::from_conf(config);
     }
 }

@@ -57,7 +57,7 @@ class TimeoutConfigMergingTest {
                         }
                     }
                     #{tokio_test}
-                    ##[allow(deprecated)]
+                    ##[expect(deprecated)]
                     async fn test_all_timeouts() {
                         let (_logs, _guard) = capture_test_logs();
                         let connect_timeout = Duration::from_secs(1);
@@ -159,8 +159,6 @@ class TimeoutConfigMergingTest {
                             &TimeoutConfig::builder()
                                 .read_timeout(Duration::from_secs(10))
                                 .connect_timeout(connect_timeout)
-                                .disable_operation_timeout()
-                                .disable_operation_attempt_timeout()
                                 .build(),
                             "read timeout overridden"
                         );
