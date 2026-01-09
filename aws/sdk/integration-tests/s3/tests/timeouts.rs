@@ -248,12 +248,11 @@ async fn test_connect_timeout_enabled_by_default_with_new_behavior_version() {
     }
 }
 
-
 #[tokio::test]
 #[expect(deprecated)]
 async fn test_old_behavior_version_has_no_default_connect_timeout() {
-    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_credential_types::Credentials;
+    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 
     // With v2024_03_28 (older BMV), no default connect timeout should be set
     let config = Config::builder()

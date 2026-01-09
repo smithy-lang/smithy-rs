@@ -60,7 +60,8 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                     AwsPresignedFluentBuilderMethod(codegenContext),
                     AwsFluentClientDocs(codegenContext),
                     AwsFluentClientRetryPartition(codegenContext),
-                    AwsFluentClientEnableRetries(codegenContext), // NEW: Enable retries for AWS SDK
+                    // NEW: Enable retries for AWS SDK
+                    AwsFluentClientEnableRetries(codegenContext),
                 ).letIf(codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
                     it + S3ExpressFluentClientCustomization(codegenContext)
                 },
