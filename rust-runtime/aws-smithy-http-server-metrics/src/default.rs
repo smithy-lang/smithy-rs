@@ -1,4 +1,5 @@
 use metrique::Slot;
+use metrique::SlotGuard;
 use metrique_macro::metrics;
 
 #[metrics]
@@ -23,4 +24,29 @@ pub struct DefaultRequestMetrics {
 #[derive(Default)]
 pub struct DefaultResponseMetrics {
     pub(crate) http_status_code: Option<u16>,
+}
+
+#[derive(Default, Clone)]
+pub(crate) struct DefaultRequestMetricsConfig {
+    pub(crate) disable_all: bool,
+    pub(crate) disable_request_id: bool,
+    pub(crate) disable_operation_name: bool,
+    pub(crate) disable_service_name: bool,
+    pub(crate) disable_service_version: bool,
+}
+
+#[derive(Default, Clone)]
+pub(crate) struct DefaultResponseMetricsConfig {
+    pub(crate) disable_all: bool,
+    pub(crate) disable_http_status_code: bool,
+}
+
+pub(crate) struct DefaultRequestMetricsExtension {
+    pub(crate) metrics: SlotGuard<DefaultRequestMetrics>,
+    pub(crate) config: DefaultRequestMetricsConfig,
+}
+
+pub(crate) struct DefaultResponseMetricsExtension {
+    pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
+    pub(crate) config: DefaultResponseMetricsConfig,
 }
