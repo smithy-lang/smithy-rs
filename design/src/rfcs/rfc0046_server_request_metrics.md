@@ -56,10 +56,10 @@ fn main() {
         .build();
 }
 
-#[smithy_metrics]
+#[smithy_metrics::root]
 #[metrics]
 struct MyMetrics {
-    #[smithy_metrics(extension)]
+    #[smithy_metrics::extension]
     #[metrics(flatten)]
     operation_metrics: OperationMetrics,
     custom_metric: Option<String>
@@ -75,7 +75,7 @@ fn set_request_metrics(req: Request<Body>, metrics: MyMetricsGuard) {
 }
 ```
 
-For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics(extension)]` will be available in the request extensions. To make this turnkey, a type alias will be made for any of the `#[smithy_metrics(extension)]` annotated fields' types. In this case `OperationMetricsExtension` will be `Extension<SlotGuard<OperationMetrics>>`, which can be added as a parameter in the handler signature as shown below.
+For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics::extension]` will be available in the request extensions. To make this turnkey, a type alias will be made for any of the `#[smithy_metrics::extension]` annotated fields' types. In this case `OperationMetricsExtension` will be `Extension<SlotGuard<OperationMetrics>>`, which can be added as a parameter in the handler signature as shown below.
 
 ```rust
 fn main() {
@@ -210,7 +210,7 @@ A struct that will contain fields for the default response metrics, a field for 
 
 A proc macro that can be placed on a metrique metrics struct for the adding of default metrics fields and the expansion of a `MetricsLayerBuilder` implementation for the annotated struct.
 
-This will also come with `#[smithy_metrics(rename(x = "y"))]` to rename default fields and `#[smithy_metrics(extension)]` to mark struct fields for insertion to the request extensions to be used in custom middleware or operation handlers.
+This will also come with `#[smithy_metrics(rename(x = "y"))]` to rename default fields and `#[smithy_metrics::extension]` (or `#[smithy_metrics::extension(response)]` to be explicit about whether it should be a request or response extension) to mark struct fields for insertion to the request extensions to be used in custom middleware or operation handlers.
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist

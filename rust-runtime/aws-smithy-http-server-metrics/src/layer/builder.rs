@@ -26,7 +26,7 @@ where
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
     I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone,
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
-    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
+    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
 {
     pub(crate) init_metrics: Option<I>,
     pub(crate) set_request_metrics: Option<Rq>,
@@ -42,9 +42,9 @@ impl<E, S, I, Rq, Rs> MetricsLayerBuilder<NeedsInitialization, E, S, I, Rq, Rs>
 where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
-    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
+    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
     pub fn init_metrics(mut self, init_metrics: I) -> MetricsLayerBuilder<Ready, E, S, I, Rq, Rs> {
         self.init_metrics = Some(init_metrics);
@@ -63,9 +63,9 @@ impl<E, S, I, Rq, Rs> MetricsLayerBuilder<Ready, E, S, I, Rq, Rs>
 where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
-    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone,
+    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
     pub fn without_default_request_metrics(mut self) -> Self {
         self.with_default_request_metrics = false;
@@ -98,49 +98,49 @@ where
         + Send
         + Sync
         + 'static,
-    Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
+    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
         + Clone
         + Send
         + Sync
         + 'static,
 {
     pub fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
-        let set_default_request_metrics = |req: &mut Request<ReqBody>,
-                                           metrics: &mut AppendAndCloseOnDrop<
+        let default_req_metrics_extension_fn = |req: &mut Request<ReqBody>,
+                                                metrics: &mut AppendAndCloseOnDrop<
             DefaultMetrics,
             S,
         >| {
             metrics.request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
-
-            let mut default_req_metrics_slotguard = metrics
+            let default_req_metrics_slotguard = metrics
                     .request_metrics
                     .as_mut()
                     .expect("unreachable: the option is set to some in this scope")
                     .open(OnParentDrop::Discard)
                     .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-            default_req_metrics_slotguard.request_id = Some("test_request_id".to_string());
-
             req.extensions_mut().insert(default_req_metrics_slotguard);
         };
 
-        let set_default_response_metrics =
-            |res: &Response<ResBody>, metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>| {
-                let default_res_metrics = DefaultResponseMetrics {
-                    http_status_code: Some(res.status().as_u16()),
-                };
+        let default_res_metrics_extension_fn = |res: &mut Response<ResBody>,
+                                                metrics: &mut AppendAndCloseOnDrop<
+            DefaultMetrics,
+            S,
+        >| {
+            metrics.response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
+            let default_res_metrics_slotguard = metrics
+                    .response_metrics
+                    .as_mut()
+                    .expect("unreachable: the option is set to some in this scope")
+                    .open(OnParentDrop::Discard)
+                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-                metrics.response_metrics = Some(default_res_metrics);
-            };
+            res.extensions_mut().insert(default_res_metrics_slotguard);
+        };
 
         MetricsLayer {
             init_metrics: self.init_metrics.expect("init_metrics must be provided"),
-            set_default_request_metrics: self
-                .with_default_request_metrics
-                .then_some(set_default_request_metrics),
-            set_default_response_metrics: self
-                .with_default_response_metrics
-                .then_some(set_default_response_metrics),
+            default_req_metrics_extension_fn,
+            default_res_metrics_extension_fn,
             set_request_metrics: self.set_request_metrics,
             set_response_metrics: self.set_response_metrics,
         }
