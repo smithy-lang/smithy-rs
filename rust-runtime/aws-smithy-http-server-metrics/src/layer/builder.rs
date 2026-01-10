@@ -6,13 +6,16 @@ use metrique::AppendAndCloseOnDrop;
 use metrique::OnParentDrop;
 use metrique::RootEntry;
 use metrique::Slot;
-use metrique::SlotGuard;
 use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
 
 use crate::default::DefaultMetricsEntry;
 use crate::default::DefaultRequestMetrics;
+use crate::default::DefaultRequestMetricsConfig;
+use crate::default::DefaultRequestMetricsExtension;
 use crate::default::DefaultResponseMetrics;
+use crate::default::DefaultResponseMetricsConfig;
+use crate::default::DefaultResponseMetricsExtension;
 use crate::layer::DefaultMetrics;
 use crate::layer::MetricsLayer;
 use crate::layer::ReqBody;
@@ -129,7 +132,18 @@ where
         + Sync
         + 'static,
 {
-    pub fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
+    // TODO: make a macro for this
+    pub fn build_default(
+        self,
+    ) -> MetricsLayer<
+        DefaultMetrics,
+        S,
+        I,
+        Rq,
+        Rs,
+        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
+        fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>),
+    > {
         let default_req_metrics_extension_fn = |req: &mut Request<ReqBody>,
                                                 metrics: &mut AppendAndCloseOnDrop<
             DefaultMetrics,
@@ -143,7 +157,12 @@ where
                     .open(OnParentDrop::Discard)
                     .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-            req.extensions_mut().insert(default_req_metrics_slotguard);
+            let ext = DefaultRequestMetricsExtension {
+                metrics: default_req_metrics_slotguard,
+                config: DefaultRequestMetricsConfig::default(),
+            };
+
+            req.extensions_mut().insert(ext);
         };
 
         let default_res_metrics_extension_fn = |res: &mut Response<ResBody>,
@@ -159,7 +178,12 @@ where
                     .open(OnParentDrop::Discard)
                     .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-            res.extensions_mut().insert(default_res_metrics_slotguard);
+            let ext = DefaultResponseMetricsExtension {
+                metrics: default_res_metrics_slotguard,
+                config: DefaultResponseMetricsConfig::default(),
+            };
+
+            res.extensions_mut().insert(ext);
         };
 
         MetricsLayer {
@@ -170,29 +194,74 @@ where
             set_response_metrics: self.set_response_metrics,
         }
     }
-}
 
-#[derive(Default)]
-pub(crate) struct DefaultRequestMetricsConfig {
-    pub(crate) disable_all: bool,
-    pub(crate) disable_request_id: bool,
-    pub(crate) disable_operation_name: bool,
-    pub(crate) disable_service_name: bool,
-    pub(crate) disable_service_version: bool,
-}
+    pub fn build(
+        self,
+    ) -> MetricsLayer<
+        DefaultMetrics,
+        S,
+        I,
+        Rq,
+        Rs,
+        impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+        impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    > {
+        let default_req_metrics_extension_fn = move |req: &mut Request<ReqBody>,
+                                                     metrics: &mut AppendAndCloseOnDrop<
+            DefaultMetrics,
+            S,
+        >| {
+            metrics.request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
+            let default_req_metrics_slotguard = metrics
+                    .request_metrics
+                    .as_mut()
+                    .expect("unreachable: the option is set to some in this scope")
+                    .open(OnParentDrop::Discard)
+                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
 
-#[derive(Default)]
-pub(crate) struct DefaultResponseMetricsConfig {
-    pub(crate) disable_all: bool,
-    pub(crate) disable_http_status_code: bool,
-}
+            let ext = DefaultRequestMetricsExtension {
+                metrics: default_req_metrics_slotguard,
+                config: self.default_request_metrics_config.clone(),
+            };
 
-pub(crate) struct DefaultRequestMetricsExtension {
-    pub(crate) metrics: SlotGuard<DefaultRequestMetrics>,
-    pub(crate) config: DefaultRequestMetricsConfig,
-}
+            req.extensions_mut().insert(ext);
+        };
 
-pub(crate) struct DefaultResponseMetricsExtension {
-    pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
-    pub(crate) config: DefaultResponseMetricsConfig,
+        let default_res_metrics_extension_fn = move |res: &mut Response<ResBody>,
+                                                     metrics: &mut AppendAndCloseOnDrop<
+            DefaultMetrics,
+            S,
+        >| {
+            metrics.response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
+            let default_res_metrics_slotguard = metrics
+                    .response_metrics
+                    .as_mut()
+                    .expect("unreachable: the option is set to some in this scope")
+                    .open(OnParentDrop::Discard)
+                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
+
+            let ext = DefaultResponseMetricsExtension {
+                metrics: default_res_metrics_slotguard,
+                config: self.default_response_metrics_config.clone(),
+            };
+
+            res.extensions_mut().insert(ext);
+        };
+
+        MetricsLayer {
+            init_metrics: self.init_metrics.expect("init_metrics must be provided"),
+            default_req_metrics_extension_fn,
+            default_res_metrics_extension_fn,
+            set_request_metrics: self.set_request_metrics,
+            set_response_metrics: self.set_response_metrics,
+        }
+    }
 }

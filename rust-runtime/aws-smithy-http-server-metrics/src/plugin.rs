@@ -1,4 +1,3 @@
-use std::ops::Deref;
 use std::task::Context;
 use std::task::Poll;
 
@@ -6,13 +5,11 @@ use aws_smithy_http_server::operation::OperationShape;
 use aws_smithy_http_server::plugin::HttpMarker;
 use aws_smithy_http_server::plugin::Plugin;
 use aws_smithy_http_server::service::ServiceShape;
-use futures::FutureExt;
 use http::Request;
 use http::Response;
 use metrique::OnParentDrop;
 use metrique::ServiceMetrics;
 use metrique::Slot;
-use metrique::SlotGuard;
 use metrique_writer::GlobalEntrySink;
 use tower::Service;
 
@@ -20,7 +17,11 @@ use crate::ReqBody;
 use crate::ResBody;
 use crate::default::DefaultMetrics;
 use crate::default::DefaultRequestMetrics;
+use crate::default::DefaultRequestMetricsConfig;
+use crate::default::DefaultRequestMetricsExtension;
 use crate::default::DefaultResponseMetrics;
+use crate::default::DefaultResponseMetricsConfig;
+use crate::default::DefaultResponseMetricsExtension;
 
 pub struct MetricsPlugin {
     pub(crate) with_default_request_metrics: bool,
@@ -99,9 +100,9 @@ where
 {
     fn get_default_request_metrics(&self, req: &Request<ReqBody>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
-            service_name: self.operation_name.map(|n| n.to_string()),
-            service_version: self.service_name.map(|n| n.to_string()),
-            operation_name: self.service_version.map(|n| n.to_string()),
+            service_name: self.service_name.map(|n| n.to_string()),
+            service_version: self.service_version.map(|n| n.to_string()),
+            operation_name: self.operation_name.map(|n| n.to_string()),
             request_id: Some("req_id_placeholder".to_string()),
         }
     }
@@ -109,6 +110,43 @@ where
     fn get_default_response_metrics(res: &Response<ResBody>) -> DefaultResponseMetrics {
         DefaultResponseMetrics {
             http_status_code: Some(res.status().as_u16()),
+        }
+    }
+
+    fn apply_default_request_metrics_config(
+        metrics: DefaultRequestMetrics,
+        config: &DefaultRequestMetricsConfig,
+    ) -> DefaultRequestMetrics {
+        if config.disable_all {
+            return DefaultRequestMetrics::default();
+        }
+
+        DefaultRequestMetrics {
+            service_name: metrics
+                .service_name
+                .filter(|_| !config.disable_service_name),
+            service_version: metrics
+                .service_version
+                .filter(|_| !config.disable_service_version),
+            operation_name: metrics
+                .operation_name
+                .filter(|_| !config.disable_operation_name),
+            request_id: metrics.request_id.filter(|_| !config.disable_request_id),
+        }
+    }
+
+    fn apply_default_response_metrics_config(
+        metrics: DefaultResponseMetrics,
+        config: &DefaultResponseMetricsConfig,
+    ) -> DefaultResponseMetrics {
+        if config.disable_all {
+            return DefaultResponseMetrics::default();
+        }
+
+        DefaultResponseMetrics {
+            http_status_code: metrics
+                .http_status_code
+                .filter(|_| !config.disable_http_status_code),
         }
     }
 }
@@ -127,16 +165,19 @@ where
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
         let default_request_metrics = self.get_default_request_metrics(&req);
 
-        let maybe_req_metrics = req
+        let maybe_default_req_metrics_ext = req
             .extensions_mut()
-            .get_mut::<SlotGuard<DefaultRequestMetrics>>();
+            .get_mut::<DefaultRequestMetricsExtension>();
 
-        match maybe_req_metrics {
-            Some(req_metrics) => {
-                **req_metrics = default_request_metrics;
+        match maybe_default_req_metrics_ext {
+            Some(default_req_metrics_ext) => {
+                *default_req_metrics_ext.metrics = Self::apply_default_request_metrics_config(
+                    default_request_metrics,
+                    &default_req_metrics_ext.config,
+                );
 
                 req.extensions_mut()
-                    .remove::<SlotGuard<DefaultRequestMetrics>>();
+                    .remove::<DefaultRequestMetricsExtension>();
 
                 let future = self.inner.call(req);
                 return futures::FutureExt::boxed(async move {
@@ -147,16 +188,20 @@ where
 
                     let default_response_metrics = Self::get_default_response_metrics(&res);
 
-                    let maybe_res_metrics = res
-                        .extensions_mut()
-                        .get_mut::<SlotGuard<DefaultResponseMetrics>>();
+                    let maybe_default_res_metrics_ext =
+                        res.extensions_mut()
+                            .get_mut::<DefaultResponseMetricsExtension>();
 
-                    if let Some(res_metrics) = maybe_res_metrics {
-                        **res_metrics = default_response_metrics;
+                    if let Some(default_res_metrics_ext) = maybe_default_res_metrics_ext {
+                        *default_res_metrics_ext.metrics =
+                            Self::apply_default_response_metrics_config(
+                                default_response_metrics,
+                                &default_res_metrics_ext.config,
+                            );
                     }
 
                     res.extensions_mut()
-                        .remove::<SlotGuard<DefaultResponseMetrics>>();
+                        .remove::<DefaultResponseMetricsExtension>();
 
                     Ok(res)
                 });

@@ -16,8 +16,8 @@ use tower::Layer;
 use crate::ReqBody;
 use crate::ResBody;
 use crate::default::DefaultMetrics;
-use crate::layer::builder::DefaultRequestMetricsConfig;
-use crate::layer::builder::DefaultResponseMetricsConfig;
+use crate::default::DefaultRequestMetricsConfig;
+use crate::default::DefaultResponseMetricsConfig;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
 use crate::service::MetricsLayerService;
@@ -30,36 +30,44 @@ pub struct MetricsLayer<
     I = fn() -> AppendAndCloseOnDrop<E, S>,
     Rq = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>),
     Rs = fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>),
+    DefaultRq = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>),
+    DefaultRs = fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>),
 > where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
     I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    DefaultRq:
+        Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    DefaultRs:
+        Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
     pub(crate) init_metrics: I,
-    pub(crate) default_req_metrics_extension_fn:
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>),
-    pub(crate) default_res_metrics_extension_fn:
-        fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>),
+    pub(crate) default_req_metrics_extension_fn: DefaultRq,
+    pub(crate) default_res_metrics_extension_fn: DefaultRs,
     pub(crate) set_request_metrics: Option<Rq>,
     pub(crate) set_response_metrics: Option<Rs>,
 }
 impl MetricsLayer {
-    pub fn new() -> Self {
+    pub fn new() -> MetricsLayer {
         Self::builder()
             .init_metrics(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink()))
-            .build()
+            .build_default()
     }
 }
 
-impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
+impl<E, S, I, Rq, Rs, DefaultRq, DefaultRs> MetricsLayer<E, S, I, Rq, Rs, DefaultRq, DefaultRs>
 where
+    E: CloseEntry + Send + Sync + 'static,
+    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
     I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    DefaultRq:
+        Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    DefaultRs:
+        Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
     pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S, I, Rq, Rs> {
         MetricsLayerBuilder {
@@ -73,23 +81,28 @@ where
     }
 }
 
-impl<Ser, E, S, I, Rq, Rs> Layer<Ser> for MetricsLayer<E, S, I, Rq, Rs>
+impl<Ser, E, S, I, Rq, Rs, DefaultRq, DefaultRs> Layer<Ser>
+    for MetricsLayer<E, S, I, Rq, Rs, DefaultRq, DefaultRs>
 where
     Ser: Clone,
+    E: CloseEntry + Send + Sync + 'static,
+    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
     I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    DefaultRq:
+        Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    DefaultRs:
+        Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
-    type Service = MetricsLayerService<Ser, I, Rq, Rs, E, S>;
+    type Service = MetricsLayerService<Ser, DefaultRq, DefaultRs, E, S, I, Rq, Rs>;
 
     fn layer(&self, inner: Ser) -> Self::Service {
         MetricsLayerService {
             inner,
             init_metrics: self.init_metrics.clone(),
-            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
+            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn.clone(),
+            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn.clone(),
             set_request_metrics: self.set_request_metrics.clone(),
             set_response_metrics: self.set_response_metrics.clone(),
         }
