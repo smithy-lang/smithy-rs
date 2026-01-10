@@ -1,13 +1,20 @@
 #![allow(missing_docs)]
 
 use aws_smithy_http_server::error::Error;
+use http::Request;
+use http::Response;
 use http_body::combinators::UnsyncBoxBody;
 use hyper::body::Bytes;
+use metrique::AppendAndCloseOnDrop;
 
 pub mod default;
 pub mod layer;
 pub mod plugin;
 pub mod service;
 
-type ReqBody = hyper::body::Body;
-type ResBody = UnsyncBoxBody<Bytes, Error>;
+pub type ReqBody = hyper::body::Body;
+pub type ResBody = UnsyncBoxBody<Bytes, Error>;
+
+pub(crate) type DefaultInit<E, S> = fn() -> AppendAndCloseOnDrop<E, S>;
+pub(crate) type DefaultRq<E, S> = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>);
+pub(crate) type DefaultRs<E, S> = fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>);
