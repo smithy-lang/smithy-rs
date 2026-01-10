@@ -112,6 +112,7 @@ pub async fn main() {
         .expect("failed to build an instance of PokemonService");
 
     let metrics_layer = MetricsLayer::new();
+
     let service = metrics_layer.layer(app);
 
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
