@@ -16,6 +16,8 @@ use tower::Layer;
 use crate::ReqBody;
 use crate::ResBody;
 use crate::default::DefaultMetrics;
+use crate::layer::builder::DefaultRequestMetricsConfig;
+use crate::layer::builder::DefaultResponseMetricsConfig;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
 use crate::service::MetricsLayerService;
@@ -64,8 +66,8 @@ where
             init_metrics: None,
             set_request_metrics: None,
             set_response_metrics: None,
-            with_default_request_metrics: true,
-            with_default_response_metrics: true,
+            default_request_metrics_config: DefaultRequestMetricsConfig::default(),
+            default_response_metrics_config: DefaultResponseMetricsConfig::default(),
             _state: PhantomData,
         }
     }

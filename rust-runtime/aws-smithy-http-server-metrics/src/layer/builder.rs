@@ -6,6 +6,7 @@ use metrique::AppendAndCloseOnDrop;
 use metrique::OnParentDrop;
 use metrique::RootEntry;
 use metrique::Slot;
+use metrique::SlotGuard;
 use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
 
@@ -31,10 +32,8 @@ where
     pub(crate) init_metrics: Option<I>,
     pub(crate) set_request_metrics: Option<Rq>,
     pub(crate) set_response_metrics: Option<Rs>,
-
-    pub(crate) with_default_request_metrics: bool,
-    pub(crate) with_default_response_metrics: bool,
-
+    pub(crate) default_request_metrics_config: DefaultRequestMetricsConfig,
+    pub(crate) default_response_metrics_config: DefaultResponseMetricsConfig,
     pub(crate) _state: PhantomData<State>,
 }
 
@@ -52,8 +51,8 @@ where
             init_metrics: self.init_metrics,
             set_request_metrics: self.set_request_metrics,
             set_response_metrics: self.set_response_metrics,
-            with_default_request_metrics: self.with_default_request_metrics,
-            with_default_response_metrics: self.with_default_response_metrics,
+            default_request_metrics_config: self.default_request_metrics_config,
+            default_response_metrics_config: self.default_response_metrics_config,
             _state: PhantomData,
         }
     }
@@ -67,13 +66,39 @@ where
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
-    pub fn without_default_request_metrics(mut self) -> Self {
-        self.with_default_request_metrics = false;
+    pub fn disable_default_request_metrics(mut self) -> Self {
+        self.default_request_metrics_config.disable_all = true;
         self
     }
 
-    pub fn without_default_response_metrics(mut self) -> Self {
-        self.with_default_response_metrics = false;
+    pub fn disable_default_response_metrics(mut self) -> Self {
+        self.default_response_metrics_config.disable_all = true;
+        self
+    }
+
+    pub fn disable_default_request_id_metric(mut self) -> Self {
+        self.default_request_metrics_config.disable_request_id = true;
+        self
+    }
+
+    pub fn disable_default_operation_name_metric(mut self) -> Self {
+        self.default_request_metrics_config.disable_operation_name = true;
+        self
+    }
+
+    pub fn disable_default_service_name_metric(mut self) -> Self {
+        self.default_request_metrics_config.disable_service_name = true;
+        self
+    }
+
+    pub fn disable_default_service_version_metric(mut self) -> Self {
+        self.default_request_metrics_config.disable_service_version = true;
+        self
+    }
+
+    pub fn disable_default_http_status_code(mut self) -> Self {
+        self.default_response_metrics_config
+            .disable_http_status_code = true;
         self
     }
 
@@ -145,4 +170,29 @@ where
             set_response_metrics: self.set_response_metrics,
         }
     }
+}
+
+#[derive(Default)]
+pub(crate) struct DefaultRequestMetricsConfig {
+    pub(crate) disable_all: bool,
+    pub(crate) disable_request_id: bool,
+    pub(crate) disable_operation_name: bool,
+    pub(crate) disable_service_name: bool,
+    pub(crate) disable_service_version: bool,
+}
+
+#[derive(Default)]
+pub(crate) struct DefaultResponseMetricsConfig {
+    pub(crate) disable_all: bool,
+    pub(crate) disable_http_status_code: bool,
+}
+
+pub(crate) struct DefaultRequestMetricsExtension {
+    pub(crate) metrics: SlotGuard<DefaultRequestMetrics>,
+    pub(crate) config: DefaultRequestMetricsConfig,
+}
+
+pub(crate) struct DefaultResponseMetricsExtension {
+    pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
+    pub(crate) config: DefaultResponseMetricsConfig,
 }
