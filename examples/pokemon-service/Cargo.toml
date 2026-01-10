@@ -13,10 +13,13 @@ hyper = { version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
 tower = "0.4"
 tracing = "0.1"
+tracing-appender = "0.2"
+metrique = { version = "=0.1.9", features = ["emf"] }
 
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
 pokemon-service-common = { path = "../pokemon-service-common/" }
+aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
