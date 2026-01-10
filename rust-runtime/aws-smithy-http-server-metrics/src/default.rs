@@ -7,7 +7,7 @@ pub struct DefaultMetrics {
     #[metrics(flatten)]
     pub(crate) request_metrics: Option<Slot<DefaultRequestMetrics>>,
     #[metrics(flatten)]
-    pub(crate) response_metrics: Option<DefaultResponseMetrics>,
+    pub(crate) response_metrics: Option<Slot<DefaultResponseMetrics>>,
 }
 
 #[metrics]
