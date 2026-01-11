@@ -282,7 +282,7 @@ Changes checklist
 
         - [x] Retrieving `DefaultRequestMetricsExtension` from the request extensions when an outer metrics layer was added.
 
-        - [x] In the case where there is no `DefaultRequestMetricsExtension` in the request extensions, it means there was no outer metrics layer added. Therefore, we will initialize default metrics in the plugin defaults.
+        - [x] In the case where there is no `DefaultRequestMetricsExtension` in the request extensions, it means there was no outer metrics layer added. Therefore, we will initialize default metrics in the plugin defaults if a global sink has been installed.
 
 - [x] Define struct `DefaultMetrics` with a request and response metrics field of the types `DefaultRequestMetrics` and `DefaultResponseMetrics`, respectively
 
