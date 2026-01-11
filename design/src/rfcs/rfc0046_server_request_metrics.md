@@ -142,10 +142,12 @@ The focal struct that users can add to their service as a tower `Layer` for metr
 
 ```rust
 init_metrics: I,
-set_default_request_metrics: Option<fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)>,
-set_default_response_metrics: Option<fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)>,
 set_request_metrics: Option<Rq>,
 set_response_metrics: Option<Rs>,
+default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
+default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+default_req_metrics_config: DefaultRequestMetricsConfig,
+default_res_metrics_config: DefaultResponseMetricsConfig,
 ```
 
 #### Will have the following implementations:
@@ -206,6 +208,22 @@ A struct that will contain fields for the default request metrics, a field for w
 
 A struct that will contain fields for the default response metrics, a field for which will be added to a struct containing the `#[smithy_metrics]` annotation.
 
+### `DefaultRequestMetricsConfig` struct
+
+A struct that will contain fields for control of toggleability of the default request metrics.
+
+### `DefaultResponseMetricsConfig` struct
+
+A struct that will contain fields for control of toggleability of the default response metrics.
+
+### `DefaultRequestMetricsExtension` struct
+
+A struct that will contain a `DefaultRequestMetrics` and `DefaultRequestMetricsConfig` to be passed through the request extensions from an outer metrics layer to be used in the metrics plugin to set the default metrics with the given configuration. This enables us to fold all metrics together.
+
+### `DefaultResponseMetricsExtension` struct
+
+A struct that will contain a `DefaultResponseMetrics` and `DefaultResponseMetricsConfig` to be passed through the request extensions from an outer metrics layer to be used in the metrics plugin to set the default metrics with the given configuration. This enables us to fold all metrics together.
+
 ### `#[smithy_metrics]` attribute proc macro
 
 A proc macro that can be placed on a metrique metrics struct for the adding of default metrics fields and the expansion of a `MetricsLayerBuilder` implementation for the annotated struct.
@@ -216,49 +234,71 @@ This will also come with `#[smithy_metrics(rename(x = "y"))]` to rename default 
 Changes checklist
 -----------------
 
-- [] Create `rust-runtime` crates `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro`
+- [x] Create `rust-runtime` crates `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro`
 
-- [] Implement struct `MetricsLayer`
+- [x] Implement struct `MetricsLayer`
 
-    - [] Define struct with generics, trait bounds, and default type parameters
+    - [x] Define struct with generics, trait bounds, and default type parameters
 
-    - [] Generic implementation with `builder()` method
+    - [x] Generic implementation with `builder()` method
 
-    - [] Default implementation with `new()` method
+    - [x] Default implementation with `new()` method
 
-    - [] Layer implementation to map to `MetricsLayerService`
+    - [x] Layer implementation to map to `MetricsLayerService`
 
-- [] Implement struct `MetricsLayerBuilder`
+- [x] Implement struct `MetricsLayerBuilder`
 
-    - [] Define struct with generics and trait bounds for metrics and typestate pattern
+    - [x] Define struct with generics and trait bounds for metrics and typestate pattern
 
-    - [] `NeedsInitialization` state generic implementation with `init_metrics()` method
+    - [x] `NeedsInitialization` state generic implementation with `init_metrics()` method
 
-    - [] `Ready` state generic implementation with builder methods to disable any/all default metrics and passing closures to set metrics from req/res objects.
+    - [x] `Ready` state generic implementation with builder methods to disable any/all default metrics and passing closures to set metrics from req/res objects.
 
-    - [] Implementation of `build` for `DefaultMetrics` (may be replaced with the proc macro expansion when that is done)
+    - [x] Implementation of `build` for `DefaultMetrics` (may be replaced with the proc macro expansion when that is done)
 
-- [] Implement struct `MetricsPlugin`
+- [x] Implement struct `MetricsLayerService` to contain the tower service logic
 
-    - [] Implement HTTPMarker
+    - [x] Implement `Clone`
 
-    - [] Implement `Plugin` to map to `MetricsService`
+    - [x] Implement tower `Service` to contain logic for:
 
-- [] Implement struct `MetricsLayerService` to contain the tower service logic
+        - [x] Invoking the initialization function
 
-    - [] Implement `Clone`
+        - [x] Invoking the functions for adding the default request/response metrics extensions
 
-    - [] Implement tower `Service` to contain logic for:
+        - [x] Invoking the request/response metrics functions
 
-        - [] Initializing the metrics using the initialization function if passed, `Default` and a global entry sink, or emitting a compiler error saying one of these two must be satisfied
+- [x] Implement struct `MetricsPlugin`
 
-        - [] Calling the request/response metrics handlers
+    - [x] Implement HTTPMarker
 
-- [] Define struct `DefaultMetrics` with a request and response metrics field of the types `DefaultRequestMetrics` and `DefaultResponseMetrics`, respectively
+    - [x] Implement `Plugin` to map to `MetricsService`
 
-- [] Define struct `DefaultRequestMetrics` to contain the out-of-the-box request metrics
+- [x] Implement struct `MetricsPluginService`
 
-- [] Define struct `DefaultResponseMetrics`to contain the out-of-the-box response metrics
+    - [x] Implement `Clone`
+
+    - [x] Implement tower `Service` to contain logic for:
+
+        - [x] Retrieving `DefaultRequestMetricsExtension` from the request extensions when an outer metrics layer was added.
+
+        - [x] In the case where there is no `DefaultRequestMetricsExtension` in the request extensions, it means there was no outer metrics layer added. Therefore, we will initialize default metrics in the plugin defaults.
+
+- [x] Define struct `DefaultMetrics` with a request and response metrics field of the types `DefaultRequestMetrics` and `DefaultResponseMetrics`, respectively
+
+- [x] Define struct `DefaultRequestMetrics` to contain the out-of-the-box request metrics
+
+- [x] Define struct `DefaultResponseMetrics`to contain the out-of-the-box response metrics
+
+- [x] Define struct `DefaultRequestMetricsConfig` for default request metrics configuration
+
+- [x] Define struct `DefaultResponseMetricsConfig` for default response metrics configuration
+
+- [x] Define struct `DefaultRequestMetricsExtension` for passing default request metrics and config instances from an outer metrics layer to the metrics plugin via request extensions to be able to fold them together
+
+- [x] Define struct `DefaultResponseMetricsExtension` for passing default response metrics and config instances from an outer metrics layer to the metrics plugin via response extensions to be able to fold them together
+
+- [] Handle error when no sink has been attached for the default case
 
 - [] Implement proc macro attribute `#[smithy_metrics]`
 
