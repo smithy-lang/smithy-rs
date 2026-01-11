@@ -5,11 +5,13 @@ use aws_smithy_http_server::operation::OperationShape;
 use aws_smithy_http_server::plugin::HttpMarker;
 use aws_smithy_http_server::plugin::Plugin;
 use aws_smithy_http_server::service::ServiceShape;
+use futures::FutureExt;
 use http::Request;
 use http::Response;
 use metrique::OnParentDrop;
 use metrique::ServiceMetrics;
 use metrique::Slot;
+use metrique_writer::AttachGlobalEntrySink;
 use metrique_writer::GlobalEntrySink;
 use tower::Service;
 
@@ -180,7 +182,12 @@ where
                 });
             }
             None => {
-                let mut metrics = DefaultMetrics::default().append_on_drop(ServiceMetrics::sink());
+                // Do nothing if a global sink has not been installed
+                let Some(sink) = ServiceMetrics::try_sink() else {
+                    return self.inner.call(req).boxed();
+                };
+
+                let mut metrics = DefaultMetrics::default().append_on_drop(sink);
 
                 metrics.request_metrics = Some(Slot::new(self.get_default_request_metrics(&req)));
                 metrics.request_metrics
