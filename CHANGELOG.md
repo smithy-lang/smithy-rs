@@ -1,4 +1,21 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+January 11th, 2026
+==================
+**New this release:**
+- (client) Add support for tracking observability business metrics (OBSERVABILITY_TRACING, OBSERVABILITY_OTEL_TRACING, OBSERVABILITY_OTEL_METRICS) in User-Agent headers when telemetry providers are configured.
+- :bug: (client, [smithy-rs#4459](https://github.com/smithy-lang/smithy-rs/issues/4459), @lnj) Updated the `TokenBucket` creation to initialize the bucket with the user-provided `TimeSource` from the `Config`.
+    This fixes the bug in [issue 4459](https://github.com/smithy-lang/smithy-rs/issues/4459) that caused failures
+    in WASM since the TokenBucket was being created with a default `SystemTime` based `TimeSource`
+- :bug: (client, @svix-jbrown) Update the `lru` dependency for `aws-sdk-s3` and `rust-runtime`
+- (client, [smithy-rs#4469](https://github.com/smithy-lang/smithy-rs/issues/4469), @greenwoodcm) Add support for `aws-smithy-mocks` interceptor to handle concurrent requests.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4469](https://github.com/smithy-lang/smithy-rs/issues/4469))
+- @lnj ([smithy-rs#4459](https://github.com/smithy-lang/smithy-rs/issues/4459))
+- @svix-jbrown
+
+
 December 16th, 2025
 ===================
 **New this release:**
