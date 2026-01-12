@@ -72,7 +72,7 @@ where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
     Ser::Future: Send + 'static,
 {
-    fn get_default_request_metrics(&self, req: &Request<ReqBody>) -> DefaultRequestMetrics {
+    fn get_default_request_metrics(&self, _req: &Request<ReqBody>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
             service_name: Some(self.service_name.to_string()),
             service_version: self.service_version.map(|n| n.to_string()),
