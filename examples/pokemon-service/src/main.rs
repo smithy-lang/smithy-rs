@@ -71,7 +71,7 @@ pub async fn main() {
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
     let http_plugins = HttpPlugins::new()
-        .push(MetricsPlugin::default())
+        .push(MetricsPlugin)
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
@@ -147,8 +147,8 @@ pub(crate) fn setup_metrics() -> AttachHandle {
         .build()
         .output_to_makewriter(RollingFileAppender::new(
             Rotation::MINUTELY,
-            &service_log_dir,
-            &service_log_name,
+            service_log_dir,
+            service_log_name,
         ));
 
     ServiceMetrics::attach_to_stream(emf)
