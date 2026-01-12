@@ -10,6 +10,7 @@ use metrique::ServiceMetrics;
 use metrique::Slot;
 use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
+use metrique_writer::AttachGlobalEntrySink;
 use metrique_writer::GlobalEntrySink;
 
 use crate::DefaultInit;
@@ -23,6 +24,7 @@ use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
 use crate::layer::DefaultMetrics;
+use crate::layer::DefaultMetricsLayerError;
 use crate::layer::MetricsLayer;
 use crate::layer::ReqBody;
 use crate::layer::ResBody;
@@ -53,15 +55,32 @@ pub struct MetricsLayerBuilder<
 }
 
 impl MetricsLayerBuilder<NeedsInitialization> {
-    pub fn init_with_defaults(self) -> MetricsLayerBuilder<Ready> {
-        MetricsLayerBuilder {
+    /// Return a [`MetricsLayerBuilder`] with default metrics initialization using metrique's
+    /// application-wide global entry sink [`metrique::ServiceMetrics`].
+    ///
+    /// To use this, attach an [`EntrySink`] to metrique's application-wide global entry sink
+    /// [`metrique::ServiceMetrics`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`DefaultMetricsLayerError::NoSinkAttached`] if an [`metrique::EntrySink`]
+    /// has not been attached to metrique's application-wide global entry sink.
+    /// [`metrique::ServiceMetrics`]
+    pub fn try_init_with_defaults(
+        self,
+    ) -> Result<MetricsLayerBuilder<Ready>, DefaultMetricsLayerError> {
+        if ServiceMetrics::try_sink().is_none() {
+            return Err(DefaultMetricsLayerError::NoSinkAttached);
+        };
+
+        Ok(MetricsLayerBuilder {
             init_metrics: Some(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())),
             set_request_metrics: self.set_request_metrics,
             set_response_metrics: self.set_response_metrics,
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
-        }
+        })
     }
 }
 

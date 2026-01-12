@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use metrique::Slot;
 use metrique::SlotGuard;
 use metrique_macro::metrics;
@@ -10,9 +12,17 @@ pub struct DefaultMetrics {
     #[metrics(flatten)]
     pub(crate) response_metrics: Option<Slot<DefaultResponseMetrics>>,
 }
+impl Debug for DefaultMetrics {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DefaultMetrics")
+            .field("request_metrics", &())
+            .field("response_metrics", &())
+            .finish()
+    }
+}
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DefaultRequestMetrics {
     pub(crate) service_name: Option<String>,
     pub(crate) service_version: Option<String>,
@@ -21,12 +31,12 @@ pub struct DefaultRequestMetrics {
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct DefaultResponseMetrics {
     pub(crate) http_status_code: Option<u16>,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct DefaultRequestMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_request_id: bool,
@@ -35,7 +45,7 @@ pub(crate) struct DefaultRequestMetricsConfig {
     pub(crate) disable_service_version: bool,
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct DefaultResponseMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_http_status_code: bool,
