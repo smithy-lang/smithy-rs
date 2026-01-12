@@ -2,7 +2,6 @@
 target = ["wasm32-unknown-unknown", "wasm32-wasip2"]
 
 [target.wasm32-wasip2]
-# rustflags = ["-C", "opt-level=1"]
 runner = [
     "wasmtime",
     "-C", "cache=n",
