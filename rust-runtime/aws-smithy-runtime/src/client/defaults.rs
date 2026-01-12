@@ -67,8 +67,7 @@ pub fn default_http_client_plugin_v2(
 ) -> Option<SharedRuntimePlugin> {
     let mut _default: Option<SharedHttpClient> = None;
 
-    #[expect(deprecated)]
-    if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+    if behavior_version.is_at_least(BehaviorVersion::v2026_01_12()) {
         // the latest https stack takes precedence if the config flag
         // is enabled otherwise try to fall back to the legacy connector
         // if that feature flag is available.
@@ -150,7 +149,7 @@ pub fn default_retry_config_plugin(
 /// Runtime plugin that sets the default retry strategy, config, and partition.
 ///
 /// This version respects the behavior version to enable retries by default for newer versions.
-/// For AWS SDK clients with BehaviorVersion >= v2025_01_17, retries are enabled by default.
+/// For AWS SDK clients with BehaviorVersion >= v2026_01_12, retries are enabled by default.
 pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<SharedRuntimePlugin> {
     let retry_partition = RetryPartition::new(
         params
@@ -173,9 +172,8 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                 .with_interceptor(TokenBucketProvider::new(retry_partition.clone()))
         })
         .with_config(layer("default_retry_config", |layer| {
-            #[expect(deprecated)]
             let retry_config =
-                if is_aws_sdk && behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                if is_aws_sdk && behavior_version.is_at_least(BehaviorVersion::v2026_01_12()) {
                     RetryConfig::standard()
                 } else {
                     RetryConfig::disabled()
@@ -224,7 +222,7 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// Runtime plugin that sets the default timeout config.
 ///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
-/// For all clients with BehaviorVersion >= v2025_01_17, a 3.1s connection timeout is set.
+/// For all clients with BehaviorVersion > v2025_01_17 (i.e., v2025_08_07 and later), a 3.1s connection timeout is set.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
@@ -239,8 +237,8 @@ pub fn default_timeout_config_plugin_v2(
         })
         .with_config(layer("default_timeout_config", |layer| {
             #[expect(deprecated)]
-            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
-                // All clients with new behavior version: Set connect_timeout only
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
+                // All clients with BMV > v2025_01_17: Set connect_timeout only
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
                     .build()
@@ -479,7 +477,7 @@ mod tests {
     #[test]
     #[expect(deprecated)]
     fn test_retry_disabled_for_aws_sdk_old_behavior_version() {
-        // Any version before v2025_01_17 should have retries disabled
+        // Any version before v2026_01_12 should have retries disabled
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
             .with_behavior_version(BehaviorVersion::v2024_03_28())
@@ -494,17 +492,16 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             1,
-            "retries should be disabled for AWS SDK with behavior version < v2025_01_17"
+            "retries should be disabled for AWS SDK with behavior version < v2026_01_12"
         );
     }
 
     #[test]
-    #[expect(deprecated)]
     fn test_retry_enabled_at_cutoff_version() {
-        // v2025_01_17 is the cutoff - retries should be enabled from this version onwards
+        // v2026_01_12 is the cutoff - retries should be enabled from this version onwards
         let params = DefaultPluginParams::new()
             .with_retry_partition_name("test-partition")
-            .with_behavior_version(BehaviorVersion::v2025_01_17())
+            .with_behavior_version(BehaviorVersion::v2026_01_12())
             .with_is_aws_sdk(true);
         let plugin = default_retry_config_plugin_v2(&params).expect("plugin should be created");
 
@@ -516,7 +513,7 @@ mod tests {
         assert_eq!(
             retry_config.max_attempts(),
             3,
-            "retries should be enabled for AWS SDK starting from v2025_01_17"
+            "retries should be enabled for AWS SDK starting from v2026_01_12"
         );
     }
 
@@ -544,13 +541,15 @@ mod tests {
     #[expect(deprecated)]
     fn test_behavior_version_gates_retry_for_aws_sdk() {
         // This test demonstrates the complete behavior:
-        // AWS SDK clients get retries enabled ONLY when BehaviorVersion >= v2025_01_17
+        // AWS SDK clients get retries enabled ONLY when BehaviorVersion >= v2026_01_12
 
         // Test all behavior versions
         let test_cases = vec![
             (BehaviorVersion::v2023_11_09(), 1, "v2023_11_09 (old)"),
             (BehaviorVersion::v2024_03_28(), 1, "v2024_03_28 (old)"),
-            (BehaviorVersion::v2025_01_17(), 3, "v2025_01_17 (cutoff)"),
+            (BehaviorVersion::v2025_01_17(), 1, "v2025_01_17 (old)"),
+            (BehaviorVersion::v2025_08_07(), 1, "v2025_08_07 (old)"),
+            (BehaviorVersion::v2026_01_12(), 3, "v2026_01_12 (cutoff)"),
             (BehaviorVersion::latest(), 3, "latest"),
         ];
 
@@ -631,10 +630,10 @@ mod tests {
             "Non-AWS SDK clients should always have retries disabled (1 attempt)"
         );
 
-        // Scenario 4: Verify the cutoff version v2025_01_17 is the exact boundary
+        // Scenario 4: Verify the cutoff version v2026_01_12 is the exact boundary
         let params_cutoff = DefaultPluginParams::new()
             .with_retry_partition_name("aws-s3")
-            .with_behavior_version(BehaviorVersion::v2025_01_17())
+            .with_behavior_version(BehaviorVersion::v2026_01_12())
             .with_is_aws_sdk(true);
 
         let config_cutoff = config_for(default_plugins(params_cutoff));
@@ -644,7 +643,7 @@ mod tests {
         assert_eq!(
             retry_cutoff.max_attempts(),
             3,
-            "AWS SDK with v2025_01_17 (the cutoff version) should have retries enabled (3 attempts)"
+            "AWS SDK with v2026_01_12 (the cutoff version) should have retries enabled (3 attempts)"
         );
     }
 }

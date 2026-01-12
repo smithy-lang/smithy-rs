@@ -22,6 +22,7 @@ enum Inner {
     V2024_03_28,
     V2025_01_17,
     V2025_08_07,
+    V2026_01_12,
 }
 
 impl BehaviorVersion {
@@ -34,15 +35,28 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::v2025_08_07`]
+    /// The latest version is currently [`BehaviorVersion::v2026_01_12`]
     pub fn latest() -> Self {
-        Self::v2025_08_07()
+        Self::v2026_01_12()
+    }
+
+    /// Behavior version for January 12th, 2026.
+    ///
+    /// This version enables retries by default for all operations.
+    pub fn v2026_01_12() -> Self {
+        Self {
+            inner: Inner::V2026_01_12,
+        }
     }
 
     /// Behavior version for August 7th, 2025.
     ///
     /// This version updates the default HTTPS client to support proxy environment variables
     /// (e.g. `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) by default.
+    #[deprecated(
+        since = "1.10.0",
+        note = "Superseded by v2026_01_12, which enables retries by default for all operations."
+    )]
     pub fn v2025_08_07() -> Self {
         Self {
             inner: Inner::V2025_08_07,
@@ -123,10 +137,12 @@ mod tests {
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2023_11_09()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2024_03_28()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_01_17()));
+        assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_08_07()));
         assert!(!BehaviorVersion::v2023_11_09().is_at_least(BehaviorVersion::v2024_03_28()));
         assert!(Inner::V2024_03_28 > Inner::V2023_11_09);
         assert!(Inner::V2023_11_09 < Inner::V2024_03_28);
         assert!(Inner::V2024_03_28 < Inner::V2025_01_17);
         assert!(Inner::V2025_01_17 < Inner::V2025_08_07);
+        assert!(Inner::V2025_08_07 < Inner::V2026_01_12);
     }
 }
