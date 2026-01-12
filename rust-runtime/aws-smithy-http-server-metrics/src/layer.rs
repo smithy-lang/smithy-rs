@@ -56,15 +56,6 @@ pub struct MetricsLayer<
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 }
-impl MetricsLayer {
-    /// Return a [`MetricsLayer`] with default metrics initialization using metrique's
-    /// application-wide global entry sink [`metrique::ServiceMetrics`].
-    ///
-    /// See [`MetricsLayerBuilder::try_init_with_defaults`].
-    pub fn try_new() -> Result<MetricsLayer, DefaultMetricsLayerError> {
-        Ok(Self::builder().try_init_with_defaults()?.build())
-    }
-}
 
 impl<E, S> MetricsLayer<E, S>
 where
