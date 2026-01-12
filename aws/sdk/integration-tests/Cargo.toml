@@ -19,6 +19,6 @@ members = [
     "sts",
     "telemetry",
     "timestreamquery",
-    "transcribestreaming", "wasm-tests",
+    "transcribestreaming",
     "webassembly",
 ]
