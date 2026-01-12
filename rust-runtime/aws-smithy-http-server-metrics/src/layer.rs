@@ -60,22 +60,19 @@ pub struct MetricsLayer<
 impl MetricsLayer {
     /// Return a [`MetricsLayer`] with default metrics initialization using metrique's
     /// application-wide global entry sink [`metrique::ServiceMetrics`].
-    /// 
+    ///
     /// See [`MetricsLayerBuilder::try_init_with_defaults`].
     pub fn try_new() -> Result<MetricsLayer, DefaultMetricsLayerError> {
         Ok(Self::builder().try_init_with_defaults()?.build())
     }
 }
 
-impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
+impl<E, S> MetricsLayer<E, S>
 where
     E: CloseEntry + Send + Sync + 'static,
     S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
-    pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S, I, Rq, Rs> {
+    pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S> {
         MetricsLayerBuilder {
             init_metrics: None,
             set_request_metrics: None,
