@@ -110,7 +110,7 @@ pub async fn main() {
         .build()
         .expect("failed to build an instance of PokemonService");
 
-    let metrics_layer = MetricsLayer::new();
+    let metrics_layer = MetricsLayer::try_new().expect("Failed to build metrics layer");
 
     let service = metrics_layer.layer(app);
 

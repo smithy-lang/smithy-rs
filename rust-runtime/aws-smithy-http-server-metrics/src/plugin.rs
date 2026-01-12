@@ -12,7 +12,6 @@ use metrique::OnParentDrop;
 use metrique::ServiceMetrics;
 use metrique::Slot;
 use metrique_writer::AttachGlobalEntrySink;
-use metrique_writer::GlobalEntrySink;
 use tower::Service;
 
 use crate::ReqBody;

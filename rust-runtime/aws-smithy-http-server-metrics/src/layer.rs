@@ -7,8 +7,10 @@ use http::Response;
 use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::RootEntry;
-use metrique::writer::EntrySink;
+use metrique::ServiceMetrics;
 use metrique_core::CloseEntry;
+use metrique_writer::EntrySink;
+use thiserror::Error;
 use tower::Layer;
 
 use crate::DefaultInit;
@@ -25,6 +27,13 @@ use crate::service::MetricsLayerService;
 
 pub mod builder;
 
+#[derive(Error, Debug)]
+pub enum DefaultMetricsLayerError {
+    #[error("No sink attached to [`metrique::ServiceMetrics`]")]
+    NoSinkAttached,
+}
+
+#[derive(Debug)]
 pub struct MetricsLayer<
     E = DefaultMetrics,
     S = DefaultSink,
@@ -49,8 +58,12 @@ pub struct MetricsLayer<
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 }
 impl MetricsLayer {
-    pub fn new() -> MetricsLayer {
-        Self::builder().init_with_defaults().build()
+    /// Return a [`MetricsLayer`] with default metrics initialization using metrique's
+    /// application-wide global entry sink [`metrique::ServiceMetrics`].
+    /// 
+    /// See [`MetricsLayerBuilder::try_init_with_defaults`].
+    pub fn try_new() -> Result<MetricsLayer, DefaultMetricsLayerError> {
+        Ok(Self::builder().try_init_with_defaults()?.build())
     }
 }
 
