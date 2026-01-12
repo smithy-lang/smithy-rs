@@ -612,3 +612,124 @@ where
         }
     }
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::layer::MetricsLayer;
+
+    // Compile-time guarantees that methods exist on the correct states
+    macro_rules! assert_methods_callable {
+        ($state:ty => [$($method:ident($($args:tt)*)),*]) => {
+            $(const _: fn(MetricsLayerBuilder<$state>) = |b| { b.$method($($args)*); };)*
+        };
+    }
+
+    // Test that methods can be called on correct states - these will fail to compile if methods don't exist
+    assert_methods_callable!(NeedsInitialization => [init_metrics(dummy_init)]);
+    assert_methods_callable!(WithDefaults => [
+        set_request_metrics(dummy_request_fn),
+        set_response_metrics(dummy_response_fn),
+        build()
+    ]);
+    assert_methods_callable!(WithRq => [set_response_metrics(dummy_response_fn), build()]);
+    assert_methods_callable!(WithRs => [set_request_metrics(dummy_request_fn), build()]);
+    assert_methods_callable!(WithRqAndRs => [build()]);
+
+    // State transition tests
+    macro_rules! assert_state {
+        ($fn_name:ident, $state:ty) => {
+            fn $fn_name<E, S, I, Rq, Rs>(_: &MetricsLayerBuilder<$state, E, S, I, Rq, Rs>)
+            where
+                E: CloseEntry + Send + Sync + 'static,
+                S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+                I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+                Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)
+                    + Clone
+                    + Send
+                    + Sync
+                    + 'static,
+                Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
+                    + Clone
+                    + Send
+                    + Sync
+                    + 'static,
+            {
+            }
+        };
+    }
+    assert_state!(assert_needs_initialization, NeedsInitialization);
+    assert_state!(assert_with_defaults, WithDefaults);
+    assert_state!(assert_with_rq, WithRq);
+    assert_state!(assert_with_rs, WithRs);
+    assert_state!(assert_with_rq_and_rs, WithRqAndRs);
+
+    fn dummy_init() -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
+        DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())
+    }
+
+    fn dummy_request_fn(
+        _req: &mut Request<ReqBody>,
+        _metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
+    ) {
+    }
+    fn dummy_response_fn(
+        _res: &mut Response<ResBody>,
+        _metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
+    ) {
+    }
+
+    #[test]
+    fn test_needs_initialization_state() {
+        let builder = MetricsLayer::<DefaultMetrics, DefaultSink>::builder();
+        assert_needs_initialization(&builder);
+    }
+
+    #[test]
+    fn test_transition_to_with_defaults_via_init_metrics() {
+        let builder = MetricsLayer::builder().init_metrics(dummy_init);
+        assert_with_defaults(&builder);
+    }
+
+    #[test]
+    fn test_with_defaults_to_with_rq() {
+        let builder = MetricsLayer::builder()
+            .init_metrics(dummy_init)
+            .set_request_metrics(dummy_request_fn);
+        assert_with_rq(&builder);
+    }
+
+    #[test]
+    fn test_with_defaults_to_with_rs() {
+        let builder = MetricsLayer::builder()
+            .init_metrics(dummy_init)
+            .set_response_metrics(dummy_response_fn);
+        assert_with_rs(&builder);
+    }
+
+    #[test]
+    fn test_with_rq_to_with_rq_and_rs() {
+        let builder = MetricsLayer::builder()
+            .init_metrics(dummy_init)
+            .set_request_metrics(dummy_request_fn)
+            .set_response_metrics(dummy_response_fn);
+        assert_with_rq_and_rs(&builder);
+    }
+
+    #[test]
+    fn test_with_rs_to_with_rq_and_rs() {
+        let builder = MetricsLayer::builder()
+            .init_metrics(dummy_init)
+            .set_response_metrics(dummy_response_fn)
+            .set_request_metrics(dummy_request_fn);
+        assert_with_rq_and_rs(&builder);
+    }
+
+    #[test]
+    fn test_try_init_with_defaults_no_sink() {
+        let result = MetricsLayer::builder().try_init_with_defaults();
+        assert!(matches!(
+            result,
+            Err(DefaultMetricsLayerError::NoSinkAttached)
+        ));
+    }
+}
