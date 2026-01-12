@@ -7,7 +7,6 @@ use http::Response;
 use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::RootEntry;
-use metrique::ServiceMetrics;
 use metrique_core::CloseEntry;
 use metrique_writer::EntrySink;
 use thiserror::Error;
