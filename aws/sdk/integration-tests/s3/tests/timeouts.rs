@@ -210,7 +210,7 @@ async fn test_connect_timeout() {
 
 #[tokio::test]
 #[expect(deprecated)]
-async fn test_connect_timeout_enabled_by_default_with_new_behavior_version() {
+async fn test_default_connect_timeout_with_bmv_2025_01_17() {
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 
     // With BehaviorVersion >= v2025_01_17, a 3.1s connect timeout is enabled by default

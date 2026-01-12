@@ -152,12 +152,17 @@ pub fn default_retry_config_plugin(
 /// This version respects the behavior version to enable retries by default for newer versions.
 /// For AWS SDK clients with BehaviorVersion >= v2025_01_17, retries are enabled by default.
 pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<SharedRuntimePlugin> {
-    let default_partition_name = params.retry_partition_name.as_ref()?.clone();
+    let retry_partition = RetryPartition::new(
+        params
+            .retry_partition_name
+            .as_ref()
+            .expect("retry partition name is required")
+            .clone(),
+    );
     let is_aws_sdk = params.is_aws_sdk;
     let behavior_version = params
         .behavior_version
         .unwrap_or_else(BehaviorVersion::latest);
-    let retry_partition = RetryPartition::new(default_partition_name);
     Some(
         default_plugin("default_retry_config_plugin", |components| {
             components
