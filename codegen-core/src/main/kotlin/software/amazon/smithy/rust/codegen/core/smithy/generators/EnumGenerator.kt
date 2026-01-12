@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.deprecatedShape
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.documentShape
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -245,7 +246,8 @@ open class EnumGenerator(
                 writable {
                     rustBlock("match self") {
                         context.sortedMembers.forEach { member ->
-                            rust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},""")
+                            rawRust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},
+""")
                         }
                         enumType.additionalAsStrMatchArms(context)(this)
                     }
@@ -322,7 +324,7 @@ open class EnumGenerator(
             "asStrImpl" to asStrImpl,
             "Values" to
                 writable {
-                    rust(context.sortedMembers.joinToString(", ") { it.value.dq() })
+                    rawRust(context.sortedMembers.joinToString(", ") { it.value.dq() })
                 },
         )
     }
