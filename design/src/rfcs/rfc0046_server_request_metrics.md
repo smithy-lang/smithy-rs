@@ -174,13 +174,51 @@ A typestate builder for `MetricsLayer`. The states will be
 
 `NeedsInitialization`
 
-- Exposes a single `init_metrics` method so an initialization closure can be provided.
+- Exposes `init_metrics` method so an initialization closure can be provided.
 
-`Ready`
+- Exposes `try_init_with_defaults` with default metrics initialization using metrique's application-wide global entry sink [`metrique::ServiceMetrics`], returning an error if a sink has not been attached.
 
-- Exposes methods for disabling any/all of the default metrics, and methods for taking closures for setting metrics from req/res objects.
+`WithDefaults`
 
-An implementation will be made for metrics structs annotated with the `#[smithy_metrics]` proc macro that exposes a `build` method.
+A state where the fields for setting metrics from the req/res objects are `None`, using the default function pointer types as concrete type placeholders.
+
+- Exposes methods for disabling any/all of the default metrics.
+
+- Exposes methods for taking Fn closures for setting metrics from req and res objects.
+
+- Exposes build method.
+
+`WithRq`
+
+A state where the field for setting metrics from the req object has been set.
+
+- Exposes methods for disabling any/all of the default metrics.
+
+- Exposes method for taking Fn closures for setting metrics from res objects.
+
+- Exposes build method.
+
+`WithRs`
+
+A state where the field for setting metrics from the res object has been set.
+
+- Exposes methods for disabling any/all of the default metrics.
+
+- Exposes method for taking Fn closures for setting metrics from req objects.
+
+- Exposes build method.
+
+`WithRqAndRs`
+
+A state where both the fields for setting metrics from the req and res object have been set.
+
+- Exposes methods for disabling any/all of the default metrics.
+
+- Exposes build method.
+
+Implementations for each state will be made for metrics structs annotated with the `#[smithy_metrics]` proc macro that exposes a `build` method.
+
+Declarative macros will be used for the typestate pattern.
 
 ### `MetricsLayerService` struct
 
