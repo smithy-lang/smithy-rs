@@ -8,7 +8,7 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server_metrics::{layer::MetricsLayer, plugin::MetricsPlugin};
+use aws_smithy_http_server_metrics::plugin::MetricsPlugin;
 use clap::Parser;
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
@@ -37,7 +37,6 @@ use pokemon_service_common::{
     stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
-use tower::Layer;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 use crate::authz::AuthorizationPlugin;
@@ -71,7 +70,7 @@ pub async fn main() {
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
     let http_plugins = HttpPlugins::new()
-        .push(MetricsPlugin)
+        .push(MetricsPlugin::default())
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
@@ -111,13 +110,9 @@ pub async fn main() {
         .build()
         .expect("failed to build an instance of PokemonService");
 
-    let metrics_layer = MetricsLayer::try_new().expect("Failed to build metrics layer");
-
-    let service = metrics_layer.layer(app);
-
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
-    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service);
+    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(app);
 
     // Bind the application to a socket.
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)
