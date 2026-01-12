@@ -42,7 +42,13 @@ impl BehaviorVersion {
 
     /// Behavior version for January 12th, 2026.
     ///
-    /// This version enables retries by default for all operations.
+    /// This version enables retries by default for AWS SDK clients. Generic Smithy clients
+    /// (non-AWS) do not have retries enabled by default.
+    ///
+    /// Additionally, this version sets a 3.1 second connect timeout for all clients.
+    ///
+    /// For more information about behavior versions and how they affect SDK behavior, see the
+    /// [AWS SDK for Rust Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/behavior-versions.html).
     pub fn v2026_01_12() -> Self {
         Self {
             inner: Inner::V2026_01_12,
@@ -55,7 +61,7 @@ impl BehaviorVersion {
     /// (e.g. `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) by default.
     #[deprecated(
         since = "1.10.0",
-        note = "Superseded by v2026_01_12, which enables retries by default for all operations."
+        note = "Superseded by v2026_01_12, which enables retries by default for AWS SDK clients and sets a 3.1s connect timeout for all clients."
     )]
     pub fn v2025_08_07() -> Self {
         Self {

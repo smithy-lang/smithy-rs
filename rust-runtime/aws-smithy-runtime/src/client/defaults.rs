@@ -222,7 +222,7 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// Runtime plugin that sets the default timeout config.
 ///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
-/// For all clients with BehaviorVersion > v2025_01_17 (i.e., v2025_08_07 and later), a 3.1s connection timeout is set.
+/// For all clients with BehaviorVersion >= v2025_01_17, a 3.1s connection timeout is set.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
@@ -237,8 +237,8 @@ pub fn default_timeout_config_plugin_v2(
         })
         .with_config(layer("default_timeout_config", |layer| {
             #[expect(deprecated)]
-            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_08_07()) {
-                // All clients with BMV > v2025_01_17: Set connect_timeout only
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
+                // All clients with BMV >= v2025_01_17: Set connect_timeout only
                 TimeoutConfig::builder()
                     .connect_timeout(Duration::from_millis(3100))
                     .build()
