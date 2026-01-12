@@ -6,12 +6,9 @@ use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::RootEntry;
-use metrique::ServiceMetrics;
 use metrique::Slot;
 use metrique::writer::EntrySink;
 use metrique_core::CloseEntry;
-use metrique_writer::AttachGlobalEntrySink;
-use metrique_writer::GlobalEntrySink;
 
 use crate::DefaultInit;
 use crate::DefaultRq;
@@ -24,7 +21,6 @@ use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
 use crate::layer::DefaultMetrics;
-use crate::layer::DefaultMetricsLayerError;
 use crate::layer::MetricsLayer;
 use crate::layer::ReqBody;
 use crate::layer::ResBody;
@@ -75,6 +71,7 @@ pub struct WithRq;
 pub struct WithRs;
 pub struct WithRqAndRs;
 
+#[non_exhaustive]
 pub struct MetricsLayerBuilder<
     State,
     E = DefaultMetrics,
@@ -89,42 +86,12 @@ pub struct MetricsLayerBuilder<
     Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
     Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
 {
-    pub(crate) init_metrics: Option<I>,
-    pub(crate) set_request_metrics: Option<Rq>,
-    pub(crate) set_response_metrics: Option<Rs>,
-    pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
-    pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
+    pub init_metrics: Option<I>,
+    pub set_request_metrics: Option<Rq>,
+    pub set_response_metrics: Option<Rs>,
+    pub default_req_metrics_config: DefaultRequestMetricsConfig,
+    pub default_res_metrics_config: DefaultResponseMetricsConfig,
     pub(crate) _state: PhantomData<State>,
-}
-
-impl MetricsLayerBuilder<NeedsInitialization> {
-    /// Return a [`MetricsLayerBuilder`] with default metrics initialization using metrique's
-    /// application-wide global entry sink [`metrique::ServiceMetrics`].
-    ///
-    /// To use this, attach an [`EntrySink`] to metrique's application-wide global entry sink
-    /// [`metrique::ServiceMetrics`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`DefaultMetricsLayerError::NoSinkAttached`] if an [`metrique::EntrySink`]
-    /// has not been attached to metrique's application-wide global entry sink.
-    /// [`metrique::ServiceMetrics`]
-    pub fn try_init_with_defaults(
-        self,
-    ) -> Result<MetricsLayerBuilder<WithDefaults>, DefaultMetricsLayerError> {
-        if ServiceMetrics::try_sink().is_none() {
-            return Err(DefaultMetricsLayerError::NoSinkAttached);
-        };
-
-        Ok(MetricsLayerBuilder {
-            init_metrics: Some(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())),
-            set_request_metrics: self.set_request_metrics,
-            set_response_metrics: self.set_response_metrics,
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
-            _state: PhantomData,
-        })
-    }
 }
 
 impl<E, S> MetricsLayerBuilder<NeedsInitialization, E, S>
@@ -362,6 +329,9 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
+    use metrique::ServiceMetrics;
+    use metrique_writer::GlobalEntrySink;
+
     use super::*;
     use crate::layer::MetricsLayer;
 
@@ -470,14 +440,5 @@ mod tests {
             .set_response_metrics(dummy_response_fn)
             .set_request_metrics(dummy_request_fn);
         assert_with_rq_and_rs(&builder);
-    }
-
-    #[test]
-    fn test_try_init_with_defaults_no_sink() {
-        let result = MetricsLayer::builder().try_init_with_defaults();
-        assert!(matches!(
-            result,
-            Err(DefaultMetricsLayerError::NoSinkAttached)
-        ));
     }
 }

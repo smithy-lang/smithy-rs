@@ -9,14 +9,18 @@ use futures::FutureExt;
 use http::Request;
 use http::Response;
 use metrique::OnParentDrop;
+use metrique::RootEntry;
 use metrique::ServiceMetrics;
 use metrique::Slot;
 use metrique_writer::AttachGlobalEntrySink;
+use metrique_writer::BoxEntrySink;
+use metrique_writer::EntrySink;
 use tower::Service;
 
 use crate::ReqBody;
 use crate::ResBody;
 use crate::default::DefaultMetrics;
+use crate::default::DefaultMetricsEntry;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultRequestMetricsExtension;
@@ -24,17 +28,43 @@ use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
 
-#[derive(Default)]
-pub struct MetricsPlugin;
+pub struct MetricsPlugin<S = BoxEntrySink>
+where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
+{
+    sink: Option<S>,
+}
+impl<S> MetricsPlugin<S>
+where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
+{
+    pub fn new_with_sink(sink: S) -> Self {
+        Self { sink: Some(sink) }
+    }
+}
+impl MetricsPlugin {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+impl Default for MetricsPlugin {
+    fn default() -> Self {
+        Self { sink: None }
+    }
+}
 
-impl HttpMarker for MetricsPlugin {}
+impl<S> HttpMarker for MetricsPlugin<S> where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static
+{
+}
 
-impl<Ser, Op, T> Plugin<Ser, Op, T> for MetricsPlugin
+impl<Ser, Op, T, S> Plugin<Ser, Op, T> for MetricsPlugin<S>
 where
     Op: OperationShape,
     Ser: ServiceShape,
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
 {
-    type Output = MetricsPluginService<T>;
+    type Output = MetricsPluginService<T, S>;
 
     fn apply(&self, inner: T) -> Self::Output {
         MetricsPluginService {
@@ -42,21 +72,27 @@ where
             service_name: Ser::ID.name(),
             service_version: Ser::VERSION,
             operation_name: Op::ID.name(),
+            sink: self.sink.clone(),
         }
     }
 }
 
 #[derive(Debug)]
-pub struct MetricsPluginService<T> {
-    inner: T,
+pub struct MetricsPluginService<Ser, S>
+where
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
+{
+    inner: Ser,
     service_name: &'static str,
     service_version: Option<&'static str>,
     operation_name: &'static str,
+    sink: Option<S>,
 }
 
-impl<T> Clone for MetricsPluginService<T>
+impl<Ser, S> Clone for MetricsPluginService<Ser, S>
 where
-    T: Clone,
+    Ser: Clone,
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
 {
     fn clone(&self) -> Self {
         Self {
@@ -64,13 +100,15 @@ where
             operation_name: self.operation_name,
             service_name: self.service_name,
             service_version: self.service_version,
+            sink: self.sink.clone(),
         }
     }
 }
-impl<Ser> MetricsPluginService<Ser>
+impl<Ser, S> MetricsPluginService<Ser, S>
 where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
     Ser::Future: Send + 'static,
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
 {
     fn get_default_request_metrics(&self, _req: &Request<ReqBody>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
@@ -123,12 +161,49 @@ where
                 .filter(|_| !config.disable_http_status_code),
         }
     }
+
+    fn handle_metrics_with_sink<T>(
+        &mut self,
+        sink: T,
+        req: Request<ReqBody>,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = Result<Response<ResBody>, Ser::Error>> + Send + 'static>,
+    >
+    where
+        T: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
+    {
+        let mut metrics = DefaultMetrics::default().append_on_drop(sink);
+        metrics.request_metrics = Some(Slot::new(self.get_default_request_metrics(&req)));
+        metrics.request_metrics
+            .as_mut()
+            .expect("unreachable: the option is set to some in this scope")
+            .open(OnParentDrop::Discard)
+            .expect("unreachable: the slot was created in this scope and is not opened before this point");
+
+        let future = self.inner.call(req);
+        futures::FutureExt::boxed(async move {
+            let res = match future.await {
+                Ok(res) => res,
+                Err(e) => return Err(e),
+            };
+
+            metrics.response_metrics = Some(Slot::new(Self::get_default_response_metrics(&res)));
+            metrics.response_metrics
+                .as_mut()
+                .expect("unreachable: the option is set to some in this scope")
+                .open(OnParentDrop::Discard)
+                .expect("unreachable: the slot was created in this scope and is not opened before this point");
+
+            Ok(res)
+        })
+    }
 }
 
-impl<Ser> Service<Request<ReqBody>> for MetricsPluginService<Ser>
+impl<Ser, S> Service<Request<ReqBody>> for MetricsPluginService<Ser, S>
 where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
     Ser::Future: Send + 'static,
+    S: EntrySink<RootEntry<DefaultMetricsEntry>> + Clone + Send + Sync + 'static,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;
@@ -181,37 +256,13 @@ where
                 });
             }
             None => {
-                // Do nothing if a global sink has not been installed
-                let Some(sink) = ServiceMetrics::try_sink() else {
+                if let Some(sink) = self.sink.clone() {
+                    return self.handle_metrics_with_sink(sink, req);
+                } else if let Some(sink) = ServiceMetrics::try_sink() {
+                    return self.handle_metrics_with_sink(sink, req);
+                } else {
                     return self.inner.call(req).boxed();
-                };
-
-                let mut metrics = DefaultMetrics::default().append_on_drop(sink);
-
-                metrics.request_metrics = Some(Slot::new(self.get_default_request_metrics(&req)));
-                metrics.request_metrics
-                    .as_mut()
-                    .expect("unreachable: the option is set to some in this scope")
-                    .open(OnParentDrop::Discard)
-                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
-
-                let future = self.inner.call(req);
-                return futures::FutureExt::boxed(async move {
-                    let res = match future.await {
-                        Ok(res) => res,
-                        Err(e) => return Err(e),
-                    };
-
-                    metrics.response_metrics =
-                        Some(Slot::new(Self::get_default_response_metrics(&res)));
-                    metrics.response_metrics
-                        .as_mut()
-                        .expect("unreachable: the option is set to some in this scope")
-                        .open(OnParentDrop::Discard)
-                        .expect("unreachable: the slot was created in this scope and is not opened before this point");
-
-                    Ok(res)
-                });
+                }
             }
         }
     }
