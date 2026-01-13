@@ -1,19 +1,20 @@
 [package]
 name = "aws-smithy-http-server-metrics"
 version = "0.1.0"
+authors = [
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+    "Jason Gin <jasgin@amazon.com>",
+]
+description = "Server metrics via metrique integration."
 edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 [dependencies]
-# Pinning these to versions with MSRV 1.88.0
-metrique = "=0.1.9"
-metrique-macro = "=0.1.6"
-metrique-core = "=0.1.8"
-metrique-writer = "=0.1.10"
-metrique-writer-core = "=0.1.7"
-metrique-service-metrics = "=0.1.9"
-metrique-timesource = "=0.1.5"
-metrique-writer-macro = "=0.1.4"
-metrique-writer-format-emf = "=0.1.9"
+metrique = "0.1"
+metrique-writer = "0.1"
+metrique-core = "0.1"
 
 tower = "0.5"
 futures = "0.3"
@@ -23,3 +24,4 @@ hyper = "0.14"
 thiserror = "2"
 
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-http-server-metrics-macro = { path = "../aws-smithy-http-server-metrics-macro" }

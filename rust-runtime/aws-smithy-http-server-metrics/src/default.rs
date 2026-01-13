@@ -1,8 +1,8 @@
 use std::fmt::Debug;
 
+use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
-use metrique_macro::metrics;
 
 #[metrics]
 #[derive(Default)]

@@ -2,14 +2,11 @@ use std::marker::PhantomData;
 
 use http::Request;
 use http::Response;
-use metrique::writer::EntrySink;
 use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
-use metrique::RootEntry;
 use metrique::Slot;
 
-use crate::default::DefaultMetricsEntry;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultRequestMetricsExtension;
@@ -250,7 +247,7 @@ macro_rules! impl_build_for_state {
     ($state:ty) => {
         impl<S, I, Rq, Rs> DefaultMetricsBuildExt<S, I, Rq, Rs> for MetricsLayerBuilder<$state, DefaultMetrics, S, I, Rq, Rs>
         where
-            S: EntrySink<RootEntry<DefaultMetricsEntry>> + Send + Sync + 'static,
+            S: MetriqueEntrySink<DefaultMetrics>,
             I: InitMetrics<DefaultMetrics, S>,
             Rq: SetRequestMetrics<DefaultMetrics, S>,
             Rs: SetResponseMetrics<DefaultMetrics, S>,

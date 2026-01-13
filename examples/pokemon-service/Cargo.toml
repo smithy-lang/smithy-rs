@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
+rust-version = "1.88"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -15,7 +16,7 @@ tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
 tower = "0.4"
 tracing = "0.1"
 tracing-appender = "0.2"
-metrique = { version = "=0.1.9", features = ["emf"] }
+metrique = { version = "0.1", features = ["emf"] }
 
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
