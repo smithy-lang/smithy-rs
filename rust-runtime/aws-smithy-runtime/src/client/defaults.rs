@@ -33,6 +33,9 @@ use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::time::Duration;
 
+/// Default connect timeout for all clients with BehaviorVersion >= v2026_01_12
+const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(3100);
+
 fn default_plugin<CompFn>(name: &'static str, components_fn: CompFn) -> StaticRuntimePlugin
 where
     CompFn: FnOnce(RuntimeComponentsBuilder) -> RuntimeComponentsBuilder,
@@ -222,7 +225,7 @@ pub fn default_timeout_config_plugin() -> Option<SharedRuntimePlugin> {
 /// Runtime plugin that sets the default timeout config.
 ///
 /// This version respects the behavior version to enable connection timeout by default for newer versions.
-/// For all clients with BehaviorVersion >= v2025_01_17, a 3.1s connection timeout is set.
+/// For all clients with BehaviorVersion >= v2026_01_12, a 3.1s connection timeout is set.
 pub fn default_timeout_config_plugin_v2(
     params: &DefaultPluginParams,
 ) -> Option<SharedRuntimePlugin> {
@@ -236,11 +239,10 @@ pub fn default_timeout_config_plugin_v2(
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
-            #[expect(deprecated)]
-            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2025_01_17()) {
-                // All clients with BMV >= v2025_01_17: Set connect_timeout only
+            let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2026_01_12()) {
+                // All clients with BMV >= v2026_01_12: Set connect_timeout only
                 TimeoutConfig::builder()
-                    .connect_timeout(Duration::from_millis(3100))
+                    .connect_timeout(DEFAULT_CONNECT_TIMEOUT)
                     .build()
             } else {
                 // Old behavior versions: All timeouts disabled
