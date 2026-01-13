@@ -4,4 +4,4 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-wasmtime  --invoke main -D logging=y -D debug-info=y -D guest-debug=y -D address-map=y -D log-to-files=y "$@" 0 0
+wasmtime --invoke main -D logging=y -D debug-info=y -D address-map=y "$@" 0 0
