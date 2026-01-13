@@ -553,5 +553,66 @@ class EnumGeneratorTest {
             }
             project.compileAndTest()
         }
+
+        @Test
+        fun `it handles named enum values containing hash characters`() {
+            val model =
+                """
+                namespace test
+                @enum([
+                    { value: "Fruits#Apple", name: "FRUITS_APPLE" },
+                    { value: "Veggies#Carrot", name: "VEGGIES_CARROT" },
+                    { value: "Dairy#Milk#Whole", name: "DAIRY_MILK_WHOLE" },
+                ])
+                string FoodCategory
+                """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#FoodCategory")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.moduleFor(shape) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "named_enum_values_with_hash_characters",
+                    """
+                    assert_eq!(FoodCategory::FruitsApple.as_str(), "Fruits#Apple");
+                    assert_eq!(FoodCategory::VeggiesCarrot.as_str(), "Veggies#Carrot");
+                    assert_eq!(FoodCategory::DairyMilkWhole.as_str(), "Dairy#Milk#Whole");
+                    assert_eq!(FoodCategory::from("Fruits#Apple"), FoodCategory::FruitsApple);
+                    assert_eq!(FoodCategory::values(), &["Dairy#Milk#Whole", "Fruits#Apple", "Veggies#Carrot"]);
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
+
+        @Test
+        fun `it handles unnamed enum values containing hash characters`() {
+            val model =
+                """
+                namespace test
+                @enum([
+                    { value: "Fruits#Apple" },
+                    { value: "Veggies#Carrot" },
+                ])
+                string FoodCategory
+                """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#FoodCategory")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.moduleFor(shape) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "unnamed_enum_values_with_hash_characters",
+                    """
+                    assert_eq!(FoodCategory::from("Fruits#Apple").as_str(), "Fruits#Apple");
+                    assert_eq!(FoodCategory::from("Veggies#Carrot").as_str(), "Veggies#Carrot");
+                    assert_eq!(FoodCategory::values(), &["Fruits#Apple", "Veggies#Carrot"]);
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
     }
 }
