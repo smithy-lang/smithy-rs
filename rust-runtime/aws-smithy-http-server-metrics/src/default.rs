@@ -37,7 +37,7 @@ pub struct DefaultResponseMetrics {
 }
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct DefaultRequestMetricsConfig {
+pub struct DefaultRequestMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_request_id: bool,
     pub(crate) disable_operation_name: bool,
@@ -46,17 +46,17 @@ pub(crate) struct DefaultRequestMetricsConfig {
 }
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct DefaultResponseMetricsConfig {
+pub struct DefaultResponseMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_http_status_code: bool,
 }
 
-pub(crate) struct DefaultRequestMetricsExtension {
+pub struct DefaultRequestMetricsExtension {
     pub(crate) metrics: SlotGuard<DefaultRequestMetrics>,
     pub(crate) config: DefaultRequestMetricsConfig,
 }
 
-pub(crate) struct DefaultResponseMetricsExtension {
+pub struct DefaultResponseMetricsExtension {
     pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
     pub(crate) config: DefaultResponseMetricsConfig,
 }

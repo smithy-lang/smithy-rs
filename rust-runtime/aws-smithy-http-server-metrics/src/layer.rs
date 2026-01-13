@@ -6,23 +6,25 @@ use http::Request;
 use http::Response;
 use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
-use metrique::RootEntry;
-use metrique_core::CloseEntry;
-use metrique_writer::EntrySink;
 use thiserror::Error;
 use tower::Layer;
 
-use crate::DefaultInit;
-use crate::DefaultRq;
-use crate::DefaultRs;
-use crate::ReqBody;
-use crate::ResBody;
 use crate::default::DefaultMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
 use crate::service::MetricsLayerService;
+use crate::traits::InitMetrics;
+use crate::traits::MetriqueCloseEntry;
+use crate::traits::MetriqueEntrySink;
+use crate::traits::SetRequestMetrics;
+use crate::traits::SetResponseMetrics;
+use crate::types::DefaultInit;
+use crate::types::DefaultRq;
+use crate::types::DefaultRs;
+use crate::types::ReqBody;
+use crate::types::ResBody;
 
 pub mod builder;
 
@@ -40,11 +42,11 @@ pub struct MetricsLayer<
     Rq = DefaultRq<E, S>,
     Rs = DefaultRs<E, S>,
 > where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     pub(crate) init_metrics: I,
     pub(crate) set_request_metrics: Option<Rq>,
@@ -57,10 +59,23 @@ pub struct MetricsLayer<
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 }
 
+impl<S> MetricsLayer<DefaultMetrics, S>
+where
+    S: MetriqueEntrySink<DefaultMetrics> + Clone,
+{
+    pub fn new_with_sink(
+        sink: S,
+    ) -> MetricsLayer<DefaultMetrics, S, impl InitMetrics<DefaultMetrics, S>> {
+        Self::builder()
+            .init_metrics(move || DefaultMetrics::default().append_on_drop(sink.clone()))
+            .build()
+    }
+}
+
 impl<E, S> MetricsLayer<E, S>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
 {
     pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S> {
         MetricsLayerBuilder {
@@ -70,6 +85,8 @@ where
             default_req_metrics_config: DefaultRequestMetricsConfig::default(),
             default_res_metrics_config: DefaultResponseMetricsConfig::default(),
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 }
@@ -77,11 +94,11 @@ where
 impl<Ser, E, S, I, Rq, Rs> Layer<Ser> for MetricsLayer<E, S, I, Rq, Rs>
 where
     Ser: Clone,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     type Service = MetricsLayerService<Ser, E, S, I, Rq, Rs>;
 
@@ -91,8 +108,8 @@ where
             init_metrics: self.init_metrics.clone(),
             set_request_metrics: self.set_request_metrics.clone(),
             set_response_metrics: self.set_response_metrics.clone(),
-            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn.clone(),
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn.clone(),
+            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
+            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
         }

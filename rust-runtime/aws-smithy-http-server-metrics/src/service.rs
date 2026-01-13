@@ -8,23 +8,25 @@ use http_body::combinators::UnsyncBoxBody;
 use hyper::body::Body as ReqBody;
 use hyper::body::Bytes;
 use metrique::AppendAndCloseOnDrop;
-use metrique::RootEntry;
-use metrique_core::CloseEntry;
-use metrique_writer::EntrySink;
 use tower::Service;
 
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
+use crate::traits::InitMetrics;
+use crate::traits::MetriqueCloseEntry;
+use crate::traits::MetriqueEntrySink;
+use crate::traits::SetRequestMetrics;
+use crate::traits::SetResponseMetrics;
 
 type ResBody = UnsyncBoxBody<Bytes, Error>;
 
 pub struct MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     pub(crate) inner: Ser,
     pub(crate) init_metrics: I,
@@ -40,11 +42,11 @@ where
 impl<Ser, E, S, I, Rq, Rs> Clone for MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
     Ser: Clone,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -52,8 +54,8 @@ where
             init_metrics: self.init_metrics.clone(),
             set_request_metrics: self.set_request_metrics.clone(),
             set_response_metrics: self.set_response_metrics.clone(),
-            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn.clone(),
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn.clone(),
+            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
+            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
         }
@@ -63,11 +65,11 @@ impl<Ser, E, S, I, Rq, Rs> Service<Request<ReqBody>> for MetricsLayerService<Ser
 where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone,
     Ser::Future: Send + 'static,
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;
@@ -93,7 +95,7 @@ where
         }
 
         let future = self.inner.call(req);
-        let default_res_metrics_extension_fn = self.default_res_metrics_extension_fn.clone();
+        let default_res_metrics_extension_fn = self.default_res_metrics_extension_fn;
         let default_res_metrics_config = self.default_res_metrics_config.clone();
         let set_response_metrics = self.set_response_metrics.clone();
 
