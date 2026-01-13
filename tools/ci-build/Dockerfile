@@ -85,7 +85,7 @@ RUN yum -y install --allowerasing \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
-    rustup target add wasm32-wasip1; \
+    rustup target add wasm32-wasip2; \
     cargo --version; \
     cargo +${rust_nightly_version} --version;
 
@@ -131,7 +131,7 @@ ARG cargo_minimal_versions_version=0.1.27
 ARG cargo_check_external_types_version=0.3.0
 ARG maturin_version=1.5.1
 ARG wasm_pack_version=0.13.1
-ARG cargo_wasmtime_version=34.0.1
+ARG cargo_wasmtime_version=39.0.1
 ARG cargo_component_version=0.20.0
 ARG cargo_semver_checks_version=0.41.0
 ARG cargo_mdbook_version=0.4.37
