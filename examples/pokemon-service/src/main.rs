@@ -8,7 +8,7 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server_metrics::plugin::MetricsPlugin;
+use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
 use clap::Parser;
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
@@ -70,7 +70,7 @@ pub async fn main() {
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
     let http_plugins = HttpPlugins::new()
-        .push(MetricsPlugin::default())
+        .push(DefaultMetricsPlugin)
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)
         // Apply the `OperationExtensionPlugin` defined in `aws_smithy_http_server::extension`. This allows other
