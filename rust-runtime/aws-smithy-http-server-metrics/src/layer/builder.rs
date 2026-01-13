@@ -8,11 +8,7 @@ use metrique::OnParentDrop;
 use metrique::RootEntry;
 use metrique::Slot;
 use metrique::writer::EntrySink;
-use metrique_core::CloseEntry;
 
-use crate::DefaultInit;
-use crate::DefaultRq;
-use crate::DefaultRs;
 use crate::default::DefaultMetricsEntry;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
@@ -24,6 +20,14 @@ use crate::layer::DefaultMetrics;
 use crate::layer::MetricsLayer;
 use crate::layer::ReqBody;
 use crate::layer::ResBody;
+use crate::traits::InitMetrics;
+use crate::traits::MetriqueCloseEntry;
+use crate::traits::MetriqueEntrySink;
+use crate::traits::SetRequestMetrics;
+use crate::traits::SetResponseMetrics;
+use crate::types::DefaultInit;
+use crate::types::DefaultRq;
+use crate::types::DefaultRs;
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
@@ -80,11 +84,11 @@ pub struct MetricsLayerBuilder<
     Rq = DefaultRq<E, S>,
     Rs = DefaultRs<E, S>,
 > where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     pub init_metrics: Option<I>,
     pub set_request_metrics: Option<Rq>,
@@ -92,22 +96,19 @@ pub struct MetricsLayerBuilder<
     pub default_req_metrics_config: DefaultRequestMetricsConfig,
     pub default_res_metrics_config: DefaultResponseMetricsConfig,
     pub(crate) _state: PhantomData<State>,
+    pub(crate) _close_entry: PhantomData<E>,
+    pub(crate) _entry_sink: PhantomData<S>,
 }
 
 impl<E, S> MetricsLayerBuilder<NeedsInitialization, E, S>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
 {
     pub fn init_metrics(
         self,
-        init_metrics: impl Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    ) -> MetricsLayerBuilder<
-        WithDefaults,
-        E,
-        S,
-        impl Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    > {
+        init_metrics: impl InitMetrics<E, S>,
+    ) -> MetricsLayerBuilder<WithDefaults, E, S, impl InitMetrics<E, S>> {
         MetricsLayerBuilder {
             init_metrics: Some(init_metrics),
             set_request_metrics: self.set_request_metrics,
@@ -115,31 +116,22 @@ where
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 }
 
 impl<E, S, I> MetricsLayerBuilder<WithDefaults, E, S, I>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
 {
     pub fn set_request_metrics(
         self,
-        f: impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    ) -> MetricsLayerBuilder<
-        WithRq,
-        E,
-        S,
-        I,
-        impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-        DefaultRs<E, S>,
-    > {
+        f: impl SetRequestMetrics<E, S>,
+    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl SetRequestMetrics<E, S>, DefaultRs<E, S>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             set_request_metrics: Some(f),
@@ -147,6 +139,8 @@ where
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 
@@ -157,14 +151,7 @@ where
         + Send
         + Sync
         + 'static,
-    ) -> MetricsLayerBuilder<
-        WithRs,
-        E,
-        S,
-        I,
-        DefaultRq<E, S>,
-        impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-    > {
+    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, impl SetResponseMetrics<E, S>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             set_request_metrics: None,
@@ -172,6 +159,8 @@ where
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 
@@ -180,25 +169,21 @@ where
 
 impl<E, S, I, Rq> MetricsLayerBuilder<WithRq, E, S, I, Rq>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
 {
     pub fn set_response_metrics(
         self,
-        f: impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+        f: impl SetResponseMetrics<E, S>,
     ) -> MetricsLayerBuilder<
         WithRqAndRs,
         E,
         S,
         I,
-        impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-        impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+        impl SetRequestMetrics<E, S>,
+        impl SetResponseMetrics<E, S>,
     > {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
@@ -207,6 +192,8 @@ where
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 
@@ -215,25 +202,21 @@ where
 
 impl<E, S, I, Rs> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, Rs>
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-    I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-    Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
 {
     pub fn set_request_metrics(
         self,
-        f: impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+        f: impl SetRequestMetrics<E, S>,
     ) -> MetricsLayerBuilder<
         WithRqAndRs,
         E,
         S,
         I,
-        impl Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
-        impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static,
+        impl SetRequestMetrics<E, S>,
+        impl SetResponseMetrics<E, S>,
     > {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
@@ -242,6 +225,8 @@ where
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
+            _close_entry: PhantomData,
+            _entry_sink: PhantomData,
         }
     }
 
@@ -255,17 +240,9 @@ macro_rules! impl_build_for_state {
         impl<S, I, Rq, Rs> MetricsLayerBuilder<$state, DefaultMetrics, S, I, Rq, Rs>
         where
             S: EntrySink<RootEntry<DefaultMetricsEntry>> + Send + Sync + 'static,
-            I: Fn() -> AppendAndCloseOnDrop<DefaultMetrics, S> + Clone + Send + Sync + 'static,
-            Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
-                + Clone
-                + Send
-                + Sync
-                + 'static,
-            Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<DefaultMetrics, S>)
-                + Clone
-                + Send
-                + Sync
-                + 'static,
+            I: InitMetrics<DefaultMetrics, S>,
+            Rq: SetRequestMetrics<DefaultMetrics, S>,
+            Rs: SetResponseMetrics<DefaultMetrics, S>,
         {
             pub fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
                 let default_req_metrics_extension_fn =
@@ -358,19 +335,11 @@ mod tests {
         ($fn_name:ident, $state:ty) => {
             fn $fn_name<E, S, I, Rq, Rs>(_: &MetricsLayerBuilder<$state, E, S, I, Rq, Rs>)
             where
-                E: CloseEntry + Send + Sync + 'static,
-                S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
-                I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
-                Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)
-                    + Clone
-                    + Send
-                    + Sync
-                    + 'static,
-                Rs: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
-                    + Clone
-                    + Send
-                    + Sync
-                    + 'static,
+                E: MetriqueCloseEntry,
+                S: MetriqueEntrySink<E>,
+                I: InitMetrics<E, S>,
+                Rq: SetRequestMetrics<E, S>,
+                Rs: SetResponseMetrics<E, S>,
             {
             }
         };
