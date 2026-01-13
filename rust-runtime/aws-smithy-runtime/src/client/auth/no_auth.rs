@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::{
     GetIdentityResolver, RuntimeComponents, RuntimeComponentsBuilder,
 };
-use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_runtime_api::client::runtime_plugin::{Order, RuntimePlugin};
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::borrow::Cow;
@@ -102,6 +102,11 @@ impl NoAuthRuntimePluginV2 {
 }
 
 impl RuntimePlugin for NoAuthRuntimePluginV2 {
+    fn order(&self) -> Order {
+        // This plugin should be applied as an escape hatch to append the no-auth scheme, hence `NestedComponents`.
+        Order::NestedComponents
+    }
+
     fn runtime_components(
         &self,
         current_components: &RuntimeComponentsBuilder,
