@@ -12,6 +12,7 @@ use tower::Layer;
 use crate::default::DefaultMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
+use crate::layer::builder::DefaultMetricsBuildExt;
 use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
 use crate::service::MetricsLayerService;
