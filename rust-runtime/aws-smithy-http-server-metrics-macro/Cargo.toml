@@ -15,3 +15,9 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.88"
 
 [dependencies]
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
