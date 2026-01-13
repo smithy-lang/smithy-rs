@@ -36,7 +36,7 @@ pub const NO_AUTH_SCHEME_ID: AuthSchemeId = AuthSchemeId::new("noAuth");
 #[doc(hidden)]
 #[non_exhaustive]
 #[derive(Debug)]
-#[deprecated(since = "1.9.5", note = "Use `NoAuthRuntimePluginV2` instead")]
+#[deprecated(since = "1.9.8", note = "Use `NoAuthRuntimePluginV2` instead")]
 pub struct NoAuthRuntimePlugin(RuntimeComponentsBuilder);
 
 #[allow(deprecated)]

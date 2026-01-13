@@ -1,11 +1,12 @@
 [package]
 name = "aws-runtime"
-version = "1.5.16"
+version = "1.5.18"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]

@@ -56,7 +56,7 @@ jobs:
       contents: read
     needs:
     - get-pr-info
-    runs-on: ubuntu-latest
+    runs-on: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -68,6 +68,7 @@ jobs:
             # the branch this workflow was launched from.
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image

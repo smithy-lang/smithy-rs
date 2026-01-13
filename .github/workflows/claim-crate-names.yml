@@ -48,6 +48,7 @@ jobs:
       with:
         path: smithy-rs
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image

@@ -92,6 +92,7 @@ jobs:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:

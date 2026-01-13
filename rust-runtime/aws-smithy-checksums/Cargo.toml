@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.63.11"
+version = "0.63.13"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -9,6 +9,7 @@ description = "Checksum calculation and verification callbacks"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.88"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -17,7 +18,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1.10.0"
 # FIXME(https://github.com/smithy-lang/smithy-rs/issues/3981): Keep pinned until we have more comprehensive testing in place
-crc-fast = "~1.6.0"
+crc-fast = "~1.9.0"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
