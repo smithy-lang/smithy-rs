@@ -84,9 +84,9 @@ data class InfallibleEnumType(
         writable {
             rustTemplate(
                 """
-                impl<T> #{From}<T> for ${context.enumName} where T: #{AsRef}<str> {
-                    fn from(s: T) -> Self {
-                        ${context.enumName}(s.as_ref().to_owned())
+                impl #{From}<&str> for ${context.enumName} {
+                    fn from(s: &str) -> Self {
+                        ${context.enumName}(s.to_owned())
                     }
                 }
                 """,
