@@ -228,9 +228,9 @@ RUN set -eux; \
 
 COPY --chown=build:build --from=musl_toolchain /usr/local/musl/ /usr/local/musl/
 COPY --chown=build:build --from=local_tools /opt/cargo /opt/cargo
+COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=gradle_wrapper /opt/gradle /home/build/.gradle
 COPY --chown=build:build --from=cargo_tools /opt/cargo/bin/ /opt/cargo/bin/
-COPY --chown=build:build --from=install_rust /opt/rustup /opt/rustup
 COPY --chown=build:build --from=nodejs /opt/nodejs /opt/nodejs
 ENV PATH=/opt/nodejs/bin:/opt/cargo/bin:$PATH:/usr/local/musl/bin/ \
     NODE_HOME=/opt/nodejs \
