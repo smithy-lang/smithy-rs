@@ -33,26 +33,33 @@ https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=9c401721
 
 ### Once this RFC is implemented
 
-Users will be able to add default metrics to their service like below, an easy way to get out-of-the-box metrics:
+Users will get batteries-included default metrics in their service, with the ability to add an outer `MetricsLayer` for further configuration and/or include custom metrics that can be set throughout the request/response lifecycle via extensions, which will all be folded together to a single metrics entry.
+
+For a complete batteries-included experience, a codegen change will be necessary to add the HTTP plugin for default metrics via declarative opt-in in the `smithy-build.json`.
+
+The runtime crate will be merged first, followed by the codegen changes.
+
+After the runtime crate is merged and before the codegen changes are made, users can add default metrics by adding the plugin to their service programmatically.
 
 ```rust
 fn main() {
-    let app = PokemonService::builder(config)
-        ... // set operation handlers
-        .build()
-        .unwrap()
-
-    let service = MetricsLayer::new().layer(app);
+    let http_plugins = HttpPlugins::new().push(DefaultMetricsPlugin);
+    let config = PokemonServiceConfig::builder().http_plugin(http_plugins).build();
+    let app = PokemonService::builder(config).build()
 }
 ```
 
-For further configuration, a builder will be provided that takes an initialization function that allows the user to initialize an `AppendAndCloseOnDrop` with a custom metrics struct and sink.
+For further configuration, a tower layer will be provided that takes an initialization function that gives the user full control over which metrics struct and sink they want to use.
+
+For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics::extension]` will be available in the request extensions. To make this turnkey, a type alias will be made for any of the `#[smithy_metrics::extension]` annotated fields' types. In this case `OperationMetricsExtension` will be `Extension<SlotGuard<OperationMetrics>>`, which can be added as a parameter in the handler signature as shown below.
 
 ```rust
 fn main() {
     let metrics_layer = MetricsLayer::builder()
         .init_metrics(|| MyMetrics::default().append_on_drop(my_sink))
-        .set_request_metrics(set_request_metrics)
+        .set_request_metrics(|req: &mut Request<ReqBody>, metrics: &mut MyMetricsGuard| {
+            req.custom_metric = ...;
+        })
         .build();
 }
 
@@ -70,23 +77,7 @@ struct OperationMetrics {
     get_pokemon_species_metrics: Option<String>
 }
 
-fn set_request_metrics(req: Request<Body>, metrics: MyMetricsGuard) {
-    req.custom_metric = ...;
-}
-```
-
-For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics::extension]` will be available in the request extensions. To make this turnkey, a type alias will be made for any of the `#[smithy_metrics::extension]` annotated fields' types. In this case `OperationMetricsExtension` will be `Extension<SlotGuard<OperationMetrics>>`, which can be added as a parameter in the handler signature as shown below.
-
-```rust
-fn main() {
-    let app = PokemonService::builder(config)
-        .get_pokemon_species(get_pokemon_species)
-        .build()
-        .unwrap()
-
-    let service = MetricsLayer::new().layer(app);
-}
-
+/// Setting metrics in operation handler
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
@@ -96,43 +87,85 @@ pub async fn get_pokemon_species(
 }
 ```
 
+`new_with_sink` gives provides a turnkey API to use the default metrics, but customize the sink, without needing to provide a full init_metrics closure.
+
+```rust
+fn main() {
+    let metrics_layer = MetricsLayer::new_with_sink(my_sink);
+}
+```
+
 <!-- Explain the implementation of this new feature -->
 How to actually implement this RFC
 ----------------------------------
 
 There will be two new rust-runtime crates `aws-smithy-http-server-metrics` and `aws-smithy-http-server-metrics-macro`, with types re-exported in the generated server.
 
+### `DefaultMetricsPlugin` struct
+
+The focal struct that users can add to their service as an HTTP plugin which provides the default metrics. If no outer metrics layer exists, it will initialize the metrics from this layer if a sink has been attached to the metrique's application-wide `ServiceMetrics`. If an outer metrics layer was added, it will retrieve the instance from the request/response extensions and add them.
+
+We can later add this into the codegen as a declarative config option to make it fully batteries-included from the codegen layer. Though, precautions will need to be taken to prevent the possibility of multiple metrics plugins existing and creating duplicate metrics.
+
+#### This will allow users the following construction experiences:
+
+`DefaultMetricsPlugin` (for default)
+
+- For a metrics plugin that uses the application-wide `metrique::ServiceMetrics`.
+
+### `DefaultMetricsPluginService` struct
+
+A tower service for metrics that will contain the logic for setting the default operation-specific metrics.
+
+### Super traits
+
+These super traits will contain blanket implementations for reducing duplication in trait bounds.
+
+#### `MetriqueCloseEntry: CloseEntry + Send + Sync + 'static`
+
+#### `MetriqueEntrySink<E>: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static`
+
+#### `InitMetrics<E, S>: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static`
+
+#### `SetRequestMetrics<E, S>: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+
+#### `SetResponseMetrics<E, S>: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+
 ### `MetricsLayer` struct
 
-The focal struct that users can add to their service as a tower `Layer` for metrics, containing `new` and `builder` methods to get a `MetricsLayer` with the default configuration or a `MetricsLayerBuilder`, respectively.
+The focal struct that users can add to their service as a tower `Layer` for metrics, containing a `builder` method.
+
+Any metrics configuration such as altering the sink, using a custom metrique metrics type, etc will go through this metrics layer.
+
+This gives users the ability to add a metrics tower layer that initializes metrics at the outermost level in order to fold all metrics throughout the request together. Request/response extensions provides a handle to the metrics at every subsequent layer. There will be logic in the `DefaultMetricsPlugin` to use the initialized metrics from the extension if a `MetricsLayer` has been added.
 
 #### Will have following generics and trait bounds:
 
-`E: CloseEntry + Send + Sync + 'static`
+`E: MetriqueCloseEntry`
 
 - For the metrique metrics struct (i.e. annotated with #[metrics]).
 
 - Default type parameter of `DefaultMetrics`
 
-`S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static`
+`S: MetriqueEntrySink`
 
 - For the entry sink where entries are stored in an in-memory buffer until they can be written to the destination.
 
 - Default type parameter of `DefaultSink` (BoxEntrySink)
 
-`I: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static`
+`I: InitMetrics<E, S>`
 
 - Closure trait bound for the metrics initialization function. The metrics initialization must be passed down and invoked in the `MetricsLayerService`'s, so that entries are appended and closed after each request when the metrics guard is dropped. In a future version, we may be able to implement manual appending and closing of entries to enable users to pass an instance of the metrics struct itself rather than a function that returns an `AppendAndCloseOnDrop`.
 
 - Default type parameter of `fn() -> AppendAndCloseOnDrop<E, S>`
 
-`Rq: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+`Rq: SetRequestMetrics<E, S>`
 
 - Closure trait bound to allow users to set metrics however they like from the request object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized. The `Request` parameter needs to be a mutable reference so adding to the request extensions is possible.
 
 - Default type parameter of `fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)`
 
-`Rs: Fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+`Rs: SetResponseMetrics<E, S>`
 
 - Closure trait bound to allow users to set metrics however they like from the response object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized.
 
@@ -154,15 +187,9 @@ default_res_metrics_config: DefaultResponseMetricsConfig,
 
 - A fully generic implementation with a `builder()` method that returns a `MetricsLayerBuilder`.
 
-- An implementation using the default type parameters with a `new()` method that returns a fully default `MetricsLayer` using a global sink.
-
 - Implements the tower `Layer` trait to map to the `MetricsLayerService`
 
 #### This will allow users the following construction experiences:
-
-`MetricsLayer::new()`
-
-- For the complete default experience, being the out-of-the-box default metrics.
 
 `MetricsLayer::builder()`
 
@@ -170,7 +197,9 @@ default_res_metrics_config: DefaultResponseMetricsConfig,
 
 ### `MetricsLayerBuilder` struct
 
-A typestate builder for `MetricsLayer`. The states will be
+A typestate builder for `MetricsLayer` containing the same trait bounds. The `build` implementations for custom metrics type will be generated by the proc macro, which will set the `default_req_metrics_extension_fn` and `default_res_metrics_extension_fn` to add the default req/res metrics extensions to the `DefaultMetricsPlugin`.
+
+The states will be:
 
 `NeedsInitialization`
 
@@ -224,16 +253,6 @@ Declarative macros will be used for the typestate pattern.
 
 A tower service for metrics that will contain the core logic for invoking the logic for metrics initialization and setting the metrics from the request/response objects. The `call` implementation will essentially invoke the passed closures.
 
-### `MetricsPlugin` struct
-
-An HTTP plugin metrics struct to allow for default operation-level metrics.
-
-The plugin system will mitigate the need to define a layer per operation for metrics like the operation name. A Metrics Plugin will be implemented to set the operation and service metrics from the `Operation` and `Service` type parameters. It will be applied to the service in the operation setters, which will require a change in the server codegen.
-
-### `MetricsPluginService` struct
-
-A tower service for metrics that will contain the logic for setting the default operation-specific metrics.
-
 ### `DefaultMetrics` struct
 
 A struct for default metrics. This will use the `#[smithy_metrics]` and be used as the default type parameter for `MetricsLayer`.
@@ -278,11 +297,13 @@ Changes checklist
 
     - [x] Define struct with generics, trait bounds, and default type parameters
 
-    - [x] Generic implementation with `builder()` method
+    - [x] Implementation of `builder()` method
 
-    - [x] Default implementation with `new()` method
+    - [x] Implementation of `new_with_sink()` method to use the `DefaultMetrics` with a custom sink
 
     - [x] Layer implementation to map to `MetricsLayerService`
+
+- [x] Implement common traits and types
 
 - [x] Implement struct `MetricsLayerBuilder`
 
@@ -290,9 +311,15 @@ Changes checklist
 
     - [x] `NeedsInitialization` state generic implementation with `init_metrics()` method
 
-    - [x] `Ready` state generic implementation with builder methods to disable any/all default metrics and passing closures to set metrics from req/res objects.
+    - [x] `WithRq` state implementation
 
-    - [x] Implementation of `build` for `DefaultMetrics` (may be replaced with the proc macro expansion when that is done)
+    - [x] `WithRs` state implementation
+
+    - [x] `WithRqAndRs` state implementation
+
+    - [x] `build()` implementations for each state for `DefaultMetrics` (may be replaced with the proc macro expansion when that is done)
+
+    - [x] Declarative macros to reduce duplication
 
 - [x] Implement struct `MetricsLayerService` to contain the tower service logic
 
@@ -306,13 +333,13 @@ Changes checklist
 
         - [x] Invoking the request/response metrics functions
 
-- [x] Implement struct `MetricsPlugin`
+- [x] Implement struct `DefaultMetricsPlugin`
 
     - [x] Implement HTTPMarker
 
     - [x] Implement `Plugin` to map to `MetricsService`
 
-- [x] Implement struct `MetricsPluginService`
+- [x] Implement struct `DefaultMetricsPluginService`
 
     - [x] Implement `Clone`
 
@@ -335,8 +362,6 @@ Changes checklist
 - [x] Define struct `DefaultRequestMetricsExtension` for passing default request metrics and config instances from an outer metrics layer to the metrics plugin via request extensions to be able to fold them together
 
 - [x] Define struct `DefaultResponseMetricsExtension` for passing default response metrics and config instances from an outer metrics layer to the metrics plugin via response extensions to be able to fold them together
-
-- [] Handle error when no sink has been attached for the default case
 
 - [] Implement proc macro attribute `#[smithy_metrics]`
 
