@@ -12,9 +12,16 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.88"
 
 [dependencies]
-metrique = "0.1"
-metrique-writer = "0.1"
-metrique-core = "0.1"
+# Pinning to MSRV 1.88.0 suppored versions
+metrique = "=0.1.9"
+metrique-macro = "=0.1.6"
+metrique-core = "=0.1.8"
+metrique-writer = "=0.1.10"
+metrique-writer-core = "=0.1.7"
+metrique-service-metrics = "=0.1.9"
+metrique-timesource = "=0.1.5"
+metrique-writer-macro = "=0.1.4"
+metrique-writer-format-emf = "=0.1.9"
 
 tower = "0.5"
 futures = "0.3"
