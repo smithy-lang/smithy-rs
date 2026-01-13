@@ -8,9 +8,9 @@ use metrique_macro::metrics;
 #[derive(Default)]
 pub struct DefaultMetrics {
     #[metrics(flatten)]
-    pub(crate) request_metrics: Option<Slot<DefaultRequestMetrics>>,
+    pub(crate) default_request_metrics: Option<Slot<DefaultRequestMetrics>>,
     #[metrics(flatten)]
-    pub(crate) response_metrics: Option<Slot<DefaultResponseMetrics>>,
+    pub(crate) default_response_metrics: Option<Slot<DefaultResponseMetrics>>,
 }
 impl Debug for DefaultMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
