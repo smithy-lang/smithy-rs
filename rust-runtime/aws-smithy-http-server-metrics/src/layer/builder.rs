@@ -2,12 +2,12 @@ use std::marker::PhantomData;
 
 use http::Request;
 use http::Response;
+use metrique::writer::EntrySink;
 use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::RootEntry;
 use metrique::Slot;
-use metrique::writer::EntrySink;
 
 use crate::default::DefaultMetricsEntry;
 use crate::default::DefaultRequestMetrics;
@@ -147,10 +147,10 @@ where
     pub fn set_response_metrics(
         self,
         f: impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+            + Clone
+            + Send
+            + Sync
+            + 'static,
     ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, impl SetResponseMetrics<E, S>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
@@ -249,9 +249,9 @@ macro_rules! impl_build_for_state {
                     |req: &mut Request<ReqBody>,
                      metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>,
                      config: DefaultRequestMetricsConfig| {
-                        metrics.request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
+                        metrics.default_request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
                         let default_req_metrics_slotguard = metrics
-                            .request_metrics
+                            .default_request_metrics
                             .as_mut()
                             .expect("unreachable: the option is set to some in this scope")
                             .open(OnParentDrop::Discard)
@@ -269,9 +269,9 @@ macro_rules! impl_build_for_state {
                     |res: &mut Response<ResBody>,
                      metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>,
                      config: DefaultResponseMetricsConfig| {
-                        metrics.response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
+                        metrics.default_response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
                         let default_res_metrics_slotguard = metrics
-                            .response_metrics
+                            .default_response_metrics
                             .as_mut()
                             .expect("unreachable: the option is set to some in this scope")
                             .open(OnParentDrop::Discard)

@@ -1,3 +1,4 @@
+use std::future::Future;
 use std::task::Context;
 use std::task::Poll;
 
@@ -189,8 +190,9 @@ where
 
                 let mut metrics = DefaultMetrics::default().append_on_drop(sink);
 
-                metrics.request_metrics = Some(Slot::new(self.get_default_request_metrics(&req)));
-                metrics.request_metrics
+                metrics.default_request_metrics =
+                    Some(Slot::new(self.get_default_request_metrics(&req)));
+                metrics.default_request_metrics
                     .as_mut()
                     .expect("unreachable: the option is set to some in this scope")
                     .open(OnParentDrop::Discard)
@@ -203,9 +205,9 @@ where
                         Err(e) => return Err(e),
                     };
 
-                    metrics.response_metrics =
+                    metrics.default_response_metrics =
                         Some(Slot::new(Self::get_default_response_metrics(&res)));
-                    metrics.response_metrics
+                    metrics.default_response_metrics
                         .as_mut()
                         .expect("unreachable: the option is set to some in this scope")
                         .open(OnParentDrop::Discard)
