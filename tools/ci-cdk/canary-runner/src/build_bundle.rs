@@ -204,6 +204,39 @@ lazy_static! {
     ];
 }
 
+/// Lambda architecture to target
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
+pub enum LambdaArchitecture {
+    #[default]
+    X86_64,
+    Arm64,
+}
+
+impl std::str::FromStr for LambdaArchitecture {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "x86_64" | "x86-64" | "amd64" => Ok(LambdaArchitecture::X86_64),
+            "arm64" | "aarch64" => Ok(LambdaArchitecture::Arm64),
+            _ => Err(format!(
+                "Unknown architecture: {}. Use 'x86_64' or 'arm64'",
+                s
+            )),
+        }
+    }
+}
+
+impl LambdaArchitecture {
+    pub fn rust_target(&self, musl: bool) -> &'static str {
+        match (self, musl) {
+            (LambdaArchitecture::X86_64, false) => "x86_64-unknown-linux-gnu",
+            (LambdaArchitecture::X86_64, true) => "x86_64-unknown-linux-musl",
+            (LambdaArchitecture::Arm64, false) => "aarch64-unknown-linux-gnu",
+            (LambdaArchitecture::Arm64, true) => "aarch64-unknown-linux-musl",
+        }
+    }
+}
+
 #[derive(Debug, Parser, Eq, PartialEq)]
 pub struct BuildBundleArgs {
     /// Canary Lambda source code path (defaults to current directory)
@@ -233,6 +266,10 @@ pub struct BuildBundleArgs {
     /// Whether to target MUSL instead of GLIBC when compiling the Lambda
     #[clap(long)]
     pub musl: bool,
+
+    /// Lambda architecture to target (x86_64 or arm64)
+    #[clap(long, default_value = "x86_64")]
+    pub architecture: LambdaArchitecture,
 
     /// Only generate the `Cargo.toml` file rather than building the entire bundle
     #[clap(long)]
@@ -367,15 +404,14 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
     if !opt.manifest_only {
         // Compile the canary Lambda
+        let target = opt.architecture.rust_target(opt.musl);
         let mut command = Command::new("cargo");
         command
             .arg("build")
             .arg("--release")
             .arg("--manifest-path")
-            .arg(&manifest_path);
-        if opt.musl {
-            command.arg("--target=x86_64-unknown-linux-musl");
-        }
+            .arg(&manifest_path)
+            .arg(format!("--target={}", target));
         handle_failure("cargo build", &command.output()?)?;
 
         // Compile the wasm canary to a .wasm binary
@@ -390,13 +426,12 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
-        let target_path = {
-            let mut path = repository_root.join("tools").join("target");
-            if opt.musl {
-                path = path.join("x86_64-unknown-linux-musl");
-            }
-            path.join("release")
-        };
+        let target = opt.architecture.rust_target(opt.musl);
+        let target_path = repository_root
+            .join("tools")
+            .join("target")
+            .join(target)
+            .join("release");
         let wasm_bin_path = {
             repository_root
                 .join("tools")
@@ -492,6 +527,7 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: false,
+                architecture: LambdaArchitecture::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([
@@ -509,6 +545,7 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: LambdaArchitecture::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([
@@ -528,6 +565,7 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: true,
+                architecture: LambdaArchitecture::X86_64,
                 manifest_only: true,
             }),
             Args::try_parse_from([
@@ -547,6 +585,7 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: LambdaArchitecture::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([

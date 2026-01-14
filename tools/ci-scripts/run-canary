@@ -10,6 +10,7 @@ CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME=$1
 export AWS_ACCESS_KEY_ID=$2
 export AWS_SECRET_ACCESS_KEY=$3
 export AWS_SESSION_TOKEN=$4
+ARCHITECTURE=${5:-x86_64}
 export AWS_REGION=us-west-2
 export RUST_LOG=debug
 
@@ -21,4 +22,5 @@ cargo run -- \
   run --rust-version "${RUST_STABLE_VERSION}" \
       --sdk-path "${SDK_PATH}" \
       --cdk-output cdk-outputs.json \
+      --architecture "${ARCHITECTURE}" \
       --musl

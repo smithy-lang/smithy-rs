@@ -344,10 +344,10 @@ jobs:
       fail-fast: false
       matrix:
         target:
-          - x86_64-unknown-linux-gnu
-          - x86_64-unknown-linux-musl
-          - aarch64-unknown-linux-gnu
-          - aarch64-unknown-linux-musl
+        - x86_64-unknown-linux-gnu
+        - x86_64-unknown-linux-musl
+        - aarch64-unknown-linux-gnu
+        - aarch64-unknown-linux-musl
     steps:
     - uses: actions/checkout@v4
       with:
@@ -394,10 +394,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x86_64
-            runner: smithy_ubuntu-latest_8-core
-          - arch: aarch64
-            runner: smithy_ubuntu-latest_8-core-arm
+        - arch: x86_64
+          runner: smithy_ubuntu-latest_8-core
+        - arch: aarch64
+          runner: smithy_ubuntu-latest_8-core-arm
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -415,7 +415,7 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: run-canary
-        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }} ${{ matrix.arch }}
 
   # This is always a failing job since forked repositories do not have necessary repository secrets
   # to run the PR bot workflow or the canary workflow
