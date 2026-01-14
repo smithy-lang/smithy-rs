@@ -374,7 +374,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-compression"
-version = "0.0.7"
+version = "0.0.8"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -424,7 +424,7 @@ version = "0.2.2"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.6"
+version = "0.62.7"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -448,7 +448,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.5"
+version = "1.1.6"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -546,7 +546,7 @@ version = "0.1.0"
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.66.6"
+version = "0.66.7"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-http-server",
@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.6"
+version = "0.62.7"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -618,7 +618,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http-server"
-version = "0.65.10"
+version = "0.65.11"
 dependencies = [
  "aws-smithy-cbor",
  "aws-smithy-json",
@@ -684,7 +684,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.7"
+version = "0.63.8"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -798,7 +798,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-wasm"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-runtime-api",
@@ -1102,7 +1102,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fa42cf4d2b7a41bc8f663a7cab4031ebafa1bf3875705bfaf8466dc60ab52c00"
 dependencies = [
  "anstyle",
- "clap_lex 0.7.6",
+ "clap_lex 0.7.7",
 ]
 
 [[package]]
@@ -1116,9 +1116,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.7.6"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d"
+checksum = "c3e64b0cc0439b12df2fa678eae89a1c56a529fd067a9115f7827f1fffd22b32"
 
 [[package]]
 name = "cmake"
@@ -4416,9 +4416,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.22"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f30143827ddab0d256fd843b7a66d164e9f271cfa0dde49142c5ca0ca291f1e"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "matchers",
  "nu-ansi-term",

@@ -41,11 +41,11 @@ http-body-0-4 = { package = "http-body", version = "0.4.5", optional = true }
 http-body-1-0 = { package = "http-body", version = "1", optional = true }
 http-body-util = { version = "0.1.2", optional = true }
 hyper-0-14 = { package = "hyper", version = "0.14.26", optional = true }
-itoa = "1.0.0"
+itoa = "1.0.15"
 num-integer = "0.1.44"
 pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
-ryu = "1.0.5"
+ryu = "1.0.20"
 time = { version = "0.3.4", features = ["parsing"] }
 
 # ByteStream internals
