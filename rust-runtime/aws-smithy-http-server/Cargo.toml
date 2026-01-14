@@ -63,7 +63,7 @@ tower-http = { version = "0.6", features = [
     "add-extension",
     "map-response-body",
 ] }
-tracing = "0.1.40"
+tracing = "0.1.41"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
