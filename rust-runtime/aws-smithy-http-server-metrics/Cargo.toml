@@ -23,11 +23,11 @@ metrique-timesource = "=0.1.5"
 metrique-writer-macro = "=0.1.4"
 metrique-writer-format-emf = "=0.1.9"
 
-tower = "0.5"
+tower = "0.4.13"
 futures = "0.3"
 http = "0.2.9"
-http-body = "0.4"
-hyper = "0.14"
+http-body = "0.4.5"
+hyper = "0.14.26"
 thiserror = "2"
 
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
