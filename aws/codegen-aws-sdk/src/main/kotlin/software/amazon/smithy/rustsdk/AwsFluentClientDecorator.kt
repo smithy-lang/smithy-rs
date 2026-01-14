@@ -60,6 +60,7 @@ class AwsFluentClientDecorator : ClientCodegenDecorator {
                     AwsPresignedFluentBuilderMethod(codegenContext),
                     AwsFluentClientDocs(codegenContext),
                     AwsFluentClientRetryPartition(codegenContext),
+                    AwsFluentClientEnableRetries(codegenContext),
                 ).letIf(codegenContext.serviceShape.id == ShapeId.from("com.amazonaws.s3#AmazonS3")) {
                     it + S3ExpressFluentClientCustomization(codegenContext)
                 },
@@ -193,6 +194,28 @@ private class AwsFluentClientRetryPartition(private val codegenContext: ClientCo
                         *preludeScope,
                         "Cow" to RuntimeType.Cow,
                     )
+                }
+            }
+            else -> emptySection
+        }
+    }
+}
+
+/**
+ * Enables retries by default for AWS SDK clients when awsSdkBuild is true.
+ *
+ * Only applies to real AWS SDK builds (controlled by awsSdkBuild in JSON settings).
+ */
+private class AwsFluentClientEnableRetries(private val codegenContext: ClientCodegenContext) : FluentClientCustomization() {
+    override fun section(section: FluentClientSection): Writable {
+        if (!codegenContext.sdkSettings().awsSdkBuild) {
+            return emptySection
+        }
+
+        return when (section) {
+            is FluentClientSection.CustomizeDefaultPluginParams -> {
+                writable {
+                    rust(".with_is_aws_sdk(true)")
                 }
             }
             else -> emptySection

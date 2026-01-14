@@ -98,6 +98,9 @@ sealed class FluentClientSection(name: String) : Section(name) {
     /** Write additional code before plugins are configured */
     data class BeforeBaseClientPluginSetup(val config: String) :
         FluentClientSection("BeforeBaseClientPluginSetup")
+
+    /** Customize DefaultPluginParams construction */
+    data object CustomizeDefaultPluginParams : FluentClientSection("CustomizeDefaultPluginParams")
 }
 
 abstract class FluentClientCustomization : NamedCustomization<FluentClientSection>()
