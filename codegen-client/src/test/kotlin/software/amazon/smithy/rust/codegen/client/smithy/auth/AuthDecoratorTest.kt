@@ -333,6 +333,45 @@ class AuthDecoratorTest {
                     """,
                     *codegenScope(codegenContext.runtimeConfig),
                 )
+
+                Attribute.TokioTest.render(this)
+                rustTemplate(
+                    """
+                    async fn no_auth_aware_auth_scheme_option_resolver_via_plugin() {
+                        let http_client = #{StaticReplayClient}::new(
+                                vec![#{ReplayEvent}::new(
+                                    http::Request::builder()
+                                    .uri("http://localhost:1234/SomeOperation") // there shouldn't be `customidentitydata` in URI
+                                    .body(#{SdkBody}::empty())
+                                    .unwrap(),
+                                http::Response::builder().status(200).body(#{SdkBody}::empty()).unwrap(),
+                            )],
+                        );
+
+                        let config = $moduleName::Config::builder()
+                            .endpoint_url("http://localhost:1234")
+                            .http_client(http_client.clone())
+                            .push_auth_scheme(CustomAuthScheme::default())
+                            .auth_scheme_resolver(CustomAuthSchemeResolver)
+                            // Configures a noAuth-aware auth scheme resolver that appends `NO_AUTH_SCHEME_ID`
+                            // to the auth scheme options returned by `CustomAuthSchemeResolver`.
+                            .runtime_plugin(#{NoAuthRuntimePluginV2}::new())
+                            // Reorders resolved auth scheme options to place `NO_AUTH_SCHEME_ID` first.
+                            .auth_scheme_preference([#{NO_AUTH_SCHEME_ID}])
+                            .build();
+                        let client = $moduleName::Client::from_conf(config);
+                        let _ = client.some_operation().send().await.expect("success");
+                        http_client.assert_requests_match(&[]);
+                    }
+                    """,
+                    *codegenScope(codegenContext.runtimeConfig),
+                    "NO_AUTH_SCHEME_ID" to
+                        RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
+                            .resolve("client::auth::no_auth::NO_AUTH_SCHEME_ID"),
+                    "NoAuthRuntimePluginV2" to
+                        RuntimeType.smithyRuntime(codegenContext.runtimeConfig)
+                            .resolve("client::auth::no_auth::NoAuthRuntimePluginV2"),
+                )
             }
         }
     }
