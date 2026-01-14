@@ -5,7 +5,6 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
-import software.amazon.smithy.aws.traits.auth.SigV4Trait
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.OperationShape
@@ -16,7 +15,6 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.auth.AuthSchemeResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -158,23 +156,6 @@ class ClientProtocolTestGenerator(
                     }
                 }
             } ?: writable { }
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177):
-        //  Until the incorrect separation is addressed, we need to rely on this workaround.
-        val noAuthSchemeResolver =
-            codegenContext.rootDecorator.authSchemeOptions(codegenContext, emptyList()).find {
-                it.authSchemeId == SigV4Trait.ID
-            }?.let { writable {} } ?: writable {
-                // If the `Sigv4AuthDecorator` is absent in the codegen plugin, we add `noAuth` as a fallback
-                // during protocol tests. This ensures compatibility when a test model references Sigv4,
-                // but the codegen, built with the generic client plugin, does not include the decorator.
-                rust(
-                    ".auth_scheme_resolver(#T)",
-                    AuthSchemeResolverGenerator(
-                        codegenContext,
-                        emptyList(),
-                    ).noAuthSchemeResolver(),
-                )
-            }
         // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
         val host = "https://${httpRequestTestCase.host.orNull() ?: "example.com"}".dq()
         rustTemplate(
@@ -182,7 +163,9 @@ class ClientProtocolTestGenerator(
             let (http_client, request_receiver) = #{capture_request}(None);
             let config_builder = #{config}::Config::builder()
                 .with_test_defaults()
-                #{no_auth_scheme_resolver:W}
+                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177):
+                //  Until the incorrect separation is addressed, we need to rely on this workaround.
+                .allow_no_auth()
                 .endpoint_url($host);
             #{customParams}
 
@@ -192,7 +175,6 @@ class ClientProtocolTestGenerator(
                     .resolve("test_util::capture_request"),
             "config" to ClientRustModule.config,
             "customParams" to customParams,
-            "no_auth_scheme_resolver" to noAuthSchemeResolver,
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "http_client", "config_builder", "client"))
 
