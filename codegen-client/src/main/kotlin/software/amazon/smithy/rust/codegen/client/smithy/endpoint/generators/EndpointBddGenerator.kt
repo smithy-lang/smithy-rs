@@ -193,7 +193,7 @@ class EndpointBddGenerator(
             ##[derive(Debug, Clone)]
             enum ResultEndpoint {
                 ${(0 until resultCount).joinToString(",\n    ") { "Result$it" }}
-            }bd
+            }
 
             impl<'a> ResultEndpoint {
                 ##[allow(unused_variables, clippy::useless_asref)]
