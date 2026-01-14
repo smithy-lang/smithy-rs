@@ -266,17 +266,6 @@ class BddExpressionGenerator(
                 val expressionGenerator =
                     BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
 
-//                if (fn.id == "coalesce") {
-//                    val variadic = fn.variadicArguments.get()
-//                    println("FunctionDefinition.id: ${fn.id}")
-//                    println("FunctionDefinition.returnType: ${fn.returnType}")
-//                    println("FunctionDefinition.arguments: ${fn.arguments}")
-//                    println(
-//                        "FunctionDefinition.variadicArguments: ${fn.variadicArguments.get() as Array<AnyType>}",
-//                    )
-//                    println("COALESCE args in visitLibraryFunction: $args")
-//                }
-
                 val argWritables =
                     args.map { arg ->
                         if (

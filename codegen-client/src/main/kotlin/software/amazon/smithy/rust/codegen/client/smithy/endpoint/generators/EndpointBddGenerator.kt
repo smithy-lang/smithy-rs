@@ -181,7 +181,7 @@ class EndpointBddGenerator(
                     // Non-Param references
                     #{NonParamRefBindings:W}
                     match self {
-                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => {println!(\"Evaluating Condition $idx\");#{cond_$idx:W}}" }}
+                        ${(0 until conditionCount).joinToString(",\n") { idx -> "Self::Cond$idx => {#{cond_$idx:W}}" }}
                     }
                 }
             }
@@ -193,7 +193,7 @@ class EndpointBddGenerator(
             ##[derive(Debug, Clone)]
             enum ResultEndpoint {
                 ${(0 until resultCount).joinToString(",\n    ") { "Result$it" }}
-            }
+            }bd
 
             impl<'a> ResultEndpoint {
                 ##[allow(unused_variables, clippy::useless_asref)]
@@ -584,11 +584,6 @@ class AnnotatedRefs(
                         } else {
                             cond.function.functionDefinition.returnType
                         }
-
-                    if (cond.function is Ite) {
-                        println("ITE RETURNTYPE: $returnType")
-                        println("ITE TYPE: ${cond.function.type()}")
-                    }
 
                     val runtimeType =
                         when {
