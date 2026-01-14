@@ -14,8 +14,8 @@ of the new version.
 
 Running the canary locally
 --------------------------
-For testing, it's helpful to be able to run the canary locally. To accomplish this, you first need to generate a
-Cargo.toml:
+For testing, it's helpful to be able to run the canary locally. To accomplish this, you first need to generate
+Cargo.tomls and the WASM module:
 
 ```bash
 cd ../canary-runner
@@ -23,10 +23,10 @@ cd ../canary-runner
 cargo run -- build-bundle \
   --sdk-path ../../../aws/sdk/build/aws-sdk/sdk/ \
   --canary-path ../canary-lambda \
-  --manifest-only
 ```
 
-Next, come back to the `canary-lambda` directory where you can use `cargo run` in `--local` mode to
+Next, come back to the `canary-lambda` directory. Copy the WASM module from `smithy-rs/tools/target/wasm32-wasip2/release/aws_sdk_rust_lambda_canary_wasm.wasm`
+into the top level of the `canary-lambda` crate. Then you can use `cargo run` in `--local` mode to
 invoke the canary:
 
 > Note: if your default configuration does not provide a region, you must provide a region via the `AWS_REGION`
@@ -35,6 +35,8 @@ invoke the canary:
 ```bash
 export CANARY_S3_BUCKET_NAME=<your bucket name>
 export CANARY_S3_MRAP_BUCKET_ARN=<your MRAP bucket ARN>
+export CANARY_S3_EXPRESS_BUCKET_NAME=<your express bucket name>
+export AWS_REGION=<region>
 # run with `--all-features` so you run all canaries (including canaries that don't work against older versions)
 cargo run --all-features -- --local
 ```
