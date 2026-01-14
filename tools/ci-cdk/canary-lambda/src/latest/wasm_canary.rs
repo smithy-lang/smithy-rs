@@ -53,8 +53,6 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
         .expect("Current dir")
         .join("aws_sdk_rust_lambda_canary_wasm.wasm");
 
-    println!("WASM BIN PATH: {wasm_bin_path:#?}");
-
     // Create a Wasmtime Engine configured to run Components
     let engine = Engine::new(
         wasmtime::Config::new()
@@ -66,9 +64,6 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
     let component = Component::from_file(&engine, wasm_bin_path)?;
 
     // Create the linker and link in the necessary WASI bindings
-    // let mut linker: Linker<WasiHostCtx> = Linker::new(&engine);
-    // link_all_the_things(&mut linker);
-
     let mut linker = Linker::new(&engine);
     wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
     wasmtime_wasi_http::add_only_http_to_linker_async(&mut linker)?;
@@ -103,64 +98,6 @@ pub async fn wasm_canary() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// This function adds all of the WASI bindings to the linker
-// fn link_all_the_things(linker: &mut Linker<WasiHostCtx>) {
-//     //IO
-//     wasmtime_wasi::p2::bindings::io::poll::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Poll");
-//     wasmtime_wasi::p2::bindings::io::error::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Error");
-//     wasmtime_wasi::p2::bindings::io::streams::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Streams");
-
-//     //Random
-//     wasmtime_wasi::p2::bindings::random::random::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Random");
-
-//     //Clocks
-//     wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Clock");
-//     wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Wall Clock");
-
-//     //Filesystem
-//     wasmtime_wasi::p2::bindings::filesystem::types::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Filesystem Types");
-//     wasmtime_wasi::p2::bindings::filesystem::preopens::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Filesystem Preopen");
-
-//     //CLI
-//     wasmtime_wasi::p2::bindings::cli::environment::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Environment");
-//     wasmtime_wasi::p2::bindings::cli::exit::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Environment");
-//     wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Stdin");
-//     wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Stdout");
-//     wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Stderr");
-
-//     // CLI Terminal
-//     wasmtime_wasi::p2::bindings::cli::terminal_input::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Terminal Input");
-//     wasmtime_wasi::p2::bindings::cli::terminal_output::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Terminal Output");
-//     wasmtime_wasi::p2::bindings::cli::terminal_stdin::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Terminal Stdin");
-//     wasmtime_wasi::p2::bindings::cli::terminal_stdout::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Terminal Stdout");
-//     wasmtime_wasi::p2::bindings::cli::terminal_stderr::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link Terminal Stderr");
-
-//     //HTTP
-//     wasmtime_wasi_http::bindings::http::types::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link HTTP Types");
-//     wasmtime_wasi_http::bindings::http::outgoing_handler::add_to_linker(linker, |cx| cx)
-//         .expect("Failed to link HTTP Outgoing Handler");
-// }
-
-// #[ignore]
 #[cfg(test)]
 #[tokio::test]
 async fn test_wasm_canary() {
