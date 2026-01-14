@@ -456,6 +456,7 @@ internal class HttpChecksumTest {
                         .region(Region::from_static("doesntmatter"))
                         .with_test_defaults()
                         .http_client(http_client)
+                        .retry_config(#{RetryConfig}::disabled())
                         .build();
 
                     let client = $moduleName::Client::from_conf(config);
@@ -489,6 +490,7 @@ internal class HttpChecksumTest {
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
                 "http_1x" to CargoDependency.Http1x.toType(),
+                "RetryConfig" to RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
             )
         }
     }
