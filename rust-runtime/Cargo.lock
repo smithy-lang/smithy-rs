@@ -537,7 +537,7 @@ dependencies = [
  "metrique-writer-format-emf",
  "metrique-writer-macro",
  "thiserror 2.0.17",
- "tower 0.5.3",
+ "tower 0.4.13",
 ]
 
 [[package]]
