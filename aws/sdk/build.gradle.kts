@@ -441,6 +441,7 @@ fun Project.registerDowngradeFor(
                     "minicbor" to "0.24.2",
                     "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
                     "crc-fast" to "1.9.0", // TODO(https://github.com/smithy-lang/smithy-rs/issues/3981)
+                    "serde_json" to "1.0.146",
                 )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->

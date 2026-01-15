@@ -7,7 +7,6 @@ package software.amazon.smithy.rust.codegen.client.smithy.auth
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthSchemeOption
 import software.amazon.smithy.rust.codegen.core.rustlang.join
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -205,34 +204,6 @@ class AuthSchemeResolverGenerator(
                 }
                 """,
                 *codegenScope,
-            )
-        }
-    }
-
-    // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177): Only used in protocol tests.
-    //  Remove this once the issue has been addressed.
-    internal fun noAuthSchemeResolver(): RuntimeType {
-        return RuntimeType.forInlineFun("NoAuthSchemeResolver", ClientRustModule.Config.auth) {
-            rustTemplate(
-                """
-                ##[cfg(test)]
-                ##[derive(Debug)]
-                pub(crate) struct NoAuthSchemeResolver;
-
-                ##[cfg(test)]
-                impl ResolveAuthScheme for NoAuthSchemeResolver {
-                    fn resolve_auth_scheme<'a>(
-                        &'a self,
-                        _params: &'a #{Params},
-                        _cfg: &'a #{ConfigBag},
-                        _runtime_components: &'a #{RuntimeComponents},
-                    ) -> #{AuthSchemeOptionsFuture}<'a> {
-                        #{AuthSchemeOptionsFuture}::ready(#{Ok}(vec![#{NoAuthSchemeOption:W}]))
-                    }
-                }
-                """,
-                *codegenScope,
-                "NoAuthSchemeOption" to NoAuthSchemeOption().render(codegenContext),
             )
         }
     }
