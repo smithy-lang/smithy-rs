@@ -594,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-mocks"
-version = "0.2.3"
+version = "0.2.4"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-http-client",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "serial_test",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability-otel"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "async-global-executor",
  "async-task",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.9.8"
+version = "1.10.0"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -685,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.10.0"
+version = "1.11.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.3.6"
+version = "1.4.0"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
