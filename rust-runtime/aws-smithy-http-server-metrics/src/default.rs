@@ -61,7 +61,21 @@ pub struct DefaultRequestMetricsExtension {
     pub(crate) config: DefaultRequestMetricsConfig,
 }
 
+impl DefaultRequestMetricsExtension {
+    #[doc(hidden)]
+    pub fn __macro_new(metrics: SlotGuard<DefaultRequestMetrics>, config: DefaultRequestMetricsConfig) -> Self {
+        Self { metrics, config }
+    }
+}
+
 pub struct DefaultResponseMetricsExtension {
     pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
     pub(crate) config: DefaultResponseMetricsConfig,
+}
+
+impl DefaultResponseMetricsExtension {
+    #[doc(hidden)]
+    pub fn __macro_new(metrics: SlotGuard<DefaultResponseMetrics>, config: DefaultResponseMetricsConfig) -> Self {
+        Self { metrics, config }
+    }
 }
