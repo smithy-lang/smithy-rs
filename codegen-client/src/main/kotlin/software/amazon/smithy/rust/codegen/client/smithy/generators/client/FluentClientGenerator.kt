@@ -272,12 +272,14 @@ private fun baseClientRuntimePluginsFn(
 
                     let scope = ${codegenContext.moduleName.dq()};
 
+                    ##[allow(deprecated)]
                     let mut plugins = #{RuntimePlugins}::new()
                         // defaults
                         .with_client_plugins(#{default_plugins}(
                             #{DefaultPluginParams}::new()
                                 .with_retry_partition_name(default_retry_partition)
                                 .with_behavior_version(config.behavior_version.expect(${behaviorVersionError.dq()}))
+                                #{customize_default_plugin_params:W}
                         ))
                         // user config
                         .with_client_plugin(
@@ -305,6 +307,13 @@ private fun baseClientRuntimePluginsFn(
                 }
                 """,
                 *preludeScope,
+                "customize_default_plugin_params" to
+                    writable {
+                        writeCustomizations(
+                            customizations,
+                            FluentClientSection.CustomizeDefaultPluginParams,
+                        )
+                    },
                 "additional_client_plugins" to
                     writable {
                         writeCustomizations(

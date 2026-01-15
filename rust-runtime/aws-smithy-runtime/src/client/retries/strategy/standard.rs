@@ -256,7 +256,10 @@ impl RetryStrategy for StandardRetryStrategy {
 
         //  acquire permit for retry
         let error_kind = error_kind.expect("result was classified retryable");
-        match token_bucket.acquire(&error_kind) {
+        match token_bucket.acquire(
+            &error_kind,
+            &runtime_components.time_source().unwrap_or_default(),
+        ) {
             Some(permit) => self.set_retry_permit(permit),
             None => {
                 debug!("attempt #{request_attempts} failed with {error_kind:?}; However, not enough retry quota is available for another attempt so no retry will be attempted.");

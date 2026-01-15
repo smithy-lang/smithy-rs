@@ -190,7 +190,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.1.5"
+version = "0.2.0"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
