@@ -18,6 +18,7 @@ use async_stream::stream;
 use aws_smithy_http_client::{tls, Connector};
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
+use metrique::SlotGuard;
 use pokemon_service_server_sdk::{
     error, input, model,
     model::CapturingPayload,
@@ -27,6 +28,10 @@ use pokemon_service_server_sdk::{
 };
 use rand::{seq::SliceRandom, Rng};
 use tracing_subscriber::{prelude::*, EnvFilter};
+
+use crate::metrics::OperationMetrics;
+
+pub mod metrics;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
@@ -154,7 +159,9 @@ impl Default for State {
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
+    Extension(mut metrics): Extension<SlotGuard<OperationMetrics>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
+    metrics.get_pokemon_species_metrics = Some("hello world".to_string());
     state
         .0
         .call_count
@@ -352,6 +359,8 @@ pub async fn stream_pokemon_radio(
 
 #[cfg(test)]
 mod tests {
+    use metrique::Slot;
+
     use super::*;
 
     #[tokio::test]
@@ -362,13 +371,22 @@ mod tests {
 
         let state = Arc::new(State::default());
 
-        let actual_spanish_flavor_text = get_pokemon_species(input, Extension(state.clone()))
-            .await
-            .unwrap()
-            .flavor_text_entries
-            .into_iter()
-            .find(|flavor_text| flavor_text.language == model::Language::Spanish)
-            .unwrap();
+        let mut test_operation_metrics = Slot::new(OperationMetrics::default());
+        let test_operation_metrics_slotguard = test_operation_metrics
+            .open(metrique::OnParentDrop::Discard)
+            .expect("unreachable: slot was created here");
+
+        let test_metrics: Extension<SlotGuard<OperationMetrics>> =
+            Extension(test_operation_metrics_slotguard);
+
+        let actual_spanish_flavor_text =
+            get_pokemon_species(input, Extension(state.clone()), test_metrics)
+                .await
+                .unwrap()
+                .flavor_text_entries
+                .into_iter()
+                .find(|flavor_text| flavor_text.language == model::Language::Spanish)
+                .unwrap();
 
         assert_eq!(
             PIKACHU_SPANISH_FLAVOR_TEXT,
