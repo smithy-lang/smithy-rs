@@ -8,8 +8,12 @@ mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
 
-use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
+use aws_smithy_http_server_metrics::{
+    plugin::DefaultMetricsPlugin, MetricsLayer, ReqBody, ResBody,
+};
 use clap::Parser;
+use http::{Request, Response};
+use metrique_writer::GlobalEntrySink;
 use pokemon_service_server_sdk::server::{
     extension::OperationExtensionExt,
     instrumentation::InstrumentExt,
@@ -36,9 +40,15 @@ use pokemon_service_common::{
     stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
+use tower::Layer;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
-use crate::authz::AuthorizationPlugin;
+use crate::{
+    authz::AuthorizationPlugin,
+    metrics::{PokemonMetrics, PokemonMetricsBuildExt, PokemonMetricsGuard},
+};
+
+mod metrics;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -109,9 +119,28 @@ pub async fn main() {
         .build()
         .expect("failed to build an instance of PokemonService");
 
+    let metrics_layer = MetricsLayer::builder()
+        .init_metrics(|| PokemonMetrics::default().append_on_drop(ServiceMetrics::sink()))
+        .set_request_metrics(
+            |_req: &mut Request<ReqBody>, metrics: &mut PokemonMetricsGuard| {
+                metrics.request_metrics.test_request_metric =
+                    Some("test request metric".to_string());
+            },
+        )
+        .set_response_metrics(
+            |_res: &mut Response<ResBody>, metrics: &mut PokemonMetricsGuard| {
+                metrics.response_metrics.test_response_metric =
+                    Some("test response metric".to_string());
+            },
+        )
+        .disable_default_request_id_metric()
+        .build();
+
+    let service = metrics_layer.layer(app);
+
     // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
-    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(app);
+    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service);
 
     // Bind the application to a socket.
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

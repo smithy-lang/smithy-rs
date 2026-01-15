@@ -65,6 +65,36 @@ pub struct MetricsLayer<
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 }
 
+impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
+where
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
+    I: InitMetrics<E, S>,
+    Rq: SetRequestMetrics<E, S>,
+    Rs: SetResponseMetrics<E, S>,
+{
+    #[doc(hidden)]
+    pub fn __macro_new(
+        init_metrics: I,
+        set_request_metrics: Option<Rq>,
+        set_response_metrics: Option<Rs>,
+        default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
+        default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+        default_req_metrics_config: DefaultRequestMetricsConfig,
+        default_res_metrics_config: DefaultResponseMetricsConfig,
+    ) -> Self {
+        Self {
+            init_metrics,
+            set_request_metrics,
+            set_response_metrics,
+            default_req_metrics_extension_fn,
+            default_res_metrics_extension_fn,
+            default_req_metrics_config,
+            default_res_metrics_config,
+        }
+    }
+}
+
 impl<S> MetricsLayer<DefaultMetrics, S>
 where
     S: MetriqueEntrySink<DefaultMetrics> + Clone,

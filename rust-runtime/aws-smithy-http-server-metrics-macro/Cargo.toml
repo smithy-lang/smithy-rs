@@ -15,6 +15,9 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.88"
 
 [dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+proc-macro2 = "1"
 
 [package.metadata.docs.rs]
 all-features = true
