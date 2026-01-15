@@ -219,8 +219,7 @@ impl std::str::FromStr for LambdaArchitecture {
             "x86_64" | "x86-64" | "amd64" => Ok(LambdaArchitecture::X86_64),
             "arm64" | "aarch64" => Ok(LambdaArchitecture::Arm64),
             _ => Err(format!(
-                "Unknown architecture: {}. Use 'x86_64' or 'arm64'",
-                s
+                "Unknown architecture: {s}. Use 'x86_64' or 'arm64'"
             )),
         }
     }
@@ -411,7 +410,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             .arg("--release")
             .arg("--manifest-path")
             .arg(&manifest_path)
-            .arg(format!("--target={}", target));
+            .arg(format!("--target={target}"));
         handle_failure("cargo build", &command.output()?)?;
 
         // Compile the wasm canary to a .wasm binary
