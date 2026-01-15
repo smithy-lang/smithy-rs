@@ -36,19 +36,15 @@ use pokemon_service::{
     do_nothing_but_log_request_ids, get_storage_with_local_approved, DEFAULT_ADDRESS, DEFAULT_PORT,
 };
 use pokemon_service_common::{
-    capture_pokemon, check_health, get_pokemon_species, get_server_statistics, setup_tracing,
-    stream_pokemon_radio, State,
+    capture_pokemon, check_health, get_pokemon_species, get_server_statistics,
+    metrics::{PokemonMetrics, PokemonMetricsBuildExt, PokemonMetricsGuard},
+    setup_tracing, stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
 use tower::Layer;
 use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
-use crate::{
-    authz::AuthorizationPlugin,
-    metrics::{PokemonMetrics, PokemonMetricsBuildExt, PokemonMetricsGuard},
-};
-
-mod metrics;
+use crate::authz::AuthorizationPlugin;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
