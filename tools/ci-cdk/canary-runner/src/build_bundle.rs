@@ -139,14 +139,9 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
-wasmtime = { version = "17.0.1", features = ["component-model"] }
-wasmtime-wasi = "17.0.1"
-wasmtime-wasi-http = "17.0.1"
-
-# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
-# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
-arbitrary = "=1.3.2"
+wasmtime = "38.0.4"
+wasmtime-wasi = "38.0.4"
+wasmtime-wasi-http = "38.0.4"
 
 "#;
 
@@ -180,7 +175,7 @@ package = "aws:component"
 
 [dependencies]
 tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wit-bindgen = "0.51.0"
 "#;
 
 lazy_static! {
@@ -381,12 +376,13 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         // Compile the wasm canary to a .wasm binary
         let mut wasm_command = Command::new("cargo");
         wasm_command
-            .arg("component")
             .arg("build")
             .arg("--release")
+            .arg("--target")
+            .arg("wasm32-wasip2")
             .arg("--manifest-path")
             .arg(&wasm_manifest_path);
-        handle_failure("cargo component build", &wasm_command.output()?)?;
+        handle_failure("cargo build (WASM bin)", &wasm_command.output()?)?;
 
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
@@ -401,7 +397,7 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             repository_root
                 .join("tools")
                 .join("target")
-                .join("wasm32-wasip1")
+                .join("wasm32-wasip2")
                 .join("release")
                 .join("aws_sdk_rust_lambda_canary_wasm.wasm")
         };
@@ -602,14 +598,9 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
-wasmtime = { version = "17.0.1", features = ["component-model"] }
-wasmtime-wasi = "17.0.1"
-wasmtime-wasi-http = "17.0.1"
-
-# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
-# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
-arbitrary = "=1.3.2"
+wasmtime = "38.0.4"
+wasmtime-wasi = "38.0.4"
+wasmtime-wasi-http = "38.0.4"
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
@@ -665,14 +656,9 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
-wasmtime = { version = "17.0.1", features = ["component-model"] }
-wasmtime-wasi = "17.0.1"
-wasmtime-wasi-http = "17.0.1"
-
-# TODO(MSRV): Version 1.4.0 uses `error_in_core` and is considered unstable library feature in our MSRV of 1.78.0.
-# Remove this version constraint once we upgrade to a future MSRV that stabilizes `error_in_core`.
-arbitrary = "=1.3.2"
+wasmtime = "38.0.4"
+wasmtime-wasi = "38.0.4"
+wasmtime-wasi-http = "38.0.4"
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }
@@ -734,7 +720,7 @@ package = "aws:component"
 
 [dependencies]
 tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wit-bindgen = "0.51.0"
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
 aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
 aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", features = ["rt-tokio"], default-features = false }
@@ -787,7 +773,7 @@ package = "aws:component"
 
 [dependencies]
 tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = { version = "0.16.0", features = ["macros", "realloc"] }
+wit-bindgen = "0.51.0"
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"], default-features = false }
 aws-sdk-s3 = { version = "0.20.0", default-features = false }
 aws-smithy-async = { version = "0.46.0", features = ["rt-tokio"], default-features = false }
