@@ -276,4 +276,32 @@ class SymbolVisitorTest {
         symbol.definitionFile shouldBe "src/test_operation.rs"
         symbol.name shouldBe "PutObject"
     }
+
+    @Test
+    fun `handles bigInteger shapes`() {
+        val model =
+            """
+            namespace test
+
+            bigInteger MyBigInt
+            """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val sym = provider.toSymbol(model.expectShape(ShapeId.from("test#MyBigInt")))
+        sym.rustType().render(false) shouldBe "BigInteger"
+        sym.namespace shouldBe "::aws_smithy_types"
+    }
+
+    @Test
+    fun `handles bigDecimal shapes`() {
+        val model =
+            """
+            namespace test
+
+            bigDecimal MyBigDecimal
+            """.asSmithyModel()
+        val provider = testSymbolProvider(model)
+        val sym = provider.toSymbol(model.expectShape(ShapeId.from("test#MyBigDecimal")))
+        sym.rustType().render(false) shouldBe "BigDecimal"
+        sym.namespace shouldBe "::aws_smithy_types"
+    }
 }

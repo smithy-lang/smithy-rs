@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize
 
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -340,6 +342,9 @@ class XmlBindingTraitSerializerGenerator(
                     }
                 rust("$dereferenced.as_str()")
             }
+            is BigIntegerShape, is BigDecimalShape -> {
+                rust("$input.as_ref()")
+            }
             is BooleanShape, is NumberShape -> {
                 rust(
                     "#T::from(${autoDeref(input)}).encode()",
@@ -384,6 +389,8 @@ class XmlBindingTraitSerializerGenerator(
                 is NumberShape,
                 is TimestampShape,
                 is BlobShape,
+                is BigIntegerShape,
+                is BigDecimalShape,
                 -> {
                     rust(
                         "let mut inner_writer = ${ctx.scopeWriter}.start_el(${xmlName.dq()})$ns.finish();",
