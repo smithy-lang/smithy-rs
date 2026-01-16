@@ -57,7 +57,7 @@ fn dependency_order_visit(
         .get(package_handle)
         .ok_or_else(|| {
             dbg!(packages);
-            anyhow!("packages to publish doesn't contain {:?}", package_handle)
+            anyhow!("packages to publish doesn't contain {package_handle:?}")
         })?
         .local_dependencies;
     for dependency in local_dependencies {
@@ -78,7 +78,7 @@ mod tests {
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
             PackageHandle::new(name, Version::parse("1.0.0").ok()),
-            format!("{}/Cargo.toml", name),
+            format!("{name}/Cargo.toml"),
             dependencies
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").ok()))
@@ -117,7 +117,7 @@ mod tests {
         ];
 
         let error = dependency_order(packages).expect_err("cycle");
-        assert_eq!("dependency cycle detected", format!("{}", error));
+        assert_eq!("dependency cycle detected", format!("{error}"));
     }
 
     #[test]

@@ -295,13 +295,12 @@ class SerdeDecoratorTest {
                 "codegen",
                 Node.objectNodeBuilder()
                     .withMember("publicConstrainedTypes", true)
-                    .withMember("includeFluentClient", false)
                     .build(),
             ).build()
         serverIntegrationTest(
             onlyConstrained,
             params.copy(additionalSettings = constrainedShapesSettings),
-        ) { clientCodegenContext, rustCrate ->
+        ) { _codegenContext, _rustCrate ->
         }
     }
 

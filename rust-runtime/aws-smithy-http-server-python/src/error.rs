@@ -7,7 +7,7 @@
 
 #![allow(non_local_definitions)]
 
-use aws_smithy_http_server::{
+use aws_smithy_legacy_http_server::{
     body::{to_boxed, BoxBody},
     protocol::{
         aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
@@ -40,7 +40,7 @@ impl From<PyError> for PyErr {
 /// Exception that can be thrown from a Python middleware.
 ///
 /// It allows to specify a message and HTTP status code and implementing protocol specific capabilities
-/// to build a [aws_smithy_http_server::response::Response] from it.
+/// to build a [aws_smithy_legacy_http_server::response::Response] from it.
 ///
 /// :param message str:
 /// :param status_code typing.Optional\[int\]:

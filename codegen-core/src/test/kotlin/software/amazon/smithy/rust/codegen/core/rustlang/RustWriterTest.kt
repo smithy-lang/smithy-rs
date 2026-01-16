@@ -30,7 +30,7 @@ class RustWriterTest {
     @Test
     fun `inner modules correctly handle dependencies`() {
         val sut = RustWriter.forModule("parent")
-        val requestBuilder = RuntimeType.HttpRequestBuilder
+        val requestBuilder = RuntimeType.HttpRequestBuilder0x
         sut.withInlineModule(
             RustModule.new("inner", visibility = Visibility.PUBLIC, inline = true),
             TestModuleDocProvider,
@@ -38,7 +38,7 @@ class RustWriterTest {
             rustBlock("fn build(builder: #T)", requestBuilder) {
             }
         }
-        val httpDep = CargoDependency.Http.dependencies[0]
+        val httpDep = CargoDependency.Http0x.dependencies[0]
         sut.dependencies shouldContain httpDep
         sut.toString() shouldContainOnlyOnce "DO NOT EDIT"
     }
@@ -200,7 +200,7 @@ class RustWriterTest {
         sut.rustTemplate(
             "inner: #{Inner:W}, regular: #{http}",
             "Inner" to inner,
-            "http" to RuntimeType.Http.resolve("foo"),
+            "http" to RuntimeType.Http0x.resolve("foo"),
         )
         sut.toString().shouldContain("inner: hello, regular: ::http::foo")
     }
@@ -212,8 +212,8 @@ class RustWriterTest {
             assertThrows<CodegenException> {
                 sut.rustTemplate(
                     "#{Foo} #{Bar}",
-                    "Foo Bar" to CargoDependency.Http.toType().resolve("foo"),
-                    "Baz" to CargoDependency.Http.toType().resolve("foo"),
+                    "Foo Bar" to CargoDependency.Http0x.toType().resolve("foo"),
+                    "Baz" to CargoDependency.Http0x.toType().resolve("foo"),
                 )
             }
         exception.message shouldBe

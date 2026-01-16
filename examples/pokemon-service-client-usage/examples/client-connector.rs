@@ -11,8 +11,7 @@
 ///
 /// The example can be run using `cargo run --example client-connector`.
 ///
-use aws_smithy_runtime::client::http::hyper_014::HyperClientBuilder;
-use hyper_rustls::ConfigBuilderExt;
+use aws_smithy_http_client::{tls, Builder};
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};
 
@@ -26,25 +25,21 @@ use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL
 /// let client = create_client();
 /// ```
 fn create_client() -> PokemonClient {
-    let tls_config = rustls::ClientConfig::builder()
-        .with_safe_defaults()
-        // `with_native_roots()`: Load platform trusted root certificates.
-        // `with_webpki_roots()`: Load Mozilla’s set of trusted roots.
-        .with_native_roots()
-        // To use client side certificates, you can use
-        // `.with_client_auth_cert(client_cert, client_key)` instead of `.with_no_client_auth()`
-        .with_no_client_auth();
+    // Create a TLS context that loads platform trusted root certificates.
+    // The TrustStore::default() enables native roots by default.
+    let tls_context = tls::TlsContext::builder()
+        .with_trust_store(tls::TrustStore::default())
+        .build()
+        .expect("failed to build TLS context");
 
-    let tls_connector = hyper_rustls::HttpsConnectorBuilder::new()
-        .with_tls_config(tls_config)
-        // This can be changed to `.https_only()` to ensure that the client always uses HTTPs
-        .https_or_http()
-        .enable_http1()
-        .enable_http2()
-        .build();
-
-    // Create a hyper-based HTTP client that uses this TLS connector.
-    let http_client = HyperClientBuilder::new().build(tls_connector);
+    // Create an HTTP client using rustls with AWS-LC crypto provider.
+    // To use client side certificates, you would need to customize the TLS config further.
+    let http_client = Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
 
     // Pass the smithy connector to the Client::ConfigBuilder
     let config = pokemon_service_client::Config::builder()

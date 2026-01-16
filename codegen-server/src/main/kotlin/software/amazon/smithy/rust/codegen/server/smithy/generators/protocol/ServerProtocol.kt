@@ -259,7 +259,8 @@ class ServerRestJsonProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+    ): Writable =
+        RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, runtimeConfig).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")
@@ -292,7 +293,8 @@ class ServerRestXmlProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ): Writable = RestRequestSpecGenerator(httpBindingResolver, requestSpecModule).generate(operationShape)
+    ): Writable =
+        RestRequestSpecGenerator(httpBindingResolver, requestSpecModule, runtimeConfig).generate(operationShape)
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
         requestSpecModule.resolve("RequestSpec")

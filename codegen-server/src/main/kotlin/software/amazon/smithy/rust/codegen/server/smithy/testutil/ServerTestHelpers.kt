@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
@@ -34,10 +35,26 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilde
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
 
+/**
+ * Server-specific test RuntimeConfig that uses the same HTTP version default as production server code.
+ *
+ * This is used for server unit tests to ensure they test the default HTTP version behavior.
+ * Integration tests using serverIntegrationTest() can override this via additionalSettings.
+ *
+ * The HTTP version is derived from ServerCodegenConfig.DEFAULT_HTTP_1X to maintain a single source of truth.
+ *
+ * Note: Client tests use TestRuntimeConfig which defaults to HTTP 1.x.
+ */
+val ServerTestRuntimeConfig =
+    RuntimeConfig(
+        runtimeCrateLocation = TestRuntimeConfig.runtimeCrateLocation,
+        httpVersion = if (ServerCodegenConfig.DEFAULT_HTTP_1X) HttpVersion.Http1x else HttpVersion.Http0x,
+    )
+
 // These are the settings we default to if the user does not override them in their `smithy-build.json`.
 val ServerTestRustSymbolProviderConfig =
     RustSymbolProviderConfig(
-        runtimeConfig = TestRuntimeConfig,
+        runtimeConfig = ServerTestRuntimeConfig,
         renameExceptions = false,
         nullabilityCheckMode = NullableIndex.CheckMode.SERVER,
         moduleProvider = ServerModuleProvider,
@@ -135,7 +152,7 @@ fun serverTestCodegenContext(
 fun loadServerProtocol(model: Model): ServerProtocol {
     val codegenContext = serverTestCodegenContext(model)
     val (_, protocolGeneratorFactory) =
-        ServerProtocolLoader(ServerProtocolLoader.DefaultProtocols).protocolFor(model, codegenContext.serviceShape)
+        ServerProtocolLoader(ServerProtocolLoader.defaultProtocols()).protocolFor(model, codegenContext.serviceShape)
     return protocolGeneratorFactory.buildProtocolGenerator(codegenContext).protocol
 }
 

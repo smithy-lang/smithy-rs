@@ -35,7 +35,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                     #{SdkBody}::from_body_0_4(#{hyper}::Body::wrap_stream(#{event_stream:W}))
                 }
                 """,
-                "hyper" to CargoDependency.HyperWithStream.toType(),
+                "hyper" to CargoDependency.HyperWithStream0x.toType(),
                 "SdkBody" to
                     CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-0-4-x")
                         .toType().resolve("body::SdkBody"),

@@ -118,7 +118,7 @@ jobs:
         ./gradlew -Paws.services=+sts,+sso,+ssooidc,+signin,+transcribestreaming,+dynamodb :aws:sdk:assemble
 
         # Copy the Server runtime crate(s) in
-        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python rust-runtime/aws-smithy-http-server-typescript aws/sdk/build/aws-sdk/sdk
+        cp -r rust-runtime/aws-smithy-http-server rust-runtime/aws-smithy-http-server-python rust-runtime/aws-smithy-http-server-typescript rust-runtime/aws-smithy-legacy-http-server aws/sdk/build/aws-sdk/sdk
 
         pushd aws/sdk/build/aws-sdk
 
@@ -126,7 +126,7 @@ jobs:
         sed -i '/examples/d' Cargo.toml
 
         # Add server runtime crates to the workspace
-        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript",/' Cargo.toml
+        sed -i 's/"sdk\/sts",/"sdk\/sts","sdk\/aws-smithy-http-server","sdk\/aws-smithy-http-server-python","sdk\/aws-smithy-http-server-typescript","sdk\/aws-smithy-legacy-http-server",/' Cargo.toml
 
         RUSTDOCFLAGS="--cfg docsrs" cargo +${{ env.rust_nightly_version }} doc --all-features --no-deps
 

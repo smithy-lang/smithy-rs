@@ -12,7 +12,7 @@ use std::{
     task::{Context, Poll},
 };
 
-use aws_smithy_http_server::{
+use aws_smithy_legacy_http_server::{
     body::{Body, BoxBody},
     response::IntoResponse,
 };

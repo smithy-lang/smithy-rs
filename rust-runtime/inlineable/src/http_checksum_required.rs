@@ -11,7 +11,7 @@ use aws_smithy_runtime_api::client::interceptors::{
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::base64;
 use aws_smithy_types::config_bag::ConfigBag;
-use http::header::HeaderName;
+use http_1x::header::HeaderName;
 
 #[derive(Debug)]
 pub(crate) struct HttpChecksumRequiredRuntimePlugin;
