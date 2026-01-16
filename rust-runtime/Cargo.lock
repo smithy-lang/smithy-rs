@@ -742,7 +742,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-wasm"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-runtime-api",
@@ -750,7 +750,7 @@ dependencies = [
  "bytes",
  "http 1.4.0",
  "tracing",
- "wasi 0.12.1+wasi-0.2.0",
+ "wasip2",
 ]
 
 [[package]]
@@ -1541,7 +1541,7 @@ checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi 0.11.1+wasi-snapshot-preview1",
+ "wasi",
 ]
 
 [[package]]
@@ -2390,7 +2390,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a69bcab0ad47271a0234d9422b131806bf3968021e5dc9328caf2d4cd58557fc"
 dependencies = [
  "libc",
- "wasi 0.11.1+wasi-snapshot-preview1",
+ "wasi",
  "windows-sys 0.61.2",
 ]
 
@@ -4205,21 +4205,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
-name = "wasi"
-version = "0.12.1+wasi-0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af274f03e73b7d85551b3f9e97b8a04d5c9aec703cfc227a3fe0595a7561c67a"
-dependencies = [
- "wit-bindgen 0.19.2",
-]
-
-[[package]]
 name = "wasip2"
 version = "1.0.1+wasi-0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
 dependencies = [
- "wit-bindgen 0.46.0",
+ "wit-bindgen",
 ]
 
 [[package]]
@@ -4596,18 +4587,12 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.19.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b37d270da94012e0ac490ac633ad5bdd76a10a3fb15069edb033c1b771ce931f"
-dependencies = [
- "bitflags 2.10.0",
-]
-
-[[package]]
-name = "wit-bindgen"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
+dependencies = [
+ "bitflags 2.10.0",
+]
 
 [[package]]
 name = "writeable"

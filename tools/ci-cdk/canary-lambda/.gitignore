@@ -1,3 +1,4 @@
 # The Cargo.toml should be generated every time it's needed
 /Cargo.toml
 /Cargo.lock
+/aws_sdk_rust_lambda_canary_wasm.wasm
