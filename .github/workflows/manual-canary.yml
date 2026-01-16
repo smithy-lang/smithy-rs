@@ -96,14 +96,18 @@ jobs:
     needs:
     - generate
     - get-pr-info
-    runs-on: smithy_ubuntu-latest_8-core
+    runs-on: ${{ matrix.runner }}
     permissions:
       id-token: write
       contents: read
     strategy:
       fail-fast: false
       matrix:
-        arch: [x86_64, aarch64]
+        include:
+        - arch: x86_64
+          runner: smithy_ubuntu-latest_8-core
+        - arch: aarch64
+          runner: smithy_ubuntu-latest_8-core-arm
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

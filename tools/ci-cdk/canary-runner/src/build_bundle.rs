@@ -399,6 +399,12 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     if !opt.manifest_only {
         // Compile the canary Lambda
         let target = opt.architecture.rust_target(opt.musl);
+
+        // Ensure the target is installed
+        let mut rustup_command = Command::new("rustup");
+        rustup_command.arg("target").arg("add").arg(target);
+        handle_failure("rustup target add", &rustup_command.output()?)?;
+
         let mut command = Command::new("cargo");
         command
             .arg("build")
