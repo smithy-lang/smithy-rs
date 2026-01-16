@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-checksums"
-version = "0.63.13"
+version = "0.63.14"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Zelda Hessler <zhessler@amazon.com>",
@@ -18,7 +18,7 @@ aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 bytes = "1.10.0"
 # FIXME(https://github.com/smithy-lang/smithy-rs/issues/3981): Keep pinned until we have more comprehensive testing in place
-crc-fast = "~1.9.0"
+crc-fast = "=1.4.0"
 hex = "0.4.3"
 http = "0.2.9"
 http-body = "0.4.5"
