@@ -13,6 +13,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 rust-version = "1.88"
 
 [dependencies]
+aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }

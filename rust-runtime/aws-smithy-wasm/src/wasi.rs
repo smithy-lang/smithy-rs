@@ -19,8 +19,21 @@ use aws_smithy_runtime_api::{
     shared::IntoShared,
 };
 use aws_smithy_types::{body::SdkBody, retry::ErrorKind};
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use http_body_util::{BodyStream, StreamBody};
 use wstd::http::{Body as WstdBody, BodyExt as _, Client, Error as WstdError};
+use std::time::Duration;
+
+/// An sleep implementation for wasip2, using the wstd async executor.
+#[derive(Debug, Clone)]
+pub struct WasiSleep;
+impl AsyncSleep for WasiSleep {
+    fn sleep(&self, duration: Duration) -> Sleep {
+        Sleep::new(async move {
+            wstd::task::sleep(wstd::time::Duration::from(duration)).await;
+        })
+    }
+}
 
 /// Builder for [`WasiHttpClient`]. Currently empty, but allows for future
 /// config options to be added in a backwards compatible manner.

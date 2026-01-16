@@ -754,6 +754,7 @@ dependencies = [
 name = "aws-smithy-wasm"
 version = "0.1.7"
 dependencies = [
+ "aws-smithy-async",
  "aws-smithy-http",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
