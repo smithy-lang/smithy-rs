@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-compression"
-version = "0.0.8"
+version = "0.1.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
