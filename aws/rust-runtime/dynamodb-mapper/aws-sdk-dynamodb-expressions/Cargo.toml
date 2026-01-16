@@ -1,0 +1,14 @@
+[package]
+name = "aws-sdk-dynamodb-expressions"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "Type-safe DynamoDB expression builders for condition, update, and projection expressions."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[dependencies]
+aws-sdk-dynamodb = "1"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

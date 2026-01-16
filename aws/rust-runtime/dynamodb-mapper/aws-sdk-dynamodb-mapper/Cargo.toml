@@ -1,0 +1,17 @@
+[package]
+name = "aws-sdk-dynamodb-mapper"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "High-level DynamoDB mapper for the AWS SDK for Rust."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[dependencies]
+aws-sdk-dynamodb = "1"
+aws-sdk-dynamodb-mapper-core = { path = "../aws-sdk-dynamodb-mapper-core" }
+aws-sdk-dynamodb-mapper-macros = { path = "../aws-sdk-dynamodb-mapper-macros" }
+aws-sdk-dynamodb-expressions = { path = "../aws-sdk-dynamodb-expressions" }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt", "macros"] }

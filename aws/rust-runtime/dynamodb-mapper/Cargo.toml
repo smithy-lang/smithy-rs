@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "aws-sdk-dynamodb-mapper-core",
+    "aws-sdk-dynamodb-expressions",
+    "aws-sdk-dynamodb-mapper-macros",
+    "aws-sdk-dynamodb-mapper",
+]
