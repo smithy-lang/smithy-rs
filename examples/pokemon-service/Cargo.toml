@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
+rust-version = "1.88"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -13,10 +14,17 @@ hyper = { version = "0.14.26", features = ["server"] }
 tokio = "1.26.0"
 tower = "0.4"
 tracing = "0.1"
+tracing-appender = "0.2"
+
+# Pinning to MSRV 1.88.0 supported versions
+metrique = { version = "=0.1.9", features = ["emf"] }
+metrique-writer = "=0.1.10"
 
 # Local paths
 pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
 pokemon-service-common = { path = "../pokemon-service-common/" }
+aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 
 [dev-dependencies]
 assert_cmd = "2.0"

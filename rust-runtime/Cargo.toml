@@ -27,4 +27,6 @@ members = [
     "aws-smithy-xml",
     "aws-smithy-observability",
     "aws-smithy-observability-otel",
+    "aws-smithy-http-server-metrics",
+    "aws-smithy-http-server-metrics-macro",
 ]
