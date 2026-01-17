@@ -4,6 +4,7 @@
  */
 
 use std::marker::PhantomData;
+use std::sync::Arc;
 
 use http::Request;
 use http::Response;
@@ -286,7 +287,9 @@ macro_rules! impl_build_for_state {
                             config,
                         };
 
-                        req.extensions_mut().insert(ext);
+                        // Throw behind an Arc to keep forward compatible with http 1.x, 
+                        // which introduces the Clone bound to extensions
+                        req.extensions_mut().insert(Arc::new(ext));
                     };
 
                 let default_res_metrics_extension_fn =
@@ -306,7 +309,9 @@ macro_rules! impl_build_for_state {
                             config,
                         };
 
-                        res.extensions_mut().insert(ext);
+                        // Throw behind an Arc to keep forward compatible with http 1.x, 
+                        // which introduces the Clone bound to extensions
+                        res.extensions_mut().insert(Arc::new(ext));
                     };
 
                 MetricsLayer {
