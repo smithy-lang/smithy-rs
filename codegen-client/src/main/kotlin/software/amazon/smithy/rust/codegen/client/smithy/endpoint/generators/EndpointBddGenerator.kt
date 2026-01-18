@@ -431,7 +431,7 @@ class EndpointBddGenerator(
                     val rustType =
                         when {
                             // GetAttr is inlined, not a registered fn
-                            fn is GetAttr -> RuntimeType.document(runtimeConfig)
+                            fn is GetAttr -> matchRuleTypeToRustType(fn.type(), runtimeConfig)
                             // Coalesce and Ite have generic return types so we can't source the
                             // type from the function definition
                             fn is Coalesce -> matchRuleTypeToRustType(fn.type(), runtimeConfig)
@@ -448,7 +448,14 @@ class EndpointBddGenerator(
                             registeredFn != null -> registeredFn.returnType()
                             else -> throw IllegalArgumentException("Unsupported reference type $it")
                         }
-                    "pub(crate) ${it.value.name}: Option<${rustType.render()}>"
+
+                    // Kind of hacky way to check RuntimeType equivalence since these
+                    // are all Options with inner types
+                    if (rustType.namespace.startsWith("::std::option::Option<")) {
+                        "pub(crate) ${it.value.name}: ${rustType.render()}"
+                    } else {
+                        "pub(crate) ${it.value.name}: Option<${rustType.render()}>"
+                    }
                 }.joinToString(",\n")
 
             if (memberDefs.length != 0) {
@@ -589,6 +596,7 @@ class AnnotatedRefs(
                         when {
                             cond.function is Coalesce -> matchRuleTypeToRustType(cond.function.type(), runtimeConfig)
                             cond.function is Ite -> matchRuleTypeToRustType(cond.function.type(), runtimeConfig)
+                            cond.function is GetAttr -> matchRuleTypeToRustType(cond.function.type(), runtimeConfig)
                             cond.function is ParseUrl -> EndpointsLib.url()
                             cond.function.name == "aws.partition" -> EndpointsLib.partition(runtimeConfig)
                             cond.function.name == "aws.parseArn" -> EndpointsLib.arn()
