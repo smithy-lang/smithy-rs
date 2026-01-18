@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
+import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
@@ -251,6 +252,104 @@ class BddExpressionGenerator(
             }
         }
 
+        private fun handleCoalesceArg(
+            arg: Expression,
+            expressionGenerator: BddExpressionGenerator,
+        ): Writable {
+            return writable {
+                when {
+                    !isOptionalArgument(arg) -> rust("#W", expressionGenerator.generateExpression(arg))
+
+                    (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType) ->
+                        rust(
+                            """
+                            if let Some(inner) = #W{
+                                inner
+                            } else {
+                                return false
+                            }
+                            """.trimMargin(),
+                            expressionGenerator.generateExpression(arg),
+                        )
+
+                    else -> rust("*#W", expressionGenerator.generateExpression(arg))
+                }
+            }
+        }
+
+        private fun handleIteArg(
+            arg: Expression,
+            expressionGenerator: BddExpressionGenerator,
+        ): Writable {
+            return writable {
+                when {
+                    arg is StringLiteral -> {
+                        rust("#W.to_string()", expressionGenerator.generateExpression(arg))
+                    }
+
+                    (arg is GetAttr) && (arg.type() is StringType) -> {
+                        rust("#W.to_string()", expressionGenerator.generateExpression(arg))
+                    }
+
+                    !isOptionalArgument(arg) -> rust("#W", expressionGenerator.generateExpression(arg))
+
+                    arg is Reference && optionalRefNames.contains(arg.name.rustName()) ->
+                        rust(
+                            "#W.clone().expect(\"Reference already confirmed Some\")",
+                            expressionGenerator.generateExpression(arg),
+                        )
+
+                    else ->
+                        rust("*#W", expressionGenerator.generateExpression(arg))
+                }
+            }
+        }
+
+        private fun handleDefaultOptionalArg(
+            arg: Expression,
+            expressionGenerator: BddExpressionGenerator,
+        ): Writable {
+            if (!isOptionalArgument(arg)) {
+                return expressionGenerator.generateExpression(arg)
+            }
+            return writable {
+                val param =
+                    if (arg is Reference && documentRefNames.contains(arg.name.rustName())) {
+                        """&param.as_string().expect("Document was string type.")"""
+                    } else {
+                        "param"
+                    }
+                rust(
+                    """
+                    if let Some(param) = #W{
+                        $param
+                    } else {
+                        return false
+                    }
+                    """.trimMargin(),
+                    expressionGenerator.generateExpression(arg),
+                )
+            }
+        }
+
+        private fun isOptionalArgument(arg: Expression): Boolean {
+            return (arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
+                (arg is StringLiteral && optionalRefNames.contains(Identifier.of(arg.value().toString()).rustName())) ||
+                (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+        }
+
+        private fun wrapArgument(
+            arg: Expression,
+            fn: FunctionDefinition,
+            expressionGenerator: BddExpressionGenerator,
+        ): Writable {
+            return when (fn.id) {
+                "coalesce" -> handleCoalesceArg(arg, expressionGenerator)
+                "ite" -> handleIteArg(arg, expressionGenerator)
+                else -> handleDefaultOptionalArg(arg, expressionGenerator)
+            }
+        }
+
         override fun visitLibraryFunction(
             fn: FunctionDefinition,
             args: MutableList<Expression>,
@@ -266,69 +365,16 @@ class BddExpressionGenerator(
                 val expressionGenerator =
                     BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
 
-                val argWritables =
-                    args.map { arg ->
-                        if (
-                            (
-                                (arg is Reference && optionalRefNames.contains(arg.name.rustName())) ||
-                                    (
-                                        arg is StringLiteral &&
-                                            optionalRefNames.contains(
-                                                Identifier.of(arg.value().toString()).rustName(),
-                                            )
-                                    ) ||
-                                    (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
-                            )
-                        ) {
-                            if ((fn.id == "coalesce" || fn.id == "ite") && !(arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)) {
-                                writable {
-                                    rust(
-                                        """
-                                        *#W
-                                        """.trimMargin(),
-                                        expressionGenerator.generateExpression(arg),
-                                    )
-                                }
-                            } else {
-                                val param =
-                                    if (arg is Reference && documentRefNames.contains(arg.name.rustName())) {
-                                        """&param.as_string().expect("Document was string type.")"""
-                                    } else {
-                                        "param"
-                                    }
+                val argWritables = args.map { wrapArgument(it, fn, expressionGenerator) }
 
-                                writable {
-                                    rust(
-                                        """
-                                        if let Some(param) = #W{
-                                            $param
-                                        } else {
-                                            return false
-                                        }
-                                        """.trimMargin(),
-                                        expressionGenerator.generateExpression(arg),
-                                    )
-                                }
-                            }
-                        } else {
-                            expressionGenerator.generateExpression(arg)
-                        }
+                val template =
+                    if (fn.id == "coalesce" || fn.id == "ite") {
+                        "#{fn}(#{args})"
+                    } else {
+                        "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})"
                     }
 
-                // The macro stdlib fns don't take the diagnostic_collector
-                if (fn.id == "coalesce" || fn.id == "ite") {
-                    rustTemplate(
-                        "#{fn}(#{args})",
-                        "fn" to fnDefinition.usage(),
-                        "args" to argWritables.join(","),
-                    )
-                } else {
-                    rustTemplate(
-                        "#{fn}(#{args}, ${EndpointResolverGenerator.DIAGNOSTIC_COLLECTOR})",
-                        "fn" to fnDefinition.usage(),
-                        "args" to argWritables.join(","),
-                    )
-                }
+                rustTemplate(template, "fn" to fnDefinition.usage(), "args" to argWritables.join(","))
 
                 if (ownership == Ownership.Owned) {
                     rust(".to_owned()")
@@ -412,6 +458,7 @@ class BddExpressionGenerator(
                         )
                     } else if (!fnReturnTypeOptional && !fnReturnTypeIsBoolean) {
                         // Function is infallible, return true every time
+
                         rustTemplate(
                             """
                             {

@@ -542,6 +542,172 @@
         }
       }
     },
+    "aws.cloudformation#StructureIdList": {
+      "type": "list",
+      "member": {
+        "target": "smithy.api#String",
+        "traits": {
+          "smithy.api#idRef": {
+            "failWhenMissing": true,
+            "selector": "structure"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "aws.cloudformation#cfnAdditionalIdentifier": {
+      "type": "structure",
+      "members": {},
+      "traits": {
+        "smithy.api#documentation": "Indicates that the CloudFormation property generated from this member is an\nadditional identifier for the resource.",
+        "smithy.api#trait": {
+          "selector": "structure > :test(member > string)",
+          "conflicts": ["aws.cloudformation#cfnExcludeProperty"],
+          "breakingChanges": [
+            {
+              "change": "remove"
+            }
+          ]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
+    "aws.cloudformation#cfnDefaultValue": {
+      "type": "structure",
+      "members": {},
+      "traits": {
+        "smithy.api#documentation": "Indicates that a structure member has a default value\nfor the property of the CloudFormation resource.",
+        "smithy.api#trait": {
+          "selector": "resource > operation -[input, output]-> structure > member",
+          "conflicts": ["aws.cloudformation#cfnExcludeProperty"]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
+    "aws.cloudformation#cfnExcludeProperty": {
+      "type": "structure",
+      "members": {},
+      "traits": {
+        "smithy.api#documentation": "Indicates that a structure member should not be included in generated\nCloudFormation resource definitions.",
+        "smithy.api#trait": {
+          "selector": "structure > member",
+          "conflicts": [
+            "aws.cloudformation#cfnAdditionalIdentifier",
+            "aws.cloudformation#cfnMutability",
+            "aws.cloudformation#cfnDefaultValue"
+          ],
+          "breakingChanges": [
+            {
+              "change": "add"
+            }
+          ]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
+    "aws.cloudformation#cfnMutability": {
+      "type": "enum",
+      "members": {
+        "FULL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the CloudFormation property generated from this\nmember does not have any mutability restrictions, meaning that it\ncan be specified by the user and returned in a `read` or `list`\nrequest.",
+            "smithy.api#enumValue": "full"
+          }
+        },
+        "CREATE_AND_READ": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the CloudFormation property generated from this\nmember can be specified only during resource creation and can be\nreturned in a `read` or `list` request.",
+            "smithy.api#enumValue": "create-and-read"
+          }
+        },
+        "CREATE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the CloudFormation property generated from this\nmember can be specified only during resource creation and cannot\nbe returned in a `read` or `list` request. MUST NOT be set if the\nmember is also marked with the `@additionalIdentifier` trait.",
+            "smithy.api#enumValue": "create"
+          }
+        },
+        "READ": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the CloudFormation property generated from this\nmember can be returned by a `read` or `list` request, but\ncannot be set by the user.",
+            "smithy.api#enumValue": "read"
+          }
+        },
+        "WRITE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the CloudFormation property generated from this\nmember can be specified by the user, but cannot be returned by a\n`read` or `list` request. MUST NOT be set if the member is also\nmarked with the `@additionalIdentifier` trait.",
+            "smithy.api#enumValue": "write"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Indicates an explicit CloudFormation mutability of the structure member\nwhen part of a CloudFormation resource.",
+        "smithy.api#trait": {
+          "selector": "structure > member",
+          "conflicts": ["aws.cloudformation#cfnExcludeProperty"]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
+    "aws.cloudformation#cfnName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#documentation": "The cloudFormationName trait allows a CloudFormation resource property name\nto differ from a structure member name used in the model.",
+        "smithy.api#trait": {
+          "selector": "structure > member",
+          "breakingChanges": [
+            {
+              "change": "any"
+            }
+          ]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
+    "aws.cloudformation#cfnResource": {
+      "type": "structure",
+      "members": {
+        "name": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "Provides a custom CloudFormation resource name."
+          }
+        },
+        "additionalSchemas": {
+          "target": "aws.cloudformation#StructureIdList",
+          "traits": {
+            "smithy.api#documentation": "A list of additional shape IDs of structures that will have their\nproperties added to the CloudFormation resource."
+          }
+        },
+        "primaryIdentifier": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#deprecated": {
+              "message": "Prefer the resource's identifiers when generating resource schemas."
+            },
+            "smithy.api#documentation": "An alternative resource property to use as the primary identifier\nfor the CloudFormation resource. The value MUST be the name of a\nproperty on the resource shape that targets a string shape."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Indicates that a Smithy resource is a CloudFormation resource.",
+        "smithy.api#trait": {
+          "selector": "resource",
+          "breakingChanges": [
+            {
+              "change": "presence"
+            }
+          ]
+        },
+        "smithy.api#unstable": {}
+      }
+    },
     "aws.customizations#s3UnwrappedXmlOutput": {
       "type": "structure",
       "members": {},
@@ -850,6 +1016,476 @@
               "change": "remove"
             }
           ]
+        }
+      }
+    },
+    "aws.iam#ActionResource": {
+      "type": "structure",
+      "members": {
+        "conditionKeys": {
+          "target": "aws.iam#ConditionKeysList",
+          "traits": {
+            "smithy.api#documentation": "The condition keys used for authorizing against this resource."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Contains information about a resource an IAM action can be authorized against.",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ActionResourceMap": {
+      "type": "map",
+      "key": {
+        "target": "aws.iam#ResourceName"
+      },
+      "value": {
+        "target": "aws.iam#ActionResource"
+      },
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ActionResources": {
+      "type": "structure",
+      "members": {
+        "required": {
+          "target": "aws.iam#ActionResourceMap",
+          "traits": {
+            "smithy.api#documentation": "Resources that will always be authorized against for functionality of the IAM action."
+          }
+        },
+        "optional": {
+          "target": "aws.iam#ActionResourceMap",
+          "traits": {
+            "smithy.api#documentation": "Resources that will be authorized against based on optional behavior of the IAM action."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "A container for information on the resources that an IAM action may be authorized against.",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ConditionKeyDefinition": {
+      "type": "structure",
+      "members": {
+        "type": {
+          "target": "aws.iam#ConditionKeyType",
+          "traits": {
+            "smithy.api#required": {}
+          }
+        },
+        "documentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "Defines documentation about the condition key."
+          }
+        },
+        "externalDocumentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A valid URL that defines more information about the condition key."
+          }
+        },
+        "relativeDocumentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A relative URL path that defines more information about the condition key\nwithin a set of IAM-related documentation."
+          }
+        },
+        "required": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#documentation": "Whether a service resolved condition key is required.\nRequest resolved condition keys MUST use the @required trait."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "A defined condition key to appear within a service in addition to inferred and global condition keys.",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ConditionKeyName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^(([A-Za-z0-9][A-Za-z0-9-\\.]{0,62}:)?[^:\\s]+)$",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ConditionKeyType": {
+      "type": "enum",
+      "members": {
+        "ARN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A String type that contains an Amazon Resource Name (ARN).",
+            "smithy.api#enumValue": "ARN"
+          }
+        },
+        "ARRAY_OF_ARN": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of ARN types.",
+            "smithy.api#enumValue": "ArrayOfARN"
+          }
+        },
+        "BINARY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A String type that contains base-64 encoded binary data.",
+            "smithy.api#enumValue": "Binary"
+          }
+        },
+        "ARRAY_OF_BINARY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of Binary types.",
+            "smithy.api#enumValue": "ArrayOfBinary"
+          }
+        },
+        "STRING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A general string type.",
+            "smithy.api#enumValue": "String"
+          }
+        },
+        "ARRAY_OF_STRING": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of String types.",
+            "smithy.api#enumValue": "ArrayOfString"
+          }
+        },
+        "NUMERIC": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A general type for integers and floats.",
+            "smithy.api#enumValue": "Numeric"
+          }
+        },
+        "ARRAY_OF_NUMERIC": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of Numeric types.",
+            "smithy.api#enumValue": "ArrayOfNumeric"
+          }
+        },
+        "DATE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A String type that conforms to the datetime profile of ISO 8601.",
+            "smithy.api#enumValue": "Date"
+          }
+        },
+        "ARRAY_OF_DATE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of Date types.",
+            "smithy.api#enumValue": "ArrayOfDate"
+          }
+        },
+        "BOOL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A general boolean type.",
+            "smithy.api#enumValue": "Bool"
+          }
+        },
+        "ARRAY_OF_BOOL": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of Bool types.",
+            "smithy.api#enumValue": "ArrayOfBool"
+          }
+        },
+        "IP_ADDRESS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A String type that conforms to RFC 4632.",
+            "smithy.api#enumValue": "IPAddress"
+          }
+        },
+        "ARRAY_OF_IP_ADDRESS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An unordered list of IPAddress types.",
+            "smithy.api#enumValue": "ArrayOfIPAddress"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "The IAM policy type of the value that will supplied for this context key",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ConditionKeysList": {
+      "type": "list",
+      "member": {
+        "target": "smithy.api#String"
+      },
+      "traits": {
+        "smithy.api#private": {},
+        "smithy.api#uniqueItems": {}
+      }
+    },
+    "aws.iam#IamIdentifier": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^([A-Za-z0-9][A-Za-z0-9-\\.]{0,62}:[^:]+)$",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#PrincipalType": {
+      "type": "enum",
+      "members": {
+        "ROOT": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An AWS account.",
+            "smithy.api#enumValue": "Root"
+          }
+        },
+        "IAM_USER": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An AWS IAM user.",
+            "smithy.api#enumValue": "IAMUser"
+          }
+        },
+        "IAM_ROLE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "An AWS IAM role.",
+            "smithy.api#enumValue": "IAMRole"
+          }
+        },
+        "FEDERATED_USER": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "A federated user session.",
+            "smithy.api#enumValue": "FederatedUser"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "An IAM policy principal type.",
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#RequiredActionsList": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#IamIdentifier"
+      },
+      "traits": {
+        "smithy.api#private": {},
+        "smithy.api#uniqueItems": {}
+      }
+    },
+    "aws.iam#ResourceName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "aws.iam#ResourceNameList": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#ResourceName"
+      },
+      "traits": {
+        "smithy.api#private": {},
+        "smithy.api#uniqueItems": {}
+      }
+    },
+    "aws.iam#actionName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#deprecated": {
+          "since": "2023-11-10",
+          "message": "Use the `name` member of the `aws.iam#iamAction` trait instead."
+        },
+        "smithy.api#documentation": "Provides a custom IAM action name. By default, the action name is the same as the operation name.",
+        "smithy.api#trait": {
+          "selector": "operation"
+        }
+      }
+    },
+    "aws.iam#actionPermissionDescription": {
+      "type": "string",
+      "traits": {
+        "smithy.api#deprecated": {
+          "since": "2023-11-10",
+          "message": "Use the `documentation` member of the `aws.iam#iamAction` trait instead."
+        },
+        "smithy.api#documentation": "A brief description of what granting the user permission to invoke an operation would entail.\nThis description should begin with something similar to 'Enables the user to...' or 'Grants permission to...'",
+        "smithy.api#trait": {
+          "selector": "operation"
+        }
+      }
+    },
+    "aws.iam#conditionKeyValue": {
+      "type": "string",
+      "traits": {
+        "smithy.api#documentation": "Uses the associated member’s value as this condition key’s value.\nNeeded when the member name doesn't match the condition key name.",
+        "smithy.api#pattern": "^(([A-Za-z0-9][A-Za-z0-9-\\.]{0,62}:)?[^:\\s]+)$",
+        "smithy.api#trait": {
+          "selector": "member"
+        }
+      }
+    },
+    "aws.iam#conditionKeys": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#ConditionKeyName"
+      },
+      "traits": {
+        "smithy.api#documentation": "Applies condition keys by name to a resource or operation.",
+        "smithy.api#trait": {
+          "selector": ":test(resource, operation)"
+        }
+      }
+    },
+    "aws.iam#defineConditionKeys": {
+      "type": "map",
+      "key": {
+        "target": "aws.iam#ConditionKeyName"
+      },
+      "value": {
+        "target": "aws.iam#ConditionKeyDefinition"
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines the set of condition keys that appear within a service in addition to\ninferred and global condition keys.",
+        "smithy.api#trait": {
+          "selector": "service"
+        }
+      }
+    },
+    "aws.iam#disableConditionKeyInference": {
+      "type": "structure",
+      "members": {},
+      "traits": {
+        "smithy.api#documentation": "Disables the automatic inference of condition keys of service's resources or a specific resource.",
+        "smithy.api#trait": {
+          "selector": ":test(service, resource)"
+        }
+      }
+    },
+    "aws.iam#iamAction": {
+      "type": "structure",
+      "members": {
+        "name": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "The name of the action in AWS IAM."
+          }
+        },
+        "documentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A brief description of what granting the user permission to invoke an operation would entail.\nThis description should begin with something similar to 'Enables the user to...' or 'Grants permission to...'"
+          }
+        },
+        "relativeDocumentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A relative URL path that defines more information about the action within a set of IAM-related documentation."
+          }
+        },
+        "requiredActions": {
+          "target": "aws.iam#RequiredActionsList",
+          "traits": {
+            "smithy.api#documentation": "Other actions that the invoker must be authorized to perform when executing the targeted operation."
+          }
+        },
+        "resources": {
+          "target": "aws.iam#ActionResources",
+          "traits": {
+            "smithy.api#documentation": "The resources an IAM action can be authorized against."
+          }
+        },
+        "createsResources": {
+          "target": "aws.iam#ResourceNameList",
+          "traits": {
+            "smithy.api#documentation": "The resources that performing this IAM action will create."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Indicates properties of a Smithy operation as an IAM action.",
+        "smithy.api#trait": {
+          "selector": "operation"
+        }
+      }
+    },
+    "aws.iam#iamResource": {
+      "type": "structure",
+      "members": {
+        "name": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "The name of the resource in AWS IAM."
+          }
+        },
+        "relativeDocumentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A relative URL path that defines more information about the resource\nwithin a set of IAM-related documentation."
+          }
+        },
+        "disableConditionKeyInheritance": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#documentation": "When set to `true`, decouples this IAM resource's condition keys from\nthose of its parent resource(s)."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Indicates properties of a Smithy resource in AWS IAM.",
+        "smithy.api#trait": {
+          "selector": "resource"
+        }
+      }
+    },
+    "aws.iam#requiredActions": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#IamIdentifier"
+      },
+      "traits": {
+        "smithy.api#deprecated": {
+          "since": "2023-11-10",
+          "message": "Use the `requiredActions` member of the `aws.iam#iamAction` trait instead."
+        },
+        "smithy.api#documentation": "Other actions that the invoker must be authorized to perform when executing the targeted operation.",
+        "smithy.api#trait": {
+          "selector": "operation"
+        }
+      }
+    },
+    "aws.iam#serviceResolvedConditionKeys": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#ConditionKeyName"
+      },
+      "traits": {
+        "smithy.api#documentation": "Specifies the list of IAM condition keys which must be resolved by the service,\nas opposed to being pulled from the request.",
+        "smithy.api#trait": {
+          "selector": "service"
+        }
+      }
+    },
+    "aws.iam#supportedPrincipalTypes": {
+      "type": "list",
+      "member": {
+        "target": "aws.iam#PrincipalType"
+      },
+      "traits": {
+        "smithy.api#documentation": "The principal types that can use the service or operation.",
+        "smithy.api#trait": {
+          "selector": ":test(service, operation)"
         }
       }
     },
@@ -1245,6 +1881,131 @@
             "message": "Document types are not supported with restXml"
           }
         }
+      }
+    },
+    "aws.test#AwsVendorParams": {
+      "type": "structure",
+      "mixins": [
+        {
+          "target": "aws.test#BaseAwsVendorParams"
+        }
+      ],
+      "members": {},
+      "traits": {
+        "smithy.api#documentation": "Concrete vendor params to apply to AWS services by default.",
+        "smithy.api#suppress": ["UnreferencedShape"]
+      }
+    },
+    "aws.test#BaseAwsVendorParams": {
+      "type": "structure",
+      "members": {
+        "region": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#default": "us-west-2",
+            "smithy.api#documentation": "The AWS region to sign the request for and to resolve the default\nendpoint with."
+          }
+        },
+        "sigv4aRegionSet": {
+          "target": "aws.test#NonEmptyStringList",
+          "traits": {
+            "smithy.api#documentation": "The set of regions to sign a sigv4a request with."
+          }
+        },
+        "uri": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A static endpoint to send the request to."
+          }
+        },
+        "useFips": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": false,
+            "smithy.api#documentation": "Whether to resolve a FIPS compliant endpoint or not."
+          }
+        },
+        "useDualstack": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": false,
+            "smithy.api#documentation": "Whether to resolve a dualstack endpoint or not."
+          }
+        },
+        "useAccountIdRouting": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": true,
+            "smithy.api#documentation": "Whether to use account ID based routing where applicable."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Base vendor params for all aws services.",
+        "smithy.api#mixin": {},
+        "smithy.api#suppress": ["UnreferencedShape"]
+      }
+    },
+    "aws.test#NonEmptyStringList": {
+      "type": "list",
+      "member": {
+        "target": "smithy.api#String"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 1
+        },
+        "smithy.api#private": {},
+        "smithy.api#suppress": ["UnreferencedShape"]
+      }
+    },
+    "aws.test#S3VendorParams": {
+      "type": "structure",
+      "mixins": [
+        {
+          "target": "aws.test#BaseAwsVendorParams"
+        }
+      ],
+      "members": {
+        "useAccelerate": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": false,
+            "smithy.api#documentation": "Whether to resolve an accelerate endpoint or not."
+          }
+        },
+        "useGlobalEndpoint": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": false,
+            "smithy.api#documentation": "Whether to use the global endpoint for us-east-1."
+          }
+        },
+        "forcePathStyle": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": false,
+            "smithy.api#documentation": "Whether to force path-style addressing."
+          }
+        },
+        "useArnRegion": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": true,
+            "smithy.api#documentation": "Whether to use the region in the bucket arn to override the set\nregion."
+          }
+        },
+        "useMultiRegionAccessPoints": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#default": true,
+            "smithy.api#documentation": "Whether to use S3's multi-region access points."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Vendor params for S3.",
+        "smithy.api#suppress": ["UnreferencedShape"]
       }
     },
     "com.amazonaws.s3#AbacStatus": {
@@ -1961,6 +2722,60 @@
               ]
             },
             {
+              "fn": "ite",
+              "argv": [
+                {
+                  "fn": "stringEquals",
+                  "argv": [
+                    {
+                      "ref": "Region"
+                    },
+                    "aws-global"
+                  ]
+                },
+                "us-east-1",
+                {
+                  "ref": "Region"
+                }
+              ],
+              "assign": "_effective_std_region"
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "Accelerate"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseFIPS"
+                },
+                true
+              ]
+            },
+            {
+              "fn": "isSet",
+              "argv": [
+                {
+                  "ref": "Endpoint"
+                }
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "ref": "UseDualStack"
+                },
+                true
+              ]
+            },
+            {
               "fn": "isSet",
               "argv": [
                 {
@@ -1969,22 +2784,8 @@
               ]
             },
             {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "aws.parseArn",
-                  "argv": [
-                    {
-                      "ref": "Bucket"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
               "fn": "stringEquals",
               "argv": [
-                "--x-s3",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2001,30 +2802,13 @@
                     },
                     ""
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "UseS3ExpressControlEndpoint"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "UseS3ExpressControlEndpoint"
                 },
-                true
+                "--x-s3"
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--xa-s3",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2041,42 +2825,27 @@
                     },
                     ""
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "DisableS3ExpressSessionAuth"
-                }
-              ]
-            },
-            {
-              "fn": "ite",
-              "argv": [
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "ref": "DisableS3ExpressSessionAuth"
-                    },
-                    false
-                  ]
                 },
-                "sigv4",
-                "sigv4-s3express"
+                "--xa-s3"
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "Region"
+                }
               ],
-              "assign": "s3e_auth"
+              "assign": "partitionResult"
             },
             {
-              "fn": "booleanEquals",
+              "fn": "parseURL",
               "argv": [
                 {
-                  "ref": "DisableS3ExpressSessionAuth"
-                },
-                true
-              ]
+                  "ref": "Endpoint"
+                }
+              ],
+              "assign": "url"
             },
             {
               "fn": "substring",
@@ -2088,13 +2857,13 @@
                 7,
                 true
               ],
-              "assign": "bucketAliasSuffix"
+              "assign": "accessPointSuffix"
             },
             {
               "fn": "stringEquals",
               "argv": [
                 {
-                  "ref": "bucketAliasSuffix"
+                  "ref": "accessPointSuffix"
                 },
                 "--op-s3"
               ]
@@ -2117,18 +2886,6 @@
                 {
                   "ref": "Bucket"
                 },
-                32,
-                49,
-                true
-              ],
-              "assign": "outpostId_ssa_2"
-            },
-            {
-              "fn": "substring",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
                 49,
                 50,
                 true
@@ -2136,24 +2893,31 @@
               "assign": "hardwareType"
             },
             {
-              "fn": "ite",
+              "fn": "substring",
               "argv": [
                 {
-                  "ref": "UseFIPS"
+                  "ref": "Bucket"
                 },
-                "-fips",
-                ""
+                32,
+                49,
+                true
               ],
-              "assign": "s3e_fips"
+              "assign": "outpostId_ssa_2"
             },
             {
-              "fn": "aws.partition",
+              "fn": "stringEquals",
               "argv": [
                 {
-                  "ref": "Region"
-                }
-              ],
-              "assign": "regionPartition"
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "partitionResult"
+                    },
+                    "name"
+                  ]
+                },
+                "aws-cn"
+              ]
             },
             {
               "fn": "ite",
@@ -2164,46 +2928,18 @@
                 ".dualstack",
                 ""
               ],
-              "assign": "s3e_ds"
+              "assign": "_s3e_ds"
             },
             {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "Endpoint"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
+              "fn": "ite",
               "argv": [
                 {
                   "ref": "UseFIPS"
                 },
-                true
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "Accelerate"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "parseURL",
-                  "argv": [
-                    {
-                      "ref": "Endpoint"
-                    }
-                  ]
-                }
-              ]
+                "-fips",
+                ""
+              ],
+              "assign": "_s3e_fips"
             },
             {
               "fn": "booleanEquals",
@@ -2215,36 +2951,47 @@
               ]
             },
             {
-              "fn": "aws.parseArn",
+              "fn": "ite",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "DisableS3ExpressSessionAuth"
+                    },
+                    false
+                  ]
+                },
+                "sigv4",
+                "sigv4-s3express"
+              ],
+              "assign": "_s3e_auth"
+            },
+            {
+              "fn": "aws.isVirtualHostableS3Bucket",
               "argv": [
                 {
                   "ref": "Bucket"
-                }
+                },
+                false
               ]
             },
             {
-              "fn": "aws.partition",
+              "fn": "getAttr",
               "argv": [
                 {
-                  "ref": "Region"
-                }
-              ],
-              "assign": "partitionResult"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "aws-cn",
-                {
-                  "fn": "getAttr",
+                  "fn": "split",
                   "argv": [
                     {
-                      "ref": "partitionResult"
+                      "ref": "Bucket"
                     },
-                    "name"
+                    "--",
+                    0
                   ]
-                }
-              ]
+                },
+                "[1]"
+              ],
+              "assign": "s3expressAvailabilityZoneId"
             },
             {
               "fn": "isValidHostLabel",
@@ -2256,174 +3003,41 @@
               ]
             },
             {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "UseS3ExpressControlEndpoint"
+                    },
+                    false
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "regionPrefix"
+                },
+                "beta"
+              ]
+            },
+            {
               "fn": "aws.isVirtualHostableS3Bucket",
               "argv": [
                 {
                   "ref": "Bucket"
                 },
-                false
-              ]
-            },
-            {
-              "fn": "parseURL",
-              "argv": [
-                {
-                  "ref": "Endpoint"
-                }
-              ],
-              "assign": "url"
-            },
-            {
-              "fn": "aws.isVirtualHostableS3Bucket",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                },
                 true
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "http",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "url"
-                    },
-                    "scheme"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "aws.parseArn",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                }
-              ],
-              "assign": "bucketArn"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "arn:",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        0,
-                        4,
-                        false
-                      ]
-                    },
-                    ""
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "isValidHostLabel",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                false
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                true,
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "url"
-                    },
-                    "isIp"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "uriEncode",
-              "argv": [
-                {
-                  "ref": "Bucket"
-                }
-              ],
-              "assign": "uri_encoded_bucket"
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "UseObjectLambdaEndpoint"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "UseObjectLambdaEndpoint"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "isValidHostLabel",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "UseDualStack"
-                },
-                true
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
-                {
-                  "fn": "coalesce",
-                  "argv": [
-                    {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        21,
-                        23,
-                        true
-                      ]
-                    },
-                    ""
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2440,58 +3054,69 @@
                     },
                     ""
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "DisableAccessPoints"
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "DisableAccessPoints"
                 },
-                true
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "resourceId[4]"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "resourceId[2]"
-                  ]
-                }
+                "--"
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--",
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        21,
+                        23,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                },
+                "--"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "url"
+                    },
+                    "scheme"
+                  ]
+                },
+                "http"
+              ]
+            },
+            {
+              "fn": "isValidHostLabel",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                false
+              ]
+            },
+            {
+              "fn": "aws.parseArn",
+              "argv": [
+                {
+                  "ref": "Bucket"
+                }
+              ],
+              "assign": "bucketArn"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2508,13 +3133,55 @@
                     },
                     ""
                   ]
+                },
+                "--"
+              ]
+            },
+            {
+              "fn": "ite",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "UseArnRegion"
+                    },
+                    true
+                  ]
+                },
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "region"
+                  ]
+                },
+                {
+                  "ref": "Region"
                 }
+              ],
+              "assign": "_effective_arn_region"
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "url"
+                    },
+                    "isIp"
+                  ]
+                },
+                true
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2524,55 +3191,39 @@
                         {
                           "ref": "Bucket"
                         },
-                        19,
-                        21,
-                        true
+                        0,
+                        4,
+                        false
                       ]
                     },
                     ""
                   ]
+                },
+                "arn:"
+              ]
+            },
+            {
+              "fn": "uriEncode",
+              "argv": [
+                {
+                  "ref": "Bucket"
                 }
-              ]
+              ],
+              "assign": "uri_encoded_bucket"
             },
             {
-              "fn": "stringEquals",
+              "fn": "booleanEquals",
               "argv": [
-                {
-                  "ref": "hardwareType"
-                },
-                "e"
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "hardwareType"
-                },
-                "o"
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "--",
                 {
                   "fn": "coalesce",
                   "argv": [
                     {
-                      "fn": "substring",
-                      "argv": [
-                        {
-                          "ref": "Bucket"
-                        },
-                        26,
-                        28,
-                        true
-                      ]
+                      "ref": "UseObjectLambdaEndpoint"
                     },
-                    ""
+                    false
                   ]
-                }
+                },
+                true
               ]
             },
             {
@@ -2625,7 +3276,6 @@
             {
               "fn": "stringEquals",
               "argv": [
-                "s3-object-lambda",
                 {
                   "fn": "getAttr",
                   "argv": [
@@ -2634,117 +3284,92 @@
                     },
                     "service"
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "s3-outposts",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "service"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "ref": "bucketArn"
                 },
-                "resourceId[1]"
-              ],
-              "assign": "outpostId_ssa_1"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "",
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
-              ]
-            },
-            {
-              "fn": "aws.partition",
-              "argv": [
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
-              ],
-              "assign": "bucketPartition"
-            },
-            {
-              "fn": "isSet",
-              "argv": [
-                {
-                  "ref": "UseArnRegion"
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "Region"
-                },
-                {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
-                }
+                "s3-object-lambda"
               ]
             },
             {
               "fn": "isValidHostLabel",
               "argv": [
                 {
-                  "ref": "accessPointName_ssa_1"
+                  "ref": "Region"
                 },
                 true
               ]
             },
             {
-              "fn": "booleanEquals",
+              "fn": "stringEquals",
               "argv": [
-                false,
                 {
                   "fn": "getAttr",
                   "argv": [
                     {
-                      "ref": "url"
+                      "ref": "bucketArn"
                     },
-                    "isIp"
+                    "region"
                   ]
-                }
+                },
+                ""
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--",
+                {
+                  "ref": "hardwareType"
+                },
+                "e"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        26,
+                        28,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                },
+                "--"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "fn": "substring",
+                      "argv": [
+                        {
+                          "ref": "Bucket"
+                        },
+                        19,
+                        21,
+                        true
+                      ]
+                    },
+                    ""
+                  ]
+                },
+                "--"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2761,22 +3386,13 @@
                     },
                     ""
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "Region"
                 },
-                "aws-global"
+                "--"
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2793,13 +3409,13 @@
                     },
                     ""
                   ]
-                }
+                },
+                "--"
               ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "--",
                 {
                   "fn": "coalesce",
                   "argv": [
@@ -2816,7 +3432,116 @@
                     },
                     ""
                   ]
+                },
+                "--"
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "service"
+                  ]
+                },
+                "s3-outposts"
+              ]
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "DisableAccessPoints"
+                    },
+                    false
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "aws.partition",
+              "argv": [
+                {
+                  "ref": "_effective_arn_region"
                 }
+              ],
+              "assign": "bucketPartition"
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "hardwareType"
+                },
+                "o"
+              ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[4]"
+              ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[1]"
+              ],
+              "assign": "outpostId_ssa_1"
+            },
+            {
+              "fn": "booleanEquals",
+              "argv": [
+                {
+                  "fn": "coalesce",
+                  "argv": [
+                    {
+                      "ref": "UseArnRegion"
+                    },
+                    true
+                  ]
+                },
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "_effective_arn_region"
+                },
+                {
+                  "fn": "getAttr",
+                  "argv": [
+                    {
+                      "ref": "bucketArn"
+                    },
+                    "region"
+                  ]
+                }
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "aws-global"
               ]
             },
             {
@@ -2832,9 +3557,18 @@
               "fn": "booleanEquals",
               "argv": [
                 {
-                  "ref": "UseArnRegion"
+                  "ref": "DisableMultiRegionAccessPoints"
                 },
-                false
+                true
+              ]
+            },
+            {
+              "fn": "stringEquals",
+              "argv": [
+                {
+                  "ref": "Region"
+                },
+                "us-east-1"
               ]
             },
             {
@@ -2845,6 +3579,16 @@
                 },
                 false
               ]
+            },
+            {
+              "fn": "getAttr",
+              "argv": [
+                {
+                  "ref": "bucketArn"
+                },
+                "resourceId[2]"
+              ],
+              "assign": "outpostType"
             },
             {
               "fn": "stringEquals",
@@ -2873,13 +3617,7 @@
               "fn": "isValidHostLabel",
               "argv": [
                 {
-                  "fn": "getAttr",
-                  "argv": [
-                    {
-                      "ref": "bucketArn"
-                    },
-                    "region"
-                  ]
+                  "ref": "_effective_arn_region"
                 },
                 true
               ]
@@ -2887,16 +3625,6 @@
             {
               "fn": "stringEquals",
               "argv": [
-                {
-                  "ref": "Region"
-                },
-                "us-east-1"
-              ]
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                "s3",
                 {
                   "fn": "getAttr",
                   "argv": [
@@ -2905,30 +3633,13 @@
                     },
                     "service"
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "fn": "split",
-                  "argv": [
-                    {
-                      "ref": "Bucket"
-                    },
-                    "--",
-                    0
-                  ]
                 },
-                "[1]"
-              ],
-              "assign": "s3expressAvailabilityZoneId"
+                "s3"
+              ]
             },
             {
               "fn": "stringEquals",
               "argv": [
-                "",
                 {
                   "fn": "getAttr",
                   "argv": [
@@ -2937,16 +3648,8 @@
                     },
                     "accountId"
                   ]
-                }
-              ]
-            },
-            {
-              "fn": "booleanEquals",
-              "argv": [
-                {
-                  "ref": "DisableMultiRegionAccessPoints"
                 },
-                true
+                ""
               ]
             },
             {
@@ -2979,36 +3682,17 @@
                 {
                   "ref": "bucketArn"
                 },
-                "resourceId[2]"
-              ],
-              "assign": "outpostType"
-            },
-            {
-              "fn": "getAttr",
-              "argv": [
-                {
-                  "ref": "bucketArn"
-                },
                 "resourceId[3]"
               ],
               "assign": "accessPointName_ssa_2"
             },
             {
-              "fn": "aws.partition",
+              "fn": "isValidHostLabel",
               "argv": [
                 {
-                  "ref": "Region"
-                }
-              ],
-              "assign": "mrapPartition"
-            },
-            {
-              "fn": "stringEquals",
-              "argv": [
-                {
-                  "ref": "outpostType"
+                  "ref": "accessPointName_ssa_1"
                 },
-                "accesspoint"
+                true
               ]
             },
             {
@@ -3027,7 +3711,7 @@
                   "fn": "getAttr",
                   "argv": [
                     {
-                      "ref": "mrapPartition"
+                      "ref": "partitionResult"
                     },
                     "name"
                   ]
@@ -3038,9 +3722,9 @@
               "fn": "stringEquals",
               "argv": [
                 {
-                  "ref": "regionPrefix"
+                  "ref": "outpostType"
                 },
-                "beta"
+                "accesspoint"
               ]
             }
           ],
@@ -3084,9 +3768,9 @@
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "{s3e_auth}",
+                      "name": "{_s3e_auth}",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3103,9 +3787,9 @@
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "{s3e_auth}",
+                      "name": "{_s3e_auth}",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3121,7 +3805,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3express-control{s3e_fips}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3express-control{_s3e_fips}{_s3e_ds}.{_effective_std_region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
@@ -3129,7 +3813,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3140,15 +3824,15 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3express{s3e_fips}-{s3expressAvailabilityZoneId}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3express{_s3e_fips}-{s3expressAvailabilityZoneId}{_s3e_ds}.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "{s3e_auth}",
+                      "name": "{_s3e_auth}",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3170,9 +3854,9 @@
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
-                      "name": "{s3e_auth}",
+                      "name": "{_s3e_auth}",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3183,7 +3867,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3express-control{s3e_fips}{s3e_ds}.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://s3express-control{_s3e_fips}{_s3e_ds}.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "backend": "S3Express",
                   "authSchemes": [
@@ -3191,7 +3875,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3express",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3220,7 +3904,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3231,7 +3915,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.ec2.s3-outposts.{Region}.{regionPartition#dnsSuffix}",
+                "url": "https://{Bucket}.ec2.s3-outposts.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -3244,7 +3928,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3268,7 +3952,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3279,7 +3963,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.op-{outpostId_ssa_2}.s3-outposts.{Region}.{regionPartition#dnsSuffix}",
+                "url": "https://{Bucket}.op-{outpostId_ssa_2}.s3-outposts.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -3292,7 +3976,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3323,14 +4007,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3-fips.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3341,14 +4025,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3-fips.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3359,50 +4043,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3-fips.us-east-1.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3-accelerate.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3-fips.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3-accelerate.dualstack.us-east-1.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3420,7 +4068,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3431,32 +4079,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3.dualstack.us-east-1.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3474,7 +4104,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3492,43 +4122,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "{url#scheme}://{url#authority}{url#normalizedPath}{Bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "{url#scheme}://{Bucket}.{url#authority}{url#path}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3546,25 +4140,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3-accelerate.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3582,7 +4158,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3593,32 +4169,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{Bucket}.s3.{partitionResult#dnsSuffix}",
+                "url": "https://{Bucket}.s3.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://{Bucket}.s3.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -3666,7 +4224,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3677,14 +4235,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-object-lambda-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-object-lambda-fips.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3695,14 +4253,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-object-lambda.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-object-lambda.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3758,14 +4316,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint-fips.dualstack.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3776,14 +4334,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint-fips.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint-fips.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3794,14 +4352,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint.dualstack.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint.dualstack.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3819,7 +4377,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3830,14 +4388,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}-{bucketArn#accountId}.s3-accesspoint.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3873,7 +4431,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_1}.accesspoint.s3-global.{mrapPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_1}.accesspoint.s3-global.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -3890,7 +4448,7 @@
             },
             {
               "conditions": [],
-              "error": "Client was configured for partition `{mrapPartition#name}` but bucket referred to partition `{bucketArn#partition}`",
+              "error": "Client was configured for partition `{partitionResult#name}` but bucket referred to partition `{bucketArn#partition}`",
               "type": "error"
             },
             {
@@ -3934,7 +4492,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -3945,7 +4503,7 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://{accessPointName_ssa_2}-{bucketArn#accountId}.{outpostId_ssa_1}.s3-outposts.{bucketArn#region}.{bucketPartition#dnsSuffix}",
+                "url": "https://{accessPointName_ssa_2}-{bucketArn#accountId}.{outpostId_ssa_1}.s3-outposts.{_effective_arn_region}.{bucketPartition#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
@@ -3958,7 +4516,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-outposts",
-                      "signingRegion": "{bucketArn#region}"
+                      "signingRegion": "{_effective_arn_region}"
                     }
                   ]
                 },
@@ -4014,14 +4572,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3-fips.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4032,14 +4590,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3-fips.{_effective_std_region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4050,68 +4608,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3-fips.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.dualstack.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4129,25 +4633,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "{url#scheme}://{url#authority}{url#normalizedPath}{uri_encoded_bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4165,7 +4651,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4176,32 +4662,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
+                "url": "https://s3.{_effective_std_region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.{Region}.{partitionResult#dnsSuffix}/{uri_encoded_bucket}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4224,7 +4692,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4235,14 +4703,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-object-lambda-fips.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://s3-object-lambda-fips.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4253,14 +4721,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-object-lambda.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://s3-object-lambda.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3-object-lambda",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4271,14 +4739,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.dualstack.us-east-1.{partitionResult#dnsSuffix}",
+                "url": "https://s3-fips.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4289,14 +4757,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.dualstack.{Region}.{partitionResult#dnsSuffix}",
+                "url": "https://s3-fips.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4307,68 +4775,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3-fips.us-east-1.{partitionResult#dnsSuffix}",
+                "url": "https://s3.dualstack.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3-fips.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.dualstack.us-east-1.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.dualstack.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4386,25 +4800,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "{url#scheme}://{url#authority}{url#path}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4422,7 +4818,7 @@
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "us-east-1"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4433,32 +4829,14 @@
             {
               "conditions": [],
               "endpoint": {
-                "url": "https://s3.{partitionResult#dnsSuffix}",
+                "url": "https://s3.{_effective_std_region}.{partitionResult#dnsSuffix}",
                 "properties": {
                   "authSchemes": [
                     {
                       "disableDoubleEncoding": true,
                       "name": "sigv4",
                       "signingName": "s3",
-                      "signingRegion": "{Region}"
-                    }
-                  ]
-                },
-                "headers": {}
-              },
-              "type": "endpoint"
-            },
-            {
-              "conditions": [],
-              "endpoint": {
-                "url": "https://s3.{Region}.{partitionResult#dnsSuffix}",
-                "properties": {
-                  "authSchemes": [
-                    {
-                      "disableDoubleEncoding": true,
-                      "name": "sigv4",
-                      "signingName": "s3",
-                      "signingRegion": "{Region}"
+                      "signingRegion": "{_effective_std_region}"
                     }
                   ]
                 },
@@ -4472,9 +4850,9 @@
               "type": "error"
             }
           ],
-          "root": 2,
-          "nodeCount": 709,
-          "nodes": "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"
+          "root": 521,
+          "nodeCount": 521,
+          "nodes": "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"
         },
         "smithy.rules#endpointTests": {
           "testCases": [
@@ -25205,6 +25583,12 @@
           "traits": {
             "smithy.api#enumValue": "ObjectOwner"
           }
+        },
+        "LifecycleExpirationDate": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#enumValue": "LifecycleExpirationDate"
+          }
         }
       }
     },
@@ -36113,6 +36497,390 @@
           "selector": "operation"
         },
         "smithy.api#unstable": {}
+      }
+    },
+    "smithy.test#Expectation": {
+      "type": "union",
+      "members": {
+        "success": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the call is expected to not throw an error. No other\nassertions are made about the response."
+          }
+        },
+        "failure": {
+          "target": "smithy.test#FailureExpectation",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the call is expected to throw an error."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "The different kinds of expectations that can be made for a test case.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.test#FailureExpectation": {
+      "type": "structure",
+      "members": {
+        "errorId": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "Indicates that the call is expected to throw a specific type of error\nmatching the targeted shape. If not specified, the error can be of\nany type.",
+            "smithy.api#idRef": {
+              "failWhenMissing": true,
+              "selector": "[trait|error]"
+            }
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.test#SmokeTestCase": {
+      "type": "structure",
+      "members": {
+        "id": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "The identifier of the test case. This identifier may be used by\nsmoke test implementations to generate test case names. The provided\n`id` MUST match Smithy's `IDENTIFIER` ABNF. No two test cases can\nshare the same ID, including test cases defined for other operations\nbound to the same service.",
+            "smithy.api#pattern": "^[A-Za-z_][A-Za-z0-9_]+$",
+            "smithy.api#required": {}
+          }
+        },
+        "params": {
+          "target": "smithy.api#Document",
+          "traits": {
+            "smithy.api#documentation": "Defines the input parameters used to generate the request. These\nparameters MUST be compatible with the input of the operation.\n\nParameter values that contain binary data MUST be defined using values\nthat can be represented in plain text as the plain text representation\n(for example, use `\"foo\"` and not `\"Zm9vCg==\"`)."
+          }
+        },
+        "vendorParams": {
+          "target": "smithy.api#Document",
+          "traits": {
+            "smithy.api#documentation": "Defines vendor-specific parameters that are used to influence the\nrequest. For example, some vendors might utilize environment variables,\nconfiguration files on disk, or other means to influence the\nserialization formats used by clients or servers.\n\nIf a `vendorParamsShape` is set, these parameters MUST be compatible with\nthat shape's definition."
+          }
+        },
+        "vendorParamsShape": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "The ID of the shape that should be used to validate the `vendorParams`\nmember contents.\n\nIf set, the parameters in `vendorParams` MUST be compatible with this\nshape's definition.",
+            "smithy.api#idRef": {
+              "failWhenMissing": true
+            }
+          }
+        },
+        "expect": {
+          "target": "smithy.test#Expectation",
+          "traits": {
+            "smithy.api#documentation": "Defines the kind of response that is expected from the service call.",
+            "smithy.api#required": {}
+          }
+        },
+        "tags": {
+          "target": "smithy.test#TagList",
+          "traits": {
+            "smithy.api#documentation": "Attaches a list of tags that can be used to categorize and group\ntest cases. If a test case uses a feature that requires special\nconfiguration, it should be tagged."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "A single smoke test case definition.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.test#Tag": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^[A-Za-z][A-Za-z0-9_\\-]+$",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.test#TagList": {
+      "type": "list",
+      "member": {
+        "target": "smithy.test#Tag"
+      },
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.test#smokeTests": {
+      "type": "list",
+      "member": {
+        "target": "smithy.test#SmokeTestCase",
+        "traits": {
+          "smithy.api#documentation": "A list of smoke tests to perform on the operation"
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines a set of test cases to send to a live service to ensure that a\nclient can successfully connect to a service and get the right kind of\nresponse.",
+        "smithy.api#trait": {
+          "selector": "operation"
+        }
+      }
+    },
+    "smithy.waiters#Acceptor": {
+      "type": "structure",
+      "members": {
+        "state": {
+          "target": "smithy.waiters#AcceptorState",
+          "traits": {
+            "smithy.api#documentation": "The state the acceptor transitions to when matched.",
+            "smithy.api#required": {}
+          }
+        },
+        "matcher": {
+          "target": "smithy.waiters#Matcher",
+          "traits": {
+            "smithy.api#documentation": "The matcher used to test if the resource is in a given state.",
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Represents an acceptor in a waiter's state machine.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#AcceptorState": {
+      "type": "enum",
+      "members": {
+        "SUCCESS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "The waiter successfully finished waiting. This is a terminal\nstate that causes the waiter to stop.",
+            "smithy.api#enumValue": "success"
+          }
+        },
+        "FAILURE": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "The waiter failed to enter into the desired state. This is a\nterminal state that causes the waiter to stop.",
+            "smithy.api#enumValue": "failure"
+          }
+        },
+        "RETRY": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "The waiter will retry the operation. This state transition is\nimplicit if no accepter causes a state transition.",
+            "smithy.api#enumValue": "retry"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "The transition state of a waiter.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#Acceptors": {
+      "type": "list",
+      "member": {
+        "target": "smithy.waiters#Acceptor"
+      },
+      "traits": {
+        "smithy.api#length": {
+          "min": 1
+        },
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#Matcher": {
+      "type": "union",
+      "members": {
+        "output": {
+          "target": "smithy.waiters#PathMatcher",
+          "traits": {
+            "smithy.api#documentation": "Matches on the successful output of an operation using a\nJMESPath expression."
+          }
+        },
+        "inputOutput": {
+          "target": "smithy.waiters#PathMatcher",
+          "traits": {
+            "smithy.api#documentation": "Matches on both the input and output of an operation using a JMESPath\nexpression. Input parameters are available through the top-level\n`input` field, and output data is available through the top-level\n`output` field. This matcher can only be used on operations that\ndefine both input and output. This matcher is checked only if an\noperation completes successfully."
+          }
+        },
+        "errorType": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "Matches if an operation returns an error and the error matches\nthe expected error type. If an absolute shape ID is provided, the\nerror is matched exactly on the shape ID. A shape name can be\nprovided to match an error in any namespace with the given name."
+          }
+        },
+        "success": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#documentation": "When set to `true`, matches when an operation returns a successful\nresponse. When set to `false`, matches when an operation fails with\nany error."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines how an acceptor determines if it matches the current state of\na resource.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#NonEmptyString": {
+      "type": "string",
+      "traits": {
+        "smithy.api#length": {
+          "min": 1
+        },
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#NonEmptyStringList": {
+      "type": "list",
+      "member": {
+        "target": "smithy.waiters#NonEmptyString"
+      },
+      "traits": {
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#PathComparator": {
+      "type": "enum",
+      "members": {
+        "STRING_EQUALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Matches if the return value is a string that is equal to the expected string.",
+            "smithy.api#enumValue": "stringEquals"
+          }
+        },
+        "BOOLEAN_EQUALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Matches if the return value is a boolean that is equal to the string literal 'true' or 'false'.",
+            "smithy.api#enumValue": "booleanEquals"
+          }
+        },
+        "ALL_STRING_EQUALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Matches if all values in the list matches the expected string.",
+            "smithy.api#enumValue": "allStringEquals"
+          }
+        },
+        "ANY_STRING_EQUALS": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "Matches if any value in the list matches the expected string.",
+            "smithy.api#enumValue": "anyStringEquals"
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines a comparison to perform in a PathMatcher.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#PathMatcher": {
+      "type": "structure",
+      "members": {
+        "path": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "A JMESPath expression applied to the input or output of an operation.",
+            "smithy.api#required": {}
+          }
+        },
+        "expected": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "The expected return value of the expression.",
+            "smithy.api#required": {}
+          }
+        },
+        "comparator": {
+          "target": "smithy.waiters#PathComparator",
+          "traits": {
+            "smithy.api#documentation": "The comparator used to compare the result of the expression with the\nexpected value.",
+            "smithy.api#required": {}
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines how to test the result of a JMESPath expression against\nan expected value.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#Waiter": {
+      "type": "structure",
+      "members": {
+        "documentation": {
+          "target": "smithy.api#String",
+          "traits": {
+            "smithy.api#documentation": "Documentation about the waiter. Can use CommonMark."
+          }
+        },
+        "acceptors": {
+          "target": "smithy.waiters#Acceptors",
+          "traits": {
+            "smithy.api#documentation": "An ordered array of acceptors to check after executing an operation.",
+            "smithy.api#required": {}
+          }
+        },
+        "minDelay": {
+          "target": "smithy.waiters#WaiterDelay",
+          "traits": {
+            "smithy.api#default": 2,
+            "smithy.api#documentation": "The minimum amount of time in seconds to delay between each retry.\nThis value defaults to 2 if not specified. If specified, this value\nMUST be greater than or equal to 1 and less than or equal to\n`maxDelay`."
+          }
+        },
+        "maxDelay": {
+          "target": "smithy.waiters#WaiterDelay",
+          "traits": {
+            "smithy.api#default": 120,
+            "smithy.api#documentation": "The maximum amount of time in seconds to delay between each retry.\nThis value defaults to 120 if not specified (or, 2 minutes). If\nspecified, this value MUST be greater than or equal to 1."
+          }
+        },
+        "deprecated": {
+          "target": "smithy.api#Boolean",
+          "traits": {
+            "smithy.api#documentation": "Indicates if the waiter is considered deprecated. A waiter SHOULD\nbe marked as deprecated if it has been replaced by another waiter or\nif it is no longer needed (for example, if a resource changes from\neventually consistent to strongly consistent)."
+          }
+        },
+        "tags": {
+          "target": "smithy.waiters#NonEmptyStringList",
+          "traits": {
+            "smithy.api#documentation": "A list of tags associated with the waiter that allow waiters to be\ncategorized and grouped."
+          }
+        }
+      },
+      "traits": {
+        "smithy.api#documentation": "Defines an individual operation waiter.",
+        "smithy.api#private": {}
+      }
+    },
+    "smithy.waiters#WaiterDelay": {
+      "type": "integer",
+      "traits": {
+        "smithy.api#range": {
+          "min": 1
+        }
+      }
+    },
+    "smithy.waiters#WaiterName": {
+      "type": "string",
+      "traits": {
+        "smithy.api#pattern": "^[A-Z]+[A-Za-z0-9]*$"
+      }
+    },
+    "smithy.waiters#waitable": {
+      "type": "map",
+      "key": {
+        "target": "smithy.waiters#WaiterName"
+      },
+      "value": {
+        "target": "smithy.waiters#Waiter"
+      },
+      "traits": {
+        "smithy.api#documentation": "Indicates that an operation has various named \"waiters\" that can be used\nto poll a resource until it enters a desired state.",
+        "smithy.api#length": {
+          "min": 1
+        },
+        "smithy.api#trait": {
+          "selector": "operation :not(-[input, output]-> structure > member > union[trait|streaming])"
+        }
       }
     }
   }
