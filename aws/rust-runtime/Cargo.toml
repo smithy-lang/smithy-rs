@@ -9,6 +9,10 @@ members = [
     "aws-runtime-api",
     "aws-sigv4",
     "aws-types",
+    # DDB HLL
+    "dynamodb-mapper/aws-sdk-dynamodb-expressions",
+    "dynamodb-mapper/aws-sdk-dynamodb-mapper",
+    "dynamodb-mapper/aws-sdk-dynamodb-mapper-core",
+    "dynamodb-mapper/aws-sdk-dynamodb-mapper-macros",
 ]
-
 exclude = ["aws-config"]
