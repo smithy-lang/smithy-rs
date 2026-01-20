@@ -1,0 +1,16 @@
+[package]
+name = "aws-sdk-dynamodb-mapper-macros"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+description = "Derive macros for the AWS SDK DynamoDB Mapper."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full"] }
