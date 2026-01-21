@@ -6,7 +6,7 @@ description = "Conversion of types from aws-smithy-types to other libraries."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.90"
 
 [features]
 convert-chrono = ["aws-smithy-types", "chrono"]

@@ -6,7 +6,7 @@ description = "AWSQuery and EC2Query Smithy protocol logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.90"
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
