@@ -198,7 +198,7 @@ class ClientModuleDocProvider(
                     ```
                     """.trimIndent(),
                     *RuntimeType.preludeScope,
-                    "http" to CargoDependency.Http0x.toDevDependency().toType(),
+                    "http" to CargoDependency.Http1x.toDevDependency().toType(),
                 )
             }
         }

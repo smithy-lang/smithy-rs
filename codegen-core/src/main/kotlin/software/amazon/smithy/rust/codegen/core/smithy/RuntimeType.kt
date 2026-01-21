@@ -310,6 +310,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val HttpRequest1x = Http1x.resolve("Request")
         val HttpRequestBuilder1x = Http1x.resolve("request::Builder")
         val HttpResponse1x = Http1x.resolve("Response")
+        val HttpResponseBuilder1x = Http1x.resolve("response::Builder")
 
         /**
          * Returns the appropriate http crate based on HTTP version.
