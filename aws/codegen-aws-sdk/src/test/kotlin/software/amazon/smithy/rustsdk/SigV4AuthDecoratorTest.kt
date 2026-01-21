@@ -163,11 +163,15 @@ class SigV4AuthDecoratorTest {
                         "ByteStream" to RuntimeType.byteStream(rc),
                         "Credentials" to AwsRuntimeType.awsCredentialTypesTestUtil(rc).resolve("Credentials"),
                         "Region" to AwsRuntimeType.awsTypes(rc).resolve("region::Region"),
-                        "ReplayEvent" to CargoDependency.smithyHttpClientTestUtil(rc).toType().resolve("test_util::ReplayEvent"),
-                        "Request" to RuntimeType.HttpRequest0x,
-                        "Response" to RuntimeType.HttpResponse0x,
+                        "ReplayEvent" to
+                            CargoDependency.smithyHttpClientTestUtil(rc).toType()
+                                .resolve("test_util::ReplayEvent"),
+                        "Request" to RuntimeType.HttpRequest1x,
+                        "Response" to RuntimeType.HttpResponse1x,
                         "SdkBody" to RuntimeType.sdkBody(rc),
-                        "StaticReplayClient" to CargoDependency.smithyHttpClientTestUtil(rc).toType().resolve("test_util::StaticReplayClient"),
+                        "StaticReplayClient" to
+                            CargoDependency.smithyHttpClientTestUtil(rc).toType()
+                                .resolve("test_util::StaticReplayClient"),
                         "tracing_subscriber" to RuntimeType.TracingSubscriber,
                     )
                 }
