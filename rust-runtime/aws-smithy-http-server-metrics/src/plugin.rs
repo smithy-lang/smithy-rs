@@ -89,7 +89,7 @@ where
 
     fn get_default_response_metrics(res: &Response<ResBody>) -> DefaultResponseMetrics {
         DefaultResponseMetrics {
-            http_status_code: Some(res.status().as_u16()),
+            http_status_code: Some(res.status().to_string()),
         }
     }
 
