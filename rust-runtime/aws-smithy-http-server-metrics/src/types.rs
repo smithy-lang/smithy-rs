@@ -14,5 +14,5 @@ pub type ReqBody = hyper::body::Body;
 pub type ResBody = UnsyncBoxBody<Bytes, Error>;
 
 pub(crate) type DefaultInit<E, S> = fn() -> AppendAndCloseOnDrop<E, S>;
-pub(crate) type DefaultRq<E, S> = fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>);
-pub(crate) type DefaultRs<E, S> = fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>);
+pub(crate) type DefaultRq<E> = fn(&mut Request<ReqBody>, &mut E);
+pub(crate) type DefaultRs<E> = fn(&mut Response<ResBody>, &mut E);

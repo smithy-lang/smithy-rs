@@ -4,6 +4,7 @@
  */
 
 use std::future::Future;
+use std::marker::PhantomData;
 use std::task::Context;
 use std::task::Poll;
 
@@ -13,7 +14,6 @@ use http::Response;
 use http_body::combinators::UnsyncBoxBody;
 use hyper::body::Body as ReqBody;
 use hyper::body::Bytes;
-use metrique::AppendAndCloseOnDrop;
 use tower::Service;
 
 use crate::default::DefaultRequestMetricsConfig;
@@ -31,19 +31,21 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     pub(crate) inner: Ser,
     pub(crate) init_metrics: I,
     pub(crate) request_metrics: Option<Rq>,
     pub(crate) response_metrics: Option<Rs>,
     pub(crate) default_req_metrics_extension_fn:
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
+        fn(&mut Request<ReqBody>, &mut E, DefaultRequestMetricsConfig),
     pub(crate) default_res_metrics_extension_fn:
-        fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+        fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
+
+    pub(crate) _entry_sink: PhantomData<S>,
 }
 impl<Ser, E, S, I, Rq, Rs> Clone for MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
@@ -51,8 +53,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     fn clone(&self) -> Self {
         Self {
@@ -64,6 +66,8 @@ where
             default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
+
+            _entry_sink: PhantomData,
         }
     }
 }
@@ -74,8 +78,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;

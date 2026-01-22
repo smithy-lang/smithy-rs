@@ -8,7 +8,6 @@ use std::sync::Arc;
 
 use http::Request;
 use http::Response;
-use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::Slot;
@@ -84,14 +83,14 @@ pub struct MetricsLayerBuilder<
     E = DefaultMetrics,
     S = DefaultSink,
     I = DefaultInit<E, S>,
-    Rq = DefaultRq<E, S>,
-    Rs = DefaultRs<E, S>,
+    Rq = DefaultRq<E>,
+    Rs = DefaultRs<E>,
 > where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     pub init_metrics: Option<I>,
     pub request_metrics: Option<Rq>,
@@ -133,8 +132,8 @@ where
 {
     pub fn request_metrics(
         self,
-        f: impl RequestMetrics<E, S>,
-    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl RequestMetrics<E, S>, DefaultRs<E, S>> {
+        f: impl RequestMetrics<E>,
+    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl RequestMetrics<E>, DefaultRs<E>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             request_metrics: Some(f),
@@ -149,12 +148,8 @@ where
 
     pub fn response_metrics(
         self,
-        f: impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
-            + Clone
-            + Send
-            + Sync
-            + 'static,
-    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, impl ResponseMetrics<E, S>> {
+        f: impl Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static,
+    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E>, impl ResponseMetrics<E>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             request_metrics: None,
@@ -175,19 +170,13 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
+    Rq: RequestMetrics<E>,
 {
     pub fn response_metrics(
         self,
-        f: impl ResponseMetrics<E, S>,
-    ) -> MetricsLayerBuilder<
-        WithRqAndRs,
-        E,
-        S,
-        I,
-        impl RequestMetrics<E, S>,
-        impl ResponseMetrics<E, S>,
-    > {
+        f: impl ResponseMetrics<E>,
+    ) -> MetricsLayerBuilder<WithRqAndRs, E, S, I, impl RequestMetrics<E>, impl ResponseMetrics<E>>
+    {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             request_metrics: self.request_metrics,
@@ -203,24 +192,18 @@ where
     impl_disable_methods!();
 }
 
-impl<E, S, I, Rs> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, Rs>
+impl<E, S, I, Rs> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E>, Rs>
 where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rs: ResponseMetrics<E>,
 {
     pub fn request_metrics(
         self,
-        f: impl RequestMetrics<E, S>,
-    ) -> MetricsLayerBuilder<
-        WithRqAndRs,
-        E,
-        S,
-        I,
-        impl RequestMetrics<E, S>,
-        impl ResponseMetrics<E, S>,
-    > {
+        f: impl RequestMetrics<E>,
+    ) -> MetricsLayerBuilder<WithRqAndRs, E, S, I, impl RequestMetrics<E>, impl ResponseMetrics<E>>
+    {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
             request_metrics: Some(f),
@@ -241,8 +224,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     impl_disable_methods!();
 }
@@ -254,8 +237,8 @@ pub trait DefaultMetricsBuildExt<S, I, Rq, Rs>
 where
     S: MetriqueEntrySink<DefaultMetrics>,
     I: InitMetrics<DefaultMetrics, S>,
-    Rq: RequestMetrics<DefaultMetrics, S>,
-    Rs: ResponseMetrics<DefaultMetrics, S>,
+    Rq: RequestMetrics<DefaultMetrics>,
+    Rs: ResponseMetrics<DefaultMetrics>,
 {
     fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs>;
 }
@@ -266,13 +249,13 @@ macro_rules! impl_build_for_state {
         where
             S: MetriqueEntrySink<DefaultMetrics>,
             I: InitMetrics<DefaultMetrics, S>,
-            Rq: RequestMetrics<DefaultMetrics, S>,
-            Rs: ResponseMetrics<DefaultMetrics, S>,
+            Rq: RequestMetrics<DefaultMetrics>,
+            Rs: ResponseMetrics<DefaultMetrics>,
         {
             fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
                 let default_req_metrics_extension_fn =
                     |req: &mut Request<ReqBody>,
-                     metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>,
+                     metrics: &mut DefaultMetrics,
                      config: DefaultRequestMetricsConfig| {
                         metrics.default_request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
                         let default_req_metrics_slotguard = metrics
@@ -294,7 +277,7 @@ macro_rules! impl_build_for_state {
 
                 let default_res_metrics_extension_fn =
                     |res: &mut Response<ResBody>,
-                     metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, S>,
+                     metrics: &mut DefaultMetrics,
                      config: DefaultResponseMetricsConfig| {
                         metrics.default_response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
                         let default_res_metrics_slotguard = metrics
@@ -322,6 +305,7 @@ macro_rules! impl_build_for_state {
                     default_res_metrics_extension_fn,
                     default_req_metrics_config: self.default_req_metrics_config,
                     default_res_metrics_config: self.default_res_metrics_config,
+                    _entry_sink: PhantomData,
                 }
             }
         }
@@ -335,7 +319,7 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
-    use metrique::ServiceMetrics;
+    use metrique::{AppendAndCloseOnDrop, ServiceMetrics};
     use metrique_writer::GlobalEntrySink;
 
     use super::*;
@@ -367,8 +351,8 @@ mod tests {
                 E: MetriqueCloseEntry,
                 S: MetriqueEntrySink<E>,
                 I: InitMetrics<E, S>,
-                Rq: RequestMetrics<E, S>,
-                Rs: ResponseMetrics<E, S>,
+                Rq: RequestMetrics<E>,
+                Rs: ResponseMetrics<E>,
             {
             }
         };
@@ -383,16 +367,8 @@ mod tests {
         DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())
     }
 
-    fn dummy_request_fn(
-        _req: &mut Request<ReqBody>,
-        _metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
-    ) {
-    }
-    fn dummy_response_fn(
-        _res: &mut Response<ResBody>,
-        _metrics: &mut AppendAndCloseOnDrop<DefaultMetrics, DefaultSink>,
-    ) {
-    }
+    fn dummy_request_fn(_req: &mut Request<ReqBody>, _metrics: &mut DefaultMetrics) {}
+    fn dummy_response_fn(_res: &mut Response<ResBody>, _metrics: &mut DefaultMetrics) {}
 
     #[test]
     fn test_needs_initialization_state() {
