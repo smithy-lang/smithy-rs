@@ -21,7 +21,7 @@ struct ExtensionField {
 /// 3. Adds default request/repsonse metrics fields
 /// 4. Generates a builder trait and implementations for the metrics layer for the annotated metrics struct
 pub(crate) fn smithy_metrics_impl(
-    attrs: SmithyMetricsStructAttrs,
+    _attrs: SmithyMetricsStructAttrs,
     mut metrics_struct: ItemStruct,
 ) -> TokenStream2 {
     let syn::Fields::Named(ref mut fields) = metrics_struct.fields else {
@@ -75,12 +75,8 @@ pub(crate) fn smithy_metrics_impl(
         default_response_metrics: Option<metrique::Slot<aws_smithy_http_server_metrics::default::DefaultResponseMetrics>>
     });
 
-    let ext_trait = generate_ext_trait(&attrs.server_crate, &metrics_struct.ident);
-    let ext_trait_impls = generate_ext_trait_impl(
-        &attrs.server_crate,
-        &metrics_struct.ident,
-        &extension_fields,
-    );
+    let ext_trait = generate_ext_trait(&metrics_struct.ident);
+    let ext_trait_impls = generate_ext_trait_impl(&metrics_struct.ident, &extension_fields);
 
     quote! {
         #metrics_struct
@@ -90,7 +86,7 @@ pub(crate) fn smithy_metrics_impl(
 }
 
 /// Generates a builder extension trait for the metrics struct.
-fn generate_ext_trait(_sdk_crate: &Ident, metrics_struct: &Ident) -> TokenStream2 {
+fn generate_ext_trait(metrics_struct: &Ident) -> TokenStream2 {
     let trait_name = quote::format_ident!("{}BuildExt", metrics_struct);
     quote! {
         pub trait #trait_name<S, I, Rq, Rs>
@@ -106,7 +102,6 @@ fn generate_ext_trait(_sdk_crate: &Ident, metrics_struct: &Ident) -> TokenStream
 }
 
 fn generate_ext_trait_impl(
-    _sdk_crate: &Ident,
     struct_ident: &Ident,
     extension_fields: &[ExtensionField],
 ) -> TokenStream2 {
@@ -220,7 +215,7 @@ fn has_operation_attr(attrs: &[Attribute]) -> bool {
         if !attr.path().is_ident("smithy_metrics") {
             return false;
         }
-        
+
         // Parse the attribute arguments to check for "operation"
         attr.parse_args::<syn::Ident>()
             .map(|ident| ident == "operation")
@@ -229,7 +224,7 @@ fn has_operation_attr(attrs: &[Attribute]) -> bool {
 }
 
 /// Recursively searches a type for `Slot<T>` and extracts the inner type `T`, otherwise returns None.
-/// 
+///
 /// Examples:
 /// - `MyType` → `None`
 /// - `Slot<MyType>` → `Some(MyType)`
@@ -270,7 +265,6 @@ fn extract_inner_type(ty: &syn::Type) -> Option<syn::Type> {
     None
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,13 +272,16 @@ mod tests {
     /// Helper to extract the generated struct from macro output
     fn get_generated_struct(output: TokenStream2) -> syn::ItemStruct {
         let file: syn::File = syn::parse2(output).expect("should parse generated code");
-        file.items.iter().find_map(|item| {
-            if let syn::Item::Struct(s) = item {
-                Some(s.clone())
-            } else {
-                None
-            }
-        }).expect("should have generated struct")
+        file.items
+            .iter()
+            .find_map(|item| {
+                if let syn::Item::Struct(s) = item {
+                    Some(s.clone())
+                } else {
+                    None
+                }
+            })
+            .expect("should have generated struct")
     }
 
     /// Helper to find a field by name in a struct
@@ -292,7 +289,9 @@ mod tests {
         let syn::Fields::Named(fields) = &struct_item.fields else {
             panic!("should have named fields");
         };
-        fields.named.iter()
+        fields
+            .named
+            .iter()
             .find(|f| f.ident.as_ref().unwrap() == field_name)
             .expect(&format!("should have field {}", field_name))
     }
@@ -304,7 +303,7 @@ mod tests {
         assert_eq!(
             quote::quote!(#actual_ty).to_string(),
             quote::quote!(#expected_ty).to_string(),
-            "field '{}' should have type {}", 
+            "field '{}' should have type {}",
             field_name,
             quote::quote!(#expected_ty)
         );
@@ -318,16 +317,18 @@ mod tests {
                 my_field: MyType,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {
-            server_crate: syn::parse_quote!(my_crate),
-        };
+        let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
-        
+
         // Verify my_field is wrapped in Slot
-        assert_field_type(&generated_struct, "my_field", syn::parse_quote!(metrique::Slot<MyType>));
-        
+        assert_field_type(
+            &generated_struct,
+            "my_field",
+            syn::parse_quote!(metrique::Slot<MyType>),
+        );
+
         // Verify default fields exist
         find_field(&generated_struct, "default_request_metrics");
         find_field(&generated_struct, "default_response_metrics");
@@ -341,15 +342,17 @@ mod tests {
                 my_field: Slot<MyType>,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {
-            server_crate: syn::parse_quote!(my_crate),
-        };
+        let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
-        
+
         // Verify my_field is NOT double-wrapped
-        assert_field_type(&generated_struct, "my_field", syn::parse_quote!(Slot<MyType>));
+        assert_field_type(
+            &generated_struct,
+            "my_field",
+            syn::parse_quote!(Slot<MyType>),
+        );
     }
 
     #[test]
@@ -360,15 +363,17 @@ mod tests {
                 my_field: Option<Slot<MyType>>,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {
-            server_crate: syn::parse_quote!(my_crate),
-        };
+        let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
-        
+
         // Verify my_field is NOT double-wrapped
-        assert_field_type(&generated_struct, "my_field", syn::parse_quote!(Option<Slot<MyType>>));
+        assert_field_type(
+            &generated_struct,
+            "my_field",
+            syn::parse_quote!(Option<Slot<MyType>>),
+        );
     }
 
     #[test]
@@ -381,18 +386,24 @@ mod tests {
                 another_regular: i32,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {
-            server_crate: syn::parse_quote!(my_crate),
-        };
+        let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
-        
+
         // Verify operation_field is wrapped
-        assert_field_type(&generated_struct, "operation_field", syn::parse_quote!(metrique::Slot<MyType>));
-        
+        assert_field_type(
+            &generated_struct,
+            "operation_field",
+            syn::parse_quote!(metrique::Slot<MyType>),
+        );
+
         // Verify regular fields are unchanged
-        assert_field_type(&generated_struct, "regular_field", syn::parse_quote!(String));
+        assert_field_type(
+            &generated_struct,
+            "regular_field",
+            syn::parse_quote!(String),
+        );
         assert_field_type(&generated_struct, "another_regular", syn::parse_quote!(i32));
     }
 
@@ -408,17 +419,27 @@ mod tests {
                 third_operation: ThirdType,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {
-            server_crate: syn::parse_quote!(my_crate),
-        };
+        let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
-        
+
         // Verify all operation fields are wrapped
-        assert_field_type(&generated_struct, "first_operation", syn::parse_quote!(metrique::Slot<FirstType>));
-        assert_field_type(&generated_struct, "second_operation", syn::parse_quote!(metrique::Slot<SecondType>));
-        assert_field_type(&generated_struct, "third_operation", syn::parse_quote!(metrique::Slot<ThirdType>));
+        assert_field_type(
+            &generated_struct,
+            "first_operation",
+            syn::parse_quote!(metrique::Slot<FirstType>),
+        );
+        assert_field_type(
+            &generated_struct,
+            "second_operation",
+            syn::parse_quote!(metrique::Slot<SecondType>),
+        );
+        assert_field_type(
+            &generated_struct,
+            "third_operation",
+            syn::parse_quote!(metrique::Slot<ThirdType>),
+        );
     }
 
     // A few more complex tets for extract_inner_type
@@ -428,7 +449,10 @@ mod tests {
         let ty: syn::Type = syn::parse_quote!(Vec<Option<Slot<MyType>>>);
         let result = extract_inner_type(&ty).expect("should extract inner type");
         let expected: syn::Type = syn::parse_quote!(MyType);
-        assert_eq!(quote::quote!(#result).to_string(), quote::quote!(#expected).to_string());
+        assert_eq!(
+            quote::quote!(#result).to_string(),
+            quote::quote!(#expected).to_string()
+        );
     }
 
     #[test]
@@ -436,6 +460,9 @@ mod tests {
         let ty: syn::Type = syn::parse_quote!(Slot<std::collections::HashMap<String, i32>>);
         let result = extract_inner_type(&ty).expect("should extract inner type");
         let expected: syn::Type = syn::parse_quote!(std::collections::HashMap<String, i32>);
-        assert_eq!(quote::quote!(#result).to_string(), quote::quote!(#expected).to_string());
+        assert_eq!(
+            quote::quote!(#result).to_string(),
+            quote::quote!(#expected).to_string()
+        );
     }
 }
