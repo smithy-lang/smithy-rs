@@ -245,7 +245,8 @@ where
 
 macro_rules! impl_build_for_state {
     ($state:ty) => {
-        impl<S, I, Rq, Rs> DefaultMetricsBuildExt<S, I, Rq, Rs> for MetricsLayerBuilder<$state, DefaultMetrics, S, I, Rq, Rs>
+        impl<S, I, Rq, Rs> DefaultMetricsBuildExt<S, I, Rq, Rs>
+            for MetricsLayerBuilder<$state, DefaultMetrics, S, I, Rq, Rs>
         where
             S: MetriqueEntrySink<DefaultMetrics>,
             I: InitMetrics<DefaultMetrics, S>,
@@ -257,14 +258,15 @@ macro_rules! impl_build_for_state {
                     |req: &mut Request<ReqBody>,
                      metrics: &mut DefaultMetrics,
                      config: DefaultRequestMetricsConfig| {
-                        metrics.default_request_metrics = Some(Slot::new(DefaultRequestMetrics::default()));
+                        metrics.default_request_metrics =
+                            Some(Slot::new(DefaultRequestMetrics::default()));
                         let default_req_metrics_slotguard = metrics
                             .default_request_metrics
                             .as_mut()
-                            .expect("unreachable: the option is set to some in this scope")
-                            .open(OnParentDrop::Discard)
-                            .expect("unreachable: the slot was created in this scope and is not opened before this point");
-
+                            .and_then(|slot| slot.open(OnParentDrop::Discard))
+                            .expect(
+                                "unreachable: the option is set to a created slot in this scope",
+                            );
                         let ext = DefaultRequestMetricsExtension {
                             metrics: default_req_metrics_slotguard,
                             config,
@@ -279,13 +281,15 @@ macro_rules! impl_build_for_state {
                     |res: &mut Response<ResBody>,
                      metrics: &mut DefaultMetrics,
                      config: DefaultResponseMetricsConfig| {
-                        metrics.default_response_metrics = Some(Slot::new(DefaultResponseMetrics::default()));
+                        metrics.default_response_metrics =
+                            Some(Slot::new(DefaultResponseMetrics::default()));
                         let default_res_metrics_slotguard = metrics
                             .default_response_metrics
                             .as_mut()
-                            .expect("unreachable: the option is set to some in this scope")
-                            .open(OnParentDrop::Discard)
-                            .expect("unreachable: the slot was created in this scope and is not opened before this point");
+                            .and_then(|slot| slot.open(OnParentDrop::Discard))
+                            .expect(
+                                "unreachable: the option is set to a created slot in this scope",
+                            );
 
                         let ext = DefaultResponseMetricsExtension {
                             metrics: default_res_metrics_slotguard,
