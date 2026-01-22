@@ -93,8 +93,8 @@ fn generate_ext_trait(metrics_struct: &Ident) -> TokenStream2 {
         where
             S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#metrics_struct>,
             I: aws_smithy_http_server_metrics::traits::InitMetrics<#metrics_struct, S>,
-            Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#metrics_struct, S>,
-            Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#metrics_struct, S>,
+            Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#metrics_struct>,
+            Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#metrics_struct>,
         {
             fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#metrics_struct, S, I, Rq, Rs>;
         }
@@ -129,13 +129,13 @@ fn generate_ext_trait_impl(
                 where
                     S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#struct_ident>,
                     I: aws_smithy_http_server_metrics::traits::InitMetrics<#struct_ident, S>,
-                    Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#struct_ident, S>,
-                    Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident, S>,
+                    Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#struct_ident>,
+                    Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident>,
                 {
                     fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#struct_ident, S, I, Rq, Rs> {
                         let default_req_metrics_extension_fn =
                             |req: &mut http::Request<aws_smithy_http_server_metrics::types::ReqBody>,
-                            metrics: &mut metrique::AppendAndCloseOnDrop<#struct_ident, S>,
+                            metrics: &mut #struct_ident,
                             config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig| {
                                 metrics.default_request_metrics = Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
                                 let default_req_metrics_slotguard = metrics
@@ -157,7 +157,7 @@ fn generate_ext_trait_impl(
 
                         let default_res_metrics_extension_fn =
                             |res: &mut http::Response<aws_smithy_http_server_metrics::types::ResBody>,
-                            metrics: &mut metrique::AppendAndCloseOnDrop<#struct_ident, S>,
+                            metrics: &mut #struct_ident,
                             config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig| {
                                 metrics.default_response_metrics = Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultResponseMetrics::default()));
                                 let default_res_metrics_slotguard = metrics

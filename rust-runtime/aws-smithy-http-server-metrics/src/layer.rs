@@ -9,7 +9,6 @@ use std::marker::PhantomData;
 
 use http::Request;
 use http::Response;
-use metrique::AppendAndCloseOnDrop;
 use metrique::DefaultSink;
 use thiserror::Error;
 use tower::Layer;
@@ -45,24 +44,26 @@ pub struct MetricsLayer<
     E = DefaultMetrics,
     S = DefaultSink,
     I = DefaultInit<E, S>,
-    Rq = DefaultRq<E, S>,
-    Rs = DefaultRs<E, S>,
+    Rq = DefaultRq<E>,
+    Rs = DefaultRs<E>,
 > where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     pub(crate) init_metrics: I,
     pub(crate) request_metrics: Option<Rq>,
     pub(crate) response_metrics: Option<Rs>,
     pub(crate) default_req_metrics_extension_fn:
-        fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
+        fn(&mut Request<ReqBody>, &mut E, DefaultRequestMetricsConfig),
     pub(crate) default_res_metrics_extension_fn:
-        fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+        fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
+
+    pub(crate) _entry_sink: PhantomData<S>,
 }
 
 impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
@@ -70,8 +71,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     #[doc(hidden)]
     pub fn __macro_new(
@@ -80,12 +81,12 @@ where
         response_metrics: Option<Rs>,
         default_req_metrics_extension_fn: fn(
             &mut Request<ReqBody>,
-            &mut AppendAndCloseOnDrop<E, S>,
+            &mut E,
             DefaultRequestMetricsConfig,
         ),
         default_res_metrics_extension_fn: fn(
             &mut Response<ResBody>,
-            &mut AppendAndCloseOnDrop<E, S>,
+            &mut E,
             DefaultResponseMetricsConfig,
         ),
         default_req_metrics_config: DefaultRequestMetricsConfig,
@@ -99,6 +100,8 @@ where
             default_res_metrics_extension_fn,
             default_req_metrics_config,
             default_res_metrics_config,
+
+            _entry_sink: PhantomData,
         }
     }
 }
@@ -141,8 +144,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: RequestMetrics<E, S>,
-    Rs: ResponseMetrics<E, S>,
+    Rq: RequestMetrics<E>,
+    Rs: ResponseMetrics<E>,
 {
     type Service = MetricsLayerService<Ser, E, S, I, Rq, Rs>;
 
@@ -156,6 +159,8 @@ where
             default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
+
+            _entry_sink: PhantomData,
         }
     }
 }

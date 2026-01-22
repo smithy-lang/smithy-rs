@@ -31,32 +31,40 @@ where
 pub trait InitMetrics<E, S>:
     Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
 {
 }
 impl<T, E, S> InitMetrics<E, S> for T
 where
-    E: CloseEntry + Send + Sync + 'static,
-    S: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
+    E: MetriqueCloseEntry,
+    S: MetriqueEntrySink<E>,
     T: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
 {
 }
 
-pub trait RequestMetrics<E, S>:
-    Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
+pub trait RequestMetrics<E>:
+    Fn(&mut Request<ReqBody>, &mut E) + Clone + Send + Sync + 'static
+where
+    E: MetriqueCloseEntry,
 {
 }
-impl<T, E, S> RequestMetrics<E, S> for T where
-    T: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
+impl<T, E> RequestMetrics<E> for T
+where
+    E: MetriqueCloseEntry,
+    T: Fn(&mut Request<ReqBody>, &mut E) + Clone + Send + Sync + 'static,
 {
 }
 
-pub trait ResponseMetrics<E, S>:
-    Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
+pub trait ResponseMetrics<E>:
+    Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static
+where
+    E: MetriqueCloseEntry,
 {
 }
-impl<T, E, S> ResponseMetrics<E, S> for T where
-    T: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
+impl<T, E> ResponseMetrics<E> for T
+where
+    E: MetriqueCloseEntry,
+    T: Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static,
 {
 }

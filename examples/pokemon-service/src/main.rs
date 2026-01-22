@@ -119,13 +119,13 @@ pub async fn main() {
     let metrics_layer = MetricsLayer::builder()
         .init_metrics(|| PokemonMetrics::default().append_on_drop(ServiceMetrics::sink()))
         .request_metrics(
-            |_req: &mut Request<ReqBody>, metrics: &mut PokemonMetricsGuard| {
+            |_req: &mut Request<ReqBody>, metrics: &mut PokemonMetrics| {
                 metrics.request_metrics.test_request_metric =
                     Some("test request metric".to_string());
             },
         )
         .response_metrics(
-            |_res: &mut Response<ResBody>, metrics: &mut PokemonMetricsGuard| {
+            |_res: &mut Response<ResBody>, metrics: &mut PokemonMetrics| {
                 metrics.response_metrics.test_response_metric =
                     Some("test response metric".to_string());
             },

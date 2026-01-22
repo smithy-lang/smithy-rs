@@ -127,9 +127,9 @@ These super traits will contain blanket implementations for reducing duplication
 
 #### `InitMetrics<E, S>: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static`
 
-#### `RequestMetrics<E, S>: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+#### `RequestMetrics<E>: Fn(&mut Request<ReqBody>, &mut E) + Clone + Send + Sync + 'static`
 
-#### `ResponseMetrics<E, S>: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+#### `ResponseMetrics<E>: Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static`
 
 ### `MetricsLayer` struct
 
@@ -159,17 +159,17 @@ This gives users the ability to add a metrics tower layer that initializes metri
 
 - Default type parameter of `fn() -> AppendAndCloseOnDrop<E, S>`
 
-`Rq: RequestMetrics<E, S>`
+`Rq: RequestMetrics<E>`
 
 - Closure trait bound to allow users to set metrics however they like from the request object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized. The `Request` parameter needs to be a mutable reference so adding to the request extensions is possible.
 
-- Default type parameter of `fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)`
+- Default type parameter of `fn(&mut Request<ReqBody>, &mut E)`
 
-`Rs: ResponseMetrics<E, S>`
+`Rs: ResponseMetrics<E>`
 
 - Closure trait bound to allow users to set metrics however they like from the response object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized.
 
-- Default type parameter of `fn(&Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)`
+- Default type parameter of `fn(&Response<ResBody>, &mut E)`
 
 #### Will have the following fields:
 
@@ -177,8 +177,8 @@ This gives users the ability to add a metrics tower layer that initializes metri
 init_metrics: I,
 request_metrics: Option<Rq>,
 response_metrics: Option<Rs>,
-default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
-default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut E, DefaultRequestMetricsConfig),
+default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
 default_req_metrics_config: DefaultRequestMetricsConfig,
 default_res_metrics_config: DefaultResponseMetricsConfig,
 ```
