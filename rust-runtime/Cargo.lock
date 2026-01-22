@@ -539,6 +539,7 @@ dependencies = [
  "metrique-writer-format-emf",
  "metrique-writer-macro",
  "tower 0.5.3",
+ "pin-project-lite",
  "thiserror 2.0.17",
 ]
 

@@ -29,6 +29,7 @@ http = "0.2.9"
 http-body = "0.4.5"
 hyper = "0.14.26"
 thiserror = "2"
+pin-project-lite = "0.2"
 
 aws-smithy-http-server = { path = "../aws-smithy-http-server" }
 aws-smithy-http-server-metrics-macro = { path = "../aws-smithy-http-server-metrics-macro" }
