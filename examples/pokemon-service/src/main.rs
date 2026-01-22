@@ -38,12 +38,11 @@ use pokemon_service::{
 };
 use pokemon_service_common::{
     capture_pokemon, check_health, get_pokemon_species, get_server_statistics,
-    metrics::{PokemonMetrics, PokemonMetricsBuildExt, PokemonMetricsGuard},
+    metrics::{PokemonMetrics, PokemonMetricsBuildExt},
     setup_tracing, stream_pokemon_radio, State,
 };
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
 use tower::Layer;
-use tracing_appender::rolling::{RollingFileAppender, Rotation};
 
 use crate::authz::AuthorizationPlugin;
 
@@ -160,16 +159,9 @@ pub async fn main() {
 }
 
 pub(crate) fn setup_metrics() -> AttachHandle {
-    let service_log_dir = "logs";
-    let service_log_name = "pokemon_service_metrics";
-
     let emf = Emf::builder("Ns".to_string(), vec![vec![]])
         .build()
-        .output_to_makewriter(RollingFileAppender::new(
-            Rotation::MINUTELY,
-            service_log_dir,
-            service_log_name,
-        ));
+        .output_to(std::io::stdout());
 
     ServiceMetrics::attach_to_stream(emf)
 }
