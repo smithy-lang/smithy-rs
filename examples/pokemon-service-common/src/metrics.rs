@@ -1,7 +1,7 @@
 use aws_smithy_http_server_metrics::smithy_metrics;
 use metrique::unit_of_work::metrics;
 
-#[smithy_metrics(server_crate = pokemon_service_server_sdk)]
+#[smithy_metrics]
 #[metrics]
 #[derive(Default)]
 pub struct PokemonMetrics {
