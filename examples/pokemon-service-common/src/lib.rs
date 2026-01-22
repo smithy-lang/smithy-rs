@@ -11,7 +11,7 @@ use std::{
     collections::HashMap,
     convert::TryInto,
     process::Child,
-    sync::{atomic::AtomicUsize, Arc},
+    sync::{atomic::AtomicUsize, Arc, Mutex},
 };
 
 use async_stream::stream;
@@ -159,9 +159,19 @@ impl Default for State {
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
-    Extension(mut metrics): Extension<SlotGuard<OperationMetrics>>,
+    Extension(metrics): Extension<Arc<Mutex<SlotGuard<OperationMetrics>>>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
-    metrics.get_pokemon_species_metrics = Some("hello world".to_string());
+    match metrics.lock() {
+        Ok(mut metrics) => {
+            metrics.get_pokemon_species_metrics = Some("hello world".to_string());
+        }
+        Err(_) => {
+            tracing::error!(
+                "Failed to acquire lock on OperationMetrics. Metrics may be incomplete."
+            )
+        }
+    };
+
     state
         .0
         .call_count
@@ -376,8 +386,8 @@ mod tests {
             .open(metrique::OnParentDrop::Discard)
             .expect("unreachable: slot was created here");
 
-        let test_metrics: Extension<SlotGuard<OperationMetrics>> =
-            Extension(test_operation_metrics_slotguard);
+        let test_metrics: Extension<Arc<Mutex<SlotGuard<OperationMetrics>>>> =
+            Extension(Arc::new(Mutex::new(test_operation_metrics_slotguard)));
 
         let actual_spanish_flavor_text =
             get_pokemon_species(input, Extension(state.clone()), test_metrics)
