@@ -32,10 +32,10 @@ class ClientHttpBoundProtocolPayloadGenerator(
                     let marshaller = #{marshallerConstructorFn}();
                     let (signer, signer_sender) = #{DeferredSigner}::new();
                     _cfg.interceptor_state().store_put(signer_sender);
-                    #{SdkBody}::from_body_1_x(#{hyper}::Body::wrap_stream(#{event_stream:W}))
+                    #{SdkBody}::from_body_1_x(#{http_body_util}::StreamBody::new(#{event_stream:W}))
                 }
                 """,
-                "hyper" to CargoDependency.HyperWithStream0x.toType(),
+                "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
                 "SdkBody" to
                     CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x")
                         .toType().resolve("body::SdkBody"),
@@ -73,7 +73,7 @@ private fun eventStreamWithInitialRequest(
                 let initial_message = #{initial_message}(body);
                 let mut buffer = #{Vec}::new();
                 #{write_message_to}(&initial_message, &mut buffer)?;
-                let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
+                let initial_message_stream = futures_util::stream::iter(vec![Ok(#{http_body_1x}::Frame::data(buffer.into()))]);
                 let adapter = #{message_stream_adaptor:W};
                 initial_message_stream.chain(adapter)
             }
@@ -86,6 +86,7 @@ private fun eventStreamWithInitialRequest(
             "write_message_to" to
                 RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                     .resolve("frame::write_message_to"),
+            "http_body_1x" to CargoDependency.HttpBody1x.toType(),
         )
     }
 }

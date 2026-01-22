@@ -37,7 +37,7 @@ impl<T: Send + Sync + 'static, E: StdError + Send + Sync + 'static> EventStreamS
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
+impl<T: Send + Sync, E: StdError + Send + Sync + 'static> EventStreamSender<T, E> {
     #[doc(hidden)]
     pub fn into_body_stream(
         self,
@@ -118,24 +118,24 @@ impl fmt::Display for MessageStreamError {
 /// This will yield an `Err(SdkError::ConstructionFailure)` if a message can't be
 /// marshalled into an Event Stream frame, (e.g., if the message payload was too large).
 #[allow(missing_debug_implementations)]
-pub struct MessageStreamAdapter<T, E: StdError + Send + Sync + 'static> {
+pub struct MessageStreamAdapter<T: Send + Sync, E: StdError + Send + Sync + 'static> {
     marshaller: Box<dyn MarshallMessage<Input = T> + Send + Sync>,
     error_marshaller: Box<dyn MarshallMessage<Input = E> + Send + Sync>,
     signer: Box<dyn SignMessage + Send + Sync>,
-    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+    stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
     end_signal_sent: bool,
     _phantom: PhantomData<E>,
 }
 
-impl<T, E: StdError + Send + Sync + 'static> Unpin for MessageStreamAdapter<T, E> {}
+impl<T: Send + Sync, E: StdError + Send + Sync + 'static> Unpin for MessageStreamAdapter<T, E> {}
 
-impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
+impl<T: Send + Sync, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
     /// Create a new `MessageStreamAdapter`.
     pub fn new(
         marshaller: impl MarshallMessage<Input = T> + Send + Sync + 'static,
         error_marshaller: impl MarshallMessage<Input = E> + Send + Sync + 'static,
         signer: impl SignMessage + Send + Sync + 'static,
-        stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send>>,
+        stream: Pin<Box<dyn Stream<Item = Result<T, E>> + Send + Sync>>,
     ) -> Self {
         MessageStreamAdapter {
             marshaller: Box::new(marshaller),
@@ -148,9 +148,11 @@ impl<T, E: StdError + Send + Sync + 'static> MessageStreamAdapter<T, E> {
     }
 }
 
-impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
-    type Item =
-        Result<Bytes, SdkError<E, aws_smithy_runtime_api::client::orchestrator::HttpResponse>>;
+impl<T: Send + Sync, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, E> {
+    type Item = Result<
+        http_body_1x::Frame<Bytes>,
+        SdkError<E, aws_smithy_runtime_api::client::orchestrator::HttpResponse>,
+    >;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.stream.as_mut().poll_next(cx) {
@@ -177,7 +179,7 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
                     write_message_to(&message, &mut buffer)
                         .map_err(SdkError::construction_failure)?;
                     trace!(signed_message = ?buffer, "sending signed event stream message");
-                    Poll::Ready(Some(Ok(Bytes::from(buffer))))
+                    Poll::Ready(Some(Ok(http_body_1x::Frame::data(Bytes::from(buffer)))))
                 } else if !self.end_signal_sent {
                     self.end_signal_sent = true;
                     match self.signer.sign_empty() {
@@ -187,7 +189,7 @@ impl<T, E: StdError + Send + Sync + 'static> Stream for MessageStreamAdapter<T, 
                             write_message_to(&message, &mut buffer)
                                 .map_err(SdkError::construction_failure)?;
                             trace!(signed_message = ?buffer, "sending signed empty message to terminate the event stream");
-                            Poll::Ready(Some(Ok(Bytes::from(buffer))))
+                            Poll::Ready(Some(Ok(http_body_1x::Frame::data(Bytes::from(buffer)))))
                         }
                         None => Poll::Ready(None),
                     }
