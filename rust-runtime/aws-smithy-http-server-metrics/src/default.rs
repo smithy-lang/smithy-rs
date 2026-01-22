@@ -17,6 +17,7 @@ pub struct DefaultMetrics {
     #[metrics(flatten)]
     pub(crate) default_response_metrics: Option<Slot<DefaultResponseMetrics>>,
 }
+// Slot currently doesn't impl debug: https://github.com/awslabs/metrique/issues/190
 impl Debug for DefaultMetrics {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DefaultMetrics")
