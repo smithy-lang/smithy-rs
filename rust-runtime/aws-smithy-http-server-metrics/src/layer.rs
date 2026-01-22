@@ -78,8 +78,16 @@ where
         init_metrics: I,
         set_request_metrics: Option<Rq>,
         set_response_metrics: Option<Rs>,
-        default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
-        default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
+        default_req_metrics_extension_fn: fn(
+            &mut Request<ReqBody>,
+            &mut AppendAndCloseOnDrop<E, S>,
+            DefaultRequestMetricsConfig,
+        ),
+        default_res_metrics_extension_fn: fn(
+            &mut Response<ResBody>,
+            &mut AppendAndCloseOnDrop<E, S>,
+            DefaultResponseMetricsConfig,
+        ),
         default_req_metrics_config: DefaultRequestMetricsConfig,
         default_res_metrics_config: DefaultResponseMetricsConfig,
     ) -> Self {
