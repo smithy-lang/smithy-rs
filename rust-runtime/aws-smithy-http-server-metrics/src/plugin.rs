@@ -5,6 +5,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::{Arc, Mutex};
 use std::task::Context;
 use std::task::Poll;
 
@@ -20,13 +21,12 @@ use metrique::Slot;
 use metrique_writer::AttachGlobalEntrySink;
 use pin_project_lite::pin_project;
 use tower::Service;
+use tracing;
 
 use crate::default::DefaultMetrics;
 use crate::default::DefaultRequestMetrics;
-use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultRequestMetricsExtension;
 use crate::default::DefaultResponseMetrics;
-use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
 use crate::types::ReqBody;
 use crate::types::ResBody;
@@ -68,19 +68,15 @@ where
                 Poll::Ready(Ok(mut res)) => {
                     let default_response_metrics = get_default_response_metrics(&res);
 
-                    let maybe_default_res_metrics_ext =
+                    let maybe_default_res_metrics_ext_mutex = res
+                        .extensions_mut()
+                        .get_mut::<Arc<Mutex<DefaultResponseMetricsExtension>>>();
+
+                    if let Some(mutex) = maybe_default_res_metrics_ext_mutex {
+                        update_response_metrics_extension(mutex, default_response_metrics);
                         res.extensions_mut()
-                            .get_mut::<DefaultResponseMetricsExtension>();
-
-                    if let Some(default_res_metrics_ext) = maybe_default_res_metrics_ext {
-                        *default_res_metrics_ext.metrics = apply_default_response_metrics_config(
-                            default_response_metrics,
-                            &default_res_metrics_ext.config,
-                        );
+                            .remove::<Arc<Mutex<DefaultResponseMetricsExtension>>>();
                     }
-
-                    res.extensions_mut()
-                        .remove::<DefaultResponseMetricsExtension>();
 
                     Poll::Ready(Ok(res))
                 }
@@ -104,27 +100,6 @@ where
             },
             DefaultMetricsFutureProj::Passthrough { inner } => inner.poll(cx),
         }
-    }
-}
-
-fn get_default_response_metrics(res: &Response<ResBody>) -> DefaultResponseMetrics {
-    DefaultResponseMetrics {
-        http_status_code: Some(res.status().to_string()),
-    }
-}
-
-fn apply_default_response_metrics_config(
-    metrics: DefaultResponseMetrics,
-    config: &DefaultResponseMetricsConfig,
-) -> DefaultResponseMetrics {
-    if config.disable_all {
-        return DefaultResponseMetrics::default();
-    }
-
-    DefaultResponseMetrics {
-        http_status_code: metrics
-            .http_status_code
-            .filter(|_| !config.disable_http_status_code),
     }
 }
 
@@ -184,28 +159,6 @@ where
             request_id: Some("req_id_placeholder".to_string()),
         }
     }
-
-    fn apply_default_request_metrics_config(
-        metrics: DefaultRequestMetrics,
-        config: &DefaultRequestMetricsConfig,
-    ) -> DefaultRequestMetrics {
-        if config.disable_all {
-            return DefaultRequestMetrics::default();
-        }
-
-        DefaultRequestMetrics {
-            service_name: metrics
-                .service_name
-                .filter(|_| !config.disable_service_name),
-            service_version: metrics
-                .service_version
-                .filter(|_| !config.disable_service_version),
-            operation_name: metrics
-                .operation_name
-                .filter(|_| !config.disable_operation_name),
-            request_id: metrics.request_id.filter(|_| !config.disable_request_id),
-        }
-    }
 }
 
 impl<Ser> Service<Request<ReqBody>> for DefaultMetricsPluginService<Ser>
@@ -220,19 +173,16 @@ where
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
         let default_request_metrics = self.get_default_request_metrics(&req);
 
-        let maybe_default_req_metrics_ext = req
+        let maybe_default_req_metrics_ext_mutex = req
             .extensions_mut()
-            .get_mut::<DefaultRequestMetricsExtension>();
+            .get_mut::<Arc<Mutex<DefaultRequestMetricsExtension>>>();
 
-        match maybe_default_req_metrics_ext {
-            Some(default_req_metrics_ext) => {
-                *default_req_metrics_ext.metrics = Self::apply_default_request_metrics_config(
-                    default_request_metrics,
-                    &default_req_metrics_ext.config,
-                );
+        match maybe_default_req_metrics_ext_mutex {
+            Some(mutex) => {
+                update_request_metrics_extension(mutex, default_request_metrics);
 
                 req.extensions_mut()
-                    .remove::<DefaultRequestMetricsExtension>();
+                    .remove::<Arc<Mutex<DefaultRequestMetricsExtension>>>();
 
                 DefaultMetricsFuture::WithExtension {
                     inner: self.inner.call(req),
@@ -268,5 +218,70 @@ where
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         self.inner.poll_ready(cx)
+    }
+}
+
+fn get_default_response_metrics(res: &Response<ResBody>) -> DefaultResponseMetrics {
+    DefaultResponseMetrics {
+        http_status_code: Some(res.status().to_string()),
+    }
+}
+
+fn update_request_metrics_extension(
+    mutex: &Mutex<DefaultRequestMetricsExtension>,
+    metrics: DefaultRequestMetrics,
+) {
+    match mutex.lock() {
+        Ok(mut guard) => {
+            if guard.config.disable_all {
+                *guard.metrics = DefaultRequestMetrics::default();
+                return;
+            }
+
+            *guard.metrics = DefaultRequestMetrics {
+                service_name: metrics
+                    .service_name
+                    .filter(|_| !guard.config.disable_service_name),
+                service_version: metrics
+                    .service_version
+                    .filter(|_| !guard.config.disable_service_version),
+                operation_name: metrics
+                    .operation_name
+                    .filter(|_| !guard.config.disable_operation_name),
+                request_id: metrics
+                    .request_id
+                    .filter(|_| !guard.config.disable_request_id),
+            };
+        }
+        Err(_) => {
+            tracing::error!(
+                "Failed to acquire lock on DefaultRequestMetricsExtension. Metrics may be incomplete."
+            );
+        }
+    }
+}
+
+fn update_response_metrics_extension(
+    mutex: &Mutex<DefaultResponseMetricsExtension>,
+    metrics: DefaultResponseMetrics,
+) {
+    match mutex.lock() {
+        Ok(mut guard) => {
+            if guard.config.disable_all {
+                *guard.metrics = DefaultResponseMetrics::default();
+                return;
+            }
+
+            *guard.metrics = DefaultResponseMetrics {
+                http_status_code: metrics
+                    .http_status_code
+                    .filter(|_| !guard.config.disable_http_status_code),
+            };
+        }
+        Err(_) => {
+            tracing::error!(
+                "Failed to acquire lock on DefaultResponseMetricsExtension. Metrics may be incomplete."
+            );
+        }
     }
 }

@@ -118,7 +118,7 @@ fn generate_ext_trait_impl(
                 .#field_name
                 .open(metrique::OnParentDrop::Discard)
                 .expect("unreachable: the slot was created in this scope and is not opened before this point");
-            req.extensions_mut().insert(extension_slotguard);
+            req.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(extension_slotguard)));
         }
     });
 
@@ -149,7 +149,7 @@ fn generate_ext_trait_impl(
                                     config,
                                 );
 
-                                req.extensions_mut().insert(ext);
+                                req.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(ext)));
 
                                 #(#extension_insertions)*
                             };
@@ -170,7 +170,7 @@ fn generate_ext_trait_impl(
                                     config,
                                 );
 
-                                res.extensions_mut().insert(ext);
+                                res.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(ext)));
                             };
 
                         aws_smithy_http_server_metrics::layer::MetricsLayer::__macro_new(
