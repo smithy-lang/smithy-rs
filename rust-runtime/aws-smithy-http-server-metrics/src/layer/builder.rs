@@ -26,8 +26,8 @@ use crate::layer::ResBody;
 use crate::traits::InitMetrics;
 use crate::traits::MetriqueCloseEntry;
 use crate::traits::MetriqueEntrySink;
-use crate::traits::SetRequestMetrics;
-use crate::traits::SetResponseMetrics;
+use crate::traits::RequestMetrics;
+use crate::traits::ResponseMetrics;
 use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
@@ -90,12 +90,12 @@ pub struct MetricsLayerBuilder<
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     pub init_metrics: Option<I>,
-    pub set_request_metrics: Option<Rq>,
-    pub set_response_metrics: Option<Rs>,
+    pub request_metrics: Option<Rq>,
+    pub response_metrics: Option<Rs>,
     pub default_req_metrics_config: DefaultRequestMetricsConfig,
     pub default_res_metrics_config: DefaultResponseMetricsConfig,
     pub(crate) _state: PhantomData<State>,
@@ -114,8 +114,8 @@ where
     ) -> MetricsLayerBuilder<WithDefaults, E, S, impl InitMetrics<E, S>> {
         MetricsLayerBuilder {
             init_metrics: Some(init_metrics),
-            set_request_metrics: self.set_request_metrics,
-            set_response_metrics: self.set_response_metrics,
+            request_metrics: self.request_metrics,
+            response_metrics: self.response_metrics,
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
@@ -131,14 +131,14 @@ where
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
 {
-    pub fn set_request_metrics(
+    pub fn request_metrics(
         self,
-        f: impl SetRequestMetrics<E, S>,
-    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl SetRequestMetrics<E, S>, DefaultRs<E, S>> {
+        f: impl RequestMetrics<E, S>,
+    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl RequestMetrics<E, S>, DefaultRs<E, S>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
-            set_request_metrics: Some(f),
-            set_response_metrics: None,
+            request_metrics: Some(f),
+            response_metrics: None,
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
@@ -147,18 +147,18 @@ where
         }
     }
 
-    pub fn set_response_metrics(
+    pub fn response_metrics(
         self,
         f: impl Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>)
             + Clone
             + Send
             + Sync
             + 'static,
-    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, impl SetResponseMetrics<E, S>> {
+    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E, S>, impl ResponseMetrics<E, S>> {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
-            set_request_metrics: None,
-            set_response_metrics: Some(f),
+            request_metrics: None,
+            response_metrics: Some(f),
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
@@ -175,23 +175,23 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
 {
-    pub fn set_response_metrics(
+    pub fn response_metrics(
         self,
-        f: impl SetResponseMetrics<E, S>,
+        f: impl ResponseMetrics<E, S>,
     ) -> MetricsLayerBuilder<
         WithRqAndRs,
         E,
         S,
         I,
-        impl SetRequestMetrics<E, S>,
-        impl SetResponseMetrics<E, S>,
+        impl RequestMetrics<E, S>,
+        impl ResponseMetrics<E, S>,
     > {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
-            set_request_metrics: self.set_request_metrics,
-            set_response_metrics: Some(f),
+            request_metrics: self.request_metrics,
+            response_metrics: Some(f),
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
@@ -208,23 +208,23 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
-    pub fn set_request_metrics(
+    pub fn request_metrics(
         self,
-        f: impl SetRequestMetrics<E, S>,
+        f: impl RequestMetrics<E, S>,
     ) -> MetricsLayerBuilder<
         WithRqAndRs,
         E,
         S,
         I,
-        impl SetRequestMetrics<E, S>,
-        impl SetResponseMetrics<E, S>,
+        impl RequestMetrics<E, S>,
+        impl ResponseMetrics<E, S>,
     > {
         MetricsLayerBuilder {
             init_metrics: self.init_metrics,
-            set_request_metrics: Some(f),
-            set_response_metrics: self.set_response_metrics,
+            request_metrics: Some(f),
+            response_metrics: self.response_metrics,
             default_req_metrics_config: self.default_req_metrics_config,
             default_res_metrics_config: self.default_res_metrics_config,
             _state: PhantomData,
@@ -241,8 +241,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     impl_disable_methods!();
 }
@@ -254,8 +254,8 @@ pub trait DefaultMetricsBuildExt<S, I, Rq, Rs>
 where
     S: MetriqueEntrySink<DefaultMetrics>,
     I: InitMetrics<DefaultMetrics, S>,
-    Rq: SetRequestMetrics<DefaultMetrics, S>,
-    Rs: SetResponseMetrics<DefaultMetrics, S>,
+    Rq: RequestMetrics<DefaultMetrics, S>,
+    Rs: ResponseMetrics<DefaultMetrics, S>,
 {
     fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs>;
 }
@@ -266,8 +266,8 @@ macro_rules! impl_build_for_state {
         where
             S: MetriqueEntrySink<DefaultMetrics>,
             I: InitMetrics<DefaultMetrics, S>,
-            Rq: SetRequestMetrics<DefaultMetrics, S>,
-            Rs: SetResponseMetrics<DefaultMetrics, S>,
+            Rq: RequestMetrics<DefaultMetrics, S>,
+            Rs: ResponseMetrics<DefaultMetrics, S>,
         {
             fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
                 let default_req_metrics_extension_fn =
@@ -316,8 +316,8 @@ macro_rules! impl_build_for_state {
 
                 MetricsLayer {
                     init_metrics: self.init_metrics.expect("init_metrics must be provided"),
-                    set_request_metrics: self.set_request_metrics,
-                    set_response_metrics: self.set_response_metrics,
+                    request_metrics: self.request_metrics,
+                    response_metrics: self.response_metrics,
                     default_req_metrics_extension_fn,
                     default_res_metrics_extension_fn,
                     default_req_metrics_config: self.default_req_metrics_config,
@@ -351,12 +351,12 @@ mod tests {
     // Test that methods can be called on correct states - these will fail to compile if methods don't exist
     assert_methods_callable!(NeedsInitialization => [init_metrics(dummy_init)]);
     assert_methods_callable!(WithDefaults => [
-        set_request_metrics(dummy_request_fn),
-        set_response_metrics(dummy_response_fn),
+        request_metrics(dummy_request_fn),
+        response_metrics(dummy_response_fn),
         build()
     ]);
-    assert_methods_callable!(WithRq => [set_response_metrics(dummy_response_fn), build()]);
-    assert_methods_callable!(WithRs => [set_request_metrics(dummy_request_fn), build()]);
+    assert_methods_callable!(WithRq => [response_metrics(dummy_response_fn), build()]);
+    assert_methods_callable!(WithRs => [request_metrics(dummy_request_fn), build()]);
     assert_methods_callable!(WithRqAndRs => [build()]);
 
     // State transition tests
@@ -367,8 +367,8 @@ mod tests {
                 E: MetriqueCloseEntry,
                 S: MetriqueEntrySink<E>,
                 I: InitMetrics<E, S>,
-                Rq: SetRequestMetrics<E, S>,
-                Rs: SetResponseMetrics<E, S>,
+                Rq: RequestMetrics<E, S>,
+                Rs: ResponseMetrics<E, S>,
             {
             }
         };
@@ -410,7 +410,7 @@ mod tests {
     fn test_with_defaults_to_with_rq() {
         let builder = MetricsLayer::builder()
             .init_metrics(dummy_init)
-            .set_request_metrics(dummy_request_fn);
+            .request_metrics(dummy_request_fn);
         assert_with_rq(&builder);
     }
 
@@ -418,7 +418,7 @@ mod tests {
     fn test_with_defaults_to_with_rs() {
         let builder = MetricsLayer::builder()
             .init_metrics(dummy_init)
-            .set_response_metrics(dummy_response_fn);
+            .response_metrics(dummy_response_fn);
         assert_with_rs(&builder);
     }
 
@@ -426,8 +426,8 @@ mod tests {
     fn test_with_rq_to_with_rq_and_rs() {
         let builder = MetricsLayer::builder()
             .init_metrics(dummy_init)
-            .set_request_metrics(dummy_request_fn)
-            .set_response_metrics(dummy_response_fn);
+            .request_metrics(dummy_request_fn)
+            .response_metrics(dummy_response_fn);
         assert_with_rq_and_rs(&builder);
     }
 
@@ -435,8 +435,8 @@ mod tests {
     fn test_with_rs_to_with_rq_and_rs() {
         let builder = MetricsLayer::builder()
             .init_metrics(dummy_init)
-            .set_response_metrics(dummy_response_fn)
-            .set_request_metrics(dummy_request_fn);
+            .response_metrics(dummy_response_fn)
+            .request_metrics(dummy_request_fn);
         assert_with_rq_and_rs(&builder);
     }
 }

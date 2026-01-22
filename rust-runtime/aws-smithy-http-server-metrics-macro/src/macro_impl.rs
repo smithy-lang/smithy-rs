@@ -93,8 +93,8 @@ fn generate_ext_trait(metrics_struct: &Ident) -> TokenStream2 {
         where
             S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#metrics_struct>,
             I: aws_smithy_http_server_metrics::traits::InitMetrics<#metrics_struct, S>,
-            Rq: aws_smithy_http_server_metrics::traits::SetRequestMetrics<#metrics_struct, S>,
-            Rs: aws_smithy_http_server_metrics::traits::SetResponseMetrics<#metrics_struct, S>,
+            Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#metrics_struct, S>,
+            Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#metrics_struct, S>,
         {
             fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#metrics_struct, S, I, Rq, Rs>;
         }
@@ -129,8 +129,8 @@ fn generate_ext_trait_impl(
                 where
                     S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#struct_ident>,
                     I: aws_smithy_http_server_metrics::traits::InitMetrics<#struct_ident, S>,
-                    Rq: aws_smithy_http_server_metrics::traits::SetRequestMetrics<#struct_ident, S>,
-                    Rs: aws_smithy_http_server_metrics::traits::SetResponseMetrics<#struct_ident, S>,
+                    Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#struct_ident, S>,
+                    Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident, S>,
                 {
                     fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#struct_ident, S, I, Rq, Rs> {
                         let default_req_metrics_extension_fn =
@@ -177,8 +177,8 @@ fn generate_ext_trait_impl(
 
                         aws_smithy_http_server_metrics::layer::MetricsLayer::__macro_new(
                             self.init_metrics.expect("init_metrics must be provided"),
-                            self.set_request_metrics,
-                            self.set_response_metrics,
+                            self.request_metrics,
+                            self.response_metrics,
                             default_req_metrics_extension_fn,
                             default_res_metrics_extension_fn,
                             self.default_req_metrics_config,

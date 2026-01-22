@@ -43,20 +43,20 @@ where
 {
 }
 
-pub trait SetRequestMetrics<E, S>:
+pub trait RequestMetrics<E, S>:
     Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
 {
 }
-impl<T, E, S> SetRequestMetrics<E, S> for T where
+impl<T, E, S> RequestMetrics<E, S> for T where
     T: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
 {
 }
 
-pub trait SetResponseMetrics<E, S>:
+pub trait ResponseMetrics<E, S>:
     Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
 {
 }
-impl<T, E, S> SetResponseMetrics<E, S> for T where
+impl<T, E, S> ResponseMetrics<E, S> for T where
     T: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static
 {
 }
