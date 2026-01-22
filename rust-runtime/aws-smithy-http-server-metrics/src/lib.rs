@@ -15,8 +15,8 @@ pub mod service;
 pub mod traits;
 pub mod types;
 
-pub use layer::MetricsLayer;
 pub use layer::builder::MetricsLayerBuilder;
+pub use layer::MetricsLayer;
 
 pub use types::ReqBody;
 pub use types::ResBody;

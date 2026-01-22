@@ -287,7 +287,7 @@ macro_rules! impl_build_for_state {
                             config,
                         };
 
-                        // Throw behind an Arc to keep forward compatible with http 1.x, 
+                        // Throw behind an Arc to keep forward compatible with http 1.x,
                         // which introduces the Clone bound to extensions
                         req.extensions_mut().insert(Arc::new(ext));
                     };
@@ -309,7 +309,7 @@ macro_rules! impl_build_for_state {
                             config,
                         };
 
-                        // Throw behind an Arc to keep forward compatible with http 1.x, 
+                        // Throw behind an Arc to keep forward compatible with http 1.x,
                         // which introduces the Clone bound to extensions
                         res.extensions_mut().insert(Arc::new(ext));
                     };
