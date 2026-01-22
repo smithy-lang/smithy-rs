@@ -39,7 +39,7 @@ pub struct DefaultRequestMetrics {
 #[metrics]
 #[derive(Default, Debug)]
 pub struct DefaultResponseMetrics {
-    pub(crate) http_status_code: Option<u16>,
+    pub(crate) http_status_code: Option<String>,
 }
 
 #[derive(Default, Debug, Clone)]
