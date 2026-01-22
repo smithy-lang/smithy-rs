@@ -91,11 +91,11 @@ where
                 Poll::Ready(Ok(res)) => {
                     metrics.default_response_metrics =
                         Some(Slot::new(get_default_response_metrics(&res)));
-                    metrics.default_response_metrics
-                            .as_mut()
-                            .expect("unreachable: the option is set to some in this scope")
-                            .open(OnParentDrop::Discard)
-                            .expect("unreachable: the slot was created in this scope and is not opened before this point");
+                    metrics
+                        .default_response_metrics
+                        .as_mut()
+                        .and_then(|slot| slot.open(OnParentDrop::Discard))
+                        .expect("unreachable: the option is set to a created slot in this scope");
 
                     Poll::Ready(Ok(res))
                 }
@@ -251,11 +251,12 @@ where
 
                 metrics.default_request_metrics =
                     Some(Slot::new(self.get_default_request_metrics(&req)));
-                metrics.default_request_metrics
+
+                metrics
+                    .default_request_metrics
                     .as_mut()
-                    .expect("unreachable: the option is set to some in this scope")
-                    .open(OnParentDrop::Discard)
-                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
+                    .and_then(|slot| slot.open(OnParentDrop::Discard))
+                    .expect("unreachable: the option is set to a created slot in this scope");
 
                 DefaultMetricsFuture::WithMetrics {
                     inner: self.inner.call(req),

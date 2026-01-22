@@ -141,9 +141,8 @@ fn generate_ext_trait_impl(
                                 let default_req_metrics_slotguard = metrics
                                     .default_request_metrics
                                     .as_mut()
-                                    .expect("unreachable: the option is set to some in this scope")
-                                    .open(metrique::OnParentDrop::Discard)
-                                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
+                                    .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
+                                    .expect("unreachable: the option is set to a created slot in this scope");
 
                                 let ext = aws_smithy_http_server_metrics::default::DefaultRequestMetricsExtension::__macro_new(
                                     default_req_metrics_slotguard,
@@ -163,9 +162,8 @@ fn generate_ext_trait_impl(
                                 let default_res_metrics_slotguard = metrics
                                     .default_response_metrics
                                     .as_mut()
-                                    .expect("unreachable: the option is set to some in this scope")
-                                    .open(metrique::OnParentDrop::Discard)
-                                    .expect("unreachable: the slot was created in this scope and is not opened before this point");
+                                    .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
+                                    .expect("unreachable: the option is set to a created slot in this scope");
 
                                 let ext = aws_smithy_http_server_metrics::default::DefaultResponseMetricsExtension::__macro_new(
                                     default_res_metrics_slotguard,
