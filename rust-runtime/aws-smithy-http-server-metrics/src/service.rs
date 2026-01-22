@@ -21,8 +21,8 @@ use crate::default::DefaultResponseMetricsConfig;
 use crate::traits::InitMetrics;
 use crate::traits::MetriqueCloseEntry;
 use crate::traits::MetriqueEntrySink;
-use crate::traits::SetRequestMetrics;
-use crate::traits::SetResponseMetrics;
+use crate::traits::RequestMetrics;
+use crate::traits::ResponseMetrics;
 
 type ResBody = UnsyncBoxBody<Bytes, Error>;
 
@@ -31,13 +31,13 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     pub(crate) inner: Ser,
     pub(crate) init_metrics: I,
-    pub(crate) set_request_metrics: Option<Rq>,
-    pub(crate) set_response_metrics: Option<Rs>,
+    pub(crate) request_metrics: Option<Rq>,
+    pub(crate) response_metrics: Option<Rs>,
     pub(crate) default_req_metrics_extension_fn:
         fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
     pub(crate) default_res_metrics_extension_fn:
@@ -51,15 +51,15 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
             init_metrics: self.init_metrics.clone(),
-            set_request_metrics: self.set_request_metrics.clone(),
-            set_response_metrics: self.set_response_metrics.clone(),
+            request_metrics: self.request_metrics.clone(),
+            response_metrics: self.response_metrics.clone(),
             default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
             default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
@@ -74,8 +74,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;
@@ -96,14 +96,14 @@ where
             self.default_req_metrics_config.clone(),
         );
 
-        if let Some(set_request_metrics) = &self.set_request_metrics {
-            (set_request_metrics)(&mut req, &mut metrics);
+        if let Some(request_metrics) = &self.request_metrics {
+            (request_metrics)(&mut req, &mut metrics);
         }
 
         let future = self.inner.call(req);
         let default_res_metrics_extension_fn = self.default_res_metrics_extension_fn;
         let default_res_metrics_config = self.default_res_metrics_config.clone();
-        let set_response_metrics = self.set_response_metrics.clone();
+        let response_metrics = self.response_metrics.clone();
 
         futures::FutureExt::boxed(async move {
             let mut res = match future.await {
@@ -113,8 +113,8 @@ where
 
             (default_res_metrics_extension_fn)(&mut res, &mut metrics, default_res_metrics_config);
 
-            if let Some(set_response_metrics) = &set_response_metrics {
-                (set_response_metrics)(&mut res, &mut metrics);
+            if let Some(response_metrics) = &response_metrics {
+                (response_metrics)(&mut res, &mut metrics);
             }
 
             Ok(res)

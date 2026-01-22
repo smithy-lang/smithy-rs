@@ -57,7 +57,7 @@ For metrics control in user-defined operation handlers, the types of fields mark
 fn main() {
     let metrics_layer = MetricsLayer::builder()
         .init_metrics(|| MyMetrics::default().append_on_drop(my_sink))
-        .set_request_metrics(|req: &mut Request<ReqBody>, metrics: &mut MyMetricsGuard| {
+        .request_metrics(|req: &mut Request<ReqBody>, metrics: &mut MyMetricsGuard| {
             req.custom_metric = ...;
         })
         .build();
@@ -127,9 +127,9 @@ These super traits will contain blanket implementations for reducing duplication
 
 #### `InitMetrics<E, S>: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static`
 
-#### `SetRequestMetrics<E, S>: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+#### `RequestMetrics<E, S>: Fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
 
-#### `SetResponseMetrics<E, S>: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
+#### `ResponseMetrics<E, S>: Fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>) + Clone + Send + Sync + 'static`
 
 ### `MetricsLayer` struct
 
@@ -159,13 +159,13 @@ This gives users the ability to add a metrics tower layer that initializes metri
 
 - Default type parameter of `fn() -> AppendAndCloseOnDrop<E, S>`
 
-`Rq: SetRequestMetrics<E, S>`
+`Rq: RequestMetrics<E, S>`
 
 - Closure trait bound to allow users to set metrics however they like from the request object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized. The `Request` parameter needs to be a mutable reference so adding to the request extensions is possible.
 
 - Default type parameter of `fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>)`
 
-`Rs: SetResponseMetrics<E, S>`
+`Rs: ResponseMetrics<E, S>`
 
 - Closure trait bound to allow users to set metrics however they like from the response object, which will be invoked in the `MetricsLayerService` after the metrics have been initialized.
 
@@ -175,8 +175,8 @@ This gives users the ability to add a metrics tower layer that initializes metri
 
 ```rust
 init_metrics: I,
-set_request_metrics: Option<Rq>,
-set_response_metrics: Option<Rs>,
+request_metrics: Option<Rq>,
+response_metrics: Option<Rs>,
 default_req_metrics_extension_fn: fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
 default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultResponseMetricsConfig),
 default_req_metrics_config: DefaultRequestMetricsConfig,

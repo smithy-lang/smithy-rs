@@ -24,8 +24,8 @@ use crate::service::MetricsLayerService;
 use crate::traits::InitMetrics;
 use crate::traits::MetriqueCloseEntry;
 use crate::traits::MetriqueEntrySink;
-use crate::traits::SetRequestMetrics;
-use crate::traits::SetResponseMetrics;
+use crate::traits::RequestMetrics;
+use crate::traits::ResponseMetrics;
 use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
@@ -51,12 +51,12 @@ pub struct MetricsLayer<
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     pub(crate) init_metrics: I,
-    pub(crate) set_request_metrics: Option<Rq>,
-    pub(crate) set_response_metrics: Option<Rs>,
+    pub(crate) request_metrics: Option<Rq>,
+    pub(crate) response_metrics: Option<Rs>,
     pub(crate) default_req_metrics_extension_fn:
         fn(&mut Request<ReqBody>, &mut AppendAndCloseOnDrop<E, S>, DefaultRequestMetricsConfig),
     pub(crate) default_res_metrics_extension_fn:
@@ -70,14 +70,14 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     #[doc(hidden)]
     pub fn __macro_new(
         init_metrics: I,
-        set_request_metrics: Option<Rq>,
-        set_response_metrics: Option<Rs>,
+        request_metrics: Option<Rq>,
+        response_metrics: Option<Rs>,
         default_req_metrics_extension_fn: fn(
             &mut Request<ReqBody>,
             &mut AppendAndCloseOnDrop<E, S>,
@@ -93,8 +93,8 @@ where
     ) -> Self {
         Self {
             init_metrics,
-            set_request_metrics,
-            set_response_metrics,
+            request_metrics,
+            response_metrics,
             default_req_metrics_extension_fn,
             default_res_metrics_extension_fn,
             default_req_metrics_config,
@@ -124,8 +124,8 @@ where
     pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S> {
         MetricsLayerBuilder {
             init_metrics: None,
-            set_request_metrics: None,
-            set_response_metrics: None,
+            request_metrics: None,
+            response_metrics: None,
             default_req_metrics_config: DefaultRequestMetricsConfig::default(),
             default_res_metrics_config: DefaultResponseMetricsConfig::default(),
             _state: PhantomData,
@@ -141,8 +141,8 @@ where
     E: MetriqueCloseEntry,
     S: MetriqueEntrySink<E>,
     I: InitMetrics<E, S>,
-    Rq: SetRequestMetrics<E, S>,
-    Rs: SetResponseMetrics<E, S>,
+    Rq: RequestMetrics<E, S>,
+    Rs: ResponseMetrics<E, S>,
 {
     type Service = MetricsLayerService<Ser, E, S, I, Rq, Rs>;
 
@@ -150,8 +150,8 @@ where
         MetricsLayerService {
             inner,
             init_metrics: self.init_metrics.clone(),
-            set_request_metrics: self.set_request_metrics.clone(),
-            set_response_metrics: self.set_response_metrics.clone(),
+            request_metrics: self.request_metrics.clone(),
+            response_metrics: self.response_metrics.clone(),
             default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
             default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
