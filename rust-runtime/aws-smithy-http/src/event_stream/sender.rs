@@ -213,8 +213,6 @@ mod tests {
     };
     use aws_smithy_runtime_api::client::result::SdkError;
     use aws_smithy_types::event_stream::{Header, HeaderValue, Message};
-    use bytes::Bytes;
-    use futures_core::Stream;
     use futures_util::stream::StreamExt;
     use std::error::Error as StdError;
 
@@ -276,39 +274,27 @@ mod tests {
         }));
     }
 
-    fn check_compatible_with_hyper_wrap_stream<S, O, E>(stream: S) -> S
-    where
-        S: Stream<Item = Result<O, E>> + Send + 'static,
-        O: Into<Bytes> + 'static,
-        E: Into<Box<dyn StdError + Send + Sync + 'static>> + 'static,
-    {
-        stream
-    }
-
     #[tokio::test]
     async fn message_stream_adapter_success() {
         let stream = stream! {
             yield Ok(TestMessage("test".into()));
         };
-        let mut adapter = check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
-            TestMessage,
-            TestServiceError,
-        >::new(
+        let mut adapter = MessageStreamAdapter::<TestMessage, TestServiceError>::new(
             Marshaller,
             ErrorMarshaller,
             TestSigner,
             Box::pin(stream),
-        ));
+        );
 
-        let mut sent_bytes = adapter.next().await.unwrap().unwrap();
-        let sent = read_message_from(&mut sent_bytes).unwrap();
+        let sent_bytes = adapter.next().await.unwrap().unwrap();
+        let sent = read_message_from(&mut sent_bytes.into_data().unwrap()).unwrap();
         assert_eq!("signed", sent.headers()[0].name().as_str());
         assert_eq!(&HeaderValue::Bool(true), sent.headers()[0].value());
         let inner = read_message_from(&mut (&sent.payload()[..])).unwrap();
         assert_eq!(&b"test"[..], &inner.payload()[..]);
 
-        let mut end_signal_bytes = adapter.next().await.unwrap().unwrap();
-        let end_signal = read_message_from(&mut end_signal_bytes).unwrap();
+        let end_signal_bytes = adapter.next().await.unwrap().unwrap();
+        let end_signal = read_message_from(&mut end_signal_bytes.into_data().unwrap()).unwrap();
         assert_eq!("signed", end_signal.headers()[0].name().as_str());
         assert_eq!(&HeaderValue::Bool(true), end_signal.headers()[0].value());
         assert_eq!(0, end_signal.payload().len());
@@ -319,15 +305,12 @@ mod tests {
         let stream = stream! {
             yield Err(TestServiceError);
         };
-        let mut adapter = check_compatible_with_hyper_wrap_stream(MessageStreamAdapter::<
-            TestMessage,
-            TestServiceError,
-        >::new(
+        let mut adapter = MessageStreamAdapter::<TestMessage, TestServiceError>::new(
             Marshaller,
             ErrorMarshaller,
             NoOpSigner {},
             Box::pin(stream),
-        ));
+        );
 
         let result = adapter.next().await.unwrap();
         assert!(result.is_err());
@@ -347,15 +330,15 @@ mod tests {
             sender.input_stream,
         );
 
-        let mut sent_bytes = adapter.next().await.unwrap().unwrap();
-        let sent = read_message_from(&mut sent_bytes).unwrap();
+        let sent_bytes = adapter.next().await.unwrap().unwrap();
+        let sent = read_message_from(&mut sent_bytes.into_data().unwrap()).unwrap();
         assert_eq!("signed", sent.headers()[0].name().as_str());
         let inner = read_message_from(&mut (&sent.payload()[..])).unwrap();
         assert_eq!(&b"test"[..], &inner.payload()[..]);
 
         // Should get end signal next
-        let mut end_signal_bytes = adapter.next().await.unwrap().unwrap();
-        let end_signal = read_message_from(&mut end_signal_bytes).unwrap();
+        let end_signal_bytes = adapter.next().await.unwrap().unwrap();
+        let end_signal = read_message_from(&mut end_signal_bytes.into_data().unwrap()).unwrap();
         assert_eq!("signed", end_signal.headers()[0].name().as_str());
         assert_eq!(0, end_signal.payload().len());
 
