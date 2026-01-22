@@ -21,10 +21,10 @@ use tower::Service;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::traits::InitMetrics;
-use crate::traits::MetriqueCloseEntry;
-use crate::traits::MetriqueEntrySink;
 use crate::traits::RequestMetrics;
 use crate::traits::ResponseMetrics;
+use crate::traits::ThreadSafeCloseEntry;
+use crate::traits::ThreadSafeEntrySink;
 
 type ResBody = UnsyncBoxBody<Bytes, Error>;
 
@@ -35,8 +35,8 @@ pin_project! {
     pub struct MetricsLayerServiceFuture<F, E, S, Rs>
     where
         F: Future,
-        E: MetriqueCloseEntry,
-        S: MetriqueEntrySink<E>,
+        E: ThreadSafeCloseEntry,
+        S: ThreadSafeEntrySink<E>,
         Rs: ResponseMetrics<E>,
     {
         #[pin]
@@ -51,8 +51,8 @@ pin_project! {
 impl<F, E, S, Rs, Err> Future for MetricsLayerServiceFuture<F, E, S, Rs>
 where
     F: Future<Output = Result<Response<ResBody>, Err>>,
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     Rs: ResponseMetrics<E>,
 {
     type Output = Result<Response<ResBody>, Err>;
@@ -83,8 +83,8 @@ where
 
 pub struct MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -105,8 +105,8 @@ where
 impl<Ser, E, S, I, Rq, Rs> Clone for MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
     Ser: Clone,
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -130,8 +130,8 @@ impl<Ser, E, S, I, Rq, Rs> Service<Request<ReqBody>> for MetricsLayerService<Ser
 where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone,
     Ser::Future: Send + 'static,
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,

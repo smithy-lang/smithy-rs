@@ -21,10 +21,10 @@ use crate::layer::builder::MetricsLayerBuilder;
 use crate::layer::builder::NeedsInitialization;
 use crate::service::MetricsLayerService;
 use crate::traits::InitMetrics;
-use crate::traits::MetriqueCloseEntry;
-use crate::traits::MetriqueEntrySink;
 use crate::traits::RequestMetrics;
 use crate::traits::ResponseMetrics;
+use crate::traits::ThreadSafeCloseEntry;
+use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
@@ -47,8 +47,8 @@ pub struct MetricsLayer<
     Rq = DefaultRq<E>,
     Rs = DefaultRs<E>,
 > where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -68,8 +68,8 @@ pub struct MetricsLayer<
 
 impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -108,7 +108,7 @@ where
 
 impl<S> MetricsLayer<DefaultMetrics, S>
 where
-    S: MetriqueEntrySink<DefaultMetrics> + Clone,
+    S: ThreadSafeEntrySink<DefaultMetrics> + Clone,
 {
     pub fn new_with_sink(
         sink: S,
@@ -121,8 +121,8 @@ where
 
 impl<E, S> MetricsLayer<E, S>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
 {
     pub fn builder() -> MetricsLayerBuilder<NeedsInitialization, E, S> {
         MetricsLayerBuilder {
@@ -141,8 +141,8 @@ where
 impl<Ser, E, S, I, Rq, Rs> Layer<Ser> for MetricsLayer<E, S, I, Rq, Rs>
 where
     Ser: Clone,
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,

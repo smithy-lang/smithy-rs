@@ -13,15 +13,15 @@ use metrique_writer::EntrySink;
 use crate::types::ReqBody;
 use crate::types::ResBody;
 
-pub trait MetriqueCloseEntry: CloseEntry + Send + Sync + 'static {}
-impl<T> MetriqueCloseEntry for T where T: CloseEntry + Send + Sync + 'static {}
+pub trait ThreadSafeCloseEntry: CloseEntry + Send + Sync + 'static {}
+impl<T> ThreadSafeCloseEntry for T where T: CloseEntry + Send + Sync + 'static {}
 
-pub trait MetriqueEntrySink<E>: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static
+pub trait ThreadSafeEntrySink<E>: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static
 where
     E: CloseEntry + Send + Sync + 'static,
 {
 }
-impl<T, E> MetriqueEntrySink<E> for T
+impl<T, E> ThreadSafeEntrySink<E> for T
 where
     E: CloseEntry + Send + Sync + 'static,
     T: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static,
@@ -31,14 +31,14 @@ where
 pub trait InitMetrics<E, S>:
     Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
 {
 }
 impl<T, E, S> InitMetrics<E, S> for T
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     T: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static,
 {
 }
@@ -46,12 +46,12 @@ where
 pub trait RequestMetrics<E>:
     Fn(&mut Request<ReqBody>, &mut E) + Clone + Send + Sync + 'static
 where
-    E: MetriqueCloseEntry,
+    E: ThreadSafeCloseEntry,
 {
 }
 impl<T, E> RequestMetrics<E> for T
 where
-    E: MetriqueCloseEntry,
+    E: ThreadSafeCloseEntry,
     T: Fn(&mut Request<ReqBody>, &mut E) + Clone + Send + Sync + 'static,
 {
 }
@@ -59,12 +59,12 @@ where
 pub trait ResponseMetrics<E>:
     Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static
 where
-    E: MetriqueCloseEntry,
+    E: ThreadSafeCloseEntry,
 {
 }
 impl<T, E> ResponseMetrics<E> for T
 where
-    E: MetriqueCloseEntry,
+    E: ThreadSafeCloseEntry,
     T: Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static,
 {
 }

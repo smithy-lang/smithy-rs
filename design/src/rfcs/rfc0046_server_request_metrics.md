@@ -121,9 +121,9 @@ A tower service for metrics that will contain the logic for setting the default 
 
 These super traits will contain blanket implementations for reducing duplication in trait bounds.
 
-#### `MetriqueCloseEntry: CloseEntry + Send + Sync + 'static`
+#### `ThreadSafeCloseEntry: CloseEntry + Send + Sync + 'static`
 
-#### `MetriqueEntrySink<E>: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static`
+#### `ThreadSafeEntrySink<E>: EntrySink<RootEntry<E::Closed>> + Send + Sync + 'static`
 
 #### `InitMetrics<E, S>: Fn() -> AppendAndCloseOnDrop<E, S> + Clone + Send + Sync + 'static`
 
@@ -141,13 +141,13 @@ This gives users the ability to add a metrics tower layer that initializes metri
 
 #### Will have following generics and trait bounds:
 
-`E: MetriqueCloseEntry`
+`E: ThreadSafeCloseEntry`
 
 - For the metrique metrics struct (i.e. annotated with #[metrics]).
 
 - Default type parameter of `DefaultMetrics`
 
-`S: MetriqueEntrySink`
+`S: ThreadSafeEntrySink`
 
 - For the entry sink where entries are stored in an in-memory buffer until they can be written to the destination.
 

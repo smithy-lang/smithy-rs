@@ -23,10 +23,10 @@ use crate::layer::MetricsLayer;
 use crate::layer::ReqBody;
 use crate::layer::ResBody;
 use crate::traits::InitMetrics;
-use crate::traits::MetriqueCloseEntry;
-use crate::traits::MetriqueEntrySink;
 use crate::traits::RequestMetrics;
 use crate::traits::ResponseMetrics;
+use crate::traits::ThreadSafeCloseEntry;
+use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
@@ -86,8 +86,8 @@ pub struct MetricsLayerBuilder<
     Rq = DefaultRq<E>,
     Rs = DefaultRs<E>,
 > where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -104,8 +104,8 @@ pub struct MetricsLayerBuilder<
 
 impl<E, S> MetricsLayerBuilder<NeedsInitialization, E, S>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
 {
     pub fn init_metrics(
         self,
@@ -126,8 +126,8 @@ where
 
 impl<E, S, I> MetricsLayerBuilder<WithDefaults, E, S, I>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
 {
     pub fn request_metrics(
@@ -167,8 +167,8 @@ where
 
 impl<E, S, I, Rq> MetricsLayerBuilder<WithRq, E, S, I, Rq>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
 {
@@ -194,8 +194,8 @@ where
 
 impl<E, S, I, Rs> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E>, Rs>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rs: ResponseMetrics<E>,
 {
@@ -221,8 +221,8 @@ where
 
 impl<E, S, I, Rq, Rs> MetricsLayerBuilder<WithRqAndRs, E, S, I, Rq, Rs>
 where
-    E: MetriqueCloseEntry,
-    S: MetriqueEntrySink<E>,
+    E: ThreadSafeCloseEntry,
+    S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
     Rs: ResponseMetrics<E>,
@@ -235,7 +235,7 @@ where
 
 pub trait DefaultMetricsBuildExt<S, I, Rq, Rs>
 where
-    S: MetriqueEntrySink<DefaultMetrics>,
+    S: ThreadSafeEntrySink<DefaultMetrics>,
     I: InitMetrics<DefaultMetrics, S>,
     Rq: RequestMetrics<DefaultMetrics>,
     Rs: ResponseMetrics<DefaultMetrics>,
@@ -248,7 +248,7 @@ macro_rules! impl_build_for_state {
         impl<S, I, Rq, Rs> DefaultMetricsBuildExt<S, I, Rq, Rs>
             for MetricsLayerBuilder<$state, DefaultMetrics, S, I, Rq, Rs>
         where
-            S: MetriqueEntrySink<DefaultMetrics>,
+            S: ThreadSafeEntrySink<DefaultMetrics>,
             I: InitMetrics<DefaultMetrics, S>,
             Rq: RequestMetrics<DefaultMetrics>,
             Rs: ResponseMetrics<DefaultMetrics>,
@@ -352,8 +352,8 @@ mod tests {
         ($fn_name:ident, $state:ty) => {
             fn $fn_name<E, S, I, Rq, Rs>(_: &MetricsLayerBuilder<$state, E, S, I, Rq, Rs>)
             where
-                E: MetriqueCloseEntry,
-                S: MetriqueEntrySink<E>,
+                E: ThreadSafeCloseEntry,
+                S: ThreadSafeEntrySink<E>,
                 I: InitMetrics<E, S>,
                 Rq: RequestMetrics<E>,
                 Rs: ResponseMetrics<E>,
