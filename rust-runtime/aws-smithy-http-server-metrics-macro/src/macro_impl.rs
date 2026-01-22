@@ -91,7 +91,7 @@ fn generate_ext_trait(metrics_struct: &Ident) -> TokenStream2 {
     quote! {
         pub trait #trait_name<S, I, Rq, Rs>
         where
-            S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#metrics_struct>,
+            S: aws_smithy_http_server_metrics::traits::ThreadSafeEntrySink<#metrics_struct>,
             I: aws_smithy_http_server_metrics::traits::InitMetrics<#metrics_struct, S>,
             Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#metrics_struct>,
             Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#metrics_struct>,
@@ -127,7 +127,7 @@ fn generate_ext_trait_impl(
             ($state:ty) => {
                 impl<S, I, Rq, Rs> #trait_name<S, I, Rq, Rs> for aws_smithy_http_server_metrics::MetricsLayerBuilder<$state, #struct_ident, S, I, Rq, Rs>
                 where
-                    S: aws_smithy_http_server_metrics::traits::MetriqueEntrySink<#struct_ident>,
+                    S: aws_smithy_http_server_metrics::traits::ThreadSafeEntrySink<#struct_ident>,
                     I: aws_smithy_http_server_metrics::traits::InitMetrics<#struct_ident, S>,
                     Rq: aws_smithy_http_server_metrics::traits::RequestMetrics<#struct_ident>,
                     Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident>,
