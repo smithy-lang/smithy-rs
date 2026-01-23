@@ -3,14 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::net::{IpAddr, SocketAddr};
+use std::net::IpAddr;
+use std::net::SocketAddr;
 
-use pokemon_service_server_sdk::{
-    error::{GetStorageError, StorageAccessNotAuthorized},
-    input::{DoNothingInput, GetStorageInput},
-    output::{DoNothingOutput, GetStorageOutput},
-    server::request::{connect_info::ConnectInfo, request_id::ServerRequestId},
-};
+use aws_smithy_http_server::Extension;
+use aws_smithy_http_server_metrics::extension::Metrics;
+use pokemon_service_common::metrics::PokemonOperationMetrics;
+use pokemon_service_server_sdk::error::GetStorageError;
+use pokemon_service_server_sdk::error::StorageAccessNotAuthorized;
+use pokemon_service_server_sdk::input::DoNothingInput;
+use pokemon_service_server_sdk::input::GetStorageInput;
+use pokemon_service_server_sdk::output::DoNothingOutput;
+use pokemon_service_server_sdk::output::GetStorageOutput;
+use pokemon_service_server_sdk::server::request::connect_info::ConnectInfo;
+use pokemon_service_server_sdk::server::request::request_id::ServerRequestId;
 
 // Defaults shared between `main.rs` and `/tests`.
 pub const DEFAULT_ADDRESS: &str = "127.0.0.1";
@@ -29,10 +35,22 @@ pub async fn do_nothing_but_log_request_ids(
 pub async fn get_storage_with_local_approved(
     input: GetStorageInput,
     connect_info: ConnectInfo<SocketAddr>,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> Result<GetStorageOutput, GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
 
-    if !(input.user == "ash" && input.passcode == "pikachu123") {
+    let authenticated = input.user == "ash" && input.passcode == "pikachu123";
+
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.get_storage_metrics.user = Some(input.user.clone());
+            operation_metrics.get_storage_metrics.authenticated = Some(authenticated);
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in get_storage: {e}");
+        });
+
+    if !authenticated {
         tracing::debug!("authentication failed");
         return Err(GetStorageError::StorageAccessNotAuthorized(
             StorageAccessNotAuthorized {},
