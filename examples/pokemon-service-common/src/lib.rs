@@ -164,20 +164,24 @@ pub async fn get_pokemon_species(
     state: Extension<Arc<State>>,
     Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
+    state
+        .0
+        .call_count
+        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+
+    let pokemon = state.0.pokemons_translations.get(&input.name);
+
     metrics
         .set(|mut operation_metrics| {
-            operation_metrics.get_pokemon_species_metrics = Some("hello world".to_string());
+            operation_metrics
+                .get_pokemon_species_metrics
+                .requested_pokemon_name = Some(input.name.clone());
+            operation_metrics.get_pokemon_species_metrics.found = Some(pokemon.is_some());
         })
         .unwrap_or_else(|e| {
             tracing::error!("Error setting metrics in get_pokemon_species: {e}");
         });
 
-    state
-        .0
-        .call_count
-        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    // We only support retrieving information about Pikachu.
-    let pokemon = state.0.pokemons_translations.get(&input.name);
     match pokemon.as_ref() {
         Some(pokemon) => {
             tracing::debug!("Requested Pokémon is {}", input.name);
@@ -220,23 +224,38 @@ pub async fn get_pokemon_species(
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
 
     // We currently only support Ash and he has nothing stored
-    if !(input.user == "ash" && input.passcode == "pikachu123") {
+    let authenticated = input.user == "ash" && input.passcode == "pikachu123";
+    let collection = if authenticated { vec![] } else { vec![] };
+
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.get_storage_metrics.user = Some(input.user.clone());
+            operation_metrics.get_storage_metrics.authenticated = Some(authenticated);
+            operation_metrics.get_storage_metrics.item_count = Some(collection.len());
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in get_storage: {e}");
+        });
+
+    if !authenticated {
         tracing::debug!("authentication failed");
         return Err(error::GetStorageError::StorageAccessNotAuthorized(
             error::StorageAccessNotAuthorized {},
         ));
     }
-    Ok(output::GetStorageOutput { collection: vec![] })
+    Ok(output::GetStorageOutput { collection })
 }
 
 /// Calculates and reports metrics about this server instance.
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
     state: Extension<Arc<State>>,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> output::GetServerStatisticsOutput {
     // Read the current calls count.
     let counter = state.0.call_count.load(std::sync::atomic::Ordering::SeqCst);
@@ -246,6 +265,16 @@ pub async fn get_server_statistics(
             tracing::error!("Unable to convert u64 to i64: {}", e);
         })
         .unwrap_or(0);
+
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.get_server_statistics_metrics.total_calls =
+                Some(calls_count.to_string());
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in get_server_statistics: {e}");
+        });
+
     tracing::debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput { calls_count }
 }
@@ -253,14 +282,31 @@ pub async fn get_server_statistics(
 /// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
     mut input: input::CapturePokemonInput,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
-    if input.region != "Kanto" {
+    let is_supported_region = input.region == "Kanto";
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.capture_pokemon_metrics.requested_region = Some(input.region.clone());
+            operation_metrics.capture_pokemon_metrics.supported_region = Some(is_supported_region);
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in capture_pokemon: {e}");
+        });
+
+    if !is_supported_region {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
             error::UnsupportedRegionError {
                 region: input.region,
             },
         ));
     }
+
+    let mut capture_attempts = 0;
+    let mut successful_captures = 0;
+    let mut last_pokeball_type: Option<String> = None;
+    let mut shiny_captured = false;
+
     let output_stream = stream! {
         loop {
             use std::time::Duration;
@@ -271,6 +317,8 @@ pub async fn capture_pokemon(
                         if let Ok(attempt) = capturing_event {
                             let payload = attempt.payload.clone().unwrap_or_else(|| CapturingPayload::builder().build());
                             let pokeball = payload.pokeball().unwrap_or("");
+                            capture_attempts += 1;
+
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
@@ -286,16 +334,18 @@ pub async fn capture_pokemon(
                                     "Fast Ball" => rand::thread_rng().gen_range(0..100) > 66,
                                     _ => unreachable!("invalid pokeball"),
                                 };
-                                // Only support Kanto
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                                // Will it capture the Pokémon?
+
                                 if captured {
+                                    successful_captures += 1;
+                                    last_pokeball_type = Some(pokeball.to_string());
                                     let shiny = rand::thread_rng().gen_range(0..4096) == 0;
-                                    let pokemon = payload
-                                        .name()
-                                        .unwrap_or("")
-                                        .to_string();
+                                    if shiny {
+                                        shiny_captured = true;
+                                    }
+                                    let pokemon = payload.name().unwrap_or("").to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
+
                                     yield Ok(crate::model::CapturePokemonEvents::Event(
                                         crate::model::CaptureEvent {
                                             name: Some(pokemon),
@@ -308,12 +358,22 @@ pub async fn capture_pokemon(
                             }
                         }
                     }
-                    None => break,
+                    None => {
+                        // Stream is closing, emit final metrics
+                        metrics.set(|mut operation_metrics| {
+                            operation_metrics.capture_pokemon_metrics.pokeball_type = last_pokeball_type;
+                            operation_metrics.capture_pokemon_metrics.capture_attempts = Some(capture_attempts);
+                            operation_metrics.capture_pokemon_metrics.successful_captures = Some(successful_captures);
+                            operation_metrics.capture_pokemon_metrics.shiny_captured = Some(shiny_captured);
+                        }).ok();
+                        break;
+                    }
                 },
                 Err(e) => println!("{e:?}"),
             }
         }
     };
+
     Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()
@@ -321,12 +381,34 @@ pub async fn capture_pokemon(
 }
 
 /// Empty operation used to benchmark the service.
-pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
+pub async fn do_nothing(
+    _input: input::DoNothingInput,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+) -> output::DoNothingOutput {
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.do_nothing_metrics.invocation_count = Some(1);
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in do_nothing: {e}");
+        });
+
     output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+pub async fn check_health(
+    _input: input::CheckHealthInput,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+) -> output::CheckHealthOutput {
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.check_health_metrics.health_check_count = Some(1);
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in check_health: {e}");
+        });
+
     output::CheckHealthOutput {}
 }
 
@@ -338,6 +420,7 @@ const RADIO_STREAMS: [&str; 2] = [
 /// Streams a random Pokémon song.
 pub async fn stream_pokemon_radio(
     _input: input::StreamPokemonRadioInput,
+    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> output::StreamPokemonRadioOutput {
     let radio_stream_url = RADIO_STREAMS
         .choose(&mut rand::thread_rng())
@@ -367,44 +450,36 @@ pub async fn stream_pokemon_radio(
     }
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use metrique::Slot;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-//     use super::*;
+    #[tokio::test]
+    async fn get_pokemon_species_pikachu_spanish_flavor_text() {
+        let input = input::GetPokemonSpeciesInput {
+            name: String::from("pikachu"),
+        };
 
-//     #[tokio::test]
-//     async fn get_pokemon_species_pikachu_spanish_flavor_text() {
-//         let input = input::GetPokemonSpeciesInput {
-//             name: String::from("pikachu"),
-//         };
+        let state = Arc::new(State::default());
 
-//         let state = Arc::new(State::default());
+        let test_metrics = Extension(Metrics::new(PokemonOperationMetrics::default()));
 
-//         let mut test_operation_metrics = Slot::new(OperationMetrics::default());
-//         let test_operation_metrics_slotguard = test_operation_metrics
-//             .open(metrique::OnParentDrop::Discard)
-//             .expect("unreachable: slot was created here");
+        let actual_spanish_flavor_text =
+            get_pokemon_species(input, Extension(state.clone()), test_metrics.clone())
+                .await
+                .unwrap()
+                .flavor_text_entries
+                .into_iter()
+                .find(|flavor_text| flavor_text.language == model::Language::Spanish)
+                .unwrap();
 
-//         let test_metrics: Extension<Arc<Mutex<SlotGuard<OperationMetrics>>>> =
-//             Extension(Arc::new(Mutex::new(test_operation_metrics_slotguard)));
+        assert_eq!(
+            PIKACHU_SPANISH_FLAVOR_TEXT,
+            actual_spanish_flavor_text.flavor_text()
+        );
 
-//         let actual_spanish_flavor_text =
-//             get_pokemon_species(input, Extension(state.clone()), test_metrics)
-//                 .await
-//                 .unwrap()
-//                 .flavor_text_entries
-//                 .into_iter()
-//                 .find(|flavor_text| flavor_text.language == model::Language::Spanish)
-//                 .unwrap();
-
-//         assert_eq!(
-//             PIKACHU_SPANISH_FLAVOR_TEXT,
-//             actual_spanish_flavor_text.flavor_text()
-//         );
-
-//         let input = input::GetServerStatisticsInput {};
-//         let stats = get_server_statistics(input, Extension(state.clone())).await;
-//         assert_eq!(1, stats.calls_count);
-//     }
-// }
+        let input = input::GetServerStatisticsInput {};
+        let stats = get_server_statistics(input, Extension(state.clone()), test_metrics).await;
+        assert_eq!(1, stats.calls_count);
+    }
+}

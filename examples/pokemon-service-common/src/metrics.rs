@@ -15,19 +15,82 @@ pub struct PokemonMetrics {
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PokemonOperationMetrics {
-    pub get_pokemon_species_metrics: Option<String>,
+    #[metrics(flatten)]
+    pub get_pokemon_species_metrics: GetPokemonSpeciesMetrics,
+    #[metrics(flatten)]
+    pub get_storage_metrics: GetStorageMetrics,
+    #[metrics(flatten)]
+    pub get_server_statistics_metrics: GetServerStatisticsMetrics,
+    #[metrics(flatten)]
+    pub capture_pokemon_metrics: CapturePokemonMetrics,
+    #[metrics(flatten)]
+    pub do_nothing_metrics: DoNothingMetrics,
+    #[metrics(flatten)]
+    pub check_health_metrics: CheckHealthMetrics,
+    #[metrics(flatten)]
+    pub stream_pokemon_radio_metrics: StreamPokemonRadioMetrics,
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Clone)]
+pub struct GetPokemonSpeciesMetrics {
+    pub requested_pokemon_name: Option<String>,
+    pub found: Option<bool>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct GetStorageMetrics {
+    pub user: Option<String>,
+    pub authenticated: Option<bool>,
+    pub item_count: Option<usize>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct GetServerStatisticsMetrics {
+    pub total_calls: Option<String>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct CapturePokemonMetrics {
+    pub requested_region: Option<String>,
+    pub supported_region: Option<bool>,
+    pub pokeball_type: Option<String>,
+    pub capture_attempts: Option<usize>,
+    pub successful_captures: Option<usize>,
+    pub shiny_captured: Option<bool>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct DoNothingMetrics {
+    pub invocation_count: Option<usize>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct CheckHealthMetrics {
+    pub health_check_count: Option<usize>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
+pub struct StreamPokemonRadioMetrics {
+    pub stream_url: Option<String>,
+}
+
+#[metrics]
+#[derive(Default, Clone)]
 pub struct PokemonRequestMetrics {
     pub test_request_metric: Option<String>,
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PokemonResponseMetrics {
     pub test_response_metric: Option<String>,
 }

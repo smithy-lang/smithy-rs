@@ -114,11 +114,7 @@ fn generate_ext_trait_impl(
         let ty = &ext.ty;
         quote! {
             metrics.#field_name = metrique::Slot::new(<#ty>::default());
-            let extension_slotguard = metrics
-                .#field_name
-                .open(metrique::OnParentDrop::Discard)
-                .expect("unreachable: the slot was created in this scope and is not opened before this point");
-            req.extensions_mut().insert(aws_smithy_http_server_metrics::extension::Metrics::__macro_new(extension_slotguard));
+            req.extensions_mut().insert(aws_smithy_http_server_metrics::extension::Metrics::new(<#ty>::default()));
         }
     });
 
