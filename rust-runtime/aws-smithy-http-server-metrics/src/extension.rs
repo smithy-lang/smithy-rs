@@ -47,11 +47,7 @@ where
     ///
     /// Takes a [`SlotGuard<T>`] to construct an instance of this wrapper type
     #[doc(hidden)]
-    pub fn new(t: T) -> Self {
-        let slotguard = Slot::new(t).open(OnParentDrop::Discard).expect(
-            "unreachable: slot was created in this context and not opened before this point",
-        );
-
+    pub fn __macro_new(slotguard: SlotGuard<T>) -> Self {
         Self {
             inner: Arc::new(Mutex::new(slotguard)),
         }
