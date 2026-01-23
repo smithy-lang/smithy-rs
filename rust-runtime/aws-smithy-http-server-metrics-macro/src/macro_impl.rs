@@ -6,7 +6,7 @@ use syn::ItemStruct;
 
 use crate::SmithyMetricsStructAttrs;
 
-/// Represents a field marked with `#[smithy_metrics(operation)]` that needs
+/// Represents a field marked with `#[smithy_metrics(extension)]` that needs
 /// to be inserted as an extension into HTTP requests.
 struct ExtensionField {
     name: Ident,
@@ -16,7 +16,7 @@ struct ExtensionField {
 /// Implementation of the `#[smithy_metrics]` procedural macro.
 ///
 /// This macro:
-/// 1. Processes fields marked with `#[smithy_metrics(operation)]`
+/// 1. Processes fields marked with `#[smithy_metrics(extension)]`
 /// 2. Wraps their types in `metrique::Slot<T>` if not already wrapped
 /// 3. Adds default request/repsonse metrics fields
 /// 4. Generates a builder trait and implementations for the metrics layer for the annotated metrics struct
@@ -33,10 +33,10 @@ pub(crate) fn smithy_metrics_impl(
 
     // Collect extension fields and remove smithy_metrics attributes
     for field in &mut fields.named {
-        let has_operation = has_operation_attr(&field.attrs);
+        let has_extension = has_extension_attr(&field.attrs);
         field.attrs = clean_attrs(&field.attrs);
 
-        if !has_operation {
+        if !has_extension {
             continue;
         }
 
@@ -202,8 +202,8 @@ fn clean_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
         .collect()
 }
 
-/// Checks if a field has the `#[smithy_metrics(operation)]` attribute.
-fn has_operation_attr(attrs: &[Attribute]) -> bool {
+/// Checks if a field has the `#[smithy_metrics(extension)]` attribute.
+fn has_extension_attr(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
         // Check if attribute path is "smithy_metrics"
         if !attr.path().is_ident("smithy_metrics") {
@@ -212,7 +212,7 @@ fn has_operation_attr(attrs: &[Attribute]) -> bool {
 
         // Parse the attribute arguments to check for "operation"
         attr.parse_args::<syn::Ident>()
-            .map(|ident| ident == "operation")
+            .map(|ident| ident == "extension")
             .unwrap_or(false)
     })
 }
@@ -307,7 +307,7 @@ mod tests {
     fn test_wraps_operation_field_in_slot() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 my_field: MyType,
             }
         };
@@ -332,7 +332,7 @@ mod tests {
     fn test_already_wrapped_slot_not_double_wrapped() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 my_field: Slot<MyType>,
             }
         };
@@ -353,7 +353,7 @@ mod tests {
     fn test_option_slot_not_double_wrapped() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 my_field: Option<Slot<MyType>>,
             }
         };
@@ -374,7 +374,7 @@ mod tests {
     fn test_mixed_operation_and_regular_fields() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 operation_field: MyType,
                 regular_field: String,
                 another_regular: i32,
@@ -405,11 +405,11 @@ mod tests {
     fn test_multiple_operation_fields() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 first_operation: FirstType,
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 second_operation: SecondType,
-                #[smithy_metrics(operation)]
+                #[smithy_metrics(extension)]
                 third_operation: ThirdType,
             }
         };
