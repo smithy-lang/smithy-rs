@@ -230,13 +230,11 @@ pub async fn get_storage(
 
     // We currently only support Ash and he has nothing stored
     let authenticated = input.user == "ash" && input.passcode == "pikachu123";
-    let collection = if authenticated { vec![] } else { vec![] };
 
     metrics
         .set(|mut operation_metrics| {
             operation_metrics.get_storage_metrics.user = Some(input.user.clone());
             operation_metrics.get_storage_metrics.authenticated = Some(authenticated);
-            operation_metrics.get_storage_metrics.item_count = Some(collection.len());
         })
         .unwrap_or_else(|e| {
             tracing::error!("Error setting metrics in get_storage: {e}");
@@ -248,7 +246,7 @@ pub async fn get_storage(
             error::StorageAccessNotAuthorized {},
         ));
     }
-    Ok(output::GetStorageOutput { collection })
+    Ok(output::GetStorageOutput { collection: vec![] })
 }
 
 /// Calculates and reports metrics about this server instance.
@@ -452,9 +450,6 @@ pub async fn stream_pokemon_radio(
 
 #[cfg(test)]
 mod tests {
-    use metrique::OnParentDrop;
-    use metrique::Slot;
-
     use super::*;
 
     #[tokio::test]
@@ -465,14 +460,8 @@ mod tests {
 
         let state = Arc::new(State::default());
 
-        let slotguard = Slot::new(PokemonOperationMetrics::default())
-            .open(OnParentDrop::Discard)
-            .unwrap();
-
-        let test_metrics = Extension(Metrics::__macro_new(slotguard));
-
         let actual_spanish_flavor_text =
-            get_pokemon_species(input, Extension(state.clone()), test_metrics.clone())
+            get_pokemon_species(input, Extension(state.clone()), Extension(Metrics::test()))
                 .await
                 .unwrap()
                 .flavor_text_entries
@@ -486,7 +475,9 @@ mod tests {
         );
 
         let input = input::GetServerStatisticsInput {};
-        let stats = get_server_statistics(input, Extension(state.clone()), test_metrics).await;
+        let stats =
+            get_server_statistics(input, Extension(state.clone()), Extension(Metrics::test()))
+                .await;
         assert_eq!(1, stats.calls_count);
     }
 }

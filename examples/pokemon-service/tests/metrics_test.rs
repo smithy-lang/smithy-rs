@@ -135,7 +135,7 @@ fn test_get_pokemon_species_metrics(metrics: &Vec<Value>) {
         get_pokemon_species_metrics["requested_pokemon_name"],
         "pikachu"
     );
-    assert_eq!(get_pokemon_species_metrics["found"], true);
+    assert_eq!(get_pokemon_species_metrics["found"], 1);
 }
 
 fn test_get_storage_metrics(metrics: &Vec<Value>) {
@@ -146,5 +146,5 @@ fn test_get_storage_metrics(metrics: &Vec<Value>) {
 
     assert_eq!(storage_metric["operation_name"], "GetStorage");
     assert_eq!(storage_metric["user"], "ash");
-    assert_eq!(storage_metric["authenticated"], true);
+    assert_eq!(storage_metric["authenticated"], 1);
 }

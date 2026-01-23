@@ -53,6 +53,20 @@ where
         }
     }
 
+    /// Create a test instance that discards metrics
+    /// 
+    /// Use this in tests when you need to provide metrics to handlers
+    /// but don't care about capturing the output.
+    pub fn test() -> Self
+    where
+        T: Default,
+    {
+        let slotguard = Slot::new(T::default())
+            .open(OnParentDrop::Discard)
+            .unwrap();
+        Self::__macro_new(slotguard)
+    }
+
     /// Set the metrics
     ///
     /// Example
