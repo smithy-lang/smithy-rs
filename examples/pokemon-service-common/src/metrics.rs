@@ -11,12 +11,12 @@ pub struct PokemonMetrics {
     pub response_metrics: PokemonResponseMetrics,
     #[metrics(flatten)]
     #[smithy_metrics(operation)]
-    pub operation_metrics: OperationMetrics,
+    pub operation_metrics: PokemonOperationMetrics,
 }
 
 #[metrics]
 #[derive(Default)]
-pub struct OperationMetrics {
+pub struct PokemonOperationMetrics {
     pub get_pokemon_species_metrics: Option<String>,
 }
 

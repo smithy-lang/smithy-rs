@@ -118,7 +118,7 @@ fn generate_ext_trait_impl(
                 .#field_name
                 .open(metrique::OnParentDrop::Discard)
                 .expect("unreachable: the slot was created in this scope and is not opened before this point");
-            req.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(extension_slotguard)));
+            req.extensions_mut().insert(aws_smithy_http_server_metrics::extension::Metrics::__macro_new(extension_slotguard));
         }
     });
 
