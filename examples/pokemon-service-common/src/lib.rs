@@ -452,6 +452,9 @@ pub async fn stream_pokemon_radio(
 
 #[cfg(test)]
 mod tests {
+    use metrique::OnParentDrop;
+    use metrique::Slot;
+
     use super::*;
 
     #[tokio::test]
@@ -462,7 +465,11 @@ mod tests {
 
         let state = Arc::new(State::default());
 
-        let test_metrics = Extension(Metrics::new(PokemonOperationMetrics::default()));
+        let slotguard = Slot::new(PokemonOperationMetrics::default())
+            .open(OnParentDrop::Discard)
+            .unwrap();
+
+        let test_metrics = Extension(Metrics::__macro_new(slotguard));
 
         let actual_spanish_flavor_text =
             get_pokemon_species(input, Extension(state.clone()), test_metrics.clone())
