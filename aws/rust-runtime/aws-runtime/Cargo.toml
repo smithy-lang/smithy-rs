@@ -10,7 +10,7 @@ rust-version = "1.88"
 
 [features]
 event-stream = ["dep:aws-smithy-eventstream", "aws-sigv4/sign-eventstream"]
-http-02x = []
+http-02x = ["dep:http-02x", "dep:http-body-04x"]
 http-1x = []
 test-util = ["dep:regex-lite"]
 sigv4a = ["aws-sigv4/sigv4a"]
@@ -28,8 +28,8 @@ aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features =
 aws-types = { path = "../aws-types" }
 bytes = "1.10.0"
 fastrand = "2.3.0"
-http-02x = { package = "http", version = "0.2.12" }
-http-body-04x = { package = "http-body", version = "0.4.6" }
+http-02x = { package = "http", version = "0.2.12", optional = true}
+http-body-04x = { package = "http-body", version = "0.4.6", optional = true}
 http-1x = { package = "http", version = "1.3.1"}
 http-body-1x = { package = "http-body", version = "1.0.1"}
 percent-encoding = "2.3.1"

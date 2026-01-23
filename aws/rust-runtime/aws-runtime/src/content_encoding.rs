@@ -169,6 +169,7 @@ impl<Inner> AwsChunkedBody<Inner> {
     }
 }
 
+#[cfg(feature = "http-02x")]
 impl<Inner> http_body_04x::Body for AwsChunkedBody<Inner>
 where
     Inner: http_body_04x::Body<Data = Bytes, Error = aws_smithy_types::body::Error>,
@@ -277,6 +278,7 @@ where
 }
 
 /// Utility functions to help with the [http_body_04x::Body] trait implementation
+#[cfg(feature = "http-02x")]
 mod http_02x_utils {
     use super::{CRLF, TRAILER_SEPARATOR};
     use bytes::BytesMut;
@@ -655,6 +657,7 @@ fn get_unsigned_chunk_bytes_length(payload_length: u64) -> u64 {
 mod tests {
 
     #[cfg(test)]
+    #[cfg(feature = "http-02x")]
     mod http_02x_tests {
         use super::super::{
             http_02x_utils::{total_rendered_length_of_trailers, trailers_as_aws_chunked_bytes},
