@@ -3,16 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::{
-    io::{BufRead, BufReader},
-    process::{Command, Stdio},
-    time::Duration,
-};
+use std::io::BufRead;
+use std::io::BufReader;
+use std::process::Command;
+use std::process::Stdio;
+use std::time::Duration;
 
 use tokio::time::timeout;
 
 use pokemon_service::DEFAULT_ADDRESS;
-use pokemon_service_client::{Client, Config};
+use pokemon_service_client::Client;
+use pokemon_service_client::Config;
 use pokemon_service_common::ChildDrop;
 
 pub struct ServerHandle {
@@ -55,6 +56,22 @@ pub async fn run_server() -> ServerHandle {
         child: ChildDrop(child),
         port,
     }
+}
+
+pub async fn run_server_with_metrics_tcp(tcp_addr: &str) -> ChildDrop {
+    let child = Command::new(cargo_bin!())
+        .arg("--metrics-tcp")
+        .arg(tcp_addr)
+        .spawn()
+        .unwrap();
+
+    sleep(Duration::from_millis(500)).await;
+
+    ChildDrop(child)
+}
+
+pub fn base_url() -> String {
+    format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}")
 }
 
 pub fn base_url(port: u16) -> String {
