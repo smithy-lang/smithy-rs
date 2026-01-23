@@ -1,21 +1,23 @@
+//! A [`Clone`] bound was introduced to [`http::Extensions`] as of http 1.x, and [`SlotGuard`] is
+//! not [`Clone`], meaning we need to wrap SlotGuard<T> metrics with Arc Mutex before insertion
+//!
+//! To expose the types directly, we would need non-cloneable [`http::Extensions`] or a custom
+//! cloneable [`SlotGuard`] implementation to expose the types directly
+
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::MutexGuard;
 use std::sync::PoisonError;
 
+use metrique::OnParentDrop;
+use metrique::Slot;
 use metrique::SlotGuard;
 use thiserror::Error;
 
 use crate::traits::ThreadSafeCloseEntry;
 
-/// A wrapper type for metrics types that get inserted into [`http::Extensions`] to expose a
-/// simpler API to the handlers for setting metrics
-///
-/// A [`Clone`] bound was introduced to [`http::Extensions`] as of http 1.x, and [`SlotGuard`] is
-/// not [`Clone`], meaning we need to wrap SlotGuard<T> metrics with Arc Mutex before insertion
-///
-/// To expose the types directly, we would need non-cloneable [`http::Extensions`] or a custom
-/// cloneable [`SlotGuard`] implementation to expose the types directly
+/// Wraps a [`metrique::CloseEntry`], T, with [`Arc<Mutex<SlotGuard<T>>>`] to be Clone and thread safe
+/// for insertion into [`http::Extensions`]
 ///
 /// Example
 ///
@@ -30,6 +32,7 @@ use crate::traits::ThreadSafeCloseEntry;
 ///     });
 /// }
 /// ```
+#[derive(Clone)]
 pub struct Metrics<T>
 where
     T: ThreadSafeCloseEntry,
@@ -44,7 +47,11 @@ where
     ///
     /// Takes a [`SlotGuard<T>`] to construct an instance of this wrapper type
     #[doc(hidden)]
-    pub fn __macro_new(slotguard: SlotGuard<T>) -> Self {
+    pub fn new(t: T) -> Self {
+        let slotguard = Slot::new(t).open(OnParentDrop::Discard).expect(
+            "unreachable: slot was created in this context and not opened before this point",
+        );
+
         Self {
             inner: Arc::new(Mutex::new(slotguard)),
         }
@@ -59,7 +66,7 @@ where
     ///     metrics.get_pokemon_species_metrics = Some("hello world".to_string());
     /// });
     /// ```
-    pub fn set<F>(self, f: F) -> Result<(), MetricsError>
+    pub fn set<F>(&self, f: F) -> Result<(), MetricsError>
     where
         F: FnOnce(MutexGuard<'_, SlotGuard<T>>),
     {
