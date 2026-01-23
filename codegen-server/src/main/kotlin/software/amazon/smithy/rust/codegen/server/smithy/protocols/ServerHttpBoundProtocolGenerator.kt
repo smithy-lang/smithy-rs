@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -38,6 +39,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -212,6 +215,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
             "http" to RuntimeType.http(runtimeConfig),
             "Tracing" to RuntimeType.Tracing,
+            "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
             *preludeScope,
         )
 
@@ -562,12 +566,22 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // No binding, use `@http`.
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
-        operationShape.outputShape(model).findStreamingMember(model)?.let {
+        operationShape.outputShape(model).findStreamingMember(model)?.let { streamingMember ->
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
 
+            // Event streams vs blob streams require different handling in http@1:
+            // - Event streams (MessageStreamAdapter) yield Frame<Bytes> and use StreamBody::new() directly
+            // - Blob streams (FuturesStreamCompatByteStream) yield Bytes and need wrap_stream() to convert to Frame<Bytes>
+            val isEventStream = streamingMember.isEventStream(model)
             val wrapStreamCall =
-                if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
-                    "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
+                if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                    if (isEventStream) {
+                        // Event streams already yield Frame<Bytes>, use StreamBody::new directly
+                        "let body = #{SmithyHttpServer}::body::boxed(#{http_body_util}::StreamBody::new("
+                    } else {
+                        // Blob streams yield Bytes, use wrap_stream to convert to Frame<Bytes>
+                        "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
+                    }
                 } else {
                     "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
                 }
@@ -784,7 +798,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                 httpBindingResolver.requestContentType(operationShape)!!
 
             // Generate different body collection code based on HTTP version
-            if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                 // For HTTP 1.x: use http-body-util's BodyExt trait
                 rustTemplate(
                     """
@@ -1017,7 +1031,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     }
                             }
                         // Generate different body collection code based on HTTP version
-                        if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
+                        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                             // For HTTP 1.x: use http-body-util's BodyExt trait
                             rustTemplate(
                                 """
@@ -1529,7 +1543,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                 // HTTP/1: No Into<ByteStream> available, must use ByteStream::from_body_1_x() which requires Send + Sync.
                 // HTTP/0.4: Uses Into<ByteStream> conversion without these bounds.
                 """
@@ -1545,7 +1559,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun eventStreamBodyInto() =
         writable {
-            if (runtimeConfig.httpVersion == software.amazon.smithy.rust.codegen.core.smithy.HttpVersion.Http1x) {
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                 rustTemplate("#{SmithyTypes}::body::SdkBody::from_body_1_x(body)", *codegenScope)
             } else {
                 rust("body.into().into_inner()")
@@ -1575,7 +1589,7 @@ private fun eventStreamWithInitialResponse(
                     let mut buffer = #{Vec}::new();
                     #{write_message_to}(&initial_message, &mut buffer)
                         .expect("Failed to write initial message");
-                    let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
+                    let initial_message_stream = futures_util::stream::iter(vec![#{initial_message_item}]);
                     let adapter = #{message_stream_adaptor};
                     initial_message_stream.chain(adapter)
                 }
@@ -1585,6 +1599,7 @@ private fun eventStreamWithInitialResponse(
                 "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
                 "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
                 "initial_response_generator" to initialResponseGenerator,
+                "initial_message_item" to initialMessageItem(codegenContext.settings.runtimeConfig),
                 "write_message_to" to
                     RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                         .resolve("frame::write_message_to"),
@@ -1628,3 +1643,18 @@ private fun messageStreamAdaptor(
 ) = writable {
     rust("$outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer)")
 }
+
+private fun initialMessageItem(runtimeConfig: RuntimeConfig) =
+    writable {
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            // http@1: Initial message is chained with MessageStreamAdapter (which yields Frame<Bytes>),
+            // so both streams must have the same Item type for .chain() to work
+            rustTemplate(
+                "Ok(#{http_body_1x}::Frame::data(buffer.into()))",
+                "http_body_1x" to CargoDependency.HttpBody1x.toType(),
+            )
+        } else {
+            // http@0: MessageStreamAdapter yields Bytes, so initial message must also be Bytes
+            rust("Ok(buffer.into())")
+        }
+    }
