@@ -1,7 +1,7 @@
 [package]
 name = "aws-smithy-eventstream"
 # <IMPORTANT> Only patch releases can be made to this runtime crate until https://github.com/smithy-lang/smithy-rs/issues/3370 is resolved
-version = "0.60.14"
+version = "0.60.15"
 # </IMPORTANT>
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 description = "Event stream logic for smithy-rs."
@@ -18,7 +18,7 @@ __bench-mimalloc = []
 
 [dependencies]
 arbitrary = { version = "1.3", optional = true }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 bytes = "1.10.0"
 crc32fast = "1.3"
 derive_arbitrary = { version = "1.3", optional = true }

@@ -153,11 +153,7 @@ fn update_manifest(
     for set in ["dependencies", "dev-dependencies", "build-dependencies"] {
         if let Some(dependencies) = metadata.get_mut(set) {
             if !dependencies.is_table() {
-                bail!(
-                    "Unexpected non-table value named `{}` in {:?}",
-                    set,
-                    manifest_path
-                );
+                bail!("Unexpected non-table value named `{set}` in {manifest_path:?}");
             }
             changed = update_dependencies(
                 dependencies.as_table_like_mut().unwrap(),
@@ -265,10 +261,7 @@ fn updated_dependency_value(
         if let Some(crate_metadata) = manifest.crates.get(dependency_name) {
             value["version"] = toml_edit::value(crate_metadata.version.clone());
         } else {
-            bail!(
-                "Crate `{}` was missing from the `versions.toml`",
-                dependency_name
-            );
+            bail!("Crate `{dependency_name}` was missing from the `versions.toml`");
         }
     }
 

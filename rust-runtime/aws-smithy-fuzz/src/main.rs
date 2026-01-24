@@ -924,8 +924,7 @@ mod test {
     use std::{env::temp_dir, path::PathBuf};
 
     use crate::{
-        generate_smithy_build_for_target, generate_smithy_build_json_for_fuzzer, setup_smithy,
-        SetupSmithyArgs,
+        generate_smithy_build_for_target, generate_smithy_build_json_for_fuzzer, SetupSmithyArgs,
     };
 
     #[test]
