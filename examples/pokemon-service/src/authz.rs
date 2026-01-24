@@ -140,6 +140,13 @@ macro_rules! impl_service {
             }
 
             fn call(&mut self, req: (Op::Input, ($($var,)*))) -> Self::Future {
+                println!("\n[TRACE D1] ========== MODEL PLUGIN: AuthorizationPlugin ==========");
+                println!("[TRACE D1] File: pokemon-service/src/authz.rs");
+                println!("[TRACE D1] Type: AuthorizeService<Op, S> (Model Plugin - Position D)");
+                println!("[TRACE D1] This runs AFTER Upgrade (on Model Input/Output)");
+                println!("[TRACE D1] Checking authorization before calling handler...");
+                println!("[TRACE D1] ===========================================================\n");
+
                 let (input, exts) = req;
 
                 // Replacing the service is necessary to avoid readiness problems.
@@ -152,10 +159,12 @@ macro_rules! impl_service {
                 let fut = async move {
                     let is_authorized = authorizer.authorize(&input).await;
                     if !is_authorized {
+                        println!("[TRACE D1] Authorization FAILED!");
                         return Err(Self::Error::AuthorizeError {
                             message: "Not authorized!".to_owned(),
                         });
                     }
+                    println!("[TRACE D2] Authorization PASSED! Calling inner handler...");
 
                     service
                         .call((input, exts))

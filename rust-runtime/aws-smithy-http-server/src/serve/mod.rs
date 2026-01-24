@@ -891,15 +891,27 @@ async fn handle_connection<L, M, S, B>(
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
     for<'a> <M as Service<IncomingStream<'a, L>>>::Future: Send,
 {
+    println!("\n[TRACE 1] ========== NEW CONNECTION ==========");
+    println!("[TRACE 1] File: aws-smithy-http-server/src/serve/mod.rs");
+    println!("[TRACE 1] Function: handle_connection()");
+    println!("[TRACE 1] Connection accepted from: {:?}", remote_addr);
+    println!("[TRACE 1] ========================================\n");
+
     let watcher = graceful.map(|g| g.watcher());
     let tokio_io = TokioIo::new(conn_io);
 
     tracing::trace!("connection {remote_addr:?} accepted");
 
+    println!("[TRACE 2] File: aws-smithy-http-server/src/serve/mod.rs");
+    println!("[TRACE 2] Calling make_service.ready() to prepare service factory");
+
     make_service
         .ready()
         .await
         .expect("make_service error type is Infallible and cannot fail");
+
+    println!("[TRACE 3] File: aws-smithy-http-server/src/serve/mod.rs");
+    println!("[TRACE 3] Calling make_service.call() to create per-connection service");
 
     let tower_service = make_service
         .call(IncomingStream {
@@ -908,6 +920,9 @@ async fn handle_connection<L, M, S, B>(
         })
         .await
         .expect("make_service error type is Infallible and cannot fail");
+
+    println!("[TRACE 4] File: aws-smithy-http-server/src/serve/mod.rs");
+    println!("[TRACE 4] Wrapping Tower service with TowerToHyperService for Hyper compatibility");
 
     let hyper_service = TowerToHyperService::new(tower_service);
 

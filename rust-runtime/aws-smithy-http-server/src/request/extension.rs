@@ -94,6 +94,15 @@ where
     type Rejection = MissingExtension;
 
     fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
-        parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension)
+        println!("[TRACE 14b] File: aws-smithy-http-server/src/request/extension.rs");
+        println!("[TRACE 14b] Type: Extension<T>");
+        println!("[TRACE 14b] Function: FromParts::from_parts()");
+        println!("[TRACE 14b] Extracting Extension<T> from request parts");
+        let result = parts.extensions.remove::<T>().map(Extension).ok_or(MissingExtension);
+        match &result {
+            Ok(_) => println!("[TRACE 14b] Extension extracted successfully!"),
+            Err(_) => println!("[TRACE 14b] Extension NOT found in request!"),
+        }
+        result
     }
 }

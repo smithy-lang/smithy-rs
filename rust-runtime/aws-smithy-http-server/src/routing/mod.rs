@@ -190,12 +190,28 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        println!("\n[TRACE 6] ========== HTTP REQUEST RECEIVED ==========");
+        println!("[TRACE 6] File: aws-smithy-http-server/src/routing/mod.rs");
+        println!("[TRACE 6] Type: RoutingService<R, Protocol>");
+        println!("[TRACE 6] Function: Service::call()");
+        println!("[TRACE 6] Method: {} | URI: {}", req.method(), req.uri());
+        println!("[TRACE 6] ==============================================\n");
+
         tracing::debug!("inside routing service call");
+        println!("[TRACE 7] File: aws-smithy-http-server/src/routing/mod.rs");
+        println!("[TRACE 7] Calling Router::match_route() to find matching operation...");
+
         match self.router.match_route(&req) {
             // Successfully routed, use the routes `Service::call`.
-            Ok(ok) => RoutingFuture::from_oneshot(ok.oneshot(req)),
+            Ok(ok) => {
+                println!("[TRACE 8] File: aws-smithy-http-server/src/routing/mod.rs");
+                println!("[TRACE 8] Route matched! Dispatching to operation service via oneshot()");
+                RoutingFuture::from_oneshot(ok.oneshot(req))
+            }
             // Failed to route, use the `R::Error`s `IntoResponse<P>`.
             Err(error) => {
+                println!("[TRACE 8] File: aws-smithy-http-server/src/routing/mod.rs");
+                println!("[TRACE 8] Route NOT matched! Error: {}", error);
                 tracing::debug!(%error, "failed to route");
                 RoutingFuture::from_response(error.into_response())
             }

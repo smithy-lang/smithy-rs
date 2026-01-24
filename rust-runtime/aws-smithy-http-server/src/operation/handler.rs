@@ -148,6 +148,12 @@ where
     }
 
     fn call(&mut self, (input, exts): (Op::Input, Exts)) -> Self::Future {
+        println!("\n[TRACE 15] ========== HANDLER EXECUTION ==========");
+        println!("[TRACE 15] File: aws-smithy-http-server/src/operation/handler.rs");
+        println!("[TRACE 15] Type: IntoService<Op, H>");
+        println!("[TRACE 15] Function: Service::call()");
+        println!("[TRACE 15] Calling the user's handler function with deserialized input + extensions");
+        println!("[TRACE 15] ==============================================\n");
         self.handler.call(input, exts)
     }
 }

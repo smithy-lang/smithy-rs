@@ -67,6 +67,9 @@ where
     }
 
     fn call(&mut self, _target: T) -> Self::Future {
+        println!("[TRACE 5] File: aws-smithy-http-server/src/routing/into_make_service.rs");
+        println!("[TRACE 5] Type: IntoMakeService<S>");
+        println!("[TRACE 5] Function: Service::call() - Cloning router service for new connection");
         MakeRouteServiceFuture::new(ready(Ok(self.service.clone())))
     }
 }

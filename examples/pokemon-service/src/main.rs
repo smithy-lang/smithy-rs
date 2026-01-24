@@ -4,6 +4,7 @@
  */
 
 mod authz;
+mod outer_middleware;
 mod plugin;
 
 use std::{net::SocketAddr, sync::Arc};
@@ -35,6 +36,8 @@ use pokemon_service_common::{
 use pokemon_service_server_sdk::{scope, PokemonService, PokemonServiceConfig};
 
 use crate::authz::AuthorizationPlugin;
+use crate::outer_middleware::OuterMiddlewareLayer;
+use tower::Layer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -102,9 +105,15 @@ pub async fn main() {
         .build()
         .expect("failed to build an instance of PokemonService");
 
+    // Position A: Apply outer middleware that wraps the ENTIRE service.
+    // This middleware sees ALL requests, even those that fail routing.
+    let outer_layer = OuterMiddlewareLayer::new();
+    let app = outer_layer.layer(app);
+
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
-    let make_app = app.into_make_service_with_connect_info::<SocketAddr>();
+    use pokemon_service_server_sdk::server::routing::IntoMakeService;
+    let make_app = IntoMakeService::new(app);
 
     // Bind the application to a socket.
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

@@ -71,12 +71,24 @@ where
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
+        println!("[TRACE 9] File: aws-smithy-http-server/src/protocol/rest/router.rs");
+        println!("[TRACE 9] Type: RestRouter<S>");
+        println!("[TRACE 9] Function: Router::match_route()");
+        println!("[TRACE 9] Searching {} routes for match...", self.routes.len());
+
         let mut method_allowed = true;
 
-        for (request_spec, route) in &self.routes {
-            match request_spec.matches(request) {
+        for (idx, (request_spec, route)) in self.routes.iter().enumerate() {
+            let match_result = request_spec.matches(request);
+            println!("[TRACE 10] Route[{}]: Checking RequestSpec - Result: {:?}", idx, match_result);
+
+            match match_result {
                 // Match found.
-                Match::Yes => return Ok(route.clone()),
+                Match::Yes => {
+                    println!("[TRACE 11] File: aws-smithy-http-server/src/protocol/rest/router.rs");
+                    println!("[TRACE 11] MATCH FOUND at route index {}!", idx);
+                    return Ok(route.clone());
+                }
                 // Match found, but method disallowed.
                 Match::MethodNotAllowed => method_allowed = false,
                 // Continue looping to see if another route matches.

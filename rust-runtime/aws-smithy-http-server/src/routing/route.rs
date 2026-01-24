@@ -92,6 +92,10 @@ impl<B> Service<Request<B>> for Route<B> {
 
     #[inline]
     fn call(&mut self, req: Request<B>) -> Self::Future {
+        println!("[TRACE 12] File: aws-smithy-http-server/src/routing/route.rs");
+        println!("[TRACE 12] Type: Route<B> (type-erased service wrapper)");
+        println!("[TRACE 12] Function: Service::call()");
+        println!("[TRACE 12] Forwarding request to BoxCloneService (the actual operation service)");
         RouteFuture::new(self.service.clone().oneshot(req))
     }
 }
