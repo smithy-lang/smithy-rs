@@ -28,7 +28,7 @@ object PythonServerCargoDependency {
     val NumCpus: CargoDependency = CargoDependency("num_cpus", CratesIo("1.13"))
     val ParkingLot: CargoDependency = CargoDependency("parking_lot", CratesIo("0.12"))
 
-    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-http-server")
+    fun smithyHttpServer(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-legacy-http-server")
 
     fun smithyHttpServerPython(runtimeConfig: RuntimeConfig) =
         runtimeConfig.smithyRuntimeCrate("smithy-http-server-python")

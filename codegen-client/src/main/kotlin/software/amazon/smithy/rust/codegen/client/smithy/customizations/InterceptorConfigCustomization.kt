@@ -23,7 +23,7 @@ class InterceptorConfigCustomization(codegenContext: ClientCodegenContext) : Con
             "Intercept" to configReexport(RuntimeType.intercept(runtimeConfig)),
             "SharedInterceptor" to configReexport(RuntimeType.sharedInterceptor(runtimeConfig)),
             // TODO(Http1x): Update this dependency to Http1x
-            "Http" to CargoDependency.Http.toType(),
+            "Http" to CargoDependency.Http0x.toType(),
         )
 
     override fun section(section: ServiceConfig) =
