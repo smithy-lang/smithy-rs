@@ -125,6 +125,10 @@ where
     }
 
     fn call(&mut self, (input, exts): (Op::Input, Exts)) -> Self::Future {
+        println!("[TRACE 16] File: aws-smithy-http-server/src/operation/operation_service.rs");
+        println!("[TRACE 16] Type: Normalize<Op, S>");
+        println!("[TRACE 16] Function: Service::call()");
+        println!("[TRACE 16] Normalizing (Input, Extensions) tuple and calling inner service");
         let req = S::normalize(input, exts);
         self.inner.call(req)
     }

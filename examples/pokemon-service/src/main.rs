@@ -4,6 +4,7 @@
  */
 
 mod authz;
+mod outer_middleware;
 mod plugin;
 
 use std::net::SocketAddr;
@@ -54,6 +55,8 @@ use pokemon_service_server_sdk::PokemonServiceConfig;
 use tower::Layer;
 
 use crate::authz::AuthorizationPlugin;
+use crate::outer_middleware::OuterMiddlewareLayer;
+use tower::Layer;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -128,24 +131,15 @@ pub async fn main() {
         .build()
         .expect("failed to build an instance of PokemonService");
 
-    let metrics_layer = MetricsLayer::builder()
-        .init_metrics(|_req| {
-            let mut metrics = PokemonMetrics::default();
-            metrics.request_metrics.test_request_metric = Some("test request metric".to_string());
+    // Position A: Apply outer middleware that wraps the ENTIRE service.
+    // This middleware sees ALL requests, even those that fail routing.
+    let outer_layer = OuterMiddlewareLayer::new();
+    let app = outer_layer.layer(app);
 
-            metrics.append_on_drop(ServiceMetrics::sink())
-        })
-        .response_metrics(|_res, metrics| {
-            metrics.response_metrics.test_response_metric =
-                Some("test response metric".to_string());
-        })
-        .build();
-
-    let service = metrics_layer.layer(app);
-
-    // Using `IntoMakeServiceWithConnectInfo`, rather than `into_make_service`, to adjoin the `SocketAddr`
+    // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
-    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(service);
+    use pokemon_service_server_sdk::server::routing::IntoMakeServiceWithConnectInfo;
+    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(app);
 
     // Bind the application to a socket.
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

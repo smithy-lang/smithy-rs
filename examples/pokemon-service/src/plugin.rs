@@ -36,11 +36,13 @@ where
     }
 
     fn call(&mut self, req: R) -> Self::Future {
-        println!(
-            "Hi {} in {}",
-            self.operation_id.absolute(),
-            self.service_id.absolute()
-        );
+        println!("\n[TRACE C1] ========== HTTP PLUGIN: PrintPlugin ==========");
+        println!("[TRACE C1] File: pokemon-service/src/plugin.rs");
+        println!("[TRACE C1] Type: PrintService<S> (HTTP Plugin - Position C)");
+        println!("[TRACE C1] Operation: {}", self.operation_id.absolute());
+        println!("[TRACE C1] Service: {}", self.service_id.absolute());
+        println!("[TRACE C1] This runs BEFORE Upgrade (on HTTP Request/Response)");
+        println!("[TRACE C1] =====================================================\n");
         self.inner.call(req)
     }
 }

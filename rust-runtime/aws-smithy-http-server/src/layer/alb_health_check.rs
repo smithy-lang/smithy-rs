@@ -112,13 +112,19 @@ where
     }
 
     fn call(&mut self, req: Request<B>) -> Self::Future {
+        println!("[TRACE B2] File: aws-smithy-http-server/src/layer/alb_health_check.rs");
+        println!("[TRACE B2] Type: AlbHealthCheckService<H, S> (Route Middleware - Position B)");
+        println!("[TRACE B2] Checking if URI matches health check path: {}", self.layer.health_check_uri);
+
         if req.uri() == self.layer.health_check_uri.as_ref() {
+            println!("[TRACE B2] Health check URI MATCHED! Short-circuiting to health handler");
             let clone = self.layer.health_check_handler.clone();
             let service = std::mem::replace(&mut self.layer.health_check_handler, clone);
             let handler_future = service.oneshot(req);
 
             AlbHealthCheckFuture::handler_future(handler_future)
         } else {
+            println!("[TRACE B2] Not a health check, passing through to inner service");
             let clone = self.inner.clone();
             let service = std::mem::replace(&mut self.inner, clone);
             let service_future = service.oneshot(req);

@@ -167,6 +167,11 @@ where
 
     fn call(&mut self, mut req: http::Request<Body>) -> Self::Future {
         let request_id = ServerRequestId::new();
+        println!("[TRACE B1] File: aws-smithy-http-server/src/request/request_id.rs");
+        println!("[TRACE B1] Type: ServerRequestIdProvider<S> (Route Middleware - Position B)");
+        println!("[TRACE B1] Generated ServerRequestId: {}", request_id);
+        println!("[TRACE B1] Adding request ID to request extensions");
+
         match &self.header_key {
             Some(header_key) => {
                 req.extensions_mut().insert(request_id.clone());

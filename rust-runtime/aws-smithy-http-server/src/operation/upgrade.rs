@@ -133,12 +133,20 @@ where
                 InnerProj::FromRequest { inner } => {
                     let result = ready!(inner.poll(cx));
                     match result {
-                        Ok(ok) => this
-                            .service
-                            .take()
-                            .expect("futures cannot be polled after completion")
-                            .oneshot(ok),
+                        Ok(ok) => {
+                            println!("[TRACE 14] File: aws-smithy-http-server/src/operation/upgrade.rs");
+                            println!("[TRACE 14] Type: UpgradeFuture (FromRequest phase complete)");
+                            println!("[TRACE 14] Request deserialization SUCCESSFUL!");
+                            println!("[TRACE 14] Now calling inner operation service with deserialized input...");
+                            this
+                                .service
+                                .take()
+                                .expect("futures cannot be polled after completion")
+                                .oneshot(ok)
+                        }
                         Err(err) => {
+                            println!("[TRACE 14] File: aws-smithy-http-server/src/operation/upgrade.rs");
+                            println!("[TRACE 14] Request deserialization FAILED: {}", err);
                             // The error may arise either from a `FromRequest` failure for any user-defined
                             // handler's additional input parameters, or from a de-serialization failure
                             // of an input parameter specific to the operation.
@@ -149,10 +157,20 @@ where
                 }
                 InnerProj::Inner { call } => {
                     let result = ready!(call.poll(cx));
+                    println!("[TRACE 17] File: aws-smithy-http-server/src/operation/upgrade.rs");
+                    println!("[TRACE 17] Type: UpgradeFuture (Inner handler phase complete)");
                     let output = match result {
-                        Ok(ok) => ok.into_response(),
-                        Err(err) => err.into_response(),
+                        Ok(ok) => {
+                            println!("[TRACE 17] Handler returned SUCCESS - converting output to HTTP response");
+                            ok.into_response()
+                        }
+                        Err(err) => {
+                            println!("[TRACE 17] Handler returned ERROR - converting error to HTTP response");
+                            err.into_response()
+                        }
                     };
+                    println!("[TRACE 18] File: aws-smithy-http-server/src/operation/upgrade.rs");
+                    println!("[TRACE 18] Response serialization complete, returning HTTP response");
                     return Poll::Ready(Ok(output));
                 }
             };
@@ -181,6 +199,14 @@ where
     }
 
     fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        println!("\n[TRACE 13] ========== UPGRADE SERVICE ==========");
+        println!("[TRACE 13] File: aws-smithy-http-server/src/operation/upgrade.rs");
+        println!("[TRACE 13] Type: Upgrade<Protocol, Input, S>");
+        println!("[TRACE 13] Function: Service::call()");
+        println!("[TRACE 13] Starting HTTP -> Smithy type conversion");
+        println!("[TRACE 13] Phase: FromRequest - deserializing HTTP request to operation Input");
+        println!("[TRACE 13] ==========================================\n");
+
         let clone = self.inner.clone();
         let service = std::mem::replace(&mut self.inner, clone);
         UpgradeFuture {
