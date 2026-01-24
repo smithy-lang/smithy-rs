@@ -120,7 +120,7 @@ class ResponseBindingGeneratorTest {
                 }
                 """,
                 "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
-                "http" to RuntimeType.Http,
+                "http" to RuntimeType.Http1x,
             )
         }
         testProject.compileAndTest()
