@@ -88,7 +88,6 @@ class EndpointOverrideMetricDecoratorTest {
         awsSdkIntegrationTest(
             model,
             testParams,
-            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
         ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
@@ -156,7 +155,6 @@ class EndpointOverrideMetricDecoratorTest {
         awsSdkIntegrationTest(
             model,
             testParams,
-            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
         ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
