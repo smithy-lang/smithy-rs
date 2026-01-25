@@ -90,7 +90,7 @@ sealed class JsonSerializerSection(name: String) : Section(name) {
 typealias JsonSerializerCustomization = NamedCustomization<JsonSerializerSection>
 
 class JsonSerializerGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
     /** Function that maps a MemberShape into a JSON field name */
     private val jsonName: (MemberShape) -> String,
@@ -258,7 +258,7 @@ class JsonSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_struct_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_json_unset_struct_payload", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -270,7 +270,7 @@ class JsonSerializerGenerator(
         }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_json_unset_union_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_json_unset_union_payload", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,
@@ -301,7 +301,7 @@ class JsonSerializerGenerator(
     }
 
     override fun documentSerializer(): RuntimeType {
-        return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
+        return ProtocolFunctions.crossOperationFn("serialize_document", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {

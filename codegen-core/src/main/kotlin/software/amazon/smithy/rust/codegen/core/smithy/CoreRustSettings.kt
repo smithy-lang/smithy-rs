@@ -46,7 +46,7 @@ open class CoreCodegenConfig(
 ) {
     companion object {
         const val DEFAULT_FORMAT_TIMEOUT_SECONDS = 20
-        const val DEFAULT_DEBUG_MODE = false
+        const val DEFAULT_DEBUG_MODE = true
         const val DEFAULT_FLATTEN_MODE = false
 
         fun fromNode(node: Optional<ObjectNode>): CoreCodegenConfig =
