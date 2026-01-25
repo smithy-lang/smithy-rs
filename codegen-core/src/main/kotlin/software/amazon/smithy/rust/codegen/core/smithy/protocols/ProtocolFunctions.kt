@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
@@ -39,8 +40,40 @@ class ProtocolFunctions(
     private val codegenContext: CodegenContext,
 ) {
     companion object {
+        /**
+         * Generic protocol_serde module used for client-side code generation.
+         */
         val serDeModule = RustModule.pubCrate("protocol_serde")
 
+        /**
+         * Generate a protocol-specific module name from a protocol ShapeId.
+         * For example: aws.protocols#restJson1 -> protocol_serde_rest_json1
+         *
+         * This is only used for server-side code generation.
+         */
+        fun serDeModuleForProtocol(protocol: software.amazon.smithy.model.shapes.ShapeId): RustModule.LeafModule {
+            val protocolName = protocol.name.toSnakeCase()
+            return RustModule.pubCrate("protocol_serde_$protocolName")
+        }
+
+        /**
+         * Returns a protocol-specific serde module name based on codegen target.
+         * For server codegen, this returns `protocol_serde_{protocol_name}`.
+         * For client codegen, this returns `protocol_serde`.
+         */
+        fun serDeModule(
+            protocol: software.amazon.smithy.model.shapes.ShapeId,
+            target: CodegenTarget,
+        ): RustModule.LeafModule =
+            when (target) {
+                CodegenTarget.SERVER -> serDeModuleForProtocol(protocol)
+                CodegenTarget.CLIENT -> serDeModule
+            }
+
+        /**
+         * Generate a cross-operation function using the generic protocol_serde module.
+         * This is used by client-side code generation.
+         */
         fun crossOperationFn(
             fnName: String,
             block: ProtocolFnWritable,
@@ -48,7 +81,33 @@ class ProtocolFunctions(
             RuntimeType.forInlineFun(fnName, serDeModule) {
                 block(fnName)
             }
+
+        /**
+         * Generate a cross-operation function with a protocol-specific module name.
+         * This is used by server-side code generation to create protocol-specific modules
+         * (e.g., protocol_serde_rest_json1, protocol_serde_rpcv2_cbor).
+         *
+         * For client-side code, use the regular crossOperationFn instead.
+         */
+        fun crossOperationFn(
+            fnName: String,
+            protocol: software.amazon.smithy.model.shapes.ShapeId,
+            target: CodegenTarget,
+            block: ProtocolFnWritable,
+        ): RuntimeType {
+            val module = serDeModule(protocol, target)
+            return RuntimeType.forInlineFun(fnName, module) {
+                block(fnName)
+            }
+        }
     }
+
+    /**
+     * The serialization/deserialization module for this codegen context.
+     * - For server-side code: uses protocol-specific module (e.g., protocol_serde_rest_json1)
+     * - For client-side code: uses generic module (protocol_serde)
+     */
+    private val serDeModule: RustModule.LeafModule = Companion.serDeModule(codegenContext.protocol, codegenContext.target)
 
     private enum class FnType {
         Serialize,

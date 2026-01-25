@@ -54,7 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class XmlBindingTraitSerializerGenerator(
-    codegenContext: CodegenContext,
+    private val codegenContext: CodegenContext,
     private val httpBindingResolver: HttpBindingResolver,
 ) : StructuredDataSerializerGenerator {
     private val symbolProvider = codegenContext.symbolProvider
@@ -199,7 +199,7 @@ class XmlBindingTraitSerializerGenerator(
     }
 
     override fun unsetStructure(structure: StructureShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_xml_unset_struct_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_xml_unset_struct_payload", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName() -> #{ByteSlab} {
@@ -211,7 +211,7 @@ class XmlBindingTraitSerializerGenerator(
         }
 
     override fun unsetUnion(union: UnionShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("rest_xml_unset_union_payload") { fnName ->
+        ProtocolFunctions.crossOperationFn("rest_xml_unset_union_payload", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 "pub fn $fnName() -> #{ByteSlab} { #{Vec}::new() }",
                 *codegenScope,

@@ -60,7 +60,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         AwsQuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata", codegenContext.protocol, codegenContext.target) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
@@ -70,7 +70,7 @@ class AwsQueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata", codegenContext.protocol, codegenContext.target) { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,

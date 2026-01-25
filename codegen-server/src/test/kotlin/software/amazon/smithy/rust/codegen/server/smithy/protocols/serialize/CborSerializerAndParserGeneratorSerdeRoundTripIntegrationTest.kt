@@ -250,7 +250,7 @@ internal class CborSerializerAndParserGeneratorSerdeRoundTripIntegrationTest {
                 val serverProtocolTestGenerator =
                     ServerProtocolTestGenerator(codegenContext, ServerRpcV2CborFactory().support(), operationShape)
 
-                rustCrate.withModule(ProtocolFunctions.serDeModule) {
+                rustCrate.withModule(ProtocolFunctions.serDeModule(codegenContext.protocol, codegenContext.target)) {
                     // The SDK can only serialize operation outputs, so we only ask for response tests.
                     val responseTests =
                         serverProtocolTestGenerator.responseTestCases()

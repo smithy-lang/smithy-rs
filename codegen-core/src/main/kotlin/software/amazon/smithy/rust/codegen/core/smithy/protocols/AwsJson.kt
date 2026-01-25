@@ -199,7 +199,7 @@ open class AwsJson(
         AwsJsonSerializerGenerator(codegenContext, httpBindingResolver)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_http_error_metadata", codegenContext.protocol, codegenContext.target) { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(_response_status: u16, response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{JsonError}> {
@@ -211,7 +211,7 @@ open class AwsJson(
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata", codegenContext.protocol, codegenContext.target) { fnName ->
             // `HeaderMap::new()` doesn't allocate.
             rustTemplate(
                 """

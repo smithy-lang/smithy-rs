@@ -112,8 +112,8 @@ pub async fn main() {
 
     // Using `into_make_service_with_connect_info`, rather than `into_make_service`, to adjoin the `SocketAddr`
     // connection info.
-    use pokemon_service_server_sdk::server::routing::IntoMakeService;
-    let make_app = IntoMakeService::new(app);
+    use pokemon_service_server_sdk::server::routing::IntoMakeServiceWithConnectInfo;
+    let make_app = IntoMakeServiceWithConnectInfo::<_, SocketAddr>::new(app);
 
     // Bind the application to a socket.
     let bind: SocketAddr = format!("{}:{}", args.address, args.port)

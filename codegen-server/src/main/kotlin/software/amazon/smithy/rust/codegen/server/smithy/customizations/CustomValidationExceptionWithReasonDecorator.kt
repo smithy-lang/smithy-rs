@@ -72,6 +72,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
+            val serDeModule = software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions.serDeModule(codegenContext.protocol, codegenContext.target)
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -83,7 +84,7 @@ class ValidationExceptionWithReasonConversionGenerator(private val codegenContex
                             fields: Some(vec![first_validation_exception_field]),
                         };
                         Self::ConstraintViolation(
-                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                            crate::${serDeModule.name}::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }
