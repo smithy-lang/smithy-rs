@@ -442,21 +442,16 @@ impl Builder {
     ///
     /// # Examples
     /// Disabling identity caching:
-    /// ```no_run
-    /// # #[cfg(feature = "examples")]
-    /// # fn example() {
-    /// use aws_types::SdkConfig;
+    /// ```rust
+    /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     /// let config = SdkConfig::builder()
     ///     .identity_cache(IdentityCache::no_cache())
     ///     .build();
-    /// # }
     /// ```
     /// Changing settings on the default cache implementation:
-    /// ```no_run
-    /// # #[cfg(feature = "examples")]
-    /// # fn example() {
-    /// use aws_types::SdkConfig;
+    /// ```rust
+    /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     /// use std::time::Duration;
     ///
@@ -467,7 +462,6 @@ impl Builder {
     ///             .build()
     ///     )
     ///     .build();
-    /// # }
     /// ```
     pub fn identity_cache(mut self, cache: impl ResolveCachedIdentity + 'static) -> Self {
         self.set_identity_cache(Some(cache.into_shared()));
@@ -481,10 +475,8 @@ impl Builder {
     /// expires.
     ///
     /// # Examples
-    /// ```no_run
-    /// # #[cfg(feature = "examples")]
-    /// # fn example() {
-    /// use aws_types::SdkConfig;
+    /// ```rust
+    /// # use aws_types::SdkConfig;
     /// use aws_smithy_runtime::client::identity::IdentityCache;
     ///
     /// fn override_identity_cache() -> bool {
@@ -497,7 +489,6 @@ impl Builder {
     ///     builder.set_identity_cache(Some(IdentityCache::lazy().build()));
     /// }
     /// let config = builder.build();
-    /// # }
     /// ```
     pub fn set_identity_cache(&mut self, cache: Option<SharedIdentityCache>) -> &mut Self {
         self.identity_cache = cache;
