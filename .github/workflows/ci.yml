@@ -253,6 +253,7 @@ jobs:
           build_aws_exclude: ''
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: --all-features
+          test_aws_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
         - target: powerpc-unknown-linux-gnu
@@ -260,6 +261,7 @@ jobs:
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: ''
+          test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
         - target: powerpc64-unknown-linux-gnu
@@ -267,6 +269,7 @@ jobs:
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: ''
+          test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     steps:
@@ -331,7 +334,7 @@ jobs:
       run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace ${{ matrix.test_aws_features }}
 
   # Run the canary against generated SDKs
   #
