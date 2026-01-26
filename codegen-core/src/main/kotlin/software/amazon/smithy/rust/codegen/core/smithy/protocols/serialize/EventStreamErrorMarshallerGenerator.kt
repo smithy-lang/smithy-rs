@@ -42,7 +42,9 @@ class EventStreamErrorMarshallerGenerator(
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
-) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
+    /** Protocol suffix for multi-protocol support (e.g., "_RestJson1", "_RpcV2Cbor"). Null for single-protocol services. */
+    private val protocolSuffix: String? = null,
+) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType, protocolSuffix) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
 
@@ -159,6 +161,7 @@ class EventStreamErrorMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller")
+        val suffix = protocolSuffix ?: ""
+        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller$suffix")
     }
 }

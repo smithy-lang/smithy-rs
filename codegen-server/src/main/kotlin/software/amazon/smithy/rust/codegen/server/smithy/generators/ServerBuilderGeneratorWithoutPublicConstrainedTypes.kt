@@ -50,8 +50,19 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
     private val codegenContext: ServerCodegenContext,
     shape: StructureShape,
     validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
-    protocol: ServerProtocol,
+    protocols: List<ServerProtocol>,
 ) {
+    // For backwards compatibility, provide a single-protocol constructor
+    constructor(
+        codegenContext: ServerCodegenContext,
+        shape: StructureShape,
+        validationExceptionConversionGenerator: ValidationExceptionConversionGenerator,
+        protocol: ServerProtocol,
+    ) : this(codegenContext, shape, validationExceptionConversionGenerator, listOf(protocol))
+
+    // Primary protocol for cases where we need a single protocol reference
+    private val primaryProtocol: ServerProtocol = protocols.first()
+
     companion object {
         /**
          * Returns whether a structure shape, whose builder has been generated with
@@ -92,7 +103,7 @@ class ServerBuilderGeneratorWithoutPublicConstrainedTypes(
 
     private val codegenScope =
         arrayOf(
-            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
+            "RequestRejection" to primaryProtocol.requestRejection(codegenContext.runtimeConfig),
             "Structure" to structureSymbol,
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,

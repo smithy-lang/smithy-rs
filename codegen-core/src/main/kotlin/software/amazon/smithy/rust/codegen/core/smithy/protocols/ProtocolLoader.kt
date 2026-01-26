@@ -28,4 +28,23 @@ open class ProtocolLoader<T, C : CodegenContext>(private val supportedProtocols:
         }
         return matchingProtocols.first()
     }
+
+    /**
+     * Returns ALL matching protocols for a service, enabling multi-protocol code generation.
+     * This is used when a service defines multiple protocols (e.g., both RestJson1 and RpcV2Cbor).
+     */
+    fun protocolsFor(
+        model: Model,
+        serviceShape: ServiceShape,
+    ): List<Pair<ShapeId, ProtocolGeneratorFactory<T, C>>> {
+        val serviceProtocols: MutableMap<ShapeId, Trait> = ServiceIndex.of(model).getProtocols(serviceShape)
+        val matchingProtocols =
+            supportedProtocols.mapNotNull { (protocolId, factory) ->
+                serviceProtocols[protocolId]?.let { protocolId to factory }
+            }
+        if (matchingProtocols.isEmpty()) {
+            throw CodegenException("No matching protocol — service offers: ${serviceProtocols.keys}. We offer: ${supportedProtocols.keys}")
+        }
+        return matchingProtocols
+    }
 }

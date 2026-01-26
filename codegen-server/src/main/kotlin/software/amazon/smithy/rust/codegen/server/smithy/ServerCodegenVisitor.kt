@@ -113,6 +113,10 @@ open class ServerCodegenVisitor(
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
+    // Multi-protocol support: Store all protocol generators for services with multiple protocols
+    protected var allProtocolGenerators: List<ServerProtocolGenerator>
+    protected var allProtocols: List<ServerProtocol>
+
     init {
         val rustSymbolProviderConfig =
             RustSymbolProviderConfig(
@@ -135,7 +139,7 @@ open class ServerCodegenVisitor(
                 codegenDecorator,
                 RustServerCodegenPlugin::baseSymbolProvider,
             )
-        val (protocolShape, protocolGeneratorFactory) =
+        val serverProtocolLoader =
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
@@ -147,7 +151,14 @@ open class ServerCodegenVisitor(
                     },
                 ),
             )
-                .protocolFor(context.model, service)
+
+        // Get all matching protocols for multi-protocol support
+        val allProtocolPairs = serverProtocolLoader.protocolsFor(context.model, service)
+        val isMultiProtocol = allProtocolPairs.size > 1
+
+        // Use the first protocol as the primary (for backwards compatibility)
+        val (protocolShape, protocolGeneratorFactory) = allProtocolPairs.first()
+
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -160,6 +171,7 @@ open class ServerCodegenVisitor(
                 serverSymbolProviders.constrainedShapeSymbolProvider,
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
+                isMultiProtocol = isMultiProtocol,
             )
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
@@ -183,6 +195,18 @@ open class ServerCodegenVisitor(
                 codegenContext.expectModuleDocProvider(),
             )
         protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
+
+        // Initialize all protocol generators for multi-protocol support
+        allProtocolGenerators =
+            allProtocolPairs.map { (protoShape, factory) ->
+                val protoCodegenContext =
+                    codegenContext.copy(
+                        protocol = protoShape,
+                        isMultiProtocol = isMultiProtocol,
+                    )
+                factory.buildProtocolGenerator(protoCodegenContext)
+            }
+        allProtocols = allProtocolGenerators.map { it.protocol }
     }
 
     /**
@@ -347,7 +371,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
-                    protocolGenerator.protocol,
+                    allProtocols,
                 )
             serverBuilderGenerator.render(rustCrate, writer)
 
@@ -374,7 +398,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
-                    protocolGenerator.protocol,
+                    allProtocols,
                 )
             serverBuilderGeneratorWithoutPublicConstrainedTypes.render(rustCrate, writer)
 
@@ -699,19 +723,21 @@ open class ServerCodegenVisitor(
      *  - Additional structure shapes via `postprocessGenerateAdditionalStructures`
      */
     override fun operationShape(shape: OperationShape) {
-        // Generate errors.
+        // Generate errors (protocol-independent) - ONCE
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
-        // Generate operation shapes.
+        // Generate operation shapes (protocol-independent) - ONCE
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
 
-        // Generate operations ser/de.
-        rustCrate.withModule(ServerRustModule.Operation) {
-            protocolGenerator.renderOperation(this, shape)
+        // Generate protocol-specific ser/de - FOR EACH PROTOCOL
+        for (protoGenerator in allProtocolGenerators) {
+            rustCrate.withModule(ServerRustModule.Operation) {
+                protoGenerator.renderOperation(this, shape)
+            }
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)
