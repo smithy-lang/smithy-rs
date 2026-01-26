@@ -20,5 +20,5 @@ members = [
     "telemetry",
     "timestreamquery",
     "transcribestreaming",
-    "webassembly",
+    "webassembly-no-os",
 ]
