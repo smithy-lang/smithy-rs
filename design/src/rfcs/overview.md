@@ -54,4 +54,5 @@
 - [RFC-0042: File-per-change changelog](./rfc0042_file_per_change_changelog.md)
 - [RFC-0043: Identity Cache Partitions](./rfc0043_identity_cache_partitions.md)
 - [RFC-0045: Configurable Serde](./rfc0045_configurable_serde.md)
+- [RFC-0047: Custom ValidationException](./rfc0047_custom_validation.md)
 
