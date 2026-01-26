@@ -36,6 +36,8 @@ data class ServerCodegenContext(
     val constrainedShapeSymbolProvider: RustSymbolProvider,
     val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
+    /** Indicates if the service supports multiple protocols. When true, protocol-specific suffixes are added to generated types. */
+    val isMultiProtocol: Boolean = false,
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {

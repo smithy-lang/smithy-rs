@@ -23,6 +23,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrai
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 
 /**
@@ -54,6 +55,17 @@ class ProtocolFunctions(
         fun serDeModuleForProtocol(protocol: software.amazon.smithy.model.shapes.ShapeId): RustModule.LeafModule {
             val protocolName = protocol.name.toSnakeCase()
             return RustModule.pubCrate("protocol_serde_$protocolName")
+        }
+
+        /**
+         * Generate a protocol suffix for multi-protocol code generation.
+         * For example: aws.protocols#restJson1 -> _RestJson1
+         *
+         * This is used to differentiate between generated types (like event stream marshallers)
+         * when a service supports multiple protocols.
+         */
+        fun protocolSuffix(protocol: software.amazon.smithy.model.shapes.ShapeId): String {
+            return "_${protocol.name.toPascalCase()}"
         }
 
         /**
