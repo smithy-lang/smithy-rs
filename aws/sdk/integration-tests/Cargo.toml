@@ -21,4 +21,5 @@ members = [
     "timestreamquery",
     "transcribestreaming",
     "webassembly-no-os",
+    "webassembly-wstd",
 ]
