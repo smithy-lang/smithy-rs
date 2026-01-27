@@ -32,7 +32,7 @@ thiserror = "2"
 pin-project-lite = "0.2"
 tracing = "0.1"
 
-aws-smithy-http-server = { path = "../aws-smithy-http-server" }
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["request-id"] }
 aws-smithy-http-server-metrics-macro = { path = "../aws-smithy-http-server-metrics-macro" }
 
 [package.metadata.docs.rs]
