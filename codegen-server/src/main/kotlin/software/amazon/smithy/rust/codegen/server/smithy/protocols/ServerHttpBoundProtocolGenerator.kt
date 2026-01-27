@@ -238,11 +238,12 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     fun generateTraitImpls(
         operationWriter: RustWriter,
         operationShape: OperationShape,
+        generateSharedTypes: Boolean = true,
     ) {
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 
-        operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape)
+        operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape, generateSharedTypes)
     }
 
     /*
@@ -258,6 +259,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         inputSymbol: Symbol,
         outputSymbol: Symbol,
         operationShape: OperationShape,
+        generateSharedTypes: Boolean = true,
     ) {
         val verifyAcceptHeader =
             writable {
@@ -291,64 +293,135 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             }
 
         // Implement `from_request` trait for input types.
-        // In multi-protocol mode, each protocol needs its own InputFuture type because RuntimeError is protocol-specific
-        val inputFutureSuffix = if (protocolSuffix != null) "For$protocolSuffix" else ""
-        val inputFuture = "${inputSymbol.name}Future$inputFutureSuffix"
+        val inputFuture = "${inputSymbol.name}Future"
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
-        rustTemplate(
-            """
-            #{PinProjectLite}::pin_project! {
-                /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
-                /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
-                pub struct $inputFuture {
-                    inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
-                }
+        if (codegenContext.isMultiProtocol) {
+            // Multi-protocol mode: generate generic InputFuture<P> struct only once (controlled by generateSharedTypes)
+            if (generateSharedTypes) {
+                rustTemplate(
+                    """
+                    #{PinProjectLite}::pin_project! {
+                        /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                        /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                        pub struct $inputFuture<P>
+                        where
+                            P: #{SmithyHttpServer}::protocol::OperationError,
+                        {
+                            inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>> + Send>>
+                        }
+                    }
+
+                    impl<P> std::future::Future for $inputFuture<P>
+                    where
+                        P: #{SmithyHttpServer}::protocol::OperationError,
+                    {
+                        type Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>;
+
+                        fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                            let this = self.project();
+                            this.inner.as_mut().poll(cx)
+                        }
+                    }
+                    """,
+                    *codegenScope,
+                    "I" to inputSymbol,
+                )
             }
 
-            impl std::future::Future for $inputFuture {
-                type Output = Result<#{I}, #{RuntimeError}>;
+            // Generate FromRequest impl for this protocol (always)
+            rustTemplate(
+                """
+                impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+                where
+                    B: #{SmithyHttpServer}::body::HttpBody + Send,
+                    B: 'static,
+                    ${streamingBodyTraitBounds(operationShape)}
+                    B::Data: Send,
+                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                {
+                    type Rejection = #{RuntimeError};
+                    type Future = $inputFuture<#{Marker}>;
 
-                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-                    let this = self.project();
-                    this.inner.as_mut().poll(cx)
-                }
-            }
-
-            impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
-            where
-                B: #{SmithyHttpServer}::body::HttpBody + Send,
-                B: 'static,
-                ${streamingBodyTraitBounds(operationShape)}
-                B::Data: Send,
-                #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
-            {
-                type Rejection = #{RuntimeError};
-                type Future = $inputFuture;
-
-                fn from_request(request: #{http}::Request<B>) -> Self::Future {
-                    let fut = async move {
-                        #{verifyAcceptHeader:W}
-                        #{parse_request}(request)
-                            .await
-                    };
-                    use #{FuturesUtil}::future::TryFutureExt;
-                    let fut = fut.map_err(|e: #{RequestRejection}| {
-                        #{Tracing}::debug!(error = %e, "failed to deserialize request");
-                        #{RuntimeError}::from(e)
-                    });
-                    $inputFuture {
-                        inner: Box::pin(fut)
+                    fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                        let fut = async move {
+                            #{verifyAcceptHeader:W}
+                            #{parse_request}(request)
+                                .await
+                        };
+                        use #{FuturesUtil}::future::TryFutureExt;
+                        let fut = fut.map_err(|e: #{RequestRejection}| {
+                            #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                            #{RuntimeError}::from(e)
+                        });
+                        $inputFuture {
+                            inner: Box::pin(fut)
+                        }
                     }
                 }
-            }
-            """,
-            *codegenScope,
-            "I" to inputSymbol,
-            "Marker" to protocol.markerStruct(),
-            "parse_request" to serverParseRequest(operationShape),
-            "verifyAcceptHeader" to verifyAcceptHeader,
-        )
+                """,
+                *codegenScope,
+                "I" to inputSymbol,
+                "Marker" to protocol.markerStruct(),
+                "parse_request" to serverParseRequest(operationShape),
+                "verifyAcceptHeader" to verifyAcceptHeader,
+            )
+        } else {
+            // Single-protocol mode: generate concrete InputFuture struct (backward compatible)
+            rustTemplate(
+                """
+                #{PinProjectLite}::pin_project! {
+                    /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
+                    /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                    pub struct $inputFuture {
+                        inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, #{RuntimeError}>> + Send>>
+                    }
+                }
+
+                impl std::future::Future for $inputFuture {
+                    type Output = Result<#{I}, #{RuntimeError}>;
+
+                    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                        let this = self.project();
+                        this.inner.as_mut().poll(cx)
+                    }
+                }
+
+                impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
+                where
+                    B: #{SmithyHttpServer}::body::HttpBody + Send,
+                    B: 'static,
+                    ${streamingBodyTraitBounds(operationShape)}
+                    B::Data: Send,
+                    #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
+                {
+                    type Rejection = #{RuntimeError};
+                    type Future = $inputFuture;
+
+                    fn from_request(request: #{http}::Request<B>) -> Self::Future {
+                        let fut = async move {
+                            #{verifyAcceptHeader:W}
+                            #{parse_request}(request)
+                                .await
+                        };
+                        use #{FuturesUtil}::future::TryFutureExt;
+                        let fut = fut.map_err(|e: #{RequestRejection}| {
+                            #{Tracing}::debug!(error = %e, "failed to deserialize request");
+                            #{RuntimeError}::from(e)
+                        });
+                        $inputFuture {
+                            inner: Box::pin(fut)
+                        }
+                    }
+                }
+                """,
+                *codegenScope,
+                "I" to inputSymbol,
+                "Marker" to protocol.markerStruct(),
+                "parse_request" to serverParseRequest(operationShape),
+                "verifyAcceptHeader" to verifyAcceptHeader,
+            )
+        }
 
         // Implement `into_response` for output types.
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)

@@ -12,6 +12,45 @@ pub mod rest_xml;
 pub mod rpc_v2_cbor;
 
 use crate::rejection::MissingContentTypeReason;
+
+/// A trait that associates a `RuntimeError` type with a protocol marker.
+///
+/// This trait enables protocol-generic code to work with the correct error types
+/// for each protocol without code duplication.
+///
+/// # Example
+///
+/// ```ignore
+/// use aws_smithy_http_server::protocol::{OperationError, rest_json_1::RestJson1};
+///
+/// fn handle_error<P: OperationError>(error: P::RuntimeError) {
+///     // Handle the error
+/// }
+/// ```
+pub trait OperationError {
+    /// The runtime error type for this protocol.
+    type RuntimeError: std::error::Error + Send + Sync + 'static;
+}
+
+impl OperationError for rest_json_1::RestJson1 {
+    type RuntimeError = rest_json_1::runtime_error::RuntimeError;
+}
+
+impl OperationError for rpc_v2_cbor::RpcV2Cbor {
+    type RuntimeError = rpc_v2_cbor::runtime_error::RuntimeError;
+}
+
+impl OperationError for aws_json_10::AwsJson1_0 {
+    type RuntimeError = aws_json::runtime_error::RuntimeError;
+}
+
+impl OperationError for aws_json_11::AwsJson1_1 {
+    type RuntimeError = aws_json::runtime_error::RuntimeError;
+}
+
+impl OperationError for rest_xml::RestXml {
+    type RuntimeError = rest_xml::runtime_error::RuntimeError;
+}
 use aws_smithy_runtime_api::http::Headers as SmithyHeaders;
 use http::header::CONTENT_TYPE;
 use http::HeaderMap;
