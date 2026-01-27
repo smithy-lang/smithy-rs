@@ -407,6 +407,15 @@ pub async fn stream_pokemon_radio(
         .parse::<Uri>()
         .expect("Invalid url in `RADIO_STREAMS`");
 
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics.stream_pokemon_radio_metrics.stream_url =
+                Some(radio_stream_url.to_string())
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in stream_pokemon_radio: {e}");
+        });
+
     let connector = Connector::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,

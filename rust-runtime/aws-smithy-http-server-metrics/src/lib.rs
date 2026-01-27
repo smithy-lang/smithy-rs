@@ -147,6 +147,7 @@
 
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
+/* End of automatically managed default lints */
 
 pub mod default;
 pub mod extension;

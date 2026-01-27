@@ -80,7 +80,7 @@ aws-smithy-protocol-test = { path = "../aws-smithy-protocol-test", optional = tr
 h2 = { version = "0.4.11", default-features = false }
 tokio = { version = "1.46", features = [] }
 pin-project-lite = "0.2.14"
-tracing = "0.1.41"
+tracing = "0.1.40"
 
 # hyper 1.x stack
 hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
