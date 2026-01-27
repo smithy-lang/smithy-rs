@@ -15,7 +15,7 @@ pub struct PokemonMetrics {
 }
 
 #[metrics]
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct PokemonOperationMetrics {
     #[metrics(flatten)]
     pub get_pokemon_species_metrics: GetPokemonSpeciesMetrics,
@@ -34,7 +34,7 @@ pub struct PokemonOperationMetrics {
 }
 
 #[metrics]
-#[derive(Default, Clone)]
+#[derive(Default)]
 pub struct GetPokemonSpeciesMetrics {
     pub requested_pokemon_name: Option<String>,
     pub found: Option<bool>,
@@ -45,7 +45,6 @@ pub struct GetPokemonSpeciesMetrics {
 pub struct GetStorageMetrics {
     pub user: Option<String>,
     pub authenticated: Option<bool>,
-    pub item_count: Option<usize>,
 }
 
 #[metrics]
@@ -59,10 +58,6 @@ pub struct GetServerStatisticsMetrics {
 pub struct CapturePokemonMetrics {
     pub requested_region: Option<String>,
     pub supported_region: Option<bool>,
-    pub pokeball_type: Option<String>,
-    pub capture_attempts: Option<usize>,
-    pub successful_captures: Option<usize>,
-    pub shiny_captured: Option<bool>,
 }
 
 #[metrics]

@@ -13,6 +13,7 @@ use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::Slot;
 
+use crate::default::DefaultMetricsExtension;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultRequestMetricsExtension;
@@ -255,12 +256,16 @@ macro_rules! impl_build_for_state {
             Rs: ResponseMetrics<DefaultMetrics>,
         {
             fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs> {
-                let default_req_metrics_extension_fn =
+                let default_metrics_extension_fn =
                     |req: &mut Request<ReqBody>,
                      metrics: &mut DefaultMetrics,
-                     config: DefaultRequestMetricsConfig| {
+                     req_config: DefaultRequestMetricsConfig,
+                     res_config: DefaultResponseMetricsConfig| {
                         metrics.default_request_metrics =
                             Some(Slot::new(DefaultRequestMetrics::default()));
+                        metrics.default_response_metrics =
+                            Some(Slot::new(DefaultResponseMetrics::default()));
+
                         let default_req_metrics_slotguard = metrics
                             .default_request_metrics
                             .as_mut()
@@ -268,22 +273,6 @@ macro_rules! impl_build_for_state {
                             .expect(
                                 "unreachable: the option is set to a created slot in this scope",
                             );
-                        let ext = DefaultRequestMetricsExtension {
-                            metrics: default_req_metrics_slotguard,
-                            config,
-                        };
-
-                        // Throw behind an Arc to keep forward compatible with http 1.x,
-                        // which introduces the Clone bound to extensions
-                        req.extensions_mut().insert(Arc::new(Mutex::new(ext)));
-                    };
-
-                let default_res_metrics_extension_fn =
-                    |res: &mut Response<ResBody>,
-                     metrics: &mut DefaultMetrics,
-                     config: DefaultResponseMetricsConfig| {
-                        metrics.default_response_metrics =
-                            Some(Slot::new(DefaultResponseMetrics::default()));
                         let default_res_metrics_slotguard = metrics
                             .default_response_metrics
                             .as_mut()
@@ -292,22 +281,25 @@ macro_rules! impl_build_for_state {
                                 "unreachable: the option is set to a created slot in this scope",
                             );
 
-                        let ext = DefaultResponseMetricsExtension {
-                            metrics: default_res_metrics_slotguard,
-                            config,
+                        let ext = DefaultMetricsExtension {
+                            request_ext: DefaultRequestMetricsExtension {
+                                metrics: Arc::new(Mutex::new(default_req_metrics_slotguard)),
+                                config: req_config,
+                            },
+                            response_ext: DefaultResponseMetricsExtension {
+                                metrics: Arc::new(Mutex::new(default_res_metrics_slotguard)),
+                                config: res_config,
+                            },
                         };
 
-                        // Throw behind an Arc to keep forward compatible with http 1.x,
-                        // which introduces the Clone bound to extensions
-                        res.extensions_mut().insert(Arc::new(Mutex::new(ext)));
+                        req.extensions_mut().insert(ext);
                     };
 
                 MetricsLayer {
                     init_metrics: self.init_metrics.expect("init_metrics must be provided"),
                     request_metrics: self.request_metrics,
                     response_metrics: self.response_metrics,
-                    default_req_metrics_extension_fn,
-                    default_res_metrics_extension_fn,
+                    default_metrics_extension_fn,
                     default_req_metrics_config: self.default_req_metrics_config,
                     default_res_metrics_config: self.default_res_metrics_config,
                     _entry_sink: PhantomData,
@@ -324,7 +316,8 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
-    use metrique::{AppendAndCloseOnDrop, ServiceMetrics};
+    use metrique::AppendAndCloseOnDrop;
+    use metrique::ServiceMetrics;
     use metrique_writer::GlobalEntrySink;
 
     use super::*;

@@ -300,11 +300,6 @@ pub async fn capture_pokemon(
         ));
     }
 
-    let mut capture_attempts = 0;
-    let mut successful_captures = 0;
-    let mut last_pokeball_type: Option<String> = None;
-    let mut shiny_captured = false;
-
     let output_stream = stream! {
         loop {
             use std::time::Duration;
@@ -315,7 +310,6 @@ pub async fn capture_pokemon(
                         if let Ok(attempt) = capturing_event {
                             let payload = attempt.payload.clone().unwrap_or_else(|| CapturingPayload::builder().build());
                             let pokeball = payload.pokeball().unwrap_or("");
-                            capture_attempts += 1;
 
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
@@ -335,12 +329,7 @@ pub async fn capture_pokemon(
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
 
                                 if captured {
-                                    successful_captures += 1;
-                                    last_pokeball_type = Some(pokeball.to_string());
                                     let shiny = rand::thread_rng().gen_range(0..4096) == 0;
-                                    if shiny {
-                                        shiny_captured = true;
-                                    }
                                     let pokemon = payload.name().unwrap_or("").to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
 
@@ -356,16 +345,7 @@ pub async fn capture_pokemon(
                             }
                         }
                     }
-                    None => {
-                        // Stream is closing, emit final metrics
-                        metrics.set(|mut operation_metrics| {
-                            operation_metrics.capture_pokemon_metrics.pokeball_type = last_pokeball_type;
-                            operation_metrics.capture_pokemon_metrics.capture_attempts = Some(capture_attempts);
-                            operation_metrics.capture_pokemon_metrics.successful_captures = Some(successful_captures);
-                            operation_metrics.capture_pokemon_metrics.shiny_captured = Some(shiny_captured);
-                        }).ok();
-                        break;
-                    }
+                    None => break,
                 },
                 Err(e) => println!("{e:?}"),
             }
