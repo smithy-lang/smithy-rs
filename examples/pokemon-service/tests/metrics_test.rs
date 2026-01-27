@@ -128,8 +128,6 @@ fn test_get_pokemon_species_metrics_200(metrics: &Vec<Value>) {
         .find(|m| m["operation_name"] == "GetPokemonSpecies")
         .unwrap();
 
-    println!("Gdg");
-
     get_pokemon_species_metrics
         .get("_aws")
         .unwrap()
