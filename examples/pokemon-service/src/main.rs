@@ -136,7 +136,6 @@ pub async fn main() {
             metrics.response_metrics.test_response_metric =
                 Some("test response metric".to_string());
         })
-        .disable_default_request_id_metric()
         .build();
 
     let service = metrics_layer.layer(app);

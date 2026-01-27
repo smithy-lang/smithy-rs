@@ -28,11 +28,14 @@ async fn test_metrics_content_via_tcp() {
     // Start server with metrics TCP address
     let _child = common::run_server_with_metrics_tcp(&addr.to_string()).await;
 
+    // Wait for server to be ready before sending actual test requests
+    let expected_metrics_count = 4;
+    let timeout = Duration::from_secs(5);
+    wait_for_server_ready(timeout).await; // sends one request
+
     send_requests().await;
 
     // Poll for the metrics with a timeout of 5 seconds
-    let expected_metrics_count = 3;
-    let timeout = Duration::from_secs(5);
     let metrics_output = poll_for_metrics(metrics_buffer, expected_metrics_count, timeout).await;
 
     let metrics = parse_metrics(metrics_output);
@@ -56,6 +59,24 @@ async fn spawn_metrics_collection_task(listener: TcpListener, metrics_buffer: Ar
             }
         }
     });
+}
+
+async fn wait_for_server_ready(timeout: Duration) {
+    let client = common::client();
+
+    let start = tokio::time::Instant::now();
+    loop {
+        if client.do_nothing().send().await.is_ok() {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        if start.elapsed() > timeout {
+            panic!(
+                "Server failed to become ready after {} seconds",
+                timeout.as_secs()
+            );
+        }
+    }
 }
 
 async fn send_requests() {
@@ -104,7 +125,7 @@ async fn poll_for_metrics(
         }
 
         if start.elapsed() > timeout {
-            panic!("Timeout waiting for expected number of metrics entries, found {found_metrics_count} after 5 seconds, expected {expected_metrics_count}", );
+            panic!("Timeout waiting for expected number of metrics entries, found {found_metrics_count} after {} seconds, expected {expected_metrics_count}", timeout.as_secs());
         }
 
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
@@ -142,6 +163,7 @@ fn test_get_pokemon_species_metrics_200(metrics: &Vec<Value>) {
     assert_eq!(get_pokemon_species_metrics["found"], 1);
 
     // default request metrics
+    assert!(get_pokemon_species_metrics.get("request_id").is_some());
     assert_eq!(
         get_pokemon_species_metrics["service_name"],
         "PokemonService"
