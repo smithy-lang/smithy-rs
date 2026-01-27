@@ -4,6 +4,9 @@
  */
 
 use std::fmt::Debug;
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Duration;
 
 use metrique::unit_of_work::metrics;
 use metrique::Slot;
@@ -28,7 +31,7 @@ impl Debug for DefaultMetrics {
 }
 
 #[metrics]
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct DefaultRequestMetrics {
     pub(crate) service_name: Option<String>,
     pub(crate) service_version: Option<String>,
@@ -39,7 +42,13 @@ pub struct DefaultRequestMetrics {
 #[metrics]
 #[derive(Default, Debug)]
 pub struct DefaultResponseMetrics {
-    pub(crate) http_status_code: Option<String>,
+    pub(crate) http_status_code: Option<u16>,
+    /// Client error indicator (1 if 4xx status code, 0 otherwise)
+    pub(crate) error: Option<u64>,
+    /// Server fault indicator (1 if 5xx status code, 0 otherwise)
+    pub(crate) fault: Option<u64>,
+    /// Wallclock time from pre-deserialization of the model input to post-serialization of the model output
+    pub(crate) operation_time: Option<Duration>,
 }
 
 #[derive(Default, Debug, Clone)]
@@ -55,34 +64,45 @@ pub struct DefaultRequestMetricsConfig {
 pub struct DefaultResponseMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_http_status_code: bool,
+    pub(crate) disable_error: bool,
+    pub(crate) disable_fault: bool,
+    pub(crate) disable_operation_time: bool,
 }
 
+#[derive(Clone)]
 pub struct DefaultRequestMetricsExtension {
-    pub(crate) metrics: SlotGuard<DefaultRequestMetrics>,
+    pub(crate) metrics: Arc<Mutex<SlotGuard<DefaultRequestMetrics>>>,
     pub(crate) config: DefaultRequestMetricsConfig,
 }
 
-impl DefaultRequestMetricsExtension {
-    #[doc(hidden)]
-    pub fn __macro_new(
-        metrics: SlotGuard<DefaultRequestMetrics>,
-        config: DefaultRequestMetricsConfig,
-    ) -> Self {
-        Self { metrics, config }
-    }
-}
-
+#[derive(Clone)]
 pub struct DefaultResponseMetricsExtension {
-    pub(crate) metrics: SlotGuard<DefaultResponseMetrics>,
+    pub(crate) metrics: Arc<Mutex<SlotGuard<DefaultResponseMetrics>>>,
     pub(crate) config: DefaultResponseMetricsConfig,
 }
 
-impl DefaultResponseMetricsExtension {
+#[derive(Clone)]
+pub struct DefaultMetricsExtension {
+    pub(crate) request_ext: DefaultRequestMetricsExtension,
+    pub(crate) response_ext: DefaultResponseMetricsExtension,
+}
+impl DefaultMetricsExtension {
     #[doc(hidden)]
     pub fn __macro_new(
-        metrics: SlotGuard<DefaultResponseMetrics>,
-        config: DefaultResponseMetricsConfig,
+        request_metrics: Arc<Mutex<SlotGuard<DefaultRequestMetrics>>>,
+        response_metrics: Arc<Mutex<SlotGuard<DefaultResponseMetrics>>>,
+        request_metrics_config: DefaultRequestMetricsConfig,
+        response_metrics_config: DefaultResponseMetricsConfig,
     ) -> Self {
-        Self { metrics, config }
+        Self {
+            request_ext: DefaultRequestMetricsExtension {
+                metrics: request_metrics,
+                config: request_metrics_config,
+            },
+            response_ext: DefaultResponseMetricsExtension {
+                metrics: response_metrics,
+                config: response_metrics_config,
+            },
+        }
     }
 }

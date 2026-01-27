@@ -31,15 +31,17 @@ async fn test_metrics_content_via_tcp() {
     send_requests().await;
 
     // Poll for the metrics with a timeout of 5 seconds
+    let expected_metrics_count = 3;
     let timeout = Duration::from_secs(5);
-    let metrics_output = poll_for_metrics(metrics_buffer, timeout).await;
+    let metrics_output = poll_for_metrics(metrics_buffer, expected_metrics_count, timeout).await;
 
     let metrics = parse_metrics(metrics_output);
 
     assert!(!metrics.is_empty(), "Expected metrics to be captured");
 
-    test_get_pokemon_species_metrics(&metrics);
-    test_get_storage_metrics(&metrics);
+    test_get_pokemon_species_metrics_200(&metrics);
+    test_get_storage_401_error(&metrics);
+    test_capture_pokemon_500_error(&metrics);
 }
 
 async fn spawn_metrics_collection_task(listener: TcpListener, metrics_buffer: Arc<Mutex<Vec<u8>>>) {
@@ -59,26 +61,35 @@ async fn spawn_metrics_collection_task(listener: TcpListener, metrics_buffer: Ar
 async fn send_requests() {
     let client = common::client();
 
-    client
-        .get_pokemon_species()
-        .name("pikachu")
-        .send()
-        .await
-        .unwrap();
+    // Send a successful request
+    let _ = client.get_pokemon_species().name("pikachu").send().await;
 
-    client
+    // Send a request with an invalid password to get a 400 level error
+    let _ = client
         .get_storage()
         .user("ash")
-        .passcode("pikachu123")
+        .passcode("pkachu123")
         .send()
-        .await
-        .unwrap();
+        .await;
+
+    // Send a request with an invalid region to get 500 level error
+    let events =
+        aws_smithy_http::event_stream::EventStreamSender::from(futures_util::stream::empty());
+    let _ = client
+        .capture_pokemon()
+        .region("trigger500")
+        .events(events)
+        .send()
+        .await;
 }
 
-async fn poll_for_metrics(metrics_buffer: Arc<Mutex<Vec<u8>>>, timeout: Duration) -> String {
+async fn poll_for_metrics(
+    metrics_buffer: Arc<Mutex<Vec<u8>>>,
+    expected_metrics_count: usize,
+    timeout: Duration,
+) -> String {
     let start = tokio::time::Instant::now();
 
-    let expected_metrics_count = 2;
     let mut found_metrics_count = 0;
     loop {
         let buffer_data = metrics_buffer.lock().unwrap().clone();
@@ -111,11 +122,11 @@ fn parse_metrics(metrics_output: String) -> Vec<Value> {
         .collect()
 }
 
-fn test_get_pokemon_species_metrics(metrics: &Vec<Value>) {
+fn test_get_pokemon_species_metrics_200(metrics: &Vec<Value>) {
     let get_pokemon_species_metrics = metrics
         .iter()
         .find(|m| m["operation_name"] == "GetPokemonSpecies")
-        .expect("Expected GetPokemonSpecies metrics");
+        .unwrap();
 
     get_pokemon_species_metrics
         .get("_aws")
@@ -123,6 +134,14 @@ fn test_get_pokemon_species_metrics(metrics: &Vec<Value>) {
         .get("CloudWatchMetrics")
         .unwrap();
 
+    // operation metrics
+    assert_eq!(
+        get_pokemon_species_metrics["requested_pokemon_name"],
+        "pikachu"
+    );
+    assert_eq!(get_pokemon_species_metrics["found"], 1);
+
+    // default request metrics
     assert_eq!(
         get_pokemon_species_metrics["service_name"],
         "PokemonService"
@@ -131,20 +150,46 @@ fn test_get_pokemon_species_metrics(metrics: &Vec<Value>) {
         get_pokemon_species_metrics["operation_name"],
         "GetPokemonSpecies"
     );
-    assert_eq!(
-        get_pokemon_species_metrics["requested_pokemon_name"],
-        "pikachu"
-    );
-    assert_eq!(get_pokemon_species_metrics["found"], 1);
+    assert!(get_pokemon_species_metrics.get("operation_time").is_some());
+
+    // default response metrics
+    assert_eq!(get_pokemon_species_metrics["http_status_code"], 200);
+    assert_eq!(get_pokemon_species_metrics["error"], 0);
+    assert_eq!(get_pokemon_species_metrics["fault"], 0);
 }
 
-fn test_get_storage_metrics(metrics: &Vec<Value>) {
+fn test_get_storage_401_error(metrics: &Vec<Value>) {
     let storage_metric = metrics
         .iter()
         .find(|m| m["operation_name"] == "GetStorage")
-        .expect("Expected GetStorage metrics");
+        .unwrap();
 
-    assert_eq!(storage_metric["operation_name"], "GetStorage");
+    // operation metrics
     assert_eq!(storage_metric["user"], "ash");
-    assert_eq!(storage_metric["authenticated"], 1);
+    assert_eq!(storage_metric["authenticated"], 0);
+
+    // default request_metrics
+    assert!(storage_metric.get("operation_time").is_some());
+
+    // default response metrics
+    assert_eq!(storage_metric["error"], 1);
+    assert_eq!(storage_metric["fault"], 0);
+}
+
+fn test_capture_pokemon_500_error(metrics: &Vec<Value>) {
+    let capture_pokemon_metrics = metrics
+        .iter()
+        .find(|m| m["operation_name"] == "CapturePokemon" && m["http_status_code"] == 500)
+        .unwrap();
+
+    // operation metrics
+    assert_eq!(capture_pokemon_metrics["requested_region"], "trigger500");
+    assert_eq!(capture_pokemon_metrics["supported_region"], 0);
+
+    // default request metrics
+    assert!(capture_pokemon_metrics.get("operation_time").is_some());
+
+    // default response metrics
+    assert_eq!(capture_pokemon_metrics["error"], 0);
+    assert_eq!(capture_pokemon_metrics["fault"], 1);
 }

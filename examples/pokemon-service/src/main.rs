@@ -86,6 +86,7 @@ pub async fn main() {
     let print_plugin = Scoped::new::<PrintScope>(HttpPlugins::new().print());
 
     let http_plugins = HttpPlugins::new()
+        // Apply the `DefaultMetricsPlugin` first
         .push(DefaultMetricsPlugin)
         // Apply the scoped `PrintPlugin`
         .push(print_plugin)

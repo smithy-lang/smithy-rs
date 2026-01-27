@@ -42,8 +42,6 @@ pin_project! {
         #[pin]
         inner: F,
         metrics: metrique::AppendAndCloseOnDrop<E, S>,
-        default_res_metrics_extension_fn: fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
-        default_res_metrics_config: DefaultResponseMetricsConfig,
         response_metrics: Option<Rs>,
     }
 }
@@ -63,12 +61,6 @@ where
 
         match this.inner.poll(cx) {
             Poll::Ready(Ok(mut res)) => {
-                (this.default_res_metrics_extension_fn)(
-                    &mut res,
-                    this.metrics,
-                    this.default_res_metrics_config.clone(),
-                );
-
                 if let Some(response_metrics) = this.response_metrics {
                     (response_metrics)(&mut res, this.metrics);
                 }
@@ -93,10 +85,12 @@ where
     pub(crate) init_metrics: I,
     pub(crate) request_metrics: Option<Rq>,
     pub(crate) response_metrics: Option<Rs>,
-    pub(crate) default_req_metrics_extension_fn:
-        fn(&mut Request<ReqBody>, &mut E, DefaultRequestMetricsConfig),
-    pub(crate) default_res_metrics_extension_fn:
-        fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
+    pub(crate) default_metrics_extension_fn: fn(
+        &mut Request<ReqBody>,
+        &mut E,
+        DefaultRequestMetricsConfig,
+        DefaultResponseMetricsConfig,
+    ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 
@@ -117,8 +111,7 @@ where
             init_metrics: self.init_metrics.clone(),
             request_metrics: self.request_metrics.clone(),
             response_metrics: self.response_metrics.clone(),
-            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
+            default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
 
@@ -147,10 +140,11 @@ where
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
         let mut metrics = (self.init_metrics)();
 
-        (self.default_req_metrics_extension_fn)(
+        (self.default_metrics_extension_fn)(
             &mut req,
             &mut metrics,
             self.default_req_metrics_config.clone(),
+            self.default_res_metrics_config.clone(),
         );
 
         if let Some(request_metrics) = &self.request_metrics {
@@ -161,8 +155,6 @@ where
         MetricsLayerServiceFuture {
             inner: self.inner.call(req),
             metrics,
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
-            default_res_metrics_config: self.default_res_metrics_config.clone(),
             response_metrics: self.response_metrics.clone(),
         }
     }

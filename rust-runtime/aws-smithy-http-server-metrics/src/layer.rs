@@ -8,7 +8,6 @@
 use std::marker::PhantomData;
 
 use http::Request;
-use http::Response;
 use metrique::DefaultSink;
 use thiserror::Error;
 use tower::Layer;
@@ -56,10 +55,12 @@ pub struct MetricsLayer<
     pub(crate) init_metrics: I,
     pub(crate) request_metrics: Option<Rq>,
     pub(crate) response_metrics: Option<Rs>,
-    pub(crate) default_req_metrics_extension_fn:
-        fn(&mut Request<ReqBody>, &mut E, DefaultRequestMetricsConfig),
-    pub(crate) default_res_metrics_extension_fn:
-        fn(&mut Response<ResBody>, &mut E, DefaultResponseMetricsConfig),
+    pub(crate) default_metrics_extension_fn: fn(
+        &mut Request<ReqBody>,
+        &mut E,
+        DefaultRequestMetricsConfig,
+        DefaultResponseMetricsConfig,
+    ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 
@@ -79,14 +80,10 @@ where
         init_metrics: I,
         request_metrics: Option<Rq>,
         response_metrics: Option<Rs>,
-        default_req_metrics_extension_fn: fn(
+        default_metrics_extension_fn: fn(
             &mut Request<ReqBody>,
             &mut E,
             DefaultRequestMetricsConfig,
-        ),
-        default_res_metrics_extension_fn: fn(
-            &mut Response<ResBody>,
-            &mut E,
             DefaultResponseMetricsConfig,
         ),
         default_req_metrics_config: DefaultRequestMetricsConfig,
@@ -96,8 +93,7 @@ where
             init_metrics,
             request_metrics,
             response_metrics,
-            default_req_metrics_extension_fn,
-            default_res_metrics_extension_fn,
+            default_metrics_extension_fn,
             default_req_metrics_config,
             default_res_metrics_config,
 
@@ -155,8 +151,7 @@ where
             init_metrics: self.init_metrics.clone(),
             request_metrics: self.request_metrics.clone(),
             response_metrics: self.response_metrics.clone(),
-            default_req_metrics_extension_fn: self.default_req_metrics_extension_fn,
-            default_res_metrics_extension_fn: self.default_res_metrics_extension_fn,
+            default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
 

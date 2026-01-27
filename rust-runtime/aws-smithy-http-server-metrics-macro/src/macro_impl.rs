@@ -133,52 +133,48 @@ fn generate_ext_trait_impl(
                     Rs: aws_smithy_http_server_metrics::traits::ResponseMetrics<#struct_ident>,
                 {
                     fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#struct_ident, S, I, Rq, Rs> {
-                        let default_req_metrics_extension_fn =
+                        let default_metrics_extension_fn =
                             |req: &mut http::Request<aws_smithy_http_server_metrics::types::ReqBody>,
                             metrics: &mut #struct_ident,
-                            config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig| {
-                                metrics.default_request_metrics = Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
+                            req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
+                            res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig| {
+                                metrics.default_request_metrics =
+                                    Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
+                                metrics.default_response_metrics =
+                                    Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultResponseMetrics::default()));
+
                                 let default_req_metrics_slotguard = metrics
                                     .default_request_metrics
                                     .as_mut()
                                     .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
-                                    .expect("unreachable: the option is set to a created slot in this scope");
-
-                                let ext = aws_smithy_http_server_metrics::default::DefaultRequestMetricsExtension::__macro_new(
-                                    default_req_metrics_slotguard,
-                                    config,
-                                );
-
-                                req.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(ext)));
-
-                                #(#extension_insertions)*
-                            };
-
-                        let default_res_metrics_extension_fn =
-                            |res: &mut http::Response<aws_smithy_http_server_metrics::types::ResBody>,
-                            metrics: &mut #struct_ident,
-                            config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig| {
-                                metrics.default_response_metrics = Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultResponseMetrics::default()));
+                                    .expect(
+                                        "unreachable: the option is set to a created slot in this scope",
+                                    );
                                 let default_res_metrics_slotguard = metrics
                                     .default_response_metrics
                                     .as_mut()
                                     .and_then(|slot| slot.open(metrique::OnParentDrop::Discard))
-                                    .expect("unreachable: the option is set to a created slot in this scope");
+                                    .expect(
+                                        "unreachable: the option is set to a created slot in this scope",
+                                    );
 
-                                let ext = aws_smithy_http_server_metrics::default::DefaultResponseMetricsExtension::__macro_new(
-                                    default_res_metrics_slotguard,
-                                    config,
+                                let ext = aws_smithy_http_server_metrics::default::DefaultMetricsExtension::__macro_new(
+                                    std::sync::Arc::new(std::sync::Mutex::new(default_req_metrics_slotguard)),
+                                    std::sync::Arc::new(std::sync::Mutex::new(default_res_metrics_slotguard)),
+                                    req_config,
+                                    res_config
                                 );
 
-                                res.extensions_mut().insert(std::sync::Arc::new(std::sync::Mutex::new(ext)));
+                                req.extensions_mut().insert(ext);
+
+                                #(#extension_insertions)*
                             };
 
                         aws_smithy_http_server_metrics::layer::MetricsLayer::__macro_new(
                             self.init_metrics.expect("init_metrics must be provided"),
                             self.request_metrics,
                             self.response_metrics,
-                            default_req_metrics_extension_fn,
-                            default_res_metrics_extension_fn,
+                            default_metrics_extension_fn,
                             self.default_req_metrics_config,
                             self.default_res_metrics_config,
                         )
