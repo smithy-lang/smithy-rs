@@ -7,7 +7,7 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.90.0
-ARG rust_nightly_version=nightly-2025-09-20
+ARG rust_nightly_version=nightly-2025-10-18
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo && yum clean all && rm -rf /var/cache/yum
@@ -129,12 +129,12 @@ ARG cargo_deny_version=0.16.4
 ARG cargo_udeps_version=0.1.56
 ARG cargo_hack_version=0.6.27
 ARG cargo_minimal_versions_version=0.1.27
-ARG cargo_check_external_types_version=0.3.0
+ARG cargo_check_external_types_version=0.4.0
 ARG maturin_version=1.5.1
 ARG wasm_pack_version=0.13.1
 ARG cargo_wasmtime_version=38.0.4
 ARG cargo_component_version=0.20.0
-ARG cargo_semver_checks_version=0.41.0
+ARG cargo_semver_checks_version=0.46.0
 ARG cargo_mdbook_version=0.4.37
 ARG cargo_mdbook_mermaid_version=0.13.0
 ARG rust_nightly_version

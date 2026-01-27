@@ -35,7 +35,7 @@ env:
   apt_dependencies: libssl-dev gnuplot jq
   java_version: 17
   rust_toolchain_components: clippy,rustfmt
-  rust_nightly_version: nightly-2025-09-20
+  rust_nightly_version: nightly-2025-10-18
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 

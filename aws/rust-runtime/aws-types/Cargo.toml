@@ -30,6 +30,7 @@ tempfile = "3.16.0"
 tracing-test = "0.2.5"
 tokio = { version = "1", features = ["rt", "macros"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["http-02x"] }
+aws-smithy-runtime = { path = "../../../rust-runtime/aws-smithy-runtime", features = ["client"] }
 
 [build-dependencies]
 rustc_version = "0.4.0"
