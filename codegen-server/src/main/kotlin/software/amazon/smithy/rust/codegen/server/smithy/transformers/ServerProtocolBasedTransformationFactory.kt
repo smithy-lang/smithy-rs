@@ -16,6 +16,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
@@ -38,6 +39,15 @@ object ServerProtocolBasedTransformationFactory {
     ): Model {
         val service = settings.getService(model)
         if (!service.hasTrait<Rpcv2CborTrait>()) {
+            return model
+        }
+
+        // Check if this is a multi-protocol service. If so, don't remove traits that other protocols need.
+        // The RPC v2 CBOR protocol should ignore HTTP-specific traits rather than requiring their removal.
+        val protocols = ServiceIndex.of(model).getProtocols(service)
+        if (protocols.size > 1) {
+            // Multi-protocol service: don't remove HTTP traits that REST protocols need.
+            // RPC v2 CBOR will use its own HttpBindingResolver that generates synthetic HTTP traits.
             return model
         }
 

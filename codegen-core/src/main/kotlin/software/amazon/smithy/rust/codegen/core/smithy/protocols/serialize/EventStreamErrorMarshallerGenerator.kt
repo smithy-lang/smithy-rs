@@ -186,7 +186,7 @@ class EventStreamErrorMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        val suffix = protocolSuffix ?: ""
+        val suffix = if (protocolSuffix != null) "For$protocolSuffix" else ""
         return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller$suffix")
     }
 }

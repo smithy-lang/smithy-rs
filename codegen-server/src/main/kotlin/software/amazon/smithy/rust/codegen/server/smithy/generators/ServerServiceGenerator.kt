@@ -749,12 +749,12 @@ class ServerServiceGenerator(
                         val absolute = shape.id.toString().replace("#", "##")
                         rustTemplate(
                             """
-                            Operation::$name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}")
+                            Operation::$name => #{SmithyHttpServer}::shape_id::ShapeId::new("$absolute", "${shape.id.namespace}", "${shape.id.name}"),
                             """,
                             *codegenScope,
                         )
                     }
-                }.join(",")
+                }.join("")
             rustTemplate(
                 """
                 /// An enumeration of all [operations](https://smithy.io/2.0/spec/service-types.html##operation) in $serviceName.
