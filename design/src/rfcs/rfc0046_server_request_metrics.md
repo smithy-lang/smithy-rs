@@ -33,11 +33,9 @@ https://play.rust-lang.org/?version=stable&mode=debug&edition=2024&gist=9c401721
 
 ### Once this RFC is implemented
 
-Users will get batteries-included default metrics in their service, with the ability to add an outer `MetricsLayer` for further configuration and/or include custom metrics that can be set throughout the request/response lifecycle via extensions, which will all be folded together to a single metrics entry.
+Users will get default metrics in their service, with the ability to add an outer `MetricsLayer` for further configuration of metrics collection, including defining their own custom metrics that can be set throughout the request/response lifecycle via extensions, which will all be folded together into a single metrics entry emitted at the end of the lifecycle.
 
-For a complete batteries-included experience, a codegen change will be necessary to add the HTTP plugin for default metrics via declarative opt-in in the `smithy-build.json`.
-
-The runtime crate will be merged first, followed by the codegen changes.
+Future scope can elicit a codegen change to add the HTTP plugin for default metrics via declarative opt-in in the `smithy-build.json` to avoid needing code configuration.
 
 After the runtime crate is merged and before the codegen changes are made, users can add default metrics by adding the plugin to their service programmatically.
 
@@ -51,7 +49,9 @@ fn main() {
 
 For further configuration, a tower layer will be provided that takes an initialization function that gives the user full control over which metrics struct and sink they want to use.
 
-For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics::extension]` will be available in the request extensions. To make this turnkey, a type alias will be made for any of the `#[smithy_metrics::extension]` annotated fields' types. In this case `OperationMetricsExtension` will be `Extension<SlotGuard<OperationMetrics>>`, which can be added as a parameter in the handler signature as shown below.
+For metrics control in user-defined operation handlers, the types of fields marked with `#[smithy_metrics::extension]` will be available in the request extensions.
+
+Users can get these via `Extension<Metrics<OperationMetrics>>`, which can be added as a parameter in operation handlers:
 
 ```rust
 fn main() {
@@ -74,20 +74,34 @@ struct MyMetrics {
 
 #[metrics]
 struct OperationMetrics {
-    get_pokemon_species_metrics: Option<String>
+    #[metrics(flatten)]
+    get_pokemon_species_metrics: GetPokemonSpeciesMetrics,
+}
+
+#[metrics]
+struct GetPokemonSpeciesMetrics {
+    request_pokemon_name: Option<String>,
 }
 
 /// Setting metrics in operation handler
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
-    Extension(mut metrics): OperationMetricsExtension
+    Extension(mut metrics): Extension<Metrics<OperationMetrics>>
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
-    ...
+    metrics
+        .set(|mut operation_metrics| {
+            operation_metrics
+                .get_pokemon_species_metrics
+                .requested_pokemon_name = Some(input.name.clone());
+        })
+        .unwrap_or_else(|e| {
+            tracing::error!("Error setting metrics in get_pokemon_species: {e}");
+        });
 }
 ```
 
-`new_with_sink` gives provides a turnkey API to use the default metrics, but customize the sink, without needing to provide a full init_metrics closure.
+`new_with_sink` will be a convenience API to use the default metrics with a custom sink.
 
 ```rust
 fn main() {
@@ -281,11 +295,19 @@ A struct that will contain a `DefaultRequestMetrics` and `DefaultRequestMetricsC
 
 A struct that will contain a `DefaultResponseMetrics` and `DefaultResponseMetricsConfig` to be passed through the request extensions from an outer metrics layer to be used in the metrics plugin to set the default metrics with the given configuration. This enables us to fold all metrics together.
 
+### `DefaultMetricsExtension` struct
+
+A struct that will contain a `DefaultRequestMetricsExtension` and `DefaultResponseMetricsExtension` to be inserted into the request extensions so that metrics from `MetricsLayer` can be folded with default metrics set in `DefaultMetricsPlugin`.
+
+### `extension::Metrics` struct
+
+A wrapper struct for extensions that are inserted as a result of the `#[smithy_metrics(extension)]` attribute macro on a struct field. An `Arc<Mutex<SlotGuard<X>>>>` will be used to wrap any extensions to be forward compatible with the Clone bound introduced in http 1.x's (smithy-rs currently is on http 0.2, but the http 1.x work is underway and soon to be complete). This struct will provide User's an API where they do not have to be exposed to this complicated type.
+
 ### `#[smithy_metrics]` attribute proc macro
 
 A proc macro that can be placed on a metrique metrics struct for the adding of default metrics fields and the expansion of a `MetricsLayerBuilder` implementation for the annotated struct.
 
-This will also come with `#[smithy_metrics(rename(x = "y"))]` to rename default fields and `#[smithy_metrics::extension]` (or `#[smithy_metrics::extension(response)]` to be explicit about whether it should be a request or response extension) to mark struct fields for insertion to the request extensions to be used in custom middleware or operation handlers.
+This will also come with `#[smithy_metrics(extension)]` to mark struct fields for insertion to the request extensions to be used in custom middleware or operation handlers.
 
 <!-- Include a checklist of all the things that need to happen for this RFC's implementation to be considered complete -->
 Changes checklist
@@ -363,18 +385,14 @@ Changes checklist
 
 - [x] Define struct `DefaultResponseMetricsExtension` for passing default response metrics and config instances from an outer metrics layer to the metrics plugin via response extensions to be able to fold them together
 
-- [] Implement proc macro attribute `#[smithy_metrics]`
+- [x] Define struct `DefaultMetricsExtension`
 
-    - [] Implement expansion to wrap the types of fields annotated with `#[smithy_metrics(extension)]` with `Slotguard` if the user hasn't explicitly done so, or show an error message telling them to
+- [x] Define and implement struct `extension::Metrics`
 
-    - [] Implement expansion of a `MetricsLayerBuilder` implementation for receiving metrics type containing a `build` method
+- [x] Implement proc macro attribute `#[smithy_metrics]`
 
-- [] Create proc macro attribute `#[smithy_metrics(extension)]` on fields of a metrics struct to give users the ability to annotate the fields they want to be accessible from the request extensions down the line, such as in custom middleware or operation handlers
+    - [x] Implement expansion to wrap the types of fields annotated with `#[smithy_metrics(extension)]` with `Slotguard` if the user hasn't explicitly done so, or show an error message telling them to
 
-- [] Create proc macro attribute `#[smithy_metrics(rename(default_metric_name = "custom_name"))]` to give users the ability to rename default metrics
+    - [x] Implement expansion of a `MetricsLayerBuilder` implementation for receiving metrics type containing a `build` method
 
-- [] Create a type alias for extension type containing the slotguards of the types from the annotated fields of the metrics struct, e.g. `type OperationMetricsExtension = Extension<SlotGuard<OperationMetrics>>`
-
-- [] In the server codegen, apply the metrics plugin in all operation setters
-
-- [] Replace the manual `MetricsLayerBuilder` implementation for `DefaultMetrics` with the proc macro expansion
+- [x] Create proc macro attribute `#[smithy_metrics(extension)]` on fields of a metrics struct to give users the ability to annotate the fields they want to be accessible from the request extensions down the line, such as in custom middleware or operation handlers

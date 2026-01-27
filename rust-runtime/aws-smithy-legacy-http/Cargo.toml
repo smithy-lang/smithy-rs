@@ -28,7 +28,7 @@ http-body-04x = { package = "http-body", version = "0.4.6" }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
-tracing = "0.1.41"
+tracing = "0.1.40"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
 futures-core = "0.3.31"

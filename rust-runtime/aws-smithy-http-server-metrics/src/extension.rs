@@ -1,3 +1,8 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 //! A [`Clone`] bound was introduced to [`http::Extensions`] as of http 1.x, and [`SlotGuard`] is
 //! not [`Clone`], meaning we need to wrap SlotGuard<T> metrics with Arc Mutex before insertion
 //!
