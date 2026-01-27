@@ -15,7 +15,7 @@ pub struct PokemonMetrics {
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct PokemonOperationMetrics {
     #[metrics(flatten)]
     pub get_pokemon_species_metrics: GetPokemonSpeciesMetrics,
@@ -34,7 +34,7 @@ pub struct PokemonOperationMetrics {
 }
 
 #[metrics]
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct GetPokemonSpeciesMetrics {
     pub requested_pokemon_name: Option<String>,
     pub found: Option<bool>,

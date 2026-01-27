@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use pokemon_service_client::Client;
 use serde_json::Value;
 use serial_test::serial;
 use std::sync::Arc;
@@ -26,16 +27,14 @@ async fn test_metrics_content_via_tcp() {
     spawn_metrics_collection_task(listener, Arc::clone(&metrics_buffer)).await;
 
     // Start server with metrics TCP address
-    let _child = common::run_server_with_metrics_tcp(&addr.to_string()).await;
+    let server = common::run_server_with_metrics_tcp(&addr.to_string()).await;
+    let client = common::client(server.port);
 
-    // Wait for server to be ready before sending actual test requests
-    let expected_metrics_count = 4;
-    let timeout = Duration::from_secs(5);
-    wait_for_server_ready(timeout).await; // sends one request
-
-    send_requests().await;
+    send_requests(client).await;
 
     // Poll for the metrics with a timeout of 5 seconds
+    let expected_metrics_count = 3;
+    let timeout = Duration::from_secs(5);
     let metrics_output = poll_for_metrics(metrics_buffer, expected_metrics_count, timeout).await;
 
     let metrics = parse_metrics(metrics_output);
@@ -61,27 +60,7 @@ async fn spawn_metrics_collection_task(listener: TcpListener, metrics_buffer: Ar
     });
 }
 
-async fn wait_for_server_ready(timeout: Duration) {
-    let client = common::client();
-
-    let start = tokio::time::Instant::now();
-    loop {
-        if client.do_nothing().send().await.is_ok() {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(100)).await;
-        if start.elapsed() > timeout {
-            panic!(
-                "Server failed to become ready after {} seconds",
-                timeout.as_secs()
-            );
-        }
-    }
-}
-
-async fn send_requests() {
-    let client = common::client();
-
+async fn send_requests(client: Client) {
     // Send a successful request
     let _ = client.get_pokemon_species().name("pikachu").send().await;
 
@@ -148,6 +127,8 @@ fn test_get_pokemon_species_metrics_200(metrics: &Vec<Value>) {
         .iter()
         .find(|m| m["operation_name"] == "GetPokemonSpecies")
         .unwrap();
+
+    println!("Gdg");
 
     get_pokemon_species_metrics
         .get("_aws")

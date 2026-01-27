@@ -3,15 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_server::error::Error;
+use aws_smithy_http_server::body::BoxBody;
 use http::Request;
 use http::Response;
-use http_body::combinators::UnsyncBoxBody;
-use hyper::body::Bytes;
+use hyper::body::Incoming;
 use metrique::AppendAndCloseOnDrop;
 
-pub type ReqBody = hyper::body::Body;
-pub type ResBody = UnsyncBoxBody<Bytes, Error>;
+pub type ReqBody = Incoming;
+pub type ResBody = BoxBody;
 
 pub(crate) type DefaultInit<E, S> = fn() -> AppendAndCloseOnDrop<E, S>;
 pub(crate) type DefaultRq<E> = fn(&mut Request<ReqBody>, &mut E);

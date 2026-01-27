@@ -15,6 +15,7 @@ use clap::Parser;
 
 use metrique_writer::stream::tee;
 use metrique_writer::GlobalEntrySink;
+use pokemon_service_server_sdk::serve;
 use pokemon_service_server_sdk::server::extension::OperationExtensionExt;
 use pokemon_service_server_sdk::server::instrumentation::InstrumentExt;
 use pokemon_service_server_sdk::server::layer::alb_health_check::AlbHealthCheckLayer;

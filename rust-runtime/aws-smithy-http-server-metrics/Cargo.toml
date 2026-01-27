@@ -25,14 +25,16 @@ metrique-writer-format-emf = "=0.1.9"
 
 tower = "0.4.13"
 futures = "0.3"
-http = "0.2.9"
-http-body = "0.4.5"
-hyper = "0.14.26"
+http = "1"
+http-body = "1"
+hyper = "1"
 thiserror = "2"
 pin-project-lite = "0.2"
 tracing = "0.1"
 
-aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["request-id"] }
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = [
+    "request-id",
+] }
 aws-smithy-http-server-metrics-macro = { path = "../aws-smithy-http-server-metrics-macro" }
 
 [package.metadata.docs.rs]

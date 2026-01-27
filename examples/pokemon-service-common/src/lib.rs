@@ -16,6 +16,7 @@ use std::sync::Arc;
 use async_stream::stream;
 use aws_smithy_http_client::tls;
 use aws_smithy_http_client::Connector;
+use aws_smithy_http_server_metrics::extension::Metrics;
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
 use pokemon_service_server_sdk::error;

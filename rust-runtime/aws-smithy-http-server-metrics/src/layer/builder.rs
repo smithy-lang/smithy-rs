@@ -22,8 +22,6 @@ use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
 use crate::layer::DefaultMetrics;
 use crate::layer::MetricsLayer;
-use crate::layer::ReqBody;
-use crate::layer::ResBody;
 use crate::traits::InitMetrics;
 use crate::traits::RequestMetrics;
 use crate::traits::ResponseMetrics;
@@ -32,6 +30,8 @@ use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
+use crate::types::ReqBody;
+use crate::types::ResBody;
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
