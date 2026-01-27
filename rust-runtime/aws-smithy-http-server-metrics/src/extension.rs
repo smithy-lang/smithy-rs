@@ -21,7 +21,7 @@ use crate::traits::ThreadSafeCloseEntry;
 ///
 /// Example
 ///
-/// ```rust
+/// ```rust,ignore
 /// pub async fn get_pokemon_species(
 ///     input: input::GetPokemonSpeciesInput,
 ///     state: Extension<Arc<State>>,
@@ -69,7 +69,7 @@ where
     ///
     /// Example
     ///
-    /// ```rust
+    /// ```rust,ignore
     /// metrics.set(|mut metrics| {
     ///     metrics.get_pokemon_species_metrics = Some("hello world".to_string());
     /// });

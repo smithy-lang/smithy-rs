@@ -11,7 +11,12 @@ rust-version = "1.88"
 clap = { version = "4", features = ["derive"] }
 http = "1"
 hyper = { version = "1", features = ["server"] }
-hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto", "service"] }
+hyper-util = { version = "0.1", features = [
+    "tokio",
+    "server",
+    "server-auto",
+    "service",
+] }
 tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
 tower = "0.4"
 tracing = "0.1"
@@ -22,7 +27,9 @@ metrique = { version = "=0.1.9", features = ["emf"] }
 metrique-writer = "=0.1.10"
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = [
+    "request-id",
+] }
 pokemon-service-common = { path = "../pokemon-service-common/" }
 aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
 aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
@@ -39,7 +46,12 @@ futures-util = "0.3"
 
 # We use hyper client in tests
 hyper = { version = "1", features = ["server", "client"] }
-hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "client-legacy",
+    "http1",
+    "http2",
+] }
 
 # This dependency is only required for testing the `pokemon-service-tls` program.
 hyper-rustls = { version = "0.27", features = ["http2"] }

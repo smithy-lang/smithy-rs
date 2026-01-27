@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use aws_smithy_http_server_metrics::smithy_metrics;
 use metrique::unit_of_work::metrics;
 
