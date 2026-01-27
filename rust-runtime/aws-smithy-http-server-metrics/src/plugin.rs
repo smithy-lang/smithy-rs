@@ -12,6 +12,7 @@ use std::time::Duration;
 use aws_smithy_http_server::operation::OperationShape;
 use aws_smithy_http_server::plugin::HttpMarker;
 use aws_smithy_http_server::plugin::Plugin;
+use aws_smithy_http_server::request::request_id::ServerRequestId;
 use aws_smithy_http_server::service::ServiceShape;
 use http::Request;
 use http::Response;
@@ -175,12 +176,15 @@ where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
     Ser::Future: Send + 'static,
 {
-    fn get_default_request_metrics(&self, _req: &Request<ReqBody>) -> DefaultRequestMetrics {
+    fn get_default_request_metrics(&self, req: &Request<ReqBody>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
             service_name: Some(self.service_name.to_string()),
             service_version: self.service_version.map(|n| n.to_string()),
             operation_name: Some(self.operation_name.to_string()),
-            request_id: Some("req_id_placeholder".to_string()),
+            request_id: req
+                .extensions()
+                .get::<ServerRequestId>()
+                .map(|id| id.to_string()),
         }
     }
 }
