@@ -13,7 +13,7 @@
 //!
 //! [`DefaultMetricsPlugin`] automatically collects standard metrics for every request.
 //! See the Collected Metrics section below:
-//! 
+//!
 //! ```rust,ignore
 //! use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
 //!
@@ -24,7 +24,7 @@
 //!
 //! **Important**: [`DefaultMetricsPlugin`] requires a metrics sink to be configured,
 //! otherwise metrics collection will be skipped and an info log will be emitted.
-//! 
+//!
 //! To use a custom sink, you can add a [`MetricsLayer`]. See the MetricsLayer section below.
 //!
 //! If no [`MetricsLayer`] exists, [`DefaultMetricsPlugin`] will use metrique's global sink for
@@ -74,13 +74,13 @@
 //! # MetricsLayer
 //!
 //! Use [`MetricsLayer`] to customize metrics collection and/or define your own metrics:
-//! 
+//!
 //! Default metrics from [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin)
 //! will be folded into metrics from this layer if it is in the service's HTTP plugins.
-//! 
+//!
 //! A [`MetricsLayer`] can be used to customize the sink with the default metrics using
 //! [`MetricsLayer::new_with_sink`].
-//! 
+//!
 //! For full control, use [`MetricsLayer::builder`].
 //!
 //! ```rust,ignore
@@ -118,7 +118,7 @@
 //!     pub response_metrics: MyResponseMetrics,
 //! }
 //! ```
-//! 
+//!
 //! For a complete example, see the [pokemon-service example](https://github.com/smithy-lang/smithy-rs/tree/main/examples/pokemon-service).
 //!
 //! # Output Format Examples
