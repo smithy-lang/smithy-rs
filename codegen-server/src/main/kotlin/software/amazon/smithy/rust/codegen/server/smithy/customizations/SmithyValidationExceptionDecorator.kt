@@ -71,7 +71,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
-            val serDeModule = software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions.serDeModule(codegenContext.protocol, codegenContext.target)
+            val serDeModule = software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions.serDeModule(protocol.protocolShapeId, codegenContext.target)
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {

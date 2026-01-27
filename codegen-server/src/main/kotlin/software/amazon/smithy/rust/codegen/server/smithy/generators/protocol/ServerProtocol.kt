@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -54,6 +55,9 @@ import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerRestJso
 import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrainedShape
 
 interface ServerProtocol : Protocol {
+    /** The protocol's ShapeId for code generation purposes (e.g., aws.protocols#restJson1). */
+    val protocolShapeId: ShapeId
+
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String
 
@@ -153,6 +157,8 @@ class ServerAwsJsonProtocol(
 ) : AwsJson(serverCodegenContext, awsJsonVersion), ServerProtocol {
     private val runtimeConfig = codegenContext.runtimeConfig
 
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+
     override val protocolModulePath: String
         get() =
             when (version) {
@@ -237,6 +243,8 @@ class ServerRestJsonProtocol(
 ) : RestJson(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
 
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+
     override val protocolModulePath: String = "rest_json_1"
 
     override fun structuredDataParser(): StructuredDataParserGenerator =
@@ -282,6 +290,9 @@ class ServerRestXmlProtocol(
     codegenContext: CodegenContext,
 ) : RestXml(codegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolShapeId: ShapeId = codegenContext.protocol
+
     override val protocolModulePath = "rest_xml"
 
     override fun markerStruct() = ServerRuntimeType.protocol("RestXml", protocolModulePath, runtimeConfig)
@@ -316,6 +327,8 @@ class ServerRpcV2CborProtocol(
     private val serverCodegenContext: ServerCodegenContext,
 ) : RpcV2Cbor(serverCodegenContext), ServerProtocol {
     val runtimeConfig = codegenContext.runtimeConfig
+
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
 
     override val protocolModulePath = "rpc_v2_cbor"
 

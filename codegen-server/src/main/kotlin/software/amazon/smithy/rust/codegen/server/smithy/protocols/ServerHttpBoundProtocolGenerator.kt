@@ -291,7 +291,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             }
 
         // Implement `from_request` trait for input types.
-        val inputFuture = "${inputSymbol.name}Future"
+        // In multi-protocol mode, each protocol needs its own InputFuture type because RuntimeError is protocol-specific
+        val inputFutureSuffix = if (protocolSuffix != null) "For$protocolSuffix" else ""
+        val inputFuture = "${inputSymbol.name}Future$inputFutureSuffix"
+
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         rustTemplate(
             """

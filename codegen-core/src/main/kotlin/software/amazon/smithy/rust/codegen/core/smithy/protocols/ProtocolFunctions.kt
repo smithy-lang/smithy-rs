@@ -59,13 +59,13 @@ class ProtocolFunctions(
 
         /**
          * Generate a protocol suffix for multi-protocol code generation.
-         * For example: aws.protocols#restJson1 -> _RestJson1
+         * For example: aws.protocols#restJson1 -> RestJson1
          *
          * This is used to differentiate between generated types (like event stream marshallers)
          * when a service supports multiple protocols.
          */
         fun protocolSuffix(protocol: software.amazon.smithy.model.shapes.ShapeId): String {
-            return "_${protocol.name.toPascalCase()}"
+            return protocol.name.toPascalCase()
         }
 
         /**
