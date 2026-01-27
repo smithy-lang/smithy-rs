@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Default metrics types and configuration.
+//!
+//! This module contains the types used by [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin)
+//! to collect standard metrics automatically.
+
 use std::fmt::Debug;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -12,6 +17,9 @@ use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
 
+/// Container for default request and response metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[metrics]
 #[derive(Default)]
 pub struct DefaultMetrics {
@@ -30,6 +38,9 @@ impl Debug for DefaultMetrics {
     }
 }
 
+/// Default request metrics collected
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[metrics]
 #[derive(Debug, Default)]
 pub struct DefaultRequestMetrics {
@@ -39,6 +50,9 @@ pub struct DefaultRequestMetrics {
     pub(crate) request_id: Option<String>,
 }
 
+/// Default response metrics collected automatically.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[metrics]
 #[derive(Default, Debug)]
 pub struct DefaultResponseMetrics {
@@ -51,6 +65,9 @@ pub struct DefaultResponseMetrics {
     pub(crate) operation_time: Option<Duration>,
 }
 
+/// Configuration for disabling specific default request metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Default, Debug, Clone)]
 pub struct DefaultRequestMetricsConfig {
     pub(crate) disable_all: bool,
@@ -60,6 +77,9 @@ pub struct DefaultRequestMetricsConfig {
     pub(crate) disable_service_version: bool,
 }
 
+/// Configuration for disabling specific default response metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Default, Debug, Clone)]
 pub struct DefaultResponseMetricsConfig {
     pub(crate) disable_all: bool,
@@ -69,18 +89,27 @@ pub struct DefaultResponseMetricsConfig {
     pub(crate) disable_operation_time: bool,
 }
 
+/// Extension for accessing default request metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Clone)]
 pub struct DefaultRequestMetricsExtension {
     pub(crate) metrics: Arc<Mutex<SlotGuard<DefaultRequestMetrics>>>,
     pub(crate) config: DefaultRequestMetricsConfig,
 }
 
+/// Extension for accessing default response metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Clone)]
 pub struct DefaultResponseMetricsExtension {
     pub(crate) metrics: Arc<Mutex<SlotGuard<DefaultResponseMetrics>>>,
     pub(crate) config: DefaultResponseMetricsConfig,
 }
 
+/// Extension containing both request and response metrics.
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Clone)]
 pub struct DefaultMetricsExtension {
     pub(crate) request_ext: DefaultRequestMetricsExtension,

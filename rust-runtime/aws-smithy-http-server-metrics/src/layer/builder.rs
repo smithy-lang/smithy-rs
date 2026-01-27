@@ -8,7 +8,6 @@ use std::sync::Arc;
 use std::sync::Mutex;
 
 use http::Request;
-use http::Response;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::Slot;
@@ -31,43 +30,141 @@ use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
 use crate::types::ReqBody;
-use crate::types::ResBody;
+
+// Macro to generate request_metrics method
+macro_rules! impl_request_metrics {
+    (WithDefaults) => {
+        impl_request_metrics!(@impl WithRq, DefaultRs<E>);
+    };
+    (WithRs) => {
+        impl_request_metrics!(@impl WithRqAndRs, impl ResponseMetrics<E>);
+    };
+    (@impl $to_state:ty, $rs_type:ty) => {
+        /// Sets a function to extract custom metrics from incoming requests.
+        ///
+        /// # Function Parameters
+        ///
+        /// - `request: &mut Request<ReqBody>` - The incoming HTTP request
+        /// - `metrics: &mut E` - The metrics entry to populate
+        ///
+        /// Called before the operation handler executes.
+        ///
+        /// See [`RequestMetrics`] for the full trait signature.
+        pub fn request_metrics(
+            self,
+            f: impl RequestMetrics<E>,
+        ) -> MetricsLayerBuilder<$to_state, E, S, I, impl RequestMetrics<E>, $rs_type> {
+            MetricsLayerBuilder {
+                init_metrics: self.init_metrics,
+                request_metrics: Some(f),
+                response_metrics: self.response_metrics,
+                default_req_metrics_config: self.default_req_metrics_config,
+                default_res_metrics_config: self.default_res_metrics_config,
+                _state: PhantomData,
+                _close_entry: PhantomData,
+                _entry_sink: PhantomData,
+            }
+        }
+    };
+}
+
+// Macro to generate response_metrics method
+macro_rules! impl_response_metrics {
+    (WithDefaults) => {
+        impl_response_metrics!(@impl WithRs, DefaultRq<E>);
+    };
+    (WithRq) => {
+        impl_response_metrics!(@impl WithRqAndRs, impl RequestMetrics<E>);
+    };
+    (@impl $to_state:ty, $rq_type:ty) => {
+        /// Sets a function to extract custom metrics from responses.
+        ///
+        /// # Function Parameters
+        ///
+        /// - `response: &mut Response<ResBody>` - The HTTP response
+        /// - `metrics: &mut E` - The metrics entry to populate
+        ///
+        /// Called after the operation handler completes.
+        ///
+        /// See [`ResponseMetrics`] for the full trait signature.
+        pub fn response_metrics(
+            self,
+            f: impl ResponseMetrics<E>,
+        ) -> MetricsLayerBuilder<$to_state, E, S, I, $rq_type, impl ResponseMetrics<E>> {
+            MetricsLayerBuilder {
+                init_metrics: self.init_metrics,
+                request_metrics: self.request_metrics,
+                response_metrics: Some(f),
+                default_req_metrics_config: self.default_req_metrics_config,
+                default_res_metrics_config: self.default_res_metrics_config,
+                _state: PhantomData,
+                _close_entry: PhantomData,
+                _entry_sink: PhantomData,
+            }
+        }
+    };
+}
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
     () => {
+        /// Disable all default request metrics
         pub fn disable_default_request_metrics(mut self) -> Self {
             self.default_req_metrics_config.disable_all = true;
             self
         }
 
+        /// Disable all default response metrics
         pub fn disable_default_response_metrics(mut self) -> Self {
             self.default_res_metrics_config.disable_all = true;
             self
         }
 
+        /// Disable the `request_id` metric
         pub fn disable_default_request_id_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_request_id = true;
             self
         }
 
+        /// Disable the `operation_name` metric
         pub fn disable_default_operation_name_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_operation_name = true;
             self
         }
 
+        /// Disable the `service_name` metric
         pub fn disable_default_service_name_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_service_name = true;
             self
         }
 
+        /// Disable the `service_version` metric
         pub fn disable_default_service_version_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_service_version = true;
             self
         }
 
-        pub fn disable_default_http_status_code(mut self) -> Self {
+        /// Disable the `http_status_code` metric
+        pub fn disable_default_http_status_code_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_http_status_code = true;
+            self
+        }
+
+        /// Disable the `error` metric
+        pub fn disable_error_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_error = true;
+            self
+        }
+
+        /// Disable the `fault` metric
+        pub fn disable_fault_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_fault = true;
+            self
+        }
+
+        /// Disable the `operation_time` metric
+        pub fn disable_operation_time_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_operation_time = true;
             self
         }
     };
@@ -109,6 +206,13 @@ where
     E: ThreadSafeCloseEntry,
     S: ThreadSafeEntrySink<E>,
 {
+    /// Sets the function to initialize metrics for each request
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let metrics_layer = MetricsLayer::builder()
+    ///     .init_metrics(|| PokemonMetrics::default().append_on_drop(ServiceMetrics::sink()));
+    /// ```
     pub fn init_metrics(
         self,
         init_metrics: impl InitMetrics<E, S>,
@@ -132,38 +236,8 @@ where
     S: ThreadSafeEntrySink<E>,
     I: InitMetrics<E, S>,
 {
-    pub fn request_metrics(
-        self,
-        f: impl RequestMetrics<E>,
-    ) -> MetricsLayerBuilder<WithRq, E, S, I, impl RequestMetrics<E>, DefaultRs<E>> {
-        MetricsLayerBuilder {
-            init_metrics: self.init_metrics,
-            request_metrics: Some(f),
-            response_metrics: None,
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
-            _state: PhantomData,
-            _close_entry: PhantomData,
-            _entry_sink: PhantomData,
-        }
-    }
-
-    pub fn response_metrics(
-        self,
-        f: impl Fn(&mut Response<ResBody>, &mut E) + Clone + Send + Sync + 'static,
-    ) -> MetricsLayerBuilder<WithRs, E, S, I, DefaultRq<E>, impl ResponseMetrics<E>> {
-        MetricsLayerBuilder {
-            init_metrics: self.init_metrics,
-            request_metrics: None,
-            response_metrics: Some(f),
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
-            _state: PhantomData,
-            _close_entry: PhantomData,
-            _entry_sink: PhantomData,
-        }
-    }
-
+    impl_request_metrics!(WithDefaults);
+    impl_response_metrics!(WithDefaults);
     impl_disable_methods!();
 }
 
@@ -174,23 +248,7 @@ where
     I: InitMetrics<E, S>,
     Rq: RequestMetrics<E>,
 {
-    pub fn response_metrics(
-        self,
-        f: impl ResponseMetrics<E>,
-    ) -> MetricsLayerBuilder<WithRqAndRs, E, S, I, impl RequestMetrics<E>, impl ResponseMetrics<E>>
-    {
-        MetricsLayerBuilder {
-            init_metrics: self.init_metrics,
-            request_metrics: self.request_metrics,
-            response_metrics: Some(f),
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
-            _state: PhantomData,
-            _close_entry: PhantomData,
-            _entry_sink: PhantomData,
-        }
-    }
-
+    impl_response_metrics!(WithRq);
     impl_disable_methods!();
 }
 
@@ -201,23 +259,7 @@ where
     I: InitMetrics<E, S>,
     Rs: ResponseMetrics<E>,
 {
-    pub fn request_metrics(
-        self,
-        f: impl RequestMetrics<E>,
-    ) -> MetricsLayerBuilder<WithRqAndRs, E, S, I, impl RequestMetrics<E>, impl ResponseMetrics<E>>
-    {
-        MetricsLayerBuilder {
-            init_metrics: self.init_metrics,
-            request_metrics: Some(f),
-            response_metrics: self.response_metrics,
-            default_req_metrics_config: self.default_req_metrics_config,
-            default_res_metrics_config: self.default_res_metrics_config,
-            _state: PhantomData,
-            _close_entry: PhantomData,
-            _entry_sink: PhantomData,
-        }
-    }
-
+    impl_request_metrics!(WithRs);
     impl_disable_methods!();
 }
 
@@ -242,6 +284,7 @@ where
     Rq: RequestMetrics<DefaultMetrics>,
     Rs: ResponseMetrics<DefaultMetrics>,
 {
+    /// Build the [`MetricsLayer`] that can be added to your service.
     fn build(self) -> MetricsLayer<DefaultMetrics, S, I, Rq, Rs>;
 }
 
@@ -316,12 +359,14 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
+    use http::Response;
     use metrique::AppendAndCloseOnDrop;
     use metrique::ServiceMetrics;
     use metrique_writer::GlobalEntrySink;
 
     use super::*;
     use crate::layer::MetricsLayer;
+    use crate::types::ResBody;
 
     // Compile-time guarantees that methods exist on the correct states
     macro_rules! assert_methods_callable {

@@ -9,7 +9,7 @@ mod plugin;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
+use aws_smithy_http_server_metrics::DefaultMetricsPlugin;
 use aws_smithy_http_server_metrics::MetricsLayer;
 use clap::Parser;
 

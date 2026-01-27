@@ -25,9 +25,9 @@ use crate::types::ReqBody;
 use crate::types::ResBody;
 
 pin_project! {
-    /// Named future to avoid heap allocation
+    /// Future returned by [`MetricsLayerService`].
     ///
-    /// `inner` has `#[pin]` to prevent moving in memory once polled.
+    /// This type is not intended to be used directly. See [`MetricsLayer`](crate::layer::MetricsLayer).
     pub struct MetricsLayerServiceFuture<F, E, S, Rs>
     where
         F: Future,
@@ -69,6 +69,9 @@ where
     }
 }
 
+/// Tower service that collects metrics for HTTP requests and responses.
+///
+/// This type is not intended to be used directly. See [`MetricsLayer`](crate::layer::MetricsLayer).
 pub struct MetricsLayerService<Ser, E, S, I, Rq, Rs>
 where
     E: ThreadSafeCloseEntry,

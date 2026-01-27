@@ -37,9 +37,9 @@ use crate::types::ReqBody;
 use crate::types::ResBody;
 
 pin_project! {
-    /// Named future to avoid heap allocation
+    /// Future returned by [`DefaultMetricsPluginService`].
     ///
-    /// `inner` types has `#[pin]` to prevent moving in memory once polled.
+    /// This type is not intended to be used directly. See [`DefaultMetricsPlugin`].
     #[project = DefaultMetricsFutureProj]
     pub enum DefaultMetricsFuture<F> {
         /// Metrics extension from outer layer
@@ -128,6 +128,36 @@ where
     }
 }
 
+/// Plugin that automatically collects default metrics for all operations.
+///
+/// This plugin adds standard metrics to every operation without requiring manual configuration.
+/// For a complete list of collected metrics, see the [crate-level documentation](crate).
+///
+/// # Usage
+///
+/// Apply to your service using the plugin system:
+///
+/// ```rust,ignore
+/// use aws_smithy_http_server_metrics::DefaultMetricsPlugin;
+///
+/// let http_plugins = HttpPlugins::new()
+///     .push(DefaultMetricsPlugin)
+///     .instrument();
+/// ```
+///
+/// # Integration with MetricsLayer
+///
+/// This plugin works with [`MetricsLayer`](crate::layer::MetricsLayer).
+/// When both are used together, default metrics from this plugin are automatically
+/// folded with custom metrics from the layer.
+///
+/// # Metrics Sink
+///
+/// Metrics are emitted to the global sink configured via [`ServiceMetrics::attach`]
+/// or [`attach_to_stream`](metrique_writer::AttachGlobalEntrySinkExt::attach_to_stream).
+/// If no sink is attached, metrics collection is skipped.
+///
+/// [`ServiceMetrics::attach_to_stream`]: metrique::ServiceMetrics::attach_to_stream
 #[derive(Default)]
 pub struct DefaultMetricsPlugin;
 
@@ -150,6 +180,11 @@ where
     }
 }
 
+/// Service wrapper that collects default metrics for operations.
+///
+/// Created by applying [`DefaultMetricsPlugin`] to a service.
+///
+/// This type is not intended to be used directly. See [`DefaultMetricsPlugin`].
 #[derive(Debug)]
 pub struct DefaultMetricsPluginService<Ser> {
     inner: Ser,
@@ -236,6 +271,11 @@ where
                 // When no outer layer exists, provide the default metrics through metrique's
                 // application-wide global metric sink, if an underlying sink has been attached
                 let Some(sink) = ServiceMetrics::try_sink() else {
+                    tracing::info!(
+                        "Default metrics collection skipped. No metrics sink configured. \
+                        Use ServiceMetrics::attach() or ServiceMetrics::attach_to_stream() \
+                        to enable metrics using metrique's globally provided sink."
+                    );
                     return DefaultMetricsFuture::Passthrough {
                         inner: self.inner.call(req),
                     };
