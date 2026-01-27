@@ -73,6 +73,40 @@ class ClientEnumGeneratorTest {
     }
 
     @Test
+    fun `unnamed enums implement AsRef`() {
+        val model =
+            """
+            namespace test
+            @enum([
+                { value: "Foo" },
+                { value: "Bar" },
+            ])
+            string SomeEnum
+            """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#SomeEnum")
+        val context = testClientCodegenContext(model)
+        val project = TestWorkspace.testProject(context.symbolProvider)
+        project.moduleFor(shape) {
+            ClientEnumGenerator(context, shape, emptyList()).render(this)
+            unitTest(
+                "unnamed_enums_implement_asref",
+                """
+                let foo = SomeEnum::from("Foo");
+                let foo_ref: &str = foo.as_ref();
+                assert_eq!(foo_ref, "Foo");
+
+                fn takes_asref(s: impl AsRef<str>) -> String {
+                    s.as_ref().to_owned()
+                }
+                assert_eq!(takes_asref(SomeEnum::from("Bar")), "Bar");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
     fun `impl debug for non-sensitive enum should implement the derived debug trait`() {
         val model =
             """
