@@ -9,12 +9,8 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use aws_smithy_http_server::error::Error;
 use http::Request;
 use http::Response;
-use http_body::combinators::UnsyncBoxBody;
-use hyper::body::Body as ReqBody;
-use hyper::body::Bytes;
 use pin_project_lite::pin_project;
 use tower::Service;
 
@@ -25,8 +21,8 @@ use crate::traits::RequestMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
-
-type ResBody = UnsyncBoxBody<Bytes, Error>;
+use crate::types::ReqBody;
+use crate::types::ResBody;
 
 pin_project! {
     /// Named future to avoid heap allocation

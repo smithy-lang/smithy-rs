@@ -28,7 +28,6 @@ use crate::types::DefaultInit;
 use crate::types::DefaultRq;
 use crate::types::DefaultRs;
 use crate::types::ReqBody;
-use crate::types::ResBody;
 
 pub mod builder;
 

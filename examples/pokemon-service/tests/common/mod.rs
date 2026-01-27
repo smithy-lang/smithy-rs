@@ -58,20 +58,41 @@ pub async fn run_server() -> ServerHandle {
     }
 }
 
-pub async fn run_server_with_metrics_tcp(tcp_addr: &str) -> ChildDrop {
-    let child = Command::new(cargo_bin!())
-        .arg("--metrics-tcp")
-        .arg(tcp_addr)
+pub async fn run_server_with_metrics_tcp(tcp_addr: &str) -> ServerHandle {
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("pokemon-service"))
+        .args(["--port", "0", "--metrics-tcp", tcp_addr])
+        .stderr(Stdio::piped())
         .spawn()
         .unwrap();
 
-    sleep(Duration::from_millis(500)).await;
+    // Wait for the server to signal it's ready by reading stderr
+    let stderr = child.stderr.take().unwrap();
+    let ready_signal = tokio::task::spawn_blocking(move || {
+        let reader = BufReader::new(stderr);
+        for line in reader.lines() {
+            if let Ok(line) = line {
+                if let Some(port_str) = line.strip_prefix("SERVER_READY:") {
+                    if let Ok(port) = port_str.parse::<u16>() {
+                        return Some(port);
+                    }
+                }
+            }
+        }
+        None
+    });
 
-    ChildDrop(child)
-}
+    // Wait for the ready signal with a timeout
+    let port = match timeout(Duration::from_secs(5), ready_signal).await {
+        Ok(Ok(Some(port))) => port,
+        _ => {
+            panic!("Server did not become ready within 5 seconds");
+        }
+    };
 
-pub fn base_url() -> String {
-    format!("http://{DEFAULT_ADDRESS}:{DEFAULT_PORT}")
+    ServerHandle {
+        child: ChildDrop(child),
+        port,
+    }
 }
 
 pub fn base_url(port: u16) -> String {
