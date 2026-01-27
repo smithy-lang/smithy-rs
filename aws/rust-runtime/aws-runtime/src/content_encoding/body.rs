@@ -101,7 +101,7 @@ pin_project! {
         #[pin]
         pub(super) buffered_trailing_headers: Option<http_1x::HeaderMap>,
         #[pin]
-        pub(super) signer: Option<Box<dyn SignChunk + Send + Sync>>,
+        pub(super) signer: Option<std::panic::AssertUnwindSafe<Box<dyn SignChunk + Send + Sync>>>,
     }
 }
 
@@ -125,7 +125,7 @@ impl<Inner> AwsChunkedBody<Inner> {
     where
         S: SignChunk + Send + Sync + 'static,
     {
-        self.signer = Some(Box::new(signer));
+        self.signer = Some(std::panic::AssertUnwindSafe(Box::new(signer)));
         self
     }
 
@@ -208,3 +208,17 @@ impl std::fmt::Display for AwsChunkedBodyError {
 }
 
 impl std::error::Error for AwsChunkedBodyError {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_aws_chunked_body_is_unwind_safe_and_ref_unwind_safe() {
+        fn assert_unwind_safe<T: std::panic::UnwindSafe>() {}
+        fn assert_ref_unwind_safe<T: std::panic::RefUnwindSafe>() {}
+
+        assert_unwind_safe::<AwsChunkedBody<()>>();
+        assert_ref_unwind_safe::<AwsChunkedBody<()>>();
+    }
+}

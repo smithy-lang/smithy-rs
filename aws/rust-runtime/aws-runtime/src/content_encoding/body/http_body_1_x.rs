@@ -45,7 +45,14 @@ where
                         let buf = this.chunk_buffer.buffered();
                         let chunk_bytes = buf.copy_to_bytes(chunk_size);
                         let chunk = if this.options.is_signed {
-                            let signer = this.signer.as_deref_mut().expect("signer must be set");
+                            let signer = this
+                                .signer
+                                .as_mut()
+                                .get_mut()
+                                .as_mut()
+                                .expect("signer must be set")
+                                .0
+                                .as_mut();
                             signed_encoded_chunk(signer, chunk_bytes).map_err(|e| {
                                 Box::new(AwsChunkedBodyError::FailedToSign { source: e })
                             })?
@@ -76,7 +83,14 @@ where
                     let buf = this.chunk_buffer.buffered();
                     let chunk_bytes = buf.copy_to_bytes(bytes_len_to_read);
                     let chunk = if this.options.is_signed {
-                        let signer = this.signer.as_deref_mut().expect("signer must be set");
+                        let signer = this
+                            .signer
+                            .as_mut()
+                            .get_mut()
+                            .as_mut()
+                            .expect("signer must be set")
+                            .0
+                            .as_mut();
                         signed_encoded_chunk(signer, chunk_bytes).map_err(|e| {
                             Box::new(AwsChunkedBodyError::FailedToSign { source: e })
                         })?
@@ -107,7 +121,14 @@ where
                 Poll::Pending
             }
             WritingZeroSizedSignedChunk => {
-                let signer = this.signer.as_deref_mut().expect("signer must be set");
+                let signer = this
+                    .signer
+                    .as_mut()
+                    .get_mut()
+                    .as_mut()
+                    .expect("signer must be set")
+                    .0
+                    .as_mut();
                 let zero_sized_chunk = signed_encoded_chunk(signer, Bytes::new())
                     .map_err(|e| Box::new(AwsChunkedBodyError::FailedToSign { source: e }))?;
                 if this.buffered_trailing_headers.is_some() {
@@ -164,7 +185,14 @@ where
                 {
                     let mut trailer_bytes = BytesMut::new();
                     let trailer = if this.options.is_signed && !trailer.is_empty() {
-                        let signer = this.signer.as_deref_mut().expect("signer must be set");
+                        let signer = this
+                            .signer
+                            .as_mut()
+                            .get_mut()
+                            .as_mut()
+                            .expect("signer must be set")
+                            .0
+                            .as_mut();
                         let signature = signer
                             .trailer_signature(&Headers::try_from(trailer.clone())?)
                             .map_err(|e| {
