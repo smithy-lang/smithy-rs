@@ -734,9 +734,11 @@ open class ServerCodegenVisitor(
         }
 
         // Generate protocol-specific ser/de - FOR EACH PROTOCOL
-        for (protoGenerator in allProtocolGenerators) {
+        // generateSharedTypes is true only for the first protocol to avoid duplicate type definitions
+        for ((index, protoGenerator) in allProtocolGenerators.withIndex()) {
+            val generateSharedTypes = (index == 0)
             rustCrate.withModule(ServerRustModule.Operation) {
-                protoGenerator.renderOperation(this, shape)
+                protoGenerator.renderOperation(this, shape, generateSharedTypes)
             }
         }
 
