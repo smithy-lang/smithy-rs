@@ -6,6 +6,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.waiters
 
 import software.amazon.smithy.jmespath.ExpressionSerializer
 import software.amazon.smithy.jmespath.JmespathExpression
+import software.amazon.smithy.jmespath.RuntimeType
 import software.amazon.smithy.jmespath.ast.AndExpression
 import software.amazon.smithy.jmespath.ast.BinaryExpression
 import software.amazon.smithy.jmespath.ast.ComparatorExpression
@@ -568,23 +569,23 @@ class RustJmespathShapeTraversalGenerator(
 
     private fun generateLiteral(expr: LiteralExpression): GeneratedExpression {
         val (outputShape, outputType) =
-            when (expr.value) {
-                is Boolean -> TraversedShape.Bool(null) to RustType.Reference(lifetime = null, member = RustType.Bool)
-                is Double ->
+            when (expr.type) {
+                RuntimeType.BOOLEAN -> TraversedShape.Bool(null) to RustType.Reference(lifetime = null, member = RustType.Bool)
+                RuntimeType.NUMBER ->
                     TraversedShape.Number(null) to
                         RustType.Reference(
                             lifetime = null,
                             member = RustType.Float(64),
                         )
 
-                is String ->
+                RuntimeType.STRING ->
                     TraversedShape.String(null) to
                         RustType.Reference(
                             lifetime = null,
                             member = RustType.Opaque("str"),
                         )
 
-                null -> throw UnsupportedJmesPathException("Literal nulls are not supported by smithy-rs")
+                RuntimeType.NULL -> throw UnsupportedJmesPathException("Literal nulls are not supported by smithy-rs")
                 else -> throw UnsupportedJmesPathException("Literal expression '${ExpressionSerializer().serialize(expr)}' is not supported by smithy-rs")
             }
 
@@ -598,13 +599,13 @@ class RustJmespathShapeTraversalGenerator(
                 outputShape = outputShape,
                 output =
                     writable {
-                        when (val value = expr.value) {
-                            is Boolean -> rust("const $ident: &bool = &$value;")
-                            is Double -> {
-                                rust("const $ident: #T = &${fmtFloating(value)};", outputType)
+                        when (expr.type) {
+                            RuntimeType.BOOLEAN -> rust("const $ident: &bool = &${expr.expectBooleanValue()};")
+                            RuntimeType.NUMBER -> {
+                                rust("const $ident: #T = &${fmtFloating(expr.expectNumberValue())};", outputType)
                             }
 
-                            is String -> rust("const $ident: &str = ${value.dq()};")
+                            RuntimeType.STRING -> rust("const $ident: &str = ${expr.expectStringValue().dq()};")
                             else -> throw RuntimeException("unreachable")
                         }
                     },
