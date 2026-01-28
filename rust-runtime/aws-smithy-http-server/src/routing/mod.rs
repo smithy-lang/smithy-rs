@@ -12,6 +12,7 @@ mod into_make_service_with_connect_info;
 #[cfg(feature = "aws-lambda")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
+pub mod multi_protocol;
 
 #[doc(hidden)]
 pub mod request_spec;
@@ -52,6 +53,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    multi_protocol::{MultiProtocolRoutingError, MultiProtocolRoutingFuture, MultiProtocolRoutingService, ProtocolDetector},
     route::Route,
 };
 
@@ -112,6 +114,11 @@ impl<R, P> RoutingService<R, P> {
             router,
             _protocol: PhantomData,
         }
+    }
+
+    /// Returns a reference to the inner router.
+    pub fn router(&self) -> &R {
+        &self.router
     }
 
     /// Maps a [`Router`] using a closure.
