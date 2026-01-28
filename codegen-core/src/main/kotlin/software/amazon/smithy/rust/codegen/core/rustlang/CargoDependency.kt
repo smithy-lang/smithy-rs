@@ -293,6 +293,7 @@ data class CargoDependency(
         val Md5: CargoDependency = CargoDependency("md-5", CratesIo("0.10.0"), rustName = "md5")
         val PercentEncoding: CargoDependency =
             CargoDependency("percent-encoding", CratesIo("2.0.0"))
+        val PinProjectLite: CargoDependency = CargoDependency("pin-project-lite", CratesIo("0.2.14"))
         val Regex: CargoDependency = CargoDependency("regex", CratesIo("1.5.5"))
         val RegexLite: CargoDependency = CargoDependency("regex-lite", CratesIo("0.1.5"))
         val Ring: CargoDependency = CargoDependency("ring", CratesIo("0.17.5"))
