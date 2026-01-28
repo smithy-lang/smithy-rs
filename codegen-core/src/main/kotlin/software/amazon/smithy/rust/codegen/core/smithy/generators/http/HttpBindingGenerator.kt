@@ -96,6 +96,12 @@ sealed class HttpBindingSection(name: String) : Section(name) {
 
     data class AfterDeserializingIntoADateTimeOfHttpHeaders(val memberShape: MemberShape) :
         HttpBindingSection("AfterDeserializingIntoADateTimeOfHttpHeaders")
+
+    data class BeforeCreatingEventStreamReceiver(
+        val operationShape: OperationShape,
+        val unionShape: UnionShape,
+        val unmarshallerVariableName: String,
+    ) : HttpBindingSection("BeforeCreatingEventStreamReceiver")
 }
 
 typealias HttpBindingCustomization = NamedCustomization<HttpBindingSection>
@@ -275,6 +281,17 @@ class HttpBindingGenerator(
             """,
             "unmarshallerConstructorFn" to unmarshallerConstructorFn,
         )
+
+        // Allow customizations to wrap the unmarshaller
+        for (customization in customizations) {
+            customization.section(
+                HttpBindingSection.BeforeCreatingEventStreamReceiver(
+                    operationShape,
+                    targetShape,
+                    "unmarshaller",
+                ),
+            )(this)
+        }
 
         rustTemplate(
             """
@@ -541,8 +558,8 @@ class HttpBindingGenerator(
             val codegenScope =
                 arrayOf(
                     "BuildError" to runtimeConfig.operationBuildError(),
-                    HttpMessageType.REQUEST.name to RuntimeType.HttpRequestBuilder,
-                    HttpMessageType.RESPONSE.name to RuntimeType.HttpResponseBuilder,
+                    HttpMessageType.REQUEST.name to RuntimeType.httpRequestBuilder(runtimeConfig),
+                    HttpMessageType.RESPONSE.name to RuntimeType.httpResponseBuilder(runtimeConfig),
                     "Shape" to shapeSymbol,
                 )
             rustBlockTemplate(
@@ -718,7 +735,7 @@ class HttpBindingGenerator(
                     builder = builder.header("$headerName", header_value);
 
                     """,
-                    "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                    "HeaderValue" to RuntimeType.http(runtimeConfig).resolve("HeaderValue"),
                     "invalid_field_error" to renderErrorMessage("header_value"),
                 )
             }
@@ -754,7 +771,7 @@ class HttpBindingGenerator(
                 """
                 for (k, v) in ${local.asRef()} {
                     use std::str::FromStr;
-                    let header_name = http::header::HeaderName::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
+                    let header_name = #{HeaderName}::from_str(&format!("{}{}", "${httpBinding.locationName}", &k)).map_err(|err| {
                         #{invalid_header_name:W}
                     })?;
                     let header_value = ${
@@ -773,7 +790,8 @@ class HttpBindingGenerator(
                 }
 
                 """,
-                "HeaderValue" to RuntimeType.Http.resolve("HeaderValue"),
+                "HeaderValue" to RuntimeType.http(runtimeConfig).resolve("HeaderValue"),
+                "HeaderName" to RuntimeType.http(runtimeConfig).resolve("HeaderName"),
                 "invalid_header_name" to
                     OperationBuildError(runtimeConfig).invalidField(memberName) {
                         rust("""format!("`{k}` cannot be used as a header name: {err}")""")

@@ -23,6 +23,7 @@ import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.model.traits.HttpTrait
 import software.amazon.smithy.model.traits.MediaTypeTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -38,6 +39,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -190,13 +193,14 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val codegenScope =
         arrayOf(
             "AsyncTrait" to ServerCargoDependency.AsyncTrait.toType(),
+            "Bytes" to RuntimeType.Bytes,
             "Cow" to RuntimeType.Cow,
             "DateTime" to RuntimeType.dateTime(runtimeConfig),
             "FormUrlEncoded" to ServerCargoDependency.FormUrlEncoded.toType(),
             "FuturesUtil" to ServerCargoDependency.FuturesUtil.toType(),
-            "HttpBody" to RuntimeType.HttpBody,
+            "HttpBody" to RuntimeType.httpBody(runtimeConfig),
             "header_util" to RuntimeType.smithyHttp(runtimeConfig).resolve("header"),
-            "Hyper" to RuntimeType.Hyper,
+            "Hyper" to RuntimeType.hyper(runtimeConfig),
             "LazyStatic" to RuntimeType.LazyStatic,
             "Mime" to ServerCargoDependency.Mime.toType(),
             "Nom" to ServerCargoDependency.Nom.toType(),
@@ -209,8 +213,10 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "RequestRejection" to protocol.requestRejection(runtimeConfig),
             "ResponseRejection" to protocol.responseRejection(runtimeConfig),
             "PinProjectLite" to ServerCargoDependency.PinProjectLite.toType(),
-            "http" to RuntimeType.Http,
+            "http" to RuntimeType.http(runtimeConfig),
             "Tracing" to RuntimeType.Tracing,
+            "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
+            *preludeScope,
         )
 
     fun generateTraitImpls(
@@ -560,10 +566,28 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // No binding, use `@http`.
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
-        operationShape.outputShape(model).findStreamingMember(model)?.let {
+        operationShape.outputShape(model).findStreamingMember(model)?.let { streamingMember ->
             val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
+
+            // Event streams vs blob streams require different handling in http@1:
+            // - Event streams (MessageStreamAdapter) yield Frame<Bytes> and use StreamBody::new() directly
+            // - Blob streams (FuturesStreamCompatByteStream) yield Bytes and need wrap_stream() to convert to Frame<Bytes>
+            val isEventStream = streamingMember.isEventStream(model)
+            val wrapStreamCall =
+                if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                    if (isEventStream) {
+                        // Event streams already yield Frame<Bytes>, use StreamBody::new directly
+                        "let body = #{SmithyHttpServer}::body::boxed(#{http_body_util}::StreamBody::new("
+                    } else {
+                        // Blob streams yield Bytes, use wrap_stream to convert to Frame<Bytes>
+                        "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::wrap_stream("
+                    }
+                } else {
+                    "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream("
+                }
+
             withBlockTemplate(
-                "let body = #{SmithyHttpServer}::body::boxed(#{SmithyHttpServer}::body::Body::wrap_stream(",
+                wrapStreamCall,
                 "));",
                 *codegenScope,
             ) {
@@ -757,9 +781,9 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             """,
             *preludeScope,
             "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
-            "Request" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Request"),
+            "Request" to RuntimeType.smithyRuntimeApiWithHttpFeature(runtimeConfig).resolve("http::Request"),
             "RequestParts" to
-                RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::RequestParts"),
+                RuntimeType.smithyRuntimeApiWithHttpFeature(runtimeConfig).resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
 
@@ -772,7 +796,24 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             // there's something to parse (i.e. `parser != null`), so `!!` is safe here.
             val expectedRequestContentType =
                 httpBindingResolver.requestContentType(operationShape)!!
-            rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+
+            // Generate different body collection code based on HTTP version
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                // For HTTP 1.x: use http-body-util's BodyExt trait
+                rustTemplate(
+                    """
+                    let bytes = {
+                        use #{HttpBodyUtil}::BodyExt;
+                        body.collect().await?.to_bytes()
+                    };
+                    """,
+                    *codegenScope,
+                    "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
+                )
+            } else {
+                // For HTTP 0.x: use hyper's to_bytes
+                rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            }
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
             // operation input; we simply parse it as empty operation input.
             // This behavior applies to all protocols. This might seem like a bug, but it isn't. There's protocol tests
@@ -918,7 +959,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             rustTemplate(
                                 """
                                 {
-                                    let mut receiver = #{Deserializer}(&mut body.into().into_inner())?;
+                                    let mut receiver = #{Deserializer}(&mut #{eventStreamBodyInto:W})?;
                                     if let Some(_initial_event) = receiver
                                         .try_recv_initial(#{InitialMessageType}::Request)
                                         .await
@@ -939,16 +980,18 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         .resolve("event_stream::InitialMessageType"),
                                 "parseInitialRequest" to parseInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
+                                "eventStreamBodyInto" to eventStreamBodyInto(),
                                 *codegenScope,
                             )
                         } else {
                             rustTemplate(
                                 """
                                 {
-                                    Some(#{Deserializer}(&mut body.into().into_inner())?)
+                                    Some(#{Deserializer}(&mut #{eventStreamBodyInto:W})?)
                                 }
                                 """,
                                 "Deserializer" to deserializer,
+                                "eventStreamBodyInto" to eventStreamBodyInto(),
                                 *codegenScope,
                             )
                         }
@@ -987,18 +1030,40 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         }
                                     }
                             }
-                        rustTemplate(
-                            """
-                            {
-                                let bytes = #{Hyper}::body::to_bytes(body).await?;
-                                #{VerifyRequestContentTypeHeader:W}
-                                #{Deserializer}(&bytes)?
-                            }
-                            """,
-                            "Deserializer" to deserializer,
-                            "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
-                            *codegenScope,
-                        )
+                        // Generate different body collection code based on HTTP version
+                        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                            // For HTTP 1.x: use http-body-util's BodyExt trait
+                            rustTemplate(
+                                """
+                                {
+                                    let bytes = {
+                                        use #{HttpBodyUtil}::BodyExt;
+                                        body.collect().await?.to_bytes()
+                                    };
+                                    #{VerifyRequestContentTypeHeader:W}
+                                    #{Deserializer}(&bytes)?
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                                *codegenScope,
+                                "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
+                            )
+                        } else {
+                            // For HTTP 0.x: use hyper's to_bytes
+                            rustTemplate(
+                                """
+                                {
+                                    let bytes = #{Hyper}::body::to_bytes(body).await?;
+                                    #{VerifyRequestContentTypeHeader:W}
+                                    #{Deserializer}(&bytes)?
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                                *codegenScope,
+                            )
+                        }
                     }
                 }
             }
@@ -1478,9 +1543,27 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
     private fun streamingBodyTraitBounds(operationShape: OperationShape) =
         if (operationShape.inputShape(model).hasStreamingMember(model)) {
-            "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                // HTTP/1: No Into<ByteStream> available, must use ByteStream::from_body_1_x() which requires Send + Sync.
+                // HTTP/0.4: Uses Into<ByteStream> conversion without these bounds.
+                """
+                B: #{HttpBody}::Body<Data = #{Bytes}> + #{Send} + #{Sync} + 'static,
+                B::Error: Into<::aws_smithy_types::body::Error> + 'static,
+                """
+            } else {
+                "\n B: Into<#{SmithyTypes}::byte_stream::ByteStream>,"
+            }
         } else {
             ""
+        }
+
+    private fun eventStreamBodyInto() =
+        writable {
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                rustTemplate("#{SmithyTypes}::body::SdkBody::from_body_1_x(body)", *codegenScope)
+            } else {
+                rust("body.into().into_inner()")
+            }
         }
 
     private fun httpBindingGenerator(operationShape: OperationShape) =
@@ -1506,7 +1589,7 @@ private fun eventStreamWithInitialResponse(
                     let mut buffer = #{Vec}::new();
                     #{write_message_to}(&initial_message, &mut buffer)
                         .expect("Failed to write initial message");
-                    let initial_message_stream = futures_util::stream::iter(vec![Ok(buffer.into())]);
+                    let initial_message_stream = futures_util::stream::iter(vec![#{initial_message_item}]);
                     let adapter = #{message_stream_adaptor};
                     initial_message_stream.chain(adapter)
                 }
@@ -1516,6 +1599,7 @@ private fun eventStreamWithInitialResponse(
                 "initial_response_payload" to initialResponsePayload(codegenContext, protocol, params),
                 "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
                 "initial_response_generator" to initialResponseGenerator,
+                "initial_message_item" to initialMessageItem(codegenContext.settings.runtimeConfig),
                 "write_message_to" to
                     RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                         .resolve("frame::write_message_to"),
@@ -1559,3 +1643,18 @@ private fun messageStreamAdaptor(
 ) = writable {
     rust("$outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer)")
 }
+
+private fun initialMessageItem(runtimeConfig: RuntimeConfig) =
+    writable {
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            // http@1: Initial message is chained with MessageStreamAdapter (which yields Frame<Bytes>),
+            // so both streams must have the same Item type for .chain() to work
+            rustTemplate(
+                "Ok(#{http_body_1x}::Frame::data(buffer.into()))",
+                "http_body_1x" to CargoDependency.HttpBody1x.toType(),
+            )
+        } else {
+            // http@0: MessageStreamAdapter yields Bytes, so initial message must also be Bytes
+            rust("Ok(buffer.into())")
+        }
+    }

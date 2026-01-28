@@ -441,6 +441,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
+ "http-body-util",
  "percent-encoding",
  "pin-project-lite",
  "proptest",
@@ -570,6 +571,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -657,6 +659,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -841,6 +844,7 @@ dependencies = [
  "aws-types",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "pretty_assertions",
  "proptest",
  "regex-lite",
@@ -950,6 +954,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -973,6 +978,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -996,6 +1002,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -1080,6 +1087,7 @@ dependencies = [
  "bytes",
  "fastrand 2.3.0",
  "http 0.2.12",
+ "http 1.4.0",
  "proptest",
  "regex-lite",
  "tokio",
@@ -1186,8 +1194,9 @@ dependencies = [
  "bytes-utils",
  "crc-fast",
  "hex",
- "http 0.2.12",
- "http-body 0.4.6",
+ "http 1.4.0",
+ "http-body 1.0.1",
+ "http-body-util",
  "md-5",
  "pin-project-lite",
  "pretty_assertions",
@@ -1208,9 +1217,7 @@ dependencies = [
  "bytes-utils",
  "flate2",
  "futures-util",
- "http 0.2.12",
  "http 1.4.0",
- "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
  "pin-project-lite",
@@ -1250,7 +1257,7 @@ version = "0.2.2"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.62.6"
+version = "0.63.0"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -1260,10 +1267,10 @@ dependencies = [
  "bytes-utils",
  "futures-core",
  "futures-util",
- "http 0.2.12",
  "http 1.4.0",
- "http-body 0.4.6",
- "hyper 0.14.32",
+ "http-body 1.0.1",
+ "http-body-util",
+ "hyper 1.8.1",
  "percent-encoding",
  "pin-project-lite",
  "pin-utils",
@@ -1315,7 +1322,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.61.9"
+version = "0.62.0"
 dependencies = [
  "aws-smithy-types",
  "proptest",
@@ -1324,7 +1331,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.6"
+version = "0.62.7"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -1392,6 +1399,7 @@ dependencies = [
  "cbor-diag",
  "ciborium",
  "http 0.2.12",
+ "http 1.4.0",
  "pretty_assertions",
  "regex-lite",
  "roxmltree",
@@ -1409,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.9.7"
+version = "1.9.8"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -1425,6 +1433,7 @@ dependencies = [
  "http 1.4.0",
  "http-body 0.4.6",
  "http-body 1.0.1",
+ "http-body-util",
  "hyper 0.14.32",
  "pin-project-lite",
  "pin-utils",

@@ -299,15 +299,14 @@ mod tests {
         );
         assert!(
             error.contains("Invalid crate version"),
-            "'{}' should contain 'Invalid crate version'",
-            error
+            "'{error}' should contain 'Invalid crate version'"
         );
     }
 
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
             PackageHandle::new(name, version("1.0.0")),
-            format!("{}/Cargo.toml", name),
+            format!("{name}/Cargo.toml"),
             dependencies
                 .iter()
                 .map(|d| PackageHandle::new(*d, version("1.0.0")))

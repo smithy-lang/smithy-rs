@@ -122,15 +122,15 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 let mut buffer = vec![];
                 write_message_to(&event_stream_payload, &mut buffer).unwrap();
                 // Error type here is arbitrary to satisfy the compiler
-                let chunks: Vec<Result<bytes::Bytes, std::io::Error>> = vec![Ok(buffer.into())];
+                let chunks: Vec<Result<#{http_body_1_x}::Frame<bytes::Bytes>, std::io::Error>> = vec![Ok(#{http_body_1_x}::Frame::data(buffer.into()))];
 
                 #{event_stream:W}
 
                 let (http_client, _r) = #{capture_request}(Some(
                     #{http_1x}::Response::builder()
                         .status(200)
-                        .body(SdkBody::from_body_0_4(
-                            hyper::Body::wrap_stream(event_stream),
+                        .body(SdkBody::from_body_1_x(
+                           #{http_body_util}::StreamBody::new(event_stream),
                         ))
                         .unwrap(),
                 ));
@@ -163,6 +163,8 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 "initial_response_stream" to initialResponseStreamGenerator,
                 "receive_event_stream" to eventStreamReceiver,
                 "http_1x" to CargoDependency.Http1x.toType(),
+                "http_body_1_x" to CargoDependency.HttpBody1x.toType(),
+                "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
             )
         }
 
@@ -182,7 +184,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                 initialResponseStreamGenerator =
                                     writable {
                                         val testCase = rpcEventStreamTestCase.inner
-                                        rust(
+                                        rustTemplate(
                                             """
                                             let initial_response = msg(
                                                 "event",
@@ -192,9 +194,10 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                             );
                                             let mut buffer = vec![];
                                             aws_smithy_eventstream::frame::write_message_to(&initial_response, &mut buffer).unwrap();
-                                            let chunks: Vec<Result<bytes::Bytes, _>> = vec![Ok(buffer.into())];
+                                            let chunks: Vec<Result<#{http_body_1_x}::Frame<bytes::Bytes>, _>> = vec![Ok(#{http_body_1_x}::Frame::data(buffer.into()))];
                                             let initial_response_stream = futures_util::stream::iter(chunks);
                                             """,
+                                            "http_body_1_x" to CargoDependency.HttpBody1x.toType(),
                                         )
                                     },
                                 eventStreamGenerator =
@@ -213,7 +216,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                 initialResponseStreamGenerator =
                                     writable {
                                         val testCase = rpcEventStreamTestCase.inner
-                                        rust(
+                                        rustTemplate(
                                             """
                                             let initial_response = msg(
                                                 "event",
@@ -224,9 +227,10 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                             );
                                             let mut buffer = vec![];
                                             aws_smithy_eventstream::frame::write_message_to(&initial_response, &mut buffer).unwrap();
-                                            let chunks: Vec<Result<bytes::Bytes, _>> = vec![Ok(buffer.into())];
+                                            let chunks: Vec<Result<#{http_body_1_x}::Frame<bytes::Bytes>, _>> = vec![Ok(#{http_body_1_x}::Frame::data(buffer.into()))];
                                             let initial_response_stream = futures_util::stream::iter(chunks);
                                             """,
+                                            "http_body_1_x" to CargoDependency.HttpBody1x.toType(),
                                         )
                                     },
                                 eventStreamGenerator =
@@ -254,9 +258,11 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                                             """,
                                             "DeserializeError" to
                                                 if (rpcEventStreamTestCase.inner.protocolShapeId == "smithy.protocols#rpcv2Cbor") {
-                                                    RuntimeType.smithyCbor(codegenContext.runtimeConfig).resolve("decode::DeserializeError")
+                                                    RuntimeType.smithyCbor(codegenContext.runtimeConfig)
+                                                        .resolve("decode::DeserializeError")
                                                 } else {
-                                                    RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("deserialize::error::DeserializeError")
+                                                    RuntimeType.smithyJson(codegenContext.runtimeConfig)
+                                                        .resolve("deserialize::error::DeserializeError")
                                                 },
                                         )
                                     },
@@ -265,6 +271,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                             )
                         }
                     }
+
                     NonEventStreamMemberInOutput.OPTIONAL_UNSET -> {
                         tokioTest("without_initial_response") {
                             writeTestBody(
@@ -281,6 +288,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                             )
                         }
                     }
+
                     NonEventStreamMemberInOutput.NONE -> {
                         tokioTest("event_stream_member_only") {
                             writeTestBody(

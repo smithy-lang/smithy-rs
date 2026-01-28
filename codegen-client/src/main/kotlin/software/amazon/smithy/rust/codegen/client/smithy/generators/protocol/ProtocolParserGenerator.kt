@@ -55,7 +55,7 @@ class ProtocolParserGenerator(
             "Bytes" to RuntimeType.Bytes,
             "Headers" to RuntimeType.headers(codegenContext.runtimeConfig),
             "Response" to RuntimeType.smithyRuntimeApi(codegenContext.runtimeConfig).resolve("http::Response"),
-            "http" to RuntimeType.Http,
+            "http" to RuntimeType.Http1x,
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
         )
 
@@ -307,10 +307,12 @@ class ProtocolParserGenerator(
                         fnName, errorSymbol,
                     )
                 }
+
             HttpLocation.DOCUMENT -> {
                 // document is handled separately
                 null
             }
+
             HttpLocation.PAYLOAD -> {
                 val payloadParser: RustWriter.(String) -> Unit = { body ->
                     rust("#T($body).map_err(#T::unhandled)", structuredDataParser.payloadParser(member), errorSymbol)
@@ -327,10 +329,12 @@ class ProtocolParserGenerator(
                     writable { rust("#T(_response_body)?", deserializer) }
                 }
             }
+
             HttpLocation.RESPONSE_CODE ->
                 writable {
                     rust("Some(_response_status as _)")
                 }
+
             HttpLocation.PREFIX_HEADERS -> {
                 val sym = httpBindingGenerator.generateDeserializePrefixHeaderFn(binding)
                 writable {
@@ -345,6 +349,7 @@ class ProtocolParserGenerator(
                     )
                 }
             }
+
             else -> {
                 UNREACHABLE("Unexpected binding location: ${binding.location}")
             }
