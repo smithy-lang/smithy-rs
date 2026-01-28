@@ -159,6 +159,35 @@ open class ServerCodegenVisitor(
         // Use the first protocol as the primary (for backwards compatibility)
         val (protocolShape, protocolGeneratorFactory) = allProtocolPairs.first()
 
+        // Initialize all protocol generators for multi-protocol support first (we need allProtocols for context)
+        // Build temporary generators to get the ServerProtocol objects
+        val tempCodegenContext =
+            ServerCodegenContext(
+                model,
+                serverSymbolProviders.symbolProvider,
+                null,
+                service,
+                protocolShape,
+                settings,
+                serverSymbolProviders.unconstrainedShapeSymbolProvider,
+                serverSymbolProviders.constrainedShapeSymbolProvider,
+                serverSymbolProviders.constraintViolationSymbolProvider,
+                serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
+                isMultiProtocol = isMultiProtocol,
+            )
+
+        allProtocolGenerators =
+            allProtocolPairs.map { (protoShape, factory) ->
+                val protoCodegenContext =
+                    tempCodegenContext.copy(
+                        protocol = protoShape,
+                        isMultiProtocol = isMultiProtocol,
+                    )
+                factory.buildProtocolGenerator(protoCodegenContext)
+            }
+        allProtocols = allProtocolGenerators.map { it.protocol }
+
+        // Now create the final codegenContext with allProtocols included
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -172,6 +201,7 @@ open class ServerCodegenVisitor(
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
                 isMultiProtocol = isMultiProtocol,
+                allProtocols = allProtocols,
             )
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
@@ -196,7 +226,7 @@ open class ServerCodegenVisitor(
             )
         protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
 
-        // Initialize all protocol generators for multi-protocol support
+        // Re-initialize protocol generators with final codegenContext that includes allProtocols
         allProtocolGenerators =
             allProtocolPairs.map { (protoShape, factory) ->
                 val protoCodegenContext =

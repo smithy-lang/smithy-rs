@@ -16,6 +16,9 @@ pub(crate) mod macros;
 
 pub mod body;
 pub(crate) mod error;
+
+/// A type-erased boxed error used throughout the server framework.
+pub use self::error::BoxError;
 pub mod extension;
 pub mod instrumentation;
 pub mod layer;
