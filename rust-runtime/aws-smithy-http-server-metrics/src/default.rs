@@ -9,6 +9,7 @@
 //! to collect standard metrics automatically.
 
 use std::fmt::Debug;
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -16,6 +17,14 @@ use std::time::Duration;
 use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
+
+/// Container for keeping track of state across all requests for the service (all operations) for default metrics
+///
+/// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
+#[derive(Debug, Default, Clone)]
+pub struct DefaultMetricsServiceState {
+    pub(crate) outstanding_requests_counter: Arc<AtomicUsize>,
+}
 
 /// Container for default request and response metrics.
 ///
@@ -48,6 +57,7 @@ pub struct DefaultRequestMetrics {
     pub(crate) service_version: Option<String>,
     pub(crate) operation_name: Option<String>,
     pub(crate) request_id: Option<String>,
+    pub(crate) outstanding_requests: Option<usize>,
 }
 
 /// Default response metrics collected automatically.
@@ -75,6 +85,7 @@ pub struct DefaultRequestMetricsConfig {
     pub(crate) disable_operation_name: bool,
     pub(crate) disable_service_name: bool,
     pub(crate) disable_service_version: bool,
+    pub(crate) disable_outstanding_requests: bool,
 }
 
 /// Configuration for disabling specific default response metrics.
@@ -114,6 +125,7 @@ pub struct DefaultResponseMetricsExtension {
 pub struct DefaultMetricsExtension {
     pub(crate) request_ext: DefaultRequestMetricsExtension,
     pub(crate) response_ext: DefaultResponseMetricsExtension,
+    pub(crate) service_state: DefaultMetricsServiceState,
 }
 impl DefaultMetricsExtension {
     #[doc(hidden)]
@@ -122,6 +134,7 @@ impl DefaultMetricsExtension {
         response_metrics: Arc<Mutex<SlotGuard<DefaultResponseMetrics>>>,
         request_metrics_config: DefaultRequestMetricsConfig,
         response_metrics_config: DefaultResponseMetricsConfig,
+        service_state: DefaultMetricsServiceState,
     ) -> Self {
         Self {
             request_ext: DefaultRequestMetricsExtension {
@@ -132,6 +145,7 @@ impl DefaultMetricsExtension {
                 metrics: response_metrics,
                 config: response_metrics_config,
             },
+            service_state,
         }
     }
 }

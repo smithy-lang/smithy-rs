@@ -142,7 +142,8 @@ fn generate_ext_trait_impl(
                             |req: &mut http::Request<aws_smithy_http_server_metrics::types::ReqBody>,
                             metrics: &mut #struct_ident,
                             req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
-                            res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig| {
+                            res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig,
+                            service_state: aws_smithy_http_server_metrics::default::DefaultMetricsServiceState| {
                                 metrics.default_request_metrics =
                                     Some(metrique::Slot::new(aws_smithy_http_server_metrics::default::DefaultRequestMetrics::default()));
                                 metrics.default_response_metrics =
@@ -167,7 +168,8 @@ fn generate_ext_trait_impl(
                                     std::sync::Arc::new(std::sync::Mutex::new(default_req_metrics_slotguard)),
                                     std::sync::Arc::new(std::sync::Mutex::new(default_res_metrics_slotguard)),
                                     req_config,
-                                    res_config
+                                    res_config,
+                                    service_state,
                                 );
 
                                 req.extensions_mut().insert(ext);
