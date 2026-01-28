@@ -314,7 +314,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.61.4"
+version = "0.61.5"
 dependencies = [
  "aws-smithy-types",
  "criterion",
@@ -390,7 +390,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-experimental"
-version = "0.2.2"
+version = "0.2.3"
 
 [[package]]
 name = "aws-smithy-http"
@@ -759,7 +759,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.60.13"
+version = "0.60.14"
 dependencies = [
  "aws-smithy-protocol-test",
  "base64 0.13.1",

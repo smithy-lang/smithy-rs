@@ -11,7 +11,7 @@ description = """
 Server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.88"
+rust-version = "1.90"
 
 [features]
 default = []

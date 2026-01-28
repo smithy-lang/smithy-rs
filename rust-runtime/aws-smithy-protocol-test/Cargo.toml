@@ -6,7 +6,7 @@ description = "A collection of library functions to validate HTTP requests again
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.90"
 
 [features]
 default = ["http-02x"]

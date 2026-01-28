@@ -108,7 +108,7 @@ impl VersionView<'_> {
 }
 
 impl Versions {
-    fn published(&self) -> VersionView {
+    fn published(&self) -> VersionView<'_> {
         VersionView(self, FilterType::PublishedOnly)
     }
 }
