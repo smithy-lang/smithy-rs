@@ -31,7 +31,7 @@ where
 }
 
 /// Helper trait for functions that initialize a metrics entry for each request
-/// 
+///
 /// # Example
 ///
 /// ```rust,ignore
