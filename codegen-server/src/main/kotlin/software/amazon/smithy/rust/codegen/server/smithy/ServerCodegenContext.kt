@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.ModuleDocProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderInstantiator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.returnSymbolToParseFn
 
 /**
@@ -38,6 +39,8 @@ data class ServerCodegenContext(
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
     /** Indicates if the service supports multiple protocols. When true, protocol-specific suffixes are added to generated types. */
     val isMultiProtocol: Boolean = false,
+    /** List of all protocols supported by this service. Used for multi-protocol code generation. */
+    val allProtocols: List<ServerProtocol> = emptyList(),
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {
