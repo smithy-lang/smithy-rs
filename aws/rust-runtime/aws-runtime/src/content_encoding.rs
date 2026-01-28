@@ -23,7 +23,7 @@ const CHUNK_TERMINATOR_RAW: &[u8] = b"0\r\n";
 
 const TRAILER_SEPARATOR: &[u8] = b":";
 
-const FIXED_CHUNK_SIZE_BYTE: usize = 64 * 1024; // 64 KB
+const DEFAULT_CHUNK_SIZE_BYTE: usize = 64 * 1024; // 64 KB
 
 const SIGNATURE_LENGTH: usize = 64;
 

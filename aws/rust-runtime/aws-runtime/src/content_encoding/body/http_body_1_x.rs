@@ -337,7 +337,7 @@ mod tests {
     use super::{total_rendered_length_of_trailers, trailers_as_aws_chunked_bytes};
     use crate::content_encoding::{
         AwsChunkedBody, AwsChunkedBodyOptions, CHUNK_TERMINATOR_RAW, CRLF_RAW,
-        FIXED_CHUNK_SIZE_BYTE,
+        DEFAULT_CHUNK_SIZE_BYTE,
     };
 
     use aws_smithy_types::body::SdkBody;
@@ -814,7 +814,7 @@ mod tests {
             assert_eq!(options.encoded_length(), 20);
         }
         {
-            let options = AwsChunkedBodyOptions::new((FIXED_CHUNK_SIZE_BYTE + 10) as u64, vec![]);
+            let options = AwsChunkedBodyOptions::new((DEFAULT_CHUNK_SIZE_BYTE + 10) as u64, vec![]);
             /*
              10000\r\n
              65536 bytes of data\r\n
@@ -877,7 +877,7 @@ mod tests {
             assert_eq!(options.encoded_length(), 182);
         }
         {
-            let options = AwsChunkedBodyOptions::new((FIXED_CHUNK_SIZE_BYTE + 10) as u64, vec![])
+            let options = AwsChunkedBodyOptions::new((DEFAULT_CHUNK_SIZE_BYTE + 10) as u64, vec![])
                 .signed_chunked_encoding(true);
             /*
              10000;chunk-signature=<signature>\r\n

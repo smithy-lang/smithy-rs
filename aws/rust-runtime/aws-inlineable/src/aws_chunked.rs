@@ -19,10 +19,15 @@ use aws_smithy_runtime_api::{
     client::{
         interceptors::{context::BeforeTransmitInterceptorContextMut, Intercept},
         runtime_components::RuntimeComponents,
+        runtime_plugin::RuntimePlugin,
     },
     http::Request,
 };
-use aws_smithy_types::{body::SdkBody, config_bag::ConfigBag, error::operation::BuildError};
+use aws_smithy_types::{
+    body::SdkBody,
+    config_bag::{ConfigBag, FrozenLayer, Layer, Storable, StoreReplace},
+    error::operation::BuildError,
+};
 use http_1x::{header, HeaderValue};
 use http_body_1x::Body;
 
@@ -30,10 +35,44 @@ const X_AMZ_DECODED_CONTENT_LENGTH: &str = "x-amz-decoded-content-length";
 const TRAILER_SEPARATOR: &[u8] = b":";
 const SIGNATURE_VALUE_LENGTH: usize = 64;
 
+/// Chunk size configuration for aws-chunked encoding.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ChunkSize {
+    /// Use the specified chunk size in bytes.
+    Configured(usize),
+    /// Disable chunking by using the entire content-length as a single chunk.
+    DisableChunking,
+}
+
+impl Storable for ChunkSize {
+    type Storer = StoreReplace<Self>;
+}
+
+/// Runtime plugin for configuring chunk size.
+#[derive(Debug)]
+pub(crate) struct ChunkSizeRuntimePlugin {
+    chunk_size: ChunkSize,
+}
+
+impl ChunkSizeRuntimePlugin {
+    pub(crate) fn new(chunk_size: ChunkSize) -> Self {
+        Self { chunk_size }
+    }
+}
+
+impl RuntimePlugin for ChunkSizeRuntimePlugin {
+    fn config(&self) -> Option<FrozenLayer> {
+        let mut cfg = Layer::new("chunk_size");
+        cfg.store_put(self.chunk_size);
+        Some(cfg.freeze())
+    }
+}
+
 /// Errors related to constructing aws-chunked encoded HTTP requests.
 #[derive(Debug)]
 enum Error {
     UnsizedRequestBody,
+    ChunkSizeTooSmall { min: usize, actual: usize },
 }
 
 impl fmt::Display for Error {
@@ -42,6 +81,10 @@ impl fmt::Display for Error {
             Self::UnsizedRequestBody => write!(
                 f,
                 "Only request bodies with a known size can be aws-chunked encoded."
+            ),
+            Self::ChunkSizeTooSmall { min, actual } => write!(
+                f,
+                "Chunk size must be at least {min} bytes, but {actual} was provided."
             ),
         }
     }
@@ -84,7 +127,8 @@ impl Intercept for AwsChunkedContentEncodingInterceptor {
 
         let sign_during_encoding = context.request().uri().starts_with("http:");
         let chunked_body_options =
-            create_chunked_body_options(sign_during_encoding, original_body_size, cfg);
+            create_chunked_body_options(sign_during_encoding, original_body_size, cfg)
+                .map_err(BuildError::other)?;
 
         let request = context.request_mut();
         // For for aws-chunked encoding, `x-amz-decoded-content-length` must be set to the original body size.
@@ -183,8 +227,8 @@ fn create_chunked_body_options(
     sign_during_encoding: bool,
     original_body_size: u64,
     cfg: &mut ConfigBag,
-) -> AwsChunkedBodyOptions {
-    let chunked_body_options = if let Some(chunked_body_options) =
+) -> Result<AwsChunkedBodyOptions, Error> {
+    let mut chunked_body_options = if let Some(chunked_body_options) =
         cfg.get_mut_from_interceptor_state::<AwsChunkedBodyOptions>()
     {
         let chunked_body_options = std::mem::take(chunked_body_options);
@@ -193,9 +237,31 @@ fn create_chunked_body_options(
         AwsChunkedBodyOptions::default().with_stream_length(original_body_size)
     };
 
+    // Check if user specified a ChunkSize via .customize().chunk_size()
+    if let Some(user_chunk_size) = cfg.load::<ChunkSize>() {
+        match user_chunk_size {
+            ChunkSize::Configured(size) => {
+                chunked_body_options = chunked_body_options.with_chunk_size(*size);
+            }
+            ChunkSize::DisableChunking => {
+                chunked_body_options =
+                    chunked_body_options.with_chunk_size(original_body_size as usize);
+            }
+        }
+    }
+
+    // Validate chunk size
+    let chunk_size = chunked_body_options.chunk_size();
+    if chunk_size < 8192 {
+        return Err(Error::ChunkSizeTooSmall {
+            min: 8192,
+            actual: chunk_size,
+        });
+    }
+
     let chunked_body_options = chunked_body_options.signed_chunked_encoding(sign_during_encoding);
 
-    if sign_during_encoding && !chunked_body_options.is_trailer_empty() {
+    let chunked_body_options = if sign_during_encoding && !chunked_body_options.is_trailer_empty() {
         // When signing during aws-chunked encoding, append the length for the trailer signature.
         chunked_body_options.with_trailer_len(
             (X_AMZ_TRAILER_SIGNATURE.len() + TRAILER_SEPARATOR.len() + SIGNATURE_VALUE_LENGTH)
@@ -203,7 +269,9 @@ fn create_chunked_body_options(
         )
     } else {
         chunked_body_options
-    }
+    };
+
+    Ok(chunked_body_options)
 }
 
 #[cfg(test)]

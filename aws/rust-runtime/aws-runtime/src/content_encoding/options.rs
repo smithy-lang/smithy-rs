@@ -6,7 +6,7 @@
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 
 use super::{
-    CHUNK_SIGNATURE_BEGIN, CHUNK_TERMINATOR, CRLF, FIXED_CHUNK_SIZE_BYTE, SIGNATURE_LENGTH,
+    CHUNK_SIGNATURE_BEGIN, CHUNK_TERMINATOR, CRLF, DEFAULT_CHUNK_SIZE_BYTE, SIGNATURE_LENGTH,
 };
 
 /// Options used when constructing an [`AwsChunkedBody`](super::AwsChunkedBody).
@@ -23,7 +23,8 @@ pub struct AwsChunkedBodyOptions {
     pub(crate) disabled: bool,
     /// Whether chunks and trailer are signed.
     pub(crate) is_signed: bool,
-    /// The size of each chunk in bytes, only for testing.
+    /// The size of each chunk in bytes.
+    /// None means use default (64 KiB)
     pub(crate) chunk_size: Option<usize>,
 }
 
@@ -43,14 +44,20 @@ impl AwsChunkedBodyOptions {
         }
     }
 
-    #[allow(dead_code)] // for testing
-    pub(super) fn with_chunk_size(mut self, chunk_size: usize) -> Self {
+    /// Set the chunk size for aws-chunked encoding.
+    ///
+    /// This allows customizing the size of each chunk when using aws-chunked encoding.
+    /// The chunk size is validated by the interceptor (minimum 8 KiB).
+    pub fn with_chunk_size(mut self, chunk_size: usize) -> Self {
         self.chunk_size = Some(chunk_size);
         self
     }
 
-    pub(super) fn chunk_size(&self) -> usize {
-        self.chunk_size.unwrap_or(FIXED_CHUNK_SIZE_BYTE)
+    /// Get the chunk size that will be used for aws-chunked encoding.
+    ///
+    /// Returns the configured chunk size, or the default if not set.
+    pub fn chunk_size(&self) -> usize {
+        self.chunk_size.unwrap_or(DEFAULT_CHUNK_SIZE_BYTE)
     }
 
     pub(super) fn total_trailer_length(&self) -> u64 {

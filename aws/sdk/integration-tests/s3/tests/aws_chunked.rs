@@ -8,12 +8,15 @@ use std::task::{Context, Poll};
 use std::time::{Duration, UNIX_EPOCH};
 
 use aws_runtime::auth::PayloadSigningOverride;
+use aws_runtime::content_encoding::header::X_AMZ_TRAILER_SIGNATURE;
 use aws_runtime::content_encoding::{AwsChunkedBodyOptions, DeferredSigner};
 use aws_sdk_s3::config::Region;
+use aws_sdk_s3::error::DisplayErrorContext;
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::{Client, Config};
 use aws_smithy_async::test_util::ManualTimeSource;
 use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_http_client::test_util::dvr::ReplayingClient;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
@@ -28,7 +31,7 @@ use pin_project_lite::pin_project;
 //
 // Chunk signing during AWS chunked content encoding only occurs when requests are sent
 // without TLS. This interceptor overrides the `AwsChunkedContentEncodingInterceptor`
-// configuration to enable chunk signing regardless of transport security.
+// configuration to enable chunk signing for testing.
 #[derive(Debug)]
 struct ForceChunkedSigningInterceptor {
     time_source: ManualTimeSource,
@@ -52,7 +55,7 @@ impl Intercept for ForceChunkedSigningInterceptor {
 
         let chunked_body_options = std::mem::take(chunked_body_options)
             .signed_chunked_encoding(true)
-            .with_trailer_len(("x-amz-trailer-signature".len() + ":".len() + 64) as u64);
+            .with_trailer_len((X_AMZ_TRAILER_SIGNATURE.len() + ":".len() + 64) as u64);
 
         cfg.interceptor_state().store_put(chunked_body_options);
 
@@ -116,21 +119,103 @@ impl Body for TestBody {
 async fn test_signing_for_aws_chunked_content_encoding() {
     let time_source = ManualTimeSource::new(UNIX_EPOCH + Duration::from_secs(1234567890));
 
-    let http_client = ReplayingClient::from_file("tests/data/chunk_signing/chunk-signing.json")
+    let http_client = ReplayingClient::from_file("tests/data/aws_chunked/chunk-signing.json")
         .expect("recorded HTTP communication exists");
     let config = Config::builder()
         .with_test_defaults()
         .http_client(http_client.clone())
         .region(Region::new("us-east-1"))
         .time_source(SharedTimeSource::new(time_source.clone()))
+        .chunk_size(Some(8 * 1024)) // 8 KiB chunk size
         .build();
 
     let client = Client::from_conf(config);
 
-    let bucket = "test-bucket";
+    // 10 KiB of 'a' characters. With a 8 KiB chunk size, the payload splits into four chunks:
+    // 8 KiB, 2 KiB, 0 bytes, and the final chunk containing trailing headers.
+    let data = "a".repeat(10 * 1024);
+    let body = TestBody {
+        data: Some(Bytes::from(data)),
+    };
+    let body = ByteStream::from_body_1_x(body);
 
-    // 65 KB of 'a' characters. With a 64 KB chunk size, the payload splits into four chunks:
-    // 64 KB, 1 KB, 0 bytes, and the final chunk containing trailing headers.
+    let _ = dbg!(client
+        .put_object()
+        .body(body)
+        .bucket("test-bucket")
+        .key("10KiBofA.txt")
+        .customize()
+        .config_override(
+            Config::builder().interceptor(ForceChunkedSigningInterceptor { time_source })
+        )
+        .send()
+        .await
+        .unwrap());
+
+    http_client
+        .validate_body_and_headers(
+            Some(&["content-encoding", "x-amz-content-sha256"]),
+            "application/octet-stream",
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_aws_chunked_content_encoding_with_custom_chunk_size() {
+    let http_client = ReplayingClient::from_file("tests/data/aws_chunked/custom-chunk-size.json")
+        .expect("recorded HTTP communication exists");
+    let config = Config::builder()
+        .with_test_defaults()
+        .http_client(http_client.clone())
+        .region(Region::new("us-east-1"))
+        .build();
+
+    let client = Client::from_conf(config);
+
+    // 10 KiB of 'a' characters
+    let data = "a".repeat(10 * 1024);
+    let body = TestBody {
+        data: Some(Bytes::from(data)),
+    };
+    let body = ByteStream::from_body_1_x(body);
+
+    // Demonstrate that chunk size can be overridden per-request
+    let _ = dbg!(client
+        .put_object()
+        .body(body)
+        .bucket("test-bucket")
+        .key("10KiBofA.txt")
+        .customize()
+        .config_override(Config::builder().chunk_size(Some(8 * 1024)))
+        .send()
+        .await
+        .unwrap());
+
+    http_client
+        .validate_body_and_headers(
+            Some(&["content-encoding", "x-amz-content-sha256"]),
+            "application/octet-stream",
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn test_aws_chunked_content_encoding_with_no_chunking() {
+    let http_client = ReplayingClient::from_file("tests/data/aws_chunked/no-chunking.json")
+        .expect("recorded HTTP communication exists");
+    let config = Config::builder()
+        .with_test_defaults()
+        .http_client(http_client.clone())
+        .region(Region::new("us-east-1"))
+        .chunk_size(None) // No chunking
+        .build();
+
+    let client = Client::from_conf(config);
+
+    // 65 KiB of 'a' characters. Without chunking, the payload splits into two chunks:
+    // 65 KiB and the final chunk containg 0 bytes data and trailing headers.
     let data = "a".repeat(65 * 1024);
     let body = TestBody {
         data: Some(Bytes::from(data)),
@@ -140,19 +225,54 @@ async fn test_signing_for_aws_chunked_content_encoding() {
     let _ = dbg!(client
         .put_object()
         .body(body)
-        .bucket(bucket)
-        .key("mytest.txt")
-        .customize()
-        .config_override(
-            Config::builder().interceptor(ForceChunkedSigningInterceptor { time_source })
-        )
+        .bucket("test-bucket")
+        .key("65KiBofA.txt")
         .send()
         .await
         .unwrap());
 
-    // Verify content-encoding is `aws-chunked` and all chunk signatures match.
     http_client
-        .validate_body_and_headers(Some(&["content-encoding"]), "application/octet-stream")
+        .validate_body_and_headers(
+            Some(&["content-encoding", "x-amz-content-sha256"]),
+            "application/octet-stream",
+        )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn test_chunk_size_too_small_fails() {
+    let (http_client, _rcvr) = capture_request(None);
+    let config = Config::builder()
+        .with_test_defaults()
+        .http_client(http_client)
+        .region(Region::new("us-east-1"))
+        .chunk_size(Some(4096)) // Too small - less than 8 KiB
+        .build();
+
+    let client = Client::from_conf(config);
+
+    let data = "a".repeat(10 * 1024);
+    let body = TestBody {
+        data: Some(Bytes::from(data)),
+    };
+    let body = ByteStream::from_body_1_x(body);
+
+    let result = dbg!(
+        client
+            .put_object()
+            .body(body)
+            .bucket("test-bucket")
+            .key("10KiBofA.txt")
+            .send()
+            .await
+    );
+
+    assert!(result.is_err());
+    let err_msg = DisplayErrorContext(&result.unwrap_err()).to_string();
+    assert!(
+        err_msg.contains("Chunk size must be at least 8192 bytes, but 4096 was provided"),
+        "Expected error about minimum chunk size, got: {}",
+        err_msg
+    );
 }
