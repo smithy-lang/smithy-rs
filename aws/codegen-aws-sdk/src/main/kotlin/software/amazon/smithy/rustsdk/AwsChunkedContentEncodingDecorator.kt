@@ -46,15 +46,38 @@ class AwsChunkedContentEncodingDecorator : ClientCodegenDecorator {
     ) = baseCustomizations + AwsChunkedOperationCustomization(codegenContext, operation)
 }
 
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Replace this heuristic with a dedicated
+//  Smithy trait once available to determine whether operations require aws-chunked encoding.
+private fun operationRequiresAwsChunked(
+    codegenContext: ClientCodegenContext,
+    operation: OperationShape,
+): Boolean {
+    val checksumTrait = operation.getTrait<HttpChecksumTrait>() ?: return false
+    val requestAlgorithmMember =
+        checksumTrait.requestAlgorithmMemberShape(codegenContext, operation) ?: return false
+    requestAlgorithmMember.getTrait<HttpHeaderTrait>()?.value ?: return false
+    val input = codegenContext.model.expectShape(operation.inputShape, StructureShape::class.java)
+    return input.hasStreamingMember(codegenContext.model)
+}
+
+private fun serviceRequiresAwsChunked(codegenContext: ClientCodegenContext): Boolean =
+    codegenContext.serviceShape.allOperations.any { operationId ->
+        val operation = codegenContext.model.expectShape(operationId, OperationShape::class.java)
+        operationRequiresAwsChunked(codegenContext, operation)
+    }
+
 private class AwsChunkedConfigCustomization(
     codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val moduleUseName = codegenContext.moduleUseName()
+    private val serviceRequiresChunking = serviceRequiresAwsChunked(codegenContext)
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
                 ServiceConfig.BuilderImpl -> {
+                    if (!serviceRequiresChunking) return@writable
                     rustTemplate(
                         """
                         /// Sets the chunk size for [`aws-chunked encoding`].
@@ -72,7 +95,7 @@ private class AwsChunkedConfigCustomization(
                         ///
                         /// ## Example - Custom chunk size
                         /// ```no_run
-                        /// ## use aws_sdk_s3::{Client, Config};
+                        /// ## use $moduleUseName::{Client, Config};
                         /// ## async fn example(client: Client) -> Result<(), Box<dyn std::error::Error>> {
                         /// let config = Config::builder()
                         ///     .chunk_size(Some(10240)) // 10 KiB chunks
@@ -125,24 +148,14 @@ private class AwsChunkedOperationCustomization(
     private val codegenContext: ClientCodegenContext,
     private val operation: OperationShape,
 ) : OperationCustomization() {
-    private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override fun section(section: OperationSection) =
         writable {
-            // TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Remove all of these early returns
-            //  once we have the dedicated trait available in Smithy.
-            val checksumTrait = operation.getTrait<HttpChecksumTrait>() ?: return@writable
-            val requestAlgorithmMember =
-                checksumTrait.requestAlgorithmMemberShape(codegenContext, operation) ?: return@writable
-            requestAlgorithmMember.getTrait<HttpHeaderTrait>()?.value ?: return@writable
-            val input = model.expectShape(operation.inputShape, StructureShape::class.java)
-            if (!input.hasStreamingMember(model)) {
-                return@writable
-            }
-
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
+                    if (!operationRequiresAwsChunked(codegenContext, operation)) return@writable
+
                     section.registerInterceptor(runtimeConfig, this) {
                         rustTemplate(
                             """
