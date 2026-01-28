@@ -13,6 +13,7 @@ use metrique::OnParentDrop;
 use metrique::Slot;
 
 use crate::default::DefaultMetricsExtension;
+use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultRequestMetricsExtension;
@@ -303,7 +304,8 @@ macro_rules! impl_build_for_state {
                     |req: &mut Request<ReqBody>,
                      metrics: &mut DefaultMetrics,
                      req_config: DefaultRequestMetricsConfig,
-                     res_config: DefaultResponseMetricsConfig| {
+                     res_config: DefaultResponseMetricsConfig,
+                     service_state: DefaultMetricsServiceState| {
                         metrics.default_request_metrics =
                             Some(Slot::new(DefaultRequestMetrics::default()));
                         metrics.default_response_metrics =
@@ -333,6 +335,7 @@ macro_rules! impl_build_for_state {
                                 metrics: Arc::new(Mutex::new(default_res_metrics_slotguard)),
                                 config: res_config,
                             },
+                            service_state,
                         };
 
                         req.extensions_mut().insert(ext);

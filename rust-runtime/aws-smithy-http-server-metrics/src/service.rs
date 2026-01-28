@@ -6,6 +6,7 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 
@@ -14,6 +15,7 @@ use http::Response;
 use pin_project_lite::pin_project;
 use tower::Service;
 
+use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::traits::InitMetrics;
@@ -39,6 +41,7 @@ pin_project! {
         inner: F,
         metrics: metrique::AppendAndCloseOnDrop<E, S>,
         response_metrics: Option<Rs>,
+        default_service_state: DefaultMetricsServiceState
     }
 }
 
@@ -57,13 +60,23 @@ where
 
         match this.inner.poll(cx) {
             Poll::Ready(Ok(mut res)) => {
+                this.default_service_state
+                    .outstanding_requests_counter
+                    .fetch_sub(1, Ordering::Relaxed);
+
                 if let Some(response_metrics) = this.response_metrics {
                     (response_metrics)(&mut res, this.metrics);
                 }
 
                 Poll::Ready(Ok(res))
             }
-            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
+            Poll::Ready(Err(e)) => {
+                this.default_service_state
+                    .outstanding_requests_counter
+                    .fetch_sub(1, Ordering::Relaxed);
+
+                Poll::Ready(Err(e))
+            }
             Poll::Pending => Poll::Pending,
         }
     }
@@ -89,9 +102,11 @@ where
         &mut E,
         DefaultRequestMetricsConfig,
         DefaultResponseMetricsConfig,
+        DefaultMetricsServiceState,
     ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
+    pub(crate) default_service_state: DefaultMetricsServiceState,
 
     pub(crate) _entry_sink: PhantomData<S>,
 }
@@ -113,6 +128,7 @@ where
             default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
+            default_service_state: self.default_service_state.clone(),
 
             _entry_sink: PhantomData,
         }
@@ -139,11 +155,16 @@ where
     fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
         let mut metrics = (self.init_metrics)();
 
+        self.default_service_state
+            .outstanding_requests_counter
+            .fetch_add(1, Ordering::Relaxed);
+
         (self.default_metrics_extension_fn)(
             &mut req,
             &mut metrics,
             self.default_req_metrics_config.clone(),
             self.default_res_metrics_config.clone(),
+            self.default_service_state.clone(),
         );
 
         if let Some(request_metrics) = &self.request_metrics {
@@ -155,6 +176,7 @@ where
             inner: self.inner.call(req),
             metrics,
             response_metrics: self.response_metrics.clone(),
+            default_service_state: self.default_service_state.clone(),
         }
     }
 }

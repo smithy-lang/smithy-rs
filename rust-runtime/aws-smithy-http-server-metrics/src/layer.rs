@@ -11,6 +11,7 @@ use thiserror::Error;
 use tower::Layer;
 
 use crate::default::DefaultMetrics;
+use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::layer::builder::DefaultMetricsBuildExt;
@@ -106,6 +107,7 @@ pub struct MetricsLayer<
         &mut E,
         DefaultRequestMetricsConfig,
         DefaultResponseMetricsConfig,
+        DefaultMetricsServiceState,
     ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
@@ -131,6 +133,7 @@ where
             &mut E,
             DefaultRequestMetricsConfig,
             DefaultResponseMetricsConfig,
+            DefaultMetricsServiceState,
         ),
         default_req_metrics_config: DefaultRequestMetricsConfig,
         default_res_metrics_config: DefaultResponseMetricsConfig,
@@ -225,6 +228,7 @@ where
             default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
+            default_service_state: DefaultMetricsServiceState::default(),
 
             _entry_sink: PhantomData,
         }

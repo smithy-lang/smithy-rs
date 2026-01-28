@@ -5,6 +5,7 @@
 
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
@@ -29,7 +30,6 @@ use tracing;
 use crate::default::DefaultMetrics;
 use crate::default::DefaultMetricsExtension;
 use crate::default::DefaultRequestMetrics;
-use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
@@ -211,6 +211,9 @@ where
     Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
     Ser::Future: Send + 'static,
 {
+    /// Gets the default request metrics that can be retrieved from the request object directly
+    ///
+    /// Assigns None to those that need information from the outer metrics layer to be set
     fn get_default_request_metrics(&self, req: &Request<ReqBody>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
             service_name: Some(self.service_name.to_string()),
@@ -220,6 +223,7 @@ where
                 .extensions()
                 .get::<ServerRequestId>()
                 .map(|id| id.to_string()),
+            outstanding_requests: None,
         }
     }
 }
@@ -243,10 +247,8 @@ where
 
         match maybe_default_metrics_ext {
             Some(ext) => {
-                let configured_default_request_metrics = configure_default_request_metrics(
-                    default_request_metrics,
-                    &ext.request_ext.config,
-                );
+                let extended_default_request_metrics =
+                    extend_default_request_metrics(default_request_metrics, &ext);
 
                 ext.request_ext.metrics.lock().map_or_else(
                     |e| {
@@ -254,7 +256,7 @@ where
                             "Failed to acquire lock on DefaultRequestMetrics with error {e}. Metrics may be incomplete."
                         )
                     },
-                    |mut metrics| **metrics = configured_default_request_metrics,
+                    |mut metrics| **metrics = extended_default_request_metrics,
                 );
 
                 let response_ext = ext.response_ext.clone();
@@ -283,8 +285,7 @@ where
 
                 let mut metrics = DefaultMetrics::default().append_on_drop(sink);
 
-                metrics.default_request_metrics =
-                    Some(Slot::new(self.get_default_request_metrics(&req)));
+                metrics.default_request_metrics = Some(Slot::new(default_request_metrics));
 
                 metrics
                     .default_request_metrics
@@ -329,13 +330,21 @@ fn get_default_response_metrics(
     }
 }
 
-fn configure_default_request_metrics(
+fn extend_default_request_metrics(
     metrics: DefaultRequestMetrics,
-    config: &DefaultRequestMetricsConfig,
+    ext: &DefaultMetricsExtension,
 ) -> DefaultRequestMetrics {
+    let config = &ext.request_ext.config;
+
     if config.disable_all {
         return DefaultRequestMetrics::default();
     }
+
+    let outstanding_requests = (!config.disable_outstanding_requests).then_some(
+        ext.service_state
+            .outstanding_requests_counter
+            .load(Ordering::Relaxed),
+    );
 
     DefaultRequestMetrics {
         service_name: metrics
@@ -348,6 +357,7 @@ fn configure_default_request_metrics(
             .operation_name
             .filter(|_| !config.disable_operation_name),
         request_id: metrics.request_id.filter(|_| !config.disable_request_id),
+        outstanding_requests,
     }
 }
 
