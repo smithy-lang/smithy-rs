@@ -88,8 +88,8 @@ private class AwsChunkedConfigCustomization(
                         /// The minimum chunk size of 8 KiB is validated when the request is sent.
                         ///
                         /// **Note:** This setting only applies to operations that support aws-chunked encoding
-                        /// and has no effect on other operations. When not set, a default chunk size of 64 KiB
-                        /// is used.
+                        /// and has no effect on other operations. If this method is not invoked, a default
+                        /// chunk size of 64 KiB is used.
                         ///
                         /// [`aws-chunked encoding`]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html
                         ///
