@@ -84,6 +84,7 @@ RUN yum -y install --allowerasing \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
+    rustup target add aarch64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
     rustup target add wasm32-wasip1; \
     rustup target add wasm32-wasip2; \
