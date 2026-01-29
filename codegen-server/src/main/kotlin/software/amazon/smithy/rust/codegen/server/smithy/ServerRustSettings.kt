@@ -190,7 +190,7 @@ data class ServerCodegenConfig(
                 addValidationExceptionToConstrainedOperations =
                     node.get().getBooleanMember(
                         "addValidationExceptionToConstrainedOperations",
-                    ) as Boolean?,
+                    ).orElse(null)?.value,
                 alwaysSendEventStreamInitialResponse =
                     node.get().getBooleanMemberOrDefault(
                         "alwaysSendEventStreamInitialResponse",
