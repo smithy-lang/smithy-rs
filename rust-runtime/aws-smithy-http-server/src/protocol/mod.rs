@@ -35,7 +35,8 @@ pub mod test_helpers {
         B: http_body::Body + std::marker::Unpin,
         B::Error: std::fmt::Debug,
     {
-        let body_bytes = hyper::body::to_bytes(body).await.unwrap();
+        use http_body_util::BodyExt;
+        let body_bytes = body.collect().await.unwrap().to_bytes();
         String::from(std::str::from_utf8(&body_bytes).unwrap())
     }
 }

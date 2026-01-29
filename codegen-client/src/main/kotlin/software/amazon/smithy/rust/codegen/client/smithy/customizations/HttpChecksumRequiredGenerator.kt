@@ -42,16 +42,20 @@ class HttpChecksumRequiredGenerator(
                             "#{HttpChecksumRequiredRuntimePlugin}::new()",
                             "HttpChecksumRequiredRuntimePlugin" to
                                 InlineDependency.forRustFile(
-                                    RustModule.pubCrate("client_http_checksum_required", parent = ClientRustModule.root),
+                                    RustModule.pubCrate(
+                                        "client_http_checksum_required",
+                                        parent = ClientRustModule.root,
+                                    ),
                                     "/inlineable/src/client_http_checksum_required.rs",
                                     CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig),
                                     CargoDependency.smithyTypes(codegenContext.runtimeConfig),
-                                    CargoDependency.Http,
+                                    CargoDependency.Http1x,
                                     CargoDependency.Md5,
                                 ).toType().resolve("HttpChecksumRequiredRuntimePlugin"),
                         )
                     }
                 }
+
             else -> emptySection
         }
     }

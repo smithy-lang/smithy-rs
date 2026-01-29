@@ -12,7 +12,7 @@
 ///
 /// The example can be run using `cargo run --example mock-request`.
 ///
-use aws_smithy_runtime::client::http::test_util::capture_request;
+use aws_smithy_http_client::test_util::capture_request;
 use pokemon_service_client::primitives::SdkBody;
 use pokemon_service_client::Client as PokemonClient;
 use pokemon_service_client_usage::{setup_tracing_subscriber, POKEMON_SERVICE_URL};

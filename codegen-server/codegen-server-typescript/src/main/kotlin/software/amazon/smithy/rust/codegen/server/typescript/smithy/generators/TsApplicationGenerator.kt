@@ -54,7 +54,7 @@ class TsApplicationGenerator(
             "hyper" to TsServerCargoDependency.Hyper.toType(),
             "HashMap" to RuntimeType.HashMap,
             "parking_lot" to TsServerCargoDependency.ParkingLot.toType(),
-            "http" to RuntimeType.Http,
+            "http" to RuntimeType.Http0x,
             "socket2" to TsServerCargoDependency.Socket2.toType(),
         )
 

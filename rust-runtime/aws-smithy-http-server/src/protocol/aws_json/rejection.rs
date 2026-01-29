@@ -9,6 +9,8 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ResponseRejection {
+    #[error("error building HTTP response: {0}")]
+    Build(#[from] aws_smithy_types::error::operation::BuildError),
     #[error("error serializing JSON-encoded body: {0}")]
     Serialization(#[from] aws_smithy_types::error::operation::SerializationError),
     #[error("error building HTTP response: {0}")]
@@ -39,5 +41,17 @@ impl From<std::convert::Infallible> for RequestRejection {
     }
 }
 
+// Conversion from crate::Error is needed for custom body types and testing scenarios.
+// When using BoxBody or custom body implementations, errors are crate::Error, not hyper::Error.
+impl From<crate::Error> for RequestRejection {
+    fn from(err: crate::Error) -> Self {
+        Self::BufferHttpBodyBytes(err)
+    }
+}
+
+// Hyper's HTTP server provides requests with `hyper::body::Incoming`, which has error type
+// `hyper::Error`. During request deserialization (FromRequest), body operations can produce
+// this error, so we need this conversion to handle it within the framework.
 convert_to_request_rejection!(hyper::Error, BufferHttpBodyBytes);
+
 convert_to_request_rejection!(Box<dyn std::error::Error + Send + Sync + 'static>, BufferHttpBodyBytes);

@@ -28,7 +28,8 @@ class AwsChunkedContentEncodingDecorator : ClientCodegenDecorator {
     // This decorator must decorate after any of the following:
     // - HttpRequestChecksumDecorator
     // - HttpRequestCompressionDecorator
-    override val order: Byte = (minOf(HttpRequestChecksumDecorator.ORDER, HttpRequestCompressionDecorator.ORDER) - 1).toByte()
+    override val order: Byte =
+        (minOf(HttpRequestChecksumDecorator.ORDER, HttpRequestCompressionDecorator.ORDER) - 1).toByte()
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -81,8 +82,8 @@ private fun RuntimeConfig.awsChunked() =
         InlineAwsDependency.forRustFile(
             "aws_chunked", visibility = Visibility.PUBCRATE,
             CargoDependency.Bytes,
-            CargoDependency.Http,
-            CargoDependency.HttpBody,
+            CargoDependency.Http1x,
+            CargoDependency.HttpBody1x,
             CargoDependency.Tracing,
             AwsCargoDependency.awsRuntime(this).withFeature("http-02x"),
             CargoDependency.smithyRuntimeApiClient(this),

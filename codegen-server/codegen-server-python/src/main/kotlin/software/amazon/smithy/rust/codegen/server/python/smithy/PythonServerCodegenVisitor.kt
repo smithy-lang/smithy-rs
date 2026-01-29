@@ -19,6 +19,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplGenerator
@@ -62,6 +63,20 @@ class PythonServerCodegenVisitor(
     private val codegenDecorator: ServerCodegenDecorator,
 ) : ServerCodegenVisitor(context, codegenDecorator) {
     init {
+        // Python server bindings are only compatible with the legacy HTTP 0.x server.
+        // Force HTTP 0.x regardless of configuration settings.
+        // `publicConstrainedTypes` must always be `false` for the Python server, since Python generates its own
+        // wrapper newtypes.
+        settings =
+            settings.copy(
+                runtimeConfig = settings.runtimeConfig.copy(httpVersion = HttpVersion.Http0x),
+                codegenConfig =
+                    settings.codegenConfig.copy(
+                        publicConstrainedTypes = false,
+                        http1x = false,
+                    ),
+            )
+
         val rustSymbolProviderConfig =
             RustSymbolProviderConfig(
                 runtimeConfig = settings.runtimeConfig,
@@ -82,10 +97,6 @@ class PythonServerCodegenVisitor(
         protocolGeneratorFactory = generator
 
         model = codegenDecorator.transformModel(service, baseModel, settings)
-
-        // `publicConstrainedTypes` must always be `false` for the Python server, since Python generates its own
-        // wrapper newtypes.
-        settings = settings.copy(codegenConfig = settings.codegenConfig.copy(publicConstrainedTypes = false))
 
         fun baseSymbolProviderFactory(
             settings: ServerRustSettings,

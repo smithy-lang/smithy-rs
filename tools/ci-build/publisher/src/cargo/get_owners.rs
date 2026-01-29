@@ -82,7 +82,7 @@ mod tests {
         .spawn()
         .await;
 
-        assert!(result.is_err(), "expected error, got {:?}", result);
+        assert!(result.is_err(), "expected error, got {result:?}");
         assert_eq!(
             "Failed to get crate owners:\n\
             Status: 1\n\

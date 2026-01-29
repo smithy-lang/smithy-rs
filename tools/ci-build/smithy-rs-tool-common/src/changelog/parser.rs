@@ -130,7 +130,7 @@ mod tests {
                 ]
             }
         "#;
-        let changelog = Json::default().parse(json).unwrap();
+        let changelog = Json.parse(json).unwrap();
         assert!(changelog.smithy_rs.is_empty());
         assert_eq!(1, changelog.aws_sdk_rust.len());
         assert_eq!("Some change", changelog.aws_sdk_rust[0].message);
@@ -152,7 +152,7 @@ mod tests {
             kind = "Documentation"
             message = "Updated some docs"
         "#;
-        let changelog = Toml::default().parse(toml).unwrap();
+        let changelog = Toml.parse(toml).unwrap();
         assert_eq!(2, changelog.sdk_models.len());
         assert_eq!(
             SdkModelEntry {

@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.LogMessage
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTest {
@@ -68,6 +69,7 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
                 serverIntegrationTest(
                     model,
                     additionalDecorators = listOf(validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator),
+                    testCoverage = HttpTestType.Default,
                 )
             }
         val exceptionCause = (exception.cause!! as ValidationResult)

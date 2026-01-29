@@ -24,7 +24,7 @@ use aws_smithy_runtime_api::http::Request;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::RequestChecksumCalculation;
 use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
-use http::HeaderMap;
+use http_1x::{HeaderMap, HeaderName};
 use std::str::FromStr;
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::Ordering;
@@ -181,6 +181,7 @@ where
             // Disable aws-chunked encoding since either the user has set a custom checksum
             cfg.interceptor_state()
                 .store_put(AwsChunkedBodyOptions::disable_chunked_encoding());
+
             return Ok(());
         }
 
@@ -216,7 +217,6 @@ where
         }
 
         cfg.interceptor_state().store_put(state);
-
         Ok(())
     }
 
@@ -259,7 +259,7 @@ where
             None => {
                 tracing::debug!("applying {checksum_algorithm:?} of the request body as a trailer");
                 context.request_mut().headers_mut().insert(
-                    http::header::HeaderName::from_static("x-amz-trailer"),
+                    HeaderName::from_static("x-amz-trailer"),
                     checksum.header_name(),
                 );
 
@@ -309,7 +309,7 @@ where
                 let body =
                     calculate::ChecksumBody::new(body, checksum).with_cache(checksum_cache.clone());
 
-                SdkBody::from_body_0_4(body)
+                SdkBody::from_body_1_x(body)
             })
         };
 
@@ -424,7 +424,7 @@ mod tests {
     use aws_smithy_types::base64;
     use aws_smithy_types::byte_stream::ByteStream;
     use bytes::BytesMut;
-    use http_body::Body;
+    use http_body_util::BodyExt;
     use tempfile::NamedTempFile;
 
     fn create_test_interceptor() -> RequestChecksumInterceptor<
@@ -491,8 +491,17 @@ mod tests {
         let mut body = ctx.request().body().try_clone().expect("body is retryable");
 
         let mut body_data = BytesMut::new();
-        while let Some(data) = body.data().await {
-            body_data.extend_from_slice(&data.unwrap())
+        let mut header_value = None;
+        while let Some(Ok(frame)) = body.frame().await {
+            if frame.is_data() {
+                let data = frame.into_data().unwrap();
+                body_data.extend_from_slice(&data);
+            } else {
+                let trailers = frame.into_trailers().unwrap();
+                if let Some(hv) = trailers.get("x-amz-checksum-crc32c") {
+                    header_value = Some(hv.to_str().unwrap().to_owned());
+                }
+            }
         }
         let body_str = std::str::from_utf8(&body_data).unwrap();
         let expected = format!("This is a large file created for testing purposes 9999");
@@ -501,7 +510,14 @@ mod tests {
             "expected '{body_str}' to end with '{expected}'"
         );
         let expected_checksum = base64::encode(&crc32c_checksum);
-        while let Ok(Some(trailer)) = body.trailers().await {
+        assert_eq!(
+            header_value.as_ref(),
+            Some(&expected_checksum),
+            "expected checksum '{header_value:?}' to match '{expected_checksum}'"
+        );
+
+        let collected_body = body.collect().await.unwrap();
+        while let Some(trailer) = collected_body.trailers() {
             if let Some(header_value) = trailer.get("x-amz-checksum-crc32c") {
                 let header_value = header_value.to_str().unwrap();
                 assert_eq!(

@@ -43,13 +43,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use hyper::server::conn::AddrStream;
 use tower::{Layer, Service};
 use tower_http::add_extension::{AddExtension, AddExtensionLayer};
 
 use crate::request::connect_info::ConnectInfo;
 
-/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`http::Request`]s.
+/// A [`MakeService`] used to insert [`ConnectInfo<T>`] into [`Request`](http::Request)s.
 ///
 /// The `T` must be derivable from the underlying IO resource using the [`Connected`] trait.
 ///
@@ -101,9 +100,18 @@ pub trait Connected<T>: Clone {
     fn connect_info(target: T) -> Self;
 }
 
-impl Connected<&AddrStream> for SocketAddr {
-    fn connect_info(target: &AddrStream) -> Self {
-        target.remote_addr()
+impl Connected<SocketAddr> for SocketAddr {
+    fn connect_info(target: SocketAddr) -> Self {
+        target
+    }
+}
+
+impl<'a, L> Connected<crate::serve::IncomingStream<'a, L>> for SocketAddr
+where
+    L: crate::serve::Listener<Addr = SocketAddr>,
+{
+    fn connect_info(target: crate::serve::IncomingStream<'a, L>) -> Self {
+        *target.remote_addr()
     }
 }
 

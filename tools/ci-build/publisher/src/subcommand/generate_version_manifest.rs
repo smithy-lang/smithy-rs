@@ -151,12 +151,7 @@ fn generate_release_metadata(
 fn parse_version(name: &str, value: &str) -> Result<Version> {
     match Version::parse(value) {
         Ok(version) => Ok(version),
-        Err(err) => bail!(
-            "Failed to parse version number `{}` from `{}`: {}",
-            value,
-            name,
-            err
-        ),
+        Err(err) => bail!("Failed to parse version number `{value}` from `{name}`: {err}"),
     }
 }
 
@@ -202,10 +197,9 @@ fn find_released_versions(
             && !allowed_missing_crates.contains(&unrecent_crate_name.as_str())
         {
             bail!(
-                "Crate `{}` was included in the previous release's `versions.toml`, \
+                "Crate `{unrecent_crate_name}` was included in the previous release's `versions.toml`, \
                  but is not included in the upcoming release. If this is expected, update the \
-                 publisher tool to expect and allow it.",
-                unrecent_crate_name
+                 publisher tool to expect and allow it."
             )
         }
     }
@@ -320,8 +314,7 @@ mod tests {
         let error = format!("{}", result.err().unwrap());
         assert!(
             error.starts_with("Crate `aws-config` was included in"),
-            "Unexpected error: {}",
-            error
+            "Unexpected error: {error}"
         );
     }
 
@@ -378,7 +371,7 @@ mod tests {
         assert_eq!("0.12.0", result.get("aws-config").unwrap());
         assert_eq!("0.14.0", result.get("aws-sdk-s3").unwrap());
         assert_eq!("0.1.0", result.get("aws-sdk-somethingnew").unwrap());
-        assert!(result.get("aws-sdk-dynamodb").is_none());
+        assert!(!result.contains_key("aws-sdk-dynamodb"));
         assert_eq!(3, result.len());
     }
 

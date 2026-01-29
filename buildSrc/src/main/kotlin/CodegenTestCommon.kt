@@ -23,6 +23,29 @@ data class CodegenTest(
     val imports: List<String> = emptyList(),
 )
 
+/**
+ * Extension function to generate both http@0 (legacy) and http@1 versions of a CodegenTest.
+ *
+ * @return List containing both http@0 (with -http0x suffix) and http@1 (no suffix) versions
+ */
+fun CodegenTest.bothHttpVersions(): List<CodegenTest> {
+    return listOf(
+        // http@0 version (legacy) - no http-1x flag, add -http0x suffix
+        this.copy(
+            module = "${this.module}-http0x",
+        ),
+        // http@1 version - with http-1x flag, no suffix
+        this.copy(
+            extraCodegenConfig =
+                if (this.extraCodegenConfig?.isNotEmpty() == true) {
+                    """"http-1x": true, ${this.extraCodegenConfig}"""
+                } else {
+                    """"http-1x": true"""
+                },
+        ),
+    )
+}
+
 fun generateImports(imports: List<String>): String =
     if (imports.isEmpty()) {
         ""

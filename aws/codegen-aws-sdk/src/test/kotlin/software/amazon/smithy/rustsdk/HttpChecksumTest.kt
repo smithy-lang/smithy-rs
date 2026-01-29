@@ -172,7 +172,7 @@ internal class HttpChecksumTest {
                 Feature(
                     "http-1x",
                     default = false,
-                    listOf("dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
+                    listOf("aws-smithy-runtime-api/http-1x"),
                 ),
             )
 
@@ -188,7 +188,8 @@ internal class HttpChecksumTest {
                         use #{pretty_assertions}::assert_eq;
                         use #{SdkBody};
                         use std::io::Write;
-                        use http_body::Body;
+                        use http_body_1x::Body;
+                        use http_body_util::BodyExt;
                         use #{HttpRequest};
                         use #{UaAssert};
                         use #{UaExtract};
@@ -364,12 +365,16 @@ internal class HttpChecksumTest {
                     );
                     assert_eq!(headers.get("content-encoding").unwrap(), "aws-chunked");
 
-                    let mut body = request.body().try_clone().expect("body is retryable");
+                    let body = request
+                    .body()
+                    .try_clone()
+                    .expect("body is retryable")
+                    .collect()
+                    .await
+                    .expect("body is collectable");
 
                     let mut body_data = bytes::BytesMut::new();
-                    while let Some(data) = body.data().await {
-                        body_data.extend_from_slice(&data.unwrap())
-                    }
+                    body_data.extend_from_slice(&body.to_bytes());
 
                     let body_string = std::str::from_utf8(&body_data).unwrap();
                     assert!(body_string.contains("x-amz-checksum-$algoLower:${testDef.trailerChecksum}"));

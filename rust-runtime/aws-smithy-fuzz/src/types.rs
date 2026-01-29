@@ -37,23 +37,16 @@ impl http_body::Body for Body {
     type Data = Bytes;
     type Error = Infallible;
 
-    fn poll_data(
+    fn poll_frame(
         mut self: Pin<&mut Self>,
         _cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
         match self.as_mut().body.take() {
-            Some(data) => Poll::Ready(Some(Ok(data.into()))),
-            None => Poll::Ready(None),
-        }
-    }
-
-    fn poll_trailers(
-        mut self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        match self.as_mut().trailers.take() {
-            Some(trailers) => Poll::Ready(Ok(Some(trailers))),
-            None => Poll::Ready(Ok(None)),
+            Some(data) => Poll::Ready(Some(Ok(http_body::Frame::data(data.into())))),
+            None => match self.as_mut().trailers.take() {
+                Some(trailers) => Poll::Ready(Some(Ok(http_body::Frame::trailers(trailers)))),
+                None => Poll::Ready(None),
+            },
         }
     }
 }

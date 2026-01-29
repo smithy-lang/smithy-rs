@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-mocks"
-version = "0.2.3"
+version = "0.2.4"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Testing utilities for smithy-rs generated clients"
 edition = "2021"
@@ -12,7 +12,7 @@ rust-version = "1.88"
 aws-smithy-types = { path = "../aws-smithy-types" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x", "test-util"] }
 aws-smithy-http-client = { path = "../aws-smithy-http-client", features = ["test-util"] }
-http = "1"
+http = "1.3.1"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"]}

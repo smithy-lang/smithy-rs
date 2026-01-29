@@ -69,7 +69,7 @@ pub use plugin::*;
 pub use service::*;
 
 /// A standard interface for taking some component of the HTTP request/response and transforming it into new struct
-/// which enjoys [`Debug`] or [`Display`]. This allows for polymorphism over formatting approaches.
+/// which supports [`Debug`] or [`Display`]. This allows for polymorphism over formatting approaches.
 pub trait MakeFmt<T> {
     /// Target of the `fmt` transformation.
     type Target;

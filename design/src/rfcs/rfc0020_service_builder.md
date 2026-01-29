@@ -240,7 +240,7 @@ pub struct Router {
 }
 ```
 
-and enjoys the following `Service<http::Request>` implementation:
+and has the following `Service<http::Request>` implementation:
 
 ```rust,ignore
 impl Service<http::Request> for Router

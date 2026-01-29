@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::sync::Arc;
 
-use aws_smithy_http_server::body::{to_boxed, BoxBody};
+use aws_smithy_legacy_http_server::body::{to_boxed, BoxBody};
 use http::{response::Parts, Response};
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use tokio::sync::Mutex;

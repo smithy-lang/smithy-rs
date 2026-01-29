@@ -19,7 +19,7 @@ use super::{
 /// Allows the modification the responses status code [`Display`](std::fmt::Display) and headers
 /// [`Debug`] to accommodate sensitivity.
 ///
-/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
+/// This provides [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`StatusCode`](http::StatusCode).
 #[derive(Clone)]
 pub struct ResponseFmt<Headers, StatusCode> {
     headers: Headers,

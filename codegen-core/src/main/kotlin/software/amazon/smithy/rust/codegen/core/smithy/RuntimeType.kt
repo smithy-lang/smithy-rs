@@ -56,11 +56,29 @@ value class CrateVersionMap(
 )
 
 /**
+ * HTTP version to use for code generation.
+ *
+ * This determines which versions of http/http-body/hyper crates to use,
+ * as well as which smithy-http-server crate to use (legacy vs current).
+ */
+enum class HttpVersion {
+    /** HTTP 0.x: http@0.2, http-body@0.4, hyper@0.14, aws-smithy-legacy-http-server */
+    Http0x,
+
+    /** HTTP 1.x: http@1, http-body@1, hyper@1, aws-smithy-http-server@1 */
+    Http1x,
+}
+
+/**
  * Prefix & crate location for the runtime crates.
  */
 data class RuntimeConfig(
     val cratePrefix: String = "aws",
     val runtimeCrateLocation: RuntimeCrateLocation = RuntimeCrateLocation.path("../"),
+    /**
+     * HTTP version to use for code generation. Defaults to Http1x as that is the default for Clients.
+     */
+    val httpVersion: HttpVersion = HttpVersion.Http1x,
 ) {
     companion object {
         /**
@@ -278,16 +296,70 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         // primitive types
         val StaticStr = RuntimeType("&'static str")
 
+        // Http0x types
+        val Http0x = CargoDependency.Http0x.toType()
+        val HttpBody0x = CargoDependency.HttpBody0x.toType()
+        val HttpRequest0x = Http0x.resolve("Request")
+        val HttpRequestBuilder0x = Http0x.resolve("request::Builder")
+        val HttpResponse0x = Http0x.resolve("Response")
+        val HttpResponseBuilder0x = Http0x.resolve("response::Builder")
+
+        // Http1x types
+        val Http1x = CargoDependency.Http1x.toType()
+        val HttpBody1x = CargoDependency.HttpBody1x.toType()
+        val HttpRequest1x = Http1x.resolve("Request")
+        val HttpRequestBuilder1x = Http1x.resolve("request::Builder")
+        val HttpResponse1x = Http1x.resolve("Response")
+        val HttpResponseBuilder1x = Http1x.resolve("response::Builder")
+
+        /**
+         * Returns the appropriate http crate based on HTTP version.
+         *
+         * For HTTP 1.x: returns http@1.x crate
+         * For HTTP 0.x: returns http@0.2.x crate
+         */
+        fun http(runtimeConfig: RuntimeConfig): RuntimeType =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> Http1x
+                HttpVersion.Http0x -> Http0x
+            }
+
+        /**
+         * Returns the appropriate http::request::Builder based on HTTP version.
+         *
+         * For HTTP 1.x: returns http@1.x request::Builder
+         * For HTTP 0.x: returns http@0.2.x request::Builder
+         */
+        fun httpRequestBuilder(runtimeConfig: RuntimeConfig): RuntimeType =
+            http(runtimeConfig).resolve("request::Builder")
+
+        /**
+         * Returns the appropriate http::response::Builder based on HTTP version.
+         *
+         * For HTTP 1.x: returns http@1.x response::Builder
+         * For HTTP 0.x: returns http@0.2.x response::Builder
+         */
+        fun httpResponseBuilder(runtimeConfig: RuntimeConfig): RuntimeType =
+            http(runtimeConfig).resolve("response::Builder")
+
+        /**
+         * Returns the appropriate http-body crate module based on HTTP version.
+         *
+         * For HTTP 1.x: returns http-body@1.x crate
+         * For HTTP 0.x: returns http-body@0.4.x crate
+         */
+        fun httpBody(runtimeConfig: RuntimeConfig): RuntimeType =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> HttpBody1x
+                HttpVersion.Http0x -> HttpBody0x
+            }
+
+        fun hyper(runtimeConfig: RuntimeConfig) = CargoDependency.hyper(runtimeConfig).toType()
+
         // external cargo dependency types
         val Bytes = CargoDependency.Bytes.toType().resolve("Bytes")
         val FastRand = CargoDependency.FastRand.toType()
-        val Http = CargoDependency.Http.toType()
-        val HttpBody = CargoDependency.HttpBody.toType()
-        val HttpRequest = Http.resolve("Request")
-        val HttpRequestBuilder = Http.resolve("request::Builder")
-        val HttpResponse = Http.resolve("Response")
-        val HttpResponseBuilder = Http.resolve("response::Builder")
-        val Hyper = CargoDependency.Hyper.toType()
+        val Hyper0x = CargoDependency.Hyper0x.toType()
         val LazyStatic = CargoDependency.LazyStatic.toType()
         val PercentEncoding = CargoDependency.PercentEncoding.toType()
         val PrettyAssertions = CargoDependency.PrettyAssertions.toType()
@@ -329,6 +401,21 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun smithyRuntime(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntime(runtimeConfig).toType()
 
         fun smithyRuntimeApi(runtimeConfig: RuntimeConfig) = CargoDependency.smithyRuntimeApi(runtimeConfig).toType()
+
+        /**
+         * Returns smithy-runtime-api with the appropriate HTTP version feature enabled.
+         *
+         * This is needed when accessing HTTP types from smithy-runtime-api like http::Request.
+         * For HTTP 1.x: adds "http-1x" feature
+         * For HTTP 0.x: adds "http-02x" feature
+         *
+         * Use this instead of smithyRuntimeApi() when you need HTTP type re-exports.
+         */
+        fun smithyRuntimeApiWithHttpFeature(runtimeConfig: RuntimeConfig): RuntimeType =
+            when (runtimeConfig.httpVersion) {
+                HttpVersion.Http1x -> CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-1x").toType()
+                HttpVersion.Http0x -> CargoDependency.smithyRuntimeApi(runtimeConfig).withFeature("http-02x").toType()
+            }
 
         fun smithyRuntimeApiClient(runtimeConfig: RuntimeConfig) =
             CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType()
@@ -491,6 +578,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
                     // clients allow offsets, servers do nt
                     TimestampFormatTrait.Format.DATE_TIME ->
                         codegenTarget.ifClient { "DateTimeWithOffset" } ?: "DateTime"
+
                     TimestampFormatTrait.Format.HTTP_DATE -> "HttpDate"
                     TimestampFormatTrait.Format.UNKNOWN -> TODO()
                 }

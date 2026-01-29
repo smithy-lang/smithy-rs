@@ -115,6 +115,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun withHttp1x(enabled: Boolean = true): Builder {
+                settings.add(Http1x(enabled))
+                return this
+            }
+
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
@@ -136,6 +141,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("alwaysSendEventStreamInitialResponse", enabled)
+                    .build()
+        }
+
+        private data class Http1x(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("http-1x", enabled)
                     .build()
         }
 

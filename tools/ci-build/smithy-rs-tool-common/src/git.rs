@@ -157,7 +157,7 @@ pub struct GitCLI {
 impl GitCLI {
     pub fn new(repo_path: &Path) -> Result<Self> {
         if !repo_path.join(".git").exists() {
-            bail!("{:?} is not a git repository", repo_path);
+            bail!("{repo_path:?} is not a git repository");
         }
         Ok(Self {
             repo_path: repo_path.into(),

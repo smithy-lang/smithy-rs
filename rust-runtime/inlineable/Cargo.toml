@@ -19,18 +19,21 @@ default = ["gated-tests"]
 
 [dependencies]
 aws-smithy-cbor = { path = "../aws-smithy-cbor" }
-aws-smithy-compression = { path = "../aws-smithy-compression", features = ["http-body-0-4-x"] }
+aws-smithy-compression = { path = "../aws-smithy-compression" }
 aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client"] }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "test-util"] }
-aws-smithy-types = { path = "../aws-smithy-types" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "test-util", "http-1x"] }
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"]}
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.10.0"
 fastrand = "2.3.0"
 futures-util = "0.3.31"
-http = "0.2.9"
-http-body = "0.4.5"
+http = "0.2.12"
+http-body = "0.4.6"
+http-1x = {package = "http", version = "1.3.1"}
+http-body-1x = {package = "http-body", version = "1.0.1"}
+http-body-util = "0.1.3"
 md-5 = "0.10.0"
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.14"
