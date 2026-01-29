@@ -144,11 +144,11 @@
 //!   "http_status_code": 200
 //! }
 //! ```
-//! 
+//!
 //! # Platform support
-//! 
-//! MIPS and PowerPC are currently not supported due to lack of 
-//! [`AtomicU64`](std::sync::atomic::AtomicU64) support. Once 
+//!
+//! MIPS and PowerPC are currently not supported due to lack of
+//! [`AtomicU64`](std::sync::atomic::AtomicU64) support. Once
 //! https://github.com/smithy-lang/smithy-rs/pull/4487 and
 //! https://github.com/awslabs/metrique/issues/183 are complete,
 //! we can use the latest metrique version and support these.
