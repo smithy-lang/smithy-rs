@@ -245,11 +245,11 @@ open class SymbolVisitor(
     }
 
     override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
+        return RuntimeType.bigInteger(config.runtimeConfig).toSymbol()
     }
 
     override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
-        TODO("Not yet implemented: https://github.com/smithy-lang/smithy-rs/issues/312")
+        return RuntimeType.bigDecimal(config.runtimeConfig).toSymbol()
     }
 
     override fun operationShape(shape: OperationShape): Symbol {
