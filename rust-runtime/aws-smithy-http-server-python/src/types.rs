@@ -115,15 +115,17 @@ impl BigInteger {
         value
             .parse()
             .map(Self)
-            .map_err(|e| PyTypeError::new_err(format!("{}", e)))
+            .map_err(|e| PyTypeError::new_err(format!("{e}")))
     }
 
     #[getter(value)]
     pub fn get_value(&self) -> &str {
         self.0.as_ref()
     }
+}
 
-    pub fn as_ref(&self) -> &str {
+impl AsRef<str> for BigInteger {
+    fn as_ref(&self) -> &str {
         self.0.as_ref()
     }
 }
@@ -152,15 +154,17 @@ impl BigDecimal {
         value
             .parse()
             .map(Self)
-            .map_err(|e| PyTypeError::new_err(format!("{}", e)))
+            .map_err(|e| PyTypeError::new_err(format!("{e}")))
     }
 
     #[getter(value)]
     pub fn get_value(&self) -> &str {
         self.0.as_ref()
     }
+}
 
-    pub fn as_ref(&self) -> &str {
+impl AsRef<str> for BigDecimal {
+    fn as_ref(&self) -> &str {
         self.0.as_ref()
     }
 }
