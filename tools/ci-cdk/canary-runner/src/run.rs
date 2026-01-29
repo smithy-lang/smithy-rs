@@ -119,6 +119,10 @@ pub struct RunArgs {
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
+
+    /// Lambda architecture to target (x86_64 or arm64)
+    #[clap(long, default_value = "x86_64")]
+    architecture: crate::build_bundle::LambdaArchitecture,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -127,6 +131,7 @@ struct Options {
     sdk_release_tag: Option<ReleaseTag>,
     sdk_path: Option<PathBuf>,
     musl: bool,
+    architecture: crate::build_bundle::LambdaArchitecture,
     expected_speech_text_by_transcribe: Option<String>,
     lambda_function_memory_size_in_mb: i32,
     lambda_code_s3_bucket_name: String,
@@ -194,6 +199,7 @@ impl Options {
                 sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
+                architecture: run_opt.architecture,
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_function_memory_size_in_mb: run_opt
                     .lambda_function_memory_size_in_mb
@@ -210,6 +216,7 @@ impl Options {
                 sdk_release_tag: run_opt.sdk_release_tag,
                 sdk_path: run_opt.sdk_path,
                 musl: run_opt.musl,
+                architecture: run_opt.architecture,
                 expected_speech_text_by_transcribe: run_opt.expected_speech_text_by_transcribe,
                 lambda_function_memory_size_in_mb: run_opt
                     .lambda_function_memory_size_in_mb
@@ -362,6 +369,7 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
         musl: options.musl,
+        architecture: options.architecture,
         manifest_only: false,
     };
     info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
@@ -430,10 +438,16 @@ async fn create_lambda_fn(
             ),
     };
 
+    let lambda_arch = match options.architecture {
+        crate::build_bundle::LambdaArchitecture::X86_64 => Architecture::X8664,
+        crate::build_bundle::LambdaArchitecture::Arm64 => Architecture::Arm64,
+    };
+
     lambda_client
         .create_function()
         .function_name(bundle_name)
         .runtime(Runtime::Providedal2)
+        .architectures(lambda_arch)
         .role(&options.lambda_execution_role_arn)
         .handler("aws-sdk-rust-lambda-canary")
         .code(
@@ -544,6 +558,7 @@ async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> R
 
 #[cfg(test)]
 mod tests {
+    use crate::build_bundle::LambdaArchitecture;
     use crate::run::{Options, RunArgs, DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB};
     use clap::Parser;
 
@@ -562,7 +577,8 @@ mod tests {
                 lambda_test_s3_bucket_name: None,
                 lambda_execution_role_arn: None,
                 lambda_test_s3_mrap_bucket_arn: None,
-                lambda_test_s3_express_bucket_name: None
+                lambda_test_s3_express_bucket_name: None,
+                architecture: LambdaArchitecture::X86_64,
             },
             RunArgs::try_parse_from([
                 "run",
@@ -605,6 +621,7 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("artifact-aws-sdk-rust/sdk".into()),
                 musl: false,
+                architecture: LambdaArchitecture::X86_64,
                 expected_speech_text_by_transcribe: Some("Good day to you transcribe.".to_owned()),
                 lambda_function_memory_size_in_mb: DEFAULT_LAMBDA_FUNCTION_MEMORY_SIZE_IN_MB,
                 lambda_code_s3_bucket_name: "bucket-for-code".to_owned(),
