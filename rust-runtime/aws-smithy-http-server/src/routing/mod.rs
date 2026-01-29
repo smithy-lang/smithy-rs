@@ -53,7 +53,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
-    multi_protocol::{MultiProtocolRoutingError, MultiProtocolRoutingFuture, MultiProtocolRoutingService, ProtocolDetector},
+    multi_protocol::{MultiProtocolRoutingError, MultiProtocolRoutingFuture, MultiProtocolRoutingService, Protocol, ProtocolDetector},
     route::Route,
 };
 

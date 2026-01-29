@@ -142,7 +142,7 @@ open class RustCrate(
         manifestCustomizations: ManifestCustomizations,
         libRsCustomizations: List<LibRsCustomization>,
         requireDocs: Boolean = true,
-        protocolId: ShapeId? = null,
+        protocols: List<ShapeId> = emptyList(),
     ) {
         injectInlineDependencies()
         inner.finalize(
@@ -152,7 +152,7 @@ open class RustCrate(
             libRsCustomizations,
             this.features.toList(),
             requireDocs,
-            protocolId,
+            protocols,
         )
     }
 
@@ -277,7 +277,7 @@ fun WriterDelegator<RustWriter>.finalize(
     libRsCustomizations: List<LibRsCustomization>,
     features: List<Feature>,
     requireDocs: Boolean,
-    protocolId: ShapeId? = null,
+    protocols: List<ShapeId> = emptyList(),
 ) {
     this.useFileWriter("src/lib.rs", "crate::lib") {
         LibRsGenerator(settings, model, libRsCustomizations, requireDocs).render(it)
@@ -292,7 +292,7 @@ fun WriterDelegator<RustWriter>.finalize(
         val cargoToml =
             CargoTomlGenerator(
                 settings,
-                protocolId.toString(),
+                protocols.map { it.toString() },
                 it,
                 manifestCustomizations,
                 cargoDependencies,

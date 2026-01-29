@@ -15,12 +15,78 @@ import java.io.File
  * `codegen-client-test` and `codegen-server-test` modules.
  */
 
+/**
+ * Sealed class representing Smithy model transforms.
+ *
+ * Transforms allow modifying the Smithy model during code generation:
+ * - [ApplyTrait]: Adds a trait to a shape (generates a .smithy file with apply statement)
+ * - [ExcludeTraits]: Removes traits from the model (uses native smithy-build.json transform)
+ */
+sealed class Transform {
+    /**
+     * Returns the JSON representation for smithy-build.json transforms section,
+     * or null if this transform is not represented in smithy-build.json (e.g., ApplyTrait).
+     */
+    abstract fun toSmithyBuildJson(): String?
+}
+
+/**
+ * Applies a trait to a shape. This generates a temporary .smithy file with an `apply` statement.
+ *
+ * Example usage:
+ * ```kotlin
+ * ApplyTrait(
+ *     shape = "com.aws.example#PokemonService",
+ *     trait = "smithy.protocols#rpcv2Cbor"
+ * )
+ * ```
+ *
+ * @param shape The fully qualified shape ID to apply the trait to
+ * @param trait The fully qualified trait ID to apply
+ * @param traitArguments Optional arguments for the trait in Smithy IDL format (e.g., "(min: 1, max: 10)")
+ */
+data class ApplyTrait(
+    val shape: String,
+    val trait: String,
+    val traitArguments: String? = null,
+) : Transform() {
+    // ApplyTrait generates a .smithy file instead of using smithy-build.json transforms
+    override fun toSmithyBuildJson(): String? = null
+}
+
+/**
+ * Excludes traits from the model. Uses the native smithy-build.json `excludeTraits` transform.
+ *
+ * Example usage:
+ * ```kotlin
+ * ExcludeTraits(listOf("smithy.protocols#rpcv2Cbor", "aws.protocols#restJson1"))
+ * ```
+ *
+ * @param traits List of fully qualified trait IDs to exclude from the model
+ */
+data class ExcludeTraits(
+    val traits: List<String>,
+) : Transform() {
+    override fun toSmithyBuildJson(): String {
+        val traitsJson = traits.joinToString(", ") { "\"$it\"" }
+        return """
+            {
+                "name": "excludeTraits",
+                "args": {
+                    "traits": [$traitsJson]
+                }
+            }
+        """.trimIndent()
+    }
+}
+
 data class CodegenTest(
     val service: String,
     val module: String,
     val extraConfig: String? = null,
     val extraCodegenConfig: String? = null,
     val imports: List<String> = emptyList(),
+    val transforms: List<Transform> = emptyList(),
 )
 
 /**
@@ -52,6 +118,77 @@ fun generateImports(imports: List<String>): String =
     } else {
         "\"imports\": [${imports.joinToString(", ") { "\"$it\"" }}],"
     }
+
+/**
+ * Generates the JSON for the `transforms` section of a smithy-build.json projection.
+ * Collects JSON from all transforms that support smithy-build.json representation.
+ * [ApplyTrait] transforms are handled via generated imports and return null from toSmithyBuildJson().
+ */
+private fun generateTransformsJson(transforms: List<Transform>): String {
+    val transformJsons = transforms.mapNotNull { it.toSmithyBuildJson() }
+    if (transformJsons.isEmpty()) {
+        return ""
+    }
+    return """
+        "transforms": [
+            ${transformJsons.joinToString(",\n            ")}
+        ],
+    """.trimIndent()
+}
+
+/**
+ * Generates a Smithy file with `apply` statements for adding traits to shapes.
+ *
+ * @param moduleName The module name (used for generating unique namespaces if needed)
+ * @param applyTraits List of [ApplyTrait] transforms to include
+ * @return The content of the generated .smithy file
+ */
+fun generateApplySmithyFile(moduleName: String, applyTraits: List<ApplyTrait>): String {
+    if (applyTraits.isEmpty()) {
+        return ""
+    }
+
+    // Collect all unique namespaces from shapes and traits
+    val shapeNamespaces = applyTraits.map { it.shape.substringBeforeLast("#") }.toSet()
+    val traitNamespaces = applyTraits.map { it.trait.substringBeforeLast("#") }.toSet()
+
+    // Use the first shape's namespace as the file namespace
+    val fileNamespace = shapeNamespaces.first()
+
+    // Generate use statements for traits from other namespaces
+    val useStatements = traitNamespaces
+        .filter { it != fileNamespace }
+        .map { ns ->
+            val traitsFromNs = applyTraits.filter { it.trait.startsWith("$ns#") }
+            traitsFromNs.map { "use ${it.trait}" }
+        }
+        .flatten()
+        .distinct()
+        .joinToString("\n")
+
+    // Generate apply statements
+    val applyStatements = applyTraits.joinToString("\n") { applyTrait ->
+        val shapeName = applyTrait.shape.substringAfterLast("#")
+        val traitName = applyTrait.trait.substringAfterLast("#")
+        val args = applyTrait.traitArguments ?: ""
+        "apply $shapeName @$traitName$args"
+    }
+
+    return """
+        |${"$"}version: "2"
+        |
+        |namespace $fileNamespace
+        |
+        |${if (useStatements.isNotEmpty()) useStatements + "\n" else ""}
+        |$applyStatements
+    """.trimMargin()
+}
+
+/**
+ * Returns the path for a generated apply smithy file relative to the project directory.
+ */
+fun getApplySmithyFilePath(moduleName: String): String =
+    "build/generated-smithy/$moduleName-apply.smithy"
 
 val RustKeywords =
     setOf(
@@ -134,24 +271,37 @@ private fun generateSmithyBuild(
     tests: List<CodegenTest>,
 ): String {
     val projections =
-        tests.joinToString(",\n") {
+        tests.joinToString(",\n") { test ->
+            // Check if we have ApplyTrait transforms that require a generated file
+            val applyTraits = test.transforms.filterIsInstance<ApplyTrait>()
+            val additionalImports = if (applyTraits.isNotEmpty()) {
+                listOf(getApplySmithyFilePath(test.module))
+            } else {
+                emptyList()
+            }
+            val allImports = test.imports + additionalImports
+
+            // Generate transforms JSON (for ExcludeTraits)
+            val transformsJson = generateTransformsJson(test.transforms)
+
             """
-            "${it.module}": {
-                ${generateImports(it.imports)}
+            "${test.module}": {
+                ${generateImports(allImports)}
+                $transformsJson
                 "plugins": {
                     "$pluginName": {
                         "runtimeConfig": {
                             "relativePath": "$projectDir/rust-runtime"
                         },
                         "codegen": {
-                            ${it.extraCodegenConfig ?: ""}
+                            ${test.extraCodegenConfig ?: ""}
                         },
-                        "service": "${it.service}",
-                        "module": "${toRustCrateName(it.module)}",
+                        "service": "${test.service}",
+                        "module": "${toRustCrateName(test.module)}",
                         "moduleVersion": "0.0.1",
                         "moduleDescription": "test",
                         "moduleAuthors": ["protocoltest@example.com"]
-                        ${it.extraConfig ?: ""}
+                        ${test.extraConfig ?: ""}
                     }
                 }
             }
@@ -257,7 +407,7 @@ fun Project.registerGenerateSmithyBuildTask(
 ) {
     val properties = PropertyRetriever(rootProject, this)
     this.tasks.register("generateSmithyBuild") {
-        description = "generate smithy-build.json"
+        description = "generate smithy-build.json and apply smithy files for transforms"
         outputs.file(project.projectDir.resolve("smithy-build.json"))
         // Declare Smithy model files as inputs so task reruns when they change
         allCodegenTests.flatMap { it.imports }.forEach {
@@ -268,12 +418,25 @@ fun Project.registerGenerateSmithyBuildTask(
         }
 
         doFirst {
+            val tests = codegenTests(properties, allCodegenTests)
+
+            // Generate apply smithy files for any tests that have ApplyTrait transforms
+            tests.forEach { test ->
+                val applyTraits = test.transforms.filterIsInstance<ApplyTrait>()
+                if (applyTraits.isNotEmpty()) {
+                    val applyFilePath = project.projectDir.resolve(getApplySmithyFilePath(test.module))
+                    applyFilePath.parentFile.mkdirs()
+                    applyFilePath.writeText(generateApplySmithyFile(test.module, applyTraits))
+                    println("Generated apply smithy file: $applyFilePath")
+                }
+            }
+
             project.projectDir.resolve("smithy-build.json")
                 .writeText(
                     generateSmithyBuild(
                         rootProject.projectDir.absolutePath,
                         pluginName,
-                        codegenTests(properties, allCodegenTests),
+                        tests,
                     ),
                 )
 

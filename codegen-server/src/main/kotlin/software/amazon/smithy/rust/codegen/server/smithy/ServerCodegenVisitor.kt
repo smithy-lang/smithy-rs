@@ -338,7 +338,8 @@ open class ServerCodegenVisitor(
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,
-            protocolId = codegenContext.protocol,
+            // Order protocols by detection priority (most specific first)
+            protocols = allProtocols.map { it.protocolShapeId }.sortedBy { protocolDetectionOrder(it) },
         )
         try {
             "cargo fmt".runCommand(
@@ -800,3 +801,23 @@ open class ServerCodegenVisitor(
         }
     }
 }
+
+/**
+ * Returns the detection priority order for a protocol.
+ * Lower numbers = higher priority (checked first).
+ * This matches the order in MultiProtocolRoutingService::call():
+ * 1. RpcV2Cbor (most specific - has dedicated header)
+ * 2. AwsJson1.1 (has x-amz-target + specific content-type)
+ * 3. AwsJson1.0 (has x-amz-target + specific content-type)
+ * 4. RestJson1 (content-type + route matching)
+ * 5. RestXml (content-type + route matching)
+ */
+private fun protocolDetectionOrder(protocolId: software.amazon.smithy.model.shapes.ShapeId): Int =
+    when (protocolId.toString()) {
+        "smithy.protocols#rpcv2Cbor" -> 1
+        "aws.protocols#awsJson1_1" -> 2
+        "aws.protocols#awsJson1_0" -> 3
+        "aws.protocols#restJson1" -> 4
+        "aws.protocols#restXml" -> 5
+        else -> 100 // Unknown protocols go last
+    }
