@@ -19,7 +19,7 @@ pub enum BigNumberError {
 impl std::fmt::Display for BigNumberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BigNumberError::InvalidFormat(s) => write!(f, "invalid number format: {}", s),
+            BigNumberError::InvalidFormat(s) => write!(f, "invalid number format: {s}"),
         }
     }
 }
@@ -42,7 +42,7 @@ fn is_valid_big_integer(s: &str) -> bool {
     }
 
     // Rest must be digits only
-    chars.all(|c| matches!(c, '0'..='9'))
+    chars.all(|c| c.is_ascii_digit())
 }
 
 /// Validates that a string is a valid BigDecimal format.
