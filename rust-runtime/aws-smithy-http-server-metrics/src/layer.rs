@@ -7,6 +7,8 @@ use std::marker::PhantomData;
 
 use http::Request;
 use metrique::DefaultSink;
+use metrique::ServiceMetrics;
+use metrique_writer::GlobalEntrySink;
 use thiserror::Error;
 use tower::Layer;
 
@@ -113,6 +115,16 @@ pub struct MetricsLayer<
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
 
     pub(crate) _entry_sink: PhantomData<S>,
+}
+
+impl MetricsLayer {
+    pub fn new(
+    ) -> MetricsLayer<DefaultMetrics, DefaultSink, impl InitMetrics<DefaultMetrics, DefaultSink>>
+    {
+        Self::builder()
+            .init_metrics(|| DefaultMetrics::default().append_on_drop(ServiceMetrics::sink()))
+            .build()
+    }
 }
 
 impl<E, S, I, Rq, Rs> MetricsLayer<E, S, I, Rq, Rs>
