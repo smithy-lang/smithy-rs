@@ -19,7 +19,7 @@ use super::{
 /// Allows the modification the requests URIs [`Display`](std::fmt::Display) and headers
 /// [`Debug`] to accommodate sensitivity.
 ///
-/// This enjoys [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](http::Uri).
+/// This provides [`MakeFmt`] for [`&HeaderMap`](HeaderMap) and [`&Uri`](http::Uri).
 #[derive(Clone)]
 pub struct RequestFmt<Headers, Uri> {
     headers: Headers,

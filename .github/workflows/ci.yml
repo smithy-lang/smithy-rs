@@ -397,7 +397,7 @@ jobs:
         - arch: x86_64
           runner: smithy_ubuntu-latest_8-core
         - arch: aarch64
-          runner: smithy_ubuntu-latest_8-core-arm
+          runner: ubuntu-24.04-arm
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

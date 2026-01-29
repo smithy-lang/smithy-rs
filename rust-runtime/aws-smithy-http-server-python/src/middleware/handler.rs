@@ -5,7 +5,7 @@
 
 //! Execute pure-Python middleware handler.
 
-use aws_smithy_http_server::body::{Body, BoxBody};
+use aws_smithy_legacy_http_server::body::{Body, BoxBody};
 use http::{Request, Response};
 use pyo3::{exceptions::PyRuntimeError, prelude::*, types::PyFunction};
 use pyo3_asyncio::TaskLocals;

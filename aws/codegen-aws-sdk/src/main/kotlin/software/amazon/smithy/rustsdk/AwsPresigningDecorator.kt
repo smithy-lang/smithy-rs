@@ -170,8 +170,8 @@ class AwsPresigningDecorator internal constructor(
             rustCrate.mergeFeature(
                 Feature(
                     "http-1x",
-                    default = false,
-                    listOf("dep:http-body-1x", "aws-smithy-runtime-api/http-1x"),
+                    default = true,
+                    listOf("aws-smithy-runtime-api/http-1x"),
                 ),
             )
         }
@@ -204,6 +204,14 @@ class AwsPresignedFluentBuilderMethod(
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
         )
 
+    // Presigning requires both http version features since it pub exposes into_http_02x_request
+    // and into_http_1x_request functions
+    private val smithyRuntimeApi =
+        CargoDependency.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+            .withFeature("http-02x")
+            .withFeature("http-1x")
+            .toType()
+
     override fun section(section: FluentClientSection): Writable =
         writable {
             if (section is FluentClientSection.FluentBuilderImpl && section.operationShape.hasTrait(PresignableTrait::class.java)) {
@@ -219,7 +227,7 @@ class AwsPresignedFluentBuilderMethod(
                     *codegenScope,
                     "OpError" to section.operationErrorType,
                     "RawResponseType" to
-                        RuntimeType.smithyRuntimeApiClient(runtimeConfig)
+                        smithyRuntimeApi
                             .resolve("client::orchestrator::HttpResponse"),
                 ) {
                     renderPresignedMethodBody(section)
@@ -305,13 +313,13 @@ class AwsPresignedFluentBuilderMethod(
             "OperationError" to section.operationErrorType,
             "RuntimePlugins" to RuntimeType.runtimePlugins(runtimeConfig),
             "SharedInterceptor" to
-                RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors")
+                smithyRuntimeApi.resolve("client::interceptors")
                     .resolve("SharedInterceptor"),
             "SigV4PresigningRuntimePlugin" to
                 AwsRuntimeType.presigningInterceptor(runtimeConfig)
                     .resolve("SigV4PresigningRuntimePlugin"),
             "StopPoint" to RuntimeType.smithyRuntime(runtimeConfig).resolve("client::orchestrator::StopPoint"),
-            "USER_AGENT" to CargoDependency.Http.toType().resolve("header::USER_AGENT"),
+            "USER_AGENT" to CargoDependency.Http1x.toType().resolve("header::USER_AGENT"),
             "alternate_presigning_serializer" to
                 writable {
                     if (presignableOp.hasModelTransforms()) {
@@ -334,7 +342,7 @@ class AwsPresignedFluentBuilderMethod(
                             "Layer" to smithyTypes.resolve("config_bag::Layer"),
                             "RuntimePlugin" to RuntimeType.runtimePlugin(codegenContext.runtimeConfig),
                             "SharedRequestSerializer" to
-                                RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
+                                smithyRuntimeApi
                                     .resolve("client::ser_de::SharedRequestSerializer"),
                         )
                     }

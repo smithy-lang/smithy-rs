@@ -53,7 +53,7 @@ private class TestServiceRuntimePluginCustomization(
                                     _cfg: &mut #{ConfigBag},
                                 ) -> #{Result}<(), #{BoxError}> {
                                     // Replace the serialized request
-                                    let mut fake_req = ::http::Request::builder()
+                                    let mut fake_req = #{Http}::Request::builder()
                                         $fakeRequestBuilder
                                         .body(#{SdkBody}::from($fakeRequestBody))
                                         .expect("valid request").try_into().unwrap();
@@ -75,6 +75,7 @@ private class TestServiceRuntimePluginCustomization(
                         "Intercept" to RT.intercept(rc),
                         "RuntimeComponents" to RT.runtimeComponents(rc),
                         "SdkBody" to RT.sdkBody(rc),
+                        "Http" to RT.Http1x,
                     )
                 }
             }
@@ -111,7 +112,9 @@ private class TestOperationCustomization(
                     cfg.store_put(#{SharedResponseDeserializer}::new(TestDeser));
                     """,
                     *preludeScope,
-                    "SharedResponseDeserializer" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::SharedResponseDeserializer"),
+                    "SharedResponseDeserializer" to
+                        RT.smithyRuntimeApi(rc)
+                            .resolve("client::ser_de::SharedResponseDeserializer"),
                     "Error" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Error"),
                     "HttpResponse" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::HttpResponse"),
                     "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),

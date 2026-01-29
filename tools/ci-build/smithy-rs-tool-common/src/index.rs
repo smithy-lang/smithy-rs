@@ -133,15 +133,9 @@ mod test {
         let index = Arc::new(CratesIndex::real().unwrap());
         let known_published = Version::new(1, 1, 7);
         let known_never_published = Version::new(999, 999, 999);
-        assert_eq!(
-            is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap(),
-            true
-        );
+        assert!(is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap());
 
-        assert_eq!(
-            is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap(),
-            false
-        );
+        assert!(!is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap());
     }
 
     /// Ignored test against the real index
@@ -155,14 +149,8 @@ mod test {
         let index = Arc::new(CratesIndex::fake_from_map(crates));
         let known_published = Version::new(1, 1, 7);
         let known_never_published = Version::new(999, 999, 999);
-        assert_eq!(
-            is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap(),
-            true
-        );
+        assert!(is_published(&index, "aws-smithy-runtime-api", &known_published).unwrap());
 
-        assert_eq!(
-            is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap(),
-            false
-        );
+        assert!(!is_published(&index, "aws-smithy-runtime-api", &known_never_published).unwrap());
     }
 }
