@@ -93,6 +93,8 @@ jobs:
     - acquire-base-image
     if: ${{ github.event.pull_request.head.repo.full_name == 'smithy-lang/smithy-rs' }}
     uses: ./.github/workflows/ci.yml
+    with:
+      run_canary: true
     secrets:
       ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
       DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
