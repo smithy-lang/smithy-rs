@@ -215,7 +215,9 @@ gh workflow run "Invoke Canary as Maintainer" --repo smithy-lang/smithy-rs \
 Client changes often show the pattern for server-side implementation
 
 **Configuration Debugging:**
-- Server codegen settings go under `"codegen"` not `"codegenConfig"` in smithy-build.json
+- `codegen` settings are defined in `CoreCodegenConfig`, `ServerCodegenConfig`, or `ClientCodegenConfig` (in respective `*RustSettings.kt` files)
+- `customizationConfig` settings: search for `settings.customizationConfig` usages - classify as client/server based on whether a `ClientCodegenDecorator` or `ServerCodegenDecorator` uses it
+- In smithy-build[-template].json, use `"codegen"` not `"codegenConfig"` (the latter is only a Kotlin property name)
 - When settings aren't working, check the generated smithy-build.json structure first
 - Settings placement matters - wrong nesting means settings are ignored silently
 - Always verify actual generated configuration matches expectations
