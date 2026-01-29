@@ -12,6 +12,7 @@ use std::convert::TryInto;
 use std::process::Child;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_stream::stream;
 use aws_smithy_http_client::tls;
@@ -364,6 +365,12 @@ pub async fn do_nothing(
     _input: input::DoNothingInput,
     Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
 ) -> output::DoNothingOutput {
+    // Sleep if explicitly requested via env var 
+    // used for testing outstanding requests in metrics_test.rs
+    if std::env::var("DO_NOTHING_SLEEP_FOR_100").is_ok() {
+        tokio::time::sleep(Duration::from_secs(100)).await;
+    }
+
     metrics
         .set(|mut operation_metrics| {
             operation_metrics.do_nothing_metrics.invocation_count = Some(1);
