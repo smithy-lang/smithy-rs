@@ -197,8 +197,9 @@ class ServerServiceGenerator(
             val protocolInfos = getProtocolInfo()
 
             // Build the MultiProtocolRoutingService generic parameters using S (service type)
+            // Order matches detection priority: RpcV2, AwsJson11, AwsJson10, RestJson, RestXml
             val routerTypeParams =
-                listOf("rest_json_1", "rest_xml", "aws_json_10", "aws_json_11", "rpc_v2_cbor").map { modulePath ->
+                listOf("rpc_v2_cbor", "aws_json_11", "aws_json_10", "rest_json_1", "rest_xml").map { modulePath ->
                     val matchingProtocol = protocolInfos.find { it.modulePath == modulePath }
                     if (matchingProtocol != null) {
                         "#{${matchingProtocol.modulePath}_Router}<S>"

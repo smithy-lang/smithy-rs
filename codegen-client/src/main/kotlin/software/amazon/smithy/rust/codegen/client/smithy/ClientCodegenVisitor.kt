@@ -184,7 +184,7 @@ class ClientCodegenVisitor(
                 codegenContext,
                 listOf(),
             ),
-            protocolId = codegenContext.protocol,
+            protocols = listOf(codegenContext.protocol),
         )
         try {
             // use an increased max_width to make rustfmt fail less frequently

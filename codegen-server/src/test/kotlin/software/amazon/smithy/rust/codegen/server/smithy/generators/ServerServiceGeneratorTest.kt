@@ -42,7 +42,7 @@ internal class ServerServiceGeneratorTest {
         testDirs.forEach { generatedServer ->
             val cargoToml = generatedServer.path.resolve("Cargo.toml").readText()
             assert(cargoToml.contains("codegen-version =")) { cargoToml }
-            assert(cargoToml.contains("protocol = \"aws.protocols#restJson1\"")) { cargoToml }
+            assert(cargoToml.contains("protocols = [\"aws.protocols#restJson1\"]")) { cargoToml }
         }
     }
 }

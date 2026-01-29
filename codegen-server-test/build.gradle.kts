@@ -131,6 +131,9 @@ val commonCodegenTests = "../codegen-core/common-test-models".let { commonModels
             "pokemon-service-server-sdk",
             imports = listOf("$commonModels/pokemon.smithy", "$commonModels/pokemon-common.smithy"),
             extraCodegenConfig = """"debugMode": true""",
+            transforms = listOf(
+                ApplyTrait("com.aws.example#PokemonService", "smithy.protocols#rpcv2Cbor")
+            ),
         ),
         CodegenTest(
             "com.aws.example#PokemonService",

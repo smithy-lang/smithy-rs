@@ -490,7 +490,7 @@ private fun String.intoCrate(
                 moduleLicense = null,
                 moduleRepository = null,
                 minimumSupportedRustVersion = null,
-                protocolId = null,
+                protocols = emptyList(),
                 writer = this,
                 dependencies = deps,
             ).render()

@@ -37,6 +37,54 @@ use crate::{
 };
 
 // ============================================================================
+// Protocol Enum (for request extensions)
+// ============================================================================
+
+/// The protocol that was used to handle a request.
+///
+/// This enum is inserted into request extensions by [`MultiProtocolRoutingService`]
+/// before routing the request. Users can access it to determine which protocol
+/// handled their request:
+///
+/// ```ignore
+/// fn handler(req: http::Request<Body>) {
+///     if let Some(protocol) = req.extensions().get::<Protocol>() {
+///         match protocol {
+///             Protocol::RestJson1 => println!("Handled by RestJson1"),
+///             Protocol::RpcV2Cbor => println!("Handled by RpcV2Cbor"),
+///             // ...
+///         }
+///     }
+/// }
+/// ```
+/// Protocols are listed in detection priority order (most specific first).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Protocol {
+    /// Smithy RPC v2 CBOR protocol (checked 1st - most specific, has dedicated header)
+    RpcV2Cbor,
+    /// AWS JSON 1.1 protocol (checked 2nd - has x-amz-target + specific content-type)
+    AwsJson1_1,
+    /// AWS JSON 1.0 protocol (checked 3rd - has x-amz-target + specific content-type)
+    AwsJson1_0,
+    /// AWS RestJson1 protocol (checked 4th - content-type + route matching)
+    RestJson1,
+    /// AWS RestXml protocol (checked 5th - content-type + route matching)
+    RestXml,
+}
+
+impl fmt::Display for Protocol {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Protocol::RpcV2Cbor => write!(f, "RpcV2Cbor"),
+            Protocol::AwsJson1_1 => write!(f, "AwsJson1_1"),
+            Protocol::AwsJson1_0 => write!(f, "AwsJson1_0"),
+            Protocol::RestJson1 => write!(f, "RestJson1"),
+            Protocol::RestXml => write!(f, "RestXml"),
+        }
+    }
+}
+
+// ============================================================================
 // Error Types
 // ============================================================================
 
@@ -44,59 +92,60 @@ use crate::{
 ///
 /// This enum wraps the error types from each protocol's routing service,
 /// allowing them to be unified into a single error type.
+/// Generic parameters are in detection priority order (most specific first).
 #[derive(Debug)]
-pub enum MultiProtocolRoutingError<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E> {
+pub enum MultiProtocolRoutingError<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE> {
+    /// Error from RpcV2Cbor protocol routing
+    RpcV2Cbor(RpcV2E),
+    /// Error from AwsJson1.1 protocol routing
+    AwsJson11(AwsJson11E),
+    /// Error from AwsJson1.0 protocol routing
+    AwsJson10(AwsJson10E),
     /// Error from RestJson1 protocol routing
     RestJson(RestJsonE),
     /// Error from RestXml protocol routing
     RestXml(RestXmlE),
-    /// Error from AwsJson1.0 protocol routing
-    AwsJson10(AwsJson10E),
-    /// Error from AwsJson1.1 protocol routing
-    AwsJson11(AwsJson11E),
-    /// Error from RpcV2Cbor protocol routing
-    RpcV2Cbor(RpcV2E),
     /// No protocol matched the request
     NoProtocolMatched,
 }
 
-impl<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E> fmt::Display
-    for MultiProtocolRoutingError<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E>
+impl<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE> fmt::Display
+    for MultiProtocolRoutingError<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE>
 where
+    RpcV2E: fmt::Display,
+    AwsJson11E: fmt::Display,
+    AwsJson10E: fmt::Display,
     RestJsonE: fmt::Display,
     RestXmlE: fmt::Display,
-    AwsJson10E: fmt::Display,
-    AwsJson11E: fmt::Display,
-    RpcV2E: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::RpcV2Cbor(e) => write!(f, "RpcV2Cbor error: {}", e),
+            Self::AwsJson11(e) => write!(f, "AwsJson1.1 error: {}", e),
+            Self::AwsJson10(e) => write!(f, "AwsJson1.0 error: {}", e),
             Self::RestJson(e) => write!(f, "RestJson1 error: {}", e),
             Self::RestXml(e) => write!(f, "RestXml error: {}", e),
-            Self::AwsJson10(e) => write!(f, "AwsJson1.0 error: {}", e),
-            Self::AwsJson11(e) => write!(f, "AwsJson1.1 error: {}", e),
-            Self::RpcV2Cbor(e) => write!(f, "RpcV2Cbor error: {}", e),
             Self::NoProtocolMatched => write!(f, "no protocol matched the request"),
         }
     }
 }
 
-impl<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E> StdError
-    for MultiProtocolRoutingError<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E>
+impl<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE> StdError
+    for MultiProtocolRoutingError<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE>
 where
+    RpcV2E: StdError + 'static,
+    AwsJson11E: StdError + 'static,
+    AwsJson10E: StdError + 'static,
     RestJsonE: StdError + 'static,
     RestXmlE: StdError + 'static,
-    AwsJson10E: StdError + 'static,
-    AwsJson11E: StdError + 'static,
-    RpcV2E: StdError + 'static,
 {
     fn source(&self) -> Option<&(dyn StdError + 'static)> {
         match self {
+            Self::RpcV2Cbor(e) => Some(e),
+            Self::AwsJson11(e) => Some(e),
+            Self::AwsJson10(e) => Some(e),
             Self::RestJson(e) => Some(e),
             Self::RestXml(e) => Some(e),
-            Self::AwsJson10(e) => Some(e),
-            Self::AwsJson11(e) => Some(e),
-            Self::RpcV2Cbor(e) => Some(e),
             Self::NoProtocolMatched => None,
         }
     }
@@ -300,35 +349,35 @@ where
 
 /// A multi-protocol routing service that tries multiple protocol routers in order.
 ///
-/// The type parameters represent the router types for each protocol:
+/// The type parameters represent the router types for each protocol, ordered by detection priority:
+/// - `RpcV2Router` - Router type for RpcV2Cbor (typically `RpcV2CborRouter<Route<B>>`)
+/// - `AwsJson11Router` - Router type for AwsJson1.1 (typically `AwsJsonRouter<Route<B>>`)
+/// - `AwsJson10Router` - Router type for AwsJson1.0 (typically `AwsJsonRouter<Route<B>>`)
 /// - `RestJsonRouter` - Router type for RestJson1 (typically `RestRouter<Route<B>>`)
 /// - `RestXmlRouter` - Router type for RestXml (typically `RestRouter<Route<B>>`)
-/// - `AwsJson10Router` - Router type for AwsJson1.0 (typically `AwsJsonRouter<Route<B>>`)
-/// - `AwsJson11Router` - Router type for AwsJson1.1 (typically `AwsJsonRouter<Route<B>>`)
-/// - `RpcV2Router` - Router type for RpcV2Cbor (typically `RpcV2CborRouter<Route<B>>`)
 pub struct MultiProtocolRoutingService<
+    RpcV2Router = (),
+    AwsJson11Router = (),
+    AwsJson10Router = (),
     RestJsonRouter = (),
     RestXmlRouter = (),
-    AwsJson10Router = (),
-    AwsJson11Router = (),
-    RpcV2Router = (),
 > {
+    rpc_v2: Option<RoutingService<RpcV2Router, crate::protocol::rpc_v2_cbor::RpcV2Cbor>>,
+    aws_json_11: Option<RoutingService<AwsJson11Router, crate::protocol::aws_json_11::AwsJson1_1>>,
+    aws_json_10: Option<RoutingService<AwsJson10Router, crate::protocol::aws_json_10::AwsJson1_0>>,
     rest_json: Option<RoutingService<RestJsonRouter, crate::protocol::rest_json_1::RestJson1>>,
     rest_xml: Option<RoutingService<RestXmlRouter, crate::protocol::rest_xml::RestXml>>,
-    aws_json_10: Option<RoutingService<AwsJson10Router, crate::protocol::aws_json_10::AwsJson1_0>>,
-    aws_json_11: Option<RoutingService<AwsJson11Router, crate::protocol::aws_json_11::AwsJson1_1>>,
-    rpc_v2: Option<RoutingService<RpcV2Router, crate::protocol::rpc_v2_cbor::RpcV2Cbor>>,
 }
 
 impl MultiProtocolRoutingService<(), (), (), (), ()> {
     /// Create a new empty multi-protocol routing service.
     pub fn new() -> Self {
         Self {
+            rpc_v2: None,
+            aws_json_11: None,
+            aws_json_10: None,
             rest_json: None,
             rest_xml: None,
-            aws_json_10: None,
-            aws_json_11: None,
-            rpc_v2: None,
         }
     }
 }
@@ -339,48 +388,20 @@ impl Default for MultiProtocolRoutingService<(), (), (), (), ()> {
     }
 }
 
-impl<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router>
-    MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router>
+impl<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter>
+    MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter>
 {
-    /// Add a RestJson1 protocol router.
-    pub fn with_rest_json1<R>(
+    /// Add an RpcV2Cbor protocol router.
+    pub fn with_rpc_v2_cbor<R>(
         self,
-        svc: RoutingService<R, crate::protocol::rest_json_1::RestJson1>,
-    ) -> MultiProtocolRoutingService<R, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router> {
+        svc: RoutingService<R, crate::protocol::rpc_v2_cbor::RpcV2Cbor>,
+    ) -> MultiProtocolRoutingService<R, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter> {
         MultiProtocolRoutingService {
-            rest_json: Some(svc),
-            rest_xml: self.rest_xml,
-            aws_json_10: self.aws_json_10,
+            rpc_v2: Some(svc),
             aws_json_11: self.aws_json_11,
-            rpc_v2: self.rpc_v2,
-        }
-    }
-
-    /// Add a RestXml protocol router.
-    pub fn with_rest_xml<R>(
-        self,
-        svc: RoutingService<R, crate::protocol::rest_xml::RestXml>,
-    ) -> MultiProtocolRoutingService<RestJsonRouter, R, AwsJson10Router, AwsJson11Router, RpcV2Router> {
-        MultiProtocolRoutingService {
-            rest_json: self.rest_json,
-            rest_xml: Some(svc),
             aws_json_10: self.aws_json_10,
-            aws_json_11: self.aws_json_11,
-            rpc_v2: self.rpc_v2,
-        }
-    }
-
-    /// Add an AwsJson1.0 protocol router.
-    pub fn with_aws_json_10<R>(
-        self,
-        svc: RoutingService<R, crate::protocol::aws_json_10::AwsJson1_0>,
-    ) -> MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, R, AwsJson11Router, RpcV2Router> {
-        MultiProtocolRoutingService {
             rest_json: self.rest_json,
             rest_xml: self.rest_xml,
-            aws_json_10: Some(svc),
-            aws_json_11: self.aws_json_11,
-            rpc_v2: self.rpc_v2,
         }
     }
 
@@ -388,67 +409,95 @@ impl<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Route
     pub fn with_aws_json_11<R>(
         self,
         svc: RoutingService<R, crate::protocol::aws_json_11::AwsJson1_1>,
-    ) -> MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, R, RpcV2Router> {
+    ) -> MultiProtocolRoutingService<RpcV2Router, R, AwsJson10Router, RestJsonRouter, RestXmlRouter> {
         MultiProtocolRoutingService {
+            rpc_v2: self.rpc_v2,
+            aws_json_11: Some(svc),
+            aws_json_10: self.aws_json_10,
             rest_json: self.rest_json,
             rest_xml: self.rest_xml,
-            aws_json_10: self.aws_json_10,
-            aws_json_11: Some(svc),
-            rpc_v2: self.rpc_v2,
         }
     }
 
-    /// Add an RpcV2Cbor protocol router.
-    pub fn with_rpc_v2_cbor<R>(
+    /// Add an AwsJson1.0 protocol router.
+    pub fn with_aws_json_10<R>(
         self,
-        svc: RoutingService<R, crate::protocol::rpc_v2_cbor::RpcV2Cbor>,
-    ) -> MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, R> {
+        svc: RoutingService<R, crate::protocol::aws_json_10::AwsJson1_0>,
+    ) -> MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, R, RestJsonRouter, RestXmlRouter> {
         MultiProtocolRoutingService {
+            rpc_v2: self.rpc_v2,
+            aws_json_11: self.aws_json_11,
+            aws_json_10: Some(svc),
             rest_json: self.rest_json,
             rest_xml: self.rest_xml,
-            aws_json_10: self.aws_json_10,
+        }
+    }
+
+    /// Add a RestJson1 protocol router.
+    pub fn with_rest_json1<R>(
+        self,
+        svc: RoutingService<R, crate::protocol::rest_json_1::RestJson1>,
+    ) -> MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, R, RestXmlRouter> {
+        MultiProtocolRoutingService {
+            rpc_v2: self.rpc_v2,
             aws_json_11: self.aws_json_11,
-            rpc_v2: Some(svc),
+            aws_json_10: self.aws_json_10,
+            rest_json: Some(svc),
+            rest_xml: self.rest_xml,
+        }
+    }
+
+    /// Add a RestXml protocol router.
+    pub fn with_rest_xml<R>(
+        self,
+        svc: RoutingService<R, crate::protocol::rest_xml::RestXml>,
+    ) -> MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, R> {
+        MultiProtocolRoutingService {
+            rpc_v2: self.rpc_v2,
+            aws_json_11: self.aws_json_11,
+            aws_json_10: self.aws_json_10,
+            rest_json: self.rest_json,
+            rest_xml: Some(svc),
         }
     }
 }
 
-impl<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router> Clone
-    for MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router>
+impl<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter> Clone
+    for MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter>
 where
+    RpcV2Router: Clone,
+    AwsJson11Router: Clone,
+    AwsJson10Router: Clone,
     RestJsonRouter: Clone,
     RestXmlRouter: Clone,
-    AwsJson10Router: Clone,
-    AwsJson11Router: Clone,
-    RpcV2Router: Clone,
 {
     fn clone(&self) -> Self {
         Self {
+            rpc_v2: self.rpc_v2.clone(),
+            aws_json_11: self.aws_json_11.clone(),
+            aws_json_10: self.aws_json_10.clone(),
             rest_json: self.rest_json.clone(),
             rest_xml: self.rest_xml.clone(),
-            aws_json_10: self.aws_json_10.clone(),
-            aws_json_11: self.aws_json_11.clone(),
-            rpc_v2: self.rpc_v2.clone(),
         }
     }
 }
 
-impl<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router> fmt::Debug
-    for MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router>
+impl<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter> fmt::Debug
+    for MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter>
 where
+    RpcV2Router: fmt::Debug,
+    AwsJson11Router: fmt::Debug,
+    AwsJson10Router: fmt::Debug,
     RestJsonRouter: fmt::Debug,
     RestXmlRouter: fmt::Debug,
-    AwsJson10Router: fmt::Debug,
-    AwsJson11Router: fmt::Debug,
-    RpcV2Router: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MultiProtocolRoutingService")
+            .field("rpc_v2", &self.rpc_v2)
+            .field("aws_json_11", &self.aws_json_11)
+            .field("aws_json_10", &self.aws_json_10)
             .field("rest_json", &self.rest_json)
             .field("rest_xml", &self.rest_xml)
-            .field("aws_json_10", &self.aws_json_10)
-            .field("aws_json_11", &self.aws_json_11)
-            .field("rpc_v2", &self.rpc_v2)
             .finish()
     }
 }
@@ -458,39 +507,51 @@ where
 // ============================================================================
 
 /// The response future for [`MultiProtocolRoutingService`].
-pub struct MultiProtocolRoutingFuture<RestJsonFut, RestXmlFut, AwsJson10Fut, AwsJson11Fut, RpcV2Fut> {
-    inner: MultiProtocolRoutingFutureInner<RestJsonFut, RestXmlFut, AwsJson10Fut, AwsJson11Fut, RpcV2Fut>,
+pub struct MultiProtocolRoutingFuture<RpcV2Fut, AwsJson11Fut, AwsJson10Fut, RestJsonFut, RestXmlFut> {
+    inner: MultiProtocolRoutingFutureInner<RpcV2Fut, AwsJson11Fut, AwsJson10Fut, RestJsonFut, RestXmlFut>,
 }
 
-enum MultiProtocolRoutingFutureInner<RestJsonFut, RestXmlFut, AwsJson10Fut, AwsJson11Fut, RpcV2Fut> {
+enum MultiProtocolRoutingFutureInner<RpcV2Fut, AwsJson11Fut, AwsJson10Fut, RestJsonFut, RestXmlFut> {
+    RpcV2(RpcV2Fut),
+    AwsJson11(AwsJson11Fut),
+    AwsJson10(AwsJson10Fut),
     RestJson(RestJsonFut),
     RestXml(RestXmlFut),
-    AwsJson10(AwsJson10Fut),
-    AwsJson11(AwsJson11Fut),
-    RpcV2(RpcV2Fut),
     NotFound,
 }
 
-impl<RestJsonFut, RestXmlFut, AwsJson10Fut, AwsJson11Fut, RpcV2Fut, RespBody, RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E>
+impl<RpcV2Fut, AwsJson11Fut, AwsJson10Fut, RestJsonFut, RestXmlFut, RespBody, RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE>
     Future
-    for MultiProtocolRoutingFuture<RestJsonFut, RestXmlFut, AwsJson10Fut, AwsJson11Fut, RpcV2Fut>
+    for MultiProtocolRoutingFuture<RpcV2Fut, AwsJson11Fut, AwsJson10Fut, RestJsonFut, RestXmlFut>
 where
+    RpcV2Fut: Future<Output = Result<Response<RespBody>, RpcV2E>> + Unpin,
+    AwsJson11Fut: Future<Output = Result<Response<RespBody>, AwsJson11E>> + Unpin,
+    AwsJson10Fut: Future<Output = Result<Response<RespBody>, AwsJson10E>> + Unpin,
     RestJsonFut: Future<Output = Result<Response<RespBody>, RestJsonE>> + Unpin,
     RestXmlFut: Future<Output = Result<Response<RespBody>, RestXmlE>> + Unpin,
-    AwsJson10Fut: Future<Output = Result<Response<RespBody>, AwsJson10E>> + Unpin,
-    AwsJson11Fut: Future<Output = Result<Response<RespBody>, AwsJson11E>> + Unpin,
-    RpcV2Fut: Future<Output = Result<Response<RespBody>, RpcV2E>> + Unpin,
     RespBody: HttpBody<Data = Bytes> + Send + 'static,
     RespBody::Error: Into<BoxError>,
 {
     type Output = Result<
         Response<BoxBody>,
-        MultiProtocolRoutingError<RestJsonE, RestXmlE, AwsJson10E, AwsJson11E, RpcV2E>,
+        MultiProtocolRoutingError<RpcV2E, AwsJson11E, AwsJson10E, RestJsonE, RestXmlE>,
     >;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.get_mut();
         match &mut this.inner {
+            MultiProtocolRoutingFutureInner::RpcV2(fut) => Pin::new(fut).poll(cx).map(|res| {
+                res.map(|r| r.map(crate::body::boxed))
+                    .map_err(MultiProtocolRoutingError::RpcV2Cbor)
+            }),
+            MultiProtocolRoutingFutureInner::AwsJson11(fut) => Pin::new(fut).poll(cx).map(|res| {
+                res.map(|r| r.map(crate::body::boxed))
+                    .map_err(MultiProtocolRoutingError::AwsJson11)
+            }),
+            MultiProtocolRoutingFutureInner::AwsJson10(fut) => Pin::new(fut).poll(cx).map(|res| {
+                res.map(|r| r.map(crate::body::boxed))
+                    .map_err(MultiProtocolRoutingError::AwsJson10)
+            }),
             MultiProtocolRoutingFutureInner::RestJson(fut) => Pin::new(fut).poll(cx).map(|res| {
                 res.map(|r| r.map(crate::body::boxed))
                     .map_err(MultiProtocolRoutingError::RestJson)
@@ -498,18 +559,6 @@ where
             MultiProtocolRoutingFutureInner::RestXml(fut) => Pin::new(fut).poll(cx).map(|res| {
                 res.map(|r| r.map(crate::body::boxed))
                     .map_err(MultiProtocolRoutingError::RestXml)
-            }),
-            MultiProtocolRoutingFutureInner::AwsJson10(fut) => Pin::new(fut).poll(cx).map(|res| {
-                res.map(|r| r.map(crate::body::boxed))
-                    .map_err(MultiProtocolRoutingError::AwsJson10)
-            }),
-            MultiProtocolRoutingFutureInner::AwsJson11(fut) => Pin::new(fut).poll(cx).map(|res| {
-                res.map(|r| r.map(crate::body::boxed))
-                    .map_err(MultiProtocolRoutingError::AwsJson11)
-            }),
-            MultiProtocolRoutingFutureInner::RpcV2(fut) => Pin::new(fut).poll(cx).map(|res| {
-                res.map(|r| r.map(crate::body::boxed))
-                    .map_err(MultiProtocolRoutingError::RpcV2Cbor)
             }),
             MultiProtocolRoutingFutureInner::NotFound => {
                 // Return a default 404 response in RestJson1 format
@@ -536,10 +585,31 @@ fn default_not_found_response() -> Response<BoxBody> {
 // Service Implementation
 // ============================================================================
 
-impl<B, RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router, RespBody>
+impl<B, RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter, RespBody>
     Service<Request<B>>
-    for MultiProtocolRoutingService<RestJsonRouter, RestXmlRouter, AwsJson10Router, AwsJson11Router, RpcV2Router>
+    for MultiProtocolRoutingService<RpcV2Router, AwsJson11Router, AwsJson10Router, RestJsonRouter, RestXmlRouter>
 where
+    // RpcV2Cbor bounds
+    RpcV2Router: Router<B> + Clone,
+    RpcV2Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
+    RpcV2Router::Error: IntoResponse<crate::protocol::rpc_v2_cbor::RpcV2Cbor> + StdError,
+    RoutingService<RpcV2Router, crate::protocol::rpc_v2_cbor::RpcV2Cbor>: ProtocolDetector<B>,
+    <RpcV2Router::Service as Service<Request<B>>>::Future: Unpin,
+
+    // AwsJson1.1 bounds
+    AwsJson11Router: Router<B> + Clone,
+    AwsJson11Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
+    AwsJson11Router::Error: IntoResponse<crate::protocol::aws_json_11::AwsJson1_1> + StdError,
+    RoutingService<AwsJson11Router, crate::protocol::aws_json_11::AwsJson1_1>: ProtocolDetector<B>,
+    <AwsJson11Router::Service as Service<Request<B>>>::Future: Unpin,
+
+    // AwsJson1.0 bounds
+    AwsJson10Router: Router<B> + Clone,
+    AwsJson10Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
+    AwsJson10Router::Error: IntoResponse<crate::protocol::aws_json_10::AwsJson1_0> + StdError,
+    RoutingService<AwsJson10Router, crate::protocol::aws_json_10::AwsJson1_0>: ProtocolDetector<B>,
+    <AwsJson10Router::Service as Service<Request<B>>>::Future: Unpin,
+
     // RestJson1 bounds
     RestJsonRouter: Router<B> + Clone,
     RestJsonRouter::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
@@ -554,62 +624,46 @@ where
     RoutingService<RestXmlRouter, crate::protocol::rest_xml::RestXml>: ProtocolDetector<B>,
     <RestXmlRouter::Service as Service<Request<B>>>::Future: Unpin,
 
-    // AwsJson1.0 bounds
-    AwsJson10Router: Router<B> + Clone,
-    AwsJson10Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
-    AwsJson10Router::Error: IntoResponse<crate::protocol::aws_json_10::AwsJson1_0> + StdError,
-    RoutingService<AwsJson10Router, crate::protocol::aws_json_10::AwsJson1_0>: ProtocolDetector<B>,
-    <AwsJson10Router::Service as Service<Request<B>>>::Future: Unpin,
-
-    // AwsJson1.1 bounds
-    AwsJson11Router: Router<B> + Clone,
-    AwsJson11Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
-    AwsJson11Router::Error: IntoResponse<crate::protocol::aws_json_11::AwsJson1_1> + StdError,
-    RoutingService<AwsJson11Router, crate::protocol::aws_json_11::AwsJson1_1>: ProtocolDetector<B>,
-    <AwsJson11Router::Service as Service<Request<B>>>::Future: Unpin,
-
-    // RpcV2Cbor bounds
-    RpcV2Router: Router<B> + Clone,
-    RpcV2Router::Service: Service<Request<B>, Response = Response<RespBody>> + Clone,
-    RpcV2Router::Error: IntoResponse<crate::protocol::rpc_v2_cbor::RpcV2Cbor> + StdError,
-    RoutingService<RpcV2Router, crate::protocol::rpc_v2_cbor::RpcV2Cbor>: ProtocolDetector<B>,
-    <RpcV2Router::Service as Service<Request<B>>>::Future: Unpin,
-
     // Common bounds
     RespBody: HttpBody<Data = Bytes> + Send + 'static,
     RespBody::Error: Into<BoxError>,
 {
     type Response = Response<BoxBody>;
     type Error = MultiProtocolRoutingError<
+        <RpcV2Router::Service as Service<Request<B>>>::Error,
+        <AwsJson11Router::Service as Service<Request<B>>>::Error,
+        <AwsJson10Router::Service as Service<Request<B>>>::Error,
         <RestJsonRouter::Service as Service<Request<B>>>::Error,
         <RestXmlRouter::Service as Service<Request<B>>>::Error,
-        <AwsJson10Router::Service as Service<Request<B>>>::Error,
-        <AwsJson11Router::Service as Service<Request<B>>>::Error,
-        <RpcV2Router::Service as Service<Request<B>>>::Error,
     >;
     type Future = MultiProtocolRoutingFuture<
+        RoutingFuture<RpcV2Router::Service, B>,
+        RoutingFuture<AwsJson11Router::Service, B>,
+        RoutingFuture<AwsJson10Router::Service, B>,
         RoutingFuture<RestJsonRouter::Service, B>,
         RoutingFuture<RestXmlRouter::Service, B>,
-        RoutingFuture<AwsJson10Router::Service, B>,
-        RoutingFuture<AwsJson11Router::Service, B>,
-        RoutingFuture<RpcV2Router::Service, B>,
     >;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request<B>) -> Self::Future {
+    fn call(&mut self, mut req: Request<B>) -> Self::Future {
         // Try protocols in order of specificity:
         // 1. RpcV2Cbor (most specific - has dedicated header)
         // 2. AwsJson1.1 (has x-amz-target + specific content-type)
         // 3. AwsJson1.0 (has x-amz-target + specific content-type)
         // 4. RestJson1 (content-type + route matching)
         // 5. RestXml (content-type + route matching)
+        //
+        // Before calling the routing service, we insert the protocol marker
+        // into request extensions so users can determine which protocol handled
+        // the request.
 
         // Try RpcV2Cbor
         if let Some(ref mut rpc_v2) = self.rpc_v2 {
             if rpc_v2.can_handle(&req) {
+                req.extensions_mut().insert(Protocol::RpcV2Cbor);
                 return MultiProtocolRoutingFuture {
                     inner: MultiProtocolRoutingFutureInner::RpcV2(rpc_v2.call(req)),
                 };
@@ -619,6 +673,7 @@ where
         // Try AwsJson1.1
         if let Some(ref mut aws_json_11) = self.aws_json_11 {
             if aws_json_11.can_handle(&req) {
+                req.extensions_mut().insert(Protocol::AwsJson1_1);
                 return MultiProtocolRoutingFuture {
                     inner: MultiProtocolRoutingFutureInner::AwsJson11(aws_json_11.call(req)),
                 };
@@ -628,6 +683,7 @@ where
         // Try AwsJson1.0
         if let Some(ref mut aws_json_10) = self.aws_json_10 {
             if aws_json_10.can_handle(&req) {
+                req.extensions_mut().insert(Protocol::AwsJson1_0);
                 return MultiProtocolRoutingFuture {
                     inner: MultiProtocolRoutingFutureInner::AwsJson10(aws_json_10.call(req)),
                 };
@@ -637,6 +693,7 @@ where
         // Try RestJson1
         if let Some(ref mut rest_json) = self.rest_json {
             if rest_json.can_handle(&req) {
+                req.extensions_mut().insert(Protocol::RestJson1);
                 return MultiProtocolRoutingFuture {
                     inner: MultiProtocolRoutingFutureInner::RestJson(rest_json.call(req)),
                 };
@@ -646,6 +703,7 @@ where
         // Try RestXml
         if let Some(ref mut rest_xml) = self.rest_xml {
             if rest_xml.can_handle(&req) {
+                req.extensions_mut().insert(Protocol::RestXml);
                 return MultiProtocolRoutingFuture {
                     inner: MultiProtocolRoutingFutureInner::RestXml(rest_xml.call(req)),
                 };
@@ -748,12 +806,13 @@ mod tests {
         // RestXml, AwsJson1.0, and AwsJson1.1 are unused (represented by ()).
         // If `()` doesn't implement `Router<B>`, this type alias would cause
         // the Service impl bounds to fail when used.
+        // Generic order: RpcV2, AwsJson11, AwsJson10, RestJson, RestXml
         type PartialMultiProtocol = MultiProtocolRoutingService<
-            RestRouter<crate::routing::Route<()>>,  // RestJson1 - used
-            (),                                      // RestXml - unused
-            (),                                      // AwsJson1.0 - unused
-            (),                                      // AwsJson1.1 - unused
-            RpcV2CborRouter<crate::routing::Route<()>>, // RpcV2Cbor - used
+            RpcV2CborRouter<crate::routing::Route<()>>,  // RpcV2Cbor - used
+            (),                                           // AwsJson1.1 - unused
+            (),                                           // AwsJson1.0 - unused
+            RestRouter<crate::routing::Route<()>>,        // RestJson1 - used
+            (),                                           // RestXml - unused
         >;
 
         // This function requires Service to be implemented.
