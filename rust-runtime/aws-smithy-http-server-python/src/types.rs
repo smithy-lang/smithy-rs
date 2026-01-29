@@ -122,6 +122,10 @@ impl BigInteger {
     pub fn get_value(&self) -> &str {
         self.0.as_ref()
     }
+
+    pub fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
 }
 
 impl From<aws_smithy_types::BigInteger> for BigInteger {
@@ -153,6 +157,10 @@ impl BigDecimal {
 
     #[getter(value)]
     pub fn get_value(&self) -> &str {
+        self.0.as_ref()
+    }
+
+    pub fn as_ref(&self) -> &str {
         self.0.as_ref()
     }
 }
