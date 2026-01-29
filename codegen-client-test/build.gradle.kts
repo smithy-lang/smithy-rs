@@ -62,6 +62,7 @@ data class ClientTest(
 
 val allCodegenTests = listOf(
     ClientTest("com.amazonaws.simple#SimpleService", "simple", dependsOn = listOf("simple.smithy")),
+    ClientTest("com.amazonaws.bignumbers#BigNumberService", "big_numbers", dependsOn = listOf("big-numbers.smithy")),
     ClientTest("com.amazonaws.dynamodb#DynamoDB_20120810", "dynamo"),
     ClientTest("com.amazonaws.ebs#Ebs", "ebs", dependsOn = listOf("ebs.json")),
     ClientTest("aws.protocoltests.json10#JsonRpc10", "json_rpc10"),

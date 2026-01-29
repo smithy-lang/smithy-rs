@@ -25,4 +25,10 @@ object PythonServerRuntimeType {
 
     fun document(runtimeConfig: RuntimeConfig) =
         PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::Document")
+
+    fun bigInteger(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::BigInteger")
+
+    fun bigDecimal(runtimeConfig: RuntimeConfig) =
+        PythonServerCargoDependency.smithyHttpServerPython(runtimeConfig).toType().resolve("types::BigDecimal")
 }

@@ -7,6 +7,8 @@ package software.amazon.smithy.rust.codegen.server.python.smithy
 
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -98,6 +100,14 @@ class PythonServerSymbolVisitor(
 
     override fun documentShape(shape: DocumentShape?): Symbol {
         return PythonServerRuntimeType.document(runtimeConfig).toSymbol()
+    }
+
+    override fun bigIntegerShape(shape: BigIntegerShape?): Symbol {
+        return PythonServerRuntimeType.bigInteger(runtimeConfig).toSymbol()
+    }
+
+    override fun bigDecimalShape(shape: BigDecimalShape?): Symbol {
+        return PythonServerRuntimeType.bigDecimal(runtimeConfig).toSymbol()
     }
 }
 
