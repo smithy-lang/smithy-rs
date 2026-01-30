@@ -301,7 +301,10 @@ pub(crate) struct SigV4MessageSigner<S> {
     signing_settings: S,
 }
 
-impl<S> SigV4MessageSigner<S> {
+impl<S> SigV4MessageSigner<S>
+where
+    S: Clone + Default,
+{
     pub(crate) fn new(
         running_signature: String,
         identity: Identity,
@@ -319,12 +322,7 @@ impl<S> SigV4MessageSigner<S> {
             signing_settings,
         }
     }
-}
 
-impl<S> SigV4MessageSigner<S>
-where
-    S: Clone + Default,
-{
     fn signing_params(&self) -> v4::SigningParams<'_, S> {
         let builder = v4::SigningParams::builder()
             .identity(&self.identity)
