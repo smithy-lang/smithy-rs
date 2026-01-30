@@ -201,16 +201,13 @@ fn update_dependencies(
 /// Extracts the real name of the underlying crate when the dependency has an alias
 fn extract_real_crate_name(key: &toml_edit::KeyMut, value: &Item) -> String {
     match value {
-        Item::Value(value) => match value {
-            Value::InlineTable(inline_table) => {
-                if let Some(Value::String(real_package)) = inline_table.get("package") {
-                    real_package.value()
-                } else {
-                    key.get()
-                }
+        Item::Value(Value::InlineTable(inline_table)) => {
+            if let Some(Value::String(real_package)) = inline_table.get("package") {
+                real_package.value()
+            } else {
+                key.get()
             }
-            _ => key.get(),
-        },
+        }
         _ => key.get(),
     }
     .to_string()
