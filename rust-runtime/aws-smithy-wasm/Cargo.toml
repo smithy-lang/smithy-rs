@@ -9,7 +9,7 @@ description = "Smithy WebAssembly configuration for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-rust-version = "1.90"
+rust-version = "1.91"
 
 [dependencies]
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}

@@ -6,4 +6,4 @@ breaking: true
 new_feature: false
 bug_fix: false
 ---
-Upgrade MSRV to Rust 1.90.0.
+Upgrade MSRV to Rust 1.91.0.

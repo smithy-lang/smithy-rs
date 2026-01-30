@@ -6,7 +6,7 @@ description = "Cross-service types for the AWS SDK."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.90"
+rust-version = "1.91"
 
 [features]
 # This feature is to be used only for doc comments

@@ -11,7 +11,7 @@ description = """
 Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.90"
+rust-version = "1.91"
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }

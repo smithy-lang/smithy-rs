@@ -6,7 +6,7 @@
 # This is the base Docker build image used by CI
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
-ARG rust_stable_version=1.90.0
+ARG rust_stable_version=1.91.0
 ARG rust_nightly_version=nightly-2025-10-18
 
 FROM ${base_image} AS bare_base_image
