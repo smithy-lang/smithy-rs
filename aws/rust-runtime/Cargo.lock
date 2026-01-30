@@ -193,7 +193,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.8"
+version = "1.2.10"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -202,7 +202,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.0"
+version = "0.64.2"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -221,7 +221,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.15"
+version = "0.60.17"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -230,7 +230,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.63.0"
+version = "0.63.2"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -249,7 +249,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.6"
+version = "1.1.8"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
@@ -269,14 +269,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.2.1"
+version = "0.2.3"
 dependencies = [
  "aws-smithy-runtime-api",
 ]
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.8"
+version = "0.63.10"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -316,7 +316,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.11.0"
+version = "1.11.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.0"
+version = "1.4.2"
 dependencies = [
  "base64-simd",
  "bytes",
