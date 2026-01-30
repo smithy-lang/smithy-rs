@@ -51,3 +51,4 @@ stable = true
 [package.metadata.cargo-udeps.ignore]
 # used only in doc strings
 normal = ["aws-smithy-runtime", "hyper-rustls"]
+development = ["aws-smithy-runtime"]

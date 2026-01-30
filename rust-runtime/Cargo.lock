@@ -303,7 +303,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-async"
-version = "1.2.9"
+version = "1.2.10"
 dependencies = [
  "futures-util",
  "pin-project-lite",
@@ -323,7 +323,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.1"
+version = "0.64.2"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
@@ -346,7 +346,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-compression"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -365,7 +365,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-dns"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "aws-smithy-runtime-api",
  "criterion",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.16"
+version = "0.60.17"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -394,7 +394,7 @@ version = "0.2.3"
 
 [[package]]
 name = "aws-smithy-http"
-version = "0.63.1"
+version = "0.63.2"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.7"
+version = "1.1.8"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
@@ -531,7 +531,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.1"
+version = "0.62.2"
 dependencies = [
  "aws-smithy-types",
  "proptest",
@@ -540,7 +540,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.8"
+version = "0.62.9"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -607,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability"
-version = "0.2.2"
+version = "0.2.3"
 dependencies = [
  "aws-smithy-runtime-api",
  "serial_test",
@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability-otel"
-version = "0.1.6"
+version = "0.1.7"
 dependencies = [
  "async-global-executor",
  "async-task",
@@ -630,7 +630,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-protocol-test"
-version = "0.63.9"
+version = "0.63.10"
 dependencies = [
  "assert-json-diff",
  "aws-smithy-runtime-api",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.60.11"
+version = "0.60.12"
 dependencies = [
  "aws-smithy-types",
  "urlencoding",
@@ -685,7 +685,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.11.1"
+version = "1.11.2"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-types",
@@ -701,7 +701,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.1"
+version = "1.4.2"
 dependencies = [
  "base64 0.13.1",
  "base64-simd",
@@ -4339,9 +4339,9 @@ checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
-version = "1.0.2+wasi-0.2.9"
+version = "1.0.1+wasi-0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9517f9239f02c069db75e65f174b3da828fe5f5b945c4dd26bd25d89c03ebcf5"
+checksum = "0562428422c63773dad2c345a1882263bbf4d65cf3f42e90921f787ef5ad58e7"
 dependencies = [
  "wit-bindgen",
 ]
@@ -4721,9 +4721,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.51.0"
+version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5"
+checksum = "f17a85883d4e6d00e8a97c586de764dabcc06133f7f1d55dce5cdc070ad7fe59"
 dependencies = [
  "bitflags 2.10.0",
 ]
