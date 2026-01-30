@@ -105,7 +105,7 @@ private class AwsChunkedConfigCustomization(
                         /// ## }
                         /// ```
                         ///
-                        /// ## Example - No chunking
+                        /// ## Example - No chunking (buffers entire body in memory)
                         /// ```no_run
                         /// ## use aws_sdk_s3::{Client, Config};
                         /// ## async fn example(client: Client) -> Result<(), Box<dyn std::error::Error>> {
