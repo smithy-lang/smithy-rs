@@ -85,6 +85,7 @@ impl Intercept for ForceChunkedSigningInterceptor {
 
 // Custom streaming body
 pin_project! {
+    #[derive(Clone)]
     struct TestBody {
         data: Option<Bytes>,
     }
@@ -256,12 +257,11 @@ async fn test_chunk_size_too_small_fails() {
     let body = TestBody {
         data: Some(Bytes::from(data)),
     };
-    let body = ByteStream::from_body_1_x(body);
 
     let result = dbg!(
         client
             .put_object()
-            .body(body)
+            .body(ByteStream::from_body_1_x(body.clone()))
             .bucket("test-bucket")
             .key("10KiBofA.txt")
             .send()
@@ -272,6 +272,26 @@ async fn test_chunk_size_too_small_fails() {
     let err_msg = DisplayErrorContext(&result.unwrap_err()).to_string();
     assert!(
         err_msg.contains("Chunk size must be at least 8192 bytes, but 4096 was provided"),
+        "Expected error about minimum chunk size, got: {}",
+        err_msg
+    );
+
+    let result = dbg!(
+        client
+            .put_object()
+            .body(ByteStream::from_body_1_x(body))
+            .bucket("test-bucket")
+            .key("10KiBofA.txt")
+            .customize()
+            .config_override(Config::builder().chunk_size(Some(0))) // Test edge case of 0
+            .send()
+            .await
+    );
+
+    assert!(result.is_err());
+    let err_msg = DisplayErrorContext(&result.unwrap_err()).to_string();
+    assert!(
+        err_msg.contains("Chunk size must be at least 8192 bytes, but 0 was provided"),
         "Expected error about minimum chunk size, got: {}",
         err_msg
     );

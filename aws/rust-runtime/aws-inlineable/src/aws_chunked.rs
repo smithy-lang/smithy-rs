@@ -34,6 +34,7 @@ use http_body_1x::Body;
 const X_AMZ_DECODED_CONTENT_LENGTH: &str = "x-amz-decoded-content-length";
 const TRAILER_SEPARATOR: &[u8] = b":";
 const SIGNATURE_VALUE_LENGTH: usize = 64;
+const MIN_CHUNK_SIZE_BYTE: usize = 8192;
 
 /// Chunk size configuration for aws-chunked encoding.
 #[derive(Clone, Copy, Debug)]
@@ -252,9 +253,9 @@ fn create_chunked_body_options(
 
     // Validate chunk size
     let chunk_size = chunked_body_options.chunk_size();
-    if chunk_size < 8192 {
+    if chunk_size < MIN_CHUNK_SIZE_BYTE {
         return Err(Error::ChunkSizeTooSmall {
-            min: 8192,
+            min: MIN_CHUNK_SIZE_BYTE,
             actual: chunk_size,
         });
     }
