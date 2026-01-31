@@ -30,7 +30,7 @@ struct WasiHostCtx {
 }
 
 impl wasmtime_wasi::WasiView for WasiHostCtx {
-    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView {
+    fn ctx(&mut self) -> wasmtime_wasi::WasiCtxView<'_> {
         wasmtime_wasi::WasiCtxView {
             ctx: &mut self.preview2_ctx,
             table: &mut self.preview2_table,

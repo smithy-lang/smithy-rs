@@ -7,7 +7,7 @@ edition = "2021"
 exclude = ["aws-sig-v4-test-suite/*"]
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [features]
 default = ["sign-http", "http1"]

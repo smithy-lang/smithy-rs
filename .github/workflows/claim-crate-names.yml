@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.88.0
+  rust_version: 1.91.0
 
 name: Claim unpublished crate names on crates.io
 run-name: ${{ github.workflow }}
