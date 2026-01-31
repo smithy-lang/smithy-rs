@@ -1,7 +1,7 @@
 [package]
 name = "aws-smithy-eventstream"
 # <IMPORTANT> Only patch releases can be made to this runtime crate until https://github.com/smithy-lang/smithy-rs/issues/3370 is resolved
-version = "0.60.17"
+version = "0.60.18"
 # </IMPORTANT>
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 description = "Event stream logic for smithy-rs."
