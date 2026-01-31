@@ -208,6 +208,13 @@ fn extract_real_crate_name(key: &toml_edit::KeyMut, value: &Item) -> String {
                 key.get()
             }
         }
+        Item::Table(table) => {
+            if let Some(Item::Value(Value::String(real_package))) = table.get("package") {
+                real_package.value()
+            } else {
+                key.get()
+            }
+        }
         _ => key.get(),
     }
     .to_string()
@@ -559,7 +566,7 @@ features = ["foo", "baz"]
     }
 
     #[test]
-    fn update_aliased_dependency_with_real_crate_name() {
+    fn update_aliased_dependency_with_real_crate_name_inline_table() {
         let temp_dir = tempfile::tempdir().unwrap();
         let crate_path = temp_dir.path().join("test");
         fs::create_dir_all(&crate_path).unwrap();
@@ -596,6 +603,50 @@ version = "0.1.0"
 
 [dependencies]
 config = { version = "0.5.0", package = "aws-config" }
+"#;
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn update_aliased_dependency_with_real_crate_name_table() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let crate_path = temp_dir.path().join("test");
+        fs::create_dir_all(&crate_path).unwrap();
+
+        let manifest_path = crate_path.join("Cargo.toml");
+        std::fs::write(
+            &manifest_path,
+            br#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies.config]
+path = "not/a/real/path"
+features = ["rt-tokio"]
+package = "aws-config"
+"#,
+        )
+        .unwrap();
+
+        let context = DependencyContext {
+            sdk_path: None,
+            versions_manifest: Some(versions_toml_for(&[
+                ("aws-config", "0.5.0"),
+                ("config", "1.0.0"),
+            ])),
+        };
+
+        update_manifest(&manifest_path, &context).expect("success");
+
+        let actual = std::fs::read_to_string(&manifest_path).unwrap();
+        let expected = r#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies]
+config= { version = "0.5.0", package = "aws-config", features = ["rt-tokio"] }
 "#;
         assert_eq!(expected, actual);
     }
