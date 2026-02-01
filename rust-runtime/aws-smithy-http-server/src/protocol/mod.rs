@@ -12,6 +12,53 @@ pub mod rest_xml;
 pub mod rpc_v2_cbor;
 
 use crate::rejection::MissingContentTypeReason;
+use crate::shape_id::ShapeId;
+
+// ============================================================================
+// ProtocolShape Trait
+// ============================================================================
+
+/// Models a Smithy protocol shape.
+///
+/// This trait provides the [Smithy Shape ID](https://smithy.io/2.0/spec/model.html#shape-id)
+/// for each protocol, similar to how [`OperationShape`](crate::operation::OperationShape)
+/// provides the shape ID for operations.
+///
+/// # Example
+///
+/// ```ignore
+/// use aws_smithy_http_server::protocol::{ProtocolShape, rest_json_1::RestJson1};
+///
+/// fn print_protocol_id<P: ProtocolShape>() {
+///     println!("Protocol: {}", P::ID.absolute());
+/// }
+///
+/// print_protocol_id::<RestJson1>(); // Prints: aws.protocols#restJson1
+/// ```
+pub trait ProtocolShape {
+    /// The Shape ID of the protocol.
+    const ID: ShapeId;
+}
+
+impl ProtocolShape for rest_json_1::RestJson1 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#restJson1", "aws.protocols", "restJson1");
+}
+
+impl ProtocolShape for rest_xml::RestXml {
+    const ID: ShapeId = ShapeId::new("aws.protocols#restXml", "aws.protocols", "restXml");
+}
+
+impl ProtocolShape for aws_json_10::AwsJson1_0 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#awsJson1_0", "aws.protocols", "awsJson1_0");
+}
+
+impl ProtocolShape for aws_json_11::AwsJson1_1 {
+    const ID: ShapeId = ShapeId::new("aws.protocols#awsJson1_1", "aws.protocols", "awsJson1_1");
+}
+
+impl ProtocolShape for rpc_v2_cbor::RpcV2Cbor {
+    const ID: ShapeId = ShapeId::new("smithy.protocols#rpcv2Cbor", "smithy.protocols", "rpcv2Cbor");
+}
 
 /// A trait that associates a `RuntimeError` type with a protocol marker.
 ///
@@ -349,5 +396,55 @@ mod tests {
             &valid_request,
             &"application/json".parse().unwrap()
         ));
+    }
+
+    #[test]
+    fn test_protocol_shape_rest_json1() {
+        use super::rest_json_1::RestJson1;
+        use super::ProtocolShape;
+
+        assert_eq!(RestJson1::ID.absolute(), "aws.protocols#restJson1");
+        assert_eq!(RestJson1::ID.namespace(), "aws.protocols");
+        assert_eq!(RestJson1::ID.name(), "restJson1");
+    }
+
+    #[test]
+    fn test_protocol_shape_rest_xml() {
+        use super::rest_xml::RestXml;
+        use super::ProtocolShape;
+
+        assert_eq!(RestXml::ID.absolute(), "aws.protocols#restXml");
+        assert_eq!(RestXml::ID.namespace(), "aws.protocols");
+        assert_eq!(RestXml::ID.name(), "restXml");
+    }
+
+    #[test]
+    fn test_protocol_shape_aws_json_10() {
+        use super::aws_json_10::AwsJson1_0;
+        use super::ProtocolShape;
+
+        assert_eq!(AwsJson1_0::ID.absolute(), "aws.protocols#awsJson1_0");
+        assert_eq!(AwsJson1_0::ID.namespace(), "aws.protocols");
+        assert_eq!(AwsJson1_0::ID.name(), "awsJson1_0");
+    }
+
+    #[test]
+    fn test_protocol_shape_aws_json_11() {
+        use super::aws_json_11::AwsJson1_1;
+        use super::ProtocolShape;
+
+        assert_eq!(AwsJson1_1::ID.absolute(), "aws.protocols#awsJson1_1");
+        assert_eq!(AwsJson1_1::ID.namespace(), "aws.protocols");
+        assert_eq!(AwsJson1_1::ID.name(), "awsJson1_1");
+    }
+
+    #[test]
+    fn test_protocol_shape_rpc_v2_cbor() {
+        use super::rpc_v2_cbor::RpcV2Cbor;
+        use super::ProtocolShape;
+
+        assert_eq!(RpcV2Cbor::ID.absolute(), "smithy.protocols#rpcv2Cbor");
+        assert_eq!(RpcV2Cbor::ID.namespace(), "smithy.protocols");
+        assert_eq!(RpcV2Cbor::ID.name(), "rpcv2Cbor");
     }
 }

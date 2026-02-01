@@ -28,8 +28,11 @@ use tower::Service;
 
 use crate::{
     body::BoxBody,
-    protocol::{aws_json::router::AwsJsonRouter, rest::router::RestRouter, rpc_v2_cbor::router::RpcV2CborRouter},
+    protocol::{
+        aws_json::router::AwsJsonRouter, rest::router::RestRouter, rpc_v2_cbor::router::RpcV2CborRouter, ProtocolShape,
+    },
     routing::{Router, RoutingService},
+    shape_id::ShapeId,
 };
 
 // ============================================================================
@@ -76,6 +79,24 @@ impl fmt::Display for Protocol {
             Protocol::AwsJson1_0 => write!(f, "AwsJson1_0"),
             Protocol::RestJson1 => write!(f, "RestJson1"),
             Protocol::RestXml => write!(f, "RestXml"),
+        }
+    }
+}
+
+impl Protocol {
+    /// Returns the Smithy [`ShapeId`] for this protocol.
+    pub fn shape_id(&self) -> ShapeId {
+        use crate::protocol::{
+            aws_json_10::AwsJson1_0, aws_json_11::AwsJson1_1, rest_json_1::RestJson1, rest_xml::RestXml,
+            rpc_v2_cbor::RpcV2Cbor,
+        };
+
+        match self {
+            Protocol::RpcV2Cbor => RpcV2Cbor::ID,
+            Protocol::AwsJson1_1 => AwsJson1_1::ID,
+            Protocol::AwsJson1_0 => AwsJson1_0::ID,
+            Protocol::RestJson1 => RestJson1::ID,
+            Protocol::RestXml => RestXml::ID,
         }
     }
 }
@@ -488,32 +509,41 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: Request<B>) -> Self::Future {
+    fn call(&mut self, mut req: Request<B>) -> Self::Future {
         // Try protocols in order of specificity.
         // For () slots, compiler eliminates the branch entirely since
         // Option<Infallible> can only be None.
+        //
+        // Before calling the routing service, we insert the Protocol
+        // into request extensions so handlers can determine which protocol
+        // is handling the request.
 
         if let Some(matched) = self.rpc_v2.can_handle(&req) {
+            req.extensions_mut().insert(Protocol::RpcV2Cbor);
             return MultiProtocolFuture::RpcV2 {
                 fut: self.rpc_v2.call(req, matched),
             };
         }
         if let Some(matched) = self.aws_json_11.can_handle(&req) {
+            req.extensions_mut().insert(Protocol::AwsJson1_1);
             return MultiProtocolFuture::AwsJson11 {
                 fut: self.aws_json_11.call(req, matched),
             };
         }
         if let Some(matched) = self.aws_json_10.can_handle(&req) {
+            req.extensions_mut().insert(Protocol::AwsJson1_0);
             return MultiProtocolFuture::AwsJson10 {
                 fut: self.aws_json_10.call(req, matched),
             };
         }
         if let Some(matched) = self.rest_json.can_handle(&req) {
+            req.extensions_mut().insert(Protocol::RestJson1);
             return MultiProtocolFuture::RestJson {
                 fut: self.rest_json.call(req, matched),
             };
         }
         if let Some(matched) = self.rest_xml.can_handle(&req) {
+            req.extensions_mut().insert(Protocol::RestXml);
             return MultiProtocolFuture::RestXml {
                 fut: self.rest_xml.call(req, matched),
             };
@@ -714,6 +744,15 @@ mod tests {
         assert_eq!(format!("{}", Protocol::AwsJson1_0), "AwsJson1_0");
         assert_eq!(format!("{}", Protocol::RestJson1), "RestJson1");
         assert_eq!(format!("{}", Protocol::RestXml), "RestXml");
+    }
+
+    #[test]
+    fn test_protocol_shape_id() {
+        assert_eq!(Protocol::RpcV2Cbor.shape_id().absolute(), "smithy.protocols#rpcv2Cbor");
+        assert_eq!(Protocol::AwsJson1_1.shape_id().absolute(), "aws.protocols#awsJson1_1");
+        assert_eq!(Protocol::AwsJson1_0.shape_id().absolute(), "aws.protocols#awsJson1_0");
+        assert_eq!(Protocol::RestJson1.shape_id().absolute(), "aws.protocols#restJson1");
+        assert_eq!(Protocol::RestXml.shape_id().absolute(), "aws.protocols#restXml");
     }
 
     #[test]
