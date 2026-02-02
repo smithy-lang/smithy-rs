@@ -130,7 +130,8 @@ class ServerServiceGenerator(
                                 smithyHttpServer.resolve("routing::request_spec"),
                             )
                         // Add protocol suffix to function name to avoid collisions
-                        val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase()) + "_" + protoModulePath
+                        val functionName =
+                            RustReservedWords.escapeIfNeeded(operationName.toSnakeCase()) + "_" + protoModulePath
                         val functionBody =
                             writable {
                                 rustTemplate(
@@ -183,118 +184,79 @@ class ServerServiceGenerator(
     )
 
     /**
-     * Generate the multi-protocol router newtype wrapper.
-     * This hides the complexity of MultiProtocolRoutingService from users.
+     * Generate the router type alias for this service.
      *
-     * The router is generic over `S`, the service type stored in the underlying routers.
-     * This matches single-protocol's `Router<S>` pattern where `S` is typically `Route<Body>`
-     * or `L::Service` after applying a layer.
+     * For single-protocol services, this generates a type alias wrapping `RoutingService`.
+     * For multi-protocol services, this generates a type alias wrapping `MultiProtocolService`.
+     *
+     * The router is generic over `S`, the service type stored in the underlying router.
+     * This defaults to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
      */
-    private fun multiProtocolRouter(): Writable =
+    private fun routerTypeAlias(): Writable =
         writable {
-            if (!isMultiProtocol) return@writable
+            if (isMultiProtocol) {
+                val protocolInfos = getProtocolInfo()
 
-            val protocolInfos = getProtocolInfo()
-
-            // Build the MultiProtocolRoutingService generic parameters using S (service type)
-            // Order matches detection priority: RpcV2, AwsJson11, AwsJson10, RestJson, RestXml
-            val routerTypeParams =
-                listOf("rpc_v2_cbor", "aws_json_11", "aws_json_10", "rest_json_1", "rest_xml").map { modulePath ->
-                    val matchingProtocol = protocolInfos.find { it.modulePath == modulePath }
-                    if (matchingProtocol != null) {
-                        "#{${matchingProtocol.modulePath}_Router}<S>"
-                    } else {
-                        "()" // Protocol not used by this service
-                    }
-                }
-
-            // Build the template replacements for router types
-            val routerTemplateParams =
-                protocolInfos.flatMap { info ->
-                    listOf("${info.modulePath}_Router" to info.routerType)
-                }
-
-            rustTemplate(
-                """
-                /// Router for [`$serviceName`] that handles multiple protocols.
-                ///
-                /// This is a generated newtype that wraps the multi-protocol routing service,
-                /// hiding its complex generic parameters from users.
-                ///
-                /// The type parameter `S` is the service type stored in the underlying protocol routers,
-                /// similar to single-protocol's `Router<S>`. Typically this is `Route<Body>` before
-                /// applying layers, or `L::Service` after applying a layer `L`.
-                pub struct $routerName<S = #{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>> {
-                    inner: #{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    >,
-                }
-
-                impl<S> Clone for $routerName<S>
-                where
-                    S: Clone,
-                {
-                    fn clone(&self) -> Self {
-                        Self {
-                            inner: self.inner.clone(),
+                // Build the MultiProtocolService generic parameters using S (service type)
+                // Order matches detection priority: RpcV2, AwsJson11, AwsJson10, RestJson, RestXml
+                // Map module paths to their public routing service type aliases
+                val routerTypeParams =
+                    listOf("rpc_v2_cbor", "aws_json_11", "aws_json_10", "rest_json_1", "rest_xml").map { modulePath ->
+                        val matchingProtocol = protocolInfos.find { it.modulePath == modulePath }
+                        if (matchingProtocol != null) {
+                            // Use public type aliases from aws_smithy_http_server::routing
+                            when (modulePath) {
+                                "rpc_v2_cbor" -> "#{SmithyHttpServer}::routing::CborRoutingService<S>"
+                                "aws_json_11" -> "#{SmithyHttpServer}::routing::AwsJson11RoutingService<S>"
+                                "aws_json_10" -> "#{SmithyHttpServer}::routing::AwsJson10RoutingService<S>"
+                                "rest_json_1" -> "#{SmithyHttpServer}::routing::RestJson1RoutingService<S>"
+                                "rest_xml" -> "#{SmithyHttpServer}::routing::RestXmlRoutingService<S>"
+                                else -> throw IllegalStateException("Unknown protocol module path: $modulePath")
+                            }
+                        } else {
+                            "()" // Protocol not used by this service
                         }
                     }
-                }
 
-                impl<S: std::fmt::Debug> std::fmt::Debug for $routerName<S> {
-                    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        f.debug_struct("$routerName")
-                            .field("inner", &self.inner)
-                            .finish()
-                    }
-                }
-
-                impl<S> std::ops::Deref for $routerName<S> {
-                    type Target = #{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    >;
-
-                    fn deref(&self) -> &Self::Target {
-                        &self.inner
-                    }
-                }
-
-                impl<S> std::ops::DerefMut for $routerName<S> {
-                    fn deref_mut(&mut self) -> &mut Self::Target {
-                        &mut self.inner
-                    }
-                }
-
-                impl<S, Body> #{Tower}::Service<#{Http}::Request<Body>> for $routerName<S>
-                where
-                    #{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    >: #{Tower}::Service<#{Http}::Request<Body>>,
-                {
-                    type Response = <#{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    > as #{Tower}::Service<#{Http}::Request<Body>>>::Response;
-
-                    type Error = <#{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    > as #{Tower}::Service<#{Http}::Request<Body>>>::Error;
-
-                    type Future = <#{SmithyHttpServer}::routing::MultiProtocolRoutingService<
-                        ${routerTypeParams.joinToString(",\n                        ")},
-                    > as #{Tower}::Service<#{Http}::Request<Body>>>::Future;
-
-                    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> std::task::Poll<#{Result}<(), Self::Error>> {
-                        #{Tower}::Service::poll_ready(&mut self.inner, cx)
-                    }
-
-                    fn call(&mut self, req: #{Http}::Request<Body>) -> Self::Future {
-                        #{Tower}::Service::call(&mut self.inner, req)
-                    }
-                }
-                """,
-                *routerTemplateParams.toTypedArray(),
-                *codegenScope,
-            )
+                rustTemplate(
+                    """
+                    /// Type alias for the multi-protocol router used by this service.
+                    ///
+                    /// This type handles routing requests to the appropriate protocol handler
+                    /// based on request characteristics (headers, content-type, URI path).
+                    ///
+                    /// The type parameter `S` is the service type stored in the underlying routers,
+                    /// defaulting to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
+                    pub type $routerName<S = #{SmithyHttpServer}::routing::Route> =
+                        #{SmithyHttpServer}::routing::MultiProtocolService<
+                            ${routerTypeParams.joinToString(",\n                            ")},
+                            #{SmithyHttpServer}::routing::DefaultNotFoundService,
+                        >;
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                // Single-protocol: generate type alias for RoutingService
+                rustTemplate(
+                    """
+                    /// Type alias for the router used by this service.
+                    ///
+                    /// This type handles routing requests to the appropriate operation handler
+                    /// based on the request URI and method.
+                    ///
+                    /// The type parameter `S` is the service type stored in the underlying router,
+                    /// defaulting to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
+                    pub type $routerName<S = #{SmithyHttpServer}::routing::Route> =
+                        #{SmithyHttpServer}::routing::RoutingService<
+                            #{Router}<S>,
+                            #{Protocol},
+                        >;
+                    """,
+                    "Router" to protocol.routerType(),
+                    "Protocol" to protocol.markerStruct(),
+                    *codegenScope,
+                )
+            }
         }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
@@ -333,7 +295,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let app: $serviceName<$routerName> = app;
                     /// ```
                     ///
                     pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
@@ -397,7 +359,7 @@ class ServerServiceGenerator(
                     ///     /* Set other handlers */
                     ///     .build()
                     ///     .unwrap();
-                    /// ## let app: $serviceName<#{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route>, #{Protocol}>> = app;
+                    /// ## let app: $serviceName<$routerName> = app;
                     /// ```
                     ///
                     pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
@@ -514,12 +476,7 @@ class ServerServiceGenerator(
             /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
             /// unspecified route is requested.
             pub fn build(self) -> #{Result}<
-                $serviceName<
-                    #{SmithyHttpServer}::routing::RoutingService<
-                        #{Router}<L::Service>,
-                        #{Protocol},
-                    >,
-                >,
+                $serviceName<$routerName<L::Service>>,
                 MissingOperationsError,
             >
             where
@@ -620,10 +577,13 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the MultiProtocolRoutingService construction
+        // Generate the MultiProtocolService construction
         val multiProtocolConstruction =
             writable {
-                rustTemplate("let inner = #{SmithyHttpServer}::routing::MultiProtocolRoutingService::new()", *codegenScope)
+                rustTemplate(
+                    "let router = #{SmithyHttpServer}::routing::MultiProtocolService::new()",
+                    *codegenScope
+                )
                 for (protoInfo in protocolInfos) {
                     val svcVarName = "${protoInfo.modulePath}_svc"
                     rustTemplate(
@@ -672,12 +632,9 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine into MultiProtocolRoutingService
+                // Combine into MultiProtocolService
                 #{MultiProtocolConstruction:W}
 
-                let router = $routerName {
-                    inner,
-                };
                 Ok($serviceName { svc: router })
             }
             """,
@@ -757,9 +714,7 @@ class ServerServiceGenerator(
             pub fn build_unchecked(self) -> $serviceName<L::Service>
             where
                 Body: Send + 'static,
-                L: #{Tower}::Layer<
-                    #{SmithyHttpServer}::routing::RoutingService<#{Router}<#{SmithyHttpServer}::routing::Route<Body>>, #{Protocol}>
-                >
+                L: #{Tower}::Layer<$routerName<#{SmithyHttpServer}::routing::Route<Body>>>
             {
                 let router = #{Router}::from_iter([#{Pairs:W}]);
                 let svc = self
@@ -833,10 +788,13 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the MultiProtocolRoutingService construction
+        // Generate the MultiProtocolService construction
         val multiProtocolConstruction =
             writable {
-                rustTemplate("let inner = #{SmithyHttpServer}::routing::MultiProtocolRoutingService::new()", *codegenScope)
+                rustTemplate(
+                    "let router = #{SmithyHttpServer}::routing::MultiProtocolService::new()",
+                    *codegenScope
+                )
                 for (protoInfo in protocolInfos) {
                     val svcVarName = "${protoInfo.modulePath}_svc"
                     rustTemplate(
@@ -871,12 +829,9 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine into MultiProtocolRoutingService
+                // Combine into MultiProtocolService
                 #{MultiProtocolConstruction:W}
 
-                let router = $routerName {
-                    inner,
-                };
                 $serviceName { svc: router }
             }
             """,
@@ -986,8 +941,7 @@ class ServerServiceGenerator(
             documentShape(service, model)
 
             if (isMultiProtocol) {
-                // Multi-protocol: use the newtype router as default
-                // The router is generic over the service type S, defaulting to Route<BoxBody>
+                // Multi-protocol: use the type alias as default
                 rustTemplate(
                     """
                     ///
@@ -995,7 +949,7 @@ class ServerServiceGenerator(
                     ///
                     /// This service supports multiple protocols.
                     ##[derive(Clone)]
-                    pub struct $serviceName<S = $routerName<#{SmithyHttpServer}::routing::Route<#{SmithyHttpServer}::body::BoxBody>>> {
+                    pub struct $serviceName<S = $routerName> {
                         // This is the router wrapped by layers.
                         svc: S,
                     }
@@ -1003,28 +957,17 @@ class ServerServiceGenerator(
                     *codegenScope,
                 )
             } else {
-                // Single protocol: existing behavior
+                // Single protocol: use the type alias as default
                 rustTemplate(
                     """
                     ///
                     /// See the [root](crate) documentation for more information.
                     ##[derive(Clone)]
-                    pub struct $serviceName<
-                        S = #{SmithyHttpServer}::routing::RoutingService<
-                            #{Router}<
-                                #{SmithyHttpServer}::routing::Route<
-                                    #{SmithyHttpServer}::body::BoxBody
-                                >,
-                            >,
-                            #{Protocol},
-                        >
-                    > {
+                    pub struct $serviceName<S = $routerName> {
                         // This is the router wrapped by layers.
                         svc: S,
                     }
                     """,
-                    "Router" to protocol.routerType(),
-                    "Protocol" to protocol.markerStruct(),
                     *codegenScope,
                 )
             }
@@ -1263,8 +1206,7 @@ class ServerServiceGenerator(
         writable {
             val operations = operationStructNames.values.joinToString(",")
             val matchArms: Writable =
-                operationStructNames.map {
-                        (shape, name) ->
+                operationStructNames.map { (shape, name) ->
                     writable {
                         val absolute = shape.id.toString().replace("#", "##")
                         rustTemplate(
@@ -1314,7 +1256,7 @@ class ServerServiceGenerator(
     fun render(writer: RustWriter) {
         writer.rustTemplate(
             """
-            #{MultiProtocolRouter:W}
+            #{RouterTypeAlias:W}
 
             #{Builder:W}
 
@@ -1328,7 +1270,7 @@ class ServerServiceGenerator(
 
             #{ServiceImpl}
             """,
-            "MultiProtocolRouter" to multiProtocolRouter(),
+            "RouterTypeAlias" to routerTypeAlias(),
             "Builder" to builder(),
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
