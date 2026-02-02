@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeIteratingOverMapOrCollectionJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.BeforeSerializingMemberJsonCustomization
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader.Companion.protocolSuffixForCodegenContext
 
 /**
  * RestJson1 server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
@@ -40,6 +41,7 @@ class ServerRestJsonFactory(
             ),
             additionalServerHttpBoundProtocolCustomizations,
             additionalHttpBindingCustomizations,
+            protocolSuffix = protocolSuffixForCodegenContext(codegenContext),
         )
 
     override fun support(): ProtocolSupport {

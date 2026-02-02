@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.server.smithy.protocols
 
 import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader.Companion.protocolSuffixForCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -47,6 +48,7 @@ class ServerAwsJsonFactory(
             protocol(codegenContext),
             additionalServerHttpBoundProtocolCustomizations,
             additionalHttpBindingCustomizations,
+            protocolSuffix = protocolSuffixForCodegenContext(codegenContext),
         )
 
     override fun support(): ProtocolSupport {
