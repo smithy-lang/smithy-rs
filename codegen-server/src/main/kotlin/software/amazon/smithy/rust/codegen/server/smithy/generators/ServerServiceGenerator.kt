@@ -34,6 +34,7 @@ class ServerServiceGenerator(
     private val codegenContext: ServerCodegenContext,
     private val protocol: ServerProtocol,
     private val isConfigBuilderFallible: Boolean,
+    private val allProtocols: List<ServerProtocol>,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithyHttpServer = ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
@@ -58,8 +59,7 @@ class ServerServiceGenerator(
     private val routerName = "${serviceName}Router"
 
     // Multi-protocol support
-    private val isMultiProtocol = codegenContext.isMultiProtocol
-    private val allProtocols = codegenContext.allProtocols
+    private val isMultiProtocol = allProtocols.size > 1
 
     /** Calculate all `operationShape`s contained within the `ServiceShape`. */
     private val index = TopDownIndex.of(codegenContext.model)

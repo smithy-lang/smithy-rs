@@ -116,6 +116,7 @@ open class ServerCodegenVisitor(
     // Multi-protocol support: Store all protocol generators for services with multiple protocols
     protected var allProtocolGenerators: List<ServerProtocolGenerator>
     protected var allProtocols: List<ServerProtocol>
+    protected var isMultiProtocol: Boolean = false
 
     init {
         val rustSymbolProviderConfig =
@@ -154,40 +155,12 @@ open class ServerCodegenVisitor(
 
         // Get all matching protocols for multi-protocol support
         val allProtocolPairs = serverProtocolLoader.protocolsFor(context.model, service)
-        val isMultiProtocol = allProtocolPairs.size > 1
+        isMultiProtocol = allProtocolPairs.size > 1
 
         // Use the first protocol as the primary (for backwards compatibility)
         val (protocolShape, protocolGeneratorFactory) = allProtocolPairs.first()
 
-        // Initialize all protocol generators for multi-protocol support first (we need allProtocols for context)
-        // Build temporary generators to get the ServerProtocol objects
-        val tempCodegenContext =
-            ServerCodegenContext(
-                model,
-                serverSymbolProviders.symbolProvider,
-                null,
-                service,
-                protocolShape,
-                settings,
-                serverSymbolProviders.unconstrainedShapeSymbolProvider,
-                serverSymbolProviders.constrainedShapeSymbolProvider,
-                serverSymbolProviders.constraintViolationSymbolProvider,
-                serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
-                isMultiProtocol = isMultiProtocol,
-            )
-
-        allProtocolGenerators =
-            allProtocolPairs.map { (protoShape, factory) ->
-                val protoCodegenContext =
-                    tempCodegenContext.copy(
-                        protocol = protoShape,
-                        isMultiProtocol = isMultiProtocol,
-                    )
-                factory.buildProtocolGenerator(protoCodegenContext)
-            }
-        allProtocols = allProtocolGenerators.map { it.protocol }
-
-        // Now create the final codegenContext with allProtocols included
+        // Create the codegenContext (protocol-agnostic, no multi-protocol state stored here)
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -200,8 +173,6 @@ open class ServerCodegenVisitor(
                 serverSymbolProviders.constrainedShapeSymbolProvider,
                 serverSymbolProviders.constraintViolationSymbolProvider,
                 serverSymbolProviders.pubCrateConstrainedShapeSymbolProvider,
-                isMultiProtocol = isMultiProtocol,
-                allProtocols = allProtocols,
             )
         this.protocolGeneratorFactory = protocolGeneratorFactory
 
@@ -226,14 +197,10 @@ open class ServerCodegenVisitor(
             )
         protocolGenerator = this.protocolGeneratorFactory.buildProtocolGenerator(codegenContext)
 
-        // Re-initialize protocol generators with final codegenContext that includes allProtocols
+        // Initialize protocol generators for each supported protocol
         allProtocolGenerators =
             allProtocolPairs.map { (protoShape, factory) ->
-                val protoCodegenContext =
-                    codegenContext.copy(
-                        protocol = protoShape,
-                        isMultiProtocol = isMultiProtocol,
-                    )
+                val protoCodegenContext = codegenContext.copy(protocol = protoShape)
                 factory.buildProtocolGenerator(protoCodegenContext)
             }
         allProtocols = allProtocolGenerators.map { it.protocol }
@@ -735,6 +702,7 @@ open class ServerCodegenVisitor(
                 codegenContext,
                 serverProtocol,
                 isConfigBuilderFallible,
+                allProtocols,
             ).render(this)
 
             ServiceConfigGenerator(codegenContext, configMethods).render(this)

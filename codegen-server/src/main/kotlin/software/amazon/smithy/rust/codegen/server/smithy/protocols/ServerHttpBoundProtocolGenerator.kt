@@ -126,15 +126,15 @@ class ServerHttpBoundProtocolGenerator(
     protocolSuffix: String? = null,
 ) :
     ServerProtocolGenerator(
+        protocol,
+        ServerHttpBoundProtocolTraitImplGenerator(
+            codegenContext,
             protocol,
-            ServerHttpBoundProtocolTraitImplGenerator(
-                codegenContext,
-                protocol,
-                customizations,
-                additionalHttpBindingCustomizations,
-                protocolSuffix,
-            ),
-        )
+            customizations,
+            additionalHttpBindingCustomizations,
+            protocolSuffix,
+        ),
+    )
 
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: ServerCodegenContext,
@@ -143,12 +143,12 @@ class ServerHttpBoundProtocolPayloadGenerator(
     protocolSuffix: String? = null,
 ) :
     ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
-            codegenContext,
-            protocol,
-            HttpMessageType.RESPONSE,
-            renderEventStreamBody = { writer, params ->
-                writer.rustTemplate(
-                    """
+        codegenContext,
+        protocol,
+        HttpMessageType.RESPONSE,
+        renderEventStreamBody = { writer, params ->
+            writer.rustTemplate(
+                """
                     {
                         let error_marshaller = #{errorMarshallerConstructorFn}();
                         let marshaller = #{marshallerConstructorFn}();
@@ -156,19 +156,19 @@ class ServerHttpBoundProtocolPayloadGenerator(
                         #{event_stream}
                     }
                     """,
-                    "aws_smithy_http" to
+                "aws_smithy_http" to
                         RuntimeType.smithyHttp(codegenContext.runtimeConfig),
-                    "NoOpSigner" to
+                "NoOpSigner" to
                         RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                             .resolve("frame::NoOpSigner"),
-                    "marshallerConstructorFn" to
+                "marshallerConstructorFn" to
                         params.eventStreamMarshallerGenerator.render(),
-                    "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
-                    "event_stream" to eventStreamWithInitialResponse(codegenContext, protocol, params),
-                )
-            },
-            protocolSuffix = protocolSuffix,
-        )
+                "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+                "event_stream" to eventStreamWithInitialResponse(codegenContext, protocol, params),
+            )
+        },
+        protocolSuffix = protocolSuffix,
+    )
 
 /*
  * Generate all operation input parsers and output serializers for streaming and
@@ -190,19 +190,21 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    // Compute protocol suffix for multi-protocol support: use provided suffix or derive from context
-    private val protocolSuffix: String? =
-        protocolSuffix ?: if (codegenContext.isMultiProtocol) {
-            ProtocolFunctions.protocolSuffix(codegenContext.protocol)
-        } else {
-            null
-        }
+    // Protocol suffix for multi-protocol support (passed explicitly, null for single-protocol)
+    private val protocolSuffix: String? = protocolSuffix
+
+    // Multi-protocol mode is indicated by having a protocol suffix
+    private val isMultiProtocol: Boolean = protocolSuffix != null
 
     fun withHttpBindingCustomizations(
         customizations: List<HttpBindingCustomization>,
     ): ServerHttpBoundProtocolTraitImplGenerator {
         return ServerHttpBoundProtocolTraitImplGenerator(
-            codegenContext, protocol, this.customizations, additionalHttpBindingCustomizations + customizations, protocolSuffix,
+            codegenContext,
+            protocol,
+            this.customizations,
+            additionalHttpBindingCustomizations + customizations,
+            protocolSuffix,
         )
     }
 
@@ -223,7 +225,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "PercentEncoding" to RuntimeType.PercentEncoding,
             "Regex" to RuntimeType.Regex,
             "SmithyHttpServer" to
-                ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
+                    ServerCargoDependency.smithyHttpServer(runtimeConfig).toType(),
             "SmithyTypes" to RuntimeType.smithyTypes(runtimeConfig),
             "RuntimeError" to protocol.runtimeError(runtimeConfig),
             "RequestRejection" to protocol.requestRejection(runtimeConfig),
@@ -296,7 +298,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val inputFuture = "${inputSymbol.name}Future"
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
-        if (codegenContext.isMultiProtocol) {
+        if (isMultiProtocol) {
             // Multi-protocol mode: generate generic InputFuture<P> struct only once (controlled by generateSharedTypes)
             if (generateSharedTypes) {
                 rustTemplate(
@@ -655,7 +657,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         bindings.find { it.location == HttpLocation.RESPONSE_CODE }?.let {
             serverRenderResponseCodeBinding(it, httpTraitStatusCode)(this)
         }
-            // No binding, use `@http`.
+        // No binding, use `@http`.
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let { streamingMember ->
@@ -875,7 +877,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             "ParseError" to RuntimeType.smithyHttp(runtimeConfig).resolve("header::ParseError"),
             "Request" to RuntimeType.smithyRuntimeApiWithHttpFeature(runtimeConfig).resolve("http::Request"),
             "RequestParts" to
-                RuntimeType.smithyRuntimeApiWithHttpFeature(runtimeConfig).resolve("http::RequestParts"),
+                    RuntimeType.smithyRuntimeApiWithHttpFeature(runtimeConfig).resolve("http::RequestParts"),
         )
         val parser = structuredDataParser.serverInputParser(operationShape)
 
@@ -1068,8 +1070,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 """,
                                 "Deserializer" to deserializer,
                                 "InitialMessageType" to
-                                    RuntimeType.smithyHttp(runtimeConfig)
-                                        .resolve("event_stream::InitialMessageType"),
+                                        RuntimeType.smithyHttp(runtimeConfig)
+                                            .resolve("event_stream::InitialMessageType"),
                                 "parseInitialRequest" to parseInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                 "eventStreamBodyInto" to eventStreamBodyInto(),
@@ -1623,8 +1625,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             let value = <_ as #{PrimitiveParse}>::parse_smithy_primitive(value)?;
                             """,
                             "PrimitiveParse" to
-                                RuntimeType.smithyTypes(runtimeConfig)
-                                    .resolve("primitive::Parse"),
+                                    RuntimeType.smithyTypes(runtimeConfig)
+                                        .resolve("primitive::Parse"),
                         )
                     }
                 }
@@ -1693,8 +1695,8 @@ private fun eventStreamWithInitialResponse(
                 "initial_response_generator" to initialResponseGenerator,
                 "initial_message_item" to initialMessageItem(codegenContext.settings.runtimeConfig),
                 "write_message_to" to
-                    RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
-                        .resolve("frame::write_message_to"),
+                        RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
+                            .resolve("frame::write_message_to"),
             )
         }
     } else {
