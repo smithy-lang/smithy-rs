@@ -105,11 +105,16 @@ impl Protocol {
 // Routing Service Type Aliases
 // ============================================================================
 
-type CborRoutingService<S> = RoutingService<RpcV2CborRouter<S>, crate::protocol::rpc_v2_cbor::RpcV2Cbor>;
-type AwsJson11RoutingService<S> = RoutingService<AwsJsonRouter<S>, crate::protocol::aws_json_11::AwsJson1_1>;
-type AwsJson10RoutingService<S> = RoutingService<AwsJsonRouter<S>, crate::protocol::aws_json_10::AwsJson1_0>;
-type RestJson1RoutingService<S> = RoutingService<RestRouter<S>, crate::protocol::rest_json_1::RestJson1>;
-type RestXmlRoutingService<S> = RoutingService<RestRouter<S>, crate::protocol::rest_xml::RestXml>;
+/// Type alias for RpcV2Cbor routing service.
+pub type CborRoutingService<S> = RoutingService<RpcV2CborRouter<S>, crate::protocol::rpc_v2_cbor::RpcV2Cbor>;
+/// Type alias for AwsJson1.1 routing service.
+pub type AwsJson11RoutingService<S> = RoutingService<AwsJsonRouter<S>, crate::protocol::aws_json_11::AwsJson1_1>;
+/// Type alias for AwsJson1.0 routing service.
+pub type AwsJson10RoutingService<S> = RoutingService<AwsJsonRouter<S>, crate::protocol::aws_json_10::AwsJson1_0>;
+/// Type alias for RestJson1 routing service.
+pub type RestJson1RoutingService<S> = RoutingService<RestRouter<S>, crate::protocol::rest_json_1::RestJson1>;
+/// Type alias for RestXml routing service.
+pub type RestXmlRoutingService<S> = RoutingService<RestRouter<S>, crate::protocol::rest_xml::RestXml>;
 
 // ============================================================================
 // ProtocolSlot Trait (Zero-Cost Protocol Detection)
@@ -397,8 +402,10 @@ where
 
     #[inline]
     fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
+        // Per spec: First check method+path match, then content-type
+        let matched = self.router().match_route(req).ok()?;
         if is_json_content_type(req) {
-            self.router().match_route(req).ok()
+            Some(matched)
         } else {
             None
         }
@@ -422,8 +429,10 @@ where
 
     #[inline]
     fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
+        // Per spec: First check method+path match, then content-type
+        let matched = self.router().match_route(req).ok()?;
         if is_xml_content_type(req) {
-            self.router().match_route(req).ok()
+            Some(matched)
         } else {
             None
         }
@@ -518,31 +527,54 @@ where
         // into request extensions so handlers can determine which protocol
         // is handling the request.
 
+        tracing::trace!(
+            method = %req.method(),
+            uri = %req.uri(),
+            "multi-protocol routing: checking protocols in priority order"
+        );
+
         if let Some(matched) = self.rpc_v2.can_handle(&req) {
+            tracing::debug!(
+                protocol = "RpcV2Cbor",
+                "multi-protocol routing: request matched protocol"
+            );
             req.extensions_mut().insert(Protocol::RpcV2Cbor);
             return MultiProtocolFuture::RpcV2 {
                 fut: self.rpc_v2.call(req, matched),
             };
         }
         if let Some(matched) = self.aws_json_11.can_handle(&req) {
+            tracing::debug!(
+                protocol = "AwsJson1_1",
+                "multi-protocol routing: request matched protocol"
+            );
             req.extensions_mut().insert(Protocol::AwsJson1_1);
             return MultiProtocolFuture::AwsJson11 {
                 fut: self.aws_json_11.call(req, matched),
             };
         }
         if let Some(matched) = self.aws_json_10.can_handle(&req) {
+            tracing::debug!(
+                protocol = "AwsJson1_0",
+                "multi-protocol routing: request matched protocol"
+            );
             req.extensions_mut().insert(Protocol::AwsJson1_0);
             return MultiProtocolFuture::AwsJson10 {
                 fut: self.aws_json_10.call(req, matched),
             };
         }
         if let Some(matched) = self.rest_json.can_handle(&req) {
+            tracing::debug!(
+                protocol = "RestJson1",
+                "multi-protocol routing: request matched protocol"
+            );
             req.extensions_mut().insert(Protocol::RestJson1);
             return MultiProtocolFuture::RestJson {
                 fut: self.rest_json.call(req, matched),
             };
         }
         if let Some(matched) = self.rest_xml.can_handle(&req) {
+            tracing::debug!(protocol = "RestXml", "multi-protocol routing: request matched protocol");
             req.extensions_mut().insert(Protocol::RestXml);
             return MultiProtocolFuture::RestXml {
                 fut: self.rest_xml.call(req, matched),
@@ -550,6 +582,11 @@ where
         }
 
         // No protocol matched - use fallback
+        tracing::debug!(
+            method = %req.method(),
+            uri = %req.uri(),
+            "multi-protocol routing: no protocol matched, using fallback"
+        );
         MultiProtocolFuture::Fallback {
             fut: self.fallback.call(req),
         }
@@ -593,11 +630,14 @@ fn is_aws_json_11_content_type<B>(req: &Request<B>) -> bool {
 }
 
 /// Check if Content-Type indicates JSON (for RestJson1).
+/// Also accepts event stream content type since RestJson1 can use event streams.
 fn is_json_content_type<B>(req: &Request<B>) -> bool {
     req.headers()
         .get(http::header::CONTENT_TYPE)
         .and_then(|v| v.to_str().ok())
-        .map(|v| v.contains("application/json") || v.contains("+json"))
+        .map(|v| {
+            v.contains("application/json") || v.contains("+json") || v.contains("application/vnd.amazon.eventstream")
+        })
         .unwrap_or(true) // Default to true if no content-type (GET requests, etc.)
 }
 
