@@ -99,7 +99,7 @@ open class ServerRootGenerator(
                         //!     .expect("unable to parse the server bind address and port");
                         //! #{Hyper0}::Server::bind(&bind).serve(server).await.unwrap();
                         //! ## }
-                        //! 
+                        //!
                         //! ```
                         """,
                         "Hyper0" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
@@ -219,7 +219,7 @@ open class ServerRootGenerator(
             ##![cfg_attr(
                 not(feature = "aws-lambda"),
                 doc = " by enabling the `aws-lambda` feature flag and utilizing the `LambdaHandler`.")]
-            //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else "" }
+            //! The [`crate::${InputModule.name}`], ${if (!hasErrors) "and " else ""}[`crate::${OutputModule.name}`], ${if (hasErrors) "and [`crate::${ErrorModule.name}`]" else ""}
             //! modules provide the types used in each operation.
             //!
             //! ###### Running on Hyper
@@ -343,19 +343,28 @@ open class ServerRootGenerator(
             """,
             "HandlerImports" to handlerImports(crateName, operations, commentToken = "//!"),
             "Handlers" to handlers,
-            "ExampleHandler" to operations.take(1).map { operation -> DocHandlerGenerator(codegenContext, operation, builderFieldNames[operation]!!, "//!").docSignature() },
+            "ExampleHandler" to operations.take(1).map { operation ->
+                DocHandlerGenerator(
+                    codegenContext,
+                    operation,
+                    builderFieldNames[operation]!!,
+                    "//!"
+                ).docSignature()
+            },
             "HyperServeExample" to hyperServeExample(crateName, serviceName, unwrapConfigBuilder),
             "FullExample" to fullExample(crateName, serviceName, unwrapConfigBuilder, builderFieldNames),
             "Hyper" to ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType(),
             "Tokio" to ServerCargoDependency.TokioDev.toType(),
             "Tower" to ServerCargoDependency.Tower.toType(),
             "Body" to
-                when (codegenContext.runtimeConfig.httpVersion) {
-                    HttpVersion.Http0x ->
-                        ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType().resolve("Body")
-                    HttpVersion.Http1x ->
-                        ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType().resolve("body::Incoming")
-                },
+                    when (codegenContext.runtimeConfig.httpVersion) {
+                        HttpVersion.Http0x ->
+                            ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType().resolve("Body")
+
+                        HttpVersion.Http1x ->
+                            ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).toType()
+                                .resolve("body::Incoming")
+                    },
             "ServeLink" to serveLink(codegenContext.runtimeConfig, crateName),
         )
     }
@@ -371,7 +380,11 @@ open class ServerRootGenerator(
                     //! [`serve`]: https://docs.rs/hyper/0.14.16/hyper/server/struct.Builder.html##method.serve
                     //! [hyper server]: https://docs.rs/hyper/#{Hyper0Version}/hyper/server/index.html
                     """,
-                    "Hyper0Version" to writable { rust(ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).version()) },
+                    "Hyper0Version" to writable {
+                        rust(
+                            ServerCargoDependency.hyperDev(codegenContext.runtimeConfig).version()
+                        )
+                    },
                 )
             }
 
@@ -400,6 +413,10 @@ open class ServerRootGenerator(
             } else {
                 ""
             }
+
+        // Export router type alias for all services (single and multi-protocol)
+        val routerReExport = "${serviceName}Router,"
+
         rustWriter.rust(
             """
             pub use crate::service::{
@@ -408,6 +425,7 @@ open class ServerRootGenerator(
                 ${serviceName}ConfigBuilder,
                 $configErrorReExport
                 ${serviceName}Builder,
+                $routerReExport
                 MissingOperationsError
             };
             """,

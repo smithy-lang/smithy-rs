@@ -446,10 +446,10 @@ open class ServerCodegenVisitor(
     private fun collectionShape(shape: CollectionShape) {
         val renderUnconstrainedList =
             shape.isReachableFromOperationInput() &&
-                shape.canReachConstrainedShape(
-                    model,
-                    codegenContext.symbolProvider,
-                )
+                    shape.canReachConstrainedShape(
+                        model,
+                        codegenContext.symbolProvider,
+                    )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedList) {
@@ -510,10 +510,10 @@ open class ServerCodegenVisitor(
     override fun mapShape(shape: MapShape) {
         val renderUnconstrainedMap =
             shape.isReachableFromOperationInput() &&
-                shape.canReachConstrainedShape(
-                    model,
-                    codegenContext.symbolProvider,
-                )
+                    shape.canReachConstrainedShape(
+                        model,
+                        codegenContext.symbolProvider,
+                    )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedMap) {
@@ -805,7 +805,7 @@ open class ServerCodegenVisitor(
 /**
  * Returns the detection priority order for a protocol.
  * Lower numbers = higher priority (checked first).
- * This matches the order in MultiProtocolRoutingService::call():
+ * This matches the order in MultiProtocolService::call():
  * 1. RpcV2Cbor (most specific - has dedicated header)
  * 2. AwsJson1.1 (has x-amz-target + specific content-type)
  * 3. AwsJson1.0 (has x-amz-target + specific content-type)
