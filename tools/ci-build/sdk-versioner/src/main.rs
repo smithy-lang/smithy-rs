@@ -177,7 +177,9 @@ fn update_dependencies(
 ) -> Result<bool> {
     let mut changed = false;
     for (key, value) in dependencies.iter_mut() {
-        let category = PackageCategory::from_package_name(key.get());
+        let crate_name = extract_real_crate_name(&key, value);
+
+        let category = PackageCategory::from_package_name(&crate_name);
         if !matches!(category, PackageCategory::Unknown) {
             let old_value = match value {
                 Item::Table(table) => table.clone(),
@@ -185,7 +187,7 @@ fn update_dependencies(
                 _ => Table::new(),
             };
             *value = Item::Value(Value::InlineTable(updated_dependency_value(
-                key.get(),
+                &crate_name,
                 old_value,
                 dependency_context,
                 crate_path,
@@ -194,6 +196,28 @@ fn update_dependencies(
         }
     }
     Ok(changed)
+}
+
+/// Extracts the real name of the underlying crate when the dependency has an alias
+fn extract_real_crate_name(key: &toml_edit::KeyMut, value: &Item) -> String {
+    match value {
+        Item::Value(Value::InlineTable(inline_table)) => {
+            if let Some(Value::String(real_package)) = inline_table.get("package") {
+                real_package.value()
+            } else {
+                key.get()
+            }
+        }
+        Item::Table(table) => {
+            if let Some(Item::Value(Value::String(real_package))) = table.get("package") {
+                real_package.value()
+            } else {
+                key.get()
+            }
+        }
+        _ => key.get(),
+    }
+    .to_string()
 }
 
 fn crate_path_name(name: &str) -> &str {
@@ -539,5 +563,91 @@ version = "5.0"
 features = ["foo", "baz"]
 "#
         );
+    }
+
+    #[test]
+    fn update_aliased_dependency_with_real_crate_name_inline_table() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let crate_path = temp_dir.path().join("test");
+        fs::create_dir_all(&crate_path).unwrap();
+
+        let manifest_path = crate_path.join("Cargo.toml");
+        std::fs::write(
+            &manifest_path,
+            br#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies]
+config = { package = "aws-config", path = "not/a/real/path" }
+"#,
+        )
+        .unwrap();
+
+        let context = DependencyContext {
+            sdk_path: None,
+            versions_manifest: Some(versions_toml_for(&[
+                ("aws-config", "0.5.0"),
+                ("config", "1.0.0"),
+            ])),
+        };
+
+        update_manifest(&manifest_path, &context).expect("success");
+
+        let actual = std::fs::read_to_string(&manifest_path).unwrap();
+        let expected = r#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies]
+config = { version = "0.5.0", package = "aws-config" }
+"#;
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn update_aliased_dependency_with_real_crate_name_table() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let crate_path = temp_dir.path().join("test");
+        fs::create_dir_all(&crate_path).unwrap();
+
+        let manifest_path = crate_path.join("Cargo.toml");
+        std::fs::write(
+            &manifest_path,
+            br#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies.config]
+path = "not/a/real/path"
+features = ["rt-tokio"]
+package = "aws-config"
+"#,
+        )
+        .unwrap();
+
+        let context = DependencyContext {
+            sdk_path: None,
+            versions_manifest: Some(versions_toml_for(&[
+                ("aws-config", "0.5.0"),
+                ("config", "1.0.0"),
+            ])),
+        };
+
+        update_manifest(&manifest_path, &context).expect("success");
+
+        let actual = std::fs::read_to_string(&manifest_path).unwrap();
+        let expected = r#"
+[package]
+name = "test"
+version = "0.1.0"
+
+[dependencies]
+config= { version = "0.5.0", package = "aws-config", features = ["rt-tokio"] }
+"#;
+        assert_eq!(expected, actual);
     }
 }

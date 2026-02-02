@@ -512,6 +512,10 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun dateTime(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("DateTime")
 
+        fun bigInteger(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("BigInteger")
+
+        fun bigDecimal(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("BigDecimal")
+
         fun document(runtimeConfig: RuntimeConfig): RuntimeType = smithyTypes(runtimeConfig).resolve("Document")
 
         fun format(runtimeConfig: RuntimeConfig) = smithyTypes(runtimeConfig).resolve("date_time::Format")
