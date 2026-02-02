@@ -53,7 +53,11 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
-    multi_protocol::{MultiProtocolFuture, MultiProtocolService, Protocol, ProtocolSlot},
+    multi_protocol::{
+        AwsJson10RoutingService, AwsJson11RoutingService, CborRoutingService, DefaultNotFoundService,
+        MultiProtocolFuture, MultiProtocolService, Protocol, ProtocolSlot, RestJson1RoutingService,
+        RestXmlRoutingService,
+    },
     route::Route,
 };
 
