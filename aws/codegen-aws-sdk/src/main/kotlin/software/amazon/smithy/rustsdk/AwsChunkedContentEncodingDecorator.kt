@@ -31,8 +31,19 @@ class AwsChunkedContentEncodingDecorator : ClientCodegenDecorator {
     // This decorator must decorate after any of the following:
     // - HttpRequestChecksumDecorator
     // - HttpRequestCompressionDecorator
+    //
+    // TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Change ORDER to -1 once
+    //  a dedicated Smithy trait is available.
+    //  Why ORDER -2 is needed temporarily:
+    //  - AwsChunkedContentEncodingDecorator is part of AwsSdkCodegenDecorator (ORDER -1),
+    //    which only applies to S3
+    //  - HttpChecksumTest needs aws-chunked for flexible checksums but uses a non-S3 model
+    //  - To test this, AwsChunkedContentEncodingDecorator must be passed separately to
+    //    awsSdkIntegrationTest alongside AwsSdkCodegenDecorator
+    //  - Since HttpRequestChecksumDecorator is in AwsSdkCodegenDecorator (ORDER -1),
+    //    we need ORDER -2 to run before it
     override val order: Byte =
-        (minOf(HttpRequestChecksumDecorator.ORDER, HttpRequestCompressionDecorator.ORDER) - 1).toByte()
+        (minOf(HttpRequestChecksumDecorator.ORDER, HttpRequestCompressionDecorator.ORDER) - 2).toByte()
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -46,38 +57,16 @@ class AwsChunkedContentEncodingDecorator : ClientCodegenDecorator {
     ) = baseCustomizations + AwsChunkedOperationCustomization(codegenContext, operation)
 }
 
-// TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Replace this heuristic with a dedicated
-//  Smithy trait once available to determine whether operations require aws-chunked encoding.
-private fun operationRequiresAwsChunked(
-    codegenContext: ClientCodegenContext,
-    operation: OperationShape,
-): Boolean {
-    val checksumTrait = operation.getTrait<HttpChecksumTrait>() ?: return false
-    val requestAlgorithmMember =
-        checksumTrait.requestAlgorithmMemberShape(codegenContext, operation) ?: return false
-    requestAlgorithmMember.getTrait<HttpHeaderTrait>()?.value ?: return false
-    val input = codegenContext.model.expectShape(operation.inputShape, StructureShape::class.java)
-    return input.hasStreamingMember(codegenContext.model)
-}
-
-private fun serviceRequiresAwsChunked(codegenContext: ClientCodegenContext): Boolean =
-    codegenContext.serviceShape.allOperations.any { operationId ->
-        val operation = codegenContext.model.expectShape(operationId, OperationShape::class.java)
-        operationRequiresAwsChunked(codegenContext, operation)
-    }
-
 private class AwsChunkedConfigCustomization(
     codegenContext: ClientCodegenContext,
 ) : ConfigCustomization() {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val moduleUseName = codegenContext.moduleUseName()
-    private val serviceRequiresChunking = serviceRequiresAwsChunked(codegenContext)
 
     override fun section(section: ServiceConfig) =
         writable {
             when (section) {
                 ServiceConfig.BuilderImpl -> {
-                    if (!serviceRequiresChunking) return@writable
                     rustTemplate(
                         """
                         /// Sets the chunk size for [`aws-chunked encoding`].
@@ -142,6 +131,20 @@ private class AwsChunkedConfigCustomization(
                 else -> emptySection
             }
         }
+}
+
+// TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Replace this condition with a dedicated
+//  Smithy trait once available to determine whether operations require aws-chunked encoding.
+private fun operationRequiresAwsChunked(
+    codegenContext: ClientCodegenContext,
+    operation: OperationShape,
+): Boolean {
+    val checksumTrait = operation.getTrait<HttpChecksumTrait>() ?: return false
+    val requestAlgorithmMember =
+        checksumTrait.requestAlgorithmMemberShape(codegenContext, operation) ?: return false
+    requestAlgorithmMember.getTrait<HttpHeaderTrait>()?.value ?: return false
+    val input = codegenContext.model.expectShape(operation.inputShape, StructureShape::class.java)
+    return input.hasStreamingMember(codegenContext.model)
 }
 
 private class AwsChunkedOperationCustomization(
