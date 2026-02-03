@@ -86,7 +86,9 @@ pub struct SigningParams<'a, S> {
     pub(crate) settings: S,
 }
 
-const HMAC_256: &str = "AWS4-HMAC-SHA256";
+pub(crate) const HMAC_SHA256: &str = "AWS4-HMAC-SHA256";
+const HMAC_SHA256_PAYLOAD: &str = "AWS4-HMAC-SHA256-PAYLOAD";
+const HMAC_SHA256_TRAILER: &str = "AWS4-HMAC-SHA256-TRAILER";
 
 impl<S> SigningParams<'_, S> {
     /// Returns the region that will be used to sign SigV4 requests
@@ -101,7 +103,7 @@ impl<S> SigningParams<'_, S> {
 
     /// Return the name of the algorithm used to sign requests
     pub fn algorithm(&self) -> &'static str {
-        HMAC_256
+        HMAC_SHA256
     }
 }
 
@@ -207,7 +209,7 @@ pub fn sign_chunk<'a, S>(
 ) -> Result<SigningOutput<()>, SigningError> {
     let payload_hash = format!("{}\n{}", sha256_hex_string([]), sha256_hex_string(chunk));
     sign_streaming_payload(
-        "AWS4-HMAC-SHA256-PAYLOAD",
+        HMAC_SHA256_PAYLOAD,
         running_signature,
         params,
         &payload_hash,
@@ -237,7 +239,7 @@ pub fn sign_trailer<'a, S>(
 
     let payload_hash = sha256_hex_string(canonical_headers(headers));
     sign_streaming_payload(
-        "AWS4-HMAC-SHA256-TRAILER",
+        HMAC_SHA256_TRAILER,
         running_signature,
         params,
         &payload_hash,

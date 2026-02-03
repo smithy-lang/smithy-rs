@@ -12,7 +12,7 @@ use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::http_request::{PercentEncodingMode, SigningSettings};
-use crate::sign::v4::sha256_hex_string;
+use crate::sign::v4::{HMAC_SHA256, sha256_hex_string};
 use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
@@ -44,8 +44,6 @@ pub(crate) mod param {
     pub(crate) const X_AMZ_SIGNED_HEADERS: &str = "X-Amz-SignedHeaders";
     pub(crate) const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
 }
-
-pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
 
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
@@ -626,7 +624,7 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
-            algorithm: HMAC_256,
+            algorithm: HMAC_SHA256,
             scope,
             time,
             region,
