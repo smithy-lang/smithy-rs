@@ -127,7 +127,7 @@ async fn test_signing_for_aws_chunked_content_encoding() {
         .http_client(http_client.clone())
         .region(Region::new("us-east-1"))
         .time_source(SharedTimeSource::new(time_source.clone()))
-        .chunk_size(Some(8 * 1024)) // 8 KiB chunk size
+        .aws_chunked_encoding_chunk_size(Some(8 * 1024)) // 8 KiB chunk size
         .build();
 
     let client = Client::from_conf(config);
@@ -188,7 +188,7 @@ async fn test_aws_chunked_content_encoding_with_custom_chunk_size() {
         .bucket("test-bucket")
         .key("10KiBofA.txt")
         .customize()
-        .config_override(Config::builder().chunk_size(Some(8 * 1024)))
+        .config_override(Config::builder().aws_chunked_encoding_chunk_size(Some(8 * 1024)))
         .send()
         .await
         .unwrap());
@@ -210,7 +210,7 @@ async fn test_aws_chunked_content_encoding_with_no_chunking() {
         .with_test_defaults()
         .http_client(http_client.clone())
         .region(Region::new("us-east-1"))
-        .chunk_size(None) // No chunking
+        .aws_chunked_encoding_chunk_size(None) // No chunking
         .build();
 
     let client = Client::from_conf(config);
@@ -248,7 +248,7 @@ async fn test_chunk_size_too_small_fails() {
         .with_test_defaults()
         .http_client(http_client)
         .region(Region::new("us-east-1"))
-        .chunk_size(Some(4096)) // Too small - less than 8 KiB
+        .aws_chunked_encoding_chunk_size(Some(4096)) // Too small - less than 8 KiB
         .build();
 
     let client = Client::from_conf(config);
@@ -283,7 +283,7 @@ async fn test_chunk_size_too_small_fails() {
             .bucket("test-bucket")
             .key("10KiBofA.txt")
             .customize()
-            .config_override(Config::builder().chunk_size(Some(0))) // Test edge case of 0
+            .config_override(Config::builder().aws_chunked_encoding_chunk_size(Some(0))) // Test edge case of 0
             .send()
             .await
     );

@@ -87,7 +87,7 @@ private class AwsChunkedConfigCustomization(
                         /// ## use $moduleUseName::{Client, Config};
                         /// ## async fn example(client: Client) -> Result<(), Box<dyn std::error::Error>> {
                         /// let config = Config::builder()
-                        ///     .chunk_size(Some(10240)) // 10 KiB chunks
+                        ///     .aws_chunked_encoding_chunk_size(Some(10240)) // 10 KiB chunks
                         ///     .build();
                         /// let client = Client::from_conf(config);
                         /// ## Ok(())
@@ -99,19 +99,19 @@ private class AwsChunkedConfigCustomization(
                         /// ## use aws_sdk_s3::{Client, Config};
                         /// ## async fn example(client: Client) -> Result<(), Box<dyn std::error::Error>> {
                         /// let config = Config::builder()
-                        ///     .chunk_size(None) // Use entire content as one chunk
+                        ///     .aws_chunked_encoding_chunk_size(None) // Use entire content as one chunk
                         ///     .build();
                         /// let client = Client::from_conf(config);
                         /// ## Ok(())
                         /// ## }
                         /// ```
-                        pub fn chunk_size(mut self, chunk_size: #{Option}<usize>) -> Self {
-                            self.set_chunk_size(#{Some}(chunk_size));
+                        pub fn aws_chunked_encoding_chunk_size(mut self, chunk_size: #{Option}<usize>) -> Self {
+                            self.set_aws_chunked_encoding_chunk_size(#{Some}(chunk_size));
                             self
                         }
 
                         /// Sets the chunk size for aws-chunked encoding.
-                        pub fn set_chunk_size(&mut self, chunk_size: #{Option}<#{Option}<usize>>) -> &mut Self {
+                        pub fn set_aws_chunked_encoding_chunk_size(&mut self, chunk_size: #{Option}<#{Option}<usize>>) -> &mut Self {
                             if let #{Some}(chunk_size) = chunk_size {
                                 let chunk_size = match chunk_size {
                                     #{Some}(size) => #{ChunkSize}::Configured(size),
