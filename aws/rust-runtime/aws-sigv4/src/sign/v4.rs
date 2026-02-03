@@ -227,7 +227,7 @@ pub fn sign_trailer<'a, S>(
     fn canonical_headers(headers: &Headers) -> Vec<u8> {
         let mut sorted_headers: Vec<_> = headers.iter().collect();
         sorted_headers.sort_by_key(|(name, _)| name.to_lowercase());
-        let mut buf = Vec::new();
+        let mut buf = Vec::with_capacity(sorted_headers.len());
         for (name, value) in sorted_headers.iter() {
             buf.extend_from_slice(name.to_lowercase().as_bytes());
             buf.extend_from_slice(b":");

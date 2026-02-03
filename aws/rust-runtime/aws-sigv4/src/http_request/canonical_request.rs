@@ -12,7 +12,7 @@ use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::http_request::{PercentEncodingMode, SigningSettings};
-use crate::sign::v4::{HMAC_SHA256, sha256_hex_string};
+use crate::sign::v4::{sha256_hex_string, HMAC_SHA256};
 use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
 use http::header::{AsHeaderName, HeaderName, HOST};
