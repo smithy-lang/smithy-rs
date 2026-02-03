@@ -116,6 +116,8 @@ where
                 } else {
                     *this.state = PollingTrailers;
                 }
+                // Inner future has already returned `Ready` - no active waker.
+                // Wake explicitly to ensure the task gets polled again.
                 cx.waker().wake_by_ref();
                 Poll::Pending
             }
@@ -152,6 +154,8 @@ where
                             }
                         }
                     }
+                    // Inner future has already returned `Ready` - no active waker.
+                    // Wake explicitly to ensure the task gets polled again.
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 }
@@ -161,6 +165,8 @@ where
                 }
                 Poll::Ready(None) => {
                     *this.state = WritingTrailers;
+                    // Inner future has already returned `Ready` - no active waker.
+                    // Wake explicitly to ensure the task gets polled again.
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 }
