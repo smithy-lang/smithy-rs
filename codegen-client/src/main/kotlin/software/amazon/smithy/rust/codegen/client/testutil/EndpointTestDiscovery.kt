@@ -15,9 +15,15 @@ import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class EndpointTestDiscovery {
-    fun testCases(): List<Model> {
-        val models = ModelDiscovery.findModels(javaClass.getResource("/META-INF/smithy/manif3st"))
+    fun testCases(prefix: String = ""): List<Model> {
+        var models = ModelDiscovery.findModels(javaClass.getResource("/META-INF/smithy/manif3st"))
+
+        if (prefix != "") {
+            models = models.filter { it.path.contains(prefix) }
+        }
+
         val assembledModels = models.map { url -> ModelAssembler().discoverModels().addImport(url).assemble().unwrap() }
+
         // add a protocol trait so we can generate of it
         return assembledModels.map { model ->
             if (model.serviceShapes.size > 1) {

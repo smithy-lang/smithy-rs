@@ -7,11 +7,21 @@ use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 use http_1x::Uri;
 use url::{Host, Url as ParsedUrl};
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub(crate) struct Url<'a> {
     uri: Uri,
     url: ParsedUrl,
     raw: &'a str,
+}
+
+impl Default for Url<'_> {
+    fn default() -> Self {
+        Self {
+            uri: Uri::from_static("https://localhost"),
+            url: ParsedUrl::parse("https://localhost").unwrap(),
+            raw: "https://localhost",
+        }
+    }
 }
 
 // individual methods on parse_url might not be used (although the [`parse_url`] itself _MUST_ be used
