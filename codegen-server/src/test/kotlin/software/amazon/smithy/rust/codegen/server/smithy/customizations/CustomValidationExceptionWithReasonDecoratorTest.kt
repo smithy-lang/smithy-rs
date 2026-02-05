@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 import java.io.File
 import kotlin.streams.toList
@@ -107,6 +108,7 @@ internal class CustomValidationExceptionWithReasonDecoratorTest {
                             .build(),
                     ).build(),
             ),
+            testCoverage = HttpTestType.Default,
         )
     }
 }

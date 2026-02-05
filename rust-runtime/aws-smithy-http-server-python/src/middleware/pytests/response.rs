@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_smithy_http_server::body::to_boxed;
 use aws_smithy_http_server_python::PyResponse;
+use aws_smithy_legacy_http_server::body::to_boxed;
 use http::{Response, StatusCode, Version};
 use pyo3::{
     prelude::*,

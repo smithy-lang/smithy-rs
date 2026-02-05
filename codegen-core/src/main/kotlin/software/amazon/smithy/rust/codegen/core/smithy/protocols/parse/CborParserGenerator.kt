@@ -5,7 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
+import software.amazon.smithy.codegen.core.CodegenException
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -578,6 +581,20 @@ class CborParserGenerator(
                 is DoubleShape -> rust("decoder.double()")
 
                 is TimestampShape -> rust("decoder.timestamp()")
+
+                // BigInteger/BigDecimal are not supported with CBOR.
+                // The Smithy RPC v2 CBOR spec requires these to be encoded using CBOR tags 2/3/4
+                // (binary bignum representation), but aws-smithy-cbor doesn't implement these tags yet.
+                is BigIntegerShape ->
+                    throw CodegenException(
+                        "BigInteger is not supported with Concise Binary Object Representation (CBOR) protocol. " +
+                            "See https://github.com/smithy-lang/smithy-rs/issues/4473",
+                    )
+                is BigDecimalShape ->
+                    throw CodegenException(
+                        "BigDecimal is not supported with Concise Binary Object Representation (CBOR) protocol. " +
+                            "See https://github.com/smithy-lang/smithy-rs/issues/4473",
+                    )
 
                 // Aggregate shapes: https://smithy.io/2.0/spec/aggregate-types.html
                 is StructureShape -> deserializeStruct(target)

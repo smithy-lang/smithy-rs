@@ -139,7 +139,12 @@ open class ServerCodegenVisitor(
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols,
+                    ServerProtocolLoader.defaultProtocols { it ->
+                        codegenDecorator.httpCustomizations(
+                            serverSymbolProviders.symbolProvider,
+                            it,
+                        )
+                    },
                 ),
             )
                 .protocolFor(context.model, service)

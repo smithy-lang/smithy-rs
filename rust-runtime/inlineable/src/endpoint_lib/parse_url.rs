@@ -4,7 +4,7 @@
  */
 
 use crate::endpoint_lib::diagnostic::DiagnosticCollector;
-use http::Uri;
+use http_1x::Uri;
 use url::{Host, Url as ParsedUrl};
 
 #[derive(PartialEq, Debug, Clone)]

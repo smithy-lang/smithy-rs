@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-observability-otel"
-version = "0.1.3"
+version = "0.1.8"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
 ]

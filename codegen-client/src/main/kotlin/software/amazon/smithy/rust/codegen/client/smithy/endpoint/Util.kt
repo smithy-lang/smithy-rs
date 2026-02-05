@@ -62,7 +62,7 @@ object EndpointsLib {
     val isValidHostLabel =
         endpointsLib("host", CargoDependency.Proptest).toType().resolve("is_valid_host_label")
     val parseUrl =
-        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
+        endpointsLib("parse_url", CargoDependency.Http1x, CargoDependency.Url)
             .toType()
             .resolve("parse_url")
     val split =
