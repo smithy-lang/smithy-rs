@@ -1,6 +1,6 @@
 [package]
 name = "aws-runtime"
-version = "1.6.1"
+version = "1.7.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Runtime support code for the AWS SDK. This crate isn't intended to be used directly."
 edition = "2021"
@@ -27,6 +27,7 @@ aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api"
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types", features = ["http-body-1-x"]}
 aws-types = { path = "../aws-types" }
 bytes = "1.10.0"
+bytes-utils = "0.1.2"
 fastrand = "2.3.0"
 http-02x = { package = "http", version = "0.2.12", optional = true}
 http-body-04x = { package = "http-body", version = "0.4.6", optional = true}
