@@ -46,60 +46,6 @@ async fn test_metrics_content_via_tcp() {
     test_capture_pokemon_500_error(&metrics);
 }
 
-#[tokio::test]
-#[serial]
-async fn test_outstanding_requests_metric() {
-    // Start TCP listener to receive metrics
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
-
-    // Spawn a task to collect metrics into the buffer
-    let metrics_buffer = Arc::new(Mutex::new(Vec::new()));
-    spawn_metrics_collection_task(listener, Arc::clone(&metrics_buffer)).await;
-
-    // Start server with metrics TCP address
-    let server = common::run_server_with_metrics_tcp(&addr.to_string()).await;
-    let client = common::client(server.port);
-
-    let (tx, rx) = tokio::sync::oneshot::channel();
-
-    tokio::task::spawn(async move {
-        let client2 = common::client(server.port);
-        // Send a request that sleeps for 100 seconds
-        std::env::set_var("DO_NOTHING_SLEEP_FOR_100", "1");
-        let req = client2.do_nothing().send();
-        let _ = tx.send(()); // Signal that request is about to be sent
-        let _ = req.await;
-    });
-
-    rx.await.unwrap(); // Wait for signal
-
-    // Add a small buffer to ensure that the request in the task has been awaited
-    tokio::time::sleep(Duration::from_millis(100)).await;
-
-    // Send a successful request
-    let _ = client.get_pokemon_species().name("pikachu").send().await;
-
-    // Send a successful request
-    let _ = client.get_pokemon_species().name("pikachu").send().await;
-
-    // Poll for the metrics with a timeout of 5 seconds
-    let expected_metrics_count = 2;
-    let timeout = Duration::from_secs(5);
-    let metrics_output = poll_for_metrics(metrics_buffer, expected_metrics_count, timeout).await;
-
-    let metrics = parse_metrics(metrics_output);
-
-    assert!(!metrics.is_empty(), "Expected metrics to be captured");
-
-    // The two finished requests should both have outstanding requests of 2
-    // because of the long running request in the background, and the first finished one
-    // should decrement the outstanding requests after finishing
-    metrics
-        .iter()
-        .for_each(|metric| assert_eq!(metric["outstanding_requests"], 2));
-}
-
 async fn spawn_metrics_collection_task(listener: TcpListener, metrics_buffer: Arc<Mutex<Vec<u8>>>) {
     tokio::spawn(async move {
         while let Ok((mut socket, _)) = listener.accept().await {

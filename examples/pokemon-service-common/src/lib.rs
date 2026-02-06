@@ -12,12 +12,11 @@ use std::convert::TryInto;
 use std::process::Child;
 use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::time::Duration;
 
 use async_stream::stream;
 use aws_smithy_http_client::tls;
 use aws_smithy_http_client::Connector;
-use aws_smithy_http_server_metrics::extension::Metrics;
+use aws_smithy_http_server_metrics::operation::Metrics;
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
 use pokemon_service_server_sdk::error;
@@ -164,7 +163,7 @@ impl Default for State {
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
     state
         .0
@@ -173,16 +172,8 @@ pub async fn get_pokemon_species(
 
     let pokemon = state.0.pokemons_translations.get(&input.name);
 
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics
-                .get_pokemon_species_metrics
-                .requested_pokemon_name = Some(input.name.clone());
-            operation_metrics.get_pokemon_species_metrics.found = Some(pokemon.is_some());
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in get_pokemon_species: {e}");
-        });
+    metrics.get_pokemon_species_metrics.requested_pokemon_name = Some(input.name.clone());
+    metrics.get_pokemon_species_metrics.found = Some(pokemon.is_some());
 
     match pokemon.as_ref() {
         Some(pokemon) => {
@@ -226,21 +217,15 @@ pub async fn get_pokemon_species(
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
 
     // We currently only support Ash and he has nothing stored
     let authenticated = input.user == "ash" && input.passcode == "pikachu123";
 
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.get_storage_metrics.user = Some(input.user.clone());
-            operation_metrics.get_storage_metrics.authenticated = Some(authenticated);
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in get_storage: {e}");
-        });
+    metrics.get_storage_metrics.user = Some(input.user.clone());
+    metrics.get_storage_metrics.authenticated = Some(authenticated);
 
     if !authenticated {
         tracing::debug!("authentication failed");
@@ -255,7 +240,7 @@ pub async fn get_storage(
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
     state: Extension<Arc<State>>,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::GetServerStatisticsOutput {
     // Read the current calls count.
     let counter = state.0.call_count.load(std::sync::atomic::Ordering::SeqCst);
@@ -266,14 +251,7 @@ pub async fn get_server_statistics(
         })
         .unwrap_or(0);
 
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.get_server_statistics_metrics.total_calls =
-                Some(calls_count.to_string());
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in get_server_statistics: {e}");
-        });
+    metrics.get_server_statistics_metrics.total_calls = Some(calls_count.to_string());
 
     tracing::debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput { calls_count }
@@ -282,17 +260,12 @@ pub async fn get_server_statistics(
 /// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
     mut input: input::CapturePokemonInput,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
     let is_supported_region = input.region == "Kanto";
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.capture_pokemon_metrics.requested_region = Some(input.region.clone());
-            operation_metrics.capture_pokemon_metrics.supported_region = Some(is_supported_region);
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in capture_pokemon: {e}");
-        });
+
+    metrics.capture_pokemon_metrics.requested_region = Some(input.region.clone());
+    metrics.capture_pokemon_metrics.supported_region = Some(is_supported_region);
 
     if !is_supported_region {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
@@ -363,21 +336,9 @@ pub async fn capture_pokemon(
 /// Empty operation used to benchmark the service.
 pub async fn do_nothing(
     _input: input::DoNothingInput,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::DoNothingOutput {
-    // Sleep if explicitly requested via env var 
-    // used for testing outstanding requests in metrics_test.rs
-    if std::env::var("DO_NOTHING_SLEEP_FOR_100").is_ok() {
-        tokio::time::sleep(Duration::from_secs(100)).await;
-    }
-
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.do_nothing_metrics.invocation_count = Some(1);
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in do_nothing: {e}");
-        });
+    metrics.do_nothing_metrics.invocation_count = Some(1);
 
     output::DoNothingOutput {}
 }
@@ -385,15 +346,9 @@ pub async fn do_nothing(
 /// Operation used to show the service is running.
 pub async fn check_health(
     _input: input::CheckHealthInput,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::CheckHealthOutput {
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.check_health_metrics.health_check_count = Some(1);
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in check_health: {e}");
-        });
+    metrics.check_health_metrics.health_check_count = Some(1);
 
     output::CheckHealthOutput {}
 }
@@ -406,7 +361,7 @@ const RADIO_STREAMS: [&str; 2] = [
 /// Streams a random Pokémon song.
 pub async fn stream_pokemon_radio(
     _input: input::StreamPokemonRadioInput,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::StreamPokemonRadioOutput {
     let radio_stream_url = RADIO_STREAMS
         .choose(&mut rand::thread_rng())
@@ -414,14 +369,7 @@ pub async fn stream_pokemon_radio(
         .parse::<Uri>()
         .expect("Invalid url in `RADIO_STREAMS`");
 
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.stream_pokemon_radio_metrics.stream_url =
-                Some(radio_stream_url.to_string())
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in stream_pokemon_radio: {e}");
-        });
+    metrics.stream_pokemon_radio_metrics.stream_url = Some(radio_stream_url.to_string());
 
     let connector = Connector::builder()
         .tls_provider(tls::Provider::Rustls(
@@ -458,7 +406,7 @@ mod tests {
         let state = Arc::new(State::default());
 
         let actual_spanish_flavor_text =
-            get_pokemon_species(input, Extension(state.clone()), Extension(Metrics::test()))
+            get_pokemon_species(input, Extension(state.clone()), Metrics::test())
                 .await
                 .unwrap()
                 .flavor_text_entries
@@ -472,9 +420,7 @@ mod tests {
         );
 
         let input = input::GetServerStatisticsInput {};
-        let stats =
-            get_server_statistics(input, Extension(state.clone()), Extension(Metrics::test()))
-                .await;
+        let stats = get_server_statistics(input, Extension(state.clone()), Metrics::test()).await;
         assert_eq!(1, stats.calls_count);
     }
 }

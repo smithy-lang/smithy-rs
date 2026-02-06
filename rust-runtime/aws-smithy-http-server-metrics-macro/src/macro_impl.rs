@@ -11,9 +11,9 @@ use syn::ItemStruct;
 
 use crate::SmithyMetricsStructAttrs;
 
-/// Represents a field marked with `#[smithy_metrics(extension)]` that needs
-/// to be inserted as an extension into HTTP requests.
-struct ExtensionField {
+/// Represents a field marked with `#[smithy_metrics(operation)]` that needs
+/// to be inserted as an operation metrics extension into HTTP requests.
+struct OperationField {
     name: Ident,
     ty: syn::Type,
 }
@@ -21,7 +21,7 @@ struct ExtensionField {
 /// Implementation of the `#[smithy_metrics]` procedural macro.
 ///
 /// This macro:
-/// 1. Processes fields marked with `#[smithy_metrics(extension)]`
+/// 1. Processes fields marked with `#[smithy_metrics(operation)]`
 /// 2. Wraps their types in `metrique::Slot<T>` if not already wrapped
 /// 3. Adds default request/repsonse metrics fields
 /// 4. Generates a builder trait and implementations for the metrics layer for the annotated metrics struct
@@ -38,7 +38,7 @@ pub(crate) fn smithy_metrics_impl(
 
     // Collect extension fields and remove smithy_metrics attributes
     for field in &mut fields.named {
-        let has_extension = has_extension_attr(&field.attrs);
+        let has_extension = has_operation_attr(&field.attrs);
         field.attrs = clean_attrs(&field.attrs);
 
         if !has_extension {
@@ -46,28 +46,31 @@ pub(crate) fn smithy_metrics_impl(
         }
 
         let Some(field_name) = field.ident.clone() else {
-            return syn::Error::new_spanned(field, "extension field must have a name")
+            return syn::Error::new_spanned(field, "operation field must have a name")
                 .to_compile_error();
         };
 
-        // Wrap the field type in metrique::Slot<...> if not already wrapped in Slot
-        if let Some(unwrapped_ty) = extract_inner_type(&field.ty) {
-            // Already wrapped in Slot, keep as-is
-            extension_fields.push(ExtensionField {
-                name: field_name,
-                ty: unwrapped_ty,
-            });
-        } else {
-            // Not wrapped, wrap it
-            let ty = field.ty.clone();
-            field.ty = syn::parse_quote! {
-                metrique::Slot<#ty>
-            };
-            extension_fields.push(ExtensionField {
-                name: field_name,
-                ty,
-            });
+        // Check if user already wrapped in Slot
+        // Return compiler error if it has, since we
+        // will need to double slot the type to provide
+        // a better API to handler-level metrics
+        if extract_inner_type(&field.ty).is_some() {
+            return syn::Error::new_spanned(
+                field,
+                "operation fields should not be wrapped in Slot",
+            )
+            .to_compile_error();
         }
+
+        // Always wrap in double Slot
+        let ty = field.ty.clone();
+        field.ty = syn::parse_quote! {
+            metrique::Slot<metrique::Slot<#ty>>
+        };
+        extension_fields.push(OperationField {
+            name: field_name,
+            ty,
+        });
     }
 
     fields.named.push(syn::parse_quote! {
@@ -108,22 +111,24 @@ fn generate_ext_trait(metrics_struct: &Ident) -> TokenStream2 {
 
 fn generate_ext_trait_impl(
     struct_ident: &Ident,
-    extension_fields: &[ExtensionField],
+    operation_fields: &[OperationField],
 ) -> TokenStream2 {
     let lowercase_struct_name = quote::format_ident!("{}", struct_ident.to_string().to_lowercase());
     let trait_name = quote::format_ident!("{}BuildExt", struct_ident);
     let macro_name = quote::format_ident!("impl_build_{}_for_state", lowercase_struct_name);
 
-    let extension_insertions = extension_fields.iter().map(|ext| {
+    let operation_insertions = operation_fields.iter().map(|ext| {
         let field_name = &ext.name;
         let ty = &ext.ty;
         quote! {
-            metrics.#field_name = metrique::Slot::new(<#ty>::default());
-            let extension_slotguard = metrics
+            let inner_slot = metrique::Slot::new(<#ty>::default());
+            let outer_slot = metrique::Slot::new(inner_slot);
+            metrics.#field_name = outer_slot;
+            let slotguard = metrics
                 .#field_name
                 .open(metrique::OnParentDrop::Discard)
                 .expect("unreachable: the slot was created in this scope and is not opened before this point");
-            req.extensions_mut().insert(aws_smithy_http_server_metrics::extension::Metrics::__macro_new(extension_slotguard));
+            req.extensions_mut().insert(aws_smithy_http_server_metrics::operation::MetricsExtension::__macro_new(slotguard));
         }
     });
 
@@ -174,7 +179,7 @@ fn generate_ext_trait_impl(
 
                                 req.extensions_mut().insert(ext);
 
-                                #(#extension_insertions)*
+                                #(#operation_insertions)*
                             };
 
                         aws_smithy_http_server_metrics::layer::MetricsLayer::__macro_new(
@@ -209,8 +214,8 @@ fn clean_attrs(attrs: &[Attribute]) -> Vec<Attribute> {
         .collect()
 }
 
-/// Checks if a field has the `#[smithy_metrics(extension)]` attribute.
-fn has_extension_attr(attrs: &[Attribute]) -> bool {
+/// Checks if a field has the `#[smithy_metrics(operation)]` attribute.
+fn has_operation_attr(attrs: &[Attribute]) -> bool {
     attrs.iter().any(|attr| {
         // Check if attribute path is "smithy_metrics"
         if !attr.path().is_ident("smithy_metrics") {
@@ -219,7 +224,7 @@ fn has_extension_attr(attrs: &[Attribute]) -> bool {
 
         // Parse the attribute arguments to check for "operation"
         attr.parse_args::<syn::Ident>()
-            .map(|ident| ident == "extension")
+            .map(|ident| ident == "operation")
             .unwrap_or(false)
     })
 }
@@ -314,7 +319,7 @@ mod tests {
     fn test_wraps_operation_field_in_slot() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 my_field: MyType,
             }
         };
@@ -323,11 +328,11 @@ mod tests {
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
 
-        // Verify my_field is wrapped in Slot
+        // Verify my_field is wrapped in double Slot
         assert_field_type(
             &generated_struct,
             "my_field",
-            syn::parse_quote!(metrique::Slot<MyType>),
+            syn::parse_quote!(metrique::Slot<metrique::Slot<MyType>>),
         );
 
         // Verify default fields exist
@@ -336,52 +341,46 @@ mod tests {
     }
 
     #[test]
-    fn test_already_wrapped_slot_not_double_wrapped() {
+    fn test_already_wrapped_slot_errors() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 my_field: Slot<MyType>,
             }
         };
         let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
-        let generated_struct = get_generated_struct(output);
 
-        // Verify my_field is NOT double-wrapped
-        assert_field_type(
-            &generated_struct,
-            "my_field",
-            syn::parse_quote!(Slot<MyType>),
-        );
+        // Verify it produces a compile error
+        let output_str = output.to_string();
+        assert!(output_str.contains("compile_error"));
+        assert!(output_str.contains("should not be wrapped in Slot"));
     }
 
     #[test]
-    fn test_option_slot_not_double_wrapped() {
+    fn test_option_slot_errors() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 my_field: Option<Slot<MyType>>,
             }
         };
         let attrs = SmithyMetricsStructAttrs {};
 
         let output = smithy_metrics_impl(attrs, input);
-        let generated_struct = get_generated_struct(output);
 
-        // Verify my_field is NOT double-wrapped
-        assert_field_type(
-            &generated_struct,
-            "my_field",
-            syn::parse_quote!(Option<Slot<MyType>>),
-        );
+        // Verify it produces a compile error
+        let output_str = output.to_string();
+        assert!(output_str.contains("compile_error"));
+        assert!(output_str.contains("should not be wrapped in Slot"));
     }
 
     #[test]
     fn test_mixed_operation_and_regular_fields() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 operation_field: MyType,
                 regular_field: String,
                 another_regular: i32,
@@ -392,11 +391,11 @@ mod tests {
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
 
-        // Verify operation_field is wrapped
+        // Verify operation_field is wrapped in double Slot
         assert_field_type(
             &generated_struct,
             "operation_field",
-            syn::parse_quote!(metrique::Slot<MyType>),
+            syn::parse_quote!(metrique::Slot<metrique::Slot<MyType>>),
         );
 
         // Verify regular fields are unchanged
@@ -412,11 +411,11 @@ mod tests {
     fn test_multiple_operation_fields() {
         let input: ItemStruct = syn::parse_quote! {
             struct MyMetrics {
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 first_operation: FirstType,
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 second_operation: SecondType,
-                #[smithy_metrics(extension)]
+                #[smithy_metrics(operation)]
                 third_operation: ThirdType,
             }
         };
@@ -425,21 +424,21 @@ mod tests {
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
 
-        // Verify all operation fields are wrapped
+        // Verify all operation fields are wrapped in double Slot
         assert_field_type(
             &generated_struct,
             "first_operation",
-            syn::parse_quote!(metrique::Slot<FirstType>),
+            syn::parse_quote!(metrique::Slot<metrique::Slot<FirstType>>),
         );
         assert_field_type(
             &generated_struct,
             "second_operation",
-            syn::parse_quote!(metrique::Slot<SecondType>),
+            syn::parse_quote!(metrique::Slot<metrique::Slot<SecondType>>),
         );
         assert_field_type(
             &generated_struct,
             "third_operation",
-            syn::parse_quote!(metrique::Slot<ThirdType>),
+            syn::parse_quote!(metrique::Slot<metrique::Slot<ThirdType>>),
         );
     }
 

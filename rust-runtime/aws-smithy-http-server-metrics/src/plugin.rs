@@ -248,7 +248,7 @@ where
         match maybe_default_metrics_ext {
             Some(ext) => {
                 let extended_default_request_metrics =
-                    extend_default_request_metrics(default_request_metrics, &ext);
+                    extend_default_request_metrics(default_request_metrics, ext);
 
                 ext.request_ext.metrics.lock().map_or_else(
                     |e| {

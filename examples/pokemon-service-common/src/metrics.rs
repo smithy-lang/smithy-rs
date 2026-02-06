@@ -17,7 +17,7 @@ pub struct PokemonMetrics {
     #[metrics(flatten)]
     pub response_metrics: PokemonResponseMetrics,
     #[metrics(flatten)]
-    #[smithy_metrics(extension)]
+    #[smithy_metrics(operation)]
     pub operation_metrics: PokemonOperationMetrics,
 }
 

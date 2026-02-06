@@ -6,8 +6,7 @@
 use std::net::IpAddr;
 use std::net::SocketAddr;
 
-use aws_smithy_http_server::Extension;
-use aws_smithy_http_server_metrics::extension::Metrics;
+use aws_smithy_http_server_metrics::operation::Metrics;
 use pokemon_service_common::metrics::PokemonOperationMetrics;
 use pokemon_service_server_sdk::error::GetStorageError;
 use pokemon_service_server_sdk::error::StorageAccessNotAuthorized;
@@ -35,20 +34,13 @@ pub async fn do_nothing_but_log_request_ids(
 pub async fn get_storage_with_local_approved(
     input: GetStorageInput,
     connect_info: ConnectInfo<SocketAddr>,
-    Extension(metrics): Extension<Metrics<PokemonOperationMetrics>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<GetStorageOutput, GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
 
     let authenticated = input.user == "ash" && input.passcode == "pikachu123";
-
-    metrics
-        .set(|mut operation_metrics| {
-            operation_metrics.get_storage_metrics.user = Some(input.user.clone());
-            operation_metrics.get_storage_metrics.authenticated = Some(authenticated);
-        })
-        .unwrap_or_else(|e| {
-            tracing::error!("Error setting metrics in get_storage: {e}");
-        });
+    metrics.get_storage_metrics.user = Some(input.user.clone());
+    metrics.get_storage_metrics.authenticated = Some(authenticated);
 
     if !authenticated {
         tracing::debug!("authentication failed");

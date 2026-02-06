@@ -159,8 +159,8 @@
 #![cfg(not(any(target_arch = "mips", target_arch = "powerpc")))]
 
 pub mod default;
-pub mod extension;
 pub mod layer;
+pub mod operation;
 pub mod plugin;
 pub mod service;
 pub mod traits;
@@ -168,6 +168,7 @@ pub mod types;
 
 pub use layer::builder::MetricsLayerBuilder;
 pub use layer::MetricsLayer;
+pub use operation::Metrics as OperationMetrics;
 pub use plugin::DefaultMetricsPlugin;
 
 pub use aws_smithy_http_server_metrics_macro::smithy_metrics;
