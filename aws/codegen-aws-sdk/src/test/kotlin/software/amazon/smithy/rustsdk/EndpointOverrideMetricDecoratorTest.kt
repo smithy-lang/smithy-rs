@@ -88,7 +88,6 @@ class EndpointOverrideMetricDecoratorTest {
         awsSdkIntegrationTest(
             model,
             testParams,
-            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
         ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
@@ -104,16 +103,16 @@ class EndpointOverrideMetricDecoratorTest {
                         use $moduleName::Client;
                         use #{capture_request};
                         use #{assert_ua_contains_metric_values};
-                        
+
                         let (http_client, rcvr) = capture_request(None);
-                        
+
                         // Create SdkConfig with endpoint URL
                         let sdk_config = #{SdkConfig}::builder()
                             .region(Region::new("us-east-1"))
                             .endpoint_url("https://sdk-custom.example.com")
                             .http_client(http_client.clone())
                             .build();
-                        
+
                         // Create client from SdkConfig
                         let client = Client::new(&sdk_config);
 
@@ -136,7 +135,7 @@ class EndpointOverrideMetricDecoratorTest {
                             .headers()
                             .get("x-amz-user-agent")
                             .expect("x-amz-user-agent header missing");
-                        
+
                         assert_ua_contains_metric_values(user_agent, &["N"]);
                         """,
                         *preludeScope,
@@ -156,7 +155,6 @@ class EndpointOverrideMetricDecoratorTest {
         awsSdkIntegrationTest(
             model,
             testParams,
-            environment = mapOf("RUSTUP_TOOLCHAIN" to "1.88.0"),
         ) { context, rustCrate ->
             val rc = context.runtimeConfig
             val moduleName = context.moduleUseName()
@@ -171,9 +169,9 @@ class EndpointOverrideMetricDecoratorTest {
                         use $moduleName::config::{Credentials, Region, SharedCredentialsProvider};
                         use $moduleName::{Config, Client};
                         use #{capture_request};
-                        
+
                         let (http_client, rcvr) = capture_request(None);
-                        
+
                         // Create config WITHOUT endpoint override
                         let config = Config::builder()
                             .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))

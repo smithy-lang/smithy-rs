@@ -59,6 +59,9 @@ private val allowedRustdocLints =
         // Rustdoc warns about redundant explicit links in doc comments. This is fine for handwritten
         // crates, but is impractical to manage for code generated crates. Thus, allow it.
         "redundant_explicit_links",
+        // Model documentation may contain broken intra-doc links like `[here]` that are not valid Rust
+        // doc links. Since we can't control upstream model documentation, we need to allow this lint.
+        "broken_intra_doc_links",
         // The documentation directly from the model may contain invalid HTML tags. For instance,
         // <p><code><bucketloggingstatus xmlns="http://doc.s3.amazonaws.com/2006-03-01" /></code></p>
         // is considered an invalid self-closing HTML tag `bucketloggingstatus`
