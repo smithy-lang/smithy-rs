@@ -144,8 +144,13 @@ internal class HttpChecksumTest {
     }
 
     @Test
-    fun requestChecksumWorks() {
-        awsSdkIntegrationTest(model) { context, rustCrate ->
+    fun requestResponseChecksumWorks() {
+        awsSdkIntegrationTest(
+            model,
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Remove this additional decorator
+            //  and update the test model above with a dedicated Smithy trait once available.
+            additionalDecorators = listOf(AwsChunkedContentEncodingDecorator()),
+        ) { context, rustCrate ->
             // Allows us to use the user-agent test-utils in aws-runtime
             rustCrate.mergeFeature(Feature("test-util", true, listOf("aws-runtime/test-util")))
             val rc = context.runtimeConfig

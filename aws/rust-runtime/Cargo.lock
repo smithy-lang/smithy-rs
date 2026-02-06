@@ -117,7 +117,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.6.0"
+version = "1.7.0"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -159,7 +159,7 @@ version = "1.1.10"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.3.8"
+version = "1.4.0"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
