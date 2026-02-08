@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 8th, 2026
+==================
+
 February 1st, 2026
 ==================
 **Breaking Changes:**
