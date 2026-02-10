@@ -30,6 +30,8 @@ pub mod error;
 pub mod event_stream;
 pub mod primitive;
 pub mod retry;
+/// Runtime schema types for Smithy shapes.
+pub mod schema;
 pub mod timeout;
 
 /// Utilities for type erasure.
