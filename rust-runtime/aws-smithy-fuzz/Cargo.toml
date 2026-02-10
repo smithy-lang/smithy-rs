@@ -7,7 +7,7 @@ description = "Fuzzing utilities for smithy-rs servers"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [dependencies]
 afl = "0.15.10"
