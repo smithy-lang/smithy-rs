@@ -422,6 +422,85 @@ tasks.register("sdkTest") {
     finalizedBy(Cargo.CLIPPY.toString, Cargo.TEST.toString, Cargo.DOCS.toString)
 }
 
+tasks.register("generateLiteSDK") {
+    description = "Generate a lite SDK with filtered operations and convert aws-* path dependencies to versions"
+    dependsOn("smithyBuild")
+
+    doLast {
+        val service = properties.get("aws.services")?.removePrefix("+")
+            ?: throw IllegalArgumentException("Must specify -Paws.services=+<service>")
+
+        val cargoTomlPath = layout.buildDirectory.file("smithyprojections/sdk/$service/rust-client-codegen/Cargo.toml").get().asFile
+
+        if (!cargoTomlPath.exists()) {
+            throw IllegalStateException("Generated Cargo.toml not found at $cargoTomlPath")
+        }
+
+        // Fetch versions from latest release
+        val releaseTag = properties.get("releaseTag") ?: "release-2026-02-09"
+        val releaseUrl = "https://github.com/awslabs/aws-sdk-rust/releases/tag/$releaseTag"
+
+        logger.lifecycle("Fetching crate versions from $releaseUrl")
+        val versionsMap = mutableMapOf<String, String>()
+
+        try {
+            val tempFile = File.createTempFile("release", ".html")
+            exec {
+                commandLine("curl", "-sL", releaseUrl, "-o", tempFile.absolutePath)
+            }
+            val releaseContent = tempFile.readText()
+            tempFile.delete()
+
+            val versionRegex = """<td>(aws-[a-z0-9-]+)</td>\s*<td>(\d+\.\d+\.\d+)</td>""".toRegex()
+
+            versionRegex.findAll(releaseContent).forEach { match ->
+                val crateName = match.groupValues[1]
+                val version = match.groupValues[2]
+                versionsMap[crateName] = version
+            }
+
+            logger.lifecycle("Found ${versionsMap.size} aws-* crate versions")
+        } catch (e: Exception) {
+            logger.warn("Failed to fetch versions from GitHub: ${e.message}. Skipping dependency conversion.")
+            return@doLast
+        }
+
+        // Update Cargo.toml
+        var cargoContent = cargoTomlPath.readText()
+        var updatedCount = 0
+
+        versionsMap.forEach { (crateName, version) ->
+            // Handle regular dependencies
+            cargoContent = cargoContent.replace(
+                Regex("""\[dependencies\.$crateName\]\npath = "[^"]+""""),
+                "[dependencies.$crateName]\nversion = \"$version\""
+            ).also { if (it != cargoContent) updatedCount++ }
+
+            // Handle dev-dependencies with optional features
+            cargoContent = cargoContent.replace(
+                Regex("""\[dev-dependencies\.$crateName\]\npath = "[^"]+"\n(features = \[[^\]]+\]\n)?"""),
+                "[dev-dependencies.$crateName]\nversion = \"$version\"\n$1"
+            ).also { if (it != cargoContent) updatedCount++ }
+        }
+
+        cargoTomlPath.writeText(cargoContent)
+        logger.lifecycle("Updated $updatedCount aws-* dependencies to use versions from $releaseTag")
+
+        // Optionally copy to output directory
+        val outputPath = properties.get("outputDir")
+        if (outputPath != null) {
+            val destDir = file(outputPath)
+            copy {
+                from(cargoTomlPath.parentFile)
+                into(destDir)
+            }
+            logger.lifecycle("Lite SDK copied to: ${destDir.absolutePath}")
+        } else {
+            logger.lifecycle("Lite SDK generated at: ${cargoTomlPath.parentFile.absolutePath}")
+        }
+    }
+}
+
 /**
  * Generate tasks for pinning broken dependencies to bypass compatibility issues
  *
