@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 10th, 2026
+===================
+**Breaking Changes:**
+- :warning: (all) Upgrade MSRV to Rust 1.91.0.
+
+
 February 1st, 2026
 ==================
 **Breaking Changes:**
