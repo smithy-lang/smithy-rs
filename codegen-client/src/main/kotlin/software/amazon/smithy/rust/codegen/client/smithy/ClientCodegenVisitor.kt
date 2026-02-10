@@ -28,6 +28,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.Cli
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.DisableStalledStreamProtection
+import software.amazon.smithy.rust.codegen.client.smithy.transformers.IncludeOperationsOnly
 import software.amazon.smithy.rust.codegen.core.rustlang.EscapeFor
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustReservedWords
@@ -143,6 +144,8 @@ class ClientCodegenVisitor(
             .let { ModelTransformer.create().flattenAndRemoveMixins(it) }
             // Add errors attached at the service level to the models
             .let { ModelTransformer.create().copyServiceErrorsToOperations(it, settings.getService(it)) }
+            // Filter to only include specified operations if configured
+            .let { IncludeOperationsOnly.transformModel(it, settings.codegenConfig.includeOperations) }
             // Add `Box<T>` to recursive shapes as necessary
             .let(RecursiveShapeBoxer()::transform)
             // Normalize the `message` field on errors when enabled in settings (default: true)

@@ -130,6 +130,9 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
 
     fun generateInput(testOperationInput: EndpointTestOperationInput) =
         writable {
+            // Skip test if operation doesn't exist (filtered out)
+            val operationId = ctx.operationId(testOperationInput) ?: return@writable
+
             val operationName = testOperationInput.operationName.toSnakeCase()
             tokioTest(safeName("operation_input_test_$operationName")) {
                 rustTemplate(
@@ -145,7 +148,7 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
                     """,
                     "capture_request" to RuntimeType.captureRequest(runtimeConfig),
                     "conf" to config(testOperationInput),
-                    "invoke_operation" to operationInvocation(testOperationInput),
+                    "invoke_operation" to operationInvocation(testOperationInput, operationId),
                     "assertion" to
                         writable {
                             test.expect.endpoint.ifPresent { endpoint ->
@@ -178,20 +181,22 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
             }
         }
 
-    private fun operationInvocation(testOperationInput: EndpointTestOperationInput) =
-        writable {
-            rust("client.${testOperationInput.operationName.toSnakeCase()}()")
-            val operationInput =
-                model.expectShape(ctx.operationId(testOperationInput), OperationShape::class.java).inputShape(model)
-            testOperationInput.operationParams.members.forEach { (key, value) ->
-                val member = operationInput.expectMember(key.value)
-                rustTemplate(
-                    ".${member.setterName()}(#{value})",
-                    "value" to instantiator.generate(member, value),
-                )
-            }
-            rust(".send().await")
+    private fun operationInvocation(
+        testOperationInput: EndpointTestOperationInput,
+        operationId: ShapeId,
+    ) = writable {
+        rust("client.${testOperationInput.operationName.toSnakeCase()}()")
+        val operationInput =
+            model.expectShape(operationId, OperationShape::class.java).inputShape(model)
+        testOperationInput.operationParams.members.forEach { (key, value) ->
+            val member = operationInput.expectMember(key.value)
+            rustTemplate(
+                ".${member.setterName()}(#{value})",
+                "value" to instantiator.generate(member, value),
+            )
         }
+        rust(".send().await")
+    }
 
     /** initialize service config for test */
     private fun config(operationInput: EndpointTestOperationInput) =
@@ -244,8 +249,8 @@ class OperationInputTestGenerator(_ctx: ClientCodegenContext, private val test: 
         }
 }
 
-fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId =
+fun ClientCodegenContext.operationId(testOperationInput: EndpointTestOperationInput): ShapeId? =
     TopDownIndex.of(this.model)
         .getContainedOperations(this.serviceShape)
         .map { it.toShapeId() }
-        .first { it.name == testOperationInput.operationName }
+        .firstOrNull { it.name == testOperationInput.operationName }

@@ -83,6 +83,7 @@ data class ClientRustSettings(
  * [includeFluentClient]: Generate a `client` module in the generated SDK (currently the AWS SDK sets this to `false`
  *   and generates its own client)
  * [addMessageToErrors]: Adds a `message` field automatically to all error shapes
+ * [includeOperations]: If non-empty, only generate code for the specified operations (e.g., ["PutObject", "GetObject"])
  */
 data class ClientCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -95,6 +96,7 @@ data class ClientCodegenConfig(
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG,
     val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
+    val includeOperations: Set<String> = emptySet(),
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode, DEFAULT_FLATTEN_ACCESSORS,
     ) {
@@ -138,6 +140,10 @@ data class ClientCodegenConfig(
                     NullableIndex.CheckMode.valueOf(
                         node.get().getStringMemberOrDefault("nullabilityCheckMode", DEFAULT_NULLABILITY_CHECK_MODE),
                     ),
+                includeOperations =
+                    node.get().getArrayMember("includeOperations")
+                        .map { it.elements.map { elem -> elem.asStringNode().get().value }.toSet() }
+                        .orElse(emptySet()),
             )
         } else {
             ClientCodegenConfig(
