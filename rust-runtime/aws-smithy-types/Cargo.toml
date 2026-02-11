@@ -46,7 +46,7 @@ num-integer = "0.1.44"
 pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
 ryu = "1.0.5"
-time = { version = "0.3.4", features = ["parsing"] }
+time = { version = "0.3.47", features = ["parsing"] }
 
 # ByteStream internals
 futures-core = { version = "0.3.31", optional = true }

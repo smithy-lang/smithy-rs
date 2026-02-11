@@ -17,7 +17,7 @@ convert-streams = ["aws-smithy-async", "futures-core"]
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"], optional = true }
 aws-smithy-async = { path = "../aws-smithy-async", optional = true }
 chrono = { version = "0.4.35", optional = true, default-features = false, features = ["std"] }
-time = { version = "0.3.4", optional = true }
+time = { version = "0.3.47", optional = true }
 futures-core = { version = "0.3.31", optional = true }
 
 [package.metadata.docs.rs]
