@@ -23,7 +23,7 @@ serde = { version = "1", features = ["derive"]}
 serde_json = "1"
 serde_yaml = "0.9"
 smithy-rs-tool-common = { path = "../smithy-rs-tool-common" }
-time = { version = "0.3.9", features = ["local-offset"]}
+time = { version = "0.3.47", features = ["local-offset"]}
 toml = "0.5.8"
 
 [dev-dependencies]
