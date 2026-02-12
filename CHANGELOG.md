@@ -1,4 +1,41 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 10th, 2026
+===================
+**Breaking Changes:**
+- :warning: (all) Upgrade MSRV to Rust 1.91.0.
+
+
+February 1st, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (client, [smithy-rs#4454](https://github.com/smithy-lang/smithy-rs/issues/4454), [smithy-rs#4467](https://github.com/smithy-lang/smithy-rs/issues/4467), [aws-sdk-rust#1389](https://github.com/awslabs/aws-sdk-rust/issues/1389)) Enable retries by default for AWS SDK clients using `BehaviorVersion::v2026_01_12()` or later.
+
+    Previously, retries were only enabled when constructing clients via `aws_config::load_from_env()`. Clients constructed directly using `Client::from_conf()` did not have retries enabled, which was inconsistent with AWS SDK behavior in other languages.
+
+    This change affects AWS SDK clients constructed with `Client::from_conf()` when using `BehaviorVersion::v2026_01_12()` or `BehaviorVersion::latest()`. Generic Smithy clients (non-AWS) are not affected.
+
+    To disable retries:
+    ```rust
+    let config = aws_sdk_s3::Config::builder()
+        .retry_config(RetryConfig::disabled())
+        // ...
+        .build();
+    ```
+
+    For more context, see the [discussion on retry behavior](https://github.com/smithy-lang/smithy-rs/discussions/4466).
+
+**New this release:**
+- :tada: (client, [smithy-rs#312](https://github.com/smithy-lang/smithy-rs/issues/312), @AmitKulkarni23) Add support for Smithy bigInteger and bigDecimal types as string wrappers in aws-smithy-types, allowing users to parse with their preferred big number library.
+- :tada: (all, [smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484)) All Smithy-rs crates, for both servers and clients, now use the 1.x version of
+    the `http` crate for all internal processing. Utility methods are still provided
+    for users to convert between SDK types and both of the `http` 0.x and 1.x types.
+- :bug: (client, [smithy-rs#4500](https://github.com/smithy-lang/smithy-rs/issues/4500)) Fix JMESPath integer literal handling in waiters to support Smithy 1.66.0, which parses integer literals as `Long` instead of `Double`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @AmitKulkarni23 ([smithy-rs#312](https://github.com/smithy-lang/smithy-rs/issues/312))
+
+
 January 14th, 2026
 ==================
 **New this release:**

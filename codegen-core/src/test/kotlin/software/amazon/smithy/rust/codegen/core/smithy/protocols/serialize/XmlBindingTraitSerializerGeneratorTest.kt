@@ -109,6 +109,27 @@ internal class XmlBindingTraitSerializerGeneratorTest {
         }
         """.asSmithyModel()
 
+    private val bigNumberModel =
+        """
+        namespace test
+        use aws.protocols#restXml
+
+        structure BigNumberData {
+            bigInt: BigInteger,
+            bigDec: BigDecimal,
+        }
+
+        structure BigNumberInput {
+            @httpPayload
+            payload: BigNumberData
+        }
+
+        @http(uri: "/bignumber", method: "POST")
+        operation BigNumberOp {
+            input: BigNumberInput,
+        }
+        """.asSmithyModel()
+
     @ParameterizedTest
     @CsvSource(
         "CLIENT",
@@ -338,6 +359,47 @@ internal class XmlBindingTraitSerializerGeneratorTest {
             }
         }
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @org.junit.jupiter.api.Test
+    fun `serializes BigInteger and BigDecimal to XML`() {
+        val model = RecursiveShapeBoxer().transform(OperationNormalizer.transform(bigNumberModel))
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val serializerGenerator =
+            XmlBindingTraitSerializerGenerator(
+                codegenContext,
+                HttpTraitHttpBindingResolver(model, ProtocolContentTypes.consistent("application/xml")),
+            )
+        val operationSerializer = serializerGenerator.payloadSerializer(model.lookup("test#BigNumberInput\$payload"))
+
+        val project = TestWorkspace.testProject(testSymbolProvider(model))
+        project.lib {
+            unitTest(
+                "serialize_big_numbers",
+                """
+                use aws_smithy_types::{BigInteger, BigDecimal};
+                let input = crate::test_input::BigNumberOpInput::builder().payload(
+                    crate::test_model::BigNumberData::builder()
+                        .big_int("12345678901234567890".parse().unwrap())
+                        .big_dec("3.141592653589793238".parse().unwrap())
+                        .build()
+                ).build().unwrap();
+                let serialized = ${format(operationSerializer)}(&input.payload.unwrap()).unwrap();
+                let output = std::str::from_utf8(&serialized).unwrap();
+                assert!(output.contains("<bigInt>12345678901234567890</bigInt>"));
+                assert!(output.contains("<bigDec>3.141592653589793238</bigDec>"));
+                """,
+            )
+        }
+
+        model.lookup<StructureShape>("test#BigNumberData").also { struct ->
+            struct.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        model.lookup<OperationShape>("test#BigNumberOp").inputShape(model).also { input ->
             input.renderWithModelBuilder(model, symbolProvider, project)
         }
         project.compileAndTest()

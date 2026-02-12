@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-python"
-version = "0.66.7"
+version = "0.66.10"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ description = """
 Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.88"
+rust-version = "1.91"
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
@@ -35,11 +35,11 @@ pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.5", features = ["all"] }
 thiserror = "2"
-tokio = { version = "1.46.0", features = ["full"] }
+tokio = { version = "1.49.0", features = ["full"] }
 tokio-stream = "0.1.2"
 tower = { version = "0.4.13", features = ["util"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["json", "env-filter"] }
 tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]

@@ -10,7 +10,7 @@ edition = "2021"
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [features]
 http-1x = ["aws-smithy-runtime-api/http-1x"]
@@ -39,8 +39,8 @@ hmac = "0.12"
 lru = "0.16.3"
 ring = "0.17.5"
 sha2 = "0.10"
-tokio = "1.46.0"
-tracing = "0.1.40"
+tokio = "1.49.0"
+tracing = "0.1.44"
 url = "2.5.4"
 
 
@@ -50,7 +50,7 @@ aws-smithy-async = { path = "../../../rust-runtime/aws-smithy-async", features =
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http", features = ["rt-tokio"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["test-util"] }
 tempfile = "3.16.0"
-tokio = { version = "1.23.1", features = ["macros", "rt", "io-util"] }
+tokio = { version = "1.49.0", features = ["macros", "rt", "io-util"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 tracing-test = { version = "0.2", features = ["no-env-filter"] }
 

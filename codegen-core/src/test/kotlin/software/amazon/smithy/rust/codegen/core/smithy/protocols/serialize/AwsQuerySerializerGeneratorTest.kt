@@ -34,6 +34,8 @@ class AwsQuerySerializerGeneratorTest {
         use aws.protocols#restJson1
 
         union Choice {
+            bigInt: BigInteger,
+            bigDec: BigDecimal,
             blob: Blob,
             boolean: Boolean,
             date: Timestamp,
@@ -163,6 +165,8 @@ class AwsQuerySerializerGeneratorTest {
         use aws.protocols#restJson1
 
         union Choice {
+            bigInt: BigInteger,
+            bigDec: BigDecimal,
             blob: Blob,
             boolean: Boolean,
             date: Timestamp,
@@ -318,6 +322,70 @@ class AwsQuerySerializerGeneratorTest {
                 val enum = model.lookup<StringShape>("test#FooEnum")
                 EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
+        }
+
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @ParameterizedTest
+    @CsvSource("true", "false")
+    fun `serializes big numbers correctly`(generateUnknownVariant: Boolean) {
+        val model =
+            """
+            namespace test
+            use aws.protocols#awsQuery
+
+            @awsQuery
+            @xmlNamespace(uri: "https://example.com")
+            service TestService {
+                version: "test",
+                operations: [Op]
+            }
+
+            structure OpInput {
+                bigInt: BigInteger,
+                bigDec: BigDecimal,
+            }
+
+            @http(uri: "/", method: "POST")
+            operation Op {
+                input: OpInput,
+            }
+            """.asSmithyModel()
+
+        val codegenTarget =
+            when (generateUnknownVariant) {
+                true -> CodegenTarget.CLIENT
+                false -> CodegenTarget.SERVER
+            }
+        val codegenContext = testCodegenContext(model, codegenTarget = codegenTarget)
+        val symbolProvider = codegenContext.symbolProvider
+        val serializerGenerator = AwsQuerySerializerGenerator(codegenContext)
+        val operationGenerator = serializerGenerator.operationInputSerializer(model.lookup("test#Op"))
+
+        val project = TestWorkspace.testProject(symbolProvider)
+        project.lib {
+            unitTest(
+                "big_number_serializer",
+                """
+                use aws_smithy_types::{BigInteger, BigDecimal};
+                use std::str::FromStr;
+
+                let input = crate::test_model::OpInput::builder()
+                    .big_int(BigInteger::from_str("12345678901234567890").unwrap())
+                    .big_dec(BigDecimal::from_str("123.456").unwrap())
+                    .build();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(
+                    output,
+                    "Action=Op&Version=test&bigInt=12345678901234567890&bigDec=123.456"
+                );
+                """,
+            )
         }
 
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->

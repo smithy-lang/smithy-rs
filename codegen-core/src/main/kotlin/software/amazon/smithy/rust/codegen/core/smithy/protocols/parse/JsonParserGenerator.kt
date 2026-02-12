@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
 import software.amazon.smithy.codegen.core.Symbol
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.CollectionShape
@@ -118,6 +120,7 @@ class JsonParserGenerator(
             "expect_bool_or_null" to smithyJson.resolve("deserialize::token::expect_bool_or_null"),
             "expect_document" to smithyJson.resolve("deserialize::token::expect_document"),
             "expect_number_or_null" to smithyJson.resolve("deserialize::token::expect_number_or_null"),
+            "expect_number_as_string_or_null" to smithyJson.resolve("deserialize::token::expect_number_as_string_or_null"),
             "expect_start_array" to smithyJson.resolve("deserialize::token::expect_start_array"),
             "expect_start_object" to smithyJson.resolve("deserialize::token::expect_start_object"),
             "expect_string_or_null" to smithyJson.resolve("deserialize::token::expect_string_or_null"),
@@ -146,13 +149,15 @@ class JsonParserGenerator(
         return protocolFunctions.deserializeFn(shape, fnNameSuffix) { fnName ->
             val unusedMut = if (includedMembers.isEmpty()) "##[allow(unused_mut)] " else ""
             rustBlockTemplate(
-                "pub(crate) fn $fnName(value: &[u8], ${unusedMut}mut builder: #{Builder}) -> #{Result}<#{Builder}, #{Error}>",
+                """
+                pub(crate) fn $fnName(_value: &[u8], ${unusedMut}mut builder: #{Builder}) -> #{Result}<#{Builder}, #{Error}>
+                """,
                 "Builder" to builderSymbol,
                 *codegenScope,
             ) {
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(value)).peekable();
+                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(_value)).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
@@ -173,15 +178,15 @@ class JsonParserGenerator(
         }
         return protocolFunctions.deserializeFn(shape, fnNameSuffix = "payload") { fnName ->
             rustBlockTemplate(
-                "pub(crate) fn $fnName(input: &[u8]) -> #{Result}<#{ReturnType}, #{Error}>",
+                "pub(crate) fn $fnName(_value: &[u8]) -> #{Result}<#{ReturnType}, #{Error}>",
                 *codegenScope,
                 "ReturnType" to returnSymbolToParse.symbol,
             ) {
                 val input =
                     if (shape is DocumentShape) {
-                        "input"
+                        "_value"
                     } else {
-                        "#{or_empty}(input)"
+                        "#{or_empty}(_value)"
                     }
 
                 rustTemplate(
@@ -296,6 +301,8 @@ class JsonParserGenerator(
         when (val target = model.expectShape(memberShape.target)) {
             is StringShape -> deserializeString(target)
             is BooleanShape -> rustTemplate("#{expect_bool_or_null}(tokens.next())?", *codegenScope)
+            is BigIntegerShape -> deserializeBigInteger()
+            is BigDecimalShape -> deserializeBigDecimal()
             is NumberShape -> deserializeNumber(target)
             is BlobShape -> deserializeBlob(memberShape)
             is TimestampShape -> deserializeTimestamp(memberShape)
@@ -374,6 +381,36 @@ class JsonParserGenerator(
         }
     }
 
+    private fun RustWriter.deserializeBigInteger() {
+        // Use expect_number_as_string_or_null to preserve arbitrary precision
+        // by extracting the raw JSON number string without converting to u64/i64/f64
+        rustTemplate(
+            """
+            #{expect_number_as_string_or_null}(tokens.next(), _value)?
+                .map(<#{BigInteger} as ::std::str::FromStr>::from_str)
+                .transpose()
+                .map_err(|e| #{Error}::custom(format!("invalid BigInteger: {e}")))?
+            """,
+            "BigInteger" to RuntimeType.bigInteger(codegenContext.runtimeConfig),
+            *codegenScope,
+        )
+    }
+
+    private fun RustWriter.deserializeBigDecimal() {
+        // Use expect_number_as_string_or_null to preserve arbitrary precision
+        // by extracting the raw JSON number string without converting to u64/i64/f64
+        rustTemplate(
+            """
+            #{expect_number_as_string_or_null}(tokens.next(), _value)?
+                .map(<#{BigDecimal} as ::std::str::FromStr>::from_str)
+                .transpose()
+                .map_err(|e| #{Error}::custom(format!("invalid BigDecimal: {e}")))?
+            """,
+            "BigDecimal" to RuntimeType.bigDecimal(codegenContext.runtimeConfig),
+            *codegenScope,
+        )
+    }
+
     private fun RustWriter.deserializeTimestamp(member: MemberShape) {
         val timestampFormat =
             httpBindingResolver.timestampFormat(
@@ -397,7 +434,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbol,
@@ -448,7 +485,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens)?", parser)
+        rust("#T(tokens, _value)?", parser)
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
@@ -459,7 +496,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
@@ -506,7 +543,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens)?", parser)
+        rust("#T(tokens, _value)?", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
@@ -515,7 +552,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
@@ -541,7 +578,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens)?", nestedParser)
+        rust("#T(tokens, _value)?", nestedParser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
@@ -550,7 +587,7 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>) -> #{Result}<Option<#{Shape}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{Shape}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     *codegenScope,
@@ -657,7 +694,7 @@ class JsonParserGenerator(
                     rust("Ok(variant)")
                 }
             }
-        rust("#T(tokens)?", nestedParser)
+        rust("#T(tokens, _value)?", nestedParser)
     }
 
     private fun RustWriter.unwrapOrDefaultOrError(
