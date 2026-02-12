@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-python"
-version = "0.66.8"
+version = "0.66.9"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ description = """
 Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.88"
+rust-version = "1.91"
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
