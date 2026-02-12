@@ -13,6 +13,8 @@ mod shape_type;
 mod trait_map;
 mod trait_type;
 
+pub mod prelude;
+
 pub use shape_id::ShapeId;
 pub use shape_type::ShapeType;
 pub use trait_map::TraitMap;

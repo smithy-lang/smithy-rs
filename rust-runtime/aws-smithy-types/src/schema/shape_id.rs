@@ -9,10 +9,17 @@
 /// Format: `namespace#shapeName` or `namespace#shapeName$memberName`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShapeId {
-    value: String,
+    value: &'static str,
 }
 
 impl ShapeId {
+    /// Creates a ShapeId from a static string at compile time.
+    ///
+    /// This is used for const initialization of prelude schemas.
+    pub const fn from_static(value: &'static str) -> Self {
+        Self { value }
+    }
+
     /// Creates a new ShapeId from a string.
     ///
     /// # Examples
@@ -22,14 +29,15 @@ impl ShapeId {
     /// let shape_id = ShapeId::new("smithy.api#String");
     /// ```
     pub fn new(value: impl Into<String>) -> Self {
+        // Leak the string to get a 'static reference
         Self {
-            value: value.into(),
+            value: Box::leak(value.into().into_boxed_str()),
         }
     }
 
     /// Returns the string representation of this ShapeId.
     pub fn as_str(&self) -> &str {
-        &self.value
+        self.value
     }
 
     /// Returns the namespace portion of the ShapeId.
@@ -38,7 +46,7 @@ impl ShapeId {
     /// ```
     /// use aws_smithy_types::schema::ShapeId;
     ///
-    /// let shape_id = ShapeId::new("smithy.api#String");
+    /// let shape_id = ShapeId::from_static("smithy.api#String");
     /// assert_eq!(shape_id.namespace(), Some("smithy.api"));
     /// ```
     pub fn namespace(&self) -> Option<&str> {
@@ -51,7 +59,7 @@ impl ShapeId {
     /// ```
     /// use aws_smithy_types::schema::ShapeId;
     ///
-    /// let shape_id = ShapeId::new("smithy.api#String");
+    /// let shape_id = ShapeId::from_static("smithy.api#String");
     /// assert_eq!(shape_id.shape_name(), Some("String"));
     /// ```
     pub fn shape_name(&self) -> Option<&str> {
