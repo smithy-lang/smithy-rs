@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-legacy-http-server"
-version = "0.65.12"
+version = "0.65.13"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -37,10 +37,10 @@ pin-project-lite = "0.2.14"
 regex = "1.12.2"
 serde_urlencoded = "0.7"
 thiserror = "2"
-tokio = { version = "1.46.0", features = ["full"] }
+tokio = { version = "1.49.0", features = ["full"] }
 tower = { version = "0.4.13", features = ["util", "make"], default-features = false }
 tower-http = { version = "0.3", features = ["add-extension", "map-response-body"] }
-tracing = "0.1.40"
+tracing = "0.1.44"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
