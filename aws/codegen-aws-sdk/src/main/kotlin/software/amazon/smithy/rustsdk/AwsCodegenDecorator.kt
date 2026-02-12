@@ -58,7 +58,6 @@ val DECORATORS: List<ClientCodegenDecorator> =
             SdkConfigDecorator(),
             ServiceConfigDecorator(),
             AwsPresigningDecorator(),
-            AwsChunkedContentEncodingDecorator(),
             AwsCrateDocsDecorator(),
             AwsEndpointsStdLib(),
             *PromotedBuiltInsDecorators,
@@ -99,6 +98,9 @@ val DECORATORS: List<ClientCodegenDecorator> =
             S3ExtendedRequestIdDecorator(),
             IsTruncatedPaginatorDecorator(),
             S3ExpiresDecorator(),
+            // TODO(https://github.com/smithy-lang/smithy-rs/issues/4382): Apply this decorator based on
+            //  a dedicated Smithy trait once available.
+            AwsChunkedContentEncodingDecorator(),
         ),
         S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
         STSDecorator().onlyApplyTo("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
