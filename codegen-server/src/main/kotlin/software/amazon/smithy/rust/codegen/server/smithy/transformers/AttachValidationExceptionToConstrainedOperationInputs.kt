@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
@@ -42,7 +43,7 @@ private fun addValidationExceptionToMatchingServiceShapes(
             .map { model.expectShape(it, OperationShape::class.java) }
             .filter { operationShape ->
                 walker.walkShapes(operationShape.inputShape(model))
-                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() || it.hasEventStreamMember(model) }
             }
             .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
