@@ -6,14 +6,14 @@
 use crate::results::{Result, Results};
 use std::time::SystemTime;
 
-pub(crate) struct TestConfig {
-    pub(crate) name: String,
-    pub(crate) description: String,
-    pub(crate) unit: String,
-    pub(crate) runs: u8,
+pub struct TestConfig {
+    pub name: String,
+    pub description: String,
+    pub unit: String,
+    pub runs: u8,
 }
 
-pub(crate) fn run_test<F: Fn()>(config: &TestConfig, results: &mut Results, func: F) {
+pub fn run_test<F: Fn()>(config: &TestConfig, results: &mut Results, func: F) {
     let mut result = Result {
         name: config.name.clone(),
         description: config.description.clone(),

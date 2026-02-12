@@ -3,19 +3,15 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-mod ddb_serde;
-mod results;
-mod test_util;
-
 use clap::Parser;
-use ddb_serde::{deserialize, serialize};
-use results::Results;
-use test_util::{run_test, TestConfig};
+use sdk_perf::ddb_serde::{deserialize, serialize};
+use sdk_perf::results::Results;
+use sdk_perf::test_util::{run_test, TestConfig};
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
 struct Args {
-    /// Name of the person to greet
+    /// Commit ID for the benchmark run
     #[arg(short, long)]
     commit_id: String,
 }

@@ -14,7 +14,7 @@ use aws_smithy_runtime_api::client::ser_de::{SerializeRequest, SharedRequestSeri
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 
-pub(crate) fn deserialize() {
+pub fn deserialize() {
     use aws_sdk_dynamodb::operation::query::Query;
     use bytes::Bytes;
 
@@ -68,7 +68,7 @@ macro_rules! attr_obj {
     };
 }
 
-pub(crate) fn serialize() {
+pub fn serialize() {
     let input = PutItemInput::builder()
             .table_name("Movies-5")
             .set_item(Some(
