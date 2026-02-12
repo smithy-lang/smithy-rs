@@ -410,7 +410,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.19"
+version = "0.60.20"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -814,7 +814,6 @@ name = "aws-smithy-wasm"
 version = "0.1.9"
 dependencies = [
  "aws-smithy-async",
- "aws-smithy-http",
  "aws-smithy-runtime-api",
  "aws-smithy-types",
  "http-body-util",

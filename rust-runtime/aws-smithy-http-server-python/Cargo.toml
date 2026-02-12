@@ -19,7 +19,7 @@ aws-smithy-legacy-http-server = { path = "../aws-smithy-legacy-http-server", fea
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
-bytes = "1.10.0"
+bytes = "1.11.1"
 futures = "0.3"
 http = "0.2.12"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
