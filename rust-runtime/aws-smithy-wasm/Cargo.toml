@@ -17,7 +17,7 @@ aws-smithy-async = { path = "../aws-smithy-async" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
 aws-smithy-http = { path = "../aws-smithy-http" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
-http-body-util = "0.1.2"
+http-body-util = "0.1.3"
 sync_wrapper = { version = "1", features = ["futures"] }
 # Note the wstd crate will only build for target wasm32-wasip2, but having a target
 # statement here breaks some of the CI tests, so we leave it with the rest of the deps

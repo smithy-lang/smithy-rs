@@ -4,6 +4,7 @@
  */
 
 //! WASI HTTP Adapter
+use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::{
     client::{
@@ -19,10 +20,9 @@ use aws_smithy_runtime_api::{
     shared::IntoShared,
 };
 use aws_smithy_types::{body::SdkBody, retry::ErrorKind};
-use aws_smithy_async::rt::sleep::{AsyncSleep, Sleep};
 use http_body_util::{BodyStream, StreamBody};
-use wstd::http::{Body as WstdBody, BodyExt as _, Client, Error as WstdError};
 use std::time::Duration;
+use wstd::http::{Body as WstdBody, BodyExt as _, Client, Error as WstdError};
 
 /// An sleep implementation for wasip2, using the wstd async executor.
 #[derive(Debug, Clone)]
