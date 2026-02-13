@@ -14,6 +14,7 @@ mod trait_map;
 mod trait_type;
 
 pub mod prelude;
+pub mod serde;
 
 pub use shape_id::ShapeId;
 pub use shape_type::ShapeType;
@@ -117,7 +118,7 @@ pub trait SchemaExt: Schema {
 impl<T: Schema + ?Sized> SchemaExt for T {}
 
 #[cfg(test)]
-mod tests {
+mod test {
     use crate::schema::{Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
