@@ -246,9 +246,10 @@ class EventStreamUnmarshallerGenerator(
                 // Handle implicit payload members: members with neither @eventPayload nor @eventHeader.
                 // Per the Smithy spec, these are collectively serialized as a protocol-specific document
                 // in the message body.
-                val implicitMembers = unionStruct.members().filter {
-                    !it.hasTrait<EventPayloadTrait>() && !it.hasTrait<EventHeaderTrait>()
-                }
+                val implicitMembers =
+                    unionStruct.members().filter {
+                        !it.hasTrait<EventPayloadTrait>() && !it.hasTrait<EventHeaderTrait>()
+                    }
                 if (implicitMembers.isNotEmpty() && payloadMember == null) {
                     val parser = protocol.structuredDataParser().errorParser(unionStruct)
                     if (parser != null) {
