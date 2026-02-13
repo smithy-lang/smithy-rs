@@ -10,7 +10,7 @@ pub struct TestConfig {
     pub name: String,
     pub description: String,
     pub unit: String,
-    pub runs: u8,
+    pub runs: u16,
 }
 
 pub fn run_test<F: Fn()>(config: &TestConfig, results: &mut Results, func: F) {
