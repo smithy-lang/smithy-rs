@@ -123,10 +123,14 @@ object AttachValidationExceptionToConstrainedOperationInput {
                     "`smithy.framework#ValidationException` is now automatically added to operations with constrained inputs " +
                     "unless a custom validation exception is defined in the model.",
             )
-        } else if (addExceptionNullableFlag == false || hasCustomValidationException(model)) {
+        } else if (addExceptionNullableFlag == false ||
+            hasCustomValidationException(model) ||
+            settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse != null
+        ) {
             // Skip adding `ValidationException` when:
             // - `addValidationExceptionToConstrainedOperations` is explicitly false (backward compatibility), or
-            // - A custom validation exception exists (users must explicitly add it to operations)
+            // - A custom validation exception exists (users must explicitly add it to operations), or
+            // - A custom validation exception is configured via the experimental codegen setting
             return model
         }
 
