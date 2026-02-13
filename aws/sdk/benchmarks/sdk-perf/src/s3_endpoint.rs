@@ -34,3 +34,16 @@ pub fn resolve_s3_accesspoint_endpoint() {
 
     let _ = resolver.resolve_endpoint(&params);
 }
+
+pub fn resolve_s3express_endpoint() {
+    let resolver = DefaultResolver::new();
+
+    let params = Params::builder()
+        .set_region(Some("us-east-1".to_owned()))
+        .set_bucket(Some("mybucket--abcd-ab1--x-s3".to_owned()))
+        .set_key(Some("key".to_owned()))
+        .build()
+        .expect("valid params");
+
+    let _ = resolver.resolve_endpoint(&params);
+}
