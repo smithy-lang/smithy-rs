@@ -1,0 +1,42 @@
+[package]
+name = "aws-smithy-http-server-metrics"
+version = "0.1.0"
+authors = [
+    "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
+    "Jason Gin <jasgin@amazon.com>",
+]
+description = "Server metrics via metrique integration."
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+rust-version = "1.91"
+
+[dependencies]
+metrique = "0.1.17"
+metrique-core = "0.1.15"
+metrique-writer = "0.1.17"
+
+tower = "0.4.13"
+futures = "0.3"
+http = "1.3.1"
+http-body = "1.0.1"
+hyper = "1.6.0"
+thiserror = "2"
+pin-project-lite = "0.2.14"
+tracing = "0.1.44"
+
+aws-smithy-http-server = { path = "../aws-smithy-http-server", features = [
+    "request-id",
+] }
+aws-smithy-http-server-metrics-macro = { path = "../aws-smithy-http-server-metrics-macro" }
+
+[dev-dependencies]
+tracing-appender = "0.2"
+metrique-writer-format-emf = "0.1.16"
+
+[package.metadata.docs.rs]
+all-features = true
+targets = ["x86_64-unknown-linux-gnu"]
+cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
+rustdoc-args = ["--cfg", "docsrs"]
+# End of docs.rs metadata

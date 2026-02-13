@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.66.0"
+version = "0.66.2"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ description = """
 Server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.88"
+rust-version = "1.91"
 
 [features]
 default = []
@@ -54,7 +54,7 @@ pin-project-lite = "0.2.14"
 regex = "1.12.2"
 serde_urlencoded = "0.7"
 thiserror = "2"
-tokio = { version = "1.46.0", features = ["full"] }
+tokio = { version = "1.49.0", features = ["full"] }
 tower = { version = "0.4.13", features = [
     "util",
     "make",
@@ -63,7 +63,7 @@ tower-http = { version = "0.6", features = [
     "add-extension",
     "map-response-body",
 ] }
-tracing = "0.1.40"
+tracing = "0.1.44"
 uuid = { version = "1.1.2", features = ["v4", "fast-rng"], optional = true }
 
 [dev-dependencies]
