@@ -14,7 +14,7 @@ rust-version = "1.91"
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x", "client"]}
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 http-body-util = "0.1.3"
 sync_wrapper = { version = "1", features = ["futures"] }
