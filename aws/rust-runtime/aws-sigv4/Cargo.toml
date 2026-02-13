@@ -23,7 +23,7 @@ aws-smithy-eventstream = { path = "../../../rust-runtime/aws-smithy-eventstream"
 aws-smithy-http = { path = "../../../rust-runtime/aws-smithy-http" }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client"] }
 aws-smithy-types = { path = "../../../rust-runtime/aws-smithy-types" }
-bytes = "1.10.0"
+bytes = "1.11.1"
 form_urlencoded = { version = "1.2.1", optional = true }
 hex = "0.4.3"
 hmac = "0.12"
@@ -42,7 +42,7 @@ zeroize = { version = "^1.7.0", optional = true }
 [dev-dependencies]
 aws-credential-types = { path = "../aws-credential-types", features = ["test-util", "hardcoded-credentials"] }
 aws-smithy-runtime-api = { path = "../../../rust-runtime/aws-smithy-runtime-api", features = ["client", "test-util"] }
-bytes = "1"
+bytes = "1.11.1"
 hex-literal = "0.4.1"
 httparse = "1.10.1"
 pretty_assertions = "1.3"
