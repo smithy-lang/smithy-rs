@@ -28,6 +28,3 @@ include(":aws:sdk")
 include(":aws:sdk-adhoc-test")
 include(":aws:codegen-aws-sdk")
 include(":fuzzgen")
-
-// Temporary inclusion to get the changes from https://github.com/smithy-lang/smithy/pull/2903 before it merges
-includeBuild("/Volumes/workplace/smithy")
