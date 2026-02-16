@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-legacy-http"
-version = "0.62.10"
+version = "0.62.12"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -9,7 +9,7 @@ description = "Smithy HTTP-0x logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.88"
+rust-version = "1.91"
 
 [features]
 event-stream = ["aws-smithy-eventstream"]
@@ -28,7 +28,7 @@ http-body-04x = { package = "http-body", version = "0.4.6" }
 percent-encoding = "2.3.1"
 pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
-tracing = "0.1.40"
+tracing = "0.1.44"
 
 # For an adapter to enable the `Stream` trait for `aws_smithy_types::byte_stream::ByteStream`
 futures-core = "0.3.31"
@@ -39,7 +39,7 @@ async-stream = "0.3"
 futures-util = { version = "0.3.29", default-features = false }
 hyper = { version = "0.14.26", features = ["stream"] }
 proptest = "1"
-tokio = { version = "1.23.1", features = [
+tokio = { version = "1.49.0", features = [
     "macros",
     "rt",
     "rt-multi-thread",
