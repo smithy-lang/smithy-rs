@@ -729,6 +729,39 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_current_capacity_can_go_negative() {
+        // Test that current_capacity can become negative when a request cost
+        // exceeds the available capacity
+        let rate_limiter = ClientRateLimiter::builder()
+            .time_of_last_throttle(0.0)
+            .previous_time_bucket(0.0)
+            .build();
+
+        // Trigger throttling to enable the rate limiter
+        rate_limiter.update_rate_limiter(0.0, true);
+
+        // Wait a very short time (0.1 seconds) so minimal refill occurs
+        // With fill_rate = 0.5, this adds 0.05 tokens
+        let result = rate_limiter.acquire_permission_to_send_a_request(
+            0.1,
+            RequestReason::InitialRequest, // costs 1.0
+        );
+
+        // Should return Err because we don't have enough capacity
+        assert!(result.is_err(), "should require waiting for capacity");
+
+        // Check that current_capacity is now negative
+        let inner = rate_limiter.inner.lock().unwrap();
+        assert!(
+            inner.current_capacity < 0.0,
+            "current_capacity should be negative, got: {}",
+            inner.current_capacity
+        );
+        // Should be approximately -0.95 (0.05 from refill - 1.0 cost)
+        assert_relative_eq!(inner.current_capacity, -0.95, epsilon = 0.01);
+    }
+
     // This test is only testing that we don't fail basic math and panic. It does include an
     // element of randomness, but no duration between >= 0.0s and <= 1.0s will ever cause a panic.
     //
