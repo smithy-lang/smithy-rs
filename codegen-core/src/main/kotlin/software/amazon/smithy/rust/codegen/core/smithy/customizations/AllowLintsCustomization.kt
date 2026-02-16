@@ -47,6 +47,8 @@ private val allowedClippyLints =
         "result_large_err",
         // Difficult to avoid in generated code
         "unnecessary_map_on_constructor",
+        // Introduced by Python server codegen but needs to be suppressed for regular codegen (https://github.com/smithy-lang/smithy-rs/pull/4537)
+        "useless_conversion",
         // Service models can specify a date, such as 2024-01-08, as the "since" date for deprecation.
         "deprecated_semver",
     )
