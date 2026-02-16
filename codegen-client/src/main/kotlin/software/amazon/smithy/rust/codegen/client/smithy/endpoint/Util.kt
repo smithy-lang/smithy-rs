@@ -69,7 +69,7 @@ object EndpointsLib {
         endpointsLib("split", CargoDependency.Proptest).toType().resolve("split")
 
     fun url(lifetimeName: String = "a") =
-        endpointsLib("parse_url", CargoDependency.Http, CargoDependency.Url)
+        endpointsLib("parse_url", CargoDependency.Http1x, CargoDependency.Url)
             .toType()
             .resolve("Url<'$lifetimeName>")
 

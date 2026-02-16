@@ -1492,11 +1492,11 @@
     "aws.protocols#ChecksumAlgorithm": {
       "type": "enum",
       "members": {
-        "CRC64NVME": {
+        "CRC32": {
           "target": "smithy.api#Unit",
           "traits": {
-            "smithy.api#documentation": "CRC64NVME",
-            "smithy.api#enumValue": "CRC64NVME"
+            "smithy.api#documentation": "CRC32",
+            "smithy.api#enumValue": "CRC32"
           }
         },
         "CRC32C": {
@@ -1506,11 +1506,18 @@
             "smithy.api#enumValue": "CRC32C"
           }
         },
-        "CRC32": {
+        "CRC64NVME": {
           "target": "smithy.api#Unit",
           "traits": {
-            "smithy.api#documentation": "CRC32",
-            "smithy.api#enumValue": "CRC32"
+            "smithy.api#documentation": "CRC64NVME",
+            "smithy.api#enumValue": "CRC64NVME"
+          }
+        },
+        "MD5": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "MD5",
+            "smithy.api#enumValue": "MD5"
           }
         },
         "SHA1": {
@@ -1525,6 +1532,34 @@
           "traits": {
             "smithy.api#documentation": "SHA256",
             "smithy.api#enumValue": "SHA256"
+          }
+        },
+        "SHA512": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "SHA512",
+            "smithy.api#enumValue": "SHA512"
+          }
+        },
+        "XXHASH64": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "XXHASH64",
+            "smithy.api#enumValue": "XXHASH64"
+          }
+        },
+        "XXHASH3": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "XXHASH3",
+            "smithy.api#enumValue": "XXHASH3"
+          }
+        },
+        "XXHASH128": {
+          "target": "smithy.api#Unit",
+          "traits": {
+            "smithy.api#documentation": "XXHASH128",
+            "smithy.api#enumValue": "XXHASH128"
           }
         }
       },
