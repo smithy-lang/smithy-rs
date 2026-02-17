@@ -6,7 +6,8 @@
 use clap::Parser;
 use sdk_perf::results::Results;
 use sdk_perf::s3_endpoint::{
-    resolve_s3_accesspoint_endpoint, resolve_s3_outposts_endpoint, resolve_s3express_endpoint,
+    resolve_s3_accesspoint_endpoint, resolve_s3_outposts_endpoint, resolve_s3_path_style_endpoint,
+    resolve_s3express_endpoint,
 };
 use sdk_perf::test_util::{run_test, TestConfig};
 
@@ -55,6 +56,18 @@ fn main() {
         runs: 1000,
     };
     run_test(&s3express_config, &mut results, resolve_s3express_endpoint);
+
+    let path_style_config = TestConfig {
+        name: "s3_path_style_endpoint_resolution".into(),
+        description: "vanilla path style@us-west-2".into(),
+        unit: "Microseconds".into(),
+        runs: 1000,
+    };
+    run_test(
+        &path_style_config,
+        &mut results,
+        resolve_s3_path_style_endpoint,
+    );
 
     let output = serde_json::to_string(&results).unwrap();
     println!("{output:#}");
