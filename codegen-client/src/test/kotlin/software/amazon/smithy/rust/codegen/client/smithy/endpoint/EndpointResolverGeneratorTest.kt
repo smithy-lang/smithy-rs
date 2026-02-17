@@ -80,10 +80,11 @@ class EndpointResolverGeneratorTest {
                 .toList()
                 .distinct()
 
-        if (namespace[0].contains("split")) {
-            println("NAMESPACE: $namespace")
-            clientIntegrationTest(suite)
-        }
+//        if (namespace[0].contains("split")) {
+//            println("NAMESPACE: $namespace")
+//            clientIntegrationTest(suite)
+//        }
+        clientIntegrationTest(suite)
     }
 
     /*
