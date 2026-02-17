@@ -6,46 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix Content-Type and Accept headers for event streams in RPC v2 CBOR to set `application/vnd.amazon.eventstream`\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "ysaito1001",
-      "references": [
-        "smithy-rs#4427"
-      ],
-      "since-commit": "8a939c7b0de5ddd921132e7d558851f7957c18a8",
-      "age": 5
-    },
-    {
-      "message": "In `legacy-rustls-ring`, polyfill `with_native_roots` to use `rustls_native_certs 0.8` to avoid\nRUSTSEC-2025-0134.",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "arielb1",
-      "references": [
-        "aws-sdk-rust#1390"
-      ],
-      "since-commit": "8a939c7b0de5ddd921132e7d558851f7957c18a8",
-      "age": 5
-    },
-    {
-      "message": "Publish an MSRV for all packages\n\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "arielby",
-      "references": [],
-      "since-commit": "8a939c7b0de5ddd921132e7d558851f7957c18a8",
-      "age": 5
-    },
-    {
       "message": "Add `expect_number_as_string_or_null` function to `aws-smithy-json` that extracts JSON numbers as strings without converting to u64/i64/f64. This preserves arbitrary precision for BigInteger and BigDecimal support, preventing precision loss for numbers larger than standard numeric types can represent.\n",
       "meta": {
         "bug": false,
@@ -57,7 +17,7 @@
         "smithy-rs#4418"
       ],
       "since-commit": "26c59c21b638bbd33a9f46060ff8cc8d4c9df67c",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Update the `lru` dependency for `aws-sdk-s3` and `rust-runtime`\n",
@@ -69,7 +29,7 @@
       "author": "svix-jbrown",
       "references": [],
       "since-commit": "543c1879256ddb033d5c73a10e98611328cbc37c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Update crc-fast to 1.9\n",
@@ -81,7 +41,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "543c1879256ddb033d5c73a10e98611328cbc37c",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Add support for Smithy bigInteger and bigDecimal types as string wrappers in aws-smithy-types, allowing users to parse with their preferred big number library.\n",
@@ -95,7 +55,7 @@
         "smithy-rs#312"
       ],
       "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 2
+      "age": 3
     },
     {
       "message": "All Smithy-rs crates, for both servers and clients, now use the 1.x version of\nthe `http` crate for all internal processing. Utility methods are still provided\nfor users to convert between SDK types and both of the `http` 0.x and 1.x types.\n",
@@ -112,7 +72,7 @@
         "smithy-rs#4484"
       ],
       "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix JMESPath integer literal handling in waiters to support Smithy 1.66.0, which parses integer literals as `Long` instead of `Double`.\n",
@@ -126,7 +86,7 @@
         "smithy-rs#4500"
       ],
       "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Enable retries by default for AWS SDK clients using `BehaviorVersion::v2026_01_12()` or later.\n\nPreviously, retries were only enabled when constructing clients via `aws_config::load_from_env()`. Clients constructed directly using `Client::from_conf()` did not have retries enabled, which was inconsistent with AWS SDK behavior in other languages.\n\nThis change affects AWS SDK clients constructed with `Client::from_conf()` when using `BehaviorVersion::v2026_01_12()` or `BehaviorVersion::latest()`. Generic Smithy clients (non-AWS) are not affected.\n\nTo disable retries:\n```rust\nlet config = aws_sdk_s3::Config::builder()\n    .retry_config(RetryConfig::disabled())\n    // ...\n    .build();\n```\n\nFor more context, see the [discussion on retry behavior](https://github.com/smithy-lang/smithy-rs/discussions/4466).\n",
@@ -142,7 +102,7 @@
         "aws-sdk-rust#1389"
       ],
       "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Upgrade MSRV to Rust 1.91.0.\n",
@@ -154,7 +114,7 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "4fcd5503215ba832f29bb246e23e1d9b20510d14",
-      "age": 1
+      "age": 2
     },
     {
       "message": "Add full support for [AWS chunked content encoding](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html). AWS chunked content encoding enables streaming sigv4 for payloads without precomputing the sha256 of the entire payload. While this encoding was already used in S3's `PutObject` and `UploadPart` operations to support trailing checksums with non-chunked, unsigned streaming payloads, this release now splits streaming payloads into 64 KiB chunks by default (the last chunk may be smaller) and adds support for chunk signing (currently only activated for non-TLS requests).\n\nIf the default chunk size does not suit your use case, it can be configured via the service config:\n```\n// Custom chunk size\nlet config = aws_sdk_s3::Config::builder()\n    .aws_chunked_encoding_chunk_size(Some(10240)) // 10 KiB chunks\n    // other configurations\n    .build();\nlet client = aws_sdk_s3::Client::from_conf(config);\n```\n\n```\n// Disable chunking (buffers entire body in memory and sends it as one chunk)\nlet config = aws_sdk_s3::Config::builder()\n    .aws_chunked_encoding_chunk_size(None)\n    // other configurations\n    .build();\nlet client = aws_sdk_s3::Client::from_conf(config);\n```\n",
@@ -169,7 +129,7 @@
         "smithy-rs#4188"
       ],
       "since-commit": "4fcd5503215ba832f29bb246e23e1d9b20510d14",
-      "age": 1
+      "age": 2
     }
   ],
   "aws-sdk-model": []
