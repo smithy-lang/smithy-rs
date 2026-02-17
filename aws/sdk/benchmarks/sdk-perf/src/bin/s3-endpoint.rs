@@ -7,7 +7,7 @@ use clap::Parser;
 use sdk_perf::results::Results;
 use sdk_perf::s3_endpoint::{
     resolve_s3_accesspoint_endpoint, resolve_s3_outposts_endpoint, resolve_s3_path_style_endpoint,
-    resolve_s3express_endpoint,
+    resolve_s3_virtual_addressing_endpoint, resolve_s3express_endpoint,
 };
 use sdk_perf::test_util::{run_test, TestConfig};
 
@@ -67,6 +67,18 @@ fn main() {
         &path_style_config,
         &mut results,
         resolve_s3_path_style_endpoint,
+    );
+
+    let virtual_addressing_config = TestConfig {
+        name: "s3_virtual_addressing_endpoint_resolution".into(),
+        description: "vanilla virtual addressing@us-west-2".into(),
+        unit: "Microseconds".into(),
+        runs: 1000,
+    };
+    run_test(
+        &virtual_addressing_config,
+        &mut results,
+        resolve_s3_virtual_addressing_endpoint,
     );
 
     let output = serde_json::to_string(&results).unwrap();

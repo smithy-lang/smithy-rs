@@ -61,3 +61,16 @@ pub fn resolve_s3_path_style_endpoint() {
 
     let _ = resolver.resolve_endpoint(&params);
 }
+
+pub fn resolve_s3_virtual_addressing_endpoint() {
+    let resolver = DefaultResolver::new();
+
+    let params = Params::builder()
+        .set_region(Some("us-west-2".to_owned()))
+        .set_bucket(Some("bucket-name".to_owned()))
+        .set_key(Some("key".to_owned()))
+        .build()
+        .expect("valid params");
+
+    let _ = resolver.resolve_endpoint(&params);
+}
