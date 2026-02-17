@@ -21,3 +21,10 @@ clap = { version = "4.5.23", features = ["derive"] }
 http = "1.2.0"
 serde = {version = "1.0.216", features = ["derive"]}
 serde_json = "1.0.133"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "s3_endpoint"
+harness = false
