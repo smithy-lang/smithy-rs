@@ -4,6 +4,7 @@
  */
 
 pub mod ddb_serde;
+pub mod lambda_endpoint;
 pub mod results;
 pub mod s3_endpoint;
 pub mod test_util;
