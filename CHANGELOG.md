@@ -1,4 +1,10 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 16th, 2026
+===================
+**New this release:**
+- :tada: (server, [smithy-rs#4494](https://github.com/smithy-lang/smithy-rs/issues/4494)) Automatically add `smithy.framework#ValidationException` to operations with constrained inputs. Previously, users had to either set `addValidationExceptionToConstrainedOperations: true` in codegen settings or manually add `ValidationException` to each operation. Now this happens automatically unless a custom validation exception (a structure with the `@validationException` trait) is defined in the model. When using a custom validation exception, users must explicitly add it to each applicable operation. The `addValidationExceptionToConstrainedOperations` flag is deprecated.
+
+
 February 10th, 2026
 ===================
 **Breaking Changes:**
