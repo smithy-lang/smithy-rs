@@ -1,6 +1,6 @@
 [package]
 name = "aws-sigv4"
-version = "1.4.1"
+version = "1.4.2"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "David Barsky <me@davidbarsky.com>"]
 description = "SigV4 signer for HTTP requests and Event Stream messages."
 edition = "2021"
@@ -65,6 +65,10 @@ harness = false
 name = "sigv4a"
 harness = false
 required-features = ["sigv4a"]
+
+[[bench]]
+name = "signing_headers"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
