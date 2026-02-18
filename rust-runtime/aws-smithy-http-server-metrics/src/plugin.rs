@@ -5,7 +5,6 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
@@ -338,11 +337,8 @@ fn extend_default_request_metrics(
         return DefaultRequestMetrics::default();
     }
 
-    let outstanding_requests = (!config.disable_outstanding_requests).then_some(
-        ext.service_state
-            .outstanding_requests_counter
-            .load(Ordering::Relaxed),
-    );
+    let outstanding_requests =
+        (!config.disable_outstanding_requests).then_some(ext.service_state.outstanding_requests);
 
     DefaultRequestMetrics {
         service_name: metrics

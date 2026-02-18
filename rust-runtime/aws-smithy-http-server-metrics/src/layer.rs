@@ -13,6 +13,7 @@ use thiserror::Error;
 use tower::Layer;
 
 use crate::default::DefaultMetrics;
+use crate::default::DefaultMetricsServiceCounters;
 use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
@@ -227,7 +228,7 @@ where
             default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
-            default_service_state: DefaultMetricsServiceState::default(),
+            default_service_counters: DefaultMetricsServiceCounters::default(),
 
             _entry_sink: PhantomData,
         }

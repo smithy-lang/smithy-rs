@@ -9,7 +9,6 @@
 //! to collect standard metrics automatically.
 
 use std::fmt::Debug;
-use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
@@ -18,12 +17,21 @@ use metrique::unit_of_work::metrics;
 use metrique::Slot;
 use metrique::SlotGuard;
 
+use crate::default::service_counter::ServiceCounter;
+
+pub(crate) mod service_counter;
+
 /// Container for keeping track of state across all requests for the service (all operations) for default metrics
 ///
 /// This type is not intended for direct use. See [`DefaultMetricsPlugin`](crate::plugin::DefaultMetricsPlugin).
 #[derive(Debug, Default, Clone)]
+pub struct DefaultMetricsServiceCounters {
+    pub(crate) outstanding_requests_counter: ServiceCounter,
+}
+
+#[derive(Debug, Default, Clone)]
 pub struct DefaultMetricsServiceState {
-    pub(crate) outstanding_requests_counter: Arc<AtomicUsize>,
+    pub(crate) outstanding_requests: usize,
 }
 
 /// Container for default request and response metrics.
