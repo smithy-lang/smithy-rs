@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators
 
+import software.amazon.smithy.rulesengine.language.evaluation.value.ArrayValue
 import software.amazon.smithy.rulesengine.language.evaluation.value.BooleanValue
 import software.amazon.smithy.rulesengine.language.evaluation.value.StringValue
 import software.amazon.smithy.rulesengine.language.evaluation.value.Value
@@ -244,6 +245,11 @@ class EndpointParamsGenerator(
         return when (value) {
             is StringValue -> value.value.dq() + ".to_string()"
             is BooleanValue -> value.value.toString()
+            is ArrayValue -> {
+                val elements = value.values.joinToString(", ") { value(it) }
+                "vec![$elements]"
+            }
+
             else -> TODO("unexpected type: $value")
         }
     }

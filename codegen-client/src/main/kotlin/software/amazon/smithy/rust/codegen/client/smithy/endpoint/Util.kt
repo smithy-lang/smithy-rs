@@ -32,7 +32,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: RuntimeConfig)
+data class Context(
+    val functionRegistry: FunctionRegistry,
+    val runtimeConfig: RuntimeConfig,
+    val isBddMode: Boolean = false,
+)
 
 /**
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)

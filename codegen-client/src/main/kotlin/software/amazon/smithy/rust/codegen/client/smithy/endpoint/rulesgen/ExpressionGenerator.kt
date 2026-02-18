@@ -67,7 +67,14 @@ class ExpressionGenerator(
                         when (ref.type()) {
                             // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
                             // Typically, we don't know which type will be returned due to code generation.
-                            is StringType -> rust("${ref.name.rustName()}.as_ref() as &str")
+                            // In BDD mode, parameters are already bound as references, so the cast is unnecessary and causes errors.
+                            is StringType -> {
+                                if (context.isBddMode) {
+                                    rust("${ref.name.rustName()}.as_ref()")
+                                } else {
+                                    rust("${ref.name.rustName()}.as_ref() as &str")
+                                }
+                            }
                             else -> rust(ref.name.rustName())
                         }
                     } catch (_: RuntimeException) {

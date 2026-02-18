@@ -111,7 +111,7 @@ class EndpointBddGenerator(
         val resultCount = bddTrait.results.size
         val typeGenerator = EndpointTypesGenerator.fromContext(codegenContext)
         val registry = FunctionRegistry(stdlib)
-        val context = Context(registry, runtimeConfig)
+        val context = Context(registry, runtimeConfig, isBddMode = true)
 
         // Render conditions to a dummy writer to populate the function registry
         bddTrait.conditions.forEach { cond ->
@@ -454,7 +454,7 @@ class EndpointBddGenerator(
      */
     private fun generateEndpoint(endpoint: Endpoint): Writable {
         val registry = FunctionRegistry(stdlib)
-        val context = Context(registry, runtimeConfig)
+        val context = Context(registry, runtimeConfig, isBddMode = true)
         val generator = ExpressionGenerator(Ownership.Owned, context)
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }

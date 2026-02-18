@@ -13,6 +13,8 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.EndpointTestDiscovery
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 
+// TODO(bdd): update these tests to source the models from https://github.com/smithy-lang/smithy/tree/main/smithy-rules-engine-tests
+
 class EndpointResolverGeneratorTest {
     companion object {
         val testCases =
@@ -68,11 +70,6 @@ class EndpointResolverGeneratorTest {
     @ParameterizedTest(name = "{0}")
     @MethodSource("testSuitesBdd")
     fun `generate all BDD tests`(suite: Model) {
-        // snippet to only run one ruleset during tests
-        // if (!suite.toString().contains("hostable")) {
-        // return
-        // }
-
         val namespace =
             suite.getShapeIds().stream()
                 .map { obj: ShapeId -> obj.namespace.toString() }
@@ -80,10 +77,16 @@ class EndpointResolverGeneratorTest {
                 .toList()
                 .distinct()
 
-//        if (namespace[0].contains("split")) {
-//            println("NAMESPACE: $namespace")
-//            clientIntegrationTest(suite)
-//        }
+        // stringarray test is contains a UnionShape and our JmesPath impl doesn't support that.
+        // This test was also excluded for endpointRuleSet based tests (by just not being present
+        // in the repo), so this is aligned with the existing testing.
+        val unsupportedTests = listOf("stringarray")
+
+        // Skip unsupported tests
+        if (namespace.isNotEmpty() && unsupportedTests.any { namespace[0].contains(it) }) {
+            return
+        }
+
         clientIntegrationTest(suite)
     }
 

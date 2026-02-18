@@ -199,7 +199,7 @@ class BddExpressionGenerator(
             val expressionGenerator = createChildGenerator()
             val lhsIsOptionalRef = isOptionalRef(left)
             val rhsIsOptionalRef = isOptionalRef(right)
-            val (lhsInto, rhsInto) = getStringEqualityModifier(left, right)
+            val (lhsInto, rhsInto) = getStringEqualityModifier(left, lhsIsOptionalRef, right, rhsIsOptionalRef)
 
             conditionalBlock("&mut Some(", ")", conditional = rhsIsOptionalRef) {
                 rust("(#W$lhsInto)", expressionGenerator.generateExpression(left))
@@ -227,12 +227,16 @@ class BddExpressionGenerator(
 
         private fun getStringEqualityModifier(
             left: Expression,
+            lhsIsOptionalRef: Boolean,
             right: Expression,
+            rhsIsOptionalRef: Boolean,
         ): Pair<String, String> {
             // References are always stored as String, but functions (GetAttr, coalesce, etc) often produce
             // &str, so we .into() those result to match the reference.
-            val rhsInto = if (left is Reference && (right is Literal || right is GetAttr)) ".into()" else ""
-            val lhsInto = if (right is Reference && (left is Literal || left is GetAttr)) ".into()" else ""
+            val rhsInto =
+                if (left is Reference && lhsIsOptionalRef && (right is Literal || right is GetAttr)) ".into()" else ""
+            val lhsInto =
+                if (right is Reference && rhsIsOptionalRef && (left is Literal || left is GetAttr)) ".into()" else ""
 
             return Pair(lhsInto, rhsInto)
         }
@@ -277,6 +281,7 @@ class BddExpressionGenerator(
                             """.trimMargin(),
                             expressionGenerator.generateExpression(arg),
                         )
+
                     else -> rust("*#W", expressionGenerator.generateExpression(arg))
                 }
             }
@@ -289,15 +294,19 @@ class BddExpressionGenerator(
                 when {
                     arg is StringLiteral ->
                         rust("#W.to_string()", expressionGenerator.generateExpression(arg))
+
                     arg is GetAttr && arg.type() is StringType ->
                         rust("#W.to_string()", expressionGenerator.generateExpression(arg))
+
                     !isOptionalArgument(arg) ->
                         rust("#W", expressionGenerator.generateExpression(arg))
+
                     isOptionalRef(arg) ->
                         rust(
                             "#W.clone().expect(\"Reference already confirmed Some\")",
                             expressionGenerator.generateExpression(arg),
                         )
+
                     else ->
                         rust("*#W", expressionGenerator.generateExpression(arg))
                 }
@@ -317,6 +326,7 @@ class BddExpressionGenerator(
                     } else {
                         "param"
                     }
+
                 rust(
                     """
                     if let Some(param) = #W{
