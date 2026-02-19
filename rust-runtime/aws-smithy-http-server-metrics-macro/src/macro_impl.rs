@@ -142,7 +142,7 @@ fn generate_ext_trait_impl(
                 {
                     fn build(self) -> aws_smithy_http_server_metrics::layer::MetricsLayer<#struct_ident, Sink, Init, Res> {
                         let default_metrics_extension_fn =
-                            |req: &mut http::Request<aws_smithy_http_server_metrics::types::ReqBody>,
+                            |req: &mut aws_smithy_http_server_metrics::types::HttpRequest,
                             metrics: &mut #struct_ident,
                             req_config: aws_smithy_http_server_metrics::default::DefaultRequestMetricsConfig,
                             res_config: aws_smithy_http_server_metrics::default::DefaultResponseMetricsConfig,

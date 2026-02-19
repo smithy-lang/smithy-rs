@@ -3,15 +3,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use http::Request;
-use http::Response;
 use metrique::AppendAndCloseOnDrop;
 use metrique::RootEntry;
 use metrique_core::CloseEntry;
 use metrique_writer::EntrySink;
 
-use crate::types::ReqBody;
-use crate::types::ResBody;
+use crate::types::HttpRequest;
+use crate::types::HttpResponse;
 
 /// A thread safe [`CloseEntry`]
 pub trait ThreadSafeCloseEntry: CloseEntry + Send + Sync + 'static {}
@@ -41,7 +39,7 @@ where
 /// })
 /// ```
 pub trait InitMetrics<Entry, Sink>:
-    Fn(&mut Request<ReqBody>) -> AppendAndCloseOnDrop<Entry, Sink> + Clone + Send + Sync + 'static
+    Fn(&mut HttpRequest) -> AppendAndCloseOnDrop<Entry, Sink> + Clone + Send + Sync + 'static
 where
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
@@ -51,11 +49,7 @@ impl<T, Entry, Sink> InitMetrics<Entry, Sink> for T
 where
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
-    T: Fn(&mut Request<ReqBody>) -> AppendAndCloseOnDrop<Entry, Sink>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    T: Fn(&mut HttpRequest) -> AppendAndCloseOnDrop<Entry, Sink> + Clone + Send + Sync + 'static,
 {
 }
 
@@ -73,7 +67,7 @@ where
 /// })
 /// ```
 pub trait ResponseMetrics<Entry>:
-    Fn(&mut Response<ResBody>, &mut Entry) + Clone + Send + Sync + 'static
+    Fn(&mut HttpResponse, &mut Entry) + Clone + Send + Sync + 'static
 where
     Entry: ThreadSafeCloseEntry,
 {
@@ -81,6 +75,6 @@ where
 impl<T, Entry> ResponseMetrics<Entry> for T
 where
     Entry: ThreadSafeCloseEntry,
-    T: Fn(&mut Response<ResBody>, &mut Entry) + Clone + Send + Sync + 'static,
+    T: Fn(&mut HttpResponse, &mut Entry) + Clone + Send + Sync + 'static,
 {
 }
