@@ -120,11 +120,11 @@ class BddExpressionGenerator(
                     when (part) {
                         is GetAttr.Part.Key -> rust(".${part.key().rustName()}()")
                         is GetAttr.Part.Index -> {
-                            if (part.index() == 0) {
-                                // In this case, `.first()` is more idiomatic and `.get(0)` triggers lint warnings
-                                rust(".first().cloned()")
-                            } else {
-                                rust(".get(${part.index()}).cloned()")
+                            val index = part.index()
+                            when {
+                                index == 0 -> rust(".first().cloned()")
+                                index < 0 -> rust(".iter().nth_back(${-index - 1}).cloned()")
+                                else -> rust(".get($index).cloned()")
                             }
                         }
                     }
