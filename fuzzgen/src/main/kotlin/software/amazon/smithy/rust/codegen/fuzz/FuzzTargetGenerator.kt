@@ -95,7 +95,7 @@ class FuzzTargetGenerator(private val context: FuzzTargetContext) {
             "fuzz_service" to smithyFuzz.resolve("fuzz_service"),
             "FuzzResult" to smithyFuzz.resolve("FuzzResult"),
             "Body" to smithyFuzz.resolve("Body"),
-            "http" to CargoDependency.Http.toType(),
+            "http" to CargoDependency.Http1x.toType(),
             "target" to targetCrate(),
         )
 

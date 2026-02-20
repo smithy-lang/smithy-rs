@@ -83,6 +83,16 @@ impl fmt::Display for NoMatchingAuthSchemeError {
         } else if likely_bug {
             f.write_str(" This is likely a bug.")?;
         }
+        if !likely_bug
+            && !explored
+                .items()
+                .any(|explored| explored.scheme_id == NO_AUTH_SCHEME_ID)
+        {
+            f.write_str(
+                " If you intended to make an unauthenticated request, consider using `@optionalAuth` or `@auth([])` on the operation in the service model and regenerating the client SDK. \
+                If modifying the model is not possible, you can disable authentication at runtime as described in https://github.com/smithy-lang/smithy-rs/discussions/4197."
+            )?;
+        }
         if explored.truncated {
             f.write_str(" Note: there were other auth schemes that were evaluated that weren't listed here.")?;
         }
@@ -463,7 +473,7 @@ mod tests {
             ) -> Result<(), BoxError> {
                 request
                     .headers_mut()
-                    .insert(http_02x::header::AUTHORIZATION, "success!");
+                    .insert(http_1x::header::AUTHORIZATION, "success!");
                 Ok(())
             }
         }
@@ -774,7 +784,7 @@ mod tests {
             let mut ctx = InterceptorContext::new(Input::doesnt_matter());
             ctx.enter_serialization_phase();
             ctx.set_request(
-                http_02x::Request::builder()
+                http_1x::Request::builder()
                     .body(SdkBody::empty())
                     .unwrap()
                     .try_into()
@@ -870,7 +880,10 @@ mod tests {
             \"SigV4\" wasn't a valid option because there was no identity resolver for it. \
             \"SigV4a\" wasn't a valid option because there was no identity resolver for it. \
             Be sure to set an identity, such as credentials, auth token, or other identity \
-            type that is required for this service.",
+            type that is required for this service. \
+            If you intended to make an unauthenticated request, consider using `@optionalAuth` or `@auth([])` \
+            on the operation in the service model and regenerating the client SDK. If modifying the model is not possible, \
+            you can disable authentication at runtime as described in https://github.com/smithy-lang/smithy-rs/discussions/4197.",
             err.to_string()
         );
 

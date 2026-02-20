@@ -103,6 +103,84 @@ impl<'blob> From<&'blob Blob> for &'blob aws_smithy_types::Blob {
     }
 }
 
+/// Python Wrapper for [aws_smithy_types::BigInteger].
+#[pyclass]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BigInteger(aws_smithy_types::BigInteger);
+
+#[pymethods]
+impl BigInteger {
+    #[new]
+    pub fn pynew(value: String) -> PyResult<Self> {
+        value
+            .parse()
+            .map(Self)
+            .map_err(|e| PyTypeError::new_err(format!("{e}")))
+    }
+
+    #[getter(value)]
+    pub fn get_value(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for BigInteger {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl From<aws_smithy_types::BigInteger> for BigInteger {
+    fn from(other: aws_smithy_types::BigInteger) -> BigInteger {
+        BigInteger(other)
+    }
+}
+
+impl From<BigInteger> for aws_smithy_types::BigInteger {
+    fn from(other: BigInteger) -> aws_smithy_types::BigInteger {
+        other.0
+    }
+}
+
+/// Python Wrapper for [aws_smithy_types::BigDecimal].
+#[pyclass]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BigDecimal(aws_smithy_types::BigDecimal);
+
+#[pymethods]
+impl BigDecimal {
+    #[new]
+    pub fn pynew(value: String) -> PyResult<Self> {
+        value
+            .parse()
+            .map(Self)
+            .map_err(|e| PyTypeError::new_err(format!("{e}")))
+    }
+
+    #[getter(value)]
+    pub fn get_value(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl AsRef<str> for BigDecimal {
+    fn as_ref(&self) -> &str {
+        self.0.as_ref()
+    }
+}
+
+impl From<aws_smithy_types::BigDecimal> for BigDecimal {
+    fn from(other: aws_smithy_types::BigDecimal) -> BigDecimal {
+        BigDecimal(other)
+    }
+}
+
+impl From<BigDecimal> for aws_smithy_types::BigDecimal {
+    fn from(other: BigDecimal) -> aws_smithy_types::BigDecimal {
+        other.0
+    }
+}
+
 /// Python Wrapper for [aws_smithy_types::date_time::DateTime].
 #[pyclass]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -292,6 +370,12 @@ impl DateTime {
 impl From<aws_smithy_types::DateTime> for DateTime {
     fn from(other: aws_smithy_types::DateTime) -> DateTime {
         DateTime(other)
+    }
+}
+
+impl From<DateTime> for aws_smithy_types::DateTime {
+    fn from(other: DateTime) -> aws_smithy_types::DateTime {
+        other.0
     }
 }
 

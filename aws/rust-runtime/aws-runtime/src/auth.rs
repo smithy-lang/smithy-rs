@@ -296,7 +296,7 @@ fn apply_signing_instructions(
 ) -> Result<(), BoxError> {
     let (new_headers, new_query) = instructions.into_parts();
     for header in new_headers.into_iter() {
-        let mut value = http_02x::HeaderValue::from_str(header.value()).unwrap();
+        let mut value = http_1x::HeaderValue::from_str(header.value()).unwrap();
         value.set_sensitive(header.sensitive());
         request.headers_mut().insert(header.name(), value);
     }
@@ -329,6 +329,9 @@ pub enum PayloadSigningOverride {
 
     /// Set when a streaming body has checksum trailers.
     StreamingUnsignedPayloadTrailer,
+
+    /// Set when a signed streaming body has checksum trailers
+    StreamingSignedPayloadTrailer,
 }
 
 impl PayloadSigningOverride {
@@ -345,6 +348,7 @@ impl PayloadSigningOverride {
             Self::UnsignedPayload => SignableBody::UnsignedPayload,
             Self::Precomputed(checksum) => SignableBody::Precomputed(checksum),
             Self::StreamingUnsignedPayloadTrailer => SignableBody::StreamingUnsignedPayloadTrailer,
+            Self::StreamingSignedPayloadTrailer => SignableBody::StreamingSignedPayloadTrailer,
         }
     }
 }

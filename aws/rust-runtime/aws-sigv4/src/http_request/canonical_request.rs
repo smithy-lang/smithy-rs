@@ -12,12 +12,12 @@ use crate::http_request::uri_path_normalization::normalize_uri_path;
 use crate::http_request::url_escape::percent_encode_path;
 use crate::http_request::{PayloadChecksumKind, SignableBody, SignatureLocation, SigningParams};
 use crate::http_request::{PercentEncodingMode, SigningSettings};
-use crate::sign::v4::sha256_hex_string;
+use crate::sign::v4::{sha256_hex_string, HMAC_SHA256};
 use crate::SignatureVersion;
 use aws_smithy_http::query_writer::QueryWriter;
-use http0::header::{AsHeaderName, HeaderName, HOST};
-use http0::uri::{Port, Scheme};
-use http0::{HeaderMap, HeaderValue, Uri};
+use http::header::{AsHeaderName, HeaderName, HOST};
+use http::uri::{Port, Scheme};
+use http::{HeaderMap, HeaderValue, Uri};
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
@@ -45,10 +45,9 @@ pub(crate) mod param {
     pub(crate) const X_AMZ_SIGNATURE: &str = "X-Amz-Signature";
 }
 
-pub(crate) const HMAC_256: &str = "AWS4-HMAC-SHA256";
-
 const UNSIGNED_PAYLOAD: &str = "UNSIGNED-PAYLOAD";
 const STREAMING_UNSIGNED_PAYLOAD_TRAILER: &str = "STREAMING-UNSIGNED-PAYLOAD-TRAILER";
+const STREAMING_SIGNED_PAYLOAD_TRAILER: &str = "STREAMING-AWS4-HMAC-SHA256-PAYLOAD-TRAILER";
 
 #[derive(Debug, PartialEq)]
 pub(crate) struct HeaderValues<'a> {
@@ -325,12 +324,16 @@ impl CanonicalRequest<'_> {
         // - use `UnsignedPayload`
         // - use `UnsignedPayload` for streaming requests
         // - use `StreamingUnsignedPayloadTrailer` for streaming requests with trailers
+        // - use `StreamingSignedPayloadTrailer` for streaming requests with trailers
         match body {
             SignableBody::Bytes(data) => Cow::Owned(sha256_hex_string(data)),
             SignableBody::Precomputed(digest) => Cow::Borrowed(digest.as_str()),
             SignableBody::UnsignedPayload => Cow::Borrowed(UNSIGNED_PAYLOAD),
             SignableBody::StreamingUnsignedPayloadTrailer => {
                 Cow::Borrowed(STREAMING_UNSIGNED_PAYLOAD_TRAILER)
+            }
+            SignableBody::StreamingSignedPayloadTrailer => {
+                Cow::Borrowed(STREAMING_SIGNED_PAYLOAD_TRAILER)
             }
         }
     }
@@ -621,7 +624,7 @@ impl<'a> StringToSign<'a> {
             service,
         };
         Self {
-            algorithm: HMAC_256,
+            algorithm: HMAC_SHA256,
             scope,
             time,
             region,
@@ -690,7 +693,7 @@ mod tests {
     use aws_credential_types::Credentials;
     use aws_smithy_http::query_writer::QueryWriter;
     use aws_smithy_runtime_api::client::identity::Identity;
-    use http0::{HeaderValue, Uri};
+    use http::{HeaderValue, Uri};
     use pretty_assertions::assert_eq;
     use proptest::{prelude::*, proptest};
     use std::borrow::Cow;
@@ -900,7 +903,7 @@ mod tests {
 
     #[test]
     fn test_tilde_in_uri() {
-        let req = http0::Request::builder()
+        let req = http::Request::builder()
             .uri("https://s3.us-east-1.amazonaws.com/my-bucket?list-type=2&prefix=~objprefix&single&k=&unreserved=-_.~").body("").unwrap().into();
         let req = SignableRequest::from(&req);
         let identity = Credentials::for_tests().into();
@@ -921,7 +924,7 @@ mod tests {
         query_writer.insert("list-type", "2");
         query_writer.insert("prefix", &all_printable_ascii_chars);
 
-        let req = http0::Request::builder()
+        let req = http::Request::builder()
             .uri(query_writer.build_uri())
             .body("")
             .unwrap()
@@ -970,7 +973,7 @@ mod tests {
     // It should exclude authorization, user-agent, x-amzn-trace-id, and transfer-encoding headers from presigning
     #[test]
     fn non_presigning_header_exclusion() {
-        let request = http0::Request::builder()
+        let request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header("authorization", "test-authorization")
             .header("content-type", "application/xml")
@@ -1003,7 +1006,7 @@ mod tests {
     // It should exclude authorization, user-agent, x-amz-user-agent, x-amzn-trace-id, and transfer-encoding headers from presigning
     #[test]
     fn presigning_header_exclusion() {
-        let request = http0::Request::builder()
+        let request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header("authorization", "test-authorization")
             .header("content-type", "application/xml")
@@ -1053,7 +1056,7 @@ mod tests {
                 valid_input,
             )
         ) {
-            let mut request_builder = http0::Request::builder()
+            let mut request_builder = http::Request::builder()
                 .uri("https://some-endpoint.some-region.amazonaws.com")
                 .header("content-type", "application/xml")
                 .header("content-length", "0");
