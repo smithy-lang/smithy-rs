@@ -199,7 +199,7 @@ mod tests {
     fn package(name: &str, dependencies: &[&str]) -> Package {
         Package::new(
             PackageHandle::new(name, Version::parse("1.0.0").ok()),
-            format!("{}/Cargo.toml", name),
+            format!("{name}/Cargo.toml"),
             dependencies
                 .iter()
                 .map(|d| PackageHandle::new(*d, Version::parse("1.0.0").ok()))
@@ -281,7 +281,7 @@ mod tests {
     fn pkg_ver(name: &str, version: &str, dependencies: &[(&str, &str)]) -> Package {
         Package::new(
             PackageHandle::new(name, Some(Version::parse(version).unwrap())),
-            format!("{}/Cargo.toml", name),
+            format!("{name}/Cargo.toml"),
             dependencies
                 .iter()
                 .map(|p| PackageHandle::new(p.0, Some(Version::parse(p.1).unwrap())))
@@ -321,7 +321,7 @@ mod tests {
         .expect_err("fail");
         assert_eq!(
             "crate A has multiple versions: 1.1.0 and 1.0.0",
-            format!("{}", error)
+            format!("{error}")
         );
     }
 

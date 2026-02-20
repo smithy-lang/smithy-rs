@@ -46,7 +46,7 @@ pub fn replace_anchor(
     let start = start.unwrap_or_else(|| haystack.find(anchor_start).expect("must be present"));
     let end = match haystack[start..].find(anchor_end) {
         Some(end) => end + start,
-        None => bail!("expected matching end anchor {}", anchor_end),
+        None => bail!("expected matching end anchor {anchor_end}"),
     };
     let prefix = &haystack[..start + anchor_start.len()];
     let suffix = &haystack[end..];

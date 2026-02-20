@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-python"
-version = "0.66.6"
+version = "0.67.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,17 +11,17 @@ description = """
 Python server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.88"
+rust-version = "1.91"
 
 [dependencies]
 aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-http-server = { path = "../aws-smithy-http-server", features = ["aws-lambda"] }
+aws-smithy-legacy-http-server = { path = "../aws-smithy-legacy-http-server", features = ["aws-lambda"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.10.0"
 futures = "0.3"
-http = "0.2.9"
+http = "0.2.12"
 hyper = { version = "0.14.26", features = ["server", "http1", "http2", "tcp", "stream"] }
 tls-listener = { version = "0.7.0", features = ["rustls", "hyper-h2"] }
 rustls-pemfile = "1.0.1"
@@ -35,11 +35,11 @@ pyo3-asyncio = { version = "0.20.0", features = ["tokio-runtime"] }
 signal-hook = { version = "0.3.14", features = ["extended-siginfo"] }
 socket2 = { version = "0.5.5", features = ["all"] }
 thiserror = "2"
-tokio = { version = "1.40.0", features = ["full"] }
+tokio = { version = "1.49.0", features = ["full"] }
 tokio-stream = "0.1.2"
 tower = { version = "0.4.13", features = ["util"] }
-tracing = "0.1.40"
-tracing-subscriber = { version = "0.3.16", features = ["json", "env-filter"] }
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["json", "env-filter"] }
 tracing-appender = { version = "0.2.2"}
 
 [dev-dependencies]

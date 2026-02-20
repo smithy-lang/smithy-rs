@@ -10,10 +10,13 @@ import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import software.amazon.smithy.codegen.core.CodegenException
+import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.rust.codegen.core.testutil.IntegrationTestParams
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.server.smithy.LogMessage
 import software.amazon.smithy.rust.codegen.server.smithy.ValidationResult
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.testutil.HttpTestType
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
 
 internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTest {
@@ -67,7 +70,18 @@ internal class PostprocessValidationExceptionNotAttachedErrorMessageDecoratorTes
             assertThrows<CodegenException> {
                 serverIntegrationTest(
                     model,
+                    params =
+                        IntegrationTestParams(
+                            additionalSettings =
+                                Node.objectNodeBuilder().withMember(
+                                    "codegen",
+                                    Node.objectNodeBuilder()
+                                        .withMember("addValidationExceptionToConstrainedOperations", false)
+                                        .build(),
+                                ).build(),
+                        ),
                     additionalDecorators = listOf(validationExceptionNotAttachedErrorMessageDummyPostprocessorDecorator),
+                    testCoverage = HttpTestType.Default,
                 )
             }
         val exceptionCause = (exception.cause!! as ValidationResult)

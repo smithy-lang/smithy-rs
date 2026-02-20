@@ -16,6 +16,7 @@ fi
 
 # Need to allow warnings since there may be deprecations that the old SDK uses
 unset RUSTFLAGS
+export RUST_BACKTRACE=1
 
 set -eux
 

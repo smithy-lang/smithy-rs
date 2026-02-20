@@ -44,8 +44,9 @@ impl ShellOperation for Publish {
             .arg("1")
             .arg("--no-verify"); // The crates have already been built in previous CI steps
         let output = command.output()?;
+        let (stdout, stderr) = output_text(&output);
+
         if !output.status.success() {
-            let (stdout, stderr) = output_text(&output);
             let already_uploaded_msg = format!(
                 "error: crate version `{}` is already uploaded",
                 self.package_handle.expect_version()
@@ -56,8 +57,14 @@ impl ShellOperation for Publish {
                     self.package_handle
                 );
             } else {
+                info!(
+                    "cargo publish failed for {}\nStdout:\n{}\nStderr:\n{}",
+                    self.package_handle, stdout, stderr
+                );
                 return Err(capture_error("cargo publish", &output));
             }
+        } else {
+            info!("cargo publish succeeded for {}", self.package_handle);
         }
         Ok(())
     }
@@ -93,7 +100,7 @@ mod tests {
         }
         .spawn()
         .await;
-        assert!(result.is_err(), "expected error, got {:?}", result);
+        assert!(result.is_err(), "expected error, got {result:?}");
         assert_eq!(
             "Failed to cargo publish:\n\
             Status: 1\n\
