@@ -1,3 +1,13 @@
 aws-smithy-experimental -> pin-project
 aws-smithy-experimental -> pin-project-internal
 aws-runtime -> wit-bindgen-rt
+aws-smithy-http-client -> sync_wrapper
+aws-smithy-mocks -> sync_wrapper
+aws-smithy-runtime -> sync_wrapper
+aws-smithy-http-server -> sync_wrapper
+aws-smithy-http-server -> metrique-service-metrics
+aws-smithy-http-server -> metrique-timesource
+aws-smithy-http-server -> metrique-writer
+aws-smithy-http-server -> metrique-writer-core
+aws-smithy-http-server -> metrique-writer-format-emf
+aws-smithy-http-server -> metrique-writer-macro

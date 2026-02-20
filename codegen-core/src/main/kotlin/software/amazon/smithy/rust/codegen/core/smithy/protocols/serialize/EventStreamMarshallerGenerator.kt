@@ -265,7 +265,7 @@ open class EventStreamMarshallerGenerator(
             is BlobShape -> "ByteArray($inputName.into_inner().into())"
             is EnumShape -> "String($inputName.to_string().into())"
             is StringShape -> "String($inputName.into())"
-            is TimestampShape -> "Timestamp($inputName)"
+            is TimestampShape -> "Timestamp($inputName.into())"
             else -> throw IllegalStateException("unsupported event stream header shape type: $target")
         }
 

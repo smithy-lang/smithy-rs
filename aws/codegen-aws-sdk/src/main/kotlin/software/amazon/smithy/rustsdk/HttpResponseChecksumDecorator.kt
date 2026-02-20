@@ -40,8 +40,6 @@ private fun RuntimeConfig.awsInlineableHttpResponseChecksum() =
         InlineAwsDependency.forRustFile(
             "http_response_checksum", visibility = Visibility.PUBCRATE,
             CargoDependency.Bytes,
-            CargoDependency.Http,
-            CargoDependency.HttpBody,
             CargoDependency.Tracing,
             CargoDependency.smithyChecksums(this),
             CargoDependency.smithyHttp(this),

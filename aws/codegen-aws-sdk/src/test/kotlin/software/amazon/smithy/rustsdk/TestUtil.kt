@@ -10,6 +10,7 @@ import software.amazon.smithy.model.node.ObjectNode
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.RustClientCodegenPlugin
+import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.testutil.ClientDecoratableBuildPlugin
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
@@ -44,12 +45,14 @@ fun awsTestCodegenContext(
 fun awsSdkIntegrationTest(
     model: Model,
     params: IntegrationTestParams = awsIntegrationTestParams(),
+    additionalDecorators: List<ClientCodegenDecorator> = listOf(),
     buildPlugin: ClientDecoratableBuildPlugin = RustClientCodegenPlugin(),
     environment: Map<String, String> = mapOf(),
     test: (ClientCodegenContext, RustCrate) -> Unit = { _, _ -> },
 ) = clientIntegrationTest(
     model,
     params,
+    additionalDecorators = additionalDecorators,
     buildPlugin = buildPlugin,
     environment = environment,
     test = test,

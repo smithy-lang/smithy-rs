@@ -21,7 +21,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Compani
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Hound
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Http1x
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBody1x
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBodyUtil
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.HttpBodyUtil01x
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.PinProjectLite
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.SerdeJson
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.Smol
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.Companion.TempFile
@@ -180,7 +181,8 @@ class S3TestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustom
             addDependency(FuturesUtil.toDevDependency())
             addDependency(HdrHistogram)
             addDependency(HttpBody1x.toDevDependency().copy(optional = false))
-            addDependency(HttpBodyUtil.toDevDependency().copy(optional = false))
+            addDependency(HttpBodyUtil01x.toDevDependency().copy(optional = false))
+            addDependency(PinProjectLite.toDevDependency())
             addDependency(Smol)
             addDependency(TempFile)
             addDependency(TracingAppender)

@@ -47,6 +47,8 @@ private val allowedClippyLints =
         "result_large_err",
         // Difficult to avoid in generated code
         "unnecessary_map_on_constructor",
+        // Introduced by Python server codegen but needs to be suppressed for regular codegen (https://github.com/smithy-lang/smithy-rs/pull/4537)
+        "useless_conversion",
         // Service models can specify a date, such as 2024-01-08, as the "since" date for deprecation.
         "deprecated_semver",
     )
@@ -59,6 +61,9 @@ private val allowedRustdocLints =
         // Rustdoc warns about redundant explicit links in doc comments. This is fine for handwritten
         // crates, but is impractical to manage for code generated crates. Thus, allow it.
         "redundant_explicit_links",
+        // Model documentation may contain broken intra-doc links like `[here]` that are not valid Rust
+        // doc links. Since we can't control upstream model documentation, we need to allow this lint.
+        "broken_intra_doc_links",
         // The documentation directly from the model may contain invalid HTML tags. For instance,
         // <p><code><bucketloggingstatus xmlns="http://doc.s3.amazonaws.com/2006-03-01" /></code></p>
         // is considered an invalid self-closing HTML tag `bucketloggingstatus`

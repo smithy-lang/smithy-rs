@@ -14,7 +14,7 @@ use crate::sign::v4;
 #[cfg(feature = "sigv4a")]
 use crate::sign::v4a;
 use crate::{SignatureVersion, SigningOutput};
-use http0::Uri;
+use http::Uri;
 use std::borrow::Cow;
 use std::fmt::{Debug, Formatter};
 use std::str;
@@ -93,8 +93,11 @@ pub enum SignableBody<'a> {
     /// `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`
     Precomputed(String),
 
-    /// Set when a streaming body has checksum trailers.
+    /// Set when an unsigned streaming body has checksum trailers.
     StreamingUnsignedPayloadTrailer,
+
+    /// Set when a signed streaming body has checksum trailers.
+    StreamingSignedPayloadTrailer,
 }
 
 /// Formats the value using the given formatter. To print the body data, set the environment variable `LOG_SIGNABLE_BODY=true`.
@@ -116,6 +119,9 @@ impl Debug for SignableBody<'_> {
             Self::Precomputed(arg0) => f.debug_tuple("Precomputed").field(arg0).finish(),
             Self::StreamingUnsignedPayloadTrailer => {
                 write!(f, "StreamingUnsignedPayloadTrailer")
+            }
+            Self::StreamingSignedPayloadTrailer => {
+                write!(f, "StreamingSignedPayloadTrailer")
             }
         }
     }
@@ -206,11 +212,16 @@ impl SigningInstructions {
         }
 
         if !new_query.is_empty() {
-            let mut query = aws_smithy_http::query_writer::QueryWriter::new(request.uri());
+            let mut query = aws_smithy_http::query_writer::QueryWriter::new_from_string(
+                &request.uri().to_string(),
+            )
+            .expect("unreachable: URI is valid");
             for (name, value) in new_query {
                 query.insert(name, &value);
             }
-            *request.uri_mut() = query.build_uri();
+            let query_uri = query.build_uri().to_string();
+            let query_http0 = query_uri.parse::<http0::Uri>().expect("URI is valid");
+            *request.uri_mut() = query_http0;
         }
     }
 
@@ -514,7 +525,7 @@ mod tests {
     };
     use crate::sign::v4;
     use aws_credential_types::Credentials;
-    use http0::{HeaderValue, Request};
+    use http::{HeaderValue, Request};
     use pretty_assertions::assert_eq;
     use proptest::proptest;
     use std::borrow::Cow;
@@ -768,7 +779,7 @@ mod tests {
         );
 
         let mut signed = original.as_http_request();
-        out.output.apply_to_request_http0x(&mut signed);
+        out.output.apply_to_request_http1x(&mut signed);
 
         let expected = test.signed_request(SignatureLocation::Headers);
         assert_req_eq!(expected, signed);
@@ -787,7 +798,7 @@ mod tests {
         }
         .into();
 
-        let original = http0::Request::builder()
+        let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header("some-header", HeaderValue::from_str("テスト").unwrap())
             .body("")
@@ -801,9 +812,9 @@ mod tests {
         );
 
         let mut signed = original.as_http_request();
-        out.output.apply_to_request_http0x(&mut signed);
+        out.output.apply_to_request_http1x(&mut signed);
 
-        let expected = http0::Request::builder()
+        let expected = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header("some-header", HeaderValue::from_str("テスト").unwrap())
             .header(
@@ -841,7 +852,7 @@ mod tests {
         }
         .into();
 
-        let original = http0::Request::builder()
+        let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .body("")
             .unwrap()
@@ -862,9 +873,9 @@ mod tests {
         let mut signed = original.as_http_request();
         out_with_session_token_but_excluded
             .output
-            .apply_to_request_http0x(&mut signed);
+            .apply_to_request_http1x(&mut signed);
 
-        let expected = http0::Request::builder()
+        let expected = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header(
                 "x-amz-date",
@@ -902,7 +913,7 @@ mod tests {
         }
         .into();
 
-        let original = http0::Request::builder()
+        let original = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header(
                 "some-header",
@@ -919,9 +930,9 @@ mod tests {
         );
 
         let mut signed = original.as_http_request();
-        out.output.apply_to_request_http0x(&mut signed);
+        out.output.apply_to_request_http1x(&mut signed);
 
-        let expected = http0::Request::builder()
+        let expected = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .header(
                 "some-header",
@@ -984,12 +995,12 @@ mod tests {
         add_header(&mut headers, "some-other-header", "bar", false);
         let instructions = SigningInstructions::new(headers, vec![]);
 
-        let mut request = http0::Request::builder()
+        let mut request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com")
             .body("")
             .unwrap();
 
-        instructions.apply_to_request_http0x(&mut request);
+        instructions.apply_to_request_http1x(&mut request);
 
         let get_header = |n: &str| request.headers().get(n).unwrap().to_str().unwrap();
         assert_eq!("foo", get_header("some-header"));
@@ -1004,12 +1015,12 @@ mod tests {
         ];
         let instructions = SigningInstructions::new(vec![], params);
 
-        let mut request = http0::Request::builder()
+        let mut request = http::Request::builder()
             .uri("https://some-endpoint.some-region.amazonaws.com/some/path")
             .body("")
             .unwrap();
 
-        instructions.apply_to_request_http0x(&mut request);
+        instructions.apply_to_request_http1x(&mut request);
 
         assert_eq!(
             "/some/path?some-param=f%26o%3Fo&some-other-param%3F=bar",

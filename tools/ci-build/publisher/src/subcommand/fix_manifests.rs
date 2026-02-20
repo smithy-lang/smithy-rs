@@ -108,7 +108,7 @@ impl VersionView<'_> {
 }
 
 impl Versions {
-    fn published(&self) -> VersionView {
+    fn published(&self) -> VersionView<'_> {
         VersionView(self, FilterType::PublishedOnly)
     }
 }
@@ -166,7 +166,7 @@ fn fix_dep_set(versions: &VersionView, key: &str, metadata: &mut Value) -> Resul
                 changed += match dep.as_table_mut() {
                     None => {
                         if !dep.is_str() {
-                            bail!("unexpected dependency (must be table or string): {:?}", dep)
+                            bail!("unexpected dependency (must be table or string): {dep:?}")
                         }
                         0
                     }
@@ -185,7 +185,7 @@ fn update_dep(table: &mut Table, dep_name: &str, versions: &VersionView) -> Resu
     }
     let package_version = match versions.get(dep_name) {
         Some(version) => version.to_string(),
-        None => bail!("version not found for crate {}", dep_name),
+        None => bail!("version not found for crate {dep_name}"),
     };
     let previous_version = table.insert(
         "version".into(),

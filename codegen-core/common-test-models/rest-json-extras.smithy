@@ -66,7 +66,6 @@ service RestJsonExtras {
         CaseInsensitiveErrorOperation,
         EmptyStructWithContentOnWireOp,
         QueryPrecedence,
-        HttpQueryParamsOnlyOperation,
     ],
     errors: [ExtraError]
 }
@@ -350,47 +349,4 @@ structure EmptyStructWithContentOnWireOpOutput {
 ])
 operation EmptyStructWithContentOnWireOp {
     output: EmptyStructWithContentOnWireOpOutput,
-}
-
-@http(uri: "/http-query-params-only", method: "GET")
-@httpRequestTests([
-    {
-        id: "HttpQueryParamsOnlyRequest",
-        documentation: "Test that httpQueryParams are included in request when no other query parameters exist",
-        protocol: "aws.protocols#restJson1",
-        method: "GET",
-        uri: "/http-query-params-only",
-        queryParams: ["shouldExpandRoles=true", "shouldShowOnlyAuthForThisDocument=false"],
-        params: {
-            queryMap: {
-                "shouldExpandRoles": "true",
-                "shouldShowOnlyAuthForThisDocument": "false"
-            }
-        },
-        appliesTo: "client",
-    },
-    {
-        id: "HttpQueryParamsOnlyEmptyRequest",
-        documentation: "Test that empty httpQueryParams map results in no query parameters",
-        protocol: "aws.protocols#restJson1",
-        method: "GET",
-        uri: "/http-query-params-only",
-        params: {
-            queryMap: {}
-        },
-        appliesTo: "client",
-    }
-])
-operation HttpQueryParamsOnlyOperation {
-    input: HttpQueryParamsOnlyInput,
-}
-
-structure HttpQueryParamsOnlyInput {
-    @httpQueryParams
-    queryMap: QueryMap,
-}
-
-map QueryMap {
-    key: String,
-    value: String,
 }

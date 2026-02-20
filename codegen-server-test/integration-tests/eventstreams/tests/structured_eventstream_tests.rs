@@ -60,7 +60,7 @@ impl TestServer {
         let handler_state4 = state.clone();
 
         let config = RpcV2CborServiceConfig::builder().build();
-        let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+        let app = RpcV2CborService::builder(config)
             .streaming_operation(move |input| {
                 let state = handler_state.clone();
                 streaming_operation_handler(input, state)
@@ -84,11 +84,10 @@ impl TestServer {
 
         tokio::spawn(async move {
             let make_service = app.into_make_service();
-            let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
-                .unwrap()
-                .http2_only(true)
-                .serve(make_service);
-            server.await.unwrap();
+            rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
+                .configure_hyper(|builder| builder.http2_only())
+                .await
+                .unwrap();
         });
 
         Self { addr, state }
@@ -508,7 +507,7 @@ async fn test_server_no_initial_response_when_disabled() {
     use rpcv2cbor_extras_no_initial_response::{RpcV2CborService, RpcV2CborServiceConfig};
 
     let config = RpcV2CborServiceConfig::builder().build();
-    let app = RpcV2CborService::builder::<hyper0::Body, _, _, _>(config)
+    let app = RpcV2CborService::builder(config)
         .streaming_operation_with_initial_data(move |mut input: rpcv2cbor_extras_no_initial_response::input::StreamingOperationWithInitialDataInput| async move {
             let _ev = input.events.recv().await;
             Ok(output::StreamingOperationWithInitialDataOutput::builder()
@@ -523,11 +522,10 @@ async fn test_server_no_initial_response_when_disabled() {
 
     tokio::spawn(async move {
         let make_service = app.into_make_service();
-        let server = hyper0::Server::from_tcp(listener.into_std().unwrap())
-            .unwrap()
-            .http2_only(true)
-            .serve(make_service);
-        server.await.unwrap();
+        rpcv2cbor_extras_no_initial_response::serve(listener, make_service)
+            .configure_hyper(|builder| builder.http2_only())
+            .await
+            .unwrap();
     });
 
     let path = "/service/RpcV2CborService/operation/StreamingOperationWithInitialData";
