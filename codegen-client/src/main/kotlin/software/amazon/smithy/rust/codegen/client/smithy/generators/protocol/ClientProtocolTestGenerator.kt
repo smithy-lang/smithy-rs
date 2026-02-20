@@ -145,6 +145,9 @@ class ClientProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
+
+        val isBenchmark = httpRequestTestCase.tags.contains("serde-benchmark")
+
         val customParams =
             httpRequestTestCase.vendorParams.getObjectMember("endpointParams").orNull()?.let { params ->
                 writable {
@@ -156,15 +159,12 @@ class ClientProtocolTestGenerator(
                     }
                 }
             } ?: writable { }
-        // support test cases that set the host value, e.g: https://github.com/smithy-lang/smithy/blob/be68f3bbdfe5bf50a104b387094d40c8069f16b1/smithy-aws-protocol-tests/model/restJson1/endpoint-paths.smithy#L19
         val host = "https://${httpRequestTestCase.host.orNull() ?: "example.com"}".dq()
         rustTemplate(
             """
             let (http_client, request_receiver) = #{capture_request}(None);
             let config_builder = #{config}::Config::builder()
                 .with_test_defaults()
-                // TODO(https://github.com/smithy-lang/smithy-rs/issues/4177):
-                //  Until the incorrect separation is addressed, we need to rely on this workaround.
                 .allow_no_auth()
                 .endpoint_url($host);
             #{customParams}
@@ -178,51 +178,109 @@ class ClientProtocolTestGenerator(
         )
         renderClientCreation(this, ClientCreationParams(codegenContext, "http_client", "config_builder", "client"))
 
-        writeInline("let result = ")
-        instantiator.renderFluentCall(this, "client", operationShape, inputShape, httpRequestTestCase.params)
-        rust(""".send().await;""")
-        // Response parsing will always fail since we feed it an empty response body, so we don't care
-        // if it fails, but it is helpful to print what that failure was for debugging
-        rust("let _ = dbg!(result);")
-        rust("""let http_request = request_receiver.expect_request();""")
-
-        checkQueryParams(this, httpRequestTestCase.queryParams)
-        checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
-        checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
-        checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
-        checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
-        checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
-
-        if (protocolSupport.requestBodySerialization) {
-            // "If no request body is defined, then no assertions are made about the body of the message."
-            httpRequestTestCase.body.orNull()?.also { body ->
-                checkBody(this, body, httpRequestTestCase.bodyMediaType.orNull())
-            }
-        }
-
-        // Explicitly warn if the test case defined parameters that we aren't doing anything with
-        with(httpRequestTestCase) {
-            if (authScheme.isPresent) {
-                logger.warning("Test case provided authScheme but this was ignored")
-            }
-            if (!httpRequestTestCase.vendorParams.isEmpty) {
-                logger.warning("Test case provided vendorParams but these were ignored")
-            }
-
+        if (isBenchmark) {
+            writeInline("let input = ")
+            instantiator.render(this, inputShape, httpRequestTestCase.params)
+            rust(";")
             rustTemplate(
                 """
-                let uri: #{Uri} = http_request.uri().parse().expect("invalid URI sent");
-                #{AssertEq}(http_request.method(), ${method.dq()}, "method was incorrect");
-                #{AssertEq}(uri.path(), ${uri.dq()}, "path was incorrect");
-                """,
-                *codegenScope,
-            )
+                use #{RuntimePlugin};
+                use #{SerializeRequest};
 
-            resolvedHost.orNull()?.also { host ->
+                let op = #{Operation}::new();
+                let config = op.config().expect("operation should have config");
+                let serializer = config
+                    .load::<#{SharedRequestSerializer}>()
+                    .expect("operation should set a serializer");
+
+                let mut timings = Vec::new();
+                loop {
+                    let mut config_bag = #{ConfigBag}::base();
+                    let input = #{Input}::erase(input.clone());
+                    let serialization_start = std::time::Instant::now();
+                    let _ = serializer.serialize_input(input, &mut config_bag);
+                    let serialization_end = std::time::Instant::now();
+                    timings.push((serialization_end - serialization_start).as_nanos() as u64);
+                    if timings.len() >= 10000 {
+                        break;
+                    }
+                }
+                let mut sorted_timings = timings.clone();
+                sorted_timings.sort_unstable();
+                let n = timings.len();
+                let p50 = sorted_timings[n * 50 / 100];
+                let p90 = sorted_timings[n * 90 / 100];
+                let p95 = sorted_timings[n * 95 / 100];
+                let p99 = sorted_timings[n * 99 / 100];
+                let mean = timings.iter().sum::<u64>() / n as u64;
+                let variance = timings.iter().map(|&x| {
+                    let diff = x as i64 - mean as i64;
+                    (diff * diff) as u64
+                }).sum::<u64>() / n as u64;
+                let std_dev = (variance as f64).sqrt() as u64;
+
+                let result = serde_json::json!({
+                    "id": "${httpRequestTestCase.id}",
+                    "n": n,
+                    "mean": mean,
+                    "p50": p50,
+                    "p90": p90,
+                    "p95": p95,
+                    "p99": p99,
+                    "std_dev": std_dev
+                });
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                """,
+                "RuntimePlugin" to RT.runtimePlugin(rc),
+                "SerializeRequest" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SerializeRequest"),
+                "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+                "SharedRequestSerializer" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SharedRequestSerializer"),
+                "ConfigBag" to RT.configBag(rc),
+                "Input" to RT.smithyRuntimeApiClient(rc).resolve("client::interceptors::context::Input"),
+            )
+        } else {
+            writeInline("let result = ")
+            instantiator.renderFluentCall(this, "client", operationShape, inputShape, httpRequestTestCase.params)
+            rust(""".send().await;""")
+            rust("let _ = dbg!(result);")
+            rust("""let http_request = request_receiver.expect_request();""")
+
+            checkQueryParams(this, httpRequestTestCase.queryParams)
+            checkForbidQueryParams(this, httpRequestTestCase.forbidQueryParams)
+            checkRequiredQueryParams(this, httpRequestTestCase.requireQueryParams)
+            checkHeaders(this, "http_request.headers()", httpRequestTestCase.headers)
+            checkForbidHeaders(this, "http_request.headers()", httpRequestTestCase.forbidHeaders)
+            checkRequiredHeaders(this, "http_request.headers()", httpRequestTestCase.requireHeaders)
+
+            if (protocolSupport.requestBodySerialization) {
+                httpRequestTestCase.body.orNull()?.also { body ->
+                    checkBody(this, body, httpRequestTestCase.bodyMediaType.orNull())
+                }
+            }
+
+            with(httpRequestTestCase) {
+                if (authScheme.isPresent) {
+                    logger.warning("Test case provided authScheme but this was ignored")
+                }
+                if (!httpRequestTestCase.vendorParams.isEmpty) {
+                    logger.warning("Test case provided vendorParams but these were ignored")
+                }
+
                 rustTemplate(
-                    """#{AssertEq}(uri.host().expect("host should be set"), ${host.dq()});""",
+                    """
+                    let uri: #{Uri} = http_request.uri().parse().expect("invalid URI sent");
+                    #{AssertEq}(http_request.method(), ${method.dq()}, "method was incorrect");
+                    #{AssertEq}(uri.path(), ${uri.dq()}, "path was incorrect");
+                    """,
                     *codegenScope,
                 )
+
+                resolvedHost.orNull()?.also { host ->
+                    rustTemplate(
+                        """#{AssertEq}(uri.host().expect("host should be set"), ${host.dq()});""",
+                        *codegenScope,
+                    )
+                }
             }
         }
     }
@@ -243,6 +301,9 @@ class ClientProtocolTestGenerator(
             rust("/* test case disabled for this protocol (not yet supported) */")
             return
         }
+
+        val isBenchmark = testCase.tags.contains("serde-benchmark")
+
         writeInline("let expected_output =")
         instantiator.render(this, expectedShape, testCase.params)
         write(";")
@@ -264,54 +325,135 @@ class ClientProtocolTestGenerator(
             RT.sdkBody(runtimeConfig = rc),
         )
         val mediaType = testCase.bodyMediaType.orNull()
-        rustTemplate(
-            """
-            use #{DeserializeResponse};
-            use #{RuntimePlugin};
 
-            let op = #{Operation}::new();
-            let config = op.config().expect("the operation has config");
-            let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+        if (isBenchmark) {
+            rustTemplate(
+                """
+                use #{DeserializeResponse};
+                use #{RuntimePlugin};
 
-            let parsed = de.deserialize_streaming(&mut http_response);
-            let parsed = parsed.unwrap_or_else(|| {
-                let http_response = http_response.map(|body| {
+                let op = #{Operation}::new();
+                let config = op.config().expect("the operation has config");
+                let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+
+                let mut timings = Vec::new();
+                loop {
+                    let mut http_response_clone = #{Response}::try_from(#{HttpResponseBuilder}::new()
+                """,
+                "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
+                "RuntimePlugin" to RT.runtimePlugin(rc),
+                "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+                "SharedResponseDeserializer" to
+                    RT.smithyRuntimeApiClient(rc)
+                        .resolve("client::ser_de::SharedResponseDeserializer"),
+                "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
+                "HttpResponseBuilder" to RT.HttpResponseBuilder1x,
+            )
+            testCase.headers.forEach { (key, value) ->
+                writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
+            }
+            rustTemplate(
+                """
+                .status(${testCase.code})
+                .body(#{SdkBody}::from(${testCase.body.orNull()?.dq()?.replace("#", "##") ?: "vec![]"}))
+                .unwrap()
+                ).unwrap();
+                let deserialization_start = std::time::Instant::now();
+                let parsed = de.deserialize_streaming(&mut http_response_clone);
+                let parsed = parsed.unwrap_or_else(|| {
+                let http_response_clone = http_response_clone.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
-            });
-            """,
-            "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
-            "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
-            "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
-            "MediaType" to RT.protocolTest(rc, "MediaType"),
-            "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
-            "RuntimePlugin" to RT.runtimePlugin(rc),
-            "SdkBody" to RT.sdkBody(rc),
-            "SharedResponseDeserializer" to
-                RT.smithyRuntimeApiClient(rc)
-                    .resolve("client::ser_de::SharedResponseDeserializer"),
-        )
-        if (expectedShape.hasTrait<ErrorTrait>()) {
-            val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
-            val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
-            rust("""let parsed = parsed.expect_err("should be error response");""")
-            rustTemplate(
-                """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
-                "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
+                de.deserialize_nonstreaming(&http_response_clone)
+                });
+                let deserialization_end = std::time::Instant::now();
+                let _ = parsed;
+                timings.push((deserialization_end - deserialization_start).as_nanos() as u64);
+                if timings.len() >= 10000 {
+                break;
+                }
+                }
+                let mut sorted_timings = timings.clone();
+                sorted_timings.sort_unstable();
+                let n = timings.len();
+                let p50 = sorted_timings[n * 50 / 100];
+                let p90 = sorted_timings[n * 90 / 100];
+                let p95 = sorted_timings[n * 95 / 100];
+                let p99 = sorted_timings[n * 99 / 100];
+                let mean = timings.iter().sum::<u64>() / n as u64;
+                let variance = timings.iter().map(|&x| {
+                    let diff = x as i64 - mean as i64;
+                    (diff * diff) as u64
+                }).sum::<u64>() / n as u64;
+                let std_dev = (variance as f64).sqrt() as u64;
+
+                let result = serde_json::json!({
+                    "id": "${testCase.id}",
+                    "n": n,
+                    "mean": mean,
+                    "p50": p50,
+                    "p90": p90,
+                    "p95": p95,
+                    "p99": p99,
+                    "std_dev": std_dev
+                });
+                println!("{}", serde_json::to_string_pretty(&result).unwrap());
+                """,
+                "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
+                "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
+                "MediaType" to RT.protocolTest(rc, "MediaType"),
+                "SdkBody" to RT.sdkBody(rc),
             )
-            rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
-                compareMembers(expectedShape)
-            }
-            rustBlock("else") {
-                rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
-            }
         } else {
             rustTemplate(
-                """let parsed = parsed.expect("should be successful response").downcast::<#{Output}>().unwrap();""",
-                "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
+                """
+                use #{DeserializeResponse};
+                use #{RuntimePlugin};
+
+                let op = #{Operation}::new();
+                let config = op.config().expect("the operation has config");
+                let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+
+                let parsed = de.deserialize_streaming(&mut http_response);
+                let parsed = parsed.unwrap_or_else(|| {
+                    let http_response = http_response.map(|body| {
+                        #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
+                    });
+                    de.deserialize_nonstreaming(&http_response)
+                });
+                """,
+                "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
+                "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
+                "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
+                "MediaType" to RT.protocolTest(rc, "MediaType"),
+                "Operation" to codegenContext.symbolProvider.toSymbol(operationShape),
+                "RuntimePlugin" to RT.runtimePlugin(rc),
+                "SdkBody" to RT.sdkBody(rc),
+                "SharedResponseDeserializer" to
+                    RT.smithyRuntimeApiClient(rc)
+                        .resolve("client::ser_de::SharedResponseDeserializer"),
             )
-            compareMembers(outputShape)
+            if (expectedShape.hasTrait<ErrorTrait>()) {
+                val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
+                val errorVariant = codegenContext.symbolProvider.toSymbol(expectedShape).name
+                rust("""let parsed = parsed.expect_err("should be error response");""")
+                rustTemplate(
+                    """let parsed: &#{Error} = parsed.as_operation_error().expect("operation error").downcast_ref().unwrap();""",
+                    "Error" to codegenContext.symbolProvider.symbolForOperationError(operationShape),
+                )
+                rustBlock("if let #T::$errorVariant(parsed) = parsed", errorSymbol) {
+                    compareMembers(expectedShape)
+                }
+                rustBlock("else") {
+                    rust("panic!(\"wrong variant: Got: {:?}. Expected: {:?}\", parsed, expected_output);")
+                }
+            } else {
+                rustTemplate(
+                    """let parsed = parsed.expect("should be successful response").downcast::<#{Output}>().unwrap();""",
+                    "Output" to codegenContext.symbolProvider.toSymbol(expectedShape),
+                )
+                compareMembers(outputShape)
+            }
         }
     }
 
