@@ -34,6 +34,8 @@
  *
  * This allows the macro to handle Option/non-Option combinations without runtime checks,
  * selecting the appropriate coalesce logic at compile time based on argument types.
+ *
+ * This approach was heavily inspired by this blog post: https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
  */
 
 /// Helper trait to implement the coalesce! macro

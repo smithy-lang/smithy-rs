@@ -13,6 +13,10 @@ pub(crate) struct BddNode {
     pub low_ref: i32,
 }
 
+const RESULT_LIMIT: i32 = 100_000_000;
+const TERMINAL_TRUE: i32 = 1;
+const TERMINAL_FALSE: i32 = -1;
+
 /// Evaluates a BDD to resolve an endpoint result
 ///
 /// Arguments
@@ -49,12 +53,12 @@ pub(crate) fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
     loop {
         match current_ref {
             // Result references (>= 100_000_000)
-            ref_val if ref_val >= 100_000_000 => {
-                let result_index = (ref_val - 100_000_000) as usize;
+            ref_val if ref_val >= RESULT_LIMIT => {
+                let result_index = (ref_val - RESULT_LIMIT) as usize;
                 return results.get(result_index).cloned();
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
-            1 | -1 => return results.first().cloned(),
+            TERMINAL_TRUE | TERMINAL_FALSE => return results.first().cloned(),
             // Node references
             ref_val => {
                 let is_complement = ref_val < 0;

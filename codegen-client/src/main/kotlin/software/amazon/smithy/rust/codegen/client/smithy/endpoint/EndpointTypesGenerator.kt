@@ -41,6 +41,7 @@ class EndpointTypesGenerator(
             val index = EndpointRulesetIndex.of(codegenContext.model)
 
             // If service has BDD trait, extract parameters from it
+            // TODO(bdd): Make this the default when BDDs published for all models
             val bddTrait = index.getEndpointBddTrait(codegenContext.serviceShape)
             if (bddTrait != null) {
                 return EndpointTypesGenerator(
@@ -83,6 +84,7 @@ class EndpointTypesGenerator(
 
     fun testGenerator(): Writable =
         // BDD takes priority just like in EndpointDecorator
+        // TODO(bdd): Make this the default when BDDs published for all models
         defaultResolverBdd()?.let {
             EndpointTestGenerator(
                 tests,

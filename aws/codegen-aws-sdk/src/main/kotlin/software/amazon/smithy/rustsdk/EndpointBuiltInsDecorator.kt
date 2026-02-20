@@ -63,12 +63,12 @@ fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
     val idx = EndpointRulesetIndex.of(model)
     val endpointBddTrait = idx.getEndpointBddTrait(serviceShape)
     val rules = idx.endpointRulesForService(serviceShape)
-    if (endpointBddTrait != null) {
-        return endpointBddTrait.getBuiltIn(builtIn)
+    return if (endpointBddTrait != null) {
+        endpointBddTrait.getBuiltIn(builtIn)
     } else if (rules != null) {
-        return rules.getBuiltIn(builtIn)
+        rules.getBuiltIn(builtIn)
     } else {
-        return null
+        null
     }
 }
 
