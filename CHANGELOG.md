@@ -1,4 +1,7 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 22nd, 2026
+===================
+
 February 16th, 2026
 ===================
 **New this release:**
