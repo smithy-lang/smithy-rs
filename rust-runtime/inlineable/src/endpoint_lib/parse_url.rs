@@ -14,16 +14,6 @@ pub(crate) struct Url<'a> {
     raw: &'a str,
 }
 
-impl Default for Url<'_> {
-    fn default() -> Self {
-        Self {
-            uri: Uri::from_static("https://localhost"),
-            url: ParsedUrl::parse("https://localhost").unwrap(),
-            raw: "https://localhost",
-        }
-    }
-}
-
 // individual methods on parse_url might not be used (although the [`parse_url`] itself _MUST_ be used
 // since stdlib functions are pulled into crate lazily)
 #[allow(unused)]

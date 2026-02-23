@@ -354,7 +354,7 @@ class EndpointBddGenerator(
                 "let $memberName = params.$memberName.as_ref().map(|s| s.clone()).unwrap_or_default();"
 
             else ->
-                "let $memberName = params.$memberName.unwrap_or_default();"
+                "let $memberName = params.$memberName.expect(\"Guaranteed to have a value by earlier checks.\");"
         }
     }
 
@@ -375,31 +375,6 @@ class EndpointBddGenerator(
             val varRefs = allRefs.variableRefs()
             varRefs.forEach {
                 rust("let ${it.value.name} = &mut context.${it.value.name};")
-            }
-        }
-
-    /**
-     * All non-param references are Option<>. When the BDD is compiled Smithy guarantees that
-     * the refs used to construct the result are Some, so it is safe to unwrap_or_default them
-     * all and just use the necessary ones.
-     */
-    private fun generateNonParamReferencesForResult() =
-        writable {
-            val varRefs = allRefs.variableRefs()
-            varRefs.values.forEachIndexed { idx, it ->
-                val rustName = it.name
-                if (allRefs.filter { ref -> ref.runtimeType == RuntimeType.document(runtimeConfig) }
-                        .map { ref -> ref.name }.contains(rustName)
-                ) {
-                    rust(
-                        """
-                        let binding_$idx = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();
-                        let $rustName = binding_$idx.as_string().unwrap_or_default();
-                        """.trimIndent(),
-                    )
-                } else {
-                    rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();")
-                }
             }
         }
 
@@ -579,7 +554,7 @@ class EndpointBddGenerator(
                             """.trimIndent(),
                         )
                     } else {
-                        rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();\n")
+                        rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).expect(\"Guaranteed to have a value by earlier checks.\");\n")
                     }
                 }
             }
