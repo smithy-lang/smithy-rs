@@ -6,6 +6,7 @@
 use proc_macro2::TokenStream as TokenStream2;
 use quote::quote;
 use syn::Attribute;
+use syn::FieldsNamed;
 use syn::Ident;
 use syn::ItemStruct;
 
@@ -34,44 +35,10 @@ pub(crate) fn smithy_metrics_impl(
             .to_compile_error();
     };
 
-    let mut extension_fields = Vec::new();
-
-    // Collect extension fields and remove smithy_metrics attributes
-    for field in &mut fields.named {
-        let has_extension = has_operation_attr(&field.attrs);
-        field.attrs = clean_attrs(&field.attrs);
-
-        if !has_extension {
-            continue;
-        }
-
-        let Some(field_name) = field.ident.clone() else {
-            return syn::Error::new_spanned(field, "operation field must have a name")
-                .to_compile_error();
-        };
-
-        // Check if user already wrapped in Slot
-        // Return compiler error if it has, since we
-        // will need to double slot the type to provide
-        // a better API to handler-level metrics
-        if extract_inner_type(&field.ty).is_some() {
-            return syn::Error::new_spanned(
-                field,
-                "operation fields should not be wrapped in Slot",
-            )
-            .to_compile_error();
-        }
-
-        // Always wrap in double Slot
-        let ty = field.ty.clone();
-        field.ty = syn::parse_quote! {
-            metrique::Slot<metrique::Slot<#ty>>
-        };
-        extension_fields.push(OperationField {
-            name: field_name,
-            ty,
-        });
-    }
+    let operation_fields = match handle_operation_fields(fields) {
+        Ok(operation_fields) => operation_fields,
+        Err(e) => return e.to_compile_error(),
+    };
 
     fields.named.push(syn::parse_quote! {
         #[metrics(flatten)]
@@ -84,13 +51,56 @@ pub(crate) fn smithy_metrics_impl(
     });
 
     let ext_trait = generate_ext_trait(&metrics_struct.ident);
-    let ext_trait_impls = generate_ext_trait_impl(&metrics_struct.ident, &extension_fields);
+    let ext_trait_impls = generate_ext_trait_impl(&metrics_struct.ident, &operation_fields);
 
     quote! {
         #metrics_struct
         #ext_trait
         #ext_trait_impls
     }
+}
+
+fn handle_operation_fields(fields: &mut FieldsNamed) -> Result<Vec<OperationField>, syn::Error> {
+    let mut operation_fields = Vec::new();
+    // Collect extension fields and remove smithy_metrics attributes
+    for field in &mut fields.named {
+        let has_operation = has_operation_attr(&field.attrs);
+        field.attrs = clean_attrs(&field.attrs);
+
+        if !has_operation {
+            continue;
+        }
+
+        let Some(field_name) = field.ident.clone() else {
+            return Err(syn::Error::new_spanned(
+                field,
+                "operation field must have a name",
+            ));
+        };
+
+        // Check if user already wrapped in Slot
+        // Return compiler error if it has, since we
+        // will need to double slot the type to provide
+        // a better API to handler-level metrics
+        if extract_inner_type(&field.ty).is_some() {
+            return Err(syn::Error::new_spanned(
+                field,
+                "operation fields should not be wrapped in Slot",
+            ));
+        }
+
+        // Always wrap in double Slot
+        let ty = field.ty.clone();
+        field.ty = syn::parse_quote! {
+            metrique::Slot<metrique::Slot<#ty>>
+        };
+        operation_fields.push(OperationField {
+            name: field_name,
+            ty,
+        });
+    }
+
+    Ok(operation_fields)
 }
 
 /// Generates a builder extension trait for the metrics struct.
