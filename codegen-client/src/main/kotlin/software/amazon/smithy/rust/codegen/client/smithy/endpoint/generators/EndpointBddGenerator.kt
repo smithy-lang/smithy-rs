@@ -12,14 +12,24 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
+import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
+import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
+import software.amazon.smithy.rulesengine.language.syntax.expressions.TemplateVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Coalesce
+import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.Ite
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.ParseUrl
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
 import software.amazon.smithy.rulesengine.language.syntax.rule.Condition
+import software.amazon.smithy.rulesengine.language.syntax.rule.EndpointRule
+import software.amazon.smithy.rulesengine.language.syntax.rule.ErrorRule
 import software.amazon.smithy.rulesengine.language.syntax.rule.NoMatchRule
 import software.amazon.smithy.rulesengine.language.syntax.rule.Rule
 import software.amazon.smithy.rulesengine.language.syntax.rule.RuleValueVisitor
@@ -222,7 +232,8 @@ class EndpointBddGenerator(
                     },
                 "CustomFieldsArgs" to
                     writable {
-                        genContext.fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }.forEach { rust("#W,", it) }
+                        genContext.fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
+                            .forEach { rust("#W,", it) }
                     },
                 "CustomFieldsInit" to
                     writable {
@@ -295,12 +306,6 @@ class EndpointBddGenerator(
                 impl<'a> ResultEndpoint {
                     ##[allow(unused_variables, clippy::useless_asref)]
                     fn to_endpoint(&self, params: &'a Params, context: &ConditionContext<'a>) -> #{Result}<#{Endpoint}, #{ResolveEndpointError}> {
-                        // Param bindings
-                        #{ParamBindingsForResults:W}
-
-                        // Non-Param references
-                        #{NonParamRefBindingsForResults:W}
-
                         match self {
                             #{ResultArms:W}
                         }
@@ -313,10 +318,8 @@ class EndpointBddGenerator(
                 """,
                 *preludeScope,
                 "Endpoint" to Types(runtimeConfig).smithyEndpoint,
-                "NonParamRefBindingsForResults" to generateNonParamReferencesForResult(),
-                "ParamBindingsForResults" to generateParamBindings(forResults = true),
                 "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
-                "ResultArms" to generateResultArms(genContext.context),
+                "ResultArms" to generateResultArmsWithBindings(genContext.context),
             )
         }
 
@@ -400,13 +403,10 @@ class EndpointBddGenerator(
             }
         }
 
-    // TODO(BDD) there are numerous strings repeated throughout the arms of the Result statement, we should iterate
-    // through the rules, pull out any string literals that are used more than once, and set them as consts
-
     /**
-     * Generate the arms of the `Result` match statement.
+     * Generate the arms of the `Result` match statement with bindings inlined.
      */
-    private fun generateResultArms(context: Context) =
+    private fun generateResultArmsWithBindings(context: Context) =
         writable {
             val visitor = RuleVisitor(context)
             bddTrait.results.forEachIndexed { idx, rule ->
@@ -418,8 +418,169 @@ class EndpointBddGenerator(
                         "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
                     )
                 } else {
+                    val usedVars = collectUsedVariables(rule)
+                    val bindings = generateBindingsForVariables(usedVars)
                     val ruleOutput = rule.accept(visitor)
-                    rustTemplate("Self::Result$idx => #{output:W},\n", "output" to ruleOutput)
+                    rustTemplate(
+                        """
+                        Self::Result$idx => {
+                            #{bindings:W}
+                            #{output:W}
+                        },
+                        """,
+                        "bindings" to bindings,
+                        "output" to ruleOutput,
+                    )
+                }
+            }
+        }
+
+    /**
+     * Collect all variables (params and context refs) used in a rule.
+     */
+    private fun collectUsedVariables(rule: Rule): Set<String> {
+        val usedVars = mutableSetOf<String>()
+
+        // Forward declaration via late init
+        lateinit var collectFromExpression: (Expression) -> Unit
+        lateinit var collectFromLiteral: (Literal) -> Unit
+
+        collectFromLiteral = { literal ->
+            literal.accept(
+                object : LiteralVisitor<Unit> {
+                    override fun visitBoolean(b: Boolean) {}
+
+                    override fun visitString(value: Template) {
+                        // For templates, we need to extract the dynamic parts
+                        val parts =
+                            value.accept(
+                                object :
+                                    TemplateVisitor<Expression?> {
+                                    override fun visitStaticTemplate(value: String) = null
+
+                                    override fun visitSingleDynamicTemplate(expr: Expression) = expr
+
+                                    override fun visitStaticElement(str: String) = null
+
+                                    override fun visitDynamicElement(expr: Expression) = expr
+
+                                    override fun startMultipartTemplate() = null
+
+                                    override fun finishMultipartTemplate() = null
+                                },
+                            )
+                        parts.forEach { if (it != null) collectFromExpression(it) }
+                    }
+
+                    override fun visitRecord(members: MutableMap<Identifier, Literal>) {
+                        members.values.forEach { collectFromLiteral(it) }
+                    }
+
+                    override fun visitTuple(members: MutableList<Literal>) {
+                        members.forEach { collectFromLiteral(it) }
+                    }
+
+                    override fun visitInteger(value: Int) {}
+                },
+            )
+        }
+
+        collectFromExpression = { expr ->
+            expr.accept(
+                object : ExpressionVisitor<Unit> {
+                    override fun visitLiteral(literal: Literal) {
+                        collectFromLiteral(literal)
+                    }
+
+                    override fun visitRef(reference: Reference) {
+                        usedVars.add(reference.name.rustName())
+                    }
+
+                    override fun visitGetAttr(getAttr: GetAttr) {
+                        collectFromExpression(getAttr.target)
+                    }
+
+                    override fun visitIsSet(target: Expression) {
+                        collectFromExpression(target)
+                    }
+
+                    override fun visitNot(not: Expression) {
+                        collectFromExpression(not)
+                    }
+
+                    override fun visitBoolEquals(
+                        left: Expression,
+                        right: Expression,
+                    ) {
+                        collectFromExpression(left)
+                        collectFromExpression(right)
+                    }
+
+                    override fun visitStringEquals(
+                        left: Expression,
+                        right: Expression,
+                    ) {
+                        collectFromExpression(left)
+                        collectFromExpression(right)
+                    }
+
+                    override fun visitLibraryFunction(
+                        fn: FunctionDefinition,
+                        args: MutableList<Expression>,
+                    ) {
+                        args.forEach { collectFromExpression(it) }
+                    }
+                },
+            )
+        }
+
+        when (rule) {
+            is EndpointRule -> {
+                val endpoint = rule.endpoint
+                collectFromExpression(endpoint.url)
+                endpoint.headers.values.forEach { values -> values.forEach { collectFromExpression(it) } }
+                endpoint.properties.values.forEach { collectFromExpression(it) }
+            }
+
+            is ErrorRule -> {
+                collectFromExpression(rule.error)
+            }
+        }
+
+        return usedVars
+    }
+
+    /**
+     * Generate bindings for the specified variables.
+     */
+    private fun generateBindingsForVariables(usedVars: Set<String>) =
+        writable {
+            // Generate param bindings for used params
+            bddTrait.parameters.toList().forEach { param ->
+                val memberName = param.memberName()
+                if (usedVars.contains(memberName)) {
+                    rust(generateParamBinding(param, forResults = true) + "\n")
+                }
+            }
+
+            // Generate non-param reference bindings for used refs
+            val varRefs = allRefs.variableRefs()
+            varRefs.values.forEachIndexed { idx, ref ->
+                val rustName = ref.name
+                if (usedVars.contains(rustName)) {
+                    if (allRefs.filter { it.runtimeType == RuntimeType.document(runtimeConfig) }
+                            .map { it.name }.contains(rustName)
+                    ) {
+                        rust(
+                            """
+                            let binding_$idx = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();
+                            let $rustName = binding_$idx.as_string().unwrap_or_default();
+
+                            """.trimIndent(),
+                        )
+                    } else {
+                        rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).unwrap_or_default();\n")
+                    }
                 }
             }
         }
