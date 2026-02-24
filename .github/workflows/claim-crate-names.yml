@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.88.0
+  rust_version: 1.91.0
 
 name: Claim unpublished crate names on crates.io
 run-name: ${{ github.workflow }}
@@ -48,6 +48,7 @@ jobs:
       with:
         path: smithy-rs
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire base image
       id: acquire
       run: ./smithy-rs/.github/scripts/acquire-build-image

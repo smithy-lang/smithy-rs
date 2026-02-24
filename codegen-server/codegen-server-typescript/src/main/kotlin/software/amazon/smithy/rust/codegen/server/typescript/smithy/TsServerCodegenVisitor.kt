@@ -62,7 +62,7 @@ class TsServerCodegenVisitor(
             ServerProtocolLoader(
                 codegenDecorator.protocols(
                     service.id,
-                    ServerProtocolLoader.DefaultProtocols,
+                    ServerProtocolLoader.defaultProtocols(),
                 ),
             )
                 .protocolFor(context.model, service)

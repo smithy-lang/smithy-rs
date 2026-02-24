@@ -323,26 +323,43 @@ impl<'a> JsonTokenIterator<'a> {
             offset,
             value: if floating {
                 Number::Float(
-                    f64::from_str(number_str)
-                        .map_err(|_| self.error_at(start, InvalidNumber))
-                        .and_then(|f| {
-                            must_be_finite(f).map_err(|_| self.error_at(start, InvalidNumber))
-                        })?,
+                    f64::from_str(number_str).map_err(|_| self.error_at(start, InvalidNumber))?,
                 )
             } else if negative {
                 // If the negative value overflows, then stuff it into an f64
-                let positive = u64::from_str(&number_str[1..])
-                    .map_err(|_| self.error_at(start, InvalidNumber))?;
-                let negative = positive.wrapping_neg() as i64;
-                if negative > 0 {
-                    Number::Float(-(positive as f64))
-                } else {
-                    Number::NegInt(negative)
+                match u64::from_str(&number_str[1..]) {
+                    Ok(positive) => {
+                        // Check if the positive value fits in i64's negative range
+                        if positive <= i64::MAX as u64 {
+                            Number::NegInt(-(positive as i64))
+                        } else if positive == (i64::MAX as u64) + 1 {
+                            // Special case: i64::MIN
+                            Number::NegInt(i64::MIN)
+                        } else {
+                            // Too large for i64, use f64
+                            Number::Float(-(positive as f64))
+                        }
+                    }
+                    Err(_) => {
+                        // Number too large for u64, parse as f64 (may be infinity)
+                        Number::Float(
+                            f64::from_str(number_str)
+                                .map_err(|_| self.error_at(start, InvalidNumber))?,
+                        )
+                    }
                 }
             } else {
-                Number::PosInt(
-                    u64::from_str(number_str).map_err(|_| self.error_at(start, InvalidNumber))?,
-                )
+                // Try to parse as u64, fall back to f64 if too large
+                match u64::from_str(number_str) {
+                    Ok(n) => Number::PosInt(n),
+                    Err(_) => {
+                        // Number too large for u64, parse as f64 (may be infinity)
+                        Number::Float(
+                            f64::from_str(number_str)
+                                .map_err(|_| self.error_at(start, InvalidNumber))?,
+                        )
+                    }
+                }
             },
         })
     }
@@ -485,14 +502,6 @@ impl<'a> Iterator for JsonTokenIterator<'a> {
     }
 }
 
-fn must_be_finite(f: f64) -> Result<f64, ()> {
-    if f.is_finite() {
-        Ok(f)
-    } else {
-        Err(())
-    }
-}
-
 fn must_not_be_finite(f: f64) -> Result<f64, ()> {
     if !f.is_finite() {
         Ok(f)
@@ -504,6 +513,7 @@ fn must_not_be_finite(f: f64) -> Result<f64, ()> {
 #[cfg(test)]
 mod tests {
     use crate::deserialize::error::{DeserializeError as Error, DeserializeErrorKind as ErrorKind};
+    use crate::deserialize::token::expect_number_as_string_or_null;
     use crate::deserialize::token::test::{
         end_array, end_object, object_key, start_array, start_object, value_bool, value_null,
         value_number, value_string,
@@ -648,6 +658,41 @@ mod tests {
             Number::Float(-18446744073709551615.0),
             b"-18446744073709551615",
         );
+    }
+
+    #[test]
+    fn out_of_range_floats_produce_infinity() {
+        // Values exceeding f64::MAX should tokenize as infinity
+        // The consumer layer (token.rs) will convert to NaN for BigInteger/BigDecimal
+        let expect_infinity = |input, should_be_positive| {
+            let token = json_token_iter(input).next().unwrap().unwrap();
+            if let Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            } = token
+            {
+                assert!(
+                    f.is_infinite(),
+                    "Expected infinity for out-of-range value, got {}",
+                    f
+                );
+                if should_be_positive {
+                    assert!(f.is_sign_positive(), "Expected positive infinity");
+                } else {
+                    assert!(f.is_sign_negative(), "Expected negative infinity");
+                }
+            } else {
+                panic!("Expected Float token, got {:?}", token);
+            }
+        };
+
+        // Values > f64::MAX
+        expect_infinity(b"1.8e308", true);
+        expect_infinity(b"9.9e999", true);
+
+        // Negative values < -f64::MAX
+        expect_infinity(b"-1.8e308", false);
+        expect_infinity(b"-9.9e999", false);
     }
 
     // These cases actually shouldn't parse according to the spec, but it's easier
@@ -819,5 +864,218 @@ mod tests {
         let escaped = EscapedStr::new("foo\\nbar");
         assert_eq!("foo\\nbar", escaped.as_escaped_str());
         assert_eq!("foo\nbar", escaped.to_unescaped().unwrap());
+    }
+
+    #[test]
+    fn test_integer_overflow_to_float() {
+        // Positive integer larger than u64::MAX should parse as Float
+        let input = b"18450000000000000000";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            })) => {
+                assert!(f.is_finite());
+                assert!(f > 0.0);
+            }
+            other => panic!("Expected Float token, got {:?}", other),
+        }
+
+        // Negative integer smaller than i64::MIN should parse as Float
+        let input = b"-9223372036854775809";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            })) => {
+                assert!(f.is_finite());
+                assert!(f < 0.0);
+            }
+            other => panic!("Expected Float token, got {:?}", other),
+        }
+
+        // Extremely large number should parse as infinity
+        let large_num = b"100000000000000000000000000000000000000000000000000000000000000\
+        0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\
+        0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000\
+        00000000000000000000000000000000000000000000000000000000000000000000000";
+        let mut iter = json_token_iter(large_num);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            })) => {
+                assert_eq!(f, f64::INFINITY);
+            }
+            other => panic!("Expected Float(infinity) token, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_integer_within_range() {
+        // Numbers that fit in u64/i64 should still parse as PosInt/NegInt
+        let input = b"9007199254740993";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                assert_eq!(n, 9007199254740993);
+            }
+            other => panic!("Expected PosInt token, got {:?}", other),
+        }
+
+        let input = b"-9223372036854775808";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(n),
+                ..
+            })) => {
+                assert_eq!(n, i64::MIN);
+            }
+            other => panic!("Expected NegInt token, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_integer_boundaries() {
+        // Zero
+        let input = b"0";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(0),
+                ..
+            })) => {}
+            other => panic!("Expected PosInt(0), got {:?}", other),
+        }
+
+        // Regular negative number
+        let input = b"-123";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(-123),
+                ..
+            })) => {}
+            other => panic!("Expected NegInt(-123), got {:?}", other),
+        }
+
+        // i64::MAX (largest positive i64)
+        let input = b"9223372036854775807";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                assert_eq!(n, i64::MAX as u64);
+            }
+            other => panic!("Expected PosInt(i64::MAX), got {:?}", other),
+        }
+
+        // i64::MIN + 1 (edge case for negative range check)
+        let input = b"-9223372036854775807";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(n),
+                ..
+            })) => {
+                assert_eq!(n, i64::MIN + 1);
+            }
+            other => panic!("Expected NegInt(i64::MIN + 1), got {:?}", other),
+        }
+
+        // u64::MAX (fits in u64, should be PosInt)
+        let input = b"18446744073709551615";
+        let mut iter = json_token_iter(input);
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                assert_eq!(n, u64::MAX);
+            }
+            other => panic!("Expected PosInt(u64::MAX), got {:?}", other),
+        }
+    }
+
+    #[cfg(test)]
+    mod proptest_tests {
+        use super::*;
+
+        proptest! {
+            #[test]
+            fn positive_integers_within_u64_parse_as_posint(n in 0u64..=u64::MAX) {
+                let input = n.to_string();
+                let input_bytes = input.as_bytes();
+                let mut iter = json_token_iter(input_bytes);
+
+                match iter.next() {
+                    Some(Ok(Token::ValueNumber { value: Number::PosInt(parsed), .. })) => {
+                        prop_assert_eq!(parsed, n);
+                    }
+                    other => {
+                        return Err(proptest::test_runner::TestCaseError::fail(
+                            format!("Expected PosInt({}), got {:?}", n, other)
+                        ));
+                    }
+                }
+            }
+
+            #[test]
+            fn negative_integers_within_i64_parse_as_negint(n in i64::MIN..=i64::MAX) {
+                if n >= 0 {
+                    return Ok(());
+                }
+
+                let input = n.to_string();
+                let input_bytes = input.as_bytes();
+                let mut iter = json_token_iter(input_bytes);
+
+                match iter.next() {
+                    Some(Ok(Token::ValueNumber { value: Number::NegInt(parsed), .. })) => {
+                        prop_assert_eq!(parsed, n);
+                    }
+                    other => {
+                        return Err(proptest::test_runner::TestCaseError::fail(
+                            format!("Expected NegInt({}), got {:?}", n, other)
+                        ));
+                    }
+                }
+            }
+
+            #[test]
+            fn large_integers_overflow_to_float(
+                // u64::MAX = 18_446_744_073_709_551_615 (20 digits)
+                // Generate numbers with 21+ digits to guarantee overflow
+                num_str in "1[0-9]{20,49}"
+            ) {
+                let input_bytes = num_str.as_bytes();
+                let mut iter = json_token_iter(input_bytes);
+
+                match iter.next() {
+                    Some(Ok(Token::ValueNumber { value: Number::Float(f), .. })) => {
+                        prop_assert!(f.is_finite());
+                        prop_assert!(f > 0.0);
+                    }
+                    other => {
+                        return Err(proptest::test_runner::TestCaseError::fail(
+                            format!("Expected Float for large number, got {:?}", other)
+                        ));
+                    }
+                }
+
+                // Validate expect_number_as_string_or_null extracts the correct string
+                let mut iter = json_token_iter(input_bytes);
+                let result = expect_number_as_string_or_null(iter.next(), input_bytes)?;
+                prop_assert_eq!(result, Some(num_str.as_str()));
+            }
+        }
     }
 }

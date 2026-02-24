@@ -122,8 +122,10 @@ const AWS_SDK_RUNTIMES: &[&str] = &[
 // https://github.com/smithy-lang/smithy-rs/blob/main/buildSrc/src/main/kotlin/CrateSet.kt#L42
 const SERVER_SPECIFIC_RUNTIMES: &[&str] = &[
     "aws-smithy-http-server",
+    "aws-smithy-http-server-metrics",
+    "aws-smithy-http-server-metrics-macro",
     "aws-smithy-http-server-python",
-    "aws-smithy-http-typescript",
+    "aws-smithy-http-server-typescript",
     "aws-smithy-legacy-http-server",
 ];
 

@@ -1,4 +1,99 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+February 16th, 2026
+===================
+**New this release:**
+- :tada: (server, [smithy-rs#4494](https://github.com/smithy-lang/smithy-rs/issues/4494)) Automatically add `smithy.framework#ValidationException` to operations with constrained inputs. Previously, users had to either set `addValidationExceptionToConstrainedOperations: true` in codegen settings or manually add `ValidationException` to each operation. Now this happens automatically unless a custom validation exception (a structure with the `@validationException` trait) is defined in the model. When using a custom validation exception, users must explicitly add it to each applicable operation. The `addValidationExceptionToConstrainedOperations` flag is deprecated.
+
+
+February 10th, 2026
+===================
+**Breaking Changes:**
+- :warning: (all) Upgrade MSRV to Rust 1.91.0.
+
+
+February 1st, 2026
+==================
+**Breaking Changes:**
+- :warning::tada: (client, [smithy-rs#4454](https://github.com/smithy-lang/smithy-rs/issues/4454), [smithy-rs#4467](https://github.com/smithy-lang/smithy-rs/issues/4467), [aws-sdk-rust#1389](https://github.com/awslabs/aws-sdk-rust/issues/1389)) Enable retries by default for AWS SDK clients using `BehaviorVersion::v2026_01_12()` or later.
+
+    Previously, retries were only enabled when constructing clients via `aws_config::load_from_env()`. Clients constructed directly using `Client::from_conf()` did not have retries enabled, which was inconsistent with AWS SDK behavior in other languages.
+
+    This change affects AWS SDK clients constructed with `Client::from_conf()` when using `BehaviorVersion::v2026_01_12()` or `BehaviorVersion::latest()`. Generic Smithy clients (non-AWS) are not affected.
+
+    To disable retries:
+    ```rust
+    let config = aws_sdk_s3::Config::builder()
+        .retry_config(RetryConfig::disabled())
+        // ...
+        .build();
+    ```
+
+    For more context, see the [discussion on retry behavior](https://github.com/smithy-lang/smithy-rs/discussions/4466).
+
+**New this release:**
+- :tada: (client, [smithy-rs#312](https://github.com/smithy-lang/smithy-rs/issues/312), @AmitKulkarni23) Add support for Smithy bigInteger and bigDecimal types as string wrappers in aws-smithy-types, allowing users to parse with their preferred big number library.
+- :tada: (all, [smithy-rs#4484](https://github.com/smithy-lang/smithy-rs/issues/4484)) All Smithy-rs crates, for both servers and clients, now use the 1.x version of
+    the `http` crate for all internal processing. Utility methods are still provided
+    for users to convert between SDK types and both of the `http` 0.x and 1.x types.
+- :bug: (client, [smithy-rs#4500](https://github.com/smithy-lang/smithy-rs/issues/4500)) Fix JMESPath integer literal handling in waiters to support Smithy 1.66.0, which parses integer literals as `Long` instead of `Double`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @AmitKulkarni23 ([smithy-rs#312](https://github.com/smithy-lang/smithy-rs/issues/312))
+
+
+January 14th, 2026
+==================
+**New this release:**
+- (client) Add support for tracking observability business metrics (OBSERVABILITY_TRACING, OBSERVABILITY_OTEL_TRACING, OBSERVABILITY_OTEL_METRICS) in User-Agent headers when telemetry providers are configured.
+- :bug: (client, [smithy-rs#4459](https://github.com/smithy-lang/smithy-rs/issues/4459), @lnj) Updated the `TokenBucket` creation to initialize the bucket with the user-provided `TimeSource` from the `Config`.
+    This fixes the bug in [issue 4459](https://github.com/smithy-lang/smithy-rs/issues/4459) that caused failures
+    in WASM since the TokenBucket was being created with a default `SystemTime` based `TimeSource`
+- :bug: (client, @svix-jbrown) Update the `lru` dependency for `aws-sdk-s3` and `rust-runtime`
+- (client, [smithy-rs#4469](https://github.com/smithy-lang/smithy-rs/issues/4469), @greenwoodcm) Add support for `aws-smithy-mocks` interceptor to handle concurrent requests.
+- :bug: (client, [smithy-rs#4413](https://github.com/smithy-lang/smithy-rs/issues/4413)) Deprecate [NoAuthRuntimePlugin](https://docs.rs/aws-smithy-runtime/1.9.4/aws_smithy_runtime/client/auth/no_auth/struct.NoAuthRuntimePlugin.html), which does not properly configure the auth scheme option resolver for noAuth, and introduce `NoAuthRuntimePluginV2` that does.
+- (client) Update crc-fast to 1.9
+
+**Contributors**
+Thank you for your contributions! ❤
+- @greenwoodcm ([smithy-rs#4469](https://github.com/smithy-lang/smithy-rs/issues/4469))
+- @lnj ([smithy-rs#4459](https://github.com/smithy-lang/smithy-rs/issues/4459))
+- @svix-jbrown
+
+
+December 16th, 2025
+===================
+**New this release:**
+- :tada: (all, [smithy-rs#4418](https://github.com/smithy-lang/smithy-rs/issues/4418), @AmitKulkarni23) Add `expect_number_as_string_or_null` function to `aws-smithy-json` that extracts JSON numbers as strings without converting to u64/i64/f64. This preserves arbitrary precision for BigInteger and BigDecimal support, preventing precision loss for numbers larger than standard numeric types can represent.
+- :tada: (client, @annahay) Add token bucket success rewards, time based refill, fractional tokens
+
+**Contributors**
+Thank you for your contributions! ❤
+- @AmitKulkarni23 ([smithy-rs#4418](https://github.com/smithy-lang/smithy-rs/issues/4418))
+- @annahay
+
+
+December 8th, 2025
+==================
+**Breaking Changes:**
+- :bug::warning: (server, [smithy-rs#4400](https://github.com/smithy-lang/smithy-rs/issues/4400), [smithy-rs#4397](https://github.com/smithy-lang/smithy-rs/issues/4397)) Fix issue where SigV4 envelopes for EventStreams did not support the initial message. This is _technically_ a breaking change but should not break consumers in practice since the
+    resulting type has the same methods.
+
+**New this release:**
+- :tada: (client, @annahay) Added methods in token bucket to indicate if bucket is full or empty
+- :bug: (client, [smithy-rs#4427](https://github.com/smithy-lang/smithy-rs/issues/4427)) Fix Content-Type and Accept headers for event streams in RPC v2 CBOR to set `application/vnd.amazon.eventstream`
+- :bug: (client, [aws-sdk-rust#1390](https://github.com/awslabs/aws-sdk-rust/issues/1390), @arielb1) In `legacy-rustls-ring`, polyfill `with_native_roots` to use `rustls_native_certs 0.8` to avoid
+    RUSTSEC-2025-0134.
+- :bug: (all, @arielby) Publish an MSRV for all packages
+
+
+**Contributors**
+Thank you for your contributions! ❤
+- @annahay
+- @arielb1 ([aws-sdk-rust#1390](https://github.com/awslabs/aws-sdk-rust/issues/1390))
+- @arielby
+
+
 November 20th, 2025
 ===================
 **New this release:**

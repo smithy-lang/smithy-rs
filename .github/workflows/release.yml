@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.88.0
+  rust_version: 1.91.0
 
 name: Release smithy-rs
 on:
@@ -92,6 +92,7 @@ jobs:
         path: smithy-rs
         ref: ${{ inputs.commit_sha }}
         fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
     - name: Acquire credentials
       uses: aws-actions/configure-aws-credentials@v4
       with:

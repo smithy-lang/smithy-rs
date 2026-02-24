@@ -11,10 +11,9 @@ use aws_smithy_wasm::wasi::WasiHttpClientBuilder;
 //Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
     world: "canary-world",
-    exports: {
-        "aws:component/canary-interface": Component
-    }
 });
+
+export!(Component);
 
 struct Component;
 

@@ -41,15 +41,11 @@ pushd "${tmp_dir}/aws/sdk/integration-tests"
 cargo check --tests --all-features
 
 # Running WebAssembly (WASI) specific integration tests
-# TODO(MSRV1.85 follow-up): Investigate why we need to split the tests for the two WASM
-# targets up. The integration-tests/webassembly directory has a .cagro/config.toml that should set
-# the --cfg getrandom_backend="wasm_js" backend (only for wasm32-unknown-unknown). That worked fine
-# locally, but failed in CI. The suspicion is that the RUSTFLAGS set in our Dockerfile were overriding
-# this cfg flag, so setting it manually here works.
+# Note that the --release here is required since debug builds can create binaries with too many symbols
+# for wasmtime to run.
 pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly" &>/dev/null
-cargo check --tests --all-features --target wasm32-wasip1 -v
-RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo check --tests --all-features --target wasm32-unknown-unknown -v
-
+RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo test --target wasm32-unknown-unknown --release
+cargo test --target wasm32-wasip2 --release
 
 popd
 popd

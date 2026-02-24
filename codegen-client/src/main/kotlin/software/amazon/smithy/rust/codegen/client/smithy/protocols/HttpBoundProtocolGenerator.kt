@@ -32,12 +32,12 @@ class ClientHttpBoundProtocolPayloadGenerator(
                     let marshaller = #{marshallerConstructorFn}();
                     let (signer, signer_sender) = #{DeferredSigner}::new();
                     _cfg.interceptor_state().store_put(signer_sender);
-                    #{SdkBody}::from_body_0_4(#{hyper}::Body::wrap_stream(#{event_stream:W}))
+                    #{SdkBody}::from_body_1_x(#{http_body_util}::StreamBody::new(#{event_stream:W}))
                 }
                 """,
-                "hyper" to CargoDependency.HyperWithStream.toType(),
+                "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
                 "SdkBody" to
-                    CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-0-4-x")
+                    CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x")
                         .toType().resolve("body::SdkBody"),
                 "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
                 "DeferredSigner" to

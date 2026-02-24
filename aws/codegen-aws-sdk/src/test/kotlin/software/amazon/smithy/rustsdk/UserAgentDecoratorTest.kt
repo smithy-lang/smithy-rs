@@ -159,21 +159,21 @@ class UserAgentDecoratorTest {
 
                         let http_client = #{StaticReplayClient}::new(vec![
                             #{ReplayEvent}::new(
-                                #{http}::Request::builder()
+                                #{HttpRequest1x}::builder()
                                     .uri("http://localhost:1234/")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                #{http}::Response::builder()
+                                #{HttpResponse1x}::builder()
                                     .status(500)
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
                             ),
                             #{ReplayEvent}::new(
-                                #{http}::Request::builder()
+                                #{HttpRequest1x}::builder()
                                     .uri("http://localhost:1234/")
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
-                                #{http}::Response::builder()
+                                #{HttpResponse1x}::builder()
                                     .status(200)
                                     .body(#{SdkBody}::empty())
                                     .unwrap(),
@@ -205,10 +205,11 @@ class UserAgentDecoratorTest {
                             .unwrap();
                         assert_eq!(1, metrics_section.matches("g").count());
                         """,
-                        "http" to RuntimeType.Http,
                         "AwsCredentialFeature" to
                             AwsRuntimeType.awsCredentialTypes(rc)
                                 .resolve("credential_feature::AwsCredentialFeature"),
+                        "HttpRequest1x" to RuntimeType.HttpRequest1x,
+                        "HttpResponse1x" to RuntimeType.HttpResponse1x,
                         "RetryConfig" to RuntimeType.smithyTypes(rc).resolve("retry::RetryConfig"),
                         "ReplayEvent" to RuntimeType.smithyHttpClientTestUtil(rc).resolve("test_util::ReplayEvent"),
                         "SdkBody" to RuntimeType.sdkBody(rc),

@@ -15,18 +15,23 @@ use std::{
 };
 
 use async_stream::stream;
-use aws_smithy_runtime::client::http::hyper_014::HyperConnector;
+use aws_smithy_http_client::{tls, Connector};
+use aws_smithy_http_server_metrics::operation::Metrics;
 use aws_smithy_runtime_api::client::http::HttpConnector;
 use http::Uri;
 use pokemon_service_server_sdk::{
-    error, input, model,
-    model::CapturingPayload,
+    error, input,
+    model::{self, CapturingPayload},
     output,
     server::Extension,
     types::{Blob, ByteStream, SdkBody},
 };
 use rand::{seq::SliceRandom, Rng};
 use tracing_subscriber::{prelude::*, EnvFilter};
+
+use crate::metrics::PokemonOperationMetrics;
+
+pub mod metrics;
 
 const PIKACHU_ENGLISH_FLAVOR_TEXT: &str =
     "When several of these Pokémon gather, their electricity could build and cause lightning storms.";
@@ -154,13 +159,18 @@ impl Default for State {
 pub async fn get_pokemon_species(
     input: input::GetPokemonSpeciesInput,
     state: Extension<Arc<State>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::GetPokemonSpeciesOutput, error::GetPokemonSpeciesError> {
     state
         .0
         .call_count
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    // We only support retrieving information about Pikachu.
+
     let pokemon = state.0.pokemons_translations.get(&input.name);
+
+    metrics.get_pokemon_species_metrics.requested_pokemon_name = Some(input.name.clone());
+    metrics.get_pokemon_species_metrics.found = Some(pokemon.is_some());
+
     match pokemon.as_ref() {
         Some(pokemon) => {
             tracing::debug!("Requested Pokémon is {}", input.name);
@@ -203,11 +213,17 @@ pub async fn get_pokemon_species(
 pub async fn get_storage(
     input: input::GetStorageInput,
     _state: Extension<Arc<State>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::GetStorageOutput, error::GetStorageError> {
     tracing::debug!("attempting to authenticate storage user");
 
     // We currently only support Ash and he has nothing stored
-    if !(input.user == "ash" && input.passcode == "pikachu123") {
+    let authenticated = input.user == "ash" && input.passcode == "pikachu123";
+
+    metrics.get_storage_metrics.user = Some(input.user.clone());
+    metrics.get_storage_metrics.authenticated = Some(authenticated);
+
+    if !authenticated {
         tracing::debug!("authentication failed");
         return Err(error::GetStorageError::StorageAccessNotAuthorized(
             error::StorageAccessNotAuthorized {},
@@ -220,6 +236,7 @@ pub async fn get_storage(
 pub async fn get_server_statistics(
     _input: input::GetServerStatisticsInput,
     state: Extension<Arc<State>>,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::GetServerStatisticsOutput {
     // Read the current calls count.
     let counter = state.0.call_count.load(std::sync::atomic::Ordering::SeqCst);
@@ -229,6 +246,9 @@ pub async fn get_server_statistics(
             tracing::error!("Unable to convert u64 to i64: {}", e);
         })
         .unwrap_or(0);
+
+    metrics.get_server_statistics_metrics.total_calls = Some(calls_count.to_string());
+
     tracing::debug!("This instance served {} requests", counter);
     output::GetServerStatisticsOutput { calls_count }
 }
@@ -236,14 +256,21 @@ pub async fn get_server_statistics(
 /// Attempts to capture a Pokémon.
 pub async fn capture_pokemon(
     mut input: input::CapturePokemonInput,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> Result<output::CapturePokemonOutput, error::CapturePokemonError> {
-    if input.region != "Kanto" {
+    let is_supported_region = input.region == "Kanto";
+
+    metrics.capture_pokemon_metrics.requested_region = Some(input.region.clone());
+    metrics.capture_pokemon_metrics.supported_region = Some(is_supported_region);
+
+    if !is_supported_region {
         return Err(error::CapturePokemonError::UnsupportedRegionError(
             error::UnsupportedRegionError {
                 region: input.region,
             },
         ));
     }
+
     let output_stream = stream! {
         loop {
             use std::time::Duration;
@@ -254,6 +281,7 @@ pub async fn capture_pokemon(
                         if let Ok(attempt) = capturing_event {
                             let payload = attempt.payload.clone().unwrap_or_else(|| CapturingPayload::builder().build());
                             let pokeball = payload.pokeball().unwrap_or("");
+
                             if ! matches!(pokeball, "Master Ball" | "Great Ball" | "Fast Ball") {
                                 yield Err(
                                     crate::error::CapturePokemonEventsError::InvalidPokeballError(
@@ -269,16 +297,13 @@ pub async fn capture_pokemon(
                                     "Fast Ball" => rand::thread_rng().gen_range(0..100) > 66,
                                     _ => unreachable!("invalid pokeball"),
                                 };
-                                // Only support Kanto
                                 tokio::time::sleep(Duration::from_millis(1000)).await;
-                                // Will it capture the Pokémon?
+
                                 if captured {
                                     let shiny = rand::thread_rng().gen_range(0..4096) == 0;
-                                    let pokemon = payload
-                                        .name()
-                                        .unwrap_or("")
-                                        .to_string();
+                                    let pokemon = payload.name().unwrap_or("").to_string();
                                     let pokedex: Vec<u8> = (0..255).collect();
+
                                     yield Ok(crate::model::CapturePokemonEvents::Event(
                                         crate::model::CaptureEvent {
                                             name: Some(pokemon),
@@ -297,6 +322,7 @@ pub async fn capture_pokemon(
             }
         }
     };
+
     Ok(output::CapturePokemonOutput::builder()
         .events(output_stream.into())
         .build()
@@ -304,12 +330,19 @@ pub async fn capture_pokemon(
 }
 
 /// Empty operation used to benchmark the service.
+///
+/// Does not contain metrics to show that it is an optional parameter
 pub async fn do_nothing(_input: input::DoNothingInput) -> output::DoNothingOutput {
     output::DoNothingOutput {}
 }
 
 /// Operation used to show the service is running.
-pub async fn check_health(_input: input::CheckHealthInput) -> output::CheckHealthOutput {
+pub async fn check_health(
+    _input: input::CheckHealthInput,
+    mut metrics: Metrics<PokemonOperationMetrics>,
+) -> output::CheckHealthOutput {
+    metrics.check_health_metrics.health_check_count = Some(1);
+
     output::CheckHealthOutput {}
 }
 
@@ -321,6 +354,7 @@ const RADIO_STREAMS: [&str; 2] = [
 /// Streams a random Pokémon song.
 pub async fn stream_pokemon_radio(
     _input: input::StreamPokemonRadioInput,
+    mut metrics: Metrics<PokemonOperationMetrics>,
 ) -> output::StreamPokemonRadioOutput {
     let radio_stream_url = RADIO_STREAMS
         .choose(&mut rand::thread_rng())
@@ -328,7 +362,13 @@ pub async fn stream_pokemon_radio(
         .parse::<Uri>()
         .expect("Invalid url in `RADIO_STREAMS`");
 
-    let connector = HyperConnector::builder().build_https();
+    metrics.stream_pokemon_radio_metrics.stream_url = Some(radio_stream_url.to_string());
+
+    let connector = Connector::builder()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .build();
     let result = connector
         .call(
             http::Request::builder()
@@ -358,13 +398,14 @@ mod tests {
 
         let state = Arc::new(State::default());
 
-        let actual_spanish_flavor_text = get_pokemon_species(input, Extension(state.clone()))
-            .await
-            .unwrap()
-            .flavor_text_entries
-            .into_iter()
-            .find(|flavor_text| flavor_text.language == model::Language::Spanish)
-            .unwrap();
+        let actual_spanish_flavor_text =
+            get_pokemon_species(input, Extension(state.clone()), Metrics::test())
+                .await
+                .unwrap()
+                .flavor_text_entries
+                .into_iter()
+                .find(|flavor_text| flavor_text.language == model::Language::Spanish)
+                .unwrap();
 
         assert_eq!(
             PIKACHU_SPANISH_FLAVOR_TEXT,
@@ -372,7 +413,7 @@ mod tests {
         );
 
         let input = input::GetServerStatisticsInput {};
-        let stats = get_server_statistics(input, Extension(state.clone())).await;
+        let stats = get_server_statistics(input, Extension(state.clone()), Metrics::test()).await;
         assert_eq!(1, stats.calls_count);
     }
 }

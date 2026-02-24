@@ -34,6 +34,8 @@ class Ec2QuerySerializerGeneratorTest {
         namespace test
 
         union Choice {
+            bigInt: BigInteger,
+            bigDec: BigDecimal,
             blob: Blob,
             boolean: Boolean,
             date: Timestamp,
@@ -300,6 +302,65 @@ class Ec2QuerySerializerGeneratorTest {
                 val enum = model.lookup<StringShape>("test#FooEnum")
                 EnumGenerator(model, symbolProvider, enum, TestEnumType, emptyList()).render(this)
             }
+        }
+
+        model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
+    }
+
+    @ParameterizedTest
+    @CsvSource("true", "false")
+    fun `serializes big numbers correctly`(generateUnknownVariant: Boolean) {
+        val model =
+            """
+            namespace test
+            use aws.protocols#ec2Query
+
+            @ec2Query
+            @xmlNamespace(uri: "https://example.com")
+            service TestService {
+                version: "test",
+                operations: [Op]
+            }
+
+            structure OpInput {
+                bigInt: BigInteger,
+                bigDec: BigDecimal,
+            }
+
+            @http(uri: "/", method: "POST")
+            operation Op {
+                input: OpInput,
+            }
+            """.asSmithyModel()
+
+        val codegenContext = testCodegenContext(model)
+        val symbolProvider = codegenContext.symbolProvider
+        val serializerGenerator = Ec2QuerySerializerGenerator(codegenContext)
+        val operationGenerator = serializerGenerator.operationInputSerializer(model.lookup("test#Op"))
+
+        val project = TestWorkspace.testProject(symbolProvider)
+        project.lib {
+            unitTest(
+                "big_number_serializer",
+                """
+                use aws_smithy_types::{BigInteger, BigDecimal};
+                use std::str::FromStr;
+
+                let input = crate::test_model::OpInput::builder()
+                    .big_int(BigInteger::from_str("12345678901234567890").unwrap())
+                    .big_dec(BigDecimal::from_str("123.456").unwrap())
+                    .build();
+                let serialized = ${format(operationGenerator!!)}(&input).unwrap();
+                let output = std::str::from_utf8(serialized.bytes().unwrap()).unwrap();
+                assert_eq!(
+                    output,
+                    "Action=Op&Version=test&BigInt=12345678901234567890&BigDec=123.456"
+                );
+                """,
+            )
         }
 
         model.lookup<OperationShape>("test#Op").inputShape(model).also { input ->

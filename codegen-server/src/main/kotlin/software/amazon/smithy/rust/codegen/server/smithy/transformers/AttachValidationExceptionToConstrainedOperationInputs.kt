@@ -5,18 +5,31 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.transformers
 
+import software.amazon.smithy.framework.rust.ValidationExceptionTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustSettings
 import software.amazon.smithy.rust.codegen.server.smithy.customizations.SmithyValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.hasConstraintTrait
+import java.util.logging.Logger
+
+private val logger: Logger = Logger.getLogger("AttachValidationExceptionToConstrainedOperationInputs")
+
+/**
+ * Checks if the model has a custom validation exception defined.
+ * A custom validation exception is a structure with the `@validationException` trait.
+ */
+private fun hasCustomValidationException(model: Model): Boolean =
+    model.shapes(StructureShape::class.java).anyMatch { it.hasTrait(ValidationExceptionTrait.ID) }
 
 private fun addValidationExceptionToMatchingServiceShapes(
     model: Model,
@@ -30,7 +43,7 @@ private fun addValidationExceptionToMatchingServiceShapes(
             .map { model.expectShape(it, OperationShape::class.java) }
             .filter { operationShape ->
                 walker.walkShapes(operationShape.inputShape(model))
-                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() }
+                    .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() || it.hasEventStreamMember(model) }
             }
             .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
@@ -84,15 +97,40 @@ object AttachValidationExceptionToConstrainedOperationInputsInAllowList {
 }
 
 /**
- * Attach the `smithy.framework#ValidationException` error to operations with constrained inputs if the
- * codegen flag `addValidationExceptionToConstrainedOperations` has been set.
+ * Attach the `smithy.framework#ValidationException` error to operations with constrained inputs.
+ *
+ * This transformer automatically adds the default ValidationException to operations that have
+ * constrained inputs but don't have a validation exception attached. This behavior is skipped
+ * if the model defines a custom validation exception (a structure with the @validationException trait),
+ * in which case the user is expected to explicitly add their custom exception to operations.
+ *
+ * The `addValidationExceptionToConstrainedOperations` codegen flag is deprecated. The transformer
+ * now automatically determines whether to add ValidationException based on whether a custom
+ * validation exception exists in the model.
  */
-object AttachValidationExceptionToConstrainedOperationInputsBasedOnCodegenFlag {
+object AttachValidationExceptionToConstrainedOperationInput {
     fun transform(
         model: Model,
         settings: ServerRustSettings,
     ): Model {
-        if (!settings.codegenConfig.addValidationExceptionToConstrainedOperations) {
+        // Log deprecation warning if the flag is explicitly set
+        val addExceptionNullableFlag = settings.codegenConfig.addValidationExceptionToConstrainedOperations
+        if (addExceptionNullableFlag == true) {
+            // For backward compatibility, if `addValidationExceptionToConstrainedOperations` is explicitly true,
+            // add `ValidationException` regardless of whether a custom validation exception exists.
+            logger.warning(
+                "The 'addValidationExceptionToConstrainedOperations' codegen flag is deprecated. " +
+                    "`smithy.framework#ValidationException` is now automatically added to operations with constrained inputs " +
+                    "unless a custom validation exception is defined in the model.",
+            )
+        } else if (addExceptionNullableFlag == false ||
+            hasCustomValidationException(model) ||
+            settings.codegenConfig.experimentalCustomValidationExceptionWithReasonPleaseDoNotUse != null
+        ) {
+            // Skip adding `ValidationException` when:
+            // - `addValidationExceptionToConstrainedOperations` is explicitly false (backward compatibility), or
+            // - A custom validation exception exists (users must explicitly add it to operations), or
+            // - A custom validation exception is configured via the experimental codegen setting
             return model
         }
 
@@ -118,6 +156,6 @@ object AttachValidationExceptionToConstrainedOperationInputs {
         settings: ServerRustSettings,
     ): Model {
         val allowListTransformedModel = AttachValidationExceptionToConstrainedOperationInputsInAllowList.transform(model)
-        return AttachValidationExceptionToConstrainedOperationInputsBasedOnCodegenFlag.transform(allowListTransformedModel, settings)
+        return AttachValidationExceptionToConstrainedOperationInput.transform(allowListTransformedModel, settings)
     }
 }

@@ -5,32 +5,60 @@ edition = "2021"
 publish = false
 authors = ["Smithy-rs Server Team <smithy-rs-server@amazon.com>"]
 description = "A smithy Rust service to retrieve information about Pokémon."
+rust-version = "1.88"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
-http = "0.2"
-hyper = { version = "0.14.26", features = ["server"] }
-tokio = "1.26.0"
+http = "1"
+hyper = { version = "1", features = ["server"] }
+hyper-util = { version = "0.1", features = [
+    "tokio",
+    "server",
+    "server-auto",
+    "service",
+] }
+tokio = { version = "1.26.0", features = ["rt-multi-thread", "macros"] }
 tower = "0.4"
 tracing = "0.1"
+tracing-appender = "0.2"
+
+# Pinning to MSRV 1.88.0 supported versions
+metrique = { version = "0.1.17", features = ["emf"] }
+metrique-writer = "0.1.17"
 
 # Local paths
-pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = ["request-id"]}
+pokemon-service-server-sdk = { path = "../pokemon-service-server-sdk/", features = [
+    "request-id",
+] }
 pokemon-service-common = { path = "../pokemon-service-common/" }
+aws-smithy-http-server-metrics = { path = "../../rust-runtime/aws-smithy-http-server-metrics" }
+aws-smithy-http-server = { path = "../../rust-runtime/aws-smithy-http-server" }
 
 [dev-dependencies]
 assert_cmd = "2.0"
 async-stream = "0.3"
+bytes = "1"
+http-body-util = "0.1"
+insta = { version = "1", features = ["filters"] }
+metrique = { version = "0.1", features = ["test-util"] }
 rand = "0.8.5"
 serial_test = "3.1.1"
+futures-util = "0.3"
 
 # We use hyper client in tests
-hyper = { version = "0.14.26", features = ["server", "client"] }
+hyper = { version = "1", features = ["server", "client"] }
+hyper-util = { version = "0.1", features = [
+    "client",
+    "client-legacy",
+    "http1",
+    "http2",
+] }
 
 # This dependency is only required for testing the `pokemon-service-tls` program.
-hyper-rustls = { version = "0.24", features = ["http2"] }
+hyper-rustls = { version = "0.27", features = ["http2"] }
 
 # Local paths
+aws-smithy-runtime = { path = "../../rust-runtime/aws-smithy-runtime" }
 aws-smithy-http = { path = "../../rust-runtime/aws-smithy-http/" }
 pokemon-service-client = { path = "../pokemon-service-client/", features = [
     "behavior-version-latest",

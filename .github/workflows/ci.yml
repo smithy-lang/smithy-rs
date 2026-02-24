@@ -33,7 +33,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.88.0
+  rust_version: 1.91.0
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -88,7 +88,7 @@ jobs:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
         - action: check-aws-sdk-adhoc-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-client-codegen-unit-tests
@@ -101,31 +101,31 @@ jobs:
         - action: check-sdk-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-fuzzgen
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-integration-tests-python
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-codegen-unit-tests-python
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-serde-codegen-unit-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-e2e-test
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-server-python-e2e-test
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-style-and-lints
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-book
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-tools
           runner: smithy_ubuntu-latest_8-core
         - action: check-deterministic-codegen
           runner: smithy_ubuntu-latest_8-core
         - action: check-codegen-version
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -177,9 +177,9 @@ jobs:
         - action: check-aws-config
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-cargo-deny
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-only-aws-sdk-services
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
@@ -187,9 +187,9 @@ jobs:
         - action: check-aws-sdk-smoketest-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-standalone-integration-tests
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-benchmarks
-          runner: ubuntu-latest
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -253,20 +253,23 @@ jobs:
           build_aws_exclude: ''
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: --all-features
+          test_aws_features: --all-features
           test_aws_exclude: ''
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro
           test_smithy_rs_features: ''
+          test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
           build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
           test_smithy_rs_features: ''
+          test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
           test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
     steps:
@@ -331,7 +334,7 @@ jobs:
       run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
       shell: bash
-      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace
+      run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace ${{ matrix.test_aws_features }}
 
   # Run the canary against generated SDKs
   #

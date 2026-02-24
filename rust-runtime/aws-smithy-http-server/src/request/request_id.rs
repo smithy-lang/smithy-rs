@@ -231,7 +231,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::body::{Body, BoxBody};
     use crate::request::Request;
     use http::HeaderValue;
     use std::convert::Infallible;
@@ -248,11 +247,11 @@ mod tests {
             .layer(&ServerRequestIdProviderLayer::new_with_response_header(
                 HeaderName::from_static("x-request-id"),
             ))
-            .service(service_fn(|_req: Request<Body>| async move {
+            .service(service_fn(|_req: Request<BoxBody>| async move {
                 Ok::<_, Infallible>(Response::new(BoxBody::default()))
             }));
 
-        let req = Request::new(Body::empty());
+        let req = Request::new(crate::body::empty());
 
         let res = svc.oneshot(req).await.unwrap();
         let request_id = res.headers().get("x-request-id").unwrap().to_str().unwrap();
@@ -264,11 +263,11 @@ mod tests {
     async fn test_request_id_not_in_response_header() {
         let svc = ServiceBuilder::new()
             .layer(&ServerRequestIdProviderLayer::new())
-            .service(service_fn(|_req: Request<Body>| async move {
+            .service(service_fn(|_req: Request<BoxBody>| async move {
                 Ok::<_, Infallible>(Response::new(BoxBody::default()))
             }));
 
-        let req = Request::new(Body::empty());
+        let req = Request::new(crate::body::empty());
 
         let res = svc.oneshot(req).await.unwrap();
 
