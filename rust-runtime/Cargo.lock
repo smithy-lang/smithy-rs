@@ -527,7 +527,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-metrics"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-http-server",
  "aws-smithy-http-server-metrics-macro",
