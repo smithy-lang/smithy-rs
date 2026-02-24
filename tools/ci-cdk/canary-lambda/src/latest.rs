@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-pub(crate) mod paginator_canary;
+pub(crate) mod ec2_canary;
 pub(crate) mod s3_canary;
-pub(crate) mod transcribe_canary;
-pub(crate) mod wasm_canary;
+pub(crate) mod sts_canary;

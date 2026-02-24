@@ -5,12 +5,10 @@
 
 use aws_config::SdkConfig;
 use canary::{get_canaries_to_run, CanaryEnv};
-use lambda_runtime::{Context as LambdaContext, Error};
+use lambda_runtime::{service_fn, Error, LambdaEvent};
 use serde_json::{json, Value};
 use std::collections::BTreeMap;
 use std::env;
-use std::future::Future;
-use std::pin::Pin;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -44,9 +42,9 @@ async fn main() -> Result<(), Error> {
         );
     tracing::subscriber::set_global_default(subscriber).unwrap();
     let local = env::args().any(|arg| arg == "--local");
-    let main_handler = LambdaMain::new().await;
+    let sdk_config = aws_config::load_from_env().await;
     if local {
-        let result = lambda_main(main_handler.sdk_config)
+        let result = lambda_main(sdk_config)
             .instrument(tracing_texray::examine(info_span!("run_canaries")))
             .await?;
         if result
@@ -64,32 +62,12 @@ async fn main() -> Result<(), Error> {
             Err(format!("canary failed: {result:?}").into())
         }
     } else {
-        lambda_runtime::run(main_handler).await?;
+        lambda_runtime::run(service_fn(|_event: LambdaEvent<Value>| {
+            let sdk_config = sdk_config.clone();
+            async move { lambda_main(sdk_config).await }
+        }))
+        .await?;
         Ok(())
-    }
-}
-
-// Enables us to keep the clients alive between successive Lambda executions.
-// Not because we need to for this use-case, but to demonstrate how to.
-struct LambdaMain {
-    sdk_config: SdkConfig,
-}
-
-impl LambdaMain {
-    #[allow(deprecated)]
-    async fn new() -> Self {
-        Self {
-            sdk_config: aws_config::load_from_env().await,
-        }
-    }
-}
-
-impl lambda_runtime::Handler<Value, Value> for LambdaMain {
-    type Error = Error;
-    type Fut = Pin<Box<dyn Future<Output = Result<Value, Error>>>>;
-
-    fn call(&self, _: Value, _: LambdaContext) -> Self::Fut {
-        Box::pin(lambda_main(self.sdk_config.clone()))
     }
 }
 

@@ -128,7 +128,7 @@ async-stream = "0.3"
 bytes = "1"
 hound = "3.4"
 async-trait = "0.1"
-lambda_runtime = "0.4"
+lambda_runtime = "1"
 serde_json = "1"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
@@ -139,9 +139,6 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
 
 "#;
 
@@ -150,33 +147,9 @@ lazy_static! {
         RequiredDependency::new("aws-config").with_features(["behavior-version-latest"]),
         RequiredDependency::new("aws-sdk-s3").with_features(["http-1x"]),
         RequiredDependency::new("aws-sdk-ec2"),
-        RequiredDependency::new("aws-sdk-transcribestreaming"),
-        RequiredDependency::new("aws-smithy-wasm"),
+        RequiredDependency::new("aws-sdk-sts"),
     ];
 }
-
-const WASM_BASE_MANIFEST: &str = r#"
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
-[package]
-name = "aws-sdk-rust-lambda-canary-wasm"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
-
-[lib]
-crate-type = ["cdylib"]
-
-# metadata used by cargo-component to identify which wit world to embed in the binary
-[package.metadata.component]
-package = "aws:component"
-
-[dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = "0.51.0"
-"#;
 
 lazy_static! {
     static ref WASM_REQUIRED_SDK_CRATES: Vec<RequiredDependency> = vec![
@@ -344,22 +317,6 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     fs::write(&manifest_path, crate_manifest_content)
         .context(format!("failed to write Cargo.toml in {manifest_path:?}"))?;
 
-    // Generate the canary-wasm's Cargo.toml
-    let wasm_manifest_path = canary_path.join("../canary-wasm/Cargo.toml");
-    let mut wasm_crate_manifest_content = WASM_BASE_MANIFEST.to_string();
-    write_dependencies(
-        &WASM_REQUIRED_SDK_CRATES,
-        &mut wasm_crate_manifest_content,
-        &crate_source,
-    )?;
-    fs::write(&wasm_manifest_path, wasm_crate_manifest_content).context(format!(
-        "failed to write Cargo.toml in {wasm_manifest_path:?}"
-    ))?;
-
-    let wasm_manifest_path = std::env::current_dir()
-        .expect("Current dir")
-        .join("../canary-wasm/Cargo.toml");
-
     if !opt.manifest_only {
         // Compile the canary Lambda
         let mut command = Command::new("cargo");
@@ -373,17 +330,6 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         }
         handle_failure("cargo build", &command.output()?)?;
 
-        // Compile the wasm canary to a .wasm binary
-        let mut wasm_command = Command::new("cargo");
-        wasm_command
-            .arg("build")
-            .arg("--release")
-            .arg("--target")
-            .arg("wasm32-wasip2")
-            .arg("--manifest-path")
-            .arg(&wasm_manifest_path);
-        handle_failure("cargo build (WASM bin)", &wasm_command.output()?)?;
-
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
         let target_path = {
@@ -393,22 +339,12 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             }
             path.join("release")
         };
-        let wasm_bin_path = {
-            repository_root
-                .join("tools")
-                .join("target")
-                .join("wasm32-wasip2")
-                .join("release")
-                .join("aws_sdk_rust_lambda_canary_wasm.wasm")
-        };
         let bin_path = target_path.join("bootstrap");
         let bundle_path = target_path.join(name_bundle(
             &bin_path,
             opt.rust_version.as_deref(),
             opt.sdk_release_tag.as_ref(),
         )?);
-
-        tracing::debug!(wasm_bin_path = ?wasm_bin_path, bundle_path = ?bundle_path);
 
         let zip_file = fs::File::create(&bundle_path).context(here!())?;
         let mut zip = zip::ZipWriter::new(zip_file);
@@ -420,16 +356,6 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         .context(here!())?;
         zip.write_all(&fs::read(&bin_path).context(here!("read target"))?)
             .context(here!())?;
-
-        // Write the wasm bin to the zip
-        zip.start_file(
-            "aws_sdk_rust_lambda_canary_wasm.wasm",
-            zip::write::FileOptions::default().unix_permissions(0o644),
-        )
-        .context(here!())?;
-        zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
-            .context(here!())?;
-        zip.finish().context(here!())?;
 
         println!(
             "{}",
@@ -587,7 +513,7 @@ async-stream = "0.3"
 bytes = "1"
 hound = "3.4"
 async-trait = "0.1"
-lambda_runtime = "0.4"
+lambda_runtime = "1"
 serde_json = "1"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
@@ -598,15 +524,11 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
 
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { path = "some/sdk/path/s3", features = ["http-1x"] }
 aws-sdk-ec2 = { path = "some/sdk/path/ec2" }
-aws-sdk-transcribestreaming = { path = "some/sdk/path/transcribestreaming" }
-aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
+aws-sdk-sts = { path = "some/sdk/path/sts" }
 
 [features]
 latest = []
@@ -645,7 +567,7 @@ async-stream = "0.3"
 bytes = "1"
 hound = "3.4"
 async-trait = "0.1"
-lambda_runtime = "0.4"
+lambda_runtime = "1"
 serde_json = "1"
 thiserror = "1"
 tokio = { version = "1", features = ["full"] }
@@ -656,15 +578,11 @@ tokio-stream = "0"
 tracing-texray = "0.1.1"
 reqwest = { version = "0.12.12", features = ["rustls-tls"], default-features = false }
 edit-distance = "2"
-wasmtime = "38.0.4"
-wasmtime-wasi = "38.0.4"
-wasmtime-wasi-http = "38.0.4"
 
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"] }
 aws-sdk-s3 = { version = "0.20.0", features = ["http-1x"] }
 aws-sdk-ec2 = { version = "0.19.0" }
-aws-sdk-transcribestreaming = { version = "0.16.0" }
-aws-smithy-wasm = { version = "0.1.0" }
+aws-sdk-sts = { version = "0.16.0" }
 
 [features]
 latest = []
@@ -680,8 +598,7 @@ default = ["latest"]
                         crate_version("aws-config", "0.46.0"),
                         crate_version("aws-sdk-s3", "0.20.0"),
                         crate_version("aws-sdk-ec2", "0.19.0"),
-                        crate_version("aws-sdk-transcribestreaming", "0.16.0"),
-                        crate_version("aws-smithy-wasm", "0.1.0"),
+                        crate_version("aws-sdk-sts", "0.16.0"),
                     ]
                     .into_iter()
                     .collect(),
@@ -690,96 +607,6 @@ default = ["latest"]
                 release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
             })
             .expect("success")
-        );
-    }
-
-    #[test]
-    fn test_generate_canary_wasm_crate_manifest_with_paths() {
-        let mut output = WASM_BASE_MANIFEST.to_string();
-        let crate_source = CrateSource::Path("some/sdk/path".into());
-        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
-
-        pretty_assertions::assert_str_eq!(
-            r#"
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
-[package]
-name = "aws-sdk-rust-lambda-canary-wasm"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
-
-[lib]
-crate-type = ["cdylib"]
-
-# metadata used by cargo-component to identify which wit world to embed in the binary
-[package.metadata.component]
-package = "aws:component"
-
-[dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = "0.51.0"
-aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
-aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
-aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", features = ["rt-tokio"], default-features = false }
-aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
-"#,
-            output,
-        );
-    }
-
-    #[test]
-    fn test_generate_canary_wasm_crate_manifest_with_release_tag() {
-        let mut output = WASM_BASE_MANIFEST.to_string();
-        let crate_source = CrateSource::VersionsManifest {
-            versions: VersionsManifest {
-                smithy_rs_revision: "some-revision-smithy-rs".into(),
-                aws_doc_sdk_examples_revision: None,
-                manual_interventions: Default::default(),
-                crates: [
-                    crate_version("aws-config", "0.46.0"),
-                    crate_version("aws-sdk-s3", "0.20.0"),
-                    crate_version("aws-smithy-async", "0.46.0"),
-                    crate_version("aws-smithy-wasm", "0.1.0"),
-                ]
-                .into_iter()
-                .collect(),
-                release: None,
-            },
-            release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
-        };
-        write_dependencies(&WASM_REQUIRED_SDK_CRATES, &mut output, &crate_source).expect("success");
-
-        pretty_assertions::assert_str_eq!(
-            r#"
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-# IMPORTANT: Don't edit this file directly! Run `canary-runner build-bundle` to modify this file instead.
-[package]
-name = "aws-sdk-rust-lambda-canary-wasm"
-version = "0.1.0"
-edition = "2021"
-license = "Apache-2.0"
-
-[lib]
-crate-type = ["cdylib"]
-
-# metadata used by cargo-component to identify which wit world to embed in the binary
-[package.metadata.component]
-package = "aws:component"
-
-[dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
-wit-bindgen = "0.51.0"
-aws-config = { version = "0.46.0", features = ["behavior-version-latest"], default-features = false }
-aws-sdk-s3 = { version = "0.20.0", default-features = false }
-aws-smithy-async = { version = "0.46.0", features = ["rt-tokio"], default-features = false }
-aws-smithy-wasm = { version = "0.1.0" }
-"#,
-            output
         );
     }
 

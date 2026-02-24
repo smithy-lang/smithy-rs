@@ -5,12 +5,12 @@
 
 use crate::{mk_canary, CanaryEnv};
 use aws_config::SdkConfig;
-use aws_sdk_s3 as s3;
+use aws_sdk_sts as sts;
 
-mk_canary!("s3", |sdk_config: &SdkConfig, _env: &CanaryEnv| {
-    let client = s3::Client::new(sdk_config);
+mk_canary!("sts", |sdk_config: &SdkConfig, _env: &CanaryEnv| {
+    let client = sts::Client::new(sdk_config);
     async move {
-        let _ = client.list_buckets().send().await;
+        let _ = client.get_caller_identity().send().await;
         Ok(())
     }
 });
