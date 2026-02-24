@@ -246,8 +246,10 @@ open class EnumGenerator(
                 writable {
                     rustBlock("match self") {
                         context.sortedMembers.forEach { member ->
-                            rawRust("""${context.enumName}::${member.derivedName()} => ${member.value.dq()},
-""")
+                            rawRust(
+                                """${context.enumName}::${member.derivedName()} => ${member.value.dq()},
+                                """,
+                            )
                         }
                         enumType.additionalAsStrMatchArms(context)(this)
                     }
