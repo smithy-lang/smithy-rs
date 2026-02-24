@@ -5,85 +5,33 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 import software.amazon.smithy.model.Model
-import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.testutil.EndpointTestDiscovery
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 
-// TODO(bdd): update these tests to source the models from https://github.com/smithy-lang/smithy/tree/main/smithy-rules-engine-tests
-
 class EndpointResolverGeneratorTest {
     companion object {
-        val testCases =
-            listOf(
-                "default-values.smithy",
-                "deprecated-param.smithy",
-                "duplicate-param.smithy",
-                "get-attr-type-inference.smithy",
-                "headers.smithy",
-                "minimal-ruleset.smithy",
-                "parse-url.smithy",
-                "substring.smithy",
-                "uri-encode.smithy",
-                "valid-hostlabel.smithy",
-                "valid-model.smithy",
-            )
-
         @JvmStatic
         fun testSuites(): List<Model> {
-            return EndpointTestDiscovery().testCases("ruleset-")
-        }
-
-        @JvmStatic
-        fun testSuitesBdd(): List<Model> {
-            return EndpointTestDiscovery().testCases("bdd-")
+            return EndpointTestDiscovery().testCases()
         }
     }
 
-    @Test
-    fun `test`() {
-        `generate all rulesets`(testSuites()[0])
-    }
-
-    // for tests, load partitions.json from smithy—for real usage, this file will be inserted at codegen time
-    //
-    // private val partitionsJson =
-    //     Node.parse(
-    //         this::class.java.getResource("/software/amazon/smithy/rulesengine/language/partitions.json")?.readText()
-    //             ?: throw CodegenException("partitions.json was not present in smithy bundle"),
-    //     )
+    // Useful test util to just run a single test
+//    @Test
+//    fun `test`() {
+//        `generate all rulesets`(testSuites()[0])
+//    }
 
     @ParameterizedTest(name = "{0}")
     @MethodSource("testSuites")
     fun `generate all rulesets`(suite: Model) {
-        // snippet to only run one ruleset during tests
-        // if (!suite.toString().contains("hostable")) {
-        // return
-        // }
+        val serviceId = suite.serviceShapes.firstOrNull()?.id?.toString() ?: ""
 
-        clientIntegrationTest(suite)
-    }
-
-    @ParameterizedTest(name = "{0}")
-    @MethodSource("testSuitesBdd")
-    fun `generate all BDD tests`(suite: Model) {
-        val namespace =
-            suite.getShapeIds().stream()
-                .map { obj: ShapeId -> obj.namespace.toString() }
-                .filter { it.contains("endpointrules") }
-                .toList()
-                .distinct()
-
-        // stringarray test is contains a UnionShape and our JmesPath impl doesn't support that.
-        // This test was also excluded for endpointRuleSet based tests (by just not being present
-        // in the repo), so this is aligned with the existing testing.
-        val unsupportedTests = listOf("stringarray")
-
-        // Skip unsupported tests
-        if (namespace.isNotEmpty() && unsupportedTests.any { namespace[0].contains(it) }) {
+        // Skip stringarray test - it contains a UnionShape and our JmesPath impl doesn't support that
+        if (serviceId.contains("StringArray")) {
             return
         }
 
