@@ -9,8 +9,6 @@ use std::pin::Pin;
 use std::task::Context;
 use std::task::Poll;
 
-use http::Request;
-use http::Response;
 use pin_project_lite::pin_project;
 use tower::Service;
 
@@ -23,8 +21,8 @@ use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
-use crate::types::ReqBody;
-use crate::types::ResBody;
+use crate::types::HttpRequest;
+use crate::types::HttpResponse;
 
 pin_project! {
     /// Future returned by [`MetricsLayerService`].
@@ -48,12 +46,12 @@ pin_project! {
 
 impl<F, Entry, Sink, Res, Err> Future for MetricsLayerServiceFuture<F, Entry, Sink, Res>
 where
-    F: Future<Output = Result<Response<ResBody>, Err>>,
+    F: Future<Output = Result<HttpResponse, Err>>,
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
     Res: ResponseMetrics<Entry>,
 {
-    type Output = Result<Response<ResBody>, Err>;
+    type Output = Result<HttpResponse, Err>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // for safely accessing the pinned inner future
@@ -87,7 +85,7 @@ where
     pub(crate) init_metrics: Init,
     pub(crate) response_metrics: Option<Res>,
     pub(crate) default_metrics_extension_fn: fn(
-        &mut Request<ReqBody>,
+        &mut HttpRequest,
         &mut Entry,
         DefaultRequestMetricsConfig,
         DefaultResponseMetricsConfig,
@@ -121,10 +119,10 @@ where
         }
     }
 }
-impl<Ser, Entry, Sink, Init, Res> Service<Request<ReqBody>>
+impl<Ser, Entry, Sink, Init, Res> Service<HttpRequest>
     for MetricsLayerService<Ser, Entry, Sink, Init, Res>
 where
-    Ser: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone,
+    Ser: Service<HttpRequest, Response = HttpResponse> + Clone,
     Ser::Future: Send + 'static,
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
@@ -139,7 +137,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+    fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut metrics = (self.init_metrics)(&mut req);
 
         // We increment the outstanding requests and get the count at this layer

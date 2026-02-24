@@ -5,7 +5,6 @@
 
 use std::marker::PhantomData;
 
-use http::Request;
 use metrique::DefaultSink;
 use metrique::ServiceMetrics;
 use metrique_writer::GlobalEntrySink;
@@ -27,7 +26,7 @@ use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRs;
-use crate::types::ReqBody;
+use crate::types::HttpRequest;
 
 pub mod builder;
 
@@ -101,7 +100,7 @@ pub struct MetricsLayer<
     pub(crate) init_metrics: Init,
     pub(crate) response_metrics: Option<Res>,
     pub(crate) default_metrics_extension_fn: fn(
-        &mut Request<ReqBody>,
+        &mut HttpRequest,
         &mut Entry,
         DefaultRequestMetricsConfig,
         DefaultResponseMetricsConfig,
@@ -135,7 +134,7 @@ where
         init_metrics: Init,
         response_metrics: Option<Res>,
         default_metrics_extension_fn: fn(
-            &mut Request<ReqBody>,
+            &mut HttpRequest,
             &mut Entry,
             DefaultRequestMetricsConfig,
             DefaultResponseMetricsConfig,
