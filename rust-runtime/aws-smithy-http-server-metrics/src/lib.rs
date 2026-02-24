@@ -48,9 +48,9 @@
 //!         vec![
 //!             vec![],
 //!             vec![
-//!                 "service_name".to_string(),
+//!                 "service".to_string(),
 //!                 "service_version".to_string(),
-//!                 "operation_name".to_string(),
+//!                 "operation".to_string(),
 //!             ],
 //!         ],
 //!     )
@@ -162,9 +162,9 @@
 //!
 //! | Metric | Description |
 //! |--------|-------------|
-//! | `service_name` | Name of the service |
+//! | `service` | Name of the service |
 //! | `service_version` | Version of the service |
-//! | `operation_name` | Name of the operation being invoked |
+//! | `operation` | Name of the operation being invoked |
 //! | `request_id` | Unique identifier for the request |
 //! | `outstanding_requests` | Number of concurrent requests counting any operation being processing in that moment |
 //!

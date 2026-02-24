@@ -168,9 +168,9 @@ where
     fn apply(&self, inner: T) -> Self::Output {
         DefaultMetricsPluginService {
             inner,
-            service_name: Ser::ID.name(),
+            service: Ser::ID.name(),
             service_version: Ser::VERSION,
-            operation_name: Op::ID.name(),
+            operation: Op::ID.name(),
         }
     }
 }
@@ -183,9 +183,9 @@ where
 #[derive(Debug)]
 pub struct DefaultMetricsPluginService<Ser> {
     inner: Ser,
-    service_name: &'static str,
+    service: &'static str,
     service_version: Option<&'static str>,
-    operation_name: &'static str,
+    operation: &'static str,
 }
 
 impl<Ser> Clone for DefaultMetricsPluginService<Ser>
@@ -195,8 +195,8 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            operation_name: self.operation_name,
-            service_name: self.service_name,
+            operation: self.operation,
+            service: self.service,
             service_version: self.service_version,
         }
     }
@@ -211,9 +211,9 @@ where
     /// Assigns None to those that need information from the outer metrics layer to be set
     fn get_default_request_metrics(&self, req: &HttpRequest) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
-            service_name: Some(self.service_name.to_string()),
+            service: Some(self.service.to_string()),
             service_version: self.service_version.map(|n| n.to_string()),
-            operation_name: Some(self.operation_name.to_string()),
+            operation: Some(self.operation.to_string()),
             request_id: req
                 .extensions()
                 .get::<ServerRequestId>()
@@ -339,15 +339,11 @@ fn extend_default_request_metrics(
         (!config.disable_outstanding_requests).then_some(ext.service_state.outstanding_requests);
 
     DefaultRequestMetrics {
-        service_name: metrics
-            .service_name
-            .filter(|_| !config.disable_service_name),
+        service: metrics.service.filter(|_| !config.disable_service),
         service_version: metrics
             .service_version
             .filter(|_| !config.disable_service_version),
-        operation_name: metrics
-            .operation_name
-            .filter(|_| !config.disable_operation_name),
+        operation: metrics.operation.filter(|_| !config.disable_operation),
         request_id: metrics.request_id.filter(|_| !config.disable_request_id),
         outstanding_requests,
     }

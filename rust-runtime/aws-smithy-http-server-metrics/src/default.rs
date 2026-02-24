@@ -61,9 +61,9 @@ impl Debug for DefaultMetrics {
 #[metrics]
 #[derive(Debug, Default)]
 pub struct DefaultRequestMetrics {
-    pub(crate) service_name: Option<String>,
+    pub(crate) service: Option<String>,
     pub(crate) service_version: Option<String>,
-    pub(crate) operation_name: Option<String>,
+    pub(crate) operation: Option<String>,
     pub(crate) request_id: Option<String>,
     pub(crate) outstanding_requests: Option<usize>,
 }
@@ -90,8 +90,8 @@ pub struct DefaultResponseMetrics {
 pub struct DefaultRequestMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_request_id: bool,
-    pub(crate) disable_operation_name: bool,
-    pub(crate) disable_service_name: bool,
+    pub(crate) disable_operation: bool,
+    pub(crate) disable_service: bool,
     pub(crate) disable_service_version: bool,
     pub(crate) disable_outstanding_requests: bool,
 }
