@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use http::Request;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::Slot;
@@ -28,7 +27,7 @@ use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRs;
-use crate::types::ReqBody;
+use crate::types::HttpRequest;
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
@@ -217,7 +216,7 @@ macro_rules! impl_build_for_state {
         {
             fn build(self) -> MetricsLayer<DefaultMetrics, Sink, Init, Res> {
                 let default_metrics_extension_fn =
-                    |req: &mut Request<ReqBody>,
+                    |req: &mut HttpRequest,
                      metrics: &mut DefaultMetrics,
                      req_config: DefaultRequestMetricsConfig,
                      res_config: DefaultResponseMetricsConfig,
@@ -275,14 +274,13 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
-    use http::Response;
     use metrique::AppendAndCloseOnDrop;
     use metrique::ServiceMetrics;
     use metrique_writer::GlobalEntrySink;
 
     use super::*;
     use crate::layer::MetricsLayer;
-    use crate::types::ResBody;
+    use crate::types::HttpResponse;
 
     // Compile-time guarantees that methods exist on the correct states
     macro_rules! assert_methods_callable {
@@ -314,13 +312,11 @@ mod tests {
     assert_state!(assert_with_rq, WithRq);
     assert_state!(assert_with_rq_and_rs, WithRqAndRs);
 
-    fn dummy_init(
-        _req: &mut Request<ReqBody>,
-    ) -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
+    fn dummy_init(_req: &mut HttpRequest) -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
         DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())
     }
 
-    fn dummy_response_fn(_res: &mut Response<ResBody>, _metrics: &mut DefaultMetrics) {}
+    fn dummy_response_fn(_res: &mut HttpResponse, _metrics: &mut DefaultMetrics) {}
 
     #[test]
     fn test_needs_initialization_state() {

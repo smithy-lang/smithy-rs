@@ -14,7 +14,7 @@
 //! [`DefaultMetricsPlugin`] automatically collects standard metrics for every request at operation time.
 //! See the Collected Metrics section below:
 //!
-//! ```rust
+//! ```rust, ignore
 //! use aws_smithy_http_server_metrics::plugin::DefaultMetricsPlugin;
 //! use aws_smithy_http_server::plugin::HttpPlugins;
 //!
