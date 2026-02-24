@@ -10,7 +10,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [features]
 # this allows the tests to be excluded from downstream crates to keep dependencies / test times reasonable (e.g. no proptests)

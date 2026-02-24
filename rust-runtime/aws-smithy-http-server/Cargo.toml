@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server"
-version = "0.66.2"
+version = "0.66.3"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ description = """
 Server runtime for Smithy Rust Server Framework.
 """
 publish = true
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [features]
 default = []
