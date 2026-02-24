@@ -456,23 +456,16 @@ class JsonParserGenerator(
                                         withBlock("let value =", ";") {
                                             deserializeMember(shape.member)
                                         }
-                                        rust(
+                                        rustTemplate(
                                             """
                                             if let Some(value) = value {
                                                 items.push(value);
+                                            } else {
+                                                return Err(#{Error}::custom("dense list cannot contain null values"));
                                             }
                                             """,
+                                            *codegenScope,
                                         )
-                                        codegenTarget.ifServer {
-                                            rustTemplate(
-                                                """
-                                                else {
-                                                    return Err(#{Error}::custom("dense list cannot contain null values"));
-                                                }
-                                                """,
-                                                *codegenScope,
-                                            )
-                                        }
                                     }
                                 }
                             }
@@ -514,25 +507,14 @@ class JsonParserGenerator(
                             if (isSparse) {
                                 rust("map.insert(key, value);")
                             } else {
-                                codegenTarget.ifServer {
-                                    rustTemplate(
-                                        """
-                                        match value {
-                                            Some(value) => { map.insert(key, value); }
-                                            None => return Err(#{Error}::custom("dense map cannot contain null values"))
-                                            }""",
-                                        *codegenScope,
-                                    )
-                                }
-                                codegenTarget.ifClient {
-                                    rustTemplate(
-                                        """
-                                        if let Some(value) = value {
-                                            map.insert(key, value);
-                                        }
-                                        """,
-                                    )
-                                }
+                                rustTemplate(
+                                    """
+                                    match value {
+                                        Some(value) => { map.insert(key, value); }
+                                        None => return Err(#{Error}::custom("dense map cannot contain null values"))
+                                    }""",
+                                    *codegenScope,
+                                )
                             }
                         }
                         if (returnSymbolToParse.isUnconstrained) {
