@@ -7,8 +7,7 @@
 
 use aws_smithy_http_server_metrics::smithy_metrics;
 use metrique::unit_of_work::metrics;
-
-#[smithy_metrics]
+#[smithy_metrics(rename(service_name = "program"))]
 #[metrics]
 #[derive(Default)]
 pub struct PokemonMetrics {

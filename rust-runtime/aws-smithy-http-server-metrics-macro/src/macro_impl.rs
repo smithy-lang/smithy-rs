@@ -27,13 +27,15 @@ struct OperationField {
 /// 3. Adds default request/repsonse metrics fields
 /// 4. Generates a builder trait and implementations for the metrics layer for the annotated metrics struct
 pub(crate) fn smithy_metrics_impl(
-    _attrs: SmithyMetricsStructAttrs,
+    attrs: SmithyMetricsStructAttrs,
     mut metrics_struct: ItemStruct,
 ) -> TokenStream2 {
     let syn::Fields::Named(ref mut fields) = metrics_struct.fields else {
         return syn::Error::new_spanned(metrics_struct, "only named fields are supported")
             .to_compile_error();
     };
+
+    dbg!(attrs);
 
     let operation_fields = match handle_operation_fields(fields) {
         Ok(operation_fields) => operation_fields,
@@ -328,7 +330,7 @@ mod tests {
                 my_field: MyType,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {};
+        let attrs = SmithyMetricsStructAttrs { renames: vec![] };
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
@@ -353,7 +355,7 @@ mod tests {
                 my_field: Slot<MyType>,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {};
+        let attrs = SmithyMetricsStructAttrs { renames: vec![] };
 
         let output = smithy_metrics_impl(attrs, input);
 
@@ -371,7 +373,7 @@ mod tests {
                 my_field: Option<Slot<MyType>>,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {};
+        let attrs = SmithyMetricsStructAttrs { renames: vec![] };
 
         let output = smithy_metrics_impl(attrs, input);
 
@@ -391,7 +393,7 @@ mod tests {
                 another_regular: i32,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {};
+        let attrs = SmithyMetricsStructAttrs { renames: vec![] };
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
@@ -424,7 +426,7 @@ mod tests {
                 third_operation: ThirdType,
             }
         };
-        let attrs = SmithyMetricsStructAttrs {};
+        let attrs = SmithyMetricsStructAttrs { renames: vec![] };
 
         let output = smithy_metrics_impl(attrs, input);
         let generated_struct = get_generated_struct(output);
