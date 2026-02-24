@@ -6,13 +6,14 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 
 use pin_project_lite::pin_project;
 use tower::Service;
 
+use crate::default::service_counter::ServiceCounterGuard;
+use crate::default::DefaultMetricsServiceCounters;
 use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
@@ -38,7 +39,8 @@ pin_project! {
         inner: F,
         metrics: metrique::AppendAndCloseOnDrop<Entry, Sink>,
         response_metrics: Option<Res>,
-        default_service_state: DefaultMetricsServiceState
+        default_service_state: DefaultMetricsServiceCounters,
+        outstanding_requests_counter_guard: ServiceCounterGuard
     }
 }
 
@@ -57,23 +59,13 @@ where
 
         match this.inner.poll(cx) {
             Poll::Ready(Ok(mut res)) => {
-                this.default_service_state
-                    .outstanding_requests_counter
-                    .fetch_sub(1, Ordering::Relaxed);
-
                 if let Some(response_metrics) = this.response_metrics {
                     (response_metrics)(&mut res, this.metrics);
                 }
 
                 Poll::Ready(Ok(res))
             }
-            Poll::Ready(Err(e)) => {
-                this.default_service_state
-                    .outstanding_requests_counter
-                    .fetch_sub(1, Ordering::Relaxed);
-
-                Poll::Ready(Err(e))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -101,7 +93,7 @@ where
     ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
-    pub(crate) default_service_state: DefaultMetricsServiceState,
+    pub(crate) default_service_counters: DefaultMetricsServiceCounters,
 
     pub(crate) _entry_sink: PhantomData<Sink>,
 }
@@ -121,7 +113,7 @@ where
             default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
-            default_service_state: self.default_service_state.clone(),
+            default_service_counters: self.default_service_counters.clone(),
 
             _entry_sink: PhantomData,
         }
@@ -148,23 +140,30 @@ where
     fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut metrics = (self.init_metrics)(&mut req);
 
-        self.default_service_state
+        // We increment the outstanding requests and get the count at this layer
+        // (typically outer middleware) so we can get this as close to the time
+        // this request entered the system as possible
+        let (outstanding_requests_counter_guard, outstanding_requests) = self
+            .default_service_counters
             .outstanding_requests_counter
-            .fetch_add(1, Ordering::Relaxed);
+            .increment();
 
         (self.default_metrics_extension_fn)(
             &mut req,
             &mut metrics,
             self.default_req_metrics_config.clone(),
             self.default_res_metrics_config.clone(),
-            self.default_service_state.clone(),
+            DefaultMetricsServiceState {
+                outstanding_requests,
+            },
         );
 
         MetricsLayerServiceFuture {
             inner: self.inner.call(req),
             metrics,
             response_metrics: self.response_metrics.clone(),
-            default_service_state: self.default_service_state.clone(),
+            default_service_state: self.default_service_counters.clone(),
+            outstanding_requests_counter_guard,
         }
     }
 }
