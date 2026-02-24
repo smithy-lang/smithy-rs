@@ -51,14 +51,14 @@ macro_rules! impl_disable_methods {
         }
 
         /// Disable the `operation_name` metric
-        pub fn disable_default_operation_name_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_operation_name = true;
+        pub fn disable_default_operation_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_operation = true;
             self
         }
 
         /// Disable the `service_name` metric
-        pub fn disable_default_service_name_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_service_name = true;
+        pub fn disable_default_service_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_service = true;
             self
         }
 
