@@ -44,50 +44,62 @@ macro_rules! impl_disable_methods {
             self
         }
 
-        /// Disable the `request_id` metric
+        /// Disable the default `outstanding_requests` metric
+        pub fn disable_default_outstanding_requests_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_outstanding_requests = true;
+            self
+        }
+
+        /// Disable the default `request_id` metric
         pub fn disable_default_request_id_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_request_id = true;
             self
         }
 
-        /// Disable the `operation_name` metric
+        /// Disable the default `operation_name` metric
         pub fn disable_default_operation_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_operation = true;
             self
         }
 
-        /// Disable the `service_name` metric
+        /// Disable the default `service_name` metric
         pub fn disable_default_service_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_service = true;
             self
         }
 
-        /// Disable the `service_version` metric
+        /// Disable the default `service_version` metric
         pub fn disable_default_service_version_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_service_version = true;
             self
         }
 
-        /// Disable the `http_status_code` metric
+        /// Disable the default `http_status_code` metric
         pub fn disable_default_http_status_code_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_http_status_code = true;
             self
         }
 
-        /// Disable the `error` metric
-        pub fn disable_error_metric(mut self) -> Self {
+        /// Disable the default `success` metric
+        pub fn disable_default_success_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_success = true;
+            self
+        }
+
+        /// Disable the default `error` metric
+        pub fn disable_default_error_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_error = true;
             self
         }
 
-        /// Disable the `fault` metric
-        pub fn disable_fault_metric(mut self) -> Self {
+        /// Disable the default `fault` metric
+        pub fn disable_default_fault_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_fault = true;
             self
         }
 
-        /// Disable the `operation_time` metric
-        pub fn disable_operation_time_metric(mut self) -> Self {
+        /// Disable the default `operation_time` metric
+        pub fn disable_default_operation_time_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_operation_time = true;
             self
         }
