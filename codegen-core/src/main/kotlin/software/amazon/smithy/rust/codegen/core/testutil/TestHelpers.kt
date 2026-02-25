@@ -158,6 +158,7 @@ fun String.asSmithyModel(
             // If Smithy protocol test models are in our classpath, don't load them, since they are fairly large and we
             // almost never need them.
             "smithy-protocol-tests",
+            "smithy-rules-engine-tests",
         ) + additionalDeniedModels
     val urls =
         ModelDiscovery.findModels().filter { modelUrl ->
