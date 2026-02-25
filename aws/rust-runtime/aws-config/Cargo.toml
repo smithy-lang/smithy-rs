@@ -24,7 +24,7 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/r
 client-hyper = ["aws-smithy-runtime/default-https-client"]
 rustls = ["client-hyper"]
 default-https-client = ["aws-smithy-runtime/default-https-client"]
-sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:ring", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
+sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:sha1", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-login = [
     "dep:aws-sdk-signin",
     "dep:sha2",
@@ -66,7 +66,7 @@ fastrand = "2.3.0"
 
 # implementation detail of SSO credential caching
 aws-sdk-sso = { path = "../../sdk/build/aws-sdk/sdk/sso", default-features = false, optional = true }
-ring = { version = "0.17.5", optional = true }
+sha1 = { version = "0.10", optional = true }
 hex = { version = "0.4.3", optional = true }
 zeroize = { version = "1", optional = true }
 
