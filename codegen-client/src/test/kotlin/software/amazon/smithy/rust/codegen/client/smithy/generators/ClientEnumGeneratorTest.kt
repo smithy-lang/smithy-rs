@@ -225,4 +225,38 @@ class ClientEnumGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `it handles enum values containing hash characters`() {
+        val model =
+            """
+            namespace test
+            @enum([
+                { value: "Fruits#Apple", name: "FRUITS_APPLE" },
+                { value: "Fruits#Banana", name: "FRUITS_BANANA" },
+                { value: "Veggies#Carrot", name: "VEGGIES_CARROT" },
+            ])
+            string FoodCategory
+            """.asSmithyModel()
+
+        val shape = model.lookup<StringShape>("test#FoodCategory")
+        val context = testClientCodegenContext(model)
+        val project = TestWorkspace.testProject(context.symbolProvider)
+        project.moduleFor(shape) {
+            rust("##![allow(deprecated)]")
+            ClientEnumGenerator(context, shape, emptyList()).render(this)
+            unitTest(
+                "enum_values_with_hash_characters",
+                """
+                assert_eq!(FoodCategory::FruitsApple.as_str(), "Fruits#Apple");
+                assert_eq!(FoodCategory::FruitsBanana.as_str(), "Fruits#Banana");
+                assert_eq!(FoodCategory::VeggiesCarrot.as_str(), "Veggies#Carrot");
+                assert_eq!(FoodCategory::from("Fruits#Apple"), FoodCategory::FruitsApple);
+                assert_eq!(FoodCategory::from("Veggies#Carrot"), FoodCategory::VeggiesCarrot);
+                assert_eq!(format!("{}", FoodCategory::FruitsApple), "Fruits#Apple");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }
