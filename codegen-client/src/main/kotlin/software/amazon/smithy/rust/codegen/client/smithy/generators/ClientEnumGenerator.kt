@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.docs
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -54,7 +55,7 @@ data class InfallibleEnumType(
                 "matchArms" to
                     writable {
                         context.sortedMembers.forEach { member ->
-                            rust("${member.value.dq()} => ${context.enumName}::${member.derivedName()},")
+                            rawRust("${member.value.dq()} => ${context.enumName}::${member.derivedName()},\n")
                         }
                         rust(
                             "other => ${context.enumName}::$UNKNOWN_VARIANT(#T(other.to_owned()))",
@@ -149,11 +150,7 @@ data class InfallibleEnumType(
                     "matchArms" to
                         writable {
                             context.sortedMembers.forEach { member ->
-                                rust(
-                                    """
-                                    ${context.enumName}::${member.derivedName()} => write!(f, ${member.value.dq()}),
-                                    """,
-                                )
+                                rawRust("${context.enumName}::${member.derivedName()} => write!(f, ${member.value.dq()}),\n")
                             }
                             rust("""${context.enumName}::Unknown(value) => write!(f, "{value}")""")
                         },
