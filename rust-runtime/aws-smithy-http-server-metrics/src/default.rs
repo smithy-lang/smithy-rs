@@ -76,11 +76,11 @@ pub struct DefaultRequestMetrics {
 pub struct DefaultResponseMetrics {
     pub(crate) http_status_code: Option<u16>,
     /// Success indicator (1 if 2xx status code, 0 otherwise)
-    pub(crate) success: Option<u8>,
+    pub(crate) success: Option<bool>,
     /// Client error indicator (1 if 4xx status code, 0 otherwise)
-    pub(crate) error: Option<u8>,
+    pub(crate) error: Option<bool>,
     /// Server fault indicator (1 if 5xx status code, 0 otherwise)
-    pub(crate) fault: Option<u8>,
+    pub(crate) fault: Option<bool>,
     /// Wallclock time from pre-deserialization of the model input to post-serialization of the model output
     pub(crate) operation_time: Option<Duration>,
 }

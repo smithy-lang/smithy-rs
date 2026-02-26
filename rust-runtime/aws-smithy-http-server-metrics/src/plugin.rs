@@ -310,18 +310,22 @@ fn get_default_response_metrics(
     let status_code = status.as_u16();
 
     let success = if (200..300).contains(&status_code) {
-        Some(1)
+        Some(true)
     } else {
-        Some(0)
+        Some(false)
     };
 
     let error = if (400..500).contains(&status_code) {
-        Some(1)
+        Some(true)
     } else {
-        Some(0)
+        Some(false)
     };
 
-    let fault = if status_code >= 500 { Some(1) } else { Some(0) };
+    let fault = if status_code >= 500 {
+        Some(true)
+    } else {
+        Some(false)
+    };
 
     DefaultResponseMetrics {
         http_status_code: Some(status_code),
