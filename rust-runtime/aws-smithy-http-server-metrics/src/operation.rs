@@ -25,16 +25,18 @@ use std::ops::DerefMut;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use aws_smithy_http_server::body::empty;
-use aws_smithy_http_server::request::FromParts;
-use aws_smithy_http_server::response::IntoResponse;
-use http::StatusCode;
 use metrique::OnParentDrop;
 use metrique::Slot;
 use metrique::SlotGuard;
 use thiserror::Error;
 
 use crate::traits::ThreadSafeCloseEntry;
+use crate::types::aws_smithy_http_server::request::FromParts;
+use crate::types::aws_smithy_http_server::response::IntoResponse;
+use crate::types::empty_response_body;
+use crate::types::HttpRequestParts;
+use crate::types::HttpResponse;
+use crate::types::HttpStatusCode;
 
 /// Type for metrics that can be extracted in operation handlers.
 ///
@@ -116,7 +118,7 @@ where
 {
     type Rejection = MetricsError;
 
-    fn from_parts(parts: &mut http::request::Parts) -> Result<Self, Self::Rejection> {
+    fn from_parts(parts: &mut HttpRequestParts) -> Result<Self, Self::Rejection> {
         // Get a reference to the MetricsInExtensions without removing it from the request.
         // This keeps the outer guard alive in the extensions.
         let Some(metrics_slot) = parts.extensions.get::<MetricsExtension<T>>() else {
@@ -181,9 +183,9 @@ pub enum MetricsError {
 }
 
 impl<Protocol> IntoResponse<Protocol> for MetricsError {
-    fn into_response(self) -> http::Response<aws_smithy_http_server::body::BoxBody> {
-        let mut response = http::Response::new(empty());
-        *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+    fn into_response(self) -> HttpResponse {
+        let mut response = HttpResponse::new(empty_response_body());
+        *response.status_mut() = HttpStatusCode::INTERNAL_SERVER_ERROR;
         response
     }
 }

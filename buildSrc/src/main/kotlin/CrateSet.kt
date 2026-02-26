@@ -86,6 +86,8 @@ object CrateSet {
     private val SERVER_SPECIFIC_SMITHY_RUNTIME =
         listOf(
             Crate("aws-smithy-http-server", UNSTABLE_VERSION_PROP_NAME),
+            Crate("aws-smithy-http-server-metrics", UNSTABLE_VERSION_PROP_NAME),
+            Crate("aws-smithy-http-server-metrics-macro", UNSTABLE_VERSION_PROP_NAME),
             Crate("aws-smithy-http-server-python", UNSTABLE_VERSION_PROP_NAME),
             Crate("aws-smithy-http-server-typescript", UNSTABLE_VERSION_PROP_NAME),
             Crate("aws-smithy-legacy-http-server", UNSTABLE_VERSION_PROP_NAME),

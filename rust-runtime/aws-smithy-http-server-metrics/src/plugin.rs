@@ -5,18 +5,10 @@
 
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 use std::time::Duration;
 
-use aws_smithy_http_server::operation::OperationShape;
-use aws_smithy_http_server::plugin::HttpMarker;
-use aws_smithy_http_server::plugin::Plugin;
-use aws_smithy_http_server::request::request_id::ServerRequestId;
-use aws_smithy_http_server::service::ServiceShape;
-use http::Request;
-use http::Response;
 use metrique::timers::OwnedTimerGuard;
 use metrique::timers::Stopwatch;
 use metrique::OnParentDrop;
@@ -33,8 +25,13 @@ use crate::default::DefaultRequestMetrics;
 use crate::default::DefaultResponseMetrics;
 use crate::default::DefaultResponseMetricsConfig;
 use crate::default::DefaultResponseMetricsExtension;
-use crate::types::ReqBody;
-use crate::types::ResBody;
+use crate::types::aws_smithy_http_server::operation::OperationShape;
+use crate::types::aws_smithy_http_server::plugin::HttpMarker;
+use crate::types::aws_smithy_http_server::plugin::Plugin;
+use crate::types::aws_smithy_http_server::request::request_id::ServerRequestId;
+use crate::types::aws_smithy_http_server::service::ServiceShape;
+use crate::types::HttpRequest;
+use crate::types::HttpResponse;
 
 pin_project! {
     /// Future returned by [`DefaultMetricsPluginService`].
@@ -66,9 +63,9 @@ pin_project! {
 
 impl<F, Err> Future for DefaultMetricsFuture<F>
 where
-    F: Future<Output = Result<Response<ResBody>, Err>>,
+    F: Future<Output = Result<HttpResponse, Err>>,
 {
-    type Output = Result<Response<ResBody>, Err>;
+    type Output = Result<HttpResponse, Err>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         match self.project() {
@@ -171,9 +168,9 @@ where
     fn apply(&self, inner: T) -> Self::Output {
         DefaultMetricsPluginService {
             inner,
-            service_name: Ser::ID.name(),
+            service: Ser::ID.name(),
             service_version: Ser::VERSION,
-            operation_name: Op::ID.name(),
+            operation: Op::ID.name(),
         }
     }
 }
@@ -186,9 +183,9 @@ where
 #[derive(Debug)]
 pub struct DefaultMetricsPluginService<Ser> {
     inner: Ser,
-    service_name: &'static str,
+    service: &'static str,
     service_version: Option<&'static str>,
-    operation_name: &'static str,
+    operation: &'static str,
 }
 
 impl<Ser> Clone for DefaultMetricsPluginService<Ser>
@@ -198,25 +195,25 @@ where
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
-            operation_name: self.operation_name,
-            service_name: self.service_name,
+            operation: self.operation,
+            service: self.service,
             service_version: self.service_version,
         }
     }
 }
 impl<Ser> DefaultMetricsPluginService<Ser>
 where
-    Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
+    Ser: Service<HttpRequest, Response = HttpResponse>,
     Ser::Future: Send + 'static,
 {
     /// Gets the default request metrics that can be retrieved from the request object directly
     ///
     /// Assigns None to those that need information from the outer metrics layer to be set
-    fn get_default_request_metrics(&self, req: &Request<ReqBody>) -> DefaultRequestMetrics {
+    fn get_default_request_metrics(&self, req: &HttpRequest) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
-            service_name: Some(self.service_name.to_string()),
+            service: Some(self.service.to_string()),
             service_version: self.service_version.map(|n| n.to_string()),
-            operation_name: Some(self.operation_name.to_string()),
+            operation: Some(self.operation.to_string()),
             request_id: req
                 .extensions()
                 .get::<ServerRequestId>()
@@ -226,16 +223,16 @@ where
     }
 }
 
-impl<Ser> Service<Request<ReqBody>> for DefaultMetricsPluginService<Ser>
+impl<Ser> Service<HttpRequest> for DefaultMetricsPluginService<Ser>
 where
-    Ser: Service<Request<ReqBody>, Response = Response<ResBody>>,
+    Ser: Service<HttpRequest, Response = HttpResponse>,
     Ser::Future: Send + 'static,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;
     type Future = DefaultMetricsFuture<Ser::Future>;
 
-    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+    fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut stopwatch = Stopwatch::new();
         let operation_timer_guard = stopwatch.start_owned();
 
@@ -306,7 +303,7 @@ where
 }
 
 fn get_default_response_metrics(
-    res: &Response<ResBody>,
+    res: &HttpResponse,
     operation_time: Option<Duration>,
 ) -> DefaultResponseMetrics {
     let status = res.status();
@@ -338,22 +335,15 @@ fn extend_default_request_metrics(
         return DefaultRequestMetrics::default();
     }
 
-    let outstanding_requests = (!config.disable_outstanding_requests).then_some(
-        ext.service_state
-            .outstanding_requests_counter
-            .load(Ordering::Relaxed),
-    );
+    let outstanding_requests =
+        (!config.disable_outstanding_requests).then_some(ext.service_state.outstanding_requests);
 
     DefaultRequestMetrics {
-        service_name: metrics
-            .service_name
-            .filter(|_| !config.disable_service_name),
+        service: metrics.service.filter(|_| !config.disable_service),
         service_version: metrics
             .service_version
             .filter(|_| !config.disable_service_version),
-        operation_name: metrics
-            .operation_name
-            .filter(|_| !config.disable_operation_name),
+        operation: metrics.operation.filter(|_| !config.disable_operation),
         request_id: metrics.request_id.filter(|_| !config.disable_request_id),
         outstanding_requests,
     }
