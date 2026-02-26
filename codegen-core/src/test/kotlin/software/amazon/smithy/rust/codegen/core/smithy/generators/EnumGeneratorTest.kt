@@ -50,6 +50,9 @@ class EnumGeneratorTest {
                 { value: "some-value-2",
                   name: "someName2",
                   documentation: "More documentation #escape" },
+                { value: "2D_BARCODE",
+                  name: "_2D_BARCODE",
+                  documentation: "Example with leading digit." },
                 { value: "unknown",
                   name: "unknown",
                   documentation: "It has some docs that #need to be escaped" }
@@ -78,6 +81,14 @@ class EnumGeneratorTest {
             model("unknown").also { unknown ->
                 unknown.derivedName() shouldBe "UnknownValue"
                 unknown.name()!!.renamedFrom shouldBe "Unknown"
+            }
+        }
+
+        @Test
+        fun `it prefixes enum names with underscore to avoid generating invalid identifiers starting with a digit`() {
+            model("_2D_BARCODE").also { member ->
+                member.derivedName() shouldBe "_2DBarcode"
+                member.name()!!.renamedFrom shouldBe "2DBarcode"
             }
         }
 
