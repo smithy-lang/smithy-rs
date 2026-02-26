@@ -102,6 +102,7 @@ class StructureGeneratorTest {
         val credentials = model.lookup<StructureShape>("com.test#Credentials")
         val secretStructure = model.lookup<StructureShape>("com.test#SecretStructure")
         val structWithInnerSecretStructure = model.lookup<StructureShape>("com.test#StructWithInnerSecretStructure")
+        val error = model.lookup<StructureShape>("com.test#MyError")
 
         val rustReservedWordConfig: RustReservedWordConfig =
             RustReservedWordConfig(
