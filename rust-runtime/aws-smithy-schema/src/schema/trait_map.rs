@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::{ShapeId, Trait};
+use crate::{ShapeId, Trait};
 use std::collections::HashMap;
 
 /// A map of traits keyed by their Shape ID.

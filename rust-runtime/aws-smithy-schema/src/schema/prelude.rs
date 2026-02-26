@@ -10,7 +10,7 @@
 
 use std::sync::LazyLock;
 
-use crate::schema::{Schema, ShapeId, ShapeType, TraitMap};
+use crate::{Schema, ShapeId, ShapeType, TraitMap};
 
 /// A simple schema implementation for prelude types.
 #[derive(Debug)]
@@ -36,7 +36,7 @@ impl Schema for PreludeSchema {
     }
 
     fn traits(&self) -> &TraitMap {
-        static MAP: LazyLock<TraitMap> = LazyLock::new(|| TraitMap::empty());
+        static MAP: LazyLock<TraitMap> = LazyLock::new(TraitMap::empty);
 
         &MAP
     }
@@ -126,7 +126,7 @@ pub const DOCUMENT: PreludeSchema = PreludeSchema::new(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::schema::SchemaExt;
+    use crate::SchemaExt;
 
     #[test]
     fn test_string_schema() {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use super::ShapeId;
+use crate::ShapeId;
 use std::any::Any;
 use std::fmt;
 

@@ -13,8 +13,8 @@ pub use serializer::{SerializableStruct, ShapeSerializer};
 
 #[cfg(test)]
 mod test {
-    use crate::schema::serde::{ShapeDeserializer, ShapeSerializer};
-    use crate::schema::{prelude::*, Schema};
+    use crate::serde::{ShapeDeserializer, ShapeSerializer};
+    use crate::{prelude::*, Schema};
     use std::fmt;
 
     // Mock error type for testing
@@ -121,7 +121,7 @@ mod test {
         fn write_big_integer(
             &mut self,
             _schema: &dyn Schema,
-            value: &crate::BigInteger,
+            value: &aws_smithy_types::BigInteger,
         ) -> Result<(), Self::Error> {
             self.output.push(format!("bigint({})", value.as_ref()));
             Ok(())
@@ -130,7 +130,7 @@ mod test {
         fn write_big_decimal(
             &mut self,
             _schema: &dyn Schema,
-            value: &crate::BigDecimal,
+            value: &aws_smithy_types::BigDecimal,
         ) -> Result<(), Self::Error> {
             self.output.push(format!("bigdec({})", value.as_ref()));
             Ok(())
@@ -144,7 +144,7 @@ mod test {
         fn write_blob(
             &mut self,
             _schema: &dyn Schema,
-            value: &crate::Blob,
+            value: &aws_smithy_types::Blob,
         ) -> Result<(), Self::Error> {
             self.output
                 .push(format!("blob({} bytes)", value.as_ref().len()));
@@ -154,7 +154,7 @@ mod test {
         fn write_timestamp(
             &mut self,
             _schema: &dyn Schema,
-            value: &crate::DateTime,
+            value: &aws_smithy_types::DateTime,
         ) -> Result<(), Self::Error> {
             self.output.push(format!("timestamp({})", value));
             Ok(())
@@ -163,7 +163,7 @@ mod test {
         fn write_document(
             &mut self,
             _schema: &dyn Schema,
-            _value: &crate::Document,
+            _value: &aws_smithy_types::Document,
         ) -> Result<(), Self::Error> {
             self.output.push("document".to_string());
             Ok(())
@@ -267,17 +267,17 @@ mod test {
         fn read_big_integer(
             &mut self,
             _schema: &dyn Schema,
-        ) -> Result<crate::BigInteger, Self::Error> {
+        ) -> Result<aws_smithy_types::BigInteger, Self::Error> {
             use std::str::FromStr;
-            Ok(crate::BigInteger::from_str("12345").unwrap())
+            Ok(aws_smithy_types::BigInteger::from_str("12345").unwrap())
         }
 
         fn read_big_decimal(
             &mut self,
             _schema: &dyn Schema,
-        ) -> Result<crate::BigDecimal, Self::Error> {
+        ) -> Result<aws_smithy_types::BigDecimal, Self::Error> {
             use std::str::FromStr;
-            Ok(crate::BigDecimal::from_str("123.45").unwrap())
+            Ok(aws_smithy_types::BigDecimal::from_str("123.45").unwrap())
         }
 
         fn read_string(&mut self, _schema: &dyn Schema) -> Result<String, Self::Error> {
@@ -290,16 +290,25 @@ mod test {
             }
         }
 
-        fn read_blob(&mut self, _schema: &dyn Schema) -> Result<crate::Blob, Self::Error> {
-            Ok(crate::Blob::new(vec![1, 2, 3, 4]))
+        fn read_blob(
+            &mut self,
+            _schema: &dyn Schema,
+        ) -> Result<aws_smithy_types::Blob, Self::Error> {
+            Ok(aws_smithy_types::Blob::new(vec![1, 2, 3, 4]))
         }
 
-        fn read_timestamp(&mut self, _schema: &dyn Schema) -> Result<crate::DateTime, Self::Error> {
-            Ok(crate::DateTime::from_secs(1234567890))
+        fn read_timestamp(
+            &mut self,
+            _schema: &dyn Schema,
+        ) -> Result<aws_smithy_types::DateTime, Self::Error> {
+            Ok(aws_smithy_types::DateTime::from_secs(1234567890))
         }
 
-        fn read_document(&mut self, _schema: &dyn Schema) -> Result<crate::Document, Self::Error> {
-            Ok(crate::Document::Null)
+        fn read_document(
+            &mut self,
+            _schema: &dyn Schema,
+        ) -> Result<aws_smithy_types::Document, Self::Error> {
+            Ok(aws_smithy_types::Document::Null)
         }
 
         fn is_null(&self) -> bool {

@@ -3,23 +3,37 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+/* Automatically managed default lints */
+#![cfg_attr(docsrs, feature(doc_cfg))]
+/* End of automatically managed default lints */
+
 //! Runtime schema types for Smithy shapes.
 //!
 //! This module provides the core types for representing Smithy schemas at runtime,
 //! enabling protocol-agnostic serialization and deserialization.
 
-mod shape_id;
-mod shape_type;
-mod trait_map;
-mod trait_type;
+mod schema {
+    pub mod shape_id;
+    pub mod shape_type;
+    pub mod trait_map;
+    pub mod trait_type;
 
-pub mod prelude;
-pub mod serde;
+    pub mod prelude;
+    pub mod serde;
+}
 
-pub use shape_id::ShapeId;
-pub use shape_type::ShapeType;
-pub use trait_map::TraitMap;
-pub use trait_type::Trait;
+pub use schema::shape_id::ShapeId;
+pub use schema::shape_type::ShapeType;
+pub use schema::trait_map::TraitMap;
+pub use schema::trait_type::Trait;
+
+pub mod prelude {
+    pub use crate::schema::prelude::*;
+}
+
+pub mod serde {
+    pub use crate::schema::serde::*;
+}
 
 /// Core trait representing a Smithy schema at runtime.
 ///
@@ -119,7 +133,7 @@ impl<T: Schema + ?Sized> SchemaExt for T {}
 
 #[cfg(test)]
 mod test {
-    use crate::schema::{Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
+    use crate::{Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
     #[derive(Debug)]

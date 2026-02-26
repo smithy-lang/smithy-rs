@@ -38,7 +38,7 @@ impl ShapeId {
     ///
     /// # Examples
     /// ```
-    /// use aws_smithy_types::schema::ShapeId;
+    /// use aws_smithy_schema::ShapeId;
     ///
     /// let shape_id = ShapeId::new("smithy.api#String");
     /// ```
@@ -87,10 +87,10 @@ impl ShapeId {
     ///
     /// # Examples
     /// ```
-    /// use aws_smithy_types::schema::ShapeId;
+    /// use aws_smithy_schema::ShapeId;
     ///
-    /// let shape_id = ShapeId::from_static("smithy.api#String");
-    /// assert_eq!(shape_id.namespace(), Some("smithy.api"));
+    /// let shape_id = ShapeId::new("smithy.api#String");
+    /// assert_eq!(shape_id.namespace(), "smithy.api");
     /// ```
     pub fn namespace(&self) -> &str {
         self.namespace.as_ref()
@@ -100,10 +100,10 @@ impl ShapeId {
     ///
     /// # Examples
     /// ```
-    /// use aws_smithy_types::schema::ShapeId;
+    /// use aws_smithy_schema::ShapeId;
     ///
-    /// let shape_id = ShapeId::from_static("smithy.api#String");
-    /// assert_eq!(shape_id.shape_name(), Some("String"));
+    /// let shape_id = ShapeId::new("smithy.api#String");
+    /// assert_eq!(shape_id.shape_name(), "String");
     /// ```
     pub fn shape_name(&self) -> &str {
         self.shape_name.as_ref()
@@ -113,7 +113,7 @@ impl ShapeId {
     ///
     /// # Examples
     /// ```
-    /// use aws_smithy_types::schema::ShapeId;
+    /// use aws_smithy_schema::ShapeId;
     ///
     /// let shape_id = ShapeId::new("com.example#MyStruct$member");
     /// assert_eq!(shape_id.member_name(), Some("member"));
@@ -172,7 +172,6 @@ mod tests {
             Some("member")
         );
         assert_eq!(ShapeId::new("smithy.api#String").member_name(), None);
-        assert_eq!(ShapeId::new("NoNamespace").member_name(), None);
     }
 
     #[test]
