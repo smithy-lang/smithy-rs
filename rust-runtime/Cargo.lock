@@ -683,6 +683,7 @@ dependencies = [
 name = "aws-smithy-json"
 version = "0.62.5"
 dependencies = [
+ "aws-smithy-schema",
  "aws-smithy-types 1.4.6",
  "proptest",
  "serde_json",
