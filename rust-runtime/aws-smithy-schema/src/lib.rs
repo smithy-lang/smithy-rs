@@ -18,6 +18,7 @@ mod schema {
     pub mod trait_map;
     pub mod trait_type;
 
+    pub mod codec;
     pub mod prelude;
     pub mod serde;
 }
@@ -33,6 +34,10 @@ pub mod prelude {
 
 pub mod serde {
     pub use crate::schema::serde::*;
+}
+
+pub mod codec {
+    pub use crate::schema::codec::*;
 }
 
 /// Core trait representing a Smithy schema at runtime.
