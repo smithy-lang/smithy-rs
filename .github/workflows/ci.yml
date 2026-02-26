@@ -384,6 +384,30 @@ jobs:
         echo "PR bot and canary cannot be invoked from a forked repository. Ask a maintainer to manually invoke them using your PR."
         exit 1
 
+  compiletime-benchmark:
+    runs-on: ubuntu-latest
+    name: Run Compiletime Benchmark
+    needs: generate
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    outputs:
+      compiletime-benchmark: ${{ steps.compiletime-benchmark.outputs.compiletime-benchmark }}
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+
+    - name: run benchmark
+      id: run-compiletime-benchmark
+      run: bash smithy-rs/tools/compiletime-benchmark/script
+
   # Pseudo-job that depends on matrix jobs so that we don't have to enter
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
