@@ -1,0 +1,193 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Prelude schemas for built-in Smithy types.
+//!
+//! This module provides const schemas for Smithy's prelude types,
+//! which are the fundamental types available in all Smithy models.
+
+use std::sync::LazyLock;
+
+use crate::{Schema, ShapeId, ShapeType, TraitMap};
+
+/// A simple schema implementation for prelude types.
+#[derive(Debug)]
+pub struct PreludeSchema {
+    id: ShapeId,
+    shape_type: ShapeType,
+}
+
+impl PreludeSchema {
+    /// Creates a new prelude schema.
+    pub const fn new(id: ShapeId, shape_type: ShapeType) -> Self {
+        Self { id, shape_type }
+    }
+}
+
+impl Schema for PreludeSchema {
+    fn shape_id(&self) -> &ShapeId {
+        &self.id
+    }
+
+    fn shape_type(&self) -> ShapeType {
+        self.shape_type
+    }
+
+    fn traits(&self) -> &TraitMap {
+        static MAP: LazyLock<TraitMap> = LazyLock::new(TraitMap::empty);
+
+        &MAP
+    }
+}
+
+// TODO(schema): We should probably test with these as `pub static` too since that could
+// theoretically cut down on binary size (at the expense of some runtime performance)
+
+/// Schema for `smithy.api#String`
+pub const STRING: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#String", "smithy.api", "String"),
+    ShapeType::String,
+);
+
+/// Schema for `smithy.api#Boolean`
+pub const BOOLEAN: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Boolean", "smithy.api", "Boolean"),
+    ShapeType::Boolean,
+);
+
+/// Schema for `smithy.api#Byte`
+pub const BYTE: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Byte", "smithy.api", "Byte"),
+    ShapeType::Byte,
+);
+
+/// Schema for `smithy.api#Short`
+pub const SHORT: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Short", "smithy.api", "Short"),
+    ShapeType::Short,
+);
+
+/// Schema for `smithy.api#Integer`
+pub const INTEGER: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Integer", "smithy.api", "Integer"),
+    ShapeType::Integer,
+);
+
+/// Schema for `smithy.api#Long`
+pub const LONG: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Long", "smithy.api", "Long"),
+    ShapeType::Long,
+);
+
+/// Schema for `smithy.api#Float`
+pub const FLOAT: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Float", "smithy.api", "Float"),
+    ShapeType::Float,
+);
+
+/// Schema for `smithy.api#Double`
+pub const DOUBLE: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Double", "smithy.api", "Double"),
+    ShapeType::Double,
+);
+
+/// Schema for `smithy.api#BigInteger`
+pub const BIG_INTEGER: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#BigInteger", "smithy.api", "BigInteger"),
+    ShapeType::BigInteger,
+);
+
+/// Schema for `smithy.api#BigDecimal`
+pub const BIG_DECIMAL: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#BigDecimal", "smithy.api", "BigDecimal"),
+    ShapeType::BigDecimal,
+);
+
+/// Schema for `smithy.api#Blob`
+pub const BLOB: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Blob", "smithy.api", "Blob"),
+    ShapeType::Blob,
+);
+
+/// Schema for `smithy.api#Timestamp`
+pub const TIMESTAMP: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Timestamp", "smithy.api", "Timestamp"),
+    ShapeType::Timestamp,
+);
+
+/// Schema for `smithy.api#Document`
+pub const DOCUMENT: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Document", "smithy.api", "Document"),
+    ShapeType::Document,
+);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::SchemaExt;
+
+    #[test]
+    fn test_string_schema() {
+        assert_eq!(STRING.shape_id().as_str(), "smithy.api#String");
+        assert_eq!(STRING.shape_type(), ShapeType::String);
+        assert!(STRING.is_string());
+        assert!(STRING.traits().is_empty());
+    }
+
+    #[test]
+    fn test_boolean_schema() {
+        assert_eq!(BOOLEAN.shape_id().as_str(), "smithy.api#Boolean");
+        assert_eq!(BOOLEAN.shape_type(), ShapeType::Boolean);
+        assert!(BOOLEAN.traits().is_empty());
+    }
+
+    #[test]
+    fn test_numeric_schemas() {
+        assert_eq!(BYTE.shape_type(), ShapeType::Byte);
+        assert_eq!(SHORT.shape_type(), ShapeType::Short);
+        assert_eq!(INTEGER.shape_type(), ShapeType::Integer);
+        assert_eq!(LONG.shape_type(), ShapeType::Long);
+        assert_eq!(FLOAT.shape_type(), ShapeType::Float);
+        assert_eq!(DOUBLE.shape_type(), ShapeType::Double);
+        assert_eq!(BIG_INTEGER.shape_type(), ShapeType::BigInteger);
+        assert_eq!(BIG_DECIMAL.shape_type(), ShapeType::BigDecimal);
+    }
+
+    #[test]
+    fn test_blob_schema() {
+        assert_eq!(BLOB.shape_id().as_str(), "smithy.api#Blob");
+        assert_eq!(BLOB.shape_type(), ShapeType::Blob);
+        assert!(BLOB.is_blob());
+    }
+
+    #[test]
+    fn test_timestamp_schema() {
+        assert_eq!(TIMESTAMP.shape_id().as_str(), "smithy.api#Timestamp");
+        assert_eq!(TIMESTAMP.shape_type(), ShapeType::Timestamp);
+    }
+
+    #[test]
+    fn test_document_schema() {
+        assert_eq!(DOCUMENT.shape_id().as_str(), "smithy.api#Document");
+        assert_eq!(DOCUMENT.shape_type(), ShapeType::Document);
+    }
+
+    #[test]
+    fn test_all_prelude_types_are_simple() {
+        assert!(STRING.shape_type().is_simple());
+        assert!(BOOLEAN.shape_type().is_simple());
+        assert!(BYTE.shape_type().is_simple());
+        assert!(SHORT.shape_type().is_simple());
+        assert!(INTEGER.shape_type().is_simple());
+        assert!(LONG.shape_type().is_simple());
+        assert!(FLOAT.shape_type().is_simple());
+        assert!(DOUBLE.shape_type().is_simple());
+        assert!(BIG_INTEGER.shape_type().is_simple());
+        assert!(BIG_DECIMAL.shape_type().is_simple());
+        assert!(BLOB.shape_type().is_simple());
+        assert!(TIMESTAMP.shape_type().is_simple());
+        assert!(DOCUMENT.shape_type().is_simple());
+    }
+}

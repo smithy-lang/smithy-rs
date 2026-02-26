@@ -72,6 +72,7 @@ object CrateSet {
             "aws-smithy-query",
             "aws-smithy-runtime",
             "aws-smithy-runtime-api",
+            "aws-smithy-schema",
             "aws-smithy-types",
             "aws-smithy-types-convert",
             "aws-smithy-wasm",
