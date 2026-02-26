@@ -165,12 +165,12 @@ pub trait ShapeDeserializer {
     /// Checks if the current value is null.
     ///
     /// This is used for sparse collections where null values are significant.
-    fn is_null(&mut self) -> bool;
+    fn is_null(&self) -> bool;
 
     /// Returns the size of the current container if known.
     ///
     /// This is an optimization hint that allows pre-allocating collections
     /// with the correct capacity. Returns `None` if the size is unknown or
     /// not applicable.
-    fn container_size(&mut self) -> Option<usize>;
+    fn container_size(&self) -> Option<usize>;
 }

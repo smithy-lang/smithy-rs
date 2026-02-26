@@ -3,24 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use std::borrow::Cow;
+
 /// A Smithy Shape ID.
 ///
 /// Shape IDs uniquely identify shapes in a Smithy model.
-/// Format: `namespace#shapeName` or `namespace#shapeName$memberName`
+/// - `fqn` is `"smithy.example#Foo"`
+/// - `namespace` is `"smithy.example"`
+/// - `shape_name` is `"Foo"`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShapeId {
-    value: &'static str,
+    fqn: Cow<'static, str>,
+    namespace: Cow<'static, str>,
+    shape_name: Cow<'static, str>,
 }
 
 impl ShapeId {
     /// Creates a ShapeId from a static string at compile time.
     ///
     /// This is used for const initialization of prelude schemas.
-    pub const fn from_static(value: &'static str) -> Self {
-        Self { value }
+    pub const fn from_static(
+        fqn: &'static str,
+        namespace: &'static str,
+        shape_name: &'static str,
+    ) -> Self {
+        Self {
+            fqn: Cow::Borrowed(fqn),
+            namespace: Cow::Borrowed(namespace),
+            shape_name: Cow::Borrowed(shape_name),
+        }
     }
 
-    /// Creates a new ShapeId from a string.
+    /// Creates a new ShapeId from a namespace and a shape_name.
     ///
     /// # Examples
     /// ```
@@ -28,16 +42,45 @@ impl ShapeId {
     ///
     /// let shape_id = ShapeId::new("smithy.api#String");
     /// ```
-    pub fn new(value: impl Into<String>) -> Self {
-        // Leak the string to get a 'static reference
+    pub fn new_from_parts(
+        namespace: impl Into<Cow<'static, str>>,
+        shape_name: impl Into<Cow<'static, str>>,
+    ) -> Self {
+        let namespace = namespace.into();
+        let shape_name = shape_name.into();
         Self {
-            value: Box::leak(value.into().into_boxed_str()),
+            fqn: format!("{}#{}", namespace.as_ref(), shape_name.as_ref()).into(),
+            namespace,
+            shape_name,
         }
+    }
+
+    /// Creates a new ShapeId from a fully qualified name.
+    pub fn new_from_fqn(fqn: impl Into<Cow<'static, str>>) -> Option<Self> {
+        let fqn = fqn.into();
+        let (namespace, shape_name) = fqn.as_ref().split_once('#').map(|(ns, rest)| {
+            (
+                ns.to_string(),
+                rest.split_once('$')
+                    .map_or(rest, |(name, _)| name)
+                    .to_string(),
+            )
+        })?;
+        Some(Self {
+            fqn,
+            namespace: namespace.into(),
+            shape_name: shape_name.into(),
+        })
+    }
+
+    /// Creates a new ShapeId from a fully qualified name.
+    pub fn new(fqn: impl Into<Cow<'static, str>>) -> Self {
+        Self::new_from_fqn(fqn).expect("invalid shape ID")
     }
 
     /// Returns the string representation of this ShapeId.
     pub fn as_str(&self) -> &str {
-        self.value
+        self.fqn.as_ref()
     }
 
     /// Returns the namespace portion of the ShapeId.
@@ -49,8 +92,8 @@ impl ShapeId {
     /// let shape_id = ShapeId::from_static("smithy.api#String");
     /// assert_eq!(shape_id.namespace(), Some("smithy.api"));
     /// ```
-    pub fn namespace(&self) -> Option<&str> {
-        self.value.split_once('#').map(|(ns, _)| ns)
+    pub fn namespace(&self) -> &str {
+        self.namespace.as_ref()
     }
 
     /// Returns the shape name portion of the ShapeId.
@@ -62,10 +105,8 @@ impl ShapeId {
     /// let shape_id = ShapeId::from_static("smithy.api#String");
     /// assert_eq!(shape_id.shape_name(), Some("String"));
     /// ```
-    pub fn shape_name(&self) -> Option<&str> {
-        self.value
-            .split_once('#')
-            .and_then(|(_, rest)| rest.split_once('$').map(|(name, _)| name).or(Some(rest)))
+    pub fn shape_name(&self) -> &str {
+        self.shape_name.as_ref()
     }
 
     /// Returns the member name if this is a member shape ID.
@@ -78,7 +119,7 @@ impl ShapeId {
     /// assert_eq!(shape_id.member_name(), Some("member"));
     /// ```
     pub fn member_name(&self) -> Option<&str> {
-        self.value
+        self.fqn
             .split_once('#')
             .and_then(|(_, rest)| rest.split_once('$').map(|(_, member)| member))
     }
@@ -92,7 +133,7 @@ impl From<String> for ShapeId {
 
 impl From<&str> for ShapeId {
     fn from(value: &str) -> Self {
-        Self::new(value)
+        Self::new(value.to_string())
     }
 }
 
@@ -108,28 +149,20 @@ mod tests {
 
     #[test]
     fn test_namespace() {
-        assert_eq!(
-            ShapeId::new("smithy.api#String").namespace(),
-            Some("smithy.api")
-        );
+        assert_eq!(ShapeId::new("smithy.api#String").namespace(), "smithy.api");
         assert_eq!(
             ShapeId::new("com.example#MyStruct$member").namespace(),
-            Some("com.example")
+            "com.example"
         );
-        assert_eq!(ShapeId::new("NoNamespace").namespace(), None);
     }
 
     #[test]
     fn test_shape_name() {
-        assert_eq!(
-            ShapeId::new("smithy.api#String").shape_name(),
-            Some("String")
-        );
+        assert_eq!(ShapeId::new("smithy.api#String").shape_name(), "String");
         assert_eq!(
             ShapeId::new("com.example#MyStruct$member").shape_name(),
-            Some("MyStruct")
+            "MyStruct"
         );
-        assert_eq!(ShapeId::new("NoNamespace").shape_name(), None);
     }
 
     #[test]

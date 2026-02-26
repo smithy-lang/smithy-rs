@@ -8,6 +8,8 @@
 //! This module provides const schemas for Smithy's prelude types,
 //! which are the fundamental types available in all Smithy models.
 
+use std::sync::LazyLock;
+
 use crate::schema::{Schema, ShapeId, ShapeType, TraitMap};
 
 /// A simple schema implementation for prelude types.
@@ -34,8 +36,9 @@ impl Schema for PreludeSchema {
     }
 
     fn traits(&self) -> &TraitMap {
-        static EMPTY_TRAITS: TraitMap = TraitMap::empty();
-        &EMPTY_TRAITS
+        static MAP: LazyLock<TraitMap> = LazyLock::new(|| TraitMap::empty());
+
+        &MAP
     }
 }
 
@@ -43,66 +46,80 @@ impl Schema for PreludeSchema {
 // theoretically cut down on binary size (at the expense of some runtime performance)
 
 /// Schema for `smithy.api#String`
-pub const STRING: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#String"), ShapeType::String);
+pub const STRING: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#String", "smithy.api", "String"),
+    ShapeType::String,
+);
 
 /// Schema for `smithy.api#Boolean`
 pub const BOOLEAN: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Boolean"),
+    ShapeId::from_static("smithy.api#Boolean", "smithy.api", "Boolean"),
     ShapeType::Boolean,
 );
 
 /// Schema for `smithy.api#Byte`
-pub const BYTE: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Byte"), ShapeType::Byte);
+pub const BYTE: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Byte", "smithy.api", "Byte"),
+    ShapeType::Byte,
+);
 
 /// Schema for `smithy.api#Short`
-pub const SHORT: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Short"), ShapeType::Short);
+pub const SHORT: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Short", "smithy.api", "Short"),
+    ShapeType::Short,
+);
 
 /// Schema for `smithy.api#Integer`
 pub const INTEGER: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Integer"),
+    ShapeId::from_static("smithy.api#Integer", "smithy.api", "Integer"),
     ShapeType::Integer,
 );
 
 /// Schema for `smithy.api#Long`
-pub const LONG: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Long"), ShapeType::Long);
+pub const LONG: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Long", "smithy.api", "Long"),
+    ShapeType::Long,
+);
 
 /// Schema for `smithy.api#Float`
-pub const FLOAT: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Float"), ShapeType::Float);
+pub const FLOAT: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Float", "smithy.api", "Float"),
+    ShapeType::Float,
+);
 
 /// Schema for `smithy.api#Double`
-pub const DOUBLE: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Double"), ShapeType::Double);
+pub const DOUBLE: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Double", "smithy.api", "Double"),
+    ShapeType::Double,
+);
 
 /// Schema for `smithy.api#BigInteger`
 pub const BIG_INTEGER: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#BigInteger"),
+    ShapeId::from_static("smithy.api#BigInteger", "smithy.api", "BigInteger"),
     ShapeType::BigInteger,
 );
 
 /// Schema for `smithy.api#BigDecimal`
 pub const BIG_DECIMAL: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#BigDecimal"),
+    ShapeId::from_static("smithy.api#BigDecimal", "smithy.api", "BigDecimal"),
     ShapeType::BigDecimal,
 );
 
 /// Schema for `smithy.api#Blob`
-pub const BLOB: PreludeSchema =
-    PreludeSchema::new(ShapeId::from_static("smithy.api#Blob"), ShapeType::Blob);
+pub const BLOB: PreludeSchema = PreludeSchema::new(
+    ShapeId::from_static("smithy.api#Blob", "smithy.api", "Blob"),
+    ShapeType::Blob,
+);
 
 /// Schema for `smithy.api#Timestamp`
 pub const TIMESTAMP: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Timestamp"),
+    ShapeId::from_static("smithy.api#Timestamp", "smithy.api", "Timestamp"),
     ShapeType::Timestamp,
 );
 
 /// Schema for `smithy.api#Document`
 pub const DOCUMENT: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Document"),
+    ShapeId::from_static("smithy.api#Document", "smithy.api", "Document"),
     ShapeType::Document,
 );
 

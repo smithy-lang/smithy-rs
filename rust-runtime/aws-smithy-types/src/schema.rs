@@ -188,16 +188,16 @@ mod test {
     #[test]
     fn test_shape_id_parsing() {
         let id = ShapeId::new("smithy.api#String");
-        assert_eq!(id.namespace(), Some("smithy.api"));
-        assert_eq!(id.shape_name(), Some("String"));
+        assert_eq!(id.namespace(), "smithy.api");
+        assert_eq!(id.shape_name(), "String");
         assert_eq!(id.member_name(), None);
     }
 
     #[test]
     fn test_shape_id_with_member() {
         let id = ShapeId::new("com.example#MyStruct$member");
-        assert_eq!(id.namespace(), Some("com.example"));
-        assert_eq!(id.shape_name(), Some("MyStruct"));
+        assert_eq!(id.namespace(), "com.example");
+        assert_eq!(id.shape_name(), "MyStruct");
         assert_eq!(id.member_name(), Some("member"));
     }
 

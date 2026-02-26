@@ -302,11 +302,11 @@ mod test {
             Ok(crate::Document::Null)
         }
 
-        fn is_null(&mut self) -> bool {
+        fn is_null(&self) -> bool {
             false
         }
 
-        fn container_size(&mut self) -> Option<usize> {
+        fn container_size(&self) -> Option<usize> {
             Some(10)
         }
     }
