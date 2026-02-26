@@ -173,8 +173,8 @@
 //! | Metric | Description |
 //! |--------|-------------|
 //! | `http_status_code` | HTTP status code of the response |
-//! | `error` | Client error indicator (4xx status code) |
-//! | `fault` | Server fault indicator (5xx status code) |
+//! | `client_error` | Client error indicator (4xx status code) |
+//! | `server_error` | Server error indicator (5xx status code) |
 //! | `operation_time` | Timestamp that denotes operation time from pre-deserialization to post-serialization |
 //!
 //! # Platform support

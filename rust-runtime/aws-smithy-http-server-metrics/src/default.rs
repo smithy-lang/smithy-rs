@@ -74,13 +74,13 @@ pub struct DefaultRequestMetrics {
 #[metrics]
 #[derive(Default, Debug)]
 pub struct DefaultResponseMetrics {
-    pub(crate) http_status_code: Option<u16>,
+    pub(crate) http_status_code: Option<String>,
     /// Success indicator (1 if 2xx status code, 0 otherwise)
     pub(crate) success: Option<bool>,
     /// Client error indicator (1 if 4xx status code, 0 otherwise)
-    pub(crate) error: Option<bool>,
-    /// Server fault indicator (1 if 5xx status code, 0 otherwise)
-    pub(crate) fault: Option<bool>,
+    pub(crate) client_error: Option<bool>,
+    /// Server error indicator (1 if 5xx status code, 0 otherwise)
+    pub(crate) server_error: Option<bool>,
     /// Wallclock time from pre-deserialization of the model input to post-serialization of the model output
     pub(crate) operation_time: Option<Duration>,
 }
@@ -106,8 +106,8 @@ pub struct DefaultResponseMetricsConfig {
     pub(crate) disable_all: bool,
     pub(crate) disable_http_status_code: bool,
     pub(crate) disable_success: bool,
-    pub(crate) disable_error: bool,
-    pub(crate) disable_fault: bool,
+    pub(crate) disable_client_error: bool,
+    pub(crate) disable_server_error: bool,
     pub(crate) disable_operation_time: bool,
 }
 

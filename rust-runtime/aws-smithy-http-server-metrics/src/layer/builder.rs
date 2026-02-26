@@ -86,15 +86,15 @@ macro_rules! impl_disable_methods {
             self
         }
 
-        /// Disable the default `error` metric
-        pub fn disable_default_error_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_error = true;
+        /// Disable the default `client_error` metric
+        pub fn disable_default_client_error_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_client_error = true;
             self
         }
 
-        /// Disable the default `fault` metric
-        pub fn disable_default_fault_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_fault = true;
+        /// Disable the default `server_error` metric
+        pub fn disable_default_server_error_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_server_error = true;
             self
         }
 
