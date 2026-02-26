@@ -2,6 +2,8 @@ plugins {
     `maven-publish`
     signing
 }
+
+val Project.libs get() = the<org.gradle.accessors.dm.LibrariesForLibs>()
 // FIXME(publishing): create a real "javadoc" JAR from Dokka output
 val javadocJar = tasks.register<Jar>("emptyJar") {
     archiveClassifier.set("javadoc")
@@ -14,6 +16,16 @@ publishing {
         create<MavenPublication>("codegen") {
             from(components["java"])
             artifact(javadocJar)
+
+            // Fix Kotlin stdlib version in published POM
+            versionMapping {
+                usage("java-api") {
+                    fromResolutionOf("runtimeClasspath")
+                }
+                usage("java-runtime") {
+                    fromResolutionResult()
+                }
+            }
 
             afterEvaluate {
                 pom {
