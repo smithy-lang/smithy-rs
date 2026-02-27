@@ -135,24 +135,80 @@ impl ShapeDeserializer for JsonDeserializer {
     fn read_list<T, F>(
         &mut self,
         _schema: &dyn Schema,
-        state: T,
-        _consumer: F,
+        mut state: T,
+        mut consumer: F,
     ) -> Result<T, Self::Error>
     where
         F: FnMut(T, &mut Self) -> Result<T, Self::Error>,
     {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(JsonDeserializerError::ParseError("Expected array".into()));
+        }
+        self.advance_by(1);
+
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            state = consumer(state, self)?;
+        }
+
         Ok(state)
     }
 
     fn read_map<T, F>(
         &mut self,
         _schema: &dyn Schema,
-        state: T,
-        _consumer: F,
+        mut state: T,
+        mut consumer: F,
     ) -> Result<T, Self::Error>
     where
         F: FnMut(T, String, &mut Self) -> Result<T, Self::Error>,
     {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'{') {
+            return Err(JsonDeserializerError::ParseError("Expected object".into()));
+        }
+        self.advance_by(1);
+
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b'}') {
+                self.advance_by(1);
+                break;
+            }
+
+            if self.remaining().first() != Some(&b'"') {
+                return Err(JsonDeserializerError::ParseError("Expected key".into()));
+            }
+
+            let mut iter = json_token_iter(self.remaining());
+            let key = match iter.next() {
+                Some(Ok(Token::ValueString { value, .. })) => {
+                    let len = value.as_escaped_str().len();
+                    let key = value
+                        .to_unescaped()
+                        .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))?
+                        .into_owned();
+                    self.advance_by(len + 2);
+                    key
+                }
+                _ => return Err(JsonDeserializerError::ParseError("Expected key".into())),
+            };
+
+            self.skip_whitespace();
+            if self.remaining().first() != Some(&b':') {
+                return Err(JsonDeserializerError::ParseError("Expected colon".into()));
+            }
+            self.advance_by(1);
+            self.skip_whitespace();
+
+            state = consumer(state, key, self)?;
+        }
+
         Ok(state)
     }
 
@@ -292,7 +348,58 @@ impl ShapeDeserializer for JsonDeserializer {
     }
 
     fn container_size(&self) -> Option<usize> {
-        None
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next()? {
+            Ok(Token::StartArray { .. }) => {
+                let mut count = 0;
+                let mut depth = 1;
+                for token in iter {
+                    match token {
+                        Ok(Token::StartArray { .. }) | Ok(Token::StartObject { .. }) => {
+                            if depth == 1 {
+                                count += 1;
+                            }
+                            depth += 1;
+                        }
+                        Ok(Token::EndArray { .. }) | Ok(Token::EndObject { .. }) => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(count);
+                            }
+                        }
+                        Ok(Token::ValueBool { .. })
+                        | Ok(Token::ValueNull { .. })
+                        | Ok(Token::ValueString { .. })
+                        | Ok(Token::ValueNumber { .. })
+                            if depth == 1 =>
+                        {
+                            count += 1
+                        }
+                        _ => {}
+                    }
+                }
+                None
+            }
+            Ok(Token::StartObject { .. }) => {
+                let mut count = 0;
+                let mut depth = 1;
+                for token in iter {
+                    match token {
+                        Ok(Token::StartArray { .. }) | Ok(Token::StartObject { .. }) => depth += 1,
+                        Ok(Token::EndArray { .. }) | Ok(Token::EndObject { .. }) => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(count);
+                            }
+                        }
+                        Ok(Token::ObjectKey { .. }) if depth == 1 => count += 1,
+                        _ => {}
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
     }
 }
 
@@ -609,5 +716,131 @@ mod tests {
                 age: 12345678
             }
         );
+    }
+
+    #[test]
+    fn test_read_list() {
+        let json = b"[1, 2, 3, 4, 5]";
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_integer(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, vec![1, 2, 3, 4, 5]);
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = b"[]";
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_integer(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, Vec::<i32>::new());
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = br#"["hello", "world"]"#;
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_string(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, vec!["hello", "world"]);
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+    }
+
+    #[test]
+    fn test_container_size() {
+        let deser = JsonDeserializer::new(b"[1, 2, 3, 4, 5]", JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), Some(5));
+
+        let deser = JsonDeserializer::new(b"[]", JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), Some(0));
+
+        let deser =
+            JsonDeserializer::new(br#"{"a": 1, "b": 2, "c": 3}"#, JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), Some(3));
+
+        let deser = JsonDeserializer::new(b"{}", JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), Some(0));
+
+        let deser =
+            JsonDeserializer::new(b"[[1, 2], [3, 4], [5, 6]]", JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), Some(3));
+
+        let deser = JsonDeserializer::new(b"42", JsonCodecSettings::default());
+        assert_eq!(deser.container_size(), None);
+    }
+
+    #[test]
+    fn test_read_map() {
+        use std::collections::HashMap;
+
+        let json = br#"{"a": 1, "b": 2, "c": 3}"#;
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get("a"), Some(&1));
+        assert_eq!(result.get("b"), Some(&2));
+        assert_eq!(result.get("c"), Some(&3));
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = b"{}";
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result, HashMap::<String, i32>::new());
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = br#"{"name": "Alice", "city": "Seattle"}"#;
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_string(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get("name"), Some(&"Alice".to_string()));
+        assert_eq!(result.get("city"), Some(&"Seattle".to_string()));
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
     }
 }
