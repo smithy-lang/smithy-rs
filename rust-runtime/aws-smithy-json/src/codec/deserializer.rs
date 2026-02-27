@@ -494,7 +494,46 @@ mod tests {
     #[test]
     fn test_read_struct() {
         use aws_smithy_schema::{prelude, Schema, ShapeId, ShapeType, TraitMap};
-        use std::collections::HashMap;
+
+        #[derive(Debug, Default, PartialEq)]
+        struct Person {
+            first_name: String,
+            last_name: String,
+            age: i32,
+        }
+
+        struct MemberSchema {
+            name: &'static str,
+            target: &'static dyn Schema,
+        }
+
+        impl Schema for MemberSchema {
+            fn shape_id(&self) -> &ShapeId {
+                self.target.shape_id()
+            }
+            fn shape_type(&self) -> ShapeType {
+                self.target.shape_type()
+            }
+            fn traits(&self) -> &TraitMap {
+                self.target.traits()
+            }
+            fn member_name(&self) -> Option<&str> {
+                Some(self.name)
+            }
+        }
+
+        static FIRST_NAME: MemberSchema = MemberSchema {
+            name: "firstName",
+            target: &prelude::STRING,
+        };
+        static LAST_NAME: MemberSchema = MemberSchema {
+            name: "lastName",
+            target: &prelude::STRING,
+        };
+        static AGE: MemberSchema = MemberSchema {
+            name: "age",
+            target: &prelude::INTEGER,
+        };
 
         struct TestSchema;
         impl Schema for TestSchema {
@@ -512,33 +551,63 @@ mod tests {
             }
             fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
                 match name {
-                    "name" => Some(&prelude::STRING),
-                    "age" => Some(&prelude::INTEGER),
+                    "firstName" => Some(&FIRST_NAME),
+                    "lastName" => Some(&LAST_NAME),
+                    "age" => Some(&AGE),
+                    _ => None,
+                }
+            }
+            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
+                match index {
+                    0 => Some(("firstName", &FIRST_NAME)),
+                    1 => Some(("lastName", &LAST_NAME)),
+                    2 => Some(("age", &AGE)),
                     _ => None,
                 }
             }
         }
 
-        let json = br#"{"name":"Alice","age":30}"#;
+        fn consume_person(
+            mut person: Person,
+            schema: &dyn Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Person, JsonDeserializerError> {
+            match schema.member_name() {
+                Some("firstName") => person.first_name = deser.read_string(schema)?,
+                Some("lastName") => person.last_name = deser.read_string(schema)?,
+                Some("age") => person.age = deser.read_integer(schema)?,
+                _ => {}
+            }
+            Ok(person)
+        }
+
+        let json = br#"{"lastName":"Smithy","firstName":"Alice","age":30}"#;
         let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
-
-        let fields = deser
-            .read_struct(&TestSchema, HashMap::new(), |mut map, schema, deser| {
-                let key = schema.shape_id().shape_name().to_string();
-                match schema.shape_type() {
-                    ShapeType::String => {
-                        map.insert(key, deser.read_string(schema)?);
-                    }
-                    ShapeType::Integer => {
-                        map.insert(key, deser.read_integer(schema)?.to_string());
-                    }
-                    _ => {}
-                }
-                Ok(map)
-            })
+        let person = deser
+            .read_struct(&TestSchema, Person::default(), consume_person)
             .unwrap();
+        assert_eq!(
+            person,
+            Person {
+                first_name: "Alice".to_string(),
+                last_name: "Smithy".to_string(),
+                age: 30
+            }
+        );
 
-        assert_eq!(fields.get("String"), Some(&"Alice".to_string()));
-        assert_eq!(fields.get("Integer"), Some(&"30".to_string()));
+        let json =
+            br#"{"firstName":          "Alice","age":12345678,     "lastName":"\"Smithy\""}"#;
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let person = deser
+            .read_struct(&TestSchema, Person::default(), consume_person)
+            .unwrap();
+        assert_eq!(
+            person,
+            Person {
+                first_name: "Alice".to_string(),
+                last_name: "\"Smithy\"".to_string(),
+                age: 12345678
+            }
+        );
     }
 }
