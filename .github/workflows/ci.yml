@@ -33,7 +33,7 @@ on:
         required: false
 
 env:
-  rust_version: 1.91.0
+  rust_version: 1.91.1
   rust_toolchain_components: clippy,rustfmt
   ENCRYPTED_DOCKER_PASSWORD: ${{ secrets.ENCRYPTED_DOCKER_PASSWORD }}
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
@@ -246,32 +246,33 @@ jobs:
       fail-fast: false
       # We always exclude `aws-smithy-http-server-python`, `aws-smithy-http-server-typescript`, and `aws-smithy-experimental` since they are experimental.
       # We exclude `aws-smithy-http-client` due to FIPS related feature flags and aws-lc-fips target support
+      # We exclude `aws-smithy-wasm` because it is only meant to build for WASM targets
       matrix:
         include:
         - target: i686-unknown-linux-gnu
           build_smithy_rs_features: --all-features
           build_aws_exclude: ''
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-wasm
           test_smithy_rs_features: --all-features
           test_aws_features: --all-features
           test_aws_exclude: ''
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm
         - target: powerpc-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro  --exclude aws-smithy-wasm
           test_smithy_rs_features: ''
           test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client --exclude aws-smithy-http-server-metrics --exclude aws-smithy-http-server-metrics-macro  --exclude aws-smithy-wasm
         - target: powerpc64-unknown-linux-gnu
           build_smithy_rs_features: ''
           build_aws_exclude: --exclude aws-inlineable
-          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          build_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm
           test_smithy_rs_features: ''
           test_aws_features: ''
           test_aws_exclude: --exclude aws-inlineable
-          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client
+          test_smithy_rs_exclude: --exclude aws-smithy-http-server-python --exclude aws-smithy-http-server-typescript --exclude aws-smithy-experimental --exclude aws-smithy-http-client  --exclude aws-smithy-wasm
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout

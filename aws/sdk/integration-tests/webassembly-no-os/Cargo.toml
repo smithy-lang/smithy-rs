@@ -1,6 +1,6 @@
 # This Cargo.toml is unused in generated code. It exists solely to enable these tests to compile in-situ
 [package]
-name = "webassembly"
+name = "webassembly-no-os"
 version = "0.1.0"
 authors = [
     "Eduardo Rodrigues <16357187+eduardomourar@users.noreply.github.com>",
