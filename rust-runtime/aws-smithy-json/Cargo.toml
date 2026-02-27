@@ -6,7 +6,7 @@ description = "Token streaming JSON parser for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [dependencies]
 aws-smithy-schema = { path = "../aws-smithy-schema" }

@@ -1,12 +1,12 @@
 [package]
 name = "aws-smithy-mocks"
-version = "0.2.5"
+version = "0.2.6"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Testing utilities for smithy-rs generated clients"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
