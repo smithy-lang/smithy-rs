@@ -193,7 +193,7 @@ impl Schema {
         }
     }
 
-    /// Returns the member schema by position index (for structures and unions).
+    /// Returns the member name and schema by position index (for structures and unions).
     ///
     /// This is an optimization for generated code to avoid string lookups.
     /// Consumer code should not rely on specific position values as they may change.
