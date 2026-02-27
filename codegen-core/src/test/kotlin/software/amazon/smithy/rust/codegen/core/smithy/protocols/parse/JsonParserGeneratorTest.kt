@@ -220,6 +220,63 @@ class JsonParserGeneratorTest {
                 assert_eq!(error_output.message.expect("message should be set"), "hello");
                 """,
             )
+
+            unitTest(
+                "dense_list_rejects_null",
+                """
+                // dense list should reject null values
+                let input = br#"{ "top": { "choice": { "list": [{ "int": 5 }, null, { "int": 6 }] } } }"#;
+                let err = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).expect_err("dense list cannot contain null");
+                assert!(err.to_string().contains("dense list cannot contain null values"));
+                """,
+            )
+
+            unitTest(
+                "dense_map_rejects_null",
+                """
+                // dense map should reject null values
+                let input = br#"{ "top": { "choice": { "map": { "a": { "int": 5 }, "b": null } } } }"#;
+                let err = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).expect_err("dense map cannot contain null");
+                assert!(err.to_string().contains("dense map cannot contain null values"));
+                """,
+            )
+
+            unitTest(
+                "sparse_list_allows_null",
+                """
+                // sparse list should allow null values
+                let input = br#"{ "top": { "choice": { "listSparse": [{ "int": 5 }, null, { "int": 6 }] } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
+                use test_model::Choice;
+                match output.top.unwrap().choice {
+                    Choice::ListSparse(list) => {
+                        assert_eq!(list.len(), 3);
+                        assert_eq!(list[0], Some(Choice::Int(5)));
+                        assert_eq!(list[1], None);
+                        assert_eq!(list[2], Some(Choice::Int(6)));
+                    }
+                    _ => panic!("expected ListSparse variant"),
+                }
+                """,
+            )
+
+            unitTest(
+                "sparse_map_allows_null",
+                """
+                // sparse map should allow null values
+                let input = br#"{ "top": { "choice": { "mapSparse": { "a": { "int": 5 }, "b": null } } } }"#;
+                let output = ${format(operationGenerator)}(input, test_output::OpOutput::builder()).unwrap().build();
+                use test_model::Choice;
+                match output.top.unwrap().choice {
+                    Choice::MapSparse(map) => {
+                        assert_eq!(map.len(), 2);
+                        assert_eq!(map.get("a"), Some(&Some(Choice::Int(5))));
+                        assert_eq!(map.get("b"), Some(&None));
+                    }
+                    _ => panic!("expected MapSparse variant"),
+                }
+                """,
+            )
         }
         model.lookup<StructureShape>("test#Top").also { top ->
             top.renderWithModelBuilder(model, symbolProvider, project)
