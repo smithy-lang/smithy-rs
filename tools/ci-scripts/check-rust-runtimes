@@ -59,7 +59,7 @@ do
         if [[ -f "${crate_path}/Cargo.toml" ]]; then
         #s
             # verify that the MSRV is the main MSRV
-            package_msrv=$(sed -rn 's/rust-version = "([^"]+)"/\1/p' "${crate_path}/Cargo.toml")
+            package_msrv=$(sed -rn 's/rust-version = "(1[.][0-9]+)([.][0-9]+)?"/\1/p' "${crate_path}/Cargo.toml")
             if [[ "${package_msrv}" != "${MAIN_MSRV}" ]]; then
                 msrv_mismatches+=("${runtime_path}/${crate_path}: toolchain MSRV is ${MAIN_MSRV}, crate MSRV is ${package_msrv}")
             fi
