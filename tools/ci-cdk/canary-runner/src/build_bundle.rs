@@ -184,8 +184,7 @@ lazy_static! {
             .with_features(["behavior-version-latest"])
             .with_default_feature_disabled(),
         RequiredDependency::new("aws-sdk-s3").with_default_feature_disabled(),
-        RequiredDependency::new("aws-smithy-async")
-            .with_default_feature_disabled(),
+        RequiredDependency::new("aws-smithy-async").with_default_feature_disabled(),
         RequiredDependency::new("aws-smithy-wasm"),
     ];
 }
