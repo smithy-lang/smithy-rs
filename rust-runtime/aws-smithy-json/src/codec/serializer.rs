@@ -320,4 +320,121 @@ mod tests {
             "{\"active\":true,\"name\":\"test\",\"count\":42,\"price\":3.14,\"items\":[1,2]}"
         );
     }
+
+    #[test]
+    fn test_nested_complex_serialization() {
+        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let struct_schema = aws_smithy_schema::prelude::PreludeSchema::new(
+            aws_smithy_schema::ShapeId::new("test#User"),
+            aws_smithy_schema::ShapeType::Structure,
+        );
+        let list_schema = aws_smithy_schema::prelude::PreludeSchema::new(
+            aws_smithy_schema::ShapeId::new("test#List"),
+            aws_smithy_schema::ShapeType::List,
+        );
+        let map_schema = aws_smithy_schema::prelude::PreludeSchema::new(
+            aws_smithy_schema::ShapeId::new("test#Map"),
+            aws_smithy_schema::ShapeType::Map,
+        );
+
+        ser.write_struct(&struct_schema, |s| {
+            s.output.push_str("\"id\":");
+            s.write_long(&LONG, 12345)?;
+            s.output.push(',');
+            s.output.push_str("\"name\":");
+            s.write_string(&STRING, "John Doe")?;
+            s.output.push(',');
+            s.output.push_str("\"scores\":");
+            s.write_list(&list_schema, |ls| {
+                ls.write_double(&DOUBLE, 95.5)?;
+                ls.output.push(',');
+                ls.write_double(&DOUBLE, 87.3)?;
+                ls.output.push(',');
+                ls.write_double(&DOUBLE, 92.1)?;
+                Ok(())
+            })?;
+            s.output.push(',');
+            s.output.push_str("\"address\":");
+            s.write_struct(&struct_schema, |addr| {
+                addr.output.push_str("\"street\":");
+                addr.write_string(&STRING, "123 Main St")?;
+                addr.output.push(',');
+                addr.output.push_str("\"city\":");
+                addr.write_string(&STRING, "Seattle")?;
+                addr.output.push(',');
+                addr.output.push_str("\"zip\":");
+                addr.write_integer(&INTEGER, 98101)?;
+                Ok(())
+            })?;
+            s.output.push(',');
+            s.output.push_str("\"companies\":");
+            s.write_list(&list_schema, |ls| {
+                ls.write_struct(&struct_schema, |comp| {
+                    comp.output.push_str("\"name\":");
+                    comp.write_string(&STRING, "TechCorp")?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"employees\":");
+                    comp.write_list(&list_schema, |emp| {
+                        emp.write_string(&STRING, "Alice")?;
+                        emp.output.push(',');
+                        emp.write_string(&STRING, "Bob")?;
+                        Ok(())
+                    })?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"metadata\":");
+                    comp.write_map(&map_schema, |meta| {
+                        meta.output.push_str("\"founded\":");
+                        meta.write_integer(&INTEGER, 2010)?;
+                        meta.output.push(',');
+                        meta.output.push_str("\"size\":");
+                        meta.write_integer(&INTEGER, 500)?;
+                        Ok(())
+                    })?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"active\":");
+                    comp.write_boolean(&BOOLEAN, true)?;
+                    Ok(())
+                })?;
+                ls.output.push(',');
+                ls.write_struct(&struct_schema, |comp| {
+                    comp.output.push_str("\"name\":");
+                    comp.write_string(&STRING, "StartupInc")?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"employees\":");
+                    comp.write_list(&list_schema, |emp| {
+                        emp.write_string(&STRING, "Charlie")?;
+                        Ok(())
+                    })?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"metadata\":");
+                    comp.write_map(&map_schema, |meta| {
+                        meta.output.push_str("\"founded\":");
+                        meta.write_integer(&INTEGER, 2020)?;
+                        Ok(())
+                    })?;
+                    comp.output.push(',');
+                    comp.output.push_str("\"active\":");
+                    comp.write_boolean(&BOOLEAN, false)?;
+                    Ok(())
+                })?;
+                Ok(())
+            })?;
+            s.output.push(',');
+            s.output.push_str("\"tags\":");
+            s.write_map(&map_schema, |tags| {
+                tags.output.push_str("\"role\":");
+                tags.write_string(&STRING, "admin")?;
+                tags.output.push(',');
+                tags.output.push_str("\"level\":");
+                tags.write_string(&STRING, "senior")?;
+                Ok(())
+            })?;
+            Ok(())
+        })
+        .unwrap();
+
+        let output = String::from_utf8(ser.finish().unwrap()).unwrap();
+        let expected = r#"{"id":12345,"name":"John Doe","scores":[95.5,87.3,92.1],"address":{"street":"123 Main St","city":"Seattle","zip":98101},"companies":[{"name":"TechCorp","employees":["Alice","Bob"],"metadata":{"founded":2010,"size":500},"active":true},{"name":"StartupInc","employees":["Charlie"],"metadata":{"founded":2020},"active":false}],"tags":{"role":"admin","level":"senior"}}"#;
+        assert_eq!(output, expected);
+    }
 }
