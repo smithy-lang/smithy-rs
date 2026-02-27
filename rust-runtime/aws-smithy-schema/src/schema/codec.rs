@@ -8,6 +8,8 @@
 //! A codec represents a specific serialization format (e.g., JSON, XML, CBOR)
 //! and provides methods to create serializers and deserializers for that format.
 
+pub mod http_string;
+
 use crate::serde::{ShapeDeserializer, ShapeSerializer};
 
 /// A codec for a specific serialization format.
