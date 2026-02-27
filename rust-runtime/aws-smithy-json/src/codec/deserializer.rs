@@ -843,4 +843,338 @@ mod tests {
         // Ensure no more memory was allocated for the container
         assert_eq!(result.capacity(), allocated_capacity);
     }
+
+    #[test]
+    fn test_nested_complex_deserialization() {
+        use aws_smithy_schema::{prelude, Schema, ShapeId, ShapeType, TraitMap};
+        use std::collections::HashMap;
+
+        #[derive(Debug, Default, PartialEq)]
+        struct Address {
+            street: String,
+            city: String,
+            zip: i32,
+        }
+
+        #[derive(Debug, Default, PartialEq)]
+        struct Company {
+            name: String,
+            employees: Vec<String>,
+            metadata: HashMap<String, i32>,
+            active: bool,
+        }
+
+        #[derive(Debug, Default, PartialEq)]
+        struct User {
+            id: i64,
+            name: String,
+            scores: Vec<f64>,
+            address: Address,
+            companies: Vec<Company>,
+            tags: HashMap<String, String>,
+        }
+
+        struct MemberSchema {
+            name: &'static str,
+            target: &'static dyn Schema,
+        }
+
+        impl Schema for MemberSchema {
+            fn shape_id(&self) -> &ShapeId {
+                self.target.shape_id()
+            }
+            fn shape_type(&self) -> ShapeType {
+                self.target.shape_type()
+            }
+            fn traits(&self) -> &TraitMap {
+                self.target.traits()
+            }
+            fn member_name(&self) -> Option<&str> {
+                Some(self.name)
+            }
+        }
+
+        static ADDR_STREET: MemberSchema = MemberSchema {
+            name: "street",
+            target: &prelude::STRING,
+        };
+        static ADDR_CITY: MemberSchema = MemberSchema {
+            name: "city",
+            target: &prelude::STRING,
+        };
+        static ADDR_ZIP: MemberSchema = MemberSchema {
+            name: "zip",
+            target: &prelude::INTEGER,
+        };
+
+        struct AddressSchema;
+        impl Schema for AddressSchema {
+            fn shape_id(&self) -> &ShapeId {
+                static ID: std::sync::LazyLock<ShapeId> = std::sync::LazyLock::new(|| {
+                    ShapeId::from_static("test#Address", "test", "Address")
+                });
+                &ID
+            }
+            fn shape_type(&self) -> ShapeType {
+                ShapeType::Structure
+            }
+            fn traits(&self) -> &TraitMap {
+                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
+                &MAP
+            }
+            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
+                match name {
+                    "street" => Some(&ADDR_STREET),
+                    "city" => Some(&ADDR_CITY),
+                    "zip" => Some(&ADDR_ZIP),
+                    _ => None,
+                }
+            }
+            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
+                match index {
+                    0 => Some(("street", &ADDR_STREET)),
+                    1 => Some(("city", &ADDR_CITY)),
+                    2 => Some(("zip", &ADDR_ZIP)),
+                    _ => None,
+                }
+            }
+        }
+
+        static COMP_NAME: MemberSchema = MemberSchema {
+            name: "name",
+            target: &prelude::STRING,
+        };
+        static COMP_ACTIVE: MemberSchema = MemberSchema {
+            name: "active",
+            target: &prelude::BOOLEAN,
+        };
+        static COMP_EMPLOYEES: MemberSchema = MemberSchema {
+            name: "employees",
+            target: &prelude::STRING,
+        };
+        static COMP_METADATA: MemberSchema = MemberSchema {
+            name: "metadata",
+            target: &prelude::STRING,
+        };
+
+        struct CompanySchema;
+        impl Schema for CompanySchema {
+            fn shape_id(&self) -> &ShapeId {
+                static ID: std::sync::LazyLock<ShapeId> = std::sync::LazyLock::new(|| {
+                    ShapeId::from_static("test#Company", "test", "Company")
+                });
+                &ID
+            }
+            fn shape_type(&self) -> ShapeType {
+                ShapeType::Structure
+            }
+            fn traits(&self) -> &TraitMap {
+                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
+                &MAP
+            }
+            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
+                match name {
+                    "name" => Some(&COMP_NAME),
+                    "active" => Some(&COMP_ACTIVE),
+                    "employees" => Some(&COMP_EMPLOYEES),
+                    "metadata" => Some(&COMP_METADATA),
+                    _ => None,
+                }
+            }
+            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
+                match index {
+                    0 => Some(("name", &COMP_NAME)),
+                    1 => Some(("active", &COMP_ACTIVE)),
+                    _ => None,
+                }
+            }
+        }
+
+        static USER_ID: MemberSchema = MemberSchema {
+            name: "id",
+            target: &prelude::LONG,
+        };
+        static USER_NAME: MemberSchema = MemberSchema {
+            name: "name",
+            target: &prelude::STRING,
+        };
+        static USER_SCORES: MemberSchema = MemberSchema {
+            name: "scores",
+            target: &prelude::STRING,
+        };
+        static USER_ADDRESS: MemberSchema = MemberSchema {
+            name: "address",
+            target: &prelude::STRING,
+        };
+        static USER_COMPANIES: MemberSchema = MemberSchema {
+            name: "companies",
+            target: &prelude::STRING,
+        };
+        static USER_TAGS: MemberSchema = MemberSchema {
+            name: "tags",
+            target: &prelude::STRING,
+        };
+
+        struct UserSchema;
+        impl Schema for UserSchema {
+            fn shape_id(&self) -> &ShapeId {
+                static ID: std::sync::LazyLock<ShapeId> =
+                    std::sync::LazyLock::new(|| ShapeId::from_static("test#User", "test", "User"));
+                &ID
+            }
+            fn shape_type(&self) -> ShapeType {
+                ShapeType::Structure
+            }
+            fn traits(&self) -> &TraitMap {
+                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
+                &MAP
+            }
+            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
+                match name {
+                    "id" => Some(&USER_ID),
+                    "name" => Some(&USER_NAME),
+                    "scores" => Some(&USER_SCORES),
+                    "address" => Some(&USER_ADDRESS),
+                    "companies" => Some(&USER_COMPANIES),
+                    "tags" => Some(&USER_TAGS),
+                    _ => None,
+                }
+            }
+            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
+                match index {
+                    0 => Some(("id", &USER_ID)),
+                    1 => Some(("name", &USER_NAME)),
+                    _ => None,
+                }
+            }
+        }
+
+        fn consume_address(
+            mut addr: Address,
+            schema: &dyn Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Address, JsonDeserializerError> {
+            match schema.member_name() {
+                Some("street") => addr.street = deser.read_string(schema)?,
+                Some("city") => addr.city = deser.read_string(schema)?,
+                Some("zip") => addr.zip = deser.read_integer(schema)?,
+                _ => {}
+            }
+            Ok(addr)
+        }
+
+        fn consume_company(
+            mut comp: Company,
+            schema: &dyn Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Company, JsonDeserializerError> {
+            match schema.member_name() {
+                Some("name") => comp.name = deser.read_string(schema)?,
+                Some("active") => comp.active = deser.read_boolean(schema)?,
+                Some("employees") => {
+                    comp.employees = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_string(dummy_schema())?);
+                        Ok(v)
+                    })?
+                }
+                Some("metadata") => {
+                    comp.metadata = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                        m.insert(k, d.read_integer(dummy_schema())?);
+                        Ok(m)
+                    })?
+                }
+                _ => {}
+            }
+            Ok(comp)
+        }
+
+        fn consume_user(
+            mut user: User,
+            schema: &dyn Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<User, JsonDeserializerError> {
+            match schema.member_name() {
+                Some("id") => user.id = deser.read_long(schema)?,
+                Some("name") => user.name = deser.read_string(schema)?,
+                Some("scores") => {
+                    user.scores = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_double(dummy_schema())?);
+                        Ok(v)
+                    })?
+                }
+                Some("address") => {
+                    user.address =
+                        deser.read_struct(&AddressSchema, Address::default(), consume_address)?
+                }
+                Some("companies") => {
+                    user.companies = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_struct(
+                            &CompanySchema,
+                            Company::default(),
+                            consume_company,
+                        )?);
+                        Ok(v)
+                    })?
+                }
+                Some("tags") => {
+                    user.tags = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                        m.insert(k, d.read_string(dummy_schema())?);
+                        Ok(m)
+                    })?
+                }
+                _ => {}
+            }
+            Ok(user)
+        }
+
+        let json = br#"{
+            "id": 12345,
+            "name": "John Doe",
+            "scores": [95.5, 87.3, 92.1],
+            "address": {
+                "street": "123 Main St",
+                "city": "Seattle",
+                "zip": 98101
+            },
+            "companies": [
+                {
+                    "name": "TechCorp",
+                    "employees": ["Alice", "Bob"],
+                    "metadata": {"founded": 2010, "size": 500},
+                    "active": true
+                },
+                {
+                    "name": "StartupInc",
+                    "employees": ["Charlie"],
+                    "metadata": {"founded": 2020},
+                    "active": false
+                }
+            ],
+            "tags": {"role": "admin", "level": "senior"}
+        }"#;
+
+        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let user = deser
+            .read_struct(&UserSchema, User::default(), consume_user)
+            .unwrap();
+
+        assert_eq!(user.id, 12345);
+        assert_eq!(user.name, "John Doe");
+        assert_eq!(user.scores, vec![95.5, 87.3, 92.1]);
+        assert_eq!(user.address.street, "123 Main St");
+        assert_eq!(user.address.city, "Seattle");
+        assert_eq!(user.address.zip, 98101);
+        assert_eq!(user.companies.len(), 2);
+        assert_eq!(user.companies[0].name, "TechCorp");
+        assert_eq!(user.companies[0].employees, vec!["Alice", "Bob"]);
+        assert_eq!(user.companies[0].metadata.get("founded"), Some(&2010));
+        assert_eq!(user.companies[0].metadata.get("size"), Some(&500));
+        assert_eq!(user.companies[0].active, true);
+        assert_eq!(user.companies[1].name, "StartupInc");
+        assert_eq!(user.companies[1].employees, vec!["Charlie"]);
+        assert_eq!(user.companies[1].metadata.get("founded"), Some(&2020));
+        assert_eq!(user.companies[1].active, false);
+        assert_eq!(user.tags.get("role"), Some(&"admin".to_string()));
+        assert_eq!(user.tags.get("level"), Some(&"senior".to_string()));
+    }
 }
