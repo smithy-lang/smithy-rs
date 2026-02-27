@@ -5,6 +5,8 @@
 /codegen-server/                                    @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-http-server/               @smithy-lang/smithy-rs-server
 /rust-runtime/aws-smithy-legacy-http-server/        @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-metrics        @smithy-lang/smithy-rs-server
+/rust-runtime/aws-smithy-http-server-metrics-macro  @smithy-lang/smithy-rs-server
 
 # Python Server
 /codegen-server-test/python/                        @smithy-lang/smithy-rs-server
