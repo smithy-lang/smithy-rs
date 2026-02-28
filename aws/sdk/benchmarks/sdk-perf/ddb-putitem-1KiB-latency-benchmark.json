@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "ddb-putitem-1KiB-latency-benchmark",
+  "description": "DynamoDB PutItem latency benchmark - measures SDK latency for write operations executed sequentially.",
+  "service": "dynamodb",
+  "action": "putitem",
+  "actionConfig": {
+    "description": "Each item has a string partition key 'pk' (format: '<keyPrefix><index>') and a binary attribute 'data' with <dataLength> bytes of String type data.",
+    "tableName": "benchmark-table",
+    "region": "us-east-1",
+    "dataLength": 1024,
+    "keyPrefix": "item-"
+  },
+  "batch": {
+    "description": "A batch is 1,000 PutItem actions executed sequentially",
+    "numberOfActions": 1000,
+    "sequentialExecution": true
+  },
+  "warmup": {
+    "batches": 2
+  },
+  "measurement": {
+    "batches": 3,
+    "collectMetrics": true,
+    "metricsInterval": 100
+  }
+}
