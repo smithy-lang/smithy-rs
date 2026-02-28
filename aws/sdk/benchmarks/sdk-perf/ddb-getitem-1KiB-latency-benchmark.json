@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "name": "ddb-getitem-1KiB-latency-benchmark",
+  "description": "DynamoDB GetItem latency benchmark - measures SDK latency for read operations with 1KiB items executed sequentially",
+  "service": "dynamodb",
+  "action": "getitem",
+  "actionConfig": {
+    "tableName": "benchmark-table",
+    "region": "us-east-1",
+    "keyPrefix": "item-"
+  },
+  "batch": {
+    "description": "A batch is 1,000 GetItem actions executed sequentially",
+    "numberOfActions": 1000,
+    "sequentialExecution": true
+  },
+  "warmup": {
+    "batches": 2
+  },
+  "measurement": {
+    "batches": 3,
+    "collectMetrics": true,
+    "metricsInterval": 100
+  }
+}
