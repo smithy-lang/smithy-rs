@@ -31,6 +31,12 @@ pub struct ActionConfig {
     pub table_name: String,
     pub region: String,
     pub key_prefix: String,
+    #[serde(default = "default_delete_table")]
+    pub delete_table_after_benchmark: bool,
+}
+
+fn default_delete_table() -> bool {
+    true
 }
 
 #[derive(Debug, Deserialize)]
@@ -105,7 +111,9 @@ pub async fn run_benchmark(config: BenchmarkConfig) -> BenchmarkResults {
         memory_samples.extend(mem);
     }
 
-    cleanup_table(&client, &config).await;
+    if config.action_config.delete_table_after_benchmark {
+        cleanup_table(&client, &config).await;
+    }
 
     BenchmarkResults {
         name: config.name,
