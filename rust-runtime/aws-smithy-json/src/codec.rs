@@ -86,13 +86,13 @@ impl Default for JsonCodec {
 
 impl Codec for JsonCodec {
     type Serializer = JsonSerializer;
-    type Deserializer = JsonDeserializer;
+    type Deserializer<'a> = JsonDeserializer<'a>;
 
     fn create_serializer(&self) -> Self::Serializer {
         JsonSerializer::new(self.settings.clone())
     }
 
-    fn create_deserializer(&self, input: &[u8]) -> Self::Deserializer {
+    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
         JsonDeserializer::new(input, self.settings.clone())
     }
 }

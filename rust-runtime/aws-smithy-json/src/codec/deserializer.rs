@@ -31,17 +31,19 @@ impl fmt::Display for JsonDeserializerError {
 impl std::error::Error for JsonDeserializerError {}
 
 /// JSON deserializer that implements the ShapeDeserializer trait.
-pub struct JsonDeserializer {
-    input: Vec<u8>,
+pub struct JsonDeserializer<'a> {
+    input: &'a [u8],
     position: usize,
+    // TODO(schema): Need to figure out how this will work with traits like
+    // jsonName. Will figure that out once I am codegening real Schemas
     _settings: JsonCodecSettings,
 }
 
-impl JsonDeserializer {
+impl<'a> JsonDeserializer<'a> {
     /// Creates a new JSON deserializer with the given settings.
-    pub fn new(input: &[u8], settings: JsonCodecSettings) -> Self {
+    pub fn new(input: &'a [u8], settings: JsonCodecSettings) -> Self {
         Self {
-            input: input.to_vec(),
+            input,
             position: 0,
             _settings: settings,
         }
@@ -56,7 +58,7 @@ impl JsonDeserializer {
     }
 }
 
-impl ShapeDeserializer for JsonDeserializer {
+impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     type Error = JsonDeserializerError;
 
     fn read_struct<T, F>(
@@ -403,7 +405,7 @@ impl ShapeDeserializer for JsonDeserializer {
     }
 }
 
-impl JsonDeserializer {
+impl<'a> JsonDeserializer<'a> {
     fn skip_whitespace(&mut self) {
         while self.position < self.input.len() {
             match self.input[self.position] {

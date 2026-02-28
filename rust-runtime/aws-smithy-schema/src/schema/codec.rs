@@ -47,13 +47,13 @@ pub trait Codec {
     type Serializer: ShapeSerializer;
 
     /// The deserializer type for this codec.
-    type Deserializer: ShapeDeserializer;
+    type Deserializer<'a>: ShapeDeserializer;
 
     /// Creates a new serializer for this codec.
     fn create_serializer(&self) -> Self::Serializer;
 
     /// Creates a new deserializer for this codec from the given input bytes.
-    fn create_deserializer(&self, input: &[u8]) -> Self::Deserializer;
+    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a>;
 }
 
 #[cfg(test)]
@@ -199,12 +199,12 @@ mod test {
     }
 
     // Mock deserializer
-    struct MockDeserializer {
+    struct MockDeserializer<'a> {
         #[allow(dead_code)]
-        input: Vec<u8>,
+        input: &'a [u8],
     }
 
-    impl ShapeDeserializer for MockDeserializer {
+    impl<'a> ShapeDeserializer for MockDeserializer<'a> {
         type Error = MockError;
 
         fn read_struct<T, F>(
@@ -326,16 +326,14 @@ mod test {
 
     impl Codec for MockCodec {
         type Serializer = MockSerializer;
-        type Deserializer = MockDeserializer;
+        type Deserializer<'a> = MockDeserializer<'a>;
 
         fn create_serializer(&self) -> Self::Serializer {
             MockSerializer { output: Vec::new() }
         }
 
-        fn create_deserializer(&self, input: &[u8]) -> Self::Deserializer {
-            MockDeserializer {
-                input: input.to_vec(),
-            }
+        fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
+            MockDeserializer { input }
         }
     }
 
