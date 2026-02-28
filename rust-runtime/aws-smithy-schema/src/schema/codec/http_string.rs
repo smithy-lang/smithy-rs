@@ -462,18 +462,15 @@ pub struct HttpStringCodec;
 
 impl crate::codec::Codec for HttpStringCodec {
     type Serializer = HttpStringSerializer;
-    type Deserializer = HttpStringDeserializer<'static>;
+    type Deserializer<'a> = HttpStringDeserializer<'a>;
 
     fn create_serializer(&self) -> Self::Serializer {
         HttpStringSerializer::new()
     }
 
-    fn create_deserializer(&self, input: &[u8]) -> Self::Deserializer {
-        let input_str = std::str::from_utf8(input).unwrap_or("").to_string();
-        HttpStringDeserializer {
-            input: std::borrow::Cow::Owned(input_str),
-            position: 0,
-        }
+    fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
+        let input_str = std::str::from_utf8(input).unwrap_or("");
+        HttpStringDeserializer::new(input_str)
     }
 }
 
