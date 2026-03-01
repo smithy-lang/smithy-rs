@@ -266,11 +266,13 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val stdConvert = std.resolve("convert")
         val Arc = std.resolve("sync::Arc")
         val AsRef = stdConvert.resolve("AsRef")
-        val Bool = std.resolve("primitive::bool")
         val Box = std.resolve("boxed::Box")
         val ByteSlab = std.resolve("vec::Vec<u8>")
         val Clone = std.resolve("clone::Clone")
         val Cow = std.resolve("borrow::Cow")
+
+        fun lifetimeCow(lifetimeName: String = "a") = std.resolve("borrow::Cow<'$lifetimeName>")
+
         val Debug = stdFmt.resolve("Debug")
         val Default = std.resolve("default::Default")
         val Display = stdFmt.resolve("Display")
@@ -293,7 +295,15 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val U64 = std.resolve("primitive::u64")
         val Vec = std.resolve("vec::Vec")
 
+        fun typedVec(inner: RuntimeType) = std.resolve("vec::Vec<${inner.render()}>")
+
+        fun typedOption(inner: RuntimeType) = std.resolve("option::Option<${inner.render()}>")
+
         // primitive types
+        val Bool = std.resolve("primitive::bool")
+
+        fun lifetimeStr(lifetimeName: String = "a") = RuntimeType("&'$lifetimeName str")
+
         val StaticStr = RuntimeType("&'static str")
 
         // Http0x types

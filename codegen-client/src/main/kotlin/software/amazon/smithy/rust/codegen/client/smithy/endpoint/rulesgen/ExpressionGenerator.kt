@@ -53,16 +53,28 @@ class ExpressionGenerator(
         override fun visitRef(ref: Reference) =
             writable {
                 if (ownership == Ownership.Owned) {
-                    when (ref.type()) {
-                        is BooleanType -> rust("*${ref.name.rustName()}")
-                        else -> rust("${ref.name.rustName()}.to_owned()")
+                    try {
+                        when (ref.type()) {
+                            is BooleanType -> rust("*${ref.name.rustName()}")
+                            else -> rust("${ref.name.rustName()}.to_owned()")
+                        }
+                    } catch (_: RuntimeException) {
+                        // Typechecking was never invoked, default to .to_owned()
+                        rust("${ref.name.rustName()}.to_owned()")
                     }
                 } else {
                     try {
                         when (ref.type()) {
                             // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
                             // Typically, we don't know which type will be returned due to code generation.
-                            is StringType -> rust("${ref.name.rustName()}.as_ref() as &str")
+                            // In BDD mode, parameters are already bound as references, so the cast is unnecessary and causes errors.
+                            is StringType -> {
+                                if (context.isBddMode) {
+                                    rust("${ref.name.rustName()}.as_ref()")
+                                } else {
+                                    rust("${ref.name.rustName()}.as_ref() as &str")
+                                }
+                            }
                             else -> rust(ref.name.rustName())
                         }
                     } catch (_: RuntimeException) {
@@ -90,10 +102,17 @@ class ExpressionGenerator(
                             }
                         }
                     }
-                    if (ownership == Ownership.Owned && getAttr.type() != Type.booleanType()) {
-                        if (getAttr.type() is OptionalType) {
-                            rust(".map(|t|t.to_owned())")
-                        } else {
+                    if (ownership == Ownership.Owned) {
+                        try {
+                            if (getAttr.type() != Type.booleanType()) {
+                                if (getAttr.type() is OptionalType) {
+                                    rust(".map(|t|t.to_owned())")
+                                } else {
+                                    rust(".to_owned()")
+                                }
+                            }
+                        } catch (_: RuntimeException) {
+                            // Typechecking was never invoked, default to .to_owned()
                             rust(".to_owned()")
                         }
                     }

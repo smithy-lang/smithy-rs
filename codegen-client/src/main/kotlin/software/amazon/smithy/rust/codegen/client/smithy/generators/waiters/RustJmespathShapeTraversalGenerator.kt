@@ -94,7 +94,7 @@ sealed class TraversedShape {
                 shape is EnumShape || shape.hasTrait<EnumTrait>() -> Enum(shape)
                 shape is NumberShape -> Number(shape)
                 shape is StringShape -> String(shape)
-                else -> TODO()
+                else -> throw UnsupportedJmesPathException("Shape type ${shape.type} is not supported in JMESPath expressions in smithy-rs")
             }
     }
 }
@@ -570,7 +570,13 @@ class RustJmespathShapeTraversalGenerator(
     private fun generateLiteral(expr: LiteralExpression): GeneratedExpression {
         val (outputShape, outputType) =
             when (expr.type) {
-                RuntimeType.BOOLEAN -> TraversedShape.Bool(null) to RustType.Reference(lifetime = null, member = RustType.Bool)
+                RuntimeType.BOOLEAN ->
+                    TraversedShape.Bool(null) to
+                        RustType.Reference(
+                            lifetime = null,
+                            member = RustType.Bool,
+                        )
+
                 RuntimeType.NUMBER ->
                     TraversedShape.Number(null) to
                         RustType.Reference(
@@ -736,7 +742,11 @@ class RustJmespathShapeTraversalGenerator(
         val leftBinding = "_v"
 
         val right =
-            generate(expr.right, listOf(TraversalBinding.Global(leftBinding, leftTarget)), context.copy(retainOption = true))
+            generate(
+                expr.right,
+                listOf(TraversalBinding.Global(leftBinding, leftTarget)),
+                context.copy(retainOption = true),
+            )
 
         val (projectionType, flattenNeeded) = projectionType(right)
 
@@ -788,7 +798,11 @@ class RustJmespathShapeTraversalGenerator(
                     output = writable {},
                 )
             } else {
-                generate(expr.right, listOf(TraversalBinding.Global(leftBinding, leftTarget)), context.copy(retainOption = true))
+                generate(
+                    expr.right,
+                    listOf(TraversalBinding.Global(leftBinding, leftTarget)),
+                    context.copy(retainOption = true),
+                )
             }
 
         val comparison = generate(expr.comparison, listOf(TraversalBinding.Global("_v", leftTarget)), context)
@@ -866,7 +880,11 @@ class RustJmespathShapeTraversalGenerator(
                     output = writable {},
                 )
             } else {
-                generate(expr.right, listOf(TraversalBinding.Global(leftBinding, TraversedShape.from(model, leftTarget))), context.copy(retainOption = true))
+                generate(
+                    expr.right,
+                    listOf(TraversalBinding.Global(leftBinding, TraversedShape.from(model, leftTarget))),
+                    context.copy(retainOption = true),
+                )
             }
 
         val (projectionType, flattenNeeded) = projectionType(right)
@@ -1001,10 +1019,14 @@ private fun projectionType(right: GeneratedExpression) =
             // A case like `lists.structs[].[integer]` where RHS output type (`[integer]`) is `Vec<Option<&T>>`, and we want Vec<&T>
             RustType.Vec(right.outputType.member.stripOuter<RustType.Option>()) to true
         }
+
         right.isArray() && right.outputType is RustType.Option -> {
             // A case like `maps.structs[].strings` where RHS (strings) output type (`[strings]`) is `Option<&Vec<T>>`, and we want Vec<&T>
-            RustType.Vec(right.outputType.member.stripOuter<RustType.Reference>().stripOuter<RustType.Vec>().asRef()) to true
+            RustType.Vec(
+                right.outputType.member.stripOuter<RustType.Reference>().stripOuter<RustType.Vec>().asRef(),
+            ) to true
         }
+
         else -> {
             RustType.Vec(right.outputType.stripOuter<RustType.Option>()) to false
         }

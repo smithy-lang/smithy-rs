@@ -229,6 +229,18 @@ impl From<Number> for Document {
     }
 }
 
+impl<T> From<Option<T>> for Document
+where
+    Document: From<T>,
+{
+    fn from(value: Option<T>) -> Self {
+        match value {
+            Some(inner) => inner.into(),
+            None => Document::Null,
+        }
+    }
+}
+
 /* ANCHOR END: document */
 
 #[cfg(test)]

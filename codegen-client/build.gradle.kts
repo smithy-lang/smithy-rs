@@ -21,6 +21,7 @@ dependencies {
     implementation(libs.smithy.protocol.test.traits)
     implementation(libs.smithy.waiters)
     implementation(libs.smithy.rules.engine)
+    testImplementation(libs.smithy.rules.engine.tests)
     implementation(libs.smithy.protocol.traits)
 
     // `smithy.framework#ValidationException` is defined here, which is used in event stream

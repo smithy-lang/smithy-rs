@@ -32,7 +32,11 @@ import software.amazon.smithy.rust.codegen.core.smithy.unsafeToRustName
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.orNull
 
-data class Context(val functionRegistry: FunctionRegistry, val runtimeConfig: RuntimeConfig)
+data class Context(
+    val functionRegistry: FunctionRegistry,
+    val runtimeConfig: RuntimeConfig,
+    val isBddMode: Boolean = false,
+)
 
 /**
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
@@ -51,6 +55,12 @@ object EndpointsLib {
         endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
             .resolve("PartitionResolver")
 
+    fun partition(
+        runtimeConfig: RuntimeConfig,
+        lifetimeName: String = "a",
+    ) = endpointsLib("partition", CargoDependency.smithyJson(runtimeConfig), CargoDependency.RegexLite).toType()
+        .resolve("Partition<'$lifetimeName>")
+
     val substring =
         endpointsLib("substring", CargoDependency.Proptest).toType().resolve("substring")
     val isValidHostLabel =
@@ -59,12 +69,31 @@ object EndpointsLib {
         endpointsLib("parse_url", CargoDependency.Http1x, CargoDependency.Url)
             .toType()
             .resolve("parse_url")
+    val split =
+        endpointsLib("split", CargoDependency.Proptest).toType().resolve("split")
+
+    fun url(lifetimeName: String = "a") =
+        endpointsLib("parse_url", CargoDependency.Http1x, CargoDependency.Url)
+            .toType()
+            .resolve("Url<'$lifetimeName>")
+
     val uriEncode =
         endpointsLib("uri_encode", CargoDependency.PercentEncoding)
             .toType()
             .resolve("uri_encode")
+    val coalesce =
+        endpointsLib("coalesce").toType().resolve("coalesce!")
+    val ite =
+        endpointsLib("ite").toType().resolve("ite!")
+    val evaluateBdd =
+        endpointsLib("bdd_interpreter").toType().resolve("evaluate_bdd")
+    val bddNode =
+        endpointsLib("bdd_interpreter").toType().resolve("BddNode")
 
     val awsParseArn = endpointsLib("arn").toType().resolve("parse_arn")
+
+    fun arn(lifetimeName: String = "a") = endpointsLib("arn").toType().resolve("Arn<'$lifetimeName>")
+
     val awsIsVirtualHostableS3Bucket =
         endpointsLib("s3", endpointsLib("host"), CargoDependency.RegexLite)
             .toType()

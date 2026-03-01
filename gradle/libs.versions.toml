@@ -35,6 +35,7 @@ smithy-protocol-tests = { module = "software.amazon.smithy:smithy-protocol-tests
 smithy-protocol-test-traits = { module = "software.amazon.smithy:smithy-protocol-test-traits", version.ref = "smithy-version" }
 smithy-aws-traits = { module = "software.amazon.smithy:smithy-aws-traits", version.ref = "smithy-version" }
 smithy-rules-engine = { module = "software.amazon.smithy:smithy-rules-engine", version.ref = "smithy-version" }
+smithy-rules-engine-tests = { module = "software.amazon.smithy:smithy-rules-engine-tests", version.ref = "smithy-version" }
 smithy-aws-endpoints = { module = "software.amazon.smithy:smithy-aws-endpoints", version.ref = "smithy-version" }
 smithy-validation-model = { module = "software.amazon.smithy:smithy-validation-model", version.ref = "smithy-version" }
 smithy-aws-protocol-tests = { module = "software.amazon.smithy:smithy-aws-protocol-tests", version.ref = "smithy-version" }
