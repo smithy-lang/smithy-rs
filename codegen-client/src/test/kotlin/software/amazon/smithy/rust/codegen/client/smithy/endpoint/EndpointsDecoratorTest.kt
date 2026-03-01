@@ -153,8 +153,6 @@ class EndpointsDecoratorTest {
 
     val bddModel =
         """
-        ${"$"}version: "2.0"
-
         namespace test
 
         use aws.protocols#restJson1
@@ -268,7 +266,7 @@ class EndpointsDecoratorTest {
                 string: String
             }
         }
-        """.trimIndent().asSmithyModel()
+        """.trimIndent().asSmithyModel(smithyVersion = "2")
 
     @Test
     fun `resolve endpoint BDD`() {

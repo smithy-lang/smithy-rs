@@ -18,7 +18,6 @@ use crate::endpoint_lib::diagnostic::DiagnosticCollector;
 ///
 /// ### Returns
 /// `Vec<&str>` containing the split parts
-//TODO(BDD): Might be better to return Vec<String>, will play with it when I get some codegen tests that actually use this function
 pub(crate) fn split<'a>(
     value: &'a str,
     delimiter: &str,
