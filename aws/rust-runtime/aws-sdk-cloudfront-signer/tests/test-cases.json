@@ -180,5 +180,43 @@
       "error": true,
       "errorContains": ["active", "before", "expiration"]
     }
+  },
+  {
+    "id": "json-injection-resource-url",
+    "documentation": "Verify resourceUrl containing double quotes is properly escaped in policy JSON",
+    "input": {
+      "resourceUrl": "https://example.com/file\",\"Resource\":\"*\",\"x\":\"",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://example.com/file\\\",\\\"Resource\\\":\\\"*\\\",\\\"x\\\":\\\"\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "queryParams": {
+        "Expires": "1767290400",
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "MNP0XV-bmzo5xrYyBU8m8mR3Yd0XdoB6UFAjxEt2R4VaNYtgvVYyIuI9hzD7KXX-GdBJUyqWG7wQIUJeBbEhPz7WzGKhlM1NqRW9EPGK-BwYjiLfDagfv-SHjOvIvNaWAhkaAkAlDJQ7qwzbogLAEsxboR9Ae47b6sSqBPxognM_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
+  },
+  {
+    "id": "json-injection-ip-range",
+    "documentation": "Verify ipRange containing double quotes is properly escaped in policy JSON",
+    "input": {
+      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg",
+      "keyPairId": "K1TESTKEY",
+      "privateKeyFile": "test-rsa-key.pem",
+      "expirationDate": 1767290400,
+      "ipRange": "192.168.0.0/24\",\"IpAddress\":{\"AWS:SourceIp\":\"0.0.0.0/0"
+    },
+    "expected": {
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/image.jpg\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400},\"IpAddress\":{\"AWS:SourceIp\":\"192.168.0.0/24\\\",\\\"IpAddress\\\":{\\\"AWS:SourceIp\\\":\\\"0.0.0.0/0\"}}}]}",
+      "queryParams": {
+        "Key-Pair-Id": "K1TESTKEY"
+      },
+      "signature": "k6A6kB9E5e~r3UKIhiRgjog0nGsXv2XaytBiZFAKvGSYuQpzx3rRRp1HSfxK-kIkC0cV2EqWFBAYQeVMMmEr-MOoMGHlWzvQgkIVFeolfU1kJk15u9qLeSbKOslgYYcJQpJlonA31H52CzmhKpsE9QJQZhfmaYxJzZQWEDpnUkM_",
+      "signatureAlgorithm": "RSA-SHA1"
+    }
   }
 ]
