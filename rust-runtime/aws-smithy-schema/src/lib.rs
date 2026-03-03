@@ -18,6 +18,7 @@ mod schema {
     pub mod trait_map;
     pub mod trait_type;
 
+    pub mod codec;
     pub mod prelude;
     pub mod serde;
 }
@@ -33,6 +34,10 @@ pub mod prelude {
 
 pub mod serde {
     pub use crate::schema::serde::*;
+}
+
+pub mod codec {
+    pub use crate::schema::codec::*;
 }
 
 /// Core trait representing a Smithy schema at runtime.
@@ -59,11 +64,11 @@ pub trait Schema: Send + Sync {
         None
     }
 
-    /// Returns the member schema by position index (for structures and unions).
+    /// Returns the member name and schema by position index (for structures and unions).
     ///
     /// This is an optimization for generated code to avoid string lookups.
     /// Consumer code should not rely on specific position values as they may change.
-    fn member_schema_by_index(&self, _index: usize) -> Option<&dyn Schema> {
+    fn member_schema_by_index(&self, _index: usize) -> Option<(&str, &dyn Schema)> {
         None
     }
 
@@ -77,8 +82,8 @@ pub trait Schema: Send + Sync {
         None
     }
 
-    /// Returns an iterator over member schemas (for structures and unions).
-    fn members(&self) -> Box<dyn Iterator<Item = &dyn Schema> + '_> {
+    /// Returns an iterator over member names and schemas (for structures and unions).
+    fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn Schema)> + '_> {
         Box::new(std::iter::empty())
     }
 
