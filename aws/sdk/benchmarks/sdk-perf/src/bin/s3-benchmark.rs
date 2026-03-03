@@ -5,7 +5,7 @@
 
 use clap::Parser;
 use sdk_perf::benchmark_types::BenchmarkConfig;
-use sdk_perf::ddb_benchmark::{run_benchmark, ActionConfig};
+use sdk_perf::s3_benchmark::{run_benchmark, ActionConfig};
 use std::fs;
 
 #[derive(Parser)]

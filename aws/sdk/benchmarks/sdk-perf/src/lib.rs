@@ -3,9 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+pub mod benchmark_types;
 pub mod ddb_benchmark;
 pub mod ddb_serde;
 pub mod lambda_endpoint;
 pub mod results;
+pub mod s3_benchmark;
 pub mod s3_endpoint;
 pub mod test_util;

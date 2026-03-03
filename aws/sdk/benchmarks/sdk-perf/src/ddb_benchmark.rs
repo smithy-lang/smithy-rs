@@ -3,6 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::benchmark_types::{
+    calculate_resource_stats, percentile, BenchmarkConfig, ResourceStats,
+};
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
 use serde::{Deserialize, Serialize};
@@ -10,20 +13,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use sysinfo::{Pid, ProcessRefreshKind, System};
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BenchmarkConfig {
-    pub version: u32,
-    pub name: String,
-    pub description: String,
-    pub service: String,
-    pub action: String,
-    pub action_config: ActionConfig,
-    pub batch: BatchConfig,
-    pub warmup: WarmupConfig,
-    pub measurement: MeasurementConfig,
-}
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -37,28 +26,6 @@ pub struct ActionConfig {
 
 fn default_delete_table() -> bool {
     true
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct BatchConfig {
-    pub description: String,
-    pub number_of_actions: usize,
-    pub sequential_execution: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct WarmupConfig {
-    pub batches: usize,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MeasurementConfig {
-    pub batches: usize,
-    pub collect_metrics: bool,
-    pub metrics_interval: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -80,14 +47,7 @@ pub struct LatencyStats {
     pub std_dev_ms: f64,
 }
 
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceStats {
-    pub mean: f64,
-    pub max: f64,
-}
-
-pub async fn run_benchmark(config: BenchmarkConfig) -> BenchmarkResults {
+pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkResults {
     let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(aws_config::Region::new(config.action_config.region.clone()))
         .load()
@@ -123,7 +83,7 @@ pub async fn run_benchmark(config: BenchmarkConfig) -> BenchmarkResults {
     }
 }
 
-async fn setup_table(client: &Client, config: &BenchmarkConfig) {
+async fn setup_table(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
     let table_name = &config.action_config.table_name;
 
     let _ = client
@@ -173,7 +133,7 @@ async fn setup_table(client: &Client, config: &BenchmarkConfig) {
     }
 }
 
-async fn cleanup_table(client: &Client, config: &BenchmarkConfig) {
+async fn cleanup_table(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
     let _ = client
         .delete_table()
         .table_name(&config.action_config.table_name)
@@ -181,7 +141,7 @@ async fn cleanup_table(client: &Client, config: &BenchmarkConfig) {
         .await;
 }
 
-async fn run_batch(client: &Client, config: &BenchmarkConfig) {
+async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
     let data = generate_1kib_data();
     for i in 0..config.batch.number_of_actions {
         let key = format!("{}{}", config.action_config.key_prefix, i);
@@ -212,7 +172,7 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig) {
 
 async fn run_batch_with_metrics(
     client: &Client,
-    config: &BenchmarkConfig,
+    config: &BenchmarkConfig<ActionConfig>,
 ) -> (Vec<f64>, Vec<f64>, Vec<f64>) {
     let mut latencies = Vec::new();
     let cpu_samples = Arc::new(Mutex::new(Vec::new()));
@@ -297,22 +257,4 @@ fn calculate_latency_stats(latencies: &[f64]) -> LatencyStats {
         p99_ms: percentile(&sorted, 0.99),
         std_dev_ms: std_dev,
     }
-}
-
-fn calculate_resource_stats(samples: &[f64]) -> ResourceStats {
-    if samples.is_empty() {
-        return ResourceStats {
-            mean: 0.0,
-            max: 0.0,
-        };
-    }
-    ResourceStats {
-        mean: samples.iter().sum::<f64>() / samples.len() as f64,
-        max: samples.iter().cloned().fold(f64::NEG_INFINITY, f64::max),
-    }
-}
-
-fn percentile(sorted: &[f64], p: f64) -> f64 {
-    let idx = (p * (sorted.len() - 1) as f64).round() as usize;
-    sorted[idx]
 }
