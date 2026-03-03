@@ -424,6 +424,8 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
 
         fun smithyXml(runtimeConfig: RuntimeConfig) = CargoDependency.smithyXml(runtimeConfig).toType()
 
+        fun smithySchema(runtimeConfig: RuntimeConfig) = CargoDependency.smithySchema(runtimeConfig).toType()
+
         private fun smithyProtocolTest(runtimeConfig: RuntimeConfig) =
             CargoDependency.smithyProtocolTestHelpers(runtimeConfig).toType()
 
