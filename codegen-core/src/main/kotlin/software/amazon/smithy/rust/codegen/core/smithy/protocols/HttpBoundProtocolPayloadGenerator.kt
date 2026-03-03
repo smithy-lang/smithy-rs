@@ -95,7 +95,12 @@ class HttpBoundProtocolPayloadGenerator(
         // need to take ownership.
         return if (payloadMemberName == null) {
             ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = false)
-        } else if (operationShape.isInputEventStream(model)) {
+        } else if (
+            when (httpMessageType) {
+                HttpMessageType.REQUEST -> operationShape.isInputEventStream(model)
+                HttpMessageType.RESPONSE -> operationShape.isOutputEventStream(model)
+            }
+        ) {
             ProtocolPayloadGenerator.PayloadMetadata(takesOwnership = true)
         } else {
             val member = shape.expectMember(payloadMemberName)

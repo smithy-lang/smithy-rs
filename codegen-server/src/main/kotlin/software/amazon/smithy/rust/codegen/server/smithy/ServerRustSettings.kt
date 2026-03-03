@@ -108,7 +108,13 @@ data class ServerCodegenConfig(
      *  able to define the converters in their Rust application code.
      */
     val experimentalCustomValidationExceptionWithReasonPleaseDoNotUse: String? = defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
-    val addValidationExceptionToConstrainedOperations: Boolean = DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
+    /**
+     * @deprecated This flag is deprecated. `smithy.framework#ValidationException` is now automatically added to operations
+     * with constrained inputs unless a custom validation exception (a structure with the `@validationException`
+     * trait) is defined in the model. Setting this to false will disable the automatic addition, but this
+     * behavior is deprecated and may be removed in a future release.
+     */
+    val addValidationExceptionToConstrainedOperations: Boolean? = null,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
 ) : CoreCodegenConfig(
@@ -118,7 +124,6 @@ data class ServerCodegenConfig(
         private const val DEFAULT_PUBLIC_CONSTRAINED_TYPES = true
         private const val DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS = false
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
-        private const val DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS = false
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         const val DEFAULT_HTTP_1X = false
 
@@ -183,10 +188,9 @@ data class ServerCodegenConfig(
                         defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse,
                     ),
                 addValidationExceptionToConstrainedOperations =
-                    node.get().getBooleanMemberOrDefault(
+                    node.get().getBooleanMember(
                         "addValidationExceptionToConstrainedOperations",
-                        DEFAULT_ADD_VALIDATION_EXCEPTION_TO_CONSTRAINED_OPERATIONS,
-                    ),
+                    ).orElse(null)?.value,
                 alwaysSendEventStreamInitialResponse =
                     node.get().getBooleanMemberOrDefault(
                         "alwaysSendEventStreamInitialResponse",

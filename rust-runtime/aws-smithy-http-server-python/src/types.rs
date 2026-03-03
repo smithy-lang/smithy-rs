@@ -373,6 +373,12 @@ impl From<aws_smithy_types::DateTime> for DateTime {
     }
 }
 
+impl From<DateTime> for aws_smithy_types::DateTime {
+    fn from(other: DateTime) -> aws_smithy_types::DateTime {
+        other.0
+    }
+}
+
 impl Deref for DateTime {
     type Target = aws_smithy_types::DateTime;
 

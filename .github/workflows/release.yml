@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  rust_version: 1.91.0
+  rust_version: 1.91.1
 
 name: Release smithy-rs
 on:
