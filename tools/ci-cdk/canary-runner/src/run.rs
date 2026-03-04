@@ -350,6 +350,7 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     let invoke_start_time = SystemTime::now();
     let mut invoke_result = Ok(());
     let mut init_durations = Vec::new();
+    let mut failed_cold_starts = 0;
     for i in 0..100 {
         info!("Cold start invocation {}/100", i + 1);
 
@@ -392,15 +393,17 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
             .await
             .context(here!("failed to wait for Lambda update"))?;
 
-        match invoke_lambda(lambda_client.clone(), bundle_name).await {
-            Ok(init_duration) => {
-                if let Some(duration) = init_duration {
-                    init_durations.push(duration);
-                }
+        match invoke_lambda_until_cold_start(lambda_client.clone(), bundle_name).await {
+            Ok(duration) => {
+                init_durations.push(duration);
             }
             Err(e) => {
-                invoke_result = Err(e);
-                break;
+                if e.to_string().contains("Failed to get cold start") {
+                    failed_cold_starts += 1;
+                } else {
+                    invoke_result = Err(e);
+                    break;
+                }
             }
         }
     }
@@ -408,6 +411,12 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
 
     if !init_durations.is_empty() {
         print_cold_start_stats(&init_durations);
+    }
+    if failed_cold_starts > 0 {
+        info!(
+            "Failed to achieve cold start: {} invocations",
+            failed_cold_starts
+        );
     }
 
     info!("Deleting the canary Lambda...");
@@ -547,6 +556,36 @@ async fn create_lambda_fn(
         bail!("Timed out waiting for canary Lambda to become active");
     }
     Ok(())
+}
+
+async fn invoke_lambda_until_cold_start(
+    lambda_client: lambda::Client,
+    bundle_name: &str,
+) -> Result<f64> {
+    const MAX_ATTEMPTS: u32 = 10;
+
+    for attempt in 1..=MAX_ATTEMPTS {
+        match invoke_lambda(lambda_client.clone(), bundle_name).await? {
+            Some(duration) => {
+                if attempt > 1 {
+                    info!("Cold start confirmed on attempt {}", attempt);
+                }
+                return Ok(duration);
+            }
+            None => {
+                info!(
+                    "Warm start detected (attempt {}/{}), retrying...",
+                    attempt, MAX_ATTEMPTS
+                );
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
+    }
+
+    Err(anyhow::anyhow!(
+        "Failed to get cold start after {} attempts",
+        MAX_ATTEMPTS
+    ))
 }
 
 async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<Option<f64>> {
