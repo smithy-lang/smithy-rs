@@ -221,19 +221,22 @@ class SchemaGeneratorTest {
             unitTest(
                 "trait_filtering",
                 """
-                use aws_smithy_schema::{Schema, ShapeId};
+                use aws_smithy_schema::{Schema, ShapeId, Trait};
+                use aws_smithy_schema::traits::SensitiveTrait;
                 let s = SecretData { name: None, password: None, old_field: None };
 
-                // @sensitive is an included annotation trait
+                // @sensitive is included and uses the typed SensitiveTrait
                 let sensitive_id = ShapeId::new("smithy.api#sensitive");
                 assert!(s.traits().contains(&sensitive_id), "should include @sensitive");
+                let sensitive = s.traits().get(&sensitive_id).unwrap();
+                assert!(sensitive.as_any().downcast_ref::<SensitiveTrait>().is_some(),
+                    "should be a typed SensitiveTrait");
 
                 // @deprecated is NOT in the inclusion list
                 let deprecated_id = ShapeId::new("smithy.api#deprecated");
                 assert!(!s.traits().contains(&deprecated_id), "should exclude @deprecated");
 
-                // Only @sensitive should be on the structure
-                assert_eq!(s.traits().len(), 1, "only @sensitive on the structure");
+                assert_eq!(s.traits().len(), 1);
                 """,
             )
         }

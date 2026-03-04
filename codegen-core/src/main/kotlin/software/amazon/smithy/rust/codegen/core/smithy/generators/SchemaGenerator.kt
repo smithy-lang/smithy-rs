@@ -30,6 +30,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
 /**
  * Generates Schema implementations for Smithy shapes.
@@ -135,23 +136,64 @@ class SchemaGenerator(
                     "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
                     "StringTrait" to smithySchema.resolve("StringTrait"),
                     "ShapeId" to smithySchema.resolve("ShapeId"),
+                    "traits" to smithySchema.resolve("traits"),
                 )
             for (trait in traits) {
-                val traitId = trait.toShapeId().toString().replace("#", "##")
-                val stringValue = trait.stringValue()
-                if (stringValue != null) {
+                val typedInsert = typedTraitInsert(trait)
+                if (typedInsert != null) {
                     rustTemplate(
-                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
+                        """map.insert(Box::new(#{traits}::$typedInsert));""",
                         *codegenScope,
                     )
                 } else {
-                    rustTemplate(
-                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
-                        *codegenScope,
-                    )
+                    val traitId = trait.toShapeId().toString().replace("#", "##")
+                    val stringValue = trait.stringValue()
+                    if (stringValue != null) {
+                        rustTemplate(
+                            """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
+                            *codegenScope,
+                        )
+                    } else {
+                        rustTemplate(
+                            """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
+                            *codegenScope,
+                        )
+                    }
                 }
             }
         }
+
+    /**
+     * Returns a Rust expression for constructing a typed trait, or null if no
+     * typed representation exists (falls back to generic AnnotationTrait/StringTrait).
+     */
+    private fun typedTraitInsert(trait: SmithyTrait): String? {
+        val id = trait.toShapeId().toString()
+        val stringValue = trait.stringValue()
+        return when (id) {
+            // String-valued traits
+            "smithy.api#jsonName" -> "JsonNameTrait::new(${stringValue!!.dq()})"
+            "smithy.api#xmlName" -> "XmlNameTrait::new(${stringValue!!.dq()})"
+            "smithy.api#mediaType" -> "MediaTypeTrait::new(${stringValue!!.dq()})"
+            "smithy.api#timestampFormat" -> "TimestampFormatTrait::new(${stringValue!!.dq()})"
+            "smithy.api#httpHeader" -> "HttpHeaderTrait::new(${stringValue!!.dq()})"
+            "smithy.api#httpQuery" -> "HttpQueryTrait::new(${stringValue!!.dq()})"
+            "smithy.api#httpPrefixHeaders" -> "HttpPrefixHeadersTrait::new(${stringValue!!.dq()})"
+            // Annotation traits
+            "smithy.api#sensitive" -> "SensitiveTrait"
+            "smithy.api#xmlAttribute" -> "XmlAttributeTrait"
+            "smithy.api#xmlFlattened" -> "XmlFlattenedTrait"
+            "smithy.api#httpLabel" -> "HttpLabelTrait"
+            "smithy.api#httpPayload" -> "HttpPayloadTrait"
+            "smithy.api#httpQueryParams" -> "HttpQueryParamsTrait"
+            "smithy.api#httpResponseCode" -> "HttpResponseCodeTrait"
+            "smithy.api#streaming" -> "StreamingTrait"
+            "smithy.api#eventHeader" -> "EventHeaderTrait"
+            "smithy.api#eventPayload" -> "EventPayloadTrait"
+            "smithy.api#hostLabel" -> "HostLabelTrait"
+            else -> null
+        }
+    }
 
     private fun renderMembers(
         writer: RustWriter,
