@@ -28,7 +28,7 @@ pub use schema::member::MemberSchema;
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
-pub use schema::trait_type::Trait;
+pub use schema::trait_type::{AnnotationTrait, StringTrait, Trait};
 
 pub mod prelude {
     pub use crate::schema::prelude::*;

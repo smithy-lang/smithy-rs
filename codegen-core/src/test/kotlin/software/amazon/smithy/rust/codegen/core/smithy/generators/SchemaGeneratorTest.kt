@@ -194,4 +194,48 @@ class SchemaGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `trait filtering includes sensitive and jsonName`() {
+        val traitModel =
+            """
+            namespace test
+            @sensitive
+            structure SecretData {
+                @jsonName("user_name")
+                name: String,
+                password: String,
+                @deprecated
+                oldField: String
+            }
+            """.asSmithyModel()
+
+        val traitProvider = testSymbolProvider(traitModel)
+        val traitContext = testCodegenContext(traitModel)
+        val project = TestWorkspace.testProject(traitProvider)
+        val shape = traitModel.lookup<StructureShape>("test#SecretData")
+        project.useShapeWriter(shape) {
+            StructureGenerator(traitModel, traitProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(traitContext, this, shape).render()
+            unitTest(
+                "trait_filtering",
+                """
+                use aws_smithy_schema::{Schema, ShapeId};
+                let s = SecretData { name: None, password: None, old_field: None };
+
+                // @sensitive is an included annotation trait
+                let sensitive_id = ShapeId::new("smithy.api#sensitive");
+                assert!(s.traits().contains(&sensitive_id), "should include @sensitive");
+
+                // @deprecated is NOT in the inclusion list
+                let deprecated_id = ShapeId::new("smithy.api#deprecated");
+                assert!(!s.traits().contains(&deprecated_id), "should exclude @deprecated");
+
+                // Only @sensitive should be on the structure
+                assert_eq!(s.traits().len(), 1, "only @sensitive on the structure");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }

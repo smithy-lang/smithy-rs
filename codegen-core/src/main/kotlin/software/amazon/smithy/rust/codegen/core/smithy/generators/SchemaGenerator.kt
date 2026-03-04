@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -40,6 +41,7 @@ class SchemaGenerator(
     private val codegenContext: CodegenContext,
     private val writer: RustWriter,
     private val shape: Shape,
+    private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -71,11 +73,16 @@ class SchemaGenerator(
                 }
 
                 fn traits(&self) -> &#{TraitMap} {
-                    static TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(#{TraitMap}::new);
+                    static TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
+                        let mut map = #{TraitMap}::new();
+                        #{traitInsertions}
+                        map
+                    });
                     &TRAITS
                 }
                 """,
                 *codegenScope,
+                "traitInsertions" to generateTraitInsertions(shape),
             )
             renderMembers(writer, schemaPrefix)
         }
@@ -114,6 +121,36 @@ class SchemaGenerator(
             is UnionShape -> "Union"
             is MemberShape -> "Member"
             else -> throw IllegalArgumentException("Unsupported shape type: ${shape.type}")
+        }
+
+    /**
+     * Generates a Writable that emits `map.insert(...)` calls for each
+     * included trait on the given shape.
+     */
+    private fun generateTraitInsertions(shape: Shape) =
+        writable {
+            val traits = traitFilter.traitsFor(shape)
+            val codegenScope =
+                arrayOf(
+                    "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
+                    "StringTrait" to smithySchema.resolve("StringTrait"),
+                    "ShapeId" to smithySchema.resolve("ShapeId"),
+                )
+            for (trait in traits) {
+                val traitId = trait.toShapeId().toString().replace("#", "##")
+                val stringValue = trait.stringValue()
+                if (stringValue != null) {
+                    rustTemplate(
+                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
+                        *codegenScope,
+                    )
+                }
+            }
         }
 
     private fun renderMembers(
