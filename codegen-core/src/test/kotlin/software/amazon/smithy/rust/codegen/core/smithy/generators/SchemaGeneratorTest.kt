@@ -297,4 +297,32 @@ class SchemaGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `SchemaStructureCustomization auto-generates schema with StructureGenerator`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#MyStruct")
+        project.useShapeWriter(shape) {
+            // Schema is generated automatically via the customization — no separate SchemaGenerator call
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                shape,
+                listOf(SchemaStructureCustomization(codegenContext)),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
+            unitTest(
+                "auto_schema",
+                """
+                use aws_smithy_schema::{Schema, ShapeType};
+                let s = MyStruct { name: None, age: None, active: None };
+                assert_eq!(s.shape_type(), ShapeType::Structure);
+                assert_eq!(s.shape_id().as_str(), "test#MyStruct");
+                assert!(s.member_schema("name").is_some());
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }
