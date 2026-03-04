@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
@@ -233,6 +234,64 @@ class SchemaGeneratorTest {
 
                 // Only @sensitive should be on the structure
                 assert_eq!(s.traits().len(), 1, "only @sensitive on the structure");
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `schema for recursive structure compiles`() {
+        val recursiveModel =
+            RecursiveShapeBoxer().transform(
+                """
+                namespace test
+                structure TreeNode {
+                    value: String,
+                    children: TreeNodeList
+                }
+                list TreeNodeList {
+                    member: TreeNode
+                }
+                structure LinkedNode {
+                    value: String,
+                    next: LinkedNode
+                }
+                """.asSmithyModel(),
+            )
+
+        val recProvider = testSymbolProvider(recursiveModel)
+        val recContext = testCodegenContext(recursiveModel)
+        val project = TestWorkspace.testProject(recProvider)
+
+        // Recursive through a list
+        val treeNode = recursiveModel.lookup<StructureShape>("test#TreeNode")
+        project.useShapeWriter(treeNode) {
+            StructureGenerator(recursiveModel, recProvider, this, treeNode, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(recContext, this, treeNode).render()
+            unitTest(
+                "recursive_via_list",
+                """
+                use aws_smithy_schema::{Schema, ShapeType};
+                let node = TreeNode { value: None, children: None };
+                assert_eq!(node.shape_type(), ShapeType::Structure);
+                assert_eq!(node.member_schema("children").unwrap().shape_type(), ShapeType::List);
+                """,
+            )
+        }
+
+        // Directly recursive (uses Box via RecursiveShapeBoxer)
+        val linkedNode = recursiveModel.lookup<StructureShape>("test#LinkedNode")
+        project.useShapeWriter(linkedNode) {
+            StructureGenerator(recursiveModel, recProvider, this, linkedNode, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(recContext, this, linkedNode).render()
+            unitTest(
+                "directly_recursive",
+                """
+                use aws_smithy_schema::{Schema, ShapeType};
+                let node = LinkedNode { value: None, next: None };
+                assert_eq!(node.shape_type(), ShapeType::Structure);
+                assert_eq!(node.member_schema("next").unwrap().shape_type(), ShapeType::Structure);
                 """,
             )
         }
