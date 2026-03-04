@@ -27,6 +27,27 @@ class SchemaGeneratorTest {
             active: Boolean
         }
 
+        structure ComplexStruct {
+            label: String,
+            count: Long,
+            ratio: Double,
+            enabled: Boolean,
+            data: Blob,
+            created_at: Timestamp,
+            nested: MyStruct,
+            tags: TagList,
+            metadata: StringMap
+        }
+
+        list TagList {
+            member: String
+        }
+
+        map StringMap {
+            key: String,
+            value: String
+        }
+
         union MyUnion {
             stringVariant: String,
             intVariant: Integer
@@ -92,6 +113,61 @@ class SchemaGeneratorTest {
                 let active_schema = s.member_schema("active").unwrap();
                 assert_eq!(active_schema.shape_type(), ShapeType::Boolean);
                 assert_eq!(active_schema.member_index(), Some(2));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `schema for complex structure with nested types compiles`() {
+        val project = TestWorkspace.testProject(provider)
+        val myStruct = model.lookup<StructureShape>("test#MyStruct")
+        val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
+        project.useShapeWriter(myStruct) {
+            StructureGenerator(model, provider, this, myStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, myStruct).render()
+        }
+        project.useShapeWriter(complexStruct) {
+            StructureGenerator(model, provider, this, complexStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, complexStruct).render()
+            unitTest(
+                "complex_schema",
+                """
+                use aws_smithy_schema::{Schema, ShapeType};
+                let s = ComplexStruct {
+                    label: None, count: None, ratio: None, enabled: None,
+                    data: None, created_at: None, nested: None, tags: None, metadata: None,
+                };
+                assert_eq!(s.shape_type(), ShapeType::Structure);
+                assert_eq!(s.shape_id().as_str(), "test#ComplexStruct");
+
+                // Primitive member types
+                assert_eq!(s.member_schema("label").unwrap().shape_type(), ShapeType::String);
+                assert_eq!(s.member_schema("count").unwrap().shape_type(), ShapeType::Long);
+                assert_eq!(s.member_schema("ratio").unwrap().shape_type(), ShapeType::Double);
+                assert_eq!(s.member_schema("enabled").unwrap().shape_type(), ShapeType::Boolean);
+                assert_eq!(s.member_schema("data").unwrap().shape_type(), ShapeType::Blob);
+                assert_eq!(s.member_schema("created_at").unwrap().shape_type(), ShapeType::Timestamp);
+
+                // Nested structure member
+                assert_eq!(s.member_schema("nested").unwrap().shape_type(), ShapeType::Structure);
+
+                // List member
+                assert_eq!(s.member_schema("tags").unwrap().shape_type(), ShapeType::List);
+
+                // Map member
+                assert_eq!(s.member_schema("metadata").unwrap().shape_type(), ShapeType::Map);
+
+                // All 9 members present via iterator
+                let names: Vec<&str> = s.members().map(|(n, _)| n).collect();
+                assert_eq!(names.len(), 9);
+
+                // Index-based access consistent with iterator order
+                for (i, (name, _)) in s.members().enumerate() {
+                    let (idx_name, _) = s.member_schema_by_index(i).unwrap();
+                    assert_eq!(name, idx_name);
+                }
                 """,
             )
         }
