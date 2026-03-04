@@ -10,6 +10,7 @@ import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameters
 import software.amazon.smithy.rulesengine.traits.EndpointTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointBddGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointTestGenerator
@@ -25,19 +26,39 @@ class EndpointTypesGenerator(
     private val codegenContext: ClientCodegenContext,
     private val rules: EndpointRuleSet?,
     val tests: List<EndpointTestCase>,
+    private val bddParameters: Parameters?,
 ) {
-    val params: Parameters = rules?.parameters ?: Parameters.builder().build()
+    val params: Parameters = bddParameters ?: rules?.parameters ?: Parameters.builder().build()
     private val runtimeConfig = codegenContext.runtimeConfig
     private val customizations = codegenContext.rootDecorator.endpointCustomizations(codegenContext)
     private val stdlib =
         customizations
             .flatMap { it.customRuntimeFunctions(codegenContext) }
+    private val endpointIndex = EndpointRulesetIndex.of(codegenContext.model)
 
     companion object {
         fun fromContext(codegenContext: ClientCodegenContext): EndpointTypesGenerator {
             val index = EndpointRulesetIndex.of(codegenContext.model)
+
+            // If service has BDD trait, extract parameters from it
+            // TODO(bdd): Make this the default when BDDs published for all models
+            val bddTrait = index.getEndpointBddTrait(codegenContext.serviceShape)
+            if (bddTrait != null) {
+                return EndpointTypesGenerator(
+                    codegenContext,
+                    null,
+                    index.endpointTests(codegenContext.serviceShape),
+                    bddTrait.parameters,
+                )
+            }
+
             val rulesOrNull = index.endpointRulesForService(codegenContext.serviceShape)
-            return EndpointTypesGenerator(codegenContext, rulesOrNull, index.endpointTests(codegenContext.serviceShape))
+            return EndpointTypesGenerator(
+                codegenContext,
+                rulesOrNull,
+                index.endpointTests(codegenContext.serviceShape),
+                null,
+            )
         }
     }
 
@@ -46,10 +67,33 @@ class EndpointTypesGenerator(
     fun paramsBuilder(): RuntimeType = EndpointParamsGenerator(codegenContext, params).paramsBuilder()
 
     fun defaultResolver(): RuntimeType? =
-        rules?.let { EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(it) }
+        defaultResolverBdd() ?: rules?.let {
+            EndpointResolverGenerator(codegenContext, stdlib).defaultEndpointResolver(
+                it,
+            )
+        }
+
+    fun defaultResolverBdd(): RuntimeType? =
+        endpointIndex.getEndpointBddTrait(codegenContext.serviceShape)?.let {
+            EndpointBddGenerator(
+                codegenContext,
+                it,
+                stdlib,
+            ).generateBddResolver()
+        }
 
     fun testGenerator(): Writable =
-        defaultResolver()?.let {
+        // BDD takes priority just like in EndpointDecorator
+        // TODO(bdd): Make this the default when BDDs published for all models
+        defaultResolverBdd()?.let {
+            EndpointTestGenerator(
+                tests,
+                paramsStruct(),
+                it,
+                params,
+                codegenContext = codegenContext,
+            ).generate()
+        } ?: defaultResolver()?.let {
             EndpointTestGenerator(
                 tests,
                 paramsStruct(),

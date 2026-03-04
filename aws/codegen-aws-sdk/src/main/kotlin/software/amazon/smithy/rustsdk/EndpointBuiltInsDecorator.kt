@@ -16,6 +16,7 @@ import software.amazon.smithy.rulesengine.language.EndpointRuleSet
 import software.amazon.smithy.rulesengine.language.syntax.parameters.BuiltIns
 import software.amazon.smithy.rulesengine.language.syntax.parameters.Parameter
 import software.amazon.smithy.rulesengine.language.syntax.parameters.ParameterType
+import software.amazon.smithy.rulesengine.traits.EndpointBddTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.EndpointCustomization
@@ -49,15 +50,26 @@ import java.util.Optional
 /** load a builtIn parameter from a ruleset by name */
 fun EndpointRuleSet.getBuiltIn(builtIn: String) = parameters.toList().find { it.builtIn == Optional.of(builtIn) }
 
+fun EndpointBddTrait.getBuiltIn(builtIn: String) = parameters.find { it.builtIn == Optional.of(builtIn) }
+
 /** load a builtIn parameter from a ruleset. The returned builtIn is the one defined in the ruleset (including latest docs, etc.) */
 fun EndpointRuleSet.getBuiltIn(builtIn: Parameter) = getBuiltIn(builtIn.builtIn.orNull()!!)
+
+fun EndpointBddTrait.getBuiltIn(builtIn: Parameter) = getBuiltIn(builtIn.builtIn.orNull()!!)
 
 fun ClientCodegenContext.getBuiltIn(builtIn: Parameter): Parameter? = getBuiltIn(builtIn.builtIn.orNull()!!)
 
 fun ClientCodegenContext.getBuiltIn(builtIn: String): Parameter? {
     val idx = EndpointRulesetIndex.of(model)
-    val rules = idx.endpointRulesForService(serviceShape) ?: return null
-    return rules.getBuiltIn(builtIn)
+    val endpointBddTrait = idx.getEndpointBddTrait(serviceShape)
+    val rules = idx.endpointRulesForService(serviceShape)
+    return if (endpointBddTrait != null) {
+        endpointBddTrait.getBuiltIn(builtIn)
+    } else if (rules != null) {
+        rules.getBuiltIn(builtIn)
+    } else {
+        null
+    }
 }
 
 private fun promotedBuiltins(parameter: Parameter) =
@@ -97,9 +109,17 @@ fun Model.loadBuiltIn(
     val model = this
     val idx = EndpointRulesetIndex.of(model)
     val service = model.expectShape(serviceId, ServiceShape::class.java)
-    val rules = idx.endpointRulesForService(service) ?: return null
+    val endpointBddTrait = idx.getEndpointBddTrait(service)
+    val rules = idx.endpointRulesForService(service)
+
     // load the builtIn with a matching name from the ruleset allowing for any docs updates
-    return rules.getBuiltIn(builtInSrc)
+    if (endpointBddTrait != null) {
+        return endpointBddTrait.getBuiltIn(builtInSrc)
+    } else if (rules != null) {
+        return rules.getBuiltIn(builtInSrc)
+    } else {
+        return null
+    }
 }
 
 fun Model.sdkConfigSetter(
