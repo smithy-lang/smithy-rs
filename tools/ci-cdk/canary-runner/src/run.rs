@@ -33,6 +33,7 @@ use crate::build_bundle::BuildBundleArgs;
 
 use aws_sdk_cloudwatch as cloudwatch;
 use aws_sdk_lambda as lambda;
+use aws_sdk_lambda::client::Waiters;
 use aws_sdk_s3 as s3;
 use std::collections::HashMap;
 
@@ -362,9 +363,56 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     .await
     .context(here!())?;
 
-    info!("Invoking the canary Lambda...");
+    info!("Running 100 cold start invocations...");
     let invoke_start_time = SystemTime::now();
-    let invoke_result = invoke_lambda(lambda_client.clone(), bundle_name).await;
+    let mut invoke_result = Ok(());
+    for i in 0..100 {
+        info!("Cold start invocation {}/100", i + 1);
+
+        let random_value = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("time in range")
+            .as_nanos()
+            .to_string();
+
+        let mut env_builder = lambda::types::Environment::builder()
+            .variables("RUST_BACKTRACE", "1")
+            .variables("RUST_LOG", "info")
+            .variables("CANARY_S3_BUCKET_NAME", &options.lambda_test_s3_bucket_name)
+            .variables(
+                "CANARY_S3_MRAP_BUCKET_ARN",
+                &options.lambda_test_s3_mrap_bucket_arn,
+            )
+            .variables(
+                "CANARY_S3_EXPRESS_BUCKET_NAME",
+                &options.lambda_test_s3_express_bucket_name,
+            )
+            .variables("CANARY_RANDOM", random_value);
+
+        if let Some(expected) = &options.expected_speech_text_by_transcribe {
+            env_builder = env_builder.variables("CANARY_EXPECTED_TRANSCRIBE_RESULT", expected);
+        }
+
+        lambda_client
+            .update_function_configuration()
+            .function_name(bundle_name)
+            .environment(env_builder.build())
+            .send()
+            .await
+            .context(here!("failed to update Lambda configuration"))?;
+
+        lambda_client
+            .wait_until_function_updated()
+            .function_name(bundle_name)
+            .wait(Duration::from_secs(60))
+            .await
+            .context(here!("failed to wait for Lambda update"))?;
+
+        invoke_result = invoke_lambda(lambda_client.clone(), bundle_name).await;
+        if invoke_result.is_err() {
+            break;
+        }
+    }
     let invoke_time = invoke_start_time.elapsed().expect("time in range");
 
     info!("Deleting the canary Lambda...");
