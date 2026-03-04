@@ -366,6 +366,7 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
     info!("Running 100 cold start invocations...");
     let invoke_start_time = SystemTime::now();
     let mut invoke_result = Ok(());
+    let mut init_durations = Vec::new();
     for i in 0..100 {
         info!("Cold start invocation {}/100", i + 1);
 
@@ -408,12 +409,23 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
             .await
             .context(here!("failed to wait for Lambda update"))?;
 
-        invoke_result = invoke_lambda(lambda_client.clone(), bundle_name).await;
-        if invoke_result.is_err() {
-            break;
+        match invoke_lambda(lambda_client.clone(), bundle_name).await {
+            Ok(init_duration) => {
+                if let Some(duration) = init_duration {
+                    init_durations.push(duration);
+                }
+            }
+            Err(e) => {
+                invoke_result = Err(e);
+                break;
+            }
         }
     }
     let invoke_time = invoke_start_time.elapsed().expect("time in range");
+
+    if !init_durations.is_empty() {
+        print_cold_start_stats(&init_durations);
+    }
 
     info!("Deleting the canary Lambda...");
     delete_lambda_fn(lambda_client, bundle_name)
@@ -553,7 +565,7 @@ async fn create_lambda_fn(
     Ok(())
 }
 
-async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<()> {
+async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Result<Option<f64>> {
     use lambda::primitives::Blob;
     use lambda::types::*;
 
@@ -567,11 +579,16 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
         .await
         .context(here!("failed to invoke the canary Lambda"))?;
 
+    let mut init_duration = None;
     if let Some(log_result) = response.log_result() {
-        info!(
-            "Last 4 KB of canary logs:\n----\n{}\n----\n",
-            std::str::from_utf8(&base64::decode(log_result)?)?
-        );
+        let decoded = base64::decode(log_result)?;
+        let logs = std::str::from_utf8(&decoded)?;
+        info!("Last 4 KB of canary logs:\n----\n{}\n----\n", logs);
+
+        // Parse init duration from logs (format: "Init Duration: 1234.56 ms")
+        if let Some(duration) = parse_init_duration(logs) {
+            init_duration = Some(duration);
+        }
     }
     if response.status_code() != 200 || response.function_error().is_some() {
         bail!(
@@ -612,7 +629,43 @@ async fn invoke_lambda(lambda_client: lambda::Client, bundle_name: &str) -> Resu
             bail!("The canary failed.");
         }
     }
-    Ok(())
+    Ok(init_duration)
+}
+
+fn parse_init_duration(logs: &str) -> Option<f64> {
+    for line in logs.lines() {
+        if line.contains("Init Duration:") {
+            // Format: "Init Duration: 1234.56 ms"
+            if let Some(duration_str) = line.split("Init Duration:").nth(1) {
+                if let Some(num_str) = duration_str.trim().split_whitespace().next() {
+                    return num_str.parse::<f64>().ok();
+                }
+            }
+        }
+    }
+    None
+}
+
+fn print_cold_start_stats(durations: &[f64]) {
+    let mut sorted = durations.to_vec();
+    sorted.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let mean = sorted.iter().sum::<f64>() / sorted.len() as f64;
+    let p50 = sorted[sorted.len() * 50 / 100];
+    let p90 = sorted[sorted.len() * 90 / 100];
+    let p99 = sorted[sorted.len() * 99 / 100];
+
+    let variance = sorted.iter().map(|x| (x - mean).powi(2)).sum::<f64>() / sorted.len() as f64;
+    let std_dev = variance.sqrt();
+
+    info!("\n=== Cold Start Metrics (ms) ===");
+    info!("Samples: {}", sorted.len());
+    info!("Mean: {:.2}", mean);
+    info!("P50: {:.2}", p50);
+    info!("P90: {:.2}", p90);
+    info!("P99: {:.2}", p99);
+    info!("Std Dev: {:.2}", std_dev);
+    info!("================================\n");
 }
 
 async fn delete_lambda_fn(lambda_client: lambda::Client, bundle_name: &str) -> Result<()> {
