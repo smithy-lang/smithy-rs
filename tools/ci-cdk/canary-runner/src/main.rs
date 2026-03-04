@@ -6,6 +6,7 @@
 use clap::Parser;
 use tracing_subscriber::{filter::EnvFilter, prelude::*};
 
+mod arch;
 mod build_bundle;
 mod generate_matrix;
 mod run;

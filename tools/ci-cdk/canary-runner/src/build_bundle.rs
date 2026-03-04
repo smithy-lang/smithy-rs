@@ -19,6 +19,8 @@ use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::handle_failure;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 
+use crate::arch::Arch;
+
 struct RequiredDependency {
     name: &'static str,
     features: Option<Vec<&'static str>>,
@@ -202,6 +204,10 @@ pub struct BuildBundleArgs {
     #[clap(long)]
     pub musl: bool,
 
+    /// Lambda architecture
+    #[clap(long, default_value = "x86_64")]
+    pub architecture: Arch,
+
     /// Only generate the `Cargo.toml` file rather than building the entire bundle
     #[clap(long)]
     pub manifest_only: bool,
@@ -318,24 +324,42 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
         .context(format!("failed to write Cargo.toml in {manifest_path:?}"))?;
 
     if !opt.manifest_only {
+        // Check if cross is needed and available
+        let use_cross = opt.architecture == Arch::Aarch64;
+        if use_cross {
+            let cross_check = Command::new("cross").arg("--version").output();
+            if cross_check.is_err() || !cross_check.unwrap().status.success() {
+                bail!("cross is required for Aarch64 builds but is not installed. Install it with: cargo install cross");
+            }
+        }
+
         // Compile the canary Lambda
-        let mut command = Command::new("cargo");
+        let build_cmd = if use_cross { "cross" } else { "cargo" };
+        let mut command = Command::new(build_cmd);
         command
             .arg("build")
             .arg("--release")
             .arg("--manifest-path")
             .arg(&manifest_path);
-        if opt.musl {
-            command.arg("--target=x86_64-unknown-linux-musl");
+
+        let target = match (opt.musl, opt.architecture) {
+            (true, Arch::X86_64) => Some("x86_64-unknown-linux-musl"),
+            (true, Arch::Aarch64) => Some("aarch64-unknown-linux-musl"),
+            _ => None,
+        };
+
+        if let Some(target) = target {
+            command.arg(format!("--target={}", target));
         }
-        handle_failure("cargo build", &command.output()?)?;
+
+        handle_failure(&format!("{} build", build_cmd), &command.output()?)?;
 
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
         let target_path = {
             let mut path = repository_root.join("tools").join("target");
-            if opt.musl {
-                path = path.join("x86_64-unknown-linux-musl");
+            if let Some(target) = target {
+                path = path.join(target);
             }
             path.join("release")
         };
@@ -414,6 +438,7 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([
@@ -431,6 +456,7 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([
@@ -450,6 +476,7 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: true,
+                architecture: Arch::X86_64,
                 manifest_only: true,
             }),
             Args::try_parse_from([
@@ -469,6 +496,7 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
             }),
             Args::try_parse_from([

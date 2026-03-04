@@ -29,6 +29,7 @@ use smithy_rs_tool_common::macros::here;
 use smithy_rs_tool_common::release_tag::ReleaseTag;
 use tracing::{error, info};
 
+use crate::arch::Arch;
 use crate::build_bundle::BuildBundleArgs;
 
 use aws_sdk_cloudwatch as cloudwatch;
@@ -59,24 +60,6 @@ lazy_static::lazy_static! {
         pinned.sort();
         pinned
     };
-}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub(crate) enum Arch {
-    X86_64,
-    Aarch64,
-}
-
-impl std::str::FromStr for Arch {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        match s {
-            "x86_64" => Ok(Arch::X86_64),
-            "aarch64" => Ok(Arch::Aarch64),
-            _ => bail!("Invalid architecture: {}. Must be x86_64 or aarch64", s),
-        }
-    }
 }
 
 impl From<Arch> for lambda::types::Architecture {
@@ -456,6 +439,7 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
         musl: options.musl,
+        architecture: options.architecture,
         manifest_only: false,
     };
     info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
