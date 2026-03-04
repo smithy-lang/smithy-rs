@@ -278,6 +278,16 @@ open class EnumGenerator(
                     rust("&self.0")
                 },
         )
+        rustTemplate(
+            """
+            impl #{AsRef}<str> for ${context.enumName} {
+                fn as_ref(&self) -> &str {
+                    self.as_str()
+                }
+            }
+            """,
+            *preludeScope,
+        )
         // impl From<str> for Blah { ... }
         enumType.implFromForStrForUnnamedEnum(context)(this)
         // impl FromStr for Blah { ... }

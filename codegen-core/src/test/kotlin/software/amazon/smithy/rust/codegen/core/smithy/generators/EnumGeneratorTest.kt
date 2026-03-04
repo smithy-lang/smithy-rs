@@ -236,6 +236,40 @@ class EnumGeneratorTest {
         }
 
         @Test
+        fun `unnamed enums implement AsRef`() {
+            val model =
+                """
+                namespace test
+                @enum([
+                    { value: "Foo" },
+                    { value: "Bar" },
+                ])
+                string SomeEnum
+                """.asSmithyModel()
+
+            val shape = model.lookup<StringShape>("test#SomeEnum")
+            val provider = testSymbolProvider(model)
+            val project = TestWorkspace.testProject(provider)
+            project.moduleFor(shape) {
+                renderEnum(model, provider, shape)
+                unitTest(
+                    "unnamed_enums_implement_asref",
+                    """
+                    let foo = SomeEnum::from("Foo");
+                    let foo_ref: &str = foo.as_ref();
+                    assert_eq!(foo_ref, "Foo");
+
+                    fn takes_asref(s: impl AsRef<str>) -> String {
+                        s.as_ref().to_owned()
+                    }
+                    assert_eq!(takes_asref(SomeEnum::from("Bar")), "Bar");
+                    """,
+                )
+            }
+            project.compileAndTest()
+        }
+
+        @Test
         fun `it generates unnamed enums`() {
             val model =
                 """
