@@ -48,17 +48,23 @@ pub fn get_canaries_to_run(
 }
 
 #[derive(Clone)]
-pub struct CanaryEnv {}
+pub struct CanaryEnv {
+    pub(crate) s3_bucket_name: String,
+}
 
 impl fmt::Debug for CanaryEnv {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("CanaryEnv").finish()
+        f.debug_struct("CanaryEnv")
+            .field("s3_bucket_name", &self.s3_bucket_name)
+            .finish()
     }
 }
 
 impl CanaryEnv {
     pub fn from_env() -> Self {
-        Self {}
+        let s3_bucket_name =
+            std::env::var("CANARY_S3_BUCKET_NAME").expect("CANARY_S3_BUCKET_NAME must be set");
+        Self { s3_bucket_name }
     }
 }
 
