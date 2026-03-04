@@ -307,20 +307,30 @@ fn get_default_response_metrics(
     operation_time: Option<Duration>,
 ) -> DefaultResponseMetrics {
     let status = res.status();
-    let status_code = status.as_u16();
 
-    let error = if (400..500).contains(&status_code) {
-        Some(1)
+    let success = if status.is_success() {
+        Some(true)
     } else {
-        Some(0)
+        Some(false)
     };
 
-    let fault = if status_code >= 500 { Some(1) } else { Some(0) };
+    let client_error = if status.is_client_error() {
+        Some(true)
+    } else {
+        Some(false)
+    };
+
+    let server_error = if status.is_server_error() {
+        Some(true)
+    } else {
+        Some(false)
+    };
 
     DefaultResponseMetrics {
-        http_status_code: Some(status_code),
-        error,
-        fault,
+        http_status_code: Some(status.as_str().into()),
+        success,
+        client_error,
+        server_error,
         operation_time,
     }
 }
@@ -361,8 +371,13 @@ fn configure_default_response_metrics(
         http_status_code: metrics
             .http_status_code
             .filter(|_| !config.disable_http_status_code),
-        error: metrics.error.filter(|_| !config.disable_error),
-        fault: metrics.fault.filter(|_| !config.disable_fault),
+        success: metrics.success.filter(|_| !config.disable_success),
+        client_error: metrics
+            .client_error
+            .filter(|_| !config.disable_client_error),
+        server_error: metrics
+            .server_error
+            .filter(|_| !config.disable_server_error),
         operation_time: metrics
             .operation_time
             .filter(|_| !config.disable_operation_time),
