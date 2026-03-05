@@ -258,6 +258,52 @@ class SchemaGeneratorTest {
     }
 
     @Test
+    fun `deserialize method works with JsonCodec`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#MyStruct")
+        project.useShapeWriter(shape) {
+            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, shape).render()
+            // Add aws-smithy-json dependency
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "deserialize_from_json",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let json = br#"{"name":"Alice","age":30,"active":true}"#;
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut deser = codec.create_deserializer(json);
+                let result = MyStruct::deserialize(&mut deser).expect("deserialization should succeed");
+                assert_eq!(result.name, Some("Alice".to_string()));
+                assert_eq!(result.age, Some(30));
+                assert_eq!(result.active, Some(true));
+                """,
+            )
+            unitTest(
+                "deserialize_partial_json",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let json = br#"{"name":"Bob"}"#;
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut deser = codec.create_deserializer(json);
+                let result = MyStruct::deserialize(&mut deser).expect("deserialization should succeed");
+                assert_eq!(result.name, Some("Bob".to_string()));
+                assert_eq!(result.age, None);
+                assert_eq!(result.active, None);
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
     fun `trait filtering includes sensitive and jsonName`() {
         val traitModel =
             """

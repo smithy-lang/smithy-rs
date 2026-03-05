@@ -139,6 +139,7 @@ class SchemaGenerator(
         // Write SerializableStruct impl for structures
         if (shape is StructureShape) {
             renderSerializableStruct(writer, symbol.name, schemaPrefix)
+            renderDeserializeMethod(writer, symbol.name, schemaPrefix)
         }
     }
 
@@ -215,6 +216,83 @@ class SchemaGenerator(
             is StructureShape -> "val.serialize(ser)?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
             else -> "// TODO(schema) unsupported shape type for serialization"
+        }
+
+    private fun renderDeserializeMethod(
+        writer: RustWriter,
+        structName: String,
+        schemaPrefix: String,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                "Schema" to smithySchema.resolve("Schema"),
+            )
+        val members = (shape as StructureShape).allMembers.values.toList()
+
+        writer.rustTemplate(
+            """
+            impl $structName {
+                /// Deserializes this structure from a [`ShapeDeserializer`].
+                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> Result<Self, D::Error> {
+                    let schema = $structName {
+                        #{defaultFields}
+                    };
+                    let builder = $structName {
+                        #{defaultFields}
+                    };
+                    deserializer.read_struct(&schema, builder, |mut builder, member, deser| {
+                        match member.member_index() {
+                            #{memberArms}
+                            _ => {}
+                        }
+                        Ok(builder)
+                    })
+                }
+            }
+            """,
+            *codegenScope,
+            "defaultFields" to
+                writable {
+                    members.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val memberSymbol = symbolProvider.toSymbol(member)
+                        if (memberSymbol.isOptional()) {
+                            rust("$memberName: None,")
+                        } else {
+                            rust("$memberName: Default::default(),")
+                        }
+                    }
+                },
+            "memberArms" to
+                writable {
+                    members.forEachIndexed { idx, member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val target = model.expectShape(member.target)
+                        val readExpr = readMethodForShape(target, "member")
+                        rust("Some($idx) => { builder.$memberName = Some($readExpr); }")
+                    }
+                },
+        )
+    }
+
+    private fun readMethodForShape(
+        target: Shape,
+        memberRef: String,
+    ): String =
+        when (target) {
+            is BooleanShape -> "deser.read_boolean($memberRef)?"
+            is ByteShape -> "deser.read_byte($memberRef)?"
+            is ShortShape -> "deser.read_short($memberRef)?"
+            is IntegerShape -> "deser.read_integer($memberRef)?"
+            is LongShape -> "deser.read_long($memberRef)?"
+            is FloatShape -> "deser.read_float($memberRef)?"
+            is DoubleShape -> "deser.read_double($memberRef)?"
+            is StringShape -> "deser.read_string($memberRef)?"
+            is BlobShape -> "deser.read_blob($memberRef)?"
+            is TimestampShape -> "deser.read_timestamp($memberRef)?"
+            is DocumentShape -> "deser.read_document($memberRef)?"
+            else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
         }
 
     private fun shapeTypeVariant(shape: Shape): String =
