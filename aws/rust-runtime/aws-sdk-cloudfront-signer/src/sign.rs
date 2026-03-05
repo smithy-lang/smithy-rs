@@ -35,8 +35,7 @@ enum Expiration {
 /// Request to sign a CloudFront URL or generate signed cookies.
 #[derive(Debug, Clone)]
 pub struct SigningRequest {
-    pub(crate) resource_url: String,
-    pub(crate) resource_pattern: Option<String>,
+    pub(crate) resource: String,
     pub(crate) key_pair_id: String,
     pub(crate) private_key: PrivateKey,
     pub(crate) expiration: DateTime,
@@ -54,8 +53,7 @@ impl SigningRequest {
 /// Builder for [`SigningRequest`].
 #[derive(Default, Debug)]
 pub struct SigningRequestBuilder {
-    resource_url: Option<String>,
-    resource_pattern: Option<String>,
+    resource: Option<String>,
     key_pair_id: Option<String>,
     private_key: Option<PrivateKey>,
     expiration: Option<Expiration>,
@@ -65,31 +63,13 @@ pub struct SigningRequestBuilder {
 }
 
 impl SigningRequestBuilder {
-    /// Sets the CloudFront resource URL to sign.
-    pub fn resource_url(mut self, url: impl Into<String>) -> Self {
-        self.resource_url = Some(url.into());
-        self
-    }
-
-    /// Sets a wildcard pattern for the policy's `Resource` field.
+    /// Sets the CloudFront resource for the policy.
     ///
-    /// Use this when you want the signed URL to grant access to multiple resources
-    /// matching a pattern. If not set, `resource_url` is used in the policy.
-    ///
-    /// Wildcards:
-    /// - `*` matches zero or more characters
-    /// - `?` matches exactly one character
-    ///
-    /// # Example
-    /// ```ignore
-    /// // Sign a specific URL but grant access to all files under /videos/
-    /// SigningRequest::builder()
-    ///     .resource_url("https://d111111abcdef8.cloudfront.net/videos/intro.mp4")
-    ///     .resource_pattern("https://d111111abcdef8.cloudfront.net/videos/*")
-    ///     // ...
-    /// ```
-    pub fn resource_pattern(mut self, pattern: impl Into<String>) -> Self {
-        self.resource_pattern = Some(pattern.into());
+    /// This can be an exact URL or a wildcard pattern:
+    /// - Exact: `https://d111111abcdef8.cloudfront.net/image.jpg`
+    /// - Wildcard: `https://d111111abcdef8.cloudfront.net/videos/*`
+    pub fn resource(mut self, resource: impl Into<String>) -> Self {
+        self.resource = Some(resource.into());
         self
     }
 
@@ -131,9 +111,9 @@ impl SigningRequestBuilder {
 
     /// Builds the signing request.
     pub fn build(self) -> Result<SigningRequest, SigningError> {
-        let resource_url = self
-            .resource_url
-            .ok_or_else(|| SigningError::invalid_input("resource_url is required"))?;
+        let resource = self
+            .resource
+            .ok_or_else(|| SigningError::invalid_input("resource is required"))?;
 
         let key_pair_id = self
             .key_pair_id
@@ -166,8 +146,7 @@ impl SigningRequestBuilder {
         }
 
         Ok(SigningRequest {
-            resource_url,
-            resource_pattern: self.resource_pattern,
+            resource,
             key_pair_id,
             private_key,
             expiration,
@@ -181,20 +160,10 @@ impl SigningRequestBuilder {
 #[derive(Debug, Clone)]
 pub struct SignedUrl {
     url: url::Url,
+    components: SigningComponents,
 }
 
 impl SignedUrl {
-    pub(crate) fn new(url: String) -> Result<Self, SigningError> {
-        let url = url::Url::parse(&url).map_err(|e| {
-            SigningError::new(
-                ErrorKind::InvalidInput,
-                Some(Box::new(e)),
-                Some("failed to parse URL".into()),
-            )
-        })?;
-        Ok(Self { url })
-    }
-
     /// Returns the complete signed URL as a string.
     pub fn as_str(&self) -> &str {
         self.url.as_str()
@@ -208,6 +177,12 @@ impl SignedUrl {
     /// Consumes self and returns the parsed URL.
     pub fn into_url(self) -> url::Url {
         self.url
+    }
+
+    /// Returns the signing components (Policy/Expires, Signature, Key-Pair-Id)
+    /// for reuse across multiple URLs matching a wildcard resource.
+    pub fn components(&self) -> &SigningComponents {
+        &self.components
     }
 }
 
@@ -251,6 +226,90 @@ impl TryFrom<&SignedUrl> for http::Request<()> {
     }
 }
 
+#[derive(Debug, Clone)]
+enum PolicyParam {
+    Canned { expires: i64 },
+    Custom { policy_b64: String },
+}
+
+/// Reusable signing components from a signed URL.
+///
+/// When signing with a wildcard resource, these components can be applied to
+/// specific URLs matching the pattern via [`apply_to`](Self::apply_to).
+#[derive(Debug, Clone)]
+pub struct SigningComponents {
+    policy_param: PolicyParam,
+    signature: String,
+    key_pair_id: String,
+}
+
+impl SigningComponents {
+    /// Returns the CloudFront-encoded base64 policy, if custom policy was used.
+    pub fn policy(&self) -> Option<&str> {
+        match &self.policy_param {
+            PolicyParam::Custom { policy_b64 } => Some(policy_b64),
+            PolicyParam::Canned { .. } => None,
+        }
+    }
+
+    /// Returns the expiration epoch seconds, if canned policy was used.
+    pub fn expires(&self) -> Option<i64> {
+        match &self.policy_param {
+            PolicyParam::Canned { expires } => Some(*expires),
+            PolicyParam::Custom { .. } => None,
+        }
+    }
+
+    /// Returns the CloudFront-encoded base64 signature.
+    pub fn signature(&self) -> &str {
+        &self.signature
+    }
+
+    /// Returns the key pair ID.
+    pub fn key_pair_id(&self) -> &str {
+        &self.key_pair_id
+    }
+
+    /// Applies these signing components to a URL, producing a new signed URL.
+    ///
+    /// Use this to reuse a wildcard policy across multiple URLs matching the pattern.
+    pub fn apply_to(&self, url: &str) -> Result<SignedUrl, SigningError> {
+        let mut parsed = url::Url::parse(url).map_err(|e| {
+            SigningError::new(
+                ErrorKind::InvalidInput,
+                Some(Box::new(e)),
+                Some("failed to parse URL".into()),
+            )
+        })?;
+        let existing = parsed.query().unwrap_or("").to_string();
+        let params = match &self.policy_param {
+            PolicyParam::Canned { expires } => format!(
+                "Expires={expires}&Signature={}&Key-Pair-Id={}",
+                self.signature, self.key_pair_id
+            ),
+            PolicyParam::Custom { policy_b64 } => format!(
+                "Policy={policy_b64}&Signature={}&Key-Pair-Id={}",
+                self.signature, self.key_pair_id
+            ),
+        };
+        let query = if existing.is_empty() {
+            params
+        } else {
+            format!("{existing}&{params}")
+        };
+        // Use set_query rather than query_pairs_mut because the latter uses
+        // application/x-www-form-urlencoded encoding which percent-encodes `~`
+        // as `%7E`. CloudFront's custom base64 uses `~` as a literal character
+        // in signatures. set_query uses the RFC 3986 query encode set which
+        // leaves `~` (an unreserved character) unencoded.
+        parsed.set_query(Some(&query));
+        Ok(SignedUrl {
+            url: parsed,
+            components: self.clone(),
+        })
+    }
+}
+
 /// Signed cookies for CloudFront.
 #[derive(Debug, Clone)]
 pub struct SignedCookies {
@@ -284,41 +343,17 @@ impl SignedCookies {
 // Internal signing implementation
 impl SigningRequest {
     /// Returns true if this request should use a canned policy.
-    /// Canned policy is used only when there's no resource_pattern, active_date, or ip_range.
+    /// Canned policy is used only when there's no active_date or ip_range,
+    /// and the resource doesn't contain wildcards. Wildcard resources always
+    /// require custom policy because CloudFront reconstructs canned policies
+    /// using the actual request URL, not the signed resource.
     fn use_canned_policy(&self) -> bool {
-        self.resource_pattern.is_none() && self.active_date.is_none() && self.ip_range.is_none()
+        self.active_date.is_none() && self.ip_range.is_none() && !self.resource.contains('*')
     }
 
     pub(crate) fn sign_url(&self) -> Result<SignedUrl, SigningError> {
-        let policy = self.build_policy()?;
-        let policy_json = policy.to_json();
-        let signature = self.private_key.sign(policy_json.as_bytes())?;
-        let signature_b64 = cloudfront_base64(&signature);
-
-        let separator = if self.resource_url.contains('?') {
-            "&"
-        } else {
-            "?"
-        };
-
-        let signed_url = if self.use_canned_policy() {
-            format!(
-                "{}{}Expires={}&Signature={}&Key-Pair-Id={}",
-                self.resource_url,
-                separator,
-                self.expiration.secs(),
-                signature_b64,
-                self.key_pair_id
-            )
-        } else {
-            let policy_b64 = policy.to_cloudfront_base64();
-            format!(
-                "{}{}Policy={}&Signature={}&Key-Pair-Id={}",
-                self.resource_url, separator, policy_b64, signature_b64, self.key_pair_id
-            )
-        };
-
-        SignedUrl::new(signed_url)
+        let components = self.build_components()?;
+        components.apply_to(&self.resource)
     }
 
     pub(crate) fn sign_cookies(&self) -> Result<SignedCookies, SigningError> {
@@ -348,12 +383,32 @@ impl SigningRequest {
         Ok(SignedCookies::new(cookies))
     }
 
-    fn build_policy(&self) -> Result<Policy, SigningError> {
-        // Use resource_pattern for policy if set, otherwise use resource_url
-        let policy_resource = self.resource_pattern.as_ref().unwrap_or(&self.resource_url);
+    fn build_components(&self) -> Result<SigningComponents, SigningError> {
+        let policy = self.build_policy()?;
+        let policy_json = policy.to_json();
+        let signature = self.private_key.sign(policy_json.as_bytes())?;
+        let signature_b64 = cloudfront_base64(&signature);
 
+        let policy_param = if self.use_canned_policy() {
+            PolicyParam::Canned {
+                expires: self.expiration.secs(),
+            }
+        } else {
+            PolicyParam::Custom {
+                policy_b64: policy.to_cloudfront_base64(),
+            }
+        };
+
+        Ok(SigningComponents {
+            policy_param,
+            signature: signature_b64,
+            key_pair_id: self.key_pair_id.clone(),
+        })
+    }
+
+    fn build_policy(&self) -> Result<Policy, SigningError> {
         let mut builder = Policy::builder()
-            .resource(policy_resource)
+            .resource(&self.resource)
             .expires_at(self.expiration);
 
         if let Some(active) = self.active_date {
@@ -385,7 +440,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_sign_url_canned_policy() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+            .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -405,7 +460,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_sign_url_custom_policy() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/*")
+            .resource("https://d111111abcdef8.cloudfront.net/*")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -426,7 +481,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_sign_url_with_existing_params() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg?size=large")
+            .resource("https://d111111abcdef8.cloudfront.net/image.jpg?size=large")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -444,7 +499,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_sign_cookies_canned_policy() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/*")
+            .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -463,7 +518,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_sign_cookies_custom_policy() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/*")
+            .resource("https://d111111abcdef8.cloudfront.net/*")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -480,35 +535,52 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     }
 
     #[test]
-    fn test_sign_url_with_resource_pattern() {
+    fn test_components_reuse_with_wildcard() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/videos/intro.mp4")
-            .resource_pattern("https://d111111abcdef8.cloudfront.net/videos/*")
+            .resource("https://d111111abcdef8.cloudfront.net/videos/*")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
+            .active_at(DateTime::from_secs(1767200000))
             .build()
             .unwrap();
 
-        let signed_url = request.sign_url().unwrap();
-        let url = signed_url.as_str();
+        let signed = request.sign_url().unwrap();
+        let components = signed.components();
 
-        // Should use custom policy format (Policy param) because resource_pattern is set
-        assert!(url.contains("Policy="));
-        assert!(url.contains("Signature="));
-        assert!(url.contains("Key-Pair-Id=APKAEXAMPLE"));
-        assert!(!url.contains("Expires="));
-        // The actual URL should be the resource_url, not the pattern
-        assert!(url.starts_with("https://d111111abcdef8.cloudfront.net/videos/intro.mp4?"));
+        // Components should have custom policy (active_at forces custom)
+        assert!(components.policy().is_some());
+        assert!(components.expires().is_none());
+        assert!(!components.signature().is_empty());
+        assert_eq!(components.key_pair_id(), "APKAEXAMPLE");
+
+        // Apply to specific URLs — both should get the same signing params
+        let url1 = components
+            .apply_to("https://d111111abcdef8.cloudfront.net/videos/intro.mp4")
+            .unwrap();
+        let url2 = components
+            .apply_to("https://d111111abcdef8.cloudfront.net/videos/trailer.mp4")
+            .unwrap();
+
+        assert!(url1
+            .as_str()
+            .starts_with("https://d111111abcdef8.cloudfront.net/videos/intro.mp4?"));
+        assert!(url2
+            .as_str()
+            .starts_with("https://d111111abcdef8.cloudfront.net/videos/trailer.mp4?"));
+
+        // Same policy and signature on both
+        assert_eq!(url1.components().signature(), url2.components().signature());
+        assert_eq!(url1.components().policy(), url2.components().policy());
     }
 
     #[test]
-    fn test_sign_cookies_with_resource_pattern() {
+    fn test_wildcard_cookies_custom_policy() {
+        // Wildcard resource forces custom policy
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/videos/*")
-            .resource_pattern("https://d111111abcdef8.cloudfront.net/videos/*")
+            .resource("https://d111111abcdef8.cloudfront.net/videos/*")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -517,7 +589,6 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
 
         let cookies = request.sign_cookies().unwrap();
 
-        // Should use custom policy format because resource_pattern is set
         assert!(cookies.get("CloudFront-Policy").is_some());
         assert!(cookies.get("CloudFront-Signature").is_some());
         assert_eq!(cookies.get("CloudFront-Key-Pair-Id"), Some("APKAEXAMPLE"));
@@ -528,7 +599,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_signed_url_accessors() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+            .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))
@@ -571,7 +642,7 @@ j+KnJ7pJkTvOzFwE8RfNLli9jf6/OhyYaLL4et7Ng5k=
     fn test_signed_url_to_http_request() {
         let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
         let request = SigningRequest::builder()
-            .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+            .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
             .key_pair_id("APKAEXAMPLE")
             .private_key(key)
             .expires_at(DateTime::from_secs(1767290400))

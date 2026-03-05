@@ -3,7 +3,7 @@
     "id": "canned-policy-url-basic",
     "documentation": "Sign a URL with canned policy (expiration only)",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg",
+      "resource": "https://d111111abcdef8.cloudfront.net/image.jpg",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400
@@ -22,7 +22,7 @@
     "id": "canned-policy-url-existing-params",
     "documentation": "Sign a URL that already has query parameters",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg?size=large",
+      "resource": "https://d111111abcdef8.cloudfront.net/image.jpg?size=large",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400
@@ -42,7 +42,7 @@
     "id": "custom-policy-url-with-active-date",
     "documentation": "Sign a URL with custom policy including activation date",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/video.mp4",
+      "resource": "https://d111111abcdef8.cloudfront.net/video.mp4",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400,
@@ -61,7 +61,7 @@
     "id": "custom-policy-url-with-ip-range",
     "documentation": "Sign a URL with custom policy including IP restriction",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/document.pdf",
+      "resource": "https://d111111abcdef8.cloudfront.net/document.pdf",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400,
@@ -78,16 +78,16 @@
   },
   {
     "id": "custom-policy-url-with-wildcard",
-    "documentation": "Sign a URL with wildcard resource pattern",
+    "documentation": "Sign with wildcard resource, apply components to specific URL",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/images/photo1.jpg",
-      "resourceUrlPattern": "https://d111111abcdef8.cloudfront.net/images/*",
+      "resource": "https://d111111abcdef8.cloudfront.net/images/*",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400
     },
     "expected": {
       "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/images/*\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "applyTo": "https://d111111abcdef8.cloudfront.net/images/photo1.jpg",
       "queryParams": {
         "Key-Pair-Id": "K1TESTKEY"
       },
@@ -99,17 +99,17 @@
     "id": "canned-policy-cookies",
     "documentation": "Generate signed cookies with canned policy",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/*",
+      "resource": "https://d111111abcdef8.cloudfront.net/image.jpg",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400
     },
     "expected": {
-      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/*\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
+      "policyJson": "{\"Statement\":[{\"Resource\":\"https://d111111abcdef8.cloudfront.net/image.jpg\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
       "cookies": {
         "CloudFront-Expires": "1767290400",
         "CloudFront-Key-Pair-Id": "K1TESTKEY",
-        "CloudFront-Signature": "e0yIAbSak8fgGDJfX0bwVT0uDrzdr6fV3kzHuZOGYxeitO8H-tvFuce7~aOGFNReoi6LNhYpvr0wP99~2KKbrbetwLmIdUnTToOabNamMDJSGZgVK31XPWmuxq~TGUB-4v338iQhpP5qk8rkUe3meE5VXlchIb4vvnzph83X~Z8_"
+        "CloudFront-Signature": "iONoMLnhiCy9q1~WB9GkR2DiHz18I85i3o6kZ64REf-fCSOg-AyXEZiq7fJuS~DT-kbZXjVpgIQqI4sCTcBW9XpO6dyJ5sh8Igk3V~OVncS9acGVnI~ZhHBWiGhU8GmkEMAhn6R2RGO-wKGClrXdJGEUE26XoALdHUzHbmU6AGI_"
       },
       "signatureAlgorithm": "RSA-SHA1"
     }
@@ -118,7 +118,7 @@
     "id": "custom-policy-cookies",
     "documentation": "Generate signed cookies with custom policy",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/*",
+      "resource": "https://d111111abcdef8.cloudfront.net/*",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400,
@@ -138,7 +138,7 @@
     "id": "ecdsa-canned-policy-url",
     "documentation": "Sign a URL with ECDSA key and canned policy",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/video.mp4",
+      "resource": "https://d111111abcdef8.cloudfront.net/video.mp4",
       "keyPairId": "K2ECDSATEST",
       "privateKeyFile": "test-ecdsa-key.pem",
       "expirationDate": 1767290400
@@ -157,7 +157,7 @@
     "id": "error-missing-expiration",
     "documentation": "Error when expiration date is not provided",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/file.txt",
+      "resource": "https://d111111abcdef8.cloudfront.net/file.txt",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem"
     },
@@ -170,7 +170,7 @@
     "id": "error-active-after-expiration",
     "documentation": "Error when activeDate is after expirationDate",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/file.txt",
+      "resource": "https://d111111abcdef8.cloudfront.net/file.txt",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767200000,
@@ -183,9 +183,9 @@
   },
   {
     "id": "json-injection-resource-url",
-    "documentation": "Verify resourceUrl containing double quotes is properly escaped in policy JSON",
+    "documentation": "Verify resource containing double quotes is properly escaped in policy JSON",
     "input": {
-      "resourceUrl": "https://example.com/file\",\"Resource\":\"*\",\"x\":\"",
+      "resource": "https://example.com/file\",\"Resource\":\"*\",\"x\":\"",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400
@@ -193,7 +193,6 @@
     "expected": {
       "policyJson": "{\"Statement\":[{\"Resource\":\"https://example.com/file\\\",\\\"Resource\\\":\\\"*\\\",\\\"x\\\":\\\"\",\"Condition\":{\"DateLessThan\":{\"AWS:EpochTime\":1767290400}}}]}",
       "queryParams": {
-        "Expires": "1767290400",
         "Key-Pair-Id": "K1TESTKEY"
       },
       "signature": "MNP0XV-bmzo5xrYyBU8m8mR3Yd0XdoB6UFAjxEt2R4VaNYtgvVYyIuI9hzD7KXX-GdBJUyqWG7wQIUJeBbEhPz7WzGKhlM1NqRW9EPGK-BwYjiLfDagfv-SHjOvIvNaWAhkaAkAlDJQ7qwzbogLAEsxboR9Ae47b6sSqBPxognM_",
@@ -204,7 +203,7 @@
     "id": "json-injection-ip-range",
     "documentation": "Verify ipRange containing double quotes is properly escaped in policy JSON",
     "input": {
-      "resourceUrl": "https://d111111abcdef8.cloudfront.net/image.jpg",
+      "resource": "https://d111111abcdef8.cloudfront.net/image.jpg",
       "keyPairId": "K1TESTKEY",
       "privateKeyFile": "test-rsa-key.pem",
       "expirationDate": 1767290400,

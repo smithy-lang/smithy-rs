@@ -22,7 +22,9 @@ mod policy;
 mod sign;
 
 pub use key::PrivateKey;
-pub use sign::{SignedCookies, SignedUrl, SigningRequest, SigningRequestBuilder};
+pub use sign::{
+    SignedCookies, SignedUrl, SigningComponents, SigningRequest, SigningRequestBuilder,
+};
 
 /// Sign a CloudFront URL with canned or custom policy
 pub fn sign_url(request: &SigningRequest) -> Result<SignedUrl, error::SigningError> {

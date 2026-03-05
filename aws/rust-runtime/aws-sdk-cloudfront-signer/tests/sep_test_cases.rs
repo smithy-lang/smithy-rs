@@ -19,13 +19,12 @@ struct TestCase {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TestInput {
-    resource_url: String,
+    resource: String,
     key_pair_id: String,
     private_key_file: String,
     expiration_date: Option<i64>,
     active_date: Option<i64>,
     ip_range: Option<String>,
-    resource_url_pattern: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,19 +32,13 @@ struct TestInput {
 struct TestExpected {
     #[allow(dead_code)]
     policy_json: Option<String>,
+    apply_to: Option<String>,
     query_params: Option<HashMap<String, String>>,
     cookies: Option<HashMap<String, String>>,
     signature: Option<String>,
     signature_algorithm: Option<String>,
     error: Option<bool>,
     error_contains: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct TestCases {
-    #[serde(flatten)]
-    #[allow(dead_code)]
-    cases: Vec<TestCase>,
 }
 
 fn load_test_cases() -> Vec<TestCase> {
@@ -87,7 +80,7 @@ fn test_sep_test_cases() {
 
         // Build signing request
         let mut builder = SigningRequest::builder()
-            .resource_url(&test_case.input.resource_url)
+            .resource(&test_case.input.resource)
             .key_pair_id(&test_case.input.key_pair_id)
             .private_key(private_key);
 
@@ -101,10 +94,6 @@ fn test_sep_test_cases() {
 
         if let Some(ip) = &test_case.input.ip_range {
             builder = builder.ip_range(ip);
-        }
-
-        if let Some(pattern) = &test_case.input.resource_url_pattern {
-            builder = builder.resource_pattern(pattern);
         }
 
         // Handle error cases
@@ -168,7 +157,17 @@ fn test_sep_test_cases() {
             let signed_url = sign_url(&request)
                 .unwrap_or_else(|e| panic!("Failed to sign URL for test {}: {}", test_case.id, e));
 
-            let query_params = parse_url_query_params(signed_url.as_str());
+            // If applyTo is specified, use components to apply to that URL instead
+            let final_url = if let Some(apply_to) = &test_case.expected.apply_to {
+                let components = signed_url.components();
+                components.apply_to(apply_to).unwrap_or_else(|e| {
+                    panic!("Failed to apply_to for test {}: {}", test_case.id, e)
+                })
+            } else {
+                signed_url
+            };
+
+            let query_params = parse_url_query_params(final_url.as_str());
 
             // Verify expected query parameters
             if let Some(expected_params) = &test_case.expected.query_params {

@@ -26,7 +26,7 @@ VORtjoydSpheKlsa+gE4PcFG88G2gE1Lilb8f6wEq/Lz+5kFa2S8gZmb
 fn test_sign_url_with_rsa_key() {
     let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
     let request = SigningRequest::builder()
-        .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+        .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
         .key_pair_id("APKAEXAMPLE")
         .private_key(key)
         .expires_at(DateTime::from_secs(1767290400))
@@ -41,7 +41,7 @@ fn test_sign_url_with_rsa_key() {
 fn test_sign_url_with_ecdsa_key() {
     let key = PrivateKey::from_pem(TEST_ECDSA_KEY).unwrap();
     let request = SigningRequest::builder()
-        .resource_url("https://d111111abcdef8.cloudfront.net/image.jpg")
+        .resource("https://d111111abcdef8.cloudfront.net/image.jpg")
         .key_pair_id("APKAEXAMPLE")
         .private_key(key)
         .expires_at(DateTime::from_secs(1767290400))
@@ -56,7 +56,7 @@ fn test_sign_url_with_ecdsa_key() {
 fn test_sign_cookies_with_rsa_key() {
     let key = PrivateKey::from_pem(TEST_RSA_KEY).unwrap();
     let request = SigningRequest::builder()
-        .resource_url("https://d111111abcdef8.cloudfront.net/*")
+        .resource("https://d111111abcdef8.cloudfront.net/*")
         .key_pair_id("APKAEXAMPLE")
         .private_key(key)
         .expires_at(DateTime::from_secs(1767290400))
@@ -71,7 +71,7 @@ fn test_sign_cookies_with_rsa_key() {
 fn test_sign_cookies_with_ecdsa_key() {
     let key = PrivateKey::from_pem(TEST_ECDSA_KEY).unwrap();
     let request = SigningRequest::builder()
-        .resource_url("https://d111111abcdef8.cloudfront.net/*")
+        .resource("https://d111111abcdef8.cloudfront.net/*")
         .key_pair_id("APKAEXAMPLE")
         .private_key(key)
         .expires_at(DateTime::from_secs(1767290400))
