@@ -211,6 +211,10 @@ pub struct BuildBundleArgs {
     /// Only generate the `Cargo.toml` file rather than building the entire bundle
     #[clap(long)]
     pub manifest_only: bool,
+
+    /// Disable jitter entropy in AWS-LC
+    #[clap(long)]
+    pub disable_jitter_entropy: bool,
 }
 
 #[derive(Clone)]
@@ -352,6 +356,10 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             command.arg(format!("--target={}", target));
         }
 
+        if opt.disable_jitter_entropy {
+            command.env("AWS_LC_SYS_NO_JITTER_ENTROPY", "1");
+        }
+
         handle_failure(&format!("{} build", build_cmd), &command.output()?)?;
 
         // Bundle the Lambda
@@ -440,6 +448,7 @@ mod tests {
                 musl: false,
                 architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -458,6 +467,7 @@ mod tests {
                 musl: false,
                 architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -478,6 +488,7 @@ mod tests {
                 musl: true,
                 architecture: Arch::X86_64,
                 manifest_only: true,
+                disable_jitter_entropy: false,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -498,6 +509,7 @@ mod tests {
                 musl: false,
                 architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
             }),
             Args::try_parse_from([
                 "./canary-runner",

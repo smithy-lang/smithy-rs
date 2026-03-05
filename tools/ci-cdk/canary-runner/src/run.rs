@@ -450,6 +450,7 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         musl: options.musl,
         architecture: options.architecture,
         manifest_only: false,
+        disable_jitter_entropy: false,
     };
     info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
     Ok(crate::build_bundle::build_bundle(build_args)
