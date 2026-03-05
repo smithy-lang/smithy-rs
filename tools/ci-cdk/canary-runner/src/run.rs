@@ -134,6 +134,10 @@ pub struct RunArgs {
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
+
+    /// Disable jitter entropy in AWS-LC
+    #[clap(long)]
+    disable_jitter_entropy: bool,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -150,6 +154,7 @@ struct Options {
     lambda_test_s3_mrap_bucket_arn: String,
     lambda_test_s3_express_bucket_name: String,
     lambda_execution_role_arn: String,
+    disable_jitter_entropy: bool,
 }
 
 impl Options {
@@ -220,6 +225,7 @@ impl Options {
                 lambda_test_s3_mrap_bucket_arn,
                 lambda_test_s3_express_bucket_name,
                 lambda_execution_role_arn,
+                disable_jitter_entropy: run_opt.disable_jitter_entropy,
             })
         } else {
             Ok(Options {
@@ -241,6 +247,7 @@ impl Options {
                     .lambda_test_s3_express_bucket_name
                     .expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
+                disable_jitter_entropy: run_opt.disable_jitter_entropy,
             })
         }
     }
@@ -450,7 +457,7 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         musl: options.musl,
         architecture: options.architecture,
         manifest_only: false,
-        disable_jitter_entropy: false,
+        disable_jitter_entropy: options.disable_jitter_entropy,
     };
     info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
     Ok(crate::build_bundle::build_bundle(build_args)
@@ -723,7 +730,8 @@ mod tests {
                 lambda_test_s3_bucket_name: None,
                 lambda_execution_role_arn: None,
                 lambda_test_s3_mrap_bucket_arn: None,
-                lambda_test_s3_express_bucket_name: None
+                lambda_test_s3_express_bucket_name: None,
+                disable_jitter_entropy: false,
             },
             RunArgs::try_parse_from([
                 "run",
@@ -775,6 +783,7 @@ mod tests {
                 lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
                     .to_owned(),
                 lambda_test_s3_express_bucket_name: "test--usw2-az1--x-s3".to_owned(),
+                disable_jitter_entropy: false,
             },
             Options::load_from(run_args).unwrap(),
         );
