@@ -73,3 +73,35 @@ impl Trait for StringTrait {
         self
     }
 }
+
+/// A trait with a Document value, used for unknown/custom traits.
+///
+/// When a trait is included in a schema but has no typed Rust representation,
+/// its value is stored as a [`Document`](aws_smithy_types::Document).
+#[derive(Debug, Clone)]
+pub struct DocumentTrait {
+    id: ShapeId,
+    value: aws_smithy_types::Document,
+}
+
+impl DocumentTrait {
+    /// Creates a new document-valued trait.
+    pub fn new(id: ShapeId, value: aws_smithy_types::Document) -> Self {
+        Self { id, value }
+    }
+
+    /// Returns the document value of this trait.
+    pub fn value(&self) -> &aws_smithy_types::Document {
+        &self.value
+    }
+}
+
+impl Trait for DocumentTrait {
+    fn trait_id(&self) -> &ShapeId {
+        &self.id
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}

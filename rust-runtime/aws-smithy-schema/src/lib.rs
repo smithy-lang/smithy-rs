@@ -29,7 +29,7 @@ pub use schema::member::MemberSchema;
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
-pub use schema::trait_type::{AnnotationTrait, StringTrait, Trait};
+pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait, Trait};
 
 pub mod traits {
     pub use crate::schema::traits::*;

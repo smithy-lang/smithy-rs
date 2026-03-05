@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import software.amazon.smithy.model.node.Node
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
@@ -23,6 +24,7 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -31,6 +33,36 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
+
+/**
+ * Allows custom rendering of a trait value in generated schema code.
+ *
+ * Implementations return a [Writable] that emits a Rust expression evaluating
+ * to a `Box<dyn Trait>`, or null to use the default rendering.
+ */
+fun interface TraitCodegenProvider {
+    fun render(trait: SmithyTrait): Writable?
+}
+
+/**
+ * Registry of custom [TraitCodegenProvider]s keyed by trait Shape ID.
+ *
+ * Code generator extensions can register providers for custom traits so that
+ * they are rendered with specific Rust types instead of the generic
+ * [DocumentTrait] fallback.
+ */
+class SchemaTraitExtension {
+    private val providers = mutableMapOf<software.amazon.smithy.model.shapes.ShapeId, TraitCodegenProvider>()
+
+    fun add(
+        traitId: software.amazon.smithy.model.shapes.ShapeId,
+        provider: TraitCodegenProvider,
+    ) {
+        providers[traitId] = provider
+    }
+
+    fun providerFor(trait: SmithyTrait): TraitCodegenProvider? = providers[trait.toShapeId()]
+}
 
 /**
  * Generates Schema implementations for Smithy shapes.
@@ -43,6 +75,7 @@ class SchemaGenerator(
     private val writer: RustWriter,
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
+    private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -135,30 +168,57 @@ class SchemaGenerator(
                 arrayOf(
                     "AnnotationTrait" to smithySchema.resolve("AnnotationTrait"),
                     "StringTrait" to smithySchema.resolve("StringTrait"),
+                    "DocumentTrait" to smithySchema.resolve("DocumentTrait"),
                     "ShapeId" to smithySchema.resolve("ShapeId"),
+                    "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
                     "traits" to smithySchema.resolve("traits"),
                 )
             for (trait in traits) {
+                // 1. Check extension for custom rendering
+                val customProvider = traitExtension.providerFor(trait)
+                if (customProvider != null) {
+                    val customWritable = customProvider.render(trait)
+                    if (customWritable != null) {
+                        rust("map.insert(")
+                        customWritable(this)
+                        rust(");")
+                        continue
+                    }
+                }
+
+                // 2. Use typed trait if available
                 val typedInsert = typedTraitInsert(trait)
                 if (typedInsert != null) {
                     rustTemplate(
                         """map.insert(Box::new(#{traits}::$typedInsert));""",
                         *codegenScope,
                     )
+                    continue
+                }
+
+                // 3. Fall back: annotation, string, or document
+                val traitId = trait.toShapeId().toString().replace("#", "##")
+                val stringValue = trait.stringValue()
+                if (trait.isAnnotationTrait()) {
+                    rustTemplate(
+                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
+                        *codegenScope,
+                    )
+                } else if (stringValue != null) {
+                    rustTemplate(
+                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
+                        *codegenScope,
+                    )
                 } else {
-                    val traitId = trait.toShapeId().toString().replace("#", "##")
-                    val stringValue = trait.stringValue()
-                    if (stringValue != null) {
-                        rustTemplate(
-                            """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
-                            *codegenScope,
-                        )
-                    } else {
-                        rustTemplate(
-                            """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
-                            *codegenScope,
-                        )
-                    }
+                    // TODO(schema) Evaluate creating a Document that fully models the trait data
+                    //  rather than holding it as a JSON string. The existing serde trait
+                    //  implementations on aws_smithy_types::Document could be used to convert
+                    //  the Smithy Node directly into a structured Document value.
+                    val jsonValue = Node.printJson(trait.toNode()).replace("\\", "\\\\").replace("\"", "\\\"")
+                    rustTemplate(
+                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::new("$traitId"), #{Document}::String("$jsonValue".to_string()))));""",
+                        *codegenScope,
+                    )
                 }
             }
         }

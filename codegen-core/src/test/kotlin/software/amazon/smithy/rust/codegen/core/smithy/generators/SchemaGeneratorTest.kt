@@ -8,6 +8,8 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
@@ -15,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
+import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class SchemaGeneratorTest {
@@ -237,6 +240,133 @@ class SchemaGeneratorTest {
                 assert!(!s.traits().contains(&deprecated_id), "should exclude @deprecated");
 
                 assert_eq!(s.traits().len(), 1);
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `unknown traits stored as DocumentTrait`() {
+        val customTraitModel =
+            """
+            namespace test
+
+            @trait(selector: "structure")
+            structure myCustomTrait {
+                setting: String
+            }
+
+            @trait(selector: "structure")
+            @tags(["custom"])
+            structure myAnnotationCustomTrait {}
+
+            @myCustomTrait(setting: "hello")
+            @myAnnotationCustomTrait
+            structure Tagged {
+                value: String
+            }
+            """.asSmithyModel()
+
+        val customProvider = testSymbolProvider(customTraitModel)
+        val customContext = testCodegenContext(customTraitModel)
+        // Add the custom traits to the filter so they're included
+        val filter =
+            SchemaTraitFilter(
+                customTraitModel,
+                setOf(
+                    software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait"),
+                    software.amazon.smithy.model.shapes.ShapeId.from("test#myAnnotationCustomTrait"),
+                ),
+            )
+        val project = TestWorkspace.testProject(customProvider)
+        val shape = customTraitModel.lookup<StructureShape>("test#Tagged")
+        project.useShapeWriter(shape) {
+            StructureGenerator(customTraitModel, customProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(customContext, this, shape, filter).render()
+            unitTest(
+                "unknown_traits",
+                """
+                use aws_smithy_schema::{Schema, ShapeId, Trait, DocumentTrait};
+                let s = Tagged { value: None };
+
+                // Complex custom trait is stored as DocumentTrait
+                let custom_id = ShapeId::new("test#myCustomTrait");
+                assert!(s.traits().contains(&custom_id), "should include custom trait");
+                let custom = s.traits().get(&custom_id).unwrap();
+                let doc_trait = custom.as_any().downcast_ref::<DocumentTrait>()
+                    .expect("unknown complex trait should be a DocumentTrait");
+                // The value is stored as a JSON string
+                match doc_trait.value() {
+                    aws_smithy_types::Document::String(json) => {
+                        assert!(json.contains("hello"), "should contain the setting value: {json}");
+                    }
+                    other => panic!("expected Document::String, got: {other:?}"),
+                }
+
+                // Annotation custom trait is stored as AnnotationTrait
+                let ann_id = ShapeId::new("test#myAnnotationCustomTrait");
+                assert!(s.traits().contains(&ann_id), "should include annotation custom trait");
+
+                assert_eq!(s.traits().len(), 2);
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `custom TraitCodegenProvider overrides rendering`() {
+        val customTraitModel =
+            """
+            namespace test
+
+            @trait(selector: "structure")
+            structure myCustomTrait {
+                setting: String
+            }
+
+            @myCustomTrait(setting: "world")
+            structure Overridden {
+                value: String
+            }
+            """.asSmithyModel()
+
+        val customProvider = testSymbolProvider(customTraitModel)
+        val customContext = testCodegenContext(customTraitModel)
+        val filter =
+            SchemaTraitFilter(
+                customTraitModel,
+                setOf(software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait")),
+            )
+        val extension = SchemaTraitExtension()
+        extension.add(software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait")) { trait ->
+            // Render as a StringTrait with the "setting" value extracted
+            val node = trait.toNode().expectObjectNode()
+            val setting = node.getStringMember("setting").get().value
+            software.amazon.smithy.rust.codegen.core.rustlang.writable {
+                rustTemplate(
+                    """Box::new(#{StringTrait}::new(#{ShapeId}::new("test##myCustomTrait"), ${setting.dq()}))""",
+                    "StringTrait" to RuntimeType.smithySchema(customContext.runtimeConfig).resolve("StringTrait"),
+                    "ShapeId" to RuntimeType.smithySchema(customContext.runtimeConfig).resolve("ShapeId"),
+                )
+            }
+        }
+        val project = TestWorkspace.testProject(customProvider)
+        val shape = customTraitModel.lookup<StructureShape>("test#Overridden")
+        project.useShapeWriter(shape) {
+            StructureGenerator(customTraitModel, customProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(customContext, this, shape, filter, extension).render()
+            unitTest(
+                "custom_provider",
+                """
+                use aws_smithy_schema::{Schema, ShapeId, Trait, StringTrait};
+                let s = Overridden { value: None };
+                let id = ShapeId::new("test#myCustomTrait");
+                let t = s.traits().get(&id).unwrap();
+                let st = t.as_any().downcast_ref::<StringTrait>()
+                    .expect("custom provider should render as StringTrait");
+                assert_eq!(st.value(), "world");
                 """,
             )
         }
