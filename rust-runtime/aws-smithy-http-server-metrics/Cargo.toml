@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-metrics"
-version = "0.1.1"
+version = "0.1.2"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Jason Gin <jasgin@amazon.com>",
@@ -36,6 +36,11 @@ http-02 = { package = "http", version = "0.2.12", optional = true }
 http-body-04 = { package = "http-body", version = "0.4.6", optional = true }
 hyper-014 = { package = "hyper", version = "0.14.26", optional = true }
 
+# Optional dependencies for aws-smithy-legacy-http-server support
+aws-smithy-legacy-http-server = { path = "../aws-smithy-legacy-http-server", optional = true, features = [
+    "request-id",
+] }
+
 [dev-dependencies]
 tracing-appender = "0.2"
 metrique-writer-format-emf = "0.1.16"
@@ -43,6 +48,12 @@ metrique-writer-format-emf = "0.1.16"
 [features]
 aws-smithy-http-server-065 = [
     "dep:aws-smithy-http-server-065",
+    "dep:http-02",
+    "dep:hyper-014",
+    "dep:http-body-04",
+]
+aws-smithy-legacy-http-server = [
+    "dep:aws-smithy-legacy-http-server",
     "dep:http-02",
     "dep:hyper-014",
     "dep:http-body-04",
