@@ -31,6 +31,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
@@ -134,7 +135,87 @@ class SchemaGenerator(
             *codegenScope,
         )
         renderMemberSchemas(writer, schemaPrefix)
+
+        // Write SerializableStruct impl for structures
+        if (shape is StructureShape) {
+            renderSerializableStruct(writer, symbol.name, schemaPrefix)
+        }
     }
+
+    private fun renderSerializableStruct(
+        writer: RustWriter,
+        structName: String,
+        schemaPrefix: String,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+            )
+        val members = (shape as StructureShape).allMembers.values.toList()
+
+        writer.rustTemplate(
+            """
+            impl #{SerializableStruct} for $structName {
+                fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> Result<(), S::Error> {
+                    serializer.write_struct(self, |ser| {
+                        #{memberWrites}
+                        Ok(())
+                    })
+                }
+            }
+            """,
+            *codegenScope,
+            "memberWrites" to
+                writable {
+                    members.forEachIndexed { idx, member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val memberSymbol = symbolProvider.toSymbol(member)
+                        val target = model.expectShape(member.target)
+                        val writeCall = writeMethodForShape(target, "${schemaPrefix}_MEMBER_${memberName.uppercase()}")
+                        if (memberSymbol.isOptional()) {
+                            rust(
+                                """
+                                if let Some(ref val) = self.$memberName {
+                                    $writeCall
+                                }
+                                """,
+                            )
+                        } else {
+                            rust(writeCall)
+                        }
+                    }
+                },
+        )
+    }
+
+    /**
+     * Returns a Rust expression that writes a value to a serializer.
+     * For optional fields, `val` is the unwrapped reference.
+     * For non-optional fields, `self.field_name` is used directly.
+     */
+    private fun writeMethodForShape(
+        target: Shape,
+        memberSchemaRef: String,
+    ): String =
+        when (target) {
+            is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *val)?;"
+            is ByteShape -> "ser.write_byte(&$memberSchemaRef, *val)?;"
+            is ShortShape -> "ser.write_short(&$memberSchemaRef, *val)?;"
+            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, *val)?;"
+            is LongShape -> "ser.write_long(&$memberSchemaRef, *val)?;"
+            is FloatShape -> "ser.write_float(&$memberSchemaRef, *val)?;"
+            is DoubleShape -> "ser.write_double(&$memberSchemaRef, *val)?;"
+            is StringShape -> "ser.write_string(&$memberSchemaRef, val)?;"
+            is BlobShape -> "ser.write_blob(&$memberSchemaRef, val)?;"
+            is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
+            is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
+            is ListShape -> "ser.write_list(&$memberSchemaRef, |_ser| { Ok(()) })?;"
+            is MapShape -> "ser.write_map(&$memberSchemaRef, |_ser| { Ok(()) })?;"
+            is StructureShape -> "val.serialize(ser)?;"
+            is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
+            else -> "// TODO(schema) unsupported shape type for serialization"
+        }
 
     private fun shapeTypeVariant(shape: Shape): String =
         when (shape) {

@@ -200,6 +200,64 @@ class SchemaGeneratorTest {
     }
 
     @Test
+    fun `SerializableStruct impl compiles and serializes members`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#MyStruct")
+        project.useShapeWriter(shape) {
+            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, shape).render()
+            // Reference JsonCodec via rustTemplate to auto-add the aws-smithy-json dependency
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "serializable_struct",
+                """
+                use aws_smithy_schema::serde::SerializableStruct;
+                let s = MyStruct { name: Some("Alice".to_string()), age: Some(30), active: Some(true) };
+                fn assert_serializable<T: SerializableStruct>(_t: &T) {}
+                assert_serializable(&s);
+                """,
+            )
+            unitTest(
+                "serializable_struct_json_output",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let s = MyStruct { name: Some("Alice".to_string()), age: Some(30), active: Some(true) };
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                s.serialize(&mut ser).expect("serialization should succeed");
+                let bytes = ser.finish().expect("finish should succeed");
+                let json = String::from_utf8(bytes).unwrap();
+                assert_eq!(json, r#"{"name":"Alice","age":30,"active":true}"#);
+                """,
+            )
+            unitTest(
+                "serializable_struct_json_partial",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                // Only some fields set — None fields should be omitted
+                let s = MyStruct { name: Some("Bob".to_string()), age: None, active: None };
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                s.serialize(&mut ser).expect("serialization should succeed");
+                let bytes = ser.finish().expect("finish should succeed");
+                let json = String::from_utf8(bytes).unwrap();
+                assert_eq!(json, r#"{"name":"Bob"}"#);
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
     fun `trait filtering includes sensitive and jsonName`() {
         val traitModel =
             """
