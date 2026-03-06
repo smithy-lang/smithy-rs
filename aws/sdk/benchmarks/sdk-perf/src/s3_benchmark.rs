@@ -6,6 +6,7 @@
 use crate::benchmark_types::{calculate_resource_stats, BenchmarkConfig, ResourceStats};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
+use aws_smithy_types::error::display::DisplayErrorContext;
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -158,6 +159,23 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
     }
 }
 
+fn assert_all_ok<T, E: std::fmt::Debug + std::error::Error>(
+    results: &[Result<T, E>],
+    label: &str,
+    expected: usize,
+) {
+    let ok_count = results.iter().filter(|r| r.is_ok()).count();
+    if ok_count != expected {
+        if let Some(first_err) = results.iter().find_map(|r| r.as_ref().err()) {
+            eprintln!("  First error: {}", DisplayErrorContext(first_err));
+        }
+        panic!(
+            "{}: only {}/{} operations succeeded",
+            label, ok_count, expected
+        );
+    }
+}
+
 async fn cleanup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
     println!(
         "Cleaning up objects in bucket '{}'...",
@@ -173,7 +191,8 @@ async fn cleanup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>
                 .send()
         })
         .collect();
-    let _ = join_all(tasks).await;
+    let results = join_all(tasks).await;
+    assert_all_ok(&results, "cleanup_objects", config.batch.number_of_actions);
     println!("Cleanup complete");
 }
 
@@ -280,7 +299,8 @@ async fn setup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>, 
             }
         })
         .collect();
-    let _ = join_all(tasks).await;
+    let results = join_all(tasks).await;
+    assert_all_ok(&results, "setup_objects", config.batch.number_of_actions);
 }
 
 async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data: &[u8]) {
@@ -311,7 +331,8 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data
                 }
             })
             .collect();
-        let _ = join_all(tasks).await;
+        let results = join_all(tasks).await;
+        assert_all_ok(&results, "upload", config.batch.number_of_actions);
         println!(
             "    Finished {} upload operations",
             config.batch.number_of_actions
@@ -336,7 +357,8 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data
                 }
             })
             .collect();
-        let _ = join_all(tasks).await;
+        let results = join_all(tasks).await;
+        assert_all_ok(&results, "download", config.batch.number_of_actions);
         println!(
             "    Finished {} download operations",
             config.batch.number_of_actions
