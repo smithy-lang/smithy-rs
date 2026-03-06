@@ -192,8 +192,15 @@ async fn cleanup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>
         })
         .collect();
     let results = join_all(tasks).await;
-    assert_all_ok(&results, "cleanup_objects", config.batch.number_of_actions);
-    println!("Cleanup complete");
+    let ok_count = results.iter().filter(|r| r.is_ok()).count();
+    if ok_count != config.batch.number_of_actions {
+        eprintln!(
+            "  Warning: Cleanup {}/{} succeeded",
+            ok_count, config.batch.number_of_actions
+        );
+    } else {
+        println!("  All objects deleted successfully");
+    }
 }
 
 fn is_s3express_bucket(bucket: &str) -> bool {
