@@ -25,7 +25,7 @@ pub struct ActionConfig {
 }
 
 fn default_delete_table() -> bool {
-    true
+    false
 }
 
 #[derive(Debug, Serialize)]

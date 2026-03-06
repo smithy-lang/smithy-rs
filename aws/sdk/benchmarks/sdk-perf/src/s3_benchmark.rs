@@ -27,7 +27,7 @@ pub struct ActionConfig {
 }
 
 fn default_cleanup_objects() -> bool {
-    true
+    false
 }
 
 #[derive(Debug, Serialize)]
