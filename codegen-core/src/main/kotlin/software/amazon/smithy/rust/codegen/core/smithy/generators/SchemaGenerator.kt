@@ -27,7 +27,9 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
+import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -259,7 +261,12 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$memberSchemaRef, val)?;"
                 }
-            is BlobShape -> "ser.write_blob(&$memberSchemaRef, val)?;"
+            is BlobShape ->
+                if (target.hasTrait(StreamingTrait::class.java)) {
+                    "// streaming blob is serialized as the HTTP body by the protocol, not the codec"
+                } else {
+                    "ser.write_blob(&$memberSchemaRef, val)?;"
+                }
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
             is ListShape -> {
@@ -509,6 +516,10 @@ class SchemaGenerator(
                             }
                         }
                     }
+                    // Error shapes have an extra `meta` field added by ErrorGenerator
+                    if (shape.hasTrait(ErrorTrait::class.java)) {
+                        rust("meta: Default::default(),")
+                    }
                 },
         )
     }
@@ -538,7 +549,12 @@ class SchemaGenerator(
                 } else {
                     "deser.read_string($memberRef)?"
                 }
-            is BlobShape -> "deser.read_blob($memberRef)?"
+            is BlobShape ->
+                if (target.hasTrait(StreamingTrait::class.java)) {
+                    "{ let _ = $memberRef; ::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty()) }"
+                } else {
+                    "deser.read_blob($memberRef)?"
+                }
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is ListShape -> {
@@ -620,7 +636,12 @@ class SchemaGenerator(
             is ByteShape, is ShortShape, is IntegerShape, is LongShape -> "Default::default()"
             is FloatShape, is DoubleShape -> "Default::default()"
             is StringShape -> if (isStringEnum(target)) null else "Default::default()"
-            is BlobShape -> "::aws_smithy_types::Blob::new(Vec::new())"
+            is BlobShape ->
+                if (target.hasTrait(StreamingTrait::class.java)) {
+                    "::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty())"
+                } else {
+                    "::aws_smithy_types::Blob::new(Vec::new())"
+                }
             is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
             is ListShape -> "Default::default()"
             is MapShape -> "Default::default()"
