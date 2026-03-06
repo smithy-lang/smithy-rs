@@ -26,13 +26,17 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -89,6 +93,21 @@ class SchemaGenerator(
     private val symbolProvider = codegenContext.symbolProvider
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
+
+    /** Sanitize a member name for use in Rust constant names (strips r# raw identifier prefix). */
+    private fun constantName(memberName: String): String = memberName.removePrefix("r#").removePrefix("#").uppercase()
+
+    /** Check if a shape is a string enum (EnumShape or StringShape with @enum trait). */
+    private fun isStringEnum(shape: Shape): Boolean = shape is EnumShape || shape.hasTrait(EnumTrait::class.java)
+
+    /**
+     * Escape a member name for use inside rustTemplate strings.
+     * Raw identifiers like `r#enum` contain `#`, which is the format character
+     * in rustTemplate. We must escape `#` as `##` so that `r#enum` is emitted
+     * as the literal Rust identifier rather than being parsed as a template
+     * variable reference (`r` + `#{enum}`).
+     */
+    private fun templateEscape(name: String): String = name.replace("#", "##")
 
     fun render() {
         val symbol = symbolProvider.toSymbol(shape)
@@ -168,7 +187,7 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val target = model.expectShape(member.target)
-                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${memberName.uppercase()}"
+                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
                     val writeCall = writeMethodForShape(target, memberSchemaRef)
                     if (memberSymbol.isOptional()) {
                         rust(
@@ -234,7 +253,12 @@ class SchemaGenerator(
             is BigIntegerShape -> "ser.write_big_integer(&$memberSchemaRef, val)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, val)?;"
             is EnumShape -> "ser.write_string(&$memberSchemaRef, val.as_str())?;"
-            is StringShape -> "ser.write_string(&$memberSchemaRef, val)?;"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    "ser.write_string(&$memberSchemaRef, val.as_str())?;"
+                } else {
+                    "ser.write_string(&$memberSchemaRef, val)?;"
+                }
             is BlobShape -> "ser.write_blob(&$memberSchemaRef, val)?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
@@ -317,7 +341,12 @@ class SchemaGenerator(
             is BigIntegerShape -> "ser.write_big_integer(&$prelude::BIG_INTEGER, $varName)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&$prelude::BIG_DECIMAL, $varName)?;"
             is EnumShape -> "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
-            is StringShape -> "ser.write_string(&$prelude::STRING, $varName)?;"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
+                } else {
+                    "ser.write_string(&$prelude::STRING, $varName)?;"
+                }
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> "ser.write_struct($varName, |ser| $varName.serialize_members(ser))?;"
@@ -341,7 +370,12 @@ class SchemaGenerator(
             is BigIntegerShape -> "ser.write_big_integer(&entry, $varName)?;"
             is BigDecimalShape -> "ser.write_big_decimal(&entry, $varName)?;"
             is EnumShape -> "ser.write_string(&entry, $varName.as_str())?;"
-            is StringShape -> "ser.write_string(&entry, $varName)?;"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    "ser.write_string(&entry, $varName.as_str())?;"
+                } else {
+                    "ser.write_string(&entry, $varName)?;"
+                }
             is BlobShape -> "ser.write_blob(&entry, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&entry, $varName)?;"
             is StructureShape -> "ser.write_struct(&entry, |ser| $varName.serialize_members(ser))?;"
@@ -365,33 +399,79 @@ class SchemaGenerator(
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
                 pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> Result<Self, D::Error> {
-                    let schema = $structName {
-                        #{defaultFields}
-                    };
-                    let builder = $structName {
-                        #{defaultFields}
-                    };
-                    deserializer.read_struct(&schema, builder, |mut builder, member, deser| {
+                    /// Zero-sized schema proxy that implements Schema by delegating to the
+                    /// static member schema constants. Avoids needing to construct a full
+                    /// struct instance just to use as a schema reference.
+                    struct SchemaFor;
+                    impl #{Schema} for SchemaFor {
+                        fn shape_id(&self) -> &::aws_smithy_schema::ShapeId { &${schemaPrefix}_SCHEMA_ID }
+                        fn shape_type(&self) -> ::aws_smithy_schema::ShapeType { ::aws_smithy_schema::ShapeType::Structure }
+                        fn traits(&self) -> &::aws_smithy_schema::TraitMap {
+                            static EMPTY: std::sync::LazyLock<::aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(::aws_smithy_schema::TraitMap::empty);
+                            &EMPTY
+                        }
+                        #{schemaMemberImpls}
+                    }
+                    ##[derive(Default)]
+                    struct Builder {
+                        #{builderFields}
+                    }
+                    let builder = Builder::default();
+                    let builder = deserializer.read_struct(&SchemaFor, builder, |mut builder, member, deser| {
                         match member.member_index() {
                             #{memberArms}
                             _ => {}
                         }
                         Ok(builder)
+                    })?;
+                    Ok($structName {
+                        #{constructFields}
                     })
                 }
             }
             """,
             *codegenScope,
-            "defaultFields" to
+            "schemaMemberImpls" to
+                writable {
+                    val schemaMembers = (shape as StructureShape).allMembers.values.toList()
+                    val memberMatchArms =
+                        schemaMembers.joinToString("\n") { member ->
+                            val mn = symbolProvider.toMemberName(member)
+                            val escaped = templateEscape(mn)
+                            "\"$escaped\" => Some(&${schemaPrefix}_MEMBER_${constantName(mn)}),"
+                        }
+                    val indexMatchArms =
+                        schemaMembers.withIndex().joinToString("\n") { (idx, member) ->
+                            val mn = symbolProvider.toMemberName(member)
+                            val escaped = templateEscape(mn)
+                            "$idx => Some((\"$escaped\", &${schemaPrefix}_MEMBER_${constantName(mn)})),"
+                        }
+                    rustTemplate(
+                        """
+                        fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
+                            match name {
+                                $memberMatchArms
+                                _ => None,
+                            }
+                        }
+                        fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
+                            match index {
+                                $indexMatchArms
+                                _ => None,
+                            }
+                        }
+                        """,
+                        "Schema" to smithySchema.resolve("Schema"),
+                    )
+                },
+            "builderFields" to
                 writable {
                     members.forEach { member ->
                         val memberName = symbolProvider.toMemberName(member)
                         val memberSymbol = symbolProvider.toSymbol(member)
-                        if (memberSymbol.isOptional()) {
-                            rust("$memberName: None,")
-                        } else {
-                            rust("$memberName: Default::default(),")
-                        }
+                        val target = model.expectShape(member.target)
+                        val rustType = memberSymbol.rustType().stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
+                        rust("$memberName: Option<${rustType.render()}>,")
                     }
                 },
             "memberArms" to
@@ -408,6 +488,19 @@ class SchemaGenerator(
                                 readExpr
                             }
                         rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                    }
+                },
+            "constructFields" to
+                writable {
+                    members.forEach { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val memberSymbol = symbolProvider.toSymbol(member)
+                        if (memberSymbol.isOptional()) {
+                            rust("$memberName: builder.$memberName,")
+                        } else {
+                            val target = model.expectShape(member.target)
+                            rust("$memberName: builder.$memberName.unwrap_or_else(|| ${defaultValueForShape(target)}),")
+                        }
                     }
                 },
         )
@@ -431,7 +524,13 @@ class SchemaGenerator(
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "$enumName::from(deser.read_string($memberRef)?.as_str())"
             }
-            is StringShape -> "deser.read_string($memberRef)?"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                    "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                } else {
+                    "deser.read_string($memberRef)?"
+                }
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
@@ -481,15 +580,36 @@ class SchemaGenerator(
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "$enumName::from(deser.read_string($memberRef)?.as_str())"
             }
-            is StringShape -> "deser.read_string($memberRef)?"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                    "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                } else {
+                    "deser.read_string($memberRef)?"
+                }
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
+            is DocumentShape -> "deser.read_document($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
             else -> "todo!(\"deserialize nested aggregate\")"
+        }
+
+    /** Returns a Rust default value expression for a shape (used for required fields). */
+    private fun defaultValueForShape(target: Shape): String =
+        when (target) {
+            is BooleanShape -> "Default::default()"
+            is ByteShape, is ShortShape, is IntegerShape, is LongShape -> "Default::default()"
+            is FloatShape, is DoubleShape -> "Default::default()"
+            is StringShape -> "Default::default()"
+            is BlobShape -> "::aws_smithy_types::Blob::new(Vec::new())"
+            is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
+            is ListShape -> "Default::default()"
+            is MapShape -> "Default::default()"
+            else -> "Default::default()"
         }
 
     private fun shapeTypeVariant(shape: Shape): String =
@@ -625,40 +745,43 @@ class SchemaGenerator(
         when (shape) {
             is StructureShape, is UnionShape -> {
                 val members = shape.members()
+                val memberMatchArms =
+                    members.joinToString("\n") { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val escapedName = templateEscape(memberName)
+                        "\"$escapedName\" => Some(&${schemaPrefix}_MEMBER_${constantName(memberName)}),"
+                    }
+                val indexMatchArms =
+                    members.withIndex().joinToString("\n") { (idx, member) ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val escapedName = templateEscape(memberName)
+                        "$idx => Some((\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)})),"
+                    }
+                val membersArray =
+                    members.joinToString(",\n") { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        val escapedName = templateEscape(memberName)
+                        "(\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)} as &dyn #{Schema})"
+                    }
                 writer.rustTemplate(
                     """
                     fn member_schema(&self, name: &str) -> Option<&dyn #{Schema}> {
                         match name {
-                            ${
-                        members.joinToString("\n                            ") { member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            "\"$memberName\" => Some(&${schemaPrefix}_MEMBER_${memberName.uppercase()}),"
-                        }
-                    }
+                            $memberMatchArms
                             _ => None,
                         }
                     }
 
                     fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn #{Schema})> {
                         match index {
-                            ${
-                        members.withIndex().joinToString("\n                            ") { (idx, member) ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            "$idx => Some((\"$memberName\", &${schemaPrefix}_MEMBER_${memberName.uppercase()})),"
-                        }
-                    }
+                            $indexMatchArms
                             _ => None,
                         }
                     }
 
                     fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> {
                         Box::new([
-                            ${
-                        members.joinToString(",\n                            ") { member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            "(\"$memberName\", &${schemaPrefix}_MEMBER_${memberName.uppercase()} as &dyn #{Schema})"
-                        }
-                    }
+                            $membersArray
                         ].into_iter())
                     }
                     """,
@@ -723,14 +846,14 @@ class SchemaGenerator(
                     val escapedMemberId = member.id.toString().replace("#", "##")
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${memberName.uppercase()}: #{MemberSchema} = #{MemberSchema}::new(
+                        static ${schemaPrefix}_MEMBER_${constantName(memberName)}: #{MemberSchema} = #{MemberSchema}::new(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
                                 "${member.id.name}",
                             ),
                             #{ShapeType}::${shapeTypeVariant(target)},
-                            ${memberName.dq()},
+                            ${templateEscape(memberName.dq())},
                             $idx,
                         );
                         """,
