@@ -77,8 +77,12 @@ import software.amazon.smithy.rust.codegen.server.smithy.canReachConstrainedShap
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ServerBuilderGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerRequestBindingGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.http.ServerResponseBindingGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerAwsJsonProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestJsonProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.serverBuilderSymbol
 import java.util.logging.Logger
 
@@ -892,8 +896,59 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             )
         }
 
-        // TODO(https://github.com/smithy-lang/smithy-rs/issues/3723): we should inject a check here that asserts that
-        //  the body contents are valid when there is empty operation input or no operation input.
+        // Validate the body contents when there is no structured data parser (i.e. empty or no operation input).
+        // For JSON protocols, an empty body or `{}` is accepted; anything else is rejected.
+        // For CBOR, an empty body or an empty CBOR map (0xA0) is accepted.
+        // For XML, only an empty body is accepted.
+        val hasPayloadBinding = bindings.any { it.location == HttpLocation.PAYLOAD }
+        if (parser == null && !inputShape.hasStreamingMember(model) && !hasPayloadBinding) {
+            rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
+            when (protocol) {
+                is ServerRestJsonProtocol, is ServerAwsJsonProtocol -> {
+                    rustBlock("if !bytes.is_empty()") {
+                        rustTemplate(
+                            """
+                            if bytes.as_ref() != b"{}" {
+                                return Err(#{RequestRejection}::JsonDeserialize(
+                                    #{JsonError}::custom("expected empty JSON object")
+                                ));
+                            }
+                            """,
+                            *codegenScope,
+                            "JsonError" to RuntimeType.smithyJson(runtimeConfig).resolve("deserialize::error::DeserializeError"),
+                        )
+                    }
+                }
+                is ServerRpcV2CborProtocol -> {
+                    rustBlock("if !bytes.is_empty()") {
+                        rustTemplate(
+                            """
+                            if bytes.as_ref() != &[0xA0] {
+                                return Err(#{RequestRejection}::CborDeserialize(
+                                    #{CborError}::custom("expected empty CBOR map", 0)
+                                ));
+                            }
+                            """,
+                            *codegenScope,
+                            "CborError" to RuntimeType.smithyCbor(runtimeConfig).resolve("decode::DeserializeError"),
+                        )
+                    }
+                }
+                is ServerRestXmlProtocol -> {
+                    rustBlock("if !bytes.is_empty()") {
+                        rustTemplate(
+                            """
+                            return Err(#{RequestRejection}::XmlDeserialize(
+                                #{XmlDecodeError}::custom("expected empty body for empty input")
+                            ));
+                            """,
+                            *codegenScope,
+                            "XmlDecodeError" to RuntimeType.smithyXml(runtimeConfig).resolve("decode::XmlDecodeError"),
+                        )
+                    }
+                }
+            }
+        }
 
         val err =
             if (ServerBuilderGenerator.hasFallibleBuilder(
