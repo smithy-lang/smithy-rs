@@ -213,7 +213,7 @@ class SchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
-                fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> Result<(), S::Error> {
+                fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> ::std::result::Result<(), S::Error> {
                     serializer.write_struct(self, |ser| {
                         self.serialize_members(ser)
                     })
@@ -222,7 +222,7 @@ class SchemaGenerator(
 
             impl $structName {
                 /// Writes this structure's members to the serializer without the struct wrapper.
-                pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> Result<(), S::Error> {
+                pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> ::std::result::Result<(), S::Error> {
                     #{memberWrites}
                     Ok(())
                 }
@@ -291,6 +291,8 @@ class SchemaGenerator(
             }
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val keyTarget = model.expectShape(target.key.target)
+                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
                 val valueShapeType = shapeTypeVariant(valueTarget)
                 val valueWrite = mapValueWriteExpr(valueTarget, "value")
@@ -298,7 +300,7 @@ class SchemaGenerator(
                     """
                     ser.write_map(&$memberSchemaRef, |ser| {
                         for (key, value) in val {
-                            let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
+                            let entry = aws_smithy_schema::MapEntrySchema::new($keyExpr, aws_smithy_schema::ShapeType::$valueShapeType);
                             match value {
                                 Some(value) => { $valueWrite }
                                 None => { ser.write_null(&entry)?; }
@@ -311,7 +313,7 @@ class SchemaGenerator(
                     """
                     ser.write_map(&$memberSchemaRef, |ser| {
                         for (key, value) in val {
-                            let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
+                            let entry = aws_smithy_schema::MapEntrySchema::new($keyExpr, aws_smithy_schema::ShapeType::$valueShapeType);
                             $valueWrite
                         }
                         Ok(())
@@ -398,7 +400,7 @@ class SchemaGenerator(
             """
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
-                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> Result<Self, D::Error> {
+                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, D::Error> {
                     /// Zero-sized schema proxy that implements Schema by delegating to the
                     /// static member schema constants. Avoids needing to construct a full
                     /// struct instance just to use as a schema reference.
@@ -471,7 +473,7 @@ class SchemaGenerator(
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val target = model.expectShape(member.target)
                         val rustType = memberSymbol.rustType().stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
-                        rust("$memberName: Option<${rustType.render()}>,")
+                        rust("$memberName: ::std::option::Option<${rustType.render()}>,")
                     }
                 },
             "memberArms" to
@@ -499,7 +501,12 @@ class SchemaGenerator(
                             rust("$memberName: builder.$memberName,")
                         } else {
                             val target = model.expectShape(member.target)
-                            rust("$memberName: builder.$memberName.unwrap_or_else(|| ${defaultValueForShape(target)}),")
+                            val fallback = defaultValueForShape(target)
+                            if (fallback != null) {
+                                rust("$memberName: builder.$memberName.unwrap_or_else(|| $fallback),")
+                            } else {
+                                rust("$memberName: builder.$memberName.expect(${("missing required field: $memberName").dq()}),")
+                            }
                         }
                     }
                 },
@@ -546,12 +553,20 @@ class SchemaGenerator(
             }
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val keyTarget = model.expectShape(target.key.target)
+                val keyInsert =
+                    if (isStringEnum(keyTarget)) {
+                        val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
+                        "$enumName::from(key.as_str())"
+                    } else {
+                        "key"
+                    }
                 val valueTarget = model.expectShape(target.value.target)
                 val valueRead = elementReadExpr(valueTarget, memberRef)
                 if (isSparse) {
-                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) }); Ok(map) })?"
+                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) }); Ok(map) })?"
                 } else {
-                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, $valueRead); Ok(map) })?"
+                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert($keyInsert, $valueRead); Ok(map) })?"
                 }
             }
             is StructureShape -> {
@@ -598,18 +613,18 @@ class SchemaGenerator(
             else -> "todo!(\"deserialize nested aggregate\")"
         }
 
-    /** Returns a Rust default value expression for a shape (used for required fields). */
-    private fun defaultValueForShape(target: Shape): String =
+    /** Returns a Rust default value expression for a shape, or null if no sensible default exists. */
+    private fun defaultValueForShape(target: Shape): String? =
         when (target) {
             is BooleanShape -> "Default::default()"
             is ByteShape, is ShortShape, is IntegerShape, is LongShape -> "Default::default()"
             is FloatShape, is DoubleShape -> "Default::default()"
-            is StringShape -> "Default::default()"
+            is StringShape -> if (isStringEnum(target)) null else "Default::default()"
             is BlobShape -> "::aws_smithy_types::Blob::new(Vec::new())"
             is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
             is ListShape -> "Default::default()"
             is MapShape -> "Default::default()"
-            else -> "Default::default()"
+            else -> null
         }
 
     private fun shapeTypeVariant(shape: Shape): String =
@@ -765,14 +780,14 @@ class SchemaGenerator(
                     }
                 writer.rustTemplate(
                     """
-                    fn member_schema(&self, name: &str) -> Option<&dyn #{Schema}> {
+                    fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
                         match name {
                             $memberMatchArms
                             _ => None,
                         }
                     }
 
-                    fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn #{Schema})> {
+                    fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
                         match index {
                             $indexMatchArms
                             _ => None,
@@ -792,7 +807,7 @@ class SchemaGenerator(
             is ListShape -> {
                 writer.rustTemplate(
                     """
-                    fn member(&self) -> Option<&dyn #{Schema}> {
+                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> {
                         Some(&${schemaPrefix}_MEMBER)
                     }
                     """,
@@ -803,11 +818,11 @@ class SchemaGenerator(
             is MapShape -> {
                 writer.rustTemplate(
                     """
-                    fn key(&self) -> Option<&dyn #{Schema}> {
+                    fn key(&self) -> ::std::option::Option<&dyn #{Schema}> {
                         Some(&${schemaPrefix}_KEY)
                     }
 
-                    fn member(&self) -> Option<&dyn #{Schema}> {
+                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> {
                         Some(&${schemaPrefix}_VALUE)
                     }
                     """,
@@ -818,7 +833,7 @@ class SchemaGenerator(
             is MemberShape -> {
                 writer.rust(
                     """
-                    fn member_name(&self) -> Option<&str> {
+                    fn member_name(&self) -> ::std::option::Option<&str> {
                         Some(${symbolProvider.toMemberName(shape).dq()})
                     }
                     """,
