@@ -6,6 +6,7 @@
 use crate::benchmark_types::{calculate_resource_stats, BenchmarkConfig, ResourceStats};
 use aws_sdk_s3::primitives::ByteStream;
 use aws_sdk_s3::Client;
+use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -228,69 +229,85 @@ async fn ensure_bucket_exists(client: &Client, bucket_name: &str) {
 }
 
 async fn setup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>, data: &[u8]) {
-    let mut tasks = Vec::new();
-    for i in 0..config.batch.number_of_actions {
-        let key = format!("{}{}", config.action_config.key_prefix, i);
-        let body = ByteStream::from(data.to_vec());
-        tasks.push(
-            client
+    let concurrency = config
+        .batch
+        .concurrency
+        .unwrap_or(config.batch.number_of_actions);
+    let sem = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let tasks: Vec<_> = (0..config.batch.number_of_actions)
+        .map(|i| {
+            let key = format!("{}{}", config.action_config.key_prefix, i);
+            let body = ByteStream::from(data.to_vec());
+            let sem = sem.clone();
+            let fut = client
                 .put_object()
                 .bucket(&config.action_config.bucket_name)
                 .key(key)
                 .body(body)
-                .send(),
-        );
-    }
-    for task in tasks {
-        let _ = task.await;
-    }
+                .send();
+            async move {
+                let _permit = sem.acquire().await.unwrap();
+                fut.await
+            }
+        })
+        .collect();
+    let _ = join_all(tasks).await;
 }
 
 async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data: &[u8]) {
+    let concurrency = config
+        .batch
+        .concurrency
+        .unwrap_or(config.batch.number_of_actions);
+    let sem = Arc::new(tokio::sync::Semaphore::new(concurrency));
     if config.action == "upload" {
         println!(
-            "    Starting {} upload operations...",
-            config.batch.number_of_actions
+            "    Starting {} upload operations (concurrency={})...",
+            config.batch.number_of_actions, concurrency
         );
-        let mut tasks = Vec::new();
-        for i in 0..config.batch.number_of_actions {
-            let key = format!("{}{}", config.action_config.key_prefix, i);
-            let body = ByteStream::from(data.to_vec());
-            tasks.push(
-                client
+        let tasks: Vec<_> = (0..config.batch.number_of_actions)
+            .map(|i| {
+                let key = format!("{}{}", config.action_config.key_prefix, i);
+                let body = ByteStream::from(data.to_vec());
+                let sem = sem.clone();
+                let fut = client
                     .put_object()
                     .bucket(&config.action_config.bucket_name)
                     .key(key)
                     .body(body)
-                    .send(),
-            );
-        }
-        for task in tasks {
-            let _ = task.await;
-        }
+                    .send();
+                async move {
+                    let _permit = sem.acquire().await.unwrap();
+                    fut.await
+                }
+            })
+            .collect();
+        let _ = join_all(tasks).await;
         println!(
             "    Finished {} upload operations",
             config.batch.number_of_actions
         );
     } else {
         println!(
-            "    Starting {} download operations...",
-            config.batch.number_of_actions
+            "    Starting {} download operations (concurrency={})...",
+            config.batch.number_of_actions, concurrency
         );
-        let mut tasks = Vec::new();
-        for i in 0..config.batch.number_of_actions {
-            let key = format!("{}{}", config.action_config.key_prefix, i);
-            tasks.push(
-                client
+        let tasks: Vec<_> = (0..config.batch.number_of_actions)
+            .map(|i| {
+                let key = format!("{}{}", config.action_config.key_prefix, i);
+                let sem = sem.clone();
+                let fut = client
                     .get_object()
                     .bucket(&config.action_config.bucket_name)
                     .key(key)
-                    .send(),
-            );
-        }
-        for task in tasks {
-            let _ = task.await;
-        }
+                    .send();
+                async move {
+                    let _permit = sem.acquire().await.unwrap();
+                    fut.await
+                }
+            })
+            .collect();
+        let _ = join_all(tasks).await;
         println!(
             "    Finished {} download operations",
             config.batch.number_of_actions

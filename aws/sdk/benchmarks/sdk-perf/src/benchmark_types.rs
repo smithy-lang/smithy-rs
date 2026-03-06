@@ -25,6 +25,7 @@ pub struct BatchConfig {
     pub description: String,
     pub number_of_actions: usize,
     pub sequential_execution: bool,
+    pub concurrency: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
