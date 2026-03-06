@@ -6,11 +6,14 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.node.Node
+import software.amazon.smithy.model.shapes.BigDecimalShape
+import software.amazon.smithy.model.shapes.BigIntegerShape
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.ByteShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
@@ -23,8 +26,10 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -33,6 +38,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
@@ -162,7 +168,8 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val target = model.expectShape(member.target)
-                    val writeCall = writeMethodForShape(target, "${schemaPrefix}_MEMBER_${memberName.uppercase()}")
+                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${memberName.uppercase()}"
+                    val writeCall = writeMethodForShape(target, memberSchemaRef)
                     if (memberSymbol.isOptional()) {
                         rust(
                             """
@@ -172,7 +179,14 @@ class SchemaGenerator(
                             """,
                         )
                     } else {
-                        rust(writeCall)
+                        rust(
+                            """
+                            {
+                                let val = &self.$memberName;
+                                $writeCall
+                            }
+                            """,
+                        )
                     }
                 }
             }
@@ -217,35 +231,69 @@ class SchemaGenerator(
             is LongShape -> "ser.write_long(&$memberSchemaRef, *val)?;"
             is FloatShape -> "ser.write_float(&$memberSchemaRef, *val)?;"
             is DoubleShape -> "ser.write_double(&$memberSchemaRef, *val)?;"
+            is BigIntegerShape -> "ser.write_big_integer(&$memberSchemaRef, val)?;"
+            is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, val)?;"
+            is EnumShape -> "ser.write_string(&$memberSchemaRef, val.as_str())?;"
             is StringShape -> "ser.write_string(&$memberSchemaRef, val)?;"
             is BlobShape -> "ser.write_blob(&$memberSchemaRef, val)?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
             is ListShape -> {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&$memberSchemaRef, |ser| {
-                    for item in val {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                if (isSparse) {
+                    """
+                    ser.write_list(&$memberSchemaRef, |ser| {
+                        for item in val {
+                            match item {
+                                Some(item) => { $elementWrite }
+                                None => { ser.write_null(&aws_smithy_schema::prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_list(&$memberSchemaRef, |ser| {
+                        for item in val {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
             is MapShape -> {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
                 val valueTarget = model.expectShape(target.value.target)
                 val valueShapeType = shapeTypeVariant(valueTarget)
                 val valueWrite = mapValueWriteExpr(valueTarget, "value")
-                """
-                ser.write_map(&$memberSchemaRef, |ser| {
-                    for (key, value) in val {
-                        let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
-                        $valueWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                if (isSparse) {
+                    """
+                    ser.write_map(&$memberSchemaRef, |ser| {
+                        for (key, value) in val {
+                            let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
+                            match value {
+                                Some(value) => { $valueWrite }
+                                None => { ser.write_null(&entry)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_map(&$memberSchemaRef, |ser| {
+                        for (key, value) in val {
+                            let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
+                            $valueWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, |ser| val.serialize_members(ser))?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
@@ -266,6 +314,9 @@ class SchemaGenerator(
             is LongShape -> "ser.write_long(&$prelude::LONG, *$varName)?;"
             is FloatShape -> "ser.write_float(&$prelude::FLOAT, *$varName)?;"
             is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, *$varName)?;"
+            is BigIntegerShape -> "ser.write_big_integer(&$prelude::BIG_INTEGER, $varName)?;"
+            is BigDecimalShape -> "ser.write_big_decimal(&$prelude::BIG_DECIMAL, $varName)?;"
+            is EnumShape -> "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
             is StringShape -> "ser.write_string(&$prelude::STRING, $varName)?;"
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
@@ -287,6 +338,9 @@ class SchemaGenerator(
             is LongShape -> "ser.write_long(&entry, *$varName)?;"
             is FloatShape -> "ser.write_float(&entry, *$varName)?;"
             is DoubleShape -> "ser.write_double(&entry, *$varName)?;"
+            is BigIntegerShape -> "ser.write_big_integer(&entry, $varName)?;"
+            is BigDecimalShape -> "ser.write_big_decimal(&entry, $varName)?;"
+            is EnumShape -> "ser.write_string(&entry, $varName.as_str())?;"
             is StringShape -> "ser.write_string(&entry, $varName)?;"
             is BlobShape -> "ser.write_blob(&entry, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&entry, $varName)?;"
@@ -371,23 +425,39 @@ class SchemaGenerator(
             is LongShape -> "deser.read_long($memberRef)?"
             is FloatShape -> "deser.read_float($memberRef)?"
             is DoubleShape -> "deser.read_double($memberRef)?"
+            is BigIntegerShape -> "deser.read_big_integer($memberRef)?"
+            is BigDecimalShape -> "deser.read_big_decimal($memberRef)?"
+            is EnumShape -> {
+                val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "$enumName::from(deser.read_string($memberRef)?.as_str())"
+            }
             is StringShape -> "deser.read_string($memberRef)?"
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is ListShape -> {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
                 val elementRead = elementReadExpr(elementTarget, memberRef)
-                "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push($elementRead); Ok(list) })?"
+                if (isSparse) {
+                    "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) }); Ok(list) })?"
+                } else {
+                    "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push($elementRead); Ok(list) })?"
+                }
             }
             is MapShape -> {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
                 val valueTarget = model.expectShape(target.value.target)
                 val valueRead = elementReadExpr(valueTarget, memberRef)
-                "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, $valueRead); Ok(map) })?"
+                if (isSparse) {
+                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) }); Ok(map) })?"
+                } else {
+                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, $valueRead); Ok(map) })?"
+                }
             }
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
-                "${targetSymbol.name}::deserialize(deser)?"
+                "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
         }
@@ -405,13 +475,19 @@ class SchemaGenerator(
             is LongShape -> "deser.read_long($memberRef)?"
             is FloatShape -> "deser.read_float($memberRef)?"
             is DoubleShape -> "deser.read_double($memberRef)?"
+            is BigIntegerShape -> "deser.read_big_integer($memberRef)?"
+            is BigDecimalShape -> "deser.read_big_decimal($memberRef)?"
+            is EnumShape -> {
+                val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "$enumName::from(deser.read_string($memberRef)?.as_str())"
+            }
             is StringShape -> "deser.read_string($memberRef)?"
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
-                "${targetSymbol.name}::deserialize(deser)?"
+                "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
             else -> "todo!(\"deserialize nested aggregate\")"
         }
@@ -425,6 +501,8 @@ class SchemaGenerator(
             is LongShape -> "Long"
             is FloatShape -> "Float"
             is DoubleShape -> "Double"
+            is BigIntegerShape -> "BigInteger"
+            is BigDecimalShape -> "BigDecimal"
             is StringShape -> "String"
             is BlobShape -> "Blob"
             is TimestampShape -> "Timestamp"
