@@ -90,6 +90,8 @@ class SchemaGenerator(
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
+    /** Extra field initializers for the deserialize constructor (e.g. `_request_id: None,`). */
+    private val extraConstructFields: List<String> = emptyList(),
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -519,6 +521,10 @@ class SchemaGenerator(
                     // Error shapes have an extra `meta` field added by ErrorGenerator
                     if (shape.hasTrait(ErrorTrait::class.java)) {
                         rust("meta: Default::default(),")
+                    }
+                    // Extra fields added by decorators (e.g. _request_id for output shapes)
+                    for (field in extraConstructFields) {
+                        rust(field)
                     }
                 },
         )

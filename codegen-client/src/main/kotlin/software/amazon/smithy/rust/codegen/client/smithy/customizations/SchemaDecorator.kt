@@ -9,6 +9,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 
 /**
  * Generates Schema implementations for all structure shapes, enabling
@@ -36,6 +37,22 @@ class SchemaDecorator : ClientCodegenDecorator {
         baseCustomizations: List<StructureCustomization>,
     ): List<StructureCustomization> {
         // if (!isEnabled(codegenContext)) return baseCustomizations
-        return baseCustomizations + SchemaStructureCustomization(codegenContext)
+
+        // Output shapes have extra fields added by BaseRequestIdDecorator subclasses.
+        // Collect the field names that need default initialization in the deserialize constructor.
+        val extraOutputFields = mutableListOf("_request_id: None,")
+        // S3 adds _extended_request_id via S3ExtendedRequestIdDecorator
+        if (codegenContext.serviceShape.id.name.startsWith("AmazonS3")) {
+            extraOutputFields.add("_extended_request_id: None,")
+        }
+
+        return baseCustomizations +
+            SchemaStructureCustomization(codegenContext) { shape ->
+                if (shape.hasTrait(SyntheticOutputTrait::class.java)) {
+                    extraOutputFields
+                } else {
+                    emptyList()
+                }
+            }
     }
 }
