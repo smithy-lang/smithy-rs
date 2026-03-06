@@ -150,20 +150,22 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
                 let mut item = HashMap::new();
                 item.insert("id".to_string(), AttributeValue::S(key));
                 item.insert("data".to_string(), AttributeValue::S(data.clone()));
-                let _ = client
+                client
                     .put_item()
                     .table_name(&config.action_config.table_name)
                     .set_item(Some(item))
                     .send()
-                    .await;
+                    .await
+                    .expect("putitem failed during warmup");
             }
             "getitem" => {
-                let _ = client
+                client
                     .get_item()
                     .table_name(&config.action_config.table_name)
                     .key("id", AttributeValue::S(key))
                     .send()
-                    .await;
+                    .await
+                    .expect("getitem failed during warmup");
             }
             _ => panic!("Unsupported action"),
         }
@@ -210,20 +212,22 @@ async fn run_batch_with_metrics(
                 let mut item = HashMap::new();
                 item.insert("id".to_string(), AttributeValue::S(key));
                 item.insert("data".to_string(), AttributeValue::S(data.clone()));
-                let _ = client
+                client
                     .put_item()
                     .table_name(&config.action_config.table_name)
                     .set_item(Some(item))
                     .send()
-                    .await;
+                    .await
+                    .expect("putitem failed during measurement");
             }
             "getitem" => {
-                let _ = client
+                client
                     .get_item()
                     .table_name(&config.action_config.table_name)
                     .key("id", AttributeValue::S(key))
                     .send()
-                    .await;
+                    .await
+                    .expect("getitem failed during measurement");
             }
             _ => panic!("Unsupported action"),
         }

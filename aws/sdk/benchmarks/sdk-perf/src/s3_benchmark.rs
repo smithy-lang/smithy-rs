@@ -360,12 +360,15 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data
                     .send();
                 async move {
                     let _permit = sem.acquire().await.unwrap();
-                    fut.await
+                    let resp = fut.await.expect("download request failed");
+                    resp.body
+                        .collect()
+                        .await
+                        .expect("download body read failed");
                 }
             })
             .collect();
-        let results = join_all(tasks).await;
-        assert_all_ok(&results, "download", config.batch.number_of_actions);
+        join_all(tasks).await;
         println!(
             "    Finished {} download operations",
             config.batch.number_of_actions
