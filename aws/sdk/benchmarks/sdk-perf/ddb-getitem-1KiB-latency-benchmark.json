@@ -7,7 +7,8 @@
   "actionConfig": {
     "tableName": "benchmark-table",
     "region": "us-east-1",
-    "keyPrefix": "item-"
+    "keyPrefix": "item-",
+    "deleteTableAfterBenchmark": true
   },
   "batch": {
     "description": "A batch is 1,000 GetItem actions executed sequentially",

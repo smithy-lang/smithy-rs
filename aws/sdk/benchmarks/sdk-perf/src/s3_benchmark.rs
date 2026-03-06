@@ -22,6 +22,12 @@ pub struct ActionConfig {
     #[serde(default)]
     pub files_on_disk: bool,
     pub checksum: Option<String>,
+    #[serde(default = "default_cleanup_objects")]
+    pub cleanup_objects_after_benchmark: bool,
+}
+
+fn default_cleanup_objects() -> bool {
+    true
 }
 
 #[derive(Debug, Serialize)]
@@ -137,6 +143,10 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
 
     monitor.abort();
 
+    if config.action_config.cleanup_objects_after_benchmark {
+        cleanup_objects(&client, &config).await;
+    }
+
     let cpu = cpu_samples.lock().unwrap().clone();
     let mem = memory_samples.lock().unwrap().clone();
 
@@ -146,6 +156,25 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
         cpu_stats: calculate_resource_stats(&cpu),
         memory_stats: calculate_resource_stats(&mem),
     }
+}
+
+async fn cleanup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>) {
+    println!(
+        "Cleaning up objects in bucket '{}'...",
+        config.action_config.bucket_name
+    );
+    let tasks: Vec<_> = (0..config.batch.number_of_actions)
+        .map(|i| {
+            let key = format!("{}{}", config.action_config.key_prefix, i);
+            client
+                .delete_object()
+                .bucket(&config.action_config.bucket_name)
+                .key(key)
+                .send()
+        })
+        .collect();
+    let _ = join_all(tasks).await;
+    println!("Cleanup complete");
 }
 
 fn is_s3express_bucket(bucket: &str) -> bool {
