@@ -305,7 +305,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_blob(&mut self, _schema: &dyn Schema) -> Result<Blob, Self::Error> {
         let s = self.read_string(_schema)?;
-        Ok(Blob::new(s.into_bytes()))
+        let decoded = aws_smithy_types::base64::decode(&s)
+            .map_err(|e| JsonDeserializerError::ParseError(format!("invalid base64: {}", e)))?;
+        Ok(Blob::new(decoded))
     }
 
     fn read_timestamp(&mut self, _schema: &dyn Schema) -> Result<DateTime, Self::Error> {

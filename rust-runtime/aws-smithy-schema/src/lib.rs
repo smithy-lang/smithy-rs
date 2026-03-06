@@ -13,6 +13,7 @@
 //! enabling protocol-agnostic serialization and deserialization.
 
 mod schema {
+    pub mod map_entry;
     pub mod member;
     pub mod shape_id;
     pub mod shape_type;
@@ -25,6 +26,7 @@ mod schema {
     pub mod serde;
 }
 
+pub use schema::map_entry::MapEntrySchema;
 pub use schema::member::MemberSchema;
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;

@@ -32,6 +32,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
+import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
@@ -155,38 +156,47 @@ class SchemaGenerator(
             )
         val members = (shape as StructureShape).allMembers.values.toList()
 
+        val memberWrites =
+            writable {
+                members.forEachIndexed { idx, member ->
+                    val memberName = symbolProvider.toMemberName(member)
+                    val memberSymbol = symbolProvider.toSymbol(member)
+                    val target = model.expectShape(member.target)
+                    val writeCall = writeMethodForShape(target, "${schemaPrefix}_MEMBER_${memberName.uppercase()}")
+                    if (memberSymbol.isOptional()) {
+                        rust(
+                            """
+                            if let Some(ref val) = self.$memberName {
+                                $writeCall
+                            }
+                            """,
+                        )
+                    } else {
+                        rust(writeCall)
+                    }
+                }
+            }
+
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
                 fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> Result<(), S::Error> {
                     serializer.write_struct(self, |ser| {
-                        #{memberWrites}
-                        Ok(())
+                        self.serialize_members(ser)
                     })
+                }
+            }
+
+            impl $structName {
+                /// Writes this structure's members to the serializer without the struct wrapper.
+                pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> Result<(), S::Error> {
+                    #{memberWrites}
+                    Ok(())
                 }
             }
             """,
             *codegenScope,
-            "memberWrites" to
-                writable {
-                    members.forEachIndexed { idx, member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val memberSymbol = symbolProvider.toSymbol(member)
-                        val target = model.expectShape(member.target)
-                        val writeCall = writeMethodForShape(target, "${schemaPrefix}_MEMBER_${memberName.uppercase()}")
-                        if (memberSymbol.isOptional()) {
-                            rust(
-                                """
-                                if let Some(ref val) = self.$memberName {
-                                    $writeCall
-                                }
-                                """,
-                            )
-                        } else {
-                            rust(writeCall)
-                        }
-                    }
-                },
+            "memberWrites" to memberWrites,
         )
     }
 
@@ -211,11 +221,77 @@ class SchemaGenerator(
             is BlobShape -> "ser.write_blob(&$memberSchemaRef, val)?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
-            is ListShape -> "ser.write_list(&$memberSchemaRef, |_ser| { Ok(()) })?;"
-            is MapShape -> "ser.write_map(&$memberSchemaRef, |_ser| { Ok(()) })?;"
-            is StructureShape -> "val.serialize(ser)?;"
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementWrite = elementWriteExpr(elementTarget, "item")
+                """
+                ser.write_list(&$memberSchemaRef, |ser| {
+                    for item in val {
+                        $elementWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+            is MapShape -> {
+                val valueTarget = model.expectShape(target.value.target)
+                val valueShapeType = shapeTypeVariant(valueTarget)
+                val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                """
+                ser.write_map(&$memberSchemaRef, |ser| {
+                    for (key, value) in val {
+                        let entry = aws_smithy_schema::MapEntrySchema::new(key, aws_smithy_schema::ShapeType::$valueShapeType);
+                        $valueWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+            is StructureShape -> "ser.write_struct(&$memberSchemaRef, |ser| val.serialize_members(ser))?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
             else -> "// TODO(schema) unsupported shape type for serialization"
+        }
+
+    /** Returns a write expression for a list element (no member name needed). */
+    private fun elementWriteExpr(
+        target: Shape,
+        varName: String,
+    ): String {
+        val prelude = "aws_smithy_schema::prelude"
+        return when (target) {
+            is BooleanShape -> "ser.write_boolean(&$prelude::BOOLEAN, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$prelude::BYTE, *$varName)?;"
+            is ShortShape -> "ser.write_short(&$prelude::SHORT, *$varName)?;"
+            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, *$varName)?;"
+            is LongShape -> "ser.write_long(&$prelude::LONG, *$varName)?;"
+            is FloatShape -> "ser.write_float(&$prelude::FLOAT, *$varName)?;"
+            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, *$varName)?;"
+            is StringShape -> "ser.write_string(&$prelude::STRING, $varName)?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
+            is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is StructureShape -> "ser.write_struct($varName, |ser| $varName.serialize_members(ser))?;"
+            else -> "// TODO(schema) unsupported list element type"
+        }
+    }
+
+    /** Returns a write expression for a map value (uses `entry` schema for the key). */
+    private fun mapValueWriteExpr(
+        target: Shape,
+        varName: String,
+    ): String =
+        when (target) {
+            is BooleanShape -> "ser.write_boolean(&entry, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&entry, *$varName)?;"
+            is ShortShape -> "ser.write_short(&entry, *$varName)?;"
+            is IntegerShape -> "ser.write_integer(&entry, *$varName)?;"
+            is LongShape -> "ser.write_long(&entry, *$varName)?;"
+            is FloatShape -> "ser.write_float(&entry, *$varName)?;"
+            is DoubleShape -> "ser.write_double(&entry, *$varName)?;"
+            is StringShape -> "ser.write_string(&entry, $varName)?;"
+            is BlobShape -> "ser.write_blob(&entry, $varName)?;"
+            is TimestampShape -> "ser.write_timestamp(&entry, $varName)?;"
+            is StructureShape -> "ser.write_struct(&entry, |ser| $varName.serialize_members(ser))?;"
+            else -> "// TODO(schema) unsupported map value type"
         }
 
     private fun renderDeserializeMethod(
@@ -268,9 +344,16 @@ class SchemaGenerator(
                 writable {
                     members.forEachIndexed { idx, member ->
                         val memberName = symbolProvider.toMemberName(member)
+                        val memberSymbol = symbolProvider.toSymbol(member)
                         val target = model.expectShape(member.target)
                         val readExpr = readMethodForShape(target, "member")
-                        rust("Some($idx) => { builder.$memberName = Some($readExpr); }")
+                        val wrapped =
+                            if (memberSymbol.isRustBoxed()) {
+                                "Box::new($readExpr)"
+                            } else {
+                                readExpr
+                            }
+                        rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
                     }
                 },
         )
@@ -292,7 +375,45 @@ class SchemaGenerator(
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementRead = elementReadExpr(elementTarget, memberRef)
+                "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push($elementRead); Ok(list) })?"
+            }
+            is MapShape -> {
+                val valueTarget = model.expectShape(target.value.target)
+                val valueRead = elementReadExpr(valueTarget, memberRef)
+                "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert(key, $valueRead); Ok(map) })?"
+            }
+            is StructureShape -> {
+                val targetSymbol = symbolProvider.toSymbol(target)
+                "${targetSymbol.name}::deserialize(deser)?"
+            }
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
+        }
+
+    /** Returns a read expression for a list element or map value. */
+    private fun elementReadExpr(
+        target: Shape,
+        memberRef: String,
+    ): String =
+        when (target) {
+            is BooleanShape -> "deser.read_boolean($memberRef)?"
+            is ByteShape -> "deser.read_byte($memberRef)?"
+            is ShortShape -> "deser.read_short($memberRef)?"
+            is IntegerShape -> "deser.read_integer($memberRef)?"
+            is LongShape -> "deser.read_long($memberRef)?"
+            is FloatShape -> "deser.read_float($memberRef)?"
+            is DoubleShape -> "deser.read_double($memberRef)?"
+            is StringShape -> "deser.read_string($memberRef)?"
+            is BlobShape -> "deser.read_blob($memberRef)?"
+            is TimestampShape -> "deser.read_timestamp($memberRef)?"
+            is DocumentShape -> "deser.read_document($memberRef)?"
+            is StructureShape -> {
+                val targetSymbol = symbolProvider.toSymbol(target)
+                "${targetSymbol.name}::deserialize(deser)?"
+            }
+            else -> "todo!(\"deserialize nested aggregate\")"
         }
 
     private fun shapeTypeVariant(shape: Shape): String =

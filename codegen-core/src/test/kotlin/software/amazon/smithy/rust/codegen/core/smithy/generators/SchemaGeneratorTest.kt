@@ -562,4 +562,89 @@ class SchemaGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `json round trip with ComplexStruct`() {
+        val project = TestWorkspace.testProject(provider)
+        val myStruct = model.lookup<StructureShape>("test#MyStruct")
+        val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
+        project.useShapeWriter(myStruct) {
+            StructureGenerator(model, provider, this, myStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, myStruct).render()
+        }
+        project.useShapeWriter(complexStruct) {
+            StructureGenerator(model, provider, this, complexStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            SchemaGenerator(codegenContext, this, complexStruct).render()
+            // Pull in JsonCodec dependency
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "json_round_trip_complex_struct",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+                use aws_smithy_types::{Blob, DateTime};
+                use std::collections::HashMap;
+
+                // Build a ComplexStruct with all fields populated.
+                let mut metadata = HashMap::new();
+                metadata.insert("env".to_string(), "prod".to_string());
+                metadata.insert("region".to_string(), "us-west-2".to_string());
+
+                let original = ComplexStruct {
+                    label: Some("test-label".to_string()),
+                    count: Some(42),
+                    ratio: Some(3.14),
+                    enabled: Some(true),
+                    data: Some(Blob::new(vec![1, 2, 3, 4, 5])),
+                    created_at: Some(DateTime::from_secs(1700000000)),
+                    nested: Some(MyStruct {
+                        name: Some("Alice".to_string()),
+                        age: Some(30),
+                        active: Some(true),
+                    }),
+                    tags: Some(vec!["alpha".to_string(), "beta".to_string()]),
+                    metadata: Some(metadata),
+                };
+
+                // Serialize
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                original.serialize(&mut ser).expect("serialization should succeed");
+                let bytes = ser.finish().expect("finish should succeed");
+
+                // Deserialize
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = ComplexStruct::deserialize(&mut deser).expect("deserialization should succeed");
+
+                // Assert all fields round-tripped
+                assert_eq!(result.label, Some("test-label".to_string()));
+                assert_eq!(result.count, Some(42));
+                assert_eq!(result.ratio, Some(3.14));
+                assert_eq!(result.enabled, Some(true));
+                assert_eq!(result.data, Some(Blob::new(vec![1, 2, 3, 4, 5])));
+                assert_eq!(result.created_at, Some(DateTime::from_secs(1700000000)));
+
+                // Nested struct
+                let nested = result.nested.expect("nested should be Some");
+                assert_eq!(nested.name, Some("Alice".to_string()));
+                assert_eq!(nested.age, Some(30));
+                assert_eq!(nested.active, Some(true));
+
+                // List
+                assert_eq!(result.tags, Some(vec!["alpha".to_string(), "beta".to_string()]));
+
+                // Map (compare entries individually since HashMap order is non-deterministic)
+                let meta = result.metadata.expect("metadata should be Some");
+                assert_eq!(meta.len(), 2);
+                assert_eq!(meta.get("env"), Some(&"prod".to_string()));
+                assert_eq!(meta.get("region"), Some(&"us-west-2".to_string()));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }
