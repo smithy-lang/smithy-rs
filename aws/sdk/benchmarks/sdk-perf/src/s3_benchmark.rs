@@ -52,10 +52,18 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
         "Loading AWS SDK configuration for region: {}",
         config.action_config.region
     );
-    let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_config::Region::new(config.action_config.region.clone()))
-        .load()
-        .await;
+    let mut config_loader = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(aws_config::Region::new(config.action_config.region.clone()));
+    if config.action_config.checksum.is_none() {
+        config_loader = config_loader
+            .request_checksum_calculation(
+                aws_sdk_s3::config::RequestChecksumCalculation::WhenRequired,
+            )
+            .response_checksum_validation(
+                aws_sdk_s3::config::ResponseChecksumValidation::WhenRequired,
+            );
+    }
+    let sdk_config = config_loader.load().await;
     let client = Client::new(&sdk_config);
 
     ensure_bucket_exists(&client, &config.action_config.bucket_name).await;
