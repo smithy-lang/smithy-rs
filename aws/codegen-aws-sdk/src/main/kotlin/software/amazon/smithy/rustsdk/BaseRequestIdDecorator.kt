@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
@@ -63,7 +64,22 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = baseCustomizations + listOf(RequestIdStructureCustomization(codegenContext))
+    ): List<StructureCustomization> {
+        // Replace any SchemaStructureCustomization with one that includes this decorator's
+        // extra field (_$fieldName) for output shapes, so the deserialize constructor
+        // initializes it.
+        val updated =
+            baseCustomizations.map { customization ->
+                if (customization is SchemaStructureCustomization) {
+                    customization.withExtraConstructField(fieldName) { shape ->
+                        shape.hasTrait(SyntheticOutputTrait::class.java)
+                    }
+                } else {
+                    customization
+                }
+            }
+        return updated + listOf(RequestIdStructureCustomization(codegenContext))
+    }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,

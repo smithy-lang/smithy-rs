@@ -124,9 +124,39 @@ class SchemaGenerator(
                 "MemberSchema" to smithySchema.resolve("MemberSchema"),
             )
 
-        // Write the Schema trait impl
         val schemaPrefix = symbol.name.uppercase()
-        writer.rustBlockTemplate("impl #{Schema} for ${symbol.name}", *codegenScope) {
+        val schemaStructName = "${symbol.name}Schema"
+
+        // Write module-level statics and the schema unit struct
+        val ns = shape.id.namespace
+        val name = shape.id.name
+        val fqn = shape.id.toString()
+        val escapedFqn = fqn.replace("#", "##")
+        writer.rustTemplate(
+            """
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
+                let mut map = #{TraitMap}::new();
+                #{traitInsertions}
+                map
+            });
+            """,
+            *codegenScope,
+            "traitInsertions" to generateTraitInsertions(shape),
+        )
+        renderMemberSchemas(writer, schemaPrefix)
+
+        // Generate the single schema unit struct with the full Schema impl
+        writer.rustTemplate(
+            """
+            /// Schema type for [`${symbol.name}`]. This zero-sized struct is the single
+            /// source of truth for the shape's schema, used by both the `Schema` impl
+            /// on the data type and by deserialization.
+            pub(crate) struct $schemaStructName;
+            """,
+            *codegenScope,
+        )
+        writer.rustBlockTemplate("impl #{Schema} for $schemaStructName", *codegenScope) {
             rustTemplate(
                 """
                 fn shape_id(&self) -> &#{ShapeId} {
@@ -138,38 +168,30 @@ class SchemaGenerator(
                 }
 
                 fn traits(&self) -> &#{TraitMap} {
-                    static TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
-                        let mut map = #{TraitMap}::new();
-                        #{traitInsertions}
-                        map
-                    });
-                    &TRAITS
+                    &${schemaPrefix}_SCHEMA_TRAITS
                 }
                 """,
                 *codegenScope,
-                "traitInsertions" to generateTraitInsertions(shape),
             )
             renderMembers(writer, schemaPrefix)
         }
         writer.write("")
 
-        // Write module-level static schema constants
-        val ns = shape.id.namespace
-        val name = shape.id.name
-        val fqn = shape.id.toString()
-        val escapedFqn = fqn.replace("#", "##")
+        // Provide access to the schema from the data type
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            impl ${symbol.name} {
+                /// The schema for this shape.
+                pub const SCHEMA: &'static $schemaStructName = &$schemaStructName;
+            }
             """,
             *codegenScope,
         )
-        renderMemberSchemas(writer, schemaPrefix)
 
         // Write SerializableStruct impl for structures
         if (shape is StructureShape) {
             renderSerializableStruct(writer, symbol.name, schemaPrefix)
-            renderDeserializeMethod(writer, symbol.name, schemaPrefix)
+            renderDeserializeMethod(writer, symbol.name, schemaPrefix, schemaStructName)
         }
     }
 
@@ -218,7 +240,7 @@ class SchemaGenerator(
             """
             impl #{SerializableStruct} for $structName {
                 fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> ::std::result::Result<(), S::Error> {
-                    serializer.write_struct(self, |ser| {
+                    serializer.write_struct(Self::SCHEMA, |ser| {
                         self.serialize_members(ser)
                     })
                 }
@@ -360,7 +382,10 @@ class SchemaGenerator(
                 }
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
-            is StructureShape -> "ser.write_struct($varName, |ser| $varName.serialize_members(ser))?;"
+            is StructureShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, |ser| $varName.serialize_members(ser))?;"
+            }
             else -> "// TODO(schema) unsupported list element type"
         }
     }
@@ -397,6 +422,7 @@ class SchemaGenerator(
         writer: RustWriter,
         structName: String,
         schemaPrefix: String,
+        schemaStructName: String,
     ) {
         val codegenScope =
             arrayOf(
@@ -410,25 +436,12 @@ class SchemaGenerator(
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
                 pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, D::Error> {
-                    /// Zero-sized schema proxy that implements Schema by delegating to the
-                    /// static member schema constants. Avoids needing to construct a full
-                    /// struct instance just to use as a schema reference.
-                    struct SchemaFor;
-                    impl #{Schema} for SchemaFor {
-                        fn shape_id(&self) -> &::aws_smithy_schema::ShapeId { &${schemaPrefix}_SCHEMA_ID }
-                        fn shape_type(&self) -> ::aws_smithy_schema::ShapeType { ::aws_smithy_schema::ShapeType::Structure }
-                        fn traits(&self) -> &::aws_smithy_schema::TraitMap {
-                            static EMPTY: std::sync::LazyLock<::aws_smithy_schema::TraitMap> = std::sync::LazyLock::new(::aws_smithy_schema::TraitMap::empty);
-                            &EMPTY
-                        }
-                        #{schemaMemberImpls}
-                    }
                     ##[derive(Default)]
                     struct Builder {
                         #{builderFields}
                     }
                     let builder = Builder::default();
-                    let builder = deserializer.read_struct(&SchemaFor, builder, |mut builder, member, deser| {
+                    let builder = deserializer.read_struct(&$schemaStructName, builder, |mut builder, member, deser| {
                         match member.member_index() {
                             #{memberArms}
                             _ => {}
@@ -442,39 +455,6 @@ class SchemaGenerator(
             }
             """,
             *codegenScope,
-            "schemaMemberImpls" to
-                writable {
-                    val schemaMembers = (shape as StructureShape).allMembers.values.toList()
-                    val memberMatchArms =
-                        schemaMembers.joinToString("\n") { member ->
-                            val mn = symbolProvider.toMemberName(member)
-                            val escaped = templateEscape(mn)
-                            "\"$escaped\" => Some(&${schemaPrefix}_MEMBER_${constantName(mn)}),"
-                        }
-                    val indexMatchArms =
-                        schemaMembers.withIndex().joinToString("\n") { (idx, member) ->
-                            val mn = symbolProvider.toMemberName(member)
-                            val escaped = templateEscape(mn)
-                            "$idx => Some((\"$escaped\", &${schemaPrefix}_MEMBER_${constantName(mn)})),"
-                        }
-                    rustTemplate(
-                        """
-                        fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
-                            match name {
-                                $memberMatchArms
-                                _ => None,
-                            }
-                        }
-                        fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
-                            match index {
-                                $indexMatchArms
-                                _ => None,
-                            }
-                        }
-                        """,
-                        "Schema" to smithySchema.resolve("Schema"),
-                    )
-                },
             "builderFields" to
                 writable {
                     members.forEach { member ->
@@ -772,6 +752,53 @@ class SchemaGenerator(
             "smithy.api#eventPayload" -> "EventPayloadTrait"
             "smithy.api#hostLabel" -> "HostLabelTrait"
             else -> null
+        }
+    }
+
+    /** Generates delegation from the data type's Schema impl to the schema struct. */
+    private fun renderMemberDelegation(
+        writer: RustWriter,
+        schemaStructName: String,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "Schema" to smithySchema.resolve("Schema"),
+            )
+        when (shape) {
+            is StructureShape, is UnionShape -> {
+                writer.rustTemplate(
+                    """
+                    fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member_schema(name) }
+                    fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> { $schemaStructName.member_schema_by_index(index) }
+                    fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> { $schemaStructName.members() }
+                    """,
+                    *codegenScope,
+                )
+            }
+            is ListShape -> {
+                writer.rustTemplate(
+                    """
+                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member() }
+                    """,
+                    *codegenScope,
+                )
+            }
+            is MapShape -> {
+                writer.rustTemplate(
+                    """
+                    fn key(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.key() }
+                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member() }
+                    """,
+                    *codegenScope,
+                )
+            }
+            is MemberShape -> {
+                writer.rust(
+                    """
+                    fn member_name(&self) -> ::std::option::Option<&str> { $schemaStructName.member_name() }
+                    """,
+                )
+            }
         }
     }
 

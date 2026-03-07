@@ -72,20 +72,19 @@ class SchemaGeneratorTest {
                 "schema_structure",
                 """
                 use aws_smithy_schema::Schema;
-                // Use a reference to access Schema methods
-                let s = MyStruct { name: None, age: None, active: None };
-                assert_eq!(s.shape_type(), aws_smithy_schema::ShapeType::Structure);
-                assert_eq!(s.shape_id().as_str(), "test#MyStruct");
+                let schema = MyStruct::SCHEMA;
+                assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Structure);
+                assert_eq!(schema.shape_id().as_str(), "test#MyStruct");
                 // member lookup by name
-                assert!(s.member_schema("name").is_some());
-                assert!(s.member_schema("age").is_some());
-                assert!(s.member_schema("active").is_some());
-                assert!(s.member_schema("nonexistent").is_none());
+                assert!(schema.member_schema("name").is_some());
+                assert!(schema.member_schema("age").is_some());
+                assert!(schema.member_schema("active").is_some());
+                assert!(schema.member_schema("nonexistent").is_none());
                 // member lookup by index
-                let (name, _) = s.member_schema_by_index(0).expect("index 0");
+                let (name, _) = schema.member_schema_by_index(0).expect("index 0");
                 assert_eq!(name, "name");
                 // members iterator
-                let names: Vec<&str> = s.members().map(|(n, _)| n).collect();
+                let names: Vec<&str> = schema.members().map(|(n, _)| n).collect();
                 assert_eq!(names, vec!["name", "age", "active"]);
                 """,
             )
@@ -104,17 +103,17 @@ class SchemaGeneratorTest {
                 "member_schema_types",
                 """
                 use aws_smithy_schema::{Schema, ShapeType};
-                let s = MyStruct { name: None, age: None, active: None };
-                let name_schema = s.member_schema("name").unwrap();
+                let schema = MyStruct::SCHEMA;
+                let name_schema = schema.member_schema("name").unwrap();
                 assert_eq!(name_schema.shape_type(), ShapeType::String);
                 assert_eq!(name_schema.member_name(), Some("name"));
                 assert_eq!(name_schema.member_index(), Some(0));
 
-                let age_schema = s.member_schema("age").unwrap();
+                let age_schema = schema.member_schema("age").unwrap();
                 assert_eq!(age_schema.shape_type(), ShapeType::Integer);
                 assert_eq!(age_schema.member_index(), Some(1));
 
-                let active_schema = s.member_schema("active").unwrap();
+                let active_schema = schema.member_schema("active").unwrap();
                 assert_eq!(active_schema.shape_type(), ShapeType::Boolean);
                 assert_eq!(active_schema.member_index(), Some(2));
                 """,
@@ -139,10 +138,7 @@ class SchemaGeneratorTest {
                 "complex_schema",
                 """
                 use aws_smithy_schema::{Schema, ShapeType};
-                let s = ComplexStruct {
-                    label: None, count: None, ratio: None, enabled: None,
-                    data: None, created_at: None, nested: None, tags: None, metadata: None,
-                };
+                let s = ComplexStruct::SCHEMA;
                 assert_eq!(s.shape_type(), ShapeType::Structure);
                 assert_eq!(s.shape_id().as_str(), "test#ComplexStruct");
 
@@ -189,10 +185,10 @@ class SchemaGeneratorTest {
                 "schema_union",
                 """
                 use aws_smithy_schema::Schema;
-                let u = MyUnion::StringVariant("hello".into());
-                assert_eq!(u.shape_type(), aws_smithy_schema::ShapeType::Union);
-                assert!(u.member_schema("StringVariant").is_some());
-                assert!(u.member_schema("IntVariant").is_some());
+                let schema = MyUnion::SCHEMA;
+                assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Union);
+                assert!(schema.member_schema("StringVariant").is_some());
+                assert!(schema.member_schema("IntVariant").is_some());
                 """,
             )
         }
@@ -330,7 +326,7 @@ class SchemaGeneratorTest {
                 """
                 use aws_smithy_schema::{Schema, ShapeId, Trait};
                 use aws_smithy_schema::traits::SensitiveTrait;
-                let s = SecretData { name: None, password: None, old_field: None };
+                let s = SecretData::SCHEMA;
 
                 // @sensitive is included and uses the typed SensitiveTrait
                 let sensitive_id = ShapeId::new("smithy.api#sensitive");
@@ -392,7 +388,7 @@ class SchemaGeneratorTest {
                 "unknown_traits",
                 """
                 use aws_smithy_schema::{Schema, ShapeId, Trait, DocumentTrait};
-                let s = Tagged { value: None };
+                let s = Tagged::SCHEMA;
 
                 // Complex custom trait is stored as DocumentTrait
                 let custom_id = ShapeId::new("test#myCustomTrait");
@@ -465,7 +461,7 @@ class SchemaGeneratorTest {
                 "custom_provider",
                 """
                 use aws_smithy_schema::{Schema, ShapeId, Trait, StringTrait};
-                let s = Overridden { value: None };
+                let s = Overridden::SCHEMA;
                 let id = ShapeId::new("test#myCustomTrait");
                 let t = s.traits().get(&id).unwrap();
                 let st = t.as_any().downcast_ref::<StringTrait>()
@@ -510,9 +506,9 @@ class SchemaGeneratorTest {
                 "recursive_via_list",
                 """
                 use aws_smithy_schema::{Schema, ShapeType};
-                let node = TreeNode { value: None, children: None };
-                assert_eq!(node.shape_type(), ShapeType::Structure);
-                assert_eq!(node.member_schema("children").unwrap().shape_type(), ShapeType::List);
+                let schema = TreeNode::SCHEMA;
+                assert_eq!(schema.shape_type(), ShapeType::Structure);
+                assert_eq!(schema.member_schema("children").unwrap().shape_type(), ShapeType::List);
                 """,
             )
         }
@@ -526,9 +522,9 @@ class SchemaGeneratorTest {
                 "directly_recursive",
                 """
                 use aws_smithy_schema::{Schema, ShapeType};
-                let node = LinkedNode { value: None, next: None };
-                assert_eq!(node.shape_type(), ShapeType::Structure);
-                assert_eq!(node.member_schema("next").unwrap().shape_type(), ShapeType::Structure);
+                let schema = LinkedNode::SCHEMA;
+                assert_eq!(schema.shape_type(), ShapeType::Structure);
+                assert_eq!(schema.member_schema("next").unwrap().shape_type(), ShapeType::Structure);
                 """,
             )
         }
@@ -553,10 +549,10 @@ class SchemaGeneratorTest {
                 "auto_schema",
                 """
                 use aws_smithy_schema::{Schema, ShapeType};
-                let s = MyStruct { name: None, age: None, active: None };
-                assert_eq!(s.shape_type(), ShapeType::Structure);
-                assert_eq!(s.shape_id().as_str(), "test#MyStruct");
-                assert!(s.member_schema("name").is_some());
+                let schema = MyStruct::SCHEMA;
+                assert_eq!(schema.shape_type(), ShapeType::Structure);
+                assert_eq!(schema.shape_id().as_str(), "test#MyStruct");
+                assert!(schema.member_schema("name").is_some());
                 """,
             )
         }
