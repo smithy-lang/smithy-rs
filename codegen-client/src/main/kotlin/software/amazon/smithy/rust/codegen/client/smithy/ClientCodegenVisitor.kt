@@ -275,6 +275,7 @@ class ClientCodegenVisitor(
                             errorTrait,
                             codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                             codegenContext.structSettings(),
+                            codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                         )
                     errorGenerator::renderStruct to errorGenerator::renderBuilder
                 }

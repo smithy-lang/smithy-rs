@@ -13,20 +13,29 @@
 //! enabling protocol-agnostic serialization and deserialization.
 
 mod schema {
+    pub mod map_entry;
+    pub mod member;
     pub mod shape_id;
     pub mod shape_type;
     pub mod trait_map;
     pub mod trait_type;
+    pub mod traits;
 
     pub mod codec;
     pub mod prelude;
     pub mod serde;
 }
 
+pub use schema::map_entry::MapEntrySchema;
+pub use schema::member::MemberSchema;
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
-pub use schema::trait_type::Trait;
+pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait, Trait};
+
+pub mod traits {
+    pub use crate::schema::traits::*;
+}
 
 pub mod prelude {
     pub use crate::schema::prelude::*;

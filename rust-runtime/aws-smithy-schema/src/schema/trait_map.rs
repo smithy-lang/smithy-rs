@@ -30,7 +30,7 @@ impl TraitMap {
     }
 
     /// Creates a TraitMap with zero allocated space for Prelude Schemas.
-    pub(crate) fn empty() -> Self {
+    pub fn empty() -> Self {
         Self {
             traits: HashMap::with_capacity(0),
         }

@@ -34,6 +34,8 @@ impl std::error::Error for JsonSerializerError {}
 pub struct JsonSerializer {
     output: String,
     settings: JsonCodecSettings,
+    /// Tracks whether we need a comma before the next value in a struct/list/map.
+    needs_comma: Vec<bool>,
 }
 
 impl JsonSerializer {
@@ -42,6 +44,25 @@ impl JsonSerializer {
         Self {
             output: String::new(),
             settings,
+            needs_comma: Vec::new(),
+        }
+    }
+
+    /// Writes a member name prefix (key + colon) if the schema is a member schema.
+    fn write_member_prefix(&mut self, schema: &dyn Schema) {
+        // Add comma separator if needed
+        if let Some(needs) = self.needs_comma.last_mut() {
+            if *needs {
+                self.output.push(',');
+            }
+            *needs = true;
+        }
+
+        // Write member name if this is a member schema
+        if let Some(name) = schema.member_name() {
+            self.output.push('"');
+            self.output.push_str(name);
+            self.output.push_str("\":");
         }
     }
 
@@ -76,72 +97,88 @@ impl ShapeSerializer for JsonSerializer {
         Ok(self.output.into_bytes())
     }
 
-    fn write_struct<F>(&mut self, _schema: &dyn Schema, write_members: F) -> Result<(), Self::Error>
+    fn write_struct<F>(&mut self, schema: &dyn Schema, write_members: F) -> Result<(), Self::Error>
     where
         F: FnOnce(&mut Self) -> Result<(), Self::Error>,
     {
+        self.write_member_prefix(schema);
         self.output.push('{');
+        self.needs_comma.push(false);
         write_members(self)?;
+        self.needs_comma.pop();
         self.output.push('}');
         Ok(())
     }
 
-    fn write_list<F>(&mut self, _schema: &dyn Schema, write_elements: F) -> Result<(), Self::Error>
+    fn write_list<F>(&mut self, schema: &dyn Schema, write_elements: F) -> Result<(), Self::Error>
     where
         F: FnOnce(&mut Self) -> Result<(), Self::Error>,
     {
+        self.write_member_prefix(schema);
         self.output.push('[');
+        self.needs_comma.push(false);
         write_elements(self)?;
+        self.needs_comma.pop();
         self.output.push(']');
         Ok(())
     }
 
-    fn write_map<F>(&mut self, _schema: &dyn Schema, write_entries: F) -> Result<(), Self::Error>
+    fn write_map<F>(&mut self, schema: &dyn Schema, write_entries: F) -> Result<(), Self::Error>
     where
         F: FnOnce(&mut Self) -> Result<(), Self::Error>,
     {
+        self.write_member_prefix(schema);
         self.output.push('{');
+        self.needs_comma.push(false);
         write_entries(self)?;
+        self.needs_comma.pop();
         self.output.push('}');
         Ok(())
     }
 
-    fn write_boolean(&mut self, _schema: &dyn Schema, value: bool) -> Result<(), Self::Error> {
+    fn write_boolean(&mut self, schema: &dyn Schema, value: bool) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         self.output.push_str(if value { "true" } else { "false" });
         Ok(())
     }
 
-    fn write_byte(&mut self, _schema: &dyn Schema, value: i8) -> Result<(), Self::Error> {
+    fn write_byte(&mut self, schema: &dyn Schema, value: i8) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
     }
 
-    fn write_short(&mut self, _schema: &dyn Schema, value: i16) -> Result<(), Self::Error> {
+    fn write_short(&mut self, schema: &dyn Schema, value: i16) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
     }
 
-    fn write_integer(&mut self, _schema: &dyn Schema, value: i32) -> Result<(), Self::Error> {
+    fn write_integer(&mut self, schema: &dyn Schema, value: i32) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
     }
 
-    fn write_long(&mut self, _schema: &dyn Schema, value: i64) -> Result<(), Self::Error> {
+    fn write_long(&mut self, schema: &dyn Schema, value: i64) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
     }
 
-    fn write_float(&mut self, _schema: &dyn Schema, value: f32) -> Result<(), Self::Error> {
+    fn write_float(&mut self, schema: &dyn Schema, value: f32) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
     }
 
-    fn write_double(&mut self, _schema: &dyn Schema, value: f64) -> Result<(), Self::Error> {
+    fn write_double(&mut self, schema: &dyn Schema, value: f64) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use std::fmt::Write;
         write!(&mut self.output, "{}", value)
             .map_err(|e| JsonSerializerError::WriteError(e.to_string()))
@@ -149,23 +186,26 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_big_integer(
         &mut self,
-        _schema: &dyn Schema,
+        schema: &dyn Schema,
         value: &BigInteger,
     ) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         self.output.push_str(value.as_ref());
         Ok(())
     }
 
     fn write_big_decimal(
         &mut self,
-        _schema: &dyn Schema,
+        schema: &dyn Schema,
         value: &BigDecimal,
     ) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         self.output.push_str(value.as_ref());
         Ok(())
     }
 
-    fn write_string(&mut self, _schema: &dyn Schema, value: &str) -> Result<(), Self::Error> {
+    fn write_string(&mut self, schema: &dyn Schema, value: &str) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use crate::escape::escape_string;
         self.output.push('"');
         self.output.push_str(&escape_string(value));
@@ -173,7 +213,8 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, _schema: &dyn Schema, value: &Blob) -> Result<(), Self::Error> {
+    fn write_blob(&mut self, schema: &dyn Schema, value: &Blob) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         use aws_smithy_types::base64;
         let encoded = base64::encode(value.as_ref());
         self.output.push('"');
@@ -187,6 +228,7 @@ impl ShapeSerializer for JsonSerializer {
         schema: &dyn Schema,
         value: &DateTime,
     ) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         let format = self.get_timestamp_format(schema);
         let formatted = value.fmt(format).map_err(|e| {
             JsonSerializerError::WriteError(format!("Failed to format timestamp: {}", e))
@@ -194,11 +236,9 @@ impl ShapeSerializer for JsonSerializer {
 
         match format {
             TimestampFormat::EpochSeconds => {
-                // Epoch seconds as number
                 self.output.push_str(&formatted);
             }
             _ => {
-                // Other formats as strings
                 self.output.push('"');
                 self.output.push_str(&formatted);
                 self.output.push('"');
@@ -207,16 +247,14 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_document(
-        &mut self,
-        _schema: &dyn Schema,
-        value: &Document,
-    ) -> Result<(), Self::Error> {
+    fn write_document(&mut self, schema: &dyn Schema, value: &Document) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         self.write_json_value(value);
         Ok(())
     }
 
-    fn write_null(&mut self, _schema: &dyn Schema) -> Result<(), Self::Error> {
+    fn write_null(&mut self, schema: &dyn Schema) -> Result<(), Self::Error> {
+        self.write_member_prefix(schema);
         self.output.push_str("null");
         Ok(())
     }
@@ -226,6 +264,20 @@ impl ShapeSerializer for JsonSerializer {
 mod tests {
     use super::*;
     use aws_smithy_schema::prelude::*;
+    use aws_smithy_schema::MemberSchema;
+
+    fn member(
+        name: &'static str,
+        shape_type: aws_smithy_schema::ShapeType,
+        idx: usize,
+    ) -> MemberSchema {
+        MemberSchema::new(
+            aws_smithy_schema::ShapeId::from_static("test#S$m", "test", "S"),
+            shape_type,
+            name,
+            idx,
+        )
+    }
 
     #[test]
     fn test_write_boolean() {
@@ -269,9 +321,7 @@ mod tests {
         );
         ser.write_list(&list_schema, |s| {
             s.write_integer(&INTEGER, 1)?;
-            s.output.push(',');
             s.write_integer(&INTEGER, 2)?;
-            s.output.push(',');
             s.write_integer(&INTEGER, 3)?;
             Ok(())
         })
@@ -287,27 +337,18 @@ mod tests {
             aws_smithy_schema::ShapeId::new("test#Struct"),
             aws_smithy_schema::ShapeType::Structure,
         );
-        let list_schema = aws_smithy_schema::prelude::PreludeSchema::new(
-            aws_smithy_schema::ShapeId::new("test#List"),
-            aws_smithy_schema::ShapeType::List,
-        );
+        let active = member("active", aws_smithy_schema::ShapeType::Boolean, 0);
+        let name = member("name", aws_smithy_schema::ShapeType::String, 1);
+        let count = member("count", aws_smithy_schema::ShapeType::Integer, 2);
+        let price = member("price", aws_smithy_schema::ShapeType::Float, 3);
+        let items = member("items", aws_smithy_schema::ShapeType::List, 4);
         ser.write_struct(&struct_schema, |s| {
-            s.output.push_str("\"active\":");
-            s.write_boolean(&BOOLEAN, true)?;
-            s.output.push(',');
-            s.output.push_str("\"name\":");
-            s.write_string(&STRING, "test")?;
-            s.output.push(',');
-            s.output.push_str("\"count\":");
-            s.write_integer(&INTEGER, 42)?;
-            s.output.push(',');
-            s.output.push_str("\"price\":");
-            s.write_float(&FLOAT, 3.14)?;
-            s.output.push(',');
-            s.output.push_str("\"items\":");
-            s.write_list(&list_schema, |ls| {
+            s.write_boolean(&active, true)?;
+            s.write_string(&name, "test")?;
+            s.write_integer(&count, 42)?;
+            s.write_float(&price, 3.14)?;
+            s.write_list(&items, |ls| {
                 ls.write_integer(&INTEGER, 1)?;
-                ls.output.push(',');
                 ls.write_integer(&INTEGER, 2)?;
                 Ok(())
             })?;
@@ -328,105 +369,77 @@ mod tests {
             aws_smithy_schema::ShapeId::new("test#User"),
             aws_smithy_schema::ShapeType::Structure,
         );
-        let list_schema = aws_smithy_schema::prelude::PreludeSchema::new(
-            aws_smithy_schema::ShapeId::new("test#List"),
-            aws_smithy_schema::ShapeType::List,
-        );
-        let map_schema = aws_smithy_schema::prelude::PreludeSchema::new(
-            aws_smithy_schema::ShapeId::new("test#Map"),
-            aws_smithy_schema::ShapeType::Map,
-        );
+        // User members
+        let id_m = member("id", aws_smithy_schema::ShapeType::Long, 0);
+        let name_m = member("name", aws_smithy_schema::ShapeType::String, 1);
+        let scores_m = member("scores", aws_smithy_schema::ShapeType::List, 2);
+        let address_m = member("address", aws_smithy_schema::ShapeType::Structure, 3);
+        let companies_m = member("companies", aws_smithy_schema::ShapeType::List, 4);
+        let tags_m = member("tags", aws_smithy_schema::ShapeType::Map, 5);
+        // Address members
+        let street_m = member("street", aws_smithy_schema::ShapeType::String, 0);
+        let city_m = member("city", aws_smithy_schema::ShapeType::String, 1);
+        let zip_m = member("zip", aws_smithy_schema::ShapeType::Integer, 2);
+        // Company members
+        let cname_m = member("name", aws_smithy_schema::ShapeType::String, 0);
+        let employees_m = member("employees", aws_smithy_schema::ShapeType::List, 1);
+        let metadata_m = member("metadata", aws_smithy_schema::ShapeType::Map, 2);
+        let active_m = member("active", aws_smithy_schema::ShapeType::Boolean, 3);
+        // Map entry members
+        let founded_m = member("founded", aws_smithy_schema::ShapeType::Integer, 0);
+        let size_m = member("size", aws_smithy_schema::ShapeType::Integer, 1);
+        let role_m = member("role", aws_smithy_schema::ShapeType::String, 0);
+        let level_m = member("level", aws_smithy_schema::ShapeType::String, 1);
 
         ser.write_struct(&struct_schema, |s| {
-            s.output.push_str("\"id\":");
-            s.write_long(&LONG, 12345)?;
-            s.output.push(',');
-            s.output.push_str("\"name\":");
-            s.write_string(&STRING, "John Doe")?;
-            s.output.push(',');
-            s.output.push_str("\"scores\":");
-            s.write_list(&list_schema, |ls| {
+            s.write_long(&id_m, 12345)?;
+            s.write_string(&name_m, "John Doe")?;
+            s.write_list(&scores_m, |ls| {
                 ls.write_double(&DOUBLE, 95.5)?;
-                ls.output.push(',');
                 ls.write_double(&DOUBLE, 87.3)?;
-                ls.output.push(',');
                 ls.write_double(&DOUBLE, 92.1)?;
                 Ok(())
             })?;
-            s.output.push(',');
-            s.output.push_str("\"address\":");
-            s.write_struct(&struct_schema, |addr| {
-                addr.output.push_str("\"street\":");
-                addr.write_string(&STRING, "123 Main St")?;
-                addr.output.push(',');
-                addr.output.push_str("\"city\":");
-                addr.write_string(&STRING, "Seattle")?;
-                addr.output.push(',');
-                addr.output.push_str("\"zip\":");
-                addr.write_integer(&INTEGER, 98101)?;
+            s.write_struct(&address_m, |addr| {
+                addr.write_string(&street_m, "123 Main St")?;
+                addr.write_string(&city_m, "Seattle")?;
+                addr.write_integer(&zip_m, 98101)?;
                 Ok(())
             })?;
-            s.output.push(',');
-            s.output.push_str("\"companies\":");
-            s.write_list(&list_schema, |ls| {
+            s.write_list(&companies_m, |ls| {
                 ls.write_struct(&struct_schema, |comp| {
-                    comp.output.push_str("\"name\":");
-                    comp.write_string(&STRING, "TechCorp")?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"employees\":");
-                    comp.write_list(&list_schema, |emp| {
+                    comp.write_string(&cname_m, "TechCorp")?;
+                    comp.write_list(&employees_m, |emp| {
                         emp.write_string(&STRING, "Alice")?;
-                        emp.output.push(',');
                         emp.write_string(&STRING, "Bob")?;
                         Ok(())
                     })?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"metadata\":");
-                    comp.write_map(&map_schema, |meta| {
-                        meta.output.push_str("\"founded\":");
-                        meta.write_integer(&INTEGER, 2010)?;
-                        meta.output.push(',');
-                        meta.output.push_str("\"size\":");
-                        meta.write_integer(&INTEGER, 500)?;
+                    comp.write_map(&metadata_m, |meta| {
+                        meta.write_integer(&founded_m, 2010)?;
+                        meta.write_integer(&size_m, 500)?;
                         Ok(())
                     })?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"active\":");
-                    comp.write_boolean(&BOOLEAN, true)?;
+                    comp.write_boolean(&active_m, true)?;
                     Ok(())
                 })?;
-                ls.output.push(',');
                 ls.write_struct(&struct_schema, |comp| {
-                    comp.output.push_str("\"name\":");
-                    comp.write_string(&STRING, "StartupInc")?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"employees\":");
-                    comp.write_list(&list_schema, |emp| {
+                    comp.write_string(&cname_m, "StartupInc")?;
+                    comp.write_list(&employees_m, |emp| {
                         emp.write_string(&STRING, "Charlie")?;
                         Ok(())
                     })?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"metadata\":");
-                    comp.write_map(&map_schema, |meta| {
-                        meta.output.push_str("\"founded\":");
-                        meta.write_integer(&INTEGER, 2020)?;
+                    comp.write_map(&metadata_m, |meta| {
+                        meta.write_integer(&founded_m, 2020)?;
                         Ok(())
                     })?;
-                    comp.output.push(',');
-                    comp.output.push_str("\"active\":");
-                    comp.write_boolean(&BOOLEAN, false)?;
+                    comp.write_boolean(&active_m, false)?;
                     Ok(())
                 })?;
                 Ok(())
             })?;
-            s.output.push(',');
-            s.output.push_str("\"tags\":");
-            s.write_map(&map_schema, |tags| {
-                tags.output.push_str("\"role\":");
-                tags.write_string(&STRING, "admin")?;
-                tags.output.push(',');
-                tags.output.push_str("\"level\":");
-                tags.write_string(&STRING, "senior")?;
+            s.write_map(&tags_m, |tags| {
+                tags.write_string(&role_m, "admin")?;
+                tags.write_string(&level_m, "senior")?;
                 Ok(())
             })?;
             Ok(())
