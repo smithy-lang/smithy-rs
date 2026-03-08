@@ -136,6 +136,8 @@ class SchemaGenerator(
             """
             static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
             static ${schemaPrefix}_SCHEMA_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
+                // Allow unused mut: shapes with no serialization-relevant traits produce no insertions.
+                ##[allow(unused_mut)]
                 let mut map = #{TraitMap}::new();
                 #{traitInsertions}
                 map
@@ -152,7 +154,7 @@ class SchemaGenerator(
             /// Schema type for [`${symbol.name}`]. This zero-sized struct is the single
             /// source of truth for the shape's schema, used by both the `Schema` impl
             /// on the data type and by deserialization.
-            pub(crate) struct $schemaStructName;
+            pub struct $schemaStructName;
             """,
             *codegenScope,
         )
@@ -248,6 +250,7 @@ class SchemaGenerator(
 
             impl $structName {
                 /// Writes this structure's members to the serializer without the struct wrapper.
+                ##[allow(unused_variables)]
                 pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> ::std::result::Result<(), S::Error> {
                     #{memberWrites}
                     Ok(())
@@ -441,6 +444,7 @@ class SchemaGenerator(
                         #{builderFields}
                     }
                     let builder = Builder::default();
+                    ##[allow(unused_variables, unused_mut, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
                     let builder = deserializer.read_struct(&$schemaStructName, builder, |mut builder, member, deser| {
                         match member.member_index() {
                             #{memberArms}
@@ -491,7 +495,9 @@ class SchemaGenerator(
                         } else {
                             val target = model.expectShape(member.target)
                             val fallback = defaultValueForShape(target)
-                            if (fallback != null) {
+                            if (fallback == "Default::default()") {
+                                rust("$memberName: builder.$memberName.unwrap_or_default(),")
+                            } else if (fallback != null) {
                                 rust("$memberName: builder.$memberName.unwrap_or_else(|| $fallback),")
                             } else {
                                 rust("$memberName: builder.$memberName.expect(${("missing required field: $memberName").dq()}),")
@@ -755,53 +761,6 @@ class SchemaGenerator(
         }
     }
 
-    /** Generates delegation from the data type's Schema impl to the schema struct. */
-    private fun renderMemberDelegation(
-        writer: RustWriter,
-        schemaStructName: String,
-    ) {
-        val codegenScope =
-            arrayOf(
-                "Schema" to smithySchema.resolve("Schema"),
-            )
-        when (shape) {
-            is StructureShape, is UnionShape -> {
-                writer.rustTemplate(
-                    """
-                    fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member_schema(name) }
-                    fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> { $schemaStructName.member_schema_by_index(index) }
-                    fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> { $schemaStructName.members() }
-                    """,
-                    *codegenScope,
-                )
-            }
-            is ListShape -> {
-                writer.rustTemplate(
-                    """
-                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member() }
-                    """,
-                    *codegenScope,
-                )
-            }
-            is MapShape -> {
-                writer.rustTemplate(
-                    """
-                    fn key(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.key() }
-                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> { $schemaStructName.member() }
-                    """,
-                    *codegenScope,
-                )
-            }
-            is MemberShape -> {
-                writer.rust(
-                    """
-                    fn member_name(&self) -> ::std::option::Option<&str> { $schemaStructName.member_name() }
-                    """,
-                )
-            }
-        }
-    }
-
     private fun renderMembers(
         writer: RustWriter,
         schemaPrefix: String,
@@ -814,48 +773,52 @@ class SchemaGenerator(
         when (shape) {
             is StructureShape, is UnionShape -> {
                 val members = shape.members()
-                val memberMatchArms =
-                    members.joinToString("\n") { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val escapedName = templateEscape(memberName)
-                        "\"$escapedName\" => Some(&${schemaPrefix}_MEMBER_${constantName(memberName)}),"
-                    }
-                val indexMatchArms =
-                    members.withIndex().joinToString("\n") { (idx, member) ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val escapedName = templateEscape(memberName)
-                        "$idx => Some((\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)})),"
-                    }
-                val membersArray =
-                    members.joinToString(",\n") { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val escapedName = templateEscape(memberName)
-                        "(\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)} as &dyn #{Schema})"
-                    }
-                writer.rustTemplate(
-                    """
-                    fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
-                        match name {
-                            $memberMatchArms
-                            _ => None,
+                if (members.isEmpty()) {
+                    // No members — default Schema trait methods already return None/empty
+                } else {
+                    val memberMatchArms =
+                        members.joinToString("\n") { member ->
+                            val memberName = symbolProvider.toMemberName(member)
+                            val escapedName = templateEscape(memberName)
+                            "\"$escapedName\" => Some(&${schemaPrefix}_MEMBER_${constantName(memberName)}),"
                         }
-                    }
-
-                    fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
-                        match index {
-                            $indexMatchArms
-                            _ => None,
+                    val indexMatchArms =
+                        members.withIndex().joinToString("\n") { (idx, member) ->
+                            val memberName = symbolProvider.toMemberName(member)
+                            val escapedName = templateEscape(memberName)
+                            "$idx => Some((\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)})),"
                         }
-                    }
+                    val membersArray =
+                        members.joinToString(",\n") { member ->
+                            val memberName = symbolProvider.toMemberName(member)
+                            val escapedName = templateEscape(memberName)
+                            "(\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)} as &dyn #{Schema})"
+                        }
+                    writer.rustTemplate(
+                        """
+                        fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
+                            match name {
+                                $memberMatchArms
+                                _ => None,
+                            }
+                        }
 
-                    fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> {
-                        Box::new([
-                            $membersArray
-                        ].into_iter())
-                    }
-                    """,
-                    *codegenScope,
-                )
+                        fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
+                            match index {
+                                $indexMatchArms
+                                _ => None,
+                            }
+                        }
+
+                        fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> {
+                            Box::new([
+                                $membersArray
+                            ].into_iter())
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ListShape -> {
