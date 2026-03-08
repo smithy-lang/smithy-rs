@@ -7,7 +7,6 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use http::Request;
 use metrique::DefaultSink;
 use metrique::OnParentDrop;
 use metrique::Slot;
@@ -28,7 +27,7 @@ use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
 use crate::types::DefaultInit;
 use crate::types::DefaultRs;
-use crate::types::ReqBody;
+use crate::types::HttpRequest;
 
 // Macro to generate disable methods for configuration
 macro_rules! impl_disable_methods {
@@ -45,50 +44,62 @@ macro_rules! impl_disable_methods {
             self
         }
 
-        /// Disable the `request_id` metric
+        /// Disable the default `outstanding_requests` metric
+        pub fn disable_default_outstanding_requests_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_outstanding_requests = true;
+            self
+        }
+
+        /// Disable the default `request_id` metric
         pub fn disable_default_request_id_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_request_id = true;
             self
         }
 
-        /// Disable the `operation_name` metric
-        pub fn disable_default_operation_name_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_operation_name = true;
+        /// Disable the default `operation_name` metric
+        pub fn disable_default_operation_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_operation = true;
             self
         }
 
-        /// Disable the `service_name` metric
-        pub fn disable_default_service_name_metric(mut self) -> Self {
-            self.default_req_metrics_config.disable_service_name = true;
+        /// Disable the default `service_name` metric
+        pub fn disable_default_service_metric(mut self) -> Self {
+            self.default_req_metrics_config.disable_service = true;
             self
         }
 
-        /// Disable the `service_version` metric
+        /// Disable the default `service_version` metric
         pub fn disable_default_service_version_metric(mut self) -> Self {
             self.default_req_metrics_config.disable_service_version = true;
             self
         }
 
-        /// Disable the `http_status_code` metric
+        /// Disable the default `http_status_code` metric
         pub fn disable_default_http_status_code_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_http_status_code = true;
             self
         }
 
-        /// Disable the `error` metric
-        pub fn disable_error_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_error = true;
+        /// Disable the default `success` metric
+        pub fn disable_default_success_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_success = true;
             self
         }
 
-        /// Disable the `fault` metric
-        pub fn disable_fault_metric(mut self) -> Self {
-            self.default_res_metrics_config.disable_fault = true;
+        /// Disable the default `client_error` metric
+        pub fn disable_default_client_error_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_client_error = true;
             self
         }
 
-        /// Disable the `operation_time` metric
-        pub fn disable_operation_time_metric(mut self) -> Self {
+        /// Disable the default `server_error` metric
+        pub fn disable_default_server_error_metric(mut self) -> Self {
+            self.default_res_metrics_config.disable_server_error = true;
+            self
+        }
+
+        /// Disable the default `operation_time` metric
+        pub fn disable_default_operation_time_metric(mut self) -> Self {
             self.default_res_metrics_config.disable_operation_time = true;
             self
         }
@@ -217,7 +228,7 @@ macro_rules! impl_build_for_state {
         {
             fn build(self) -> MetricsLayer<DefaultMetrics, Sink, Init, Res> {
                 let default_metrics_extension_fn =
-                    |req: &mut Request<ReqBody>,
+                    |req: &mut HttpRequest,
                      metrics: &mut DefaultMetrics,
                      req_config: DefaultRequestMetricsConfig,
                      res_config: DefaultResponseMetricsConfig,
@@ -275,14 +286,13 @@ impl_build_for_state!(WithRqAndRs);
 
 #[cfg(test)]
 mod tests {
-    use http::Response;
     use metrique::AppendAndCloseOnDrop;
     use metrique::ServiceMetrics;
     use metrique_writer::GlobalEntrySink;
 
     use super::*;
     use crate::layer::MetricsLayer;
-    use crate::types::ResBody;
+    use crate::types::HttpResponse;
 
     // Compile-time guarantees that methods exist on the correct states
     macro_rules! assert_methods_callable {
@@ -314,13 +324,11 @@ mod tests {
     assert_state!(assert_with_rq, WithRq);
     assert_state!(assert_with_rq_and_rs, WithRqAndRs);
 
-    fn dummy_init(
-        _req: &mut Request<ReqBody>,
-    ) -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
+    fn dummy_init(_req: &mut HttpRequest) -> AppendAndCloseOnDrop<DefaultMetrics, DefaultSink> {
         DefaultMetrics::default().append_on_drop(ServiceMetrics::sink())
     }
 
-    fn dummy_response_fn(_res: &mut Response<ResBody>, _metrics: &mut DefaultMetrics) {}
+    fn dummy_response_fn(_res: &mut HttpResponse, _metrics: &mut DefaultMetrics) {}
 
     #[test]
     fn test_needs_initialization_state() {

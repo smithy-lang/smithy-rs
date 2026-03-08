@@ -16,9 +16,35 @@ import software.amazon.smithy.rust.codegen.core.util.letIf
 
 class EndpointTestDiscovery {
     fun testCases(): List<Model> {
-        val models = ModelDiscovery.findModels(javaClass.getResource("/META-INF/smithy/manif3st"))
-        val assembledModels = models.map { url -> ModelAssembler().discoverModels().addImport(url).assemble().unwrap() }
-        // add a protocol trait so we can generate of it
+        // Find models from smithy-rules-engine-tests on the classpath
+        val testModels =
+            ModelDiscovery.findModels().filter { url ->
+                url.toString().contains("smithy-rules-engine-tests") &&
+                    url.toString().endsWith(".smithy")
+            }
+
+        // Find trait definitions (exclude test models)
+        val traitModels =
+            ModelDiscovery.findModels().filter { url ->
+                val urlString = url.toString()
+                // Include trait definitions but exclude test models
+                !urlString.contains("smithy-rules-engine-tests") &&
+                    !urlString.contains("smithy-protocol-tests") &&
+                    urlString.endsWith(".smithy")
+            }
+
+        // Assemble each test model individually with trait definitions
+        val assembledModels =
+            testModels.map { testUrl ->
+                val assembler = ModelAssembler()
+                // Add all trait definitions
+                traitModels.forEach { assembler.addImport(it) }
+                // Add the specific test model
+                assembler.addImport(testUrl)
+                assembler.assemble().unwrap()
+            }
+
+        // Add protocol trait if needed
         return assembledModels.map { model ->
             if (model.serviceShapes.size > 1) {
                 PANIC("too many services")

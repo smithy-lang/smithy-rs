@@ -1,12 +1,12 @@
 [package]
 name = "aws-types"
-version = "1.3.13"
+version = "1.3.14"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Russell Cohen <rcoh@amazon.com>"]
 description = "Cross-service types for the AWS SDK."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [features]
 # This feature is to be used only for doc comments

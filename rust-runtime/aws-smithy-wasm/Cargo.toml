@@ -1,27 +1,26 @@
 [package]
 name = "aws-smithy-wasm"
-version = "0.1.9"
+version = "0.1.10"
 authors = [
   "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
   "Eduardo Rodrigues <16357187+eduardomourar@users.noreply.github.com>",
+  "Pat Hickey <pat@moreproductive.org>"
 ]
-description = "Smithy WebAssembly configuration for smithy-rs."
+description = "Smithy WebAssembly wasip2 configuration for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/awslabs/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [dependencies]
-aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x"]}
-aws-smithy-http = { path = "../aws-smithy-http" }
-aws-smithy-types = { path = "../aws-smithy-types" }
-bytes = "1.10.0"
-http = "1.3.1"
-tracing = "0.1.44"
-# Note the wasi crate will only build for target wasm32-wasi, but having a target
+aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["http-1x", "client"]}
+aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
+http-body-util = "0.1.3"
+sync_wrapper = { version = "1", features = ["futures"] }
+# Note the wstd crate will only build for target wasm32-wasip2, but having a target
 # statement here breaks some of the CI tests, so we leave it with the rest of the deps
-# Pinned to exact version for Rust 1.91 WASI 0.2.4 compatibility
-wasip2 = "=1.0.1"
+wstd = "0.6.5"
 
 [package.metadata.docs.rs]
 all-features = true

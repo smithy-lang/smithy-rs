@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-legacy-http"
-version = "0.62.12"
+version = "0.62.13"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -9,7 +9,7 @@ description = "Smithy HTTP-0x logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 [features]
 event-stream = ["aws-smithy-eventstream"]
@@ -19,7 +19,7 @@ rt-tokio = ["aws-smithy-types/rt-tokio"]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
-bytes = "1.10.0"
+bytes = "1.11.1"
 bytes-utils = "0.1"
 # TODO(hyper1) - Complete the breaking changes by updating to http 1.x ecosystem fully in this crate. Also remove hyper 0.14 from dev
 http-02x = { package = "http", version = "0.2.12" }

@@ -64,6 +64,10 @@ private fun eventStreamWithInitialRequest(
         return null
     }
 
+    val smithyHttp = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
+    val eventOrInitial = smithyHttp.resolve("event_stream::EventOrInitial")
+    val eventOrInitialMarshaller = smithyHttp.resolve("event_stream::EventOrInitialMarshaller")
+
     return writable {
         rustTemplate(
             """
@@ -71,22 +75,32 @@ private fun eventStreamWithInitialRequest(
                 use #{futures_util}::StreamExt;
                 let body = #{parser}(&input)?;
                 let initial_message = #{initial_message}(body);
-                let mut buffer = #{Vec}::new();
-                #{write_message_to}(&initial_message, &mut buffer)?;
-                let initial_message_stream = futures_util::stream::iter(vec![Ok(#{http_body_1x}::Frame::data(buffer.into()))]);
-                let adapter = #{message_stream_adaptor:W};
-                initial_message_stream.chain(adapter)
+
+                // Wrap the marshaller to handle both initial and regular messages
+                let wrapped_marshaller = #{EventOrInitialMarshaller}::new(marshaller);
+
+                // Create stream with initial message
+                let initial_stream = #{futures_util}::stream::once(async move {
+                    #{Ok}(#{EventOrInitial}::InitialMessage(initial_message))
+                });
+
+                // Extract inner stream and map events
+                let event_stream = ${params.outerName}.${params.memberName}.into_inner()
+                    .map(|result| result.map(#{EventOrInitial}::Event));
+
+                // Chain streams and convert to EventStreamSender
+                let combined = initial_stream.chain(event_stream);
+                #{EventStreamSender}::from(combined)
+                    .into_body_stream(wrapped_marshaller, error_marshaller, signer)
             }
             """,
             *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
             "initial_message" to params.eventStreamMarshallerGenerator.renderInitialRequestGenerator(params.payloadContentType),
-            "message_stream_adaptor" to messageStreamAdaptor(params.outerName, params.memberName),
             "parser" to parser,
-            "write_message_to" to
-                RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
-                    .resolve("frame::write_message_to"),
-            "http_body_1x" to CargoDependency.HttpBody1x.toType(),
+            "EventOrInitial" to eventOrInitial,
+            "EventOrInitialMarshaller" to eventOrInitialMarshaller,
+            "EventStreamSender" to smithyHttp.resolve("event_stream::EventStreamSender"),
         )
     }
 }

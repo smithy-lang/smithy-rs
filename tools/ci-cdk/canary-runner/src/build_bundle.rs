@@ -174,7 +174,7 @@ crate-type = ["cdylib"]
 package = "aws:component"
 
 [dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wstd = "0.6.5"
 wit-bindgen = "0.51.0"
 "#;
 
@@ -184,9 +184,7 @@ lazy_static! {
             .with_features(["behavior-version-latest"])
             .with_default_feature_disabled(),
         RequiredDependency::new("aws-sdk-s3").with_default_feature_disabled(),
-        RequiredDependency::new("aws-smithy-async")
-            .with_features(["rt-tokio"])
-            .with_default_feature_disabled(),
+        RequiredDependency::new("aws-smithy-async").with_default_feature_disabled(),
         RequiredDependency::new("aws-smithy-wasm"),
     ];
 }
@@ -719,11 +717,11 @@ crate-type = ["cdylib"]
 package = "aws:component"
 
 [dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wstd = "0.6.5"
 wit-bindgen = "0.51.0"
 aws-config = { path = "some/sdk/path/aws-config", features = ["behavior-version-latest"], default-features = false }
 aws-sdk-s3 = { path = "some/sdk/path/s3", default-features = false }
-aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", features = ["rt-tokio"], default-features = false }
+aws-smithy-async = { path = "some/sdk/path/aws-smithy-async", default-features = false }
 aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
 "#,
             output,
@@ -772,11 +770,11 @@ crate-type = ["cdylib"]
 package = "aws:component"
 
 [dependencies]
-tokio = { version = "1.36.0", features = ["macros", "rt", "time"] }
+wstd = "0.6.5"
 wit-bindgen = "0.51.0"
 aws-config = { version = "0.46.0", features = ["behavior-version-latest"], default-features = false }
 aws-sdk-s3 = { version = "0.20.0", default-features = false }
-aws-smithy-async = { version = "0.46.0", features = ["rt-tokio"], default-features = false }
+aws-smithy-async = { version = "0.46.0", default-features = false }
 aws-smithy-wasm = { version = "0.1.0" }
 "#,
             output
