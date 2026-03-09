@@ -30,11 +30,7 @@ mod test {
             Ok(self.output)
         }
 
-        fn write_struct<F>(
-            &mut self,
-            schema: &dyn Schema,
-            write_members: F,
-        ) -> Result<(), SerdeError>
+        fn write_struct<F>(&mut self, schema: &Schema, write_members: F) -> Result<(), SerdeError>
         where
             F: FnOnce(&mut Self) -> Result<(), SerdeError>,
         {
@@ -45,11 +41,7 @@ mod test {
             Ok(())
         }
 
-        fn write_list<F>(
-            &mut self,
-            schema: &dyn Schema,
-            write_elements: F,
-        ) -> Result<(), SerdeError>
+        fn write_list<F>(&mut self, schema: &Schema, write_elements: F) -> Result<(), SerdeError>
         where
             F: FnOnce(&mut Self) -> Result<(), SerdeError>,
         {
@@ -60,7 +52,7 @@ mod test {
             Ok(())
         }
 
-        fn write_map<F>(&mut self, schema: &dyn Schema, write_entries: F) -> Result<(), SerdeError>
+        fn write_map<F>(&mut self, schema: &Schema, write_entries: F) -> Result<(), SerdeError>
         where
             F: FnOnce(&mut Self) -> Result<(), SerdeError>,
         {
@@ -71,44 +63,44 @@ mod test {
             Ok(())
         }
 
-        fn write_boolean(&mut self, _schema: &dyn Schema, value: bool) -> Result<(), SerdeError> {
+        fn write_boolean(&mut self, _schema: &Schema, value: bool) -> Result<(), SerdeError> {
             self.output.push(format!("bool({})", value));
             Ok(())
         }
 
-        fn write_byte(&mut self, _schema: &dyn Schema, value: i8) -> Result<(), SerdeError> {
+        fn write_byte(&mut self, _schema: &Schema, value: i8) -> Result<(), SerdeError> {
             self.output.push(format!("byte({})", value));
             Ok(())
         }
 
-        fn write_short(&mut self, _schema: &dyn Schema, value: i16) -> Result<(), SerdeError> {
+        fn write_short(&mut self, _schema: &Schema, value: i16) -> Result<(), SerdeError> {
             self.output.push(format!("short({})", value));
             Ok(())
         }
 
-        fn write_integer(&mut self, _schema: &dyn Schema, value: i32) -> Result<(), SerdeError> {
+        fn write_integer(&mut self, _schema: &Schema, value: i32) -> Result<(), SerdeError> {
             self.output.push(format!("int({})", value));
             Ok(())
         }
 
-        fn write_long(&mut self, _schema: &dyn Schema, value: i64) -> Result<(), SerdeError> {
+        fn write_long(&mut self, _schema: &Schema, value: i64) -> Result<(), SerdeError> {
             self.output.push(format!("long({})", value));
             Ok(())
         }
 
-        fn write_float(&mut self, _schema: &dyn Schema, value: f32) -> Result<(), SerdeError> {
+        fn write_float(&mut self, _schema: &Schema, value: f32) -> Result<(), SerdeError> {
             self.output.push(format!("float({})", value));
             Ok(())
         }
 
-        fn write_double(&mut self, _schema: &dyn Schema, value: f64) -> Result<(), SerdeError> {
+        fn write_double(&mut self, _schema: &Schema, value: f64) -> Result<(), SerdeError> {
             self.output.push(format!("double({})", value));
             Ok(())
         }
 
         fn write_big_integer(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             value: &aws_smithy_types::BigInteger,
         ) -> Result<(), SerdeError> {
             self.output.push(format!("bigint({})", value.as_ref()));
@@ -117,21 +109,21 @@ mod test {
 
         fn write_big_decimal(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             value: &aws_smithy_types::BigDecimal,
         ) -> Result<(), SerdeError> {
             self.output.push(format!("bigdec({})", value.as_ref()));
             Ok(())
         }
 
-        fn write_string(&mut self, _schema: &dyn Schema, value: &str) -> Result<(), SerdeError> {
+        fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
             self.output.push(format!("string({})", value));
             Ok(())
         }
 
         fn write_blob(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             value: &aws_smithy_types::Blob,
         ) -> Result<(), SerdeError> {
             self.output
@@ -141,7 +133,7 @@ mod test {
 
         fn write_timestamp(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             value: &aws_smithy_types::DateTime,
         ) -> Result<(), SerdeError> {
             self.output.push(format!("timestamp({})", value));
@@ -150,14 +142,14 @@ mod test {
 
         fn write_document(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::Document,
         ) -> Result<(), SerdeError> {
             self.output.push("document".to_string());
             Ok(())
         }
 
-        fn write_null(&mut self, _schema: &dyn Schema) -> Result<(), SerdeError> {
+        fn write_null(&mut self, _schema: &Schema) -> Result<(), SerdeError> {
             self.output.push("null".to_string());
             Ok(())
         }
@@ -178,12 +170,12 @@ mod test {
     impl ShapeDeserializer for MockDeserializer {
         fn read_struct<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             state: T,
             mut consumer: F,
         ) -> Result<T, SerdeError>
         where
-            F: FnMut(T, &dyn Schema, &mut Self) -> Result<T, SerdeError>,
+            F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
         {
             // Simulate reading 2 members
             let state = consumer(state, &STRING, self)?;
@@ -193,7 +185,7 @@ mod test {
 
         fn read_list<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             mut state: T,
             mut consumer: F,
         ) -> Result<T, SerdeError>
@@ -209,7 +201,7 @@ mod test {
 
         fn read_map<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             mut state: T,
             mut consumer: F,
         ) -> Result<T, SerdeError>
@@ -222,37 +214,37 @@ mod test {
             Ok(state)
         }
 
-        fn read_boolean(&mut self, _schema: &dyn Schema) -> Result<bool, SerdeError> {
+        fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
             Ok(true)
         }
 
-        fn read_byte(&mut self, _schema: &dyn Schema) -> Result<i8, SerdeError> {
+        fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
             Ok(42)
         }
 
-        fn read_short(&mut self, _schema: &dyn Schema) -> Result<i16, SerdeError> {
+        fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
             Ok(1000)
         }
 
-        fn read_integer(&mut self, _schema: &dyn Schema) -> Result<i32, SerdeError> {
+        fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
             Ok(123456)
         }
 
-        fn read_long(&mut self, _schema: &dyn Schema) -> Result<i64, SerdeError> {
+        fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
             Ok(9876543210)
         }
 
-        fn read_float(&mut self, _schema: &dyn Schema) -> Result<f32, SerdeError> {
+        fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
             Ok(3.14)
         }
 
-        fn read_double(&mut self, _schema: &dyn Schema) -> Result<f64, SerdeError> {
+        fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
             Ok(2.71828)
         }
 
         fn read_big_integer(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
         ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigInteger::from_str("12345").unwrap())
@@ -260,13 +252,13 @@ mod test {
 
         fn read_big_decimal(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
         ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigDecimal::from_str("123.45").unwrap())
         }
 
-        fn read_string(&mut self, _schema: &dyn Schema) -> Result<String, SerdeError> {
+        fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
             if self.index < self.values.len() {
                 let value = self.values[self.index].clone();
                 self.index += 1;
@@ -276,23 +268,20 @@ mod test {
             }
         }
 
-        fn read_blob(
-            &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::Blob, SerdeError> {
+        fn read_blob(&mut self, _schema: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
             Ok(aws_smithy_types::Blob::new(vec![1, 2, 3, 4]))
         }
 
         fn read_timestamp(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
         ) -> Result<aws_smithy_types::DateTime, SerdeError> {
             Ok(aws_smithy_types::DateTime::from_secs(1234567890))
         }
 
         fn read_document(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
         ) -> Result<aws_smithy_types::Document, SerdeError> {
             Ok(aws_smithy_types::Document::Null)
         }
