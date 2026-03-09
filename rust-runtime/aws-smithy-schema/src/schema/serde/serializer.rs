@@ -5,9 +5,9 @@
 
 //! Shape serialization interfaces for the Smithy data model.
 
+use super::error::SerdeError;
 use crate::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
-use std::error::Error;
 
 /// Serializes Smithy shapes to a target format.
 ///
@@ -33,14 +33,8 @@ pub trait ShapeSerializer {
     /// The serialization target type (e.g., `Vec<u8>`, `String`).
     type Output;
 
-    /// The error type returned by serialization operations.
-    type Error: Error;
-
     /// Finalizes the serialization and returns the serialized output.
-    ///
-    /// This method should be called after all values have been written.
-    /// It may perform final formatting, validation, or resource cleanup.
-    fn finish(self) -> Result<Self::Output, Self::Error>;
+    fn finish(self) -> Result<Self::Output, SerdeError>;
 
     /// Writes a structure to the serializer.
     ///
@@ -51,9 +45,9 @@ pub trait ShapeSerializer {
     ///
     /// * `schema` - The schema of the structure being serialized
     /// * `write_members` - Callback that writes the structure's members
-    fn write_struct<F>(&mut self, schema: &dyn Schema, write_members: F) -> Result<(), Self::Error>
+    fn write_struct<F>(&mut self, schema: &dyn Schema, write_members: F) -> Result<(), SerdeError>
     where
-        F: FnOnce(&mut Self) -> Result<(), Self::Error>;
+        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
 
     /// Writes a list to the serializer.
     ///
@@ -63,9 +57,9 @@ pub trait ShapeSerializer {
     ///
     /// * `schema` - The schema of the list being serialized
     /// * `write_elements` - Callback that writes the list elements
-    fn write_list<F>(&mut self, schema: &dyn Schema, write_elements: F) -> Result<(), Self::Error>
+    fn write_list<F>(&mut self, schema: &dyn Schema, write_elements: F) -> Result<(), SerdeError>
     where
-        F: FnOnce(&mut Self) -> Result<(), Self::Error>;
+        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
 
     /// Writes a map to the serializer.
     ///
@@ -75,85 +69,66 @@ pub trait ShapeSerializer {
     ///
     /// * `schema` - The schema of the map being serialized
     /// * `write_entries` - Callback that writes the map entries
-    fn write_map<F>(&mut self, schema: &dyn Schema, write_entries: F) -> Result<(), Self::Error>
+    fn write_map<F>(&mut self, schema: &dyn Schema, write_entries: F) -> Result<(), SerdeError>
     where
-        F: FnOnce(&mut Self) -> Result<(), Self::Error>;
+        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
 
     /// Writes a boolean value.
-    fn write_boolean(&mut self, schema: &dyn Schema, value: bool) -> Result<(), Self::Error>;
+    fn write_boolean(&mut self, schema: &dyn Schema, value: bool) -> Result<(), SerdeError>;
 
     /// Writes a byte (i8) value.
-    fn write_byte(&mut self, schema: &dyn Schema, value: i8) -> Result<(), Self::Error>;
+    fn write_byte(&mut self, schema: &dyn Schema, value: i8) -> Result<(), SerdeError>;
 
     /// Writes a short (i16) value.
-    fn write_short(&mut self, schema: &dyn Schema, value: i16) -> Result<(), Self::Error>;
+    fn write_short(&mut self, schema: &dyn Schema, value: i16) -> Result<(), SerdeError>;
 
     /// Writes an integer (i32) value.
-    fn write_integer(&mut self, schema: &dyn Schema, value: i32) -> Result<(), Self::Error>;
+    fn write_integer(&mut self, schema: &dyn Schema, value: i32) -> Result<(), SerdeError>;
 
     /// Writes a long (i64) value.
-    fn write_long(&mut self, schema: &dyn Schema, value: i64) -> Result<(), Self::Error>;
+    fn write_long(&mut self, schema: &dyn Schema, value: i64) -> Result<(), SerdeError>;
 
     /// Writes a float (f32) value.
-    fn write_float(&mut self, schema: &dyn Schema, value: f32) -> Result<(), Self::Error>;
+    fn write_float(&mut self, schema: &dyn Schema, value: f32) -> Result<(), SerdeError>;
 
     /// Writes a double (f64) value.
-    fn write_double(&mut self, schema: &dyn Schema, value: f64) -> Result<(), Self::Error>;
+    fn write_double(&mut self, schema: &dyn Schema, value: f64) -> Result<(), SerdeError>;
 
     /// Writes a big integer value.
     fn write_big_integer(
         &mut self,
         schema: &dyn Schema,
         value: &BigInteger,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), SerdeError>;
 
     /// Writes a big decimal value.
     fn write_big_decimal(
         &mut self,
         schema: &dyn Schema,
         value: &BigDecimal,
-    ) -> Result<(), Self::Error>;
+    ) -> Result<(), SerdeError>;
 
     /// Writes a string value.
-    fn write_string(&mut self, schema: &dyn Schema, value: &str) -> Result<(), Self::Error>;
+    fn write_string(&mut self, schema: &dyn Schema, value: &str) -> Result<(), SerdeError>;
 
     /// Writes a blob (byte array) value.
-    fn write_blob(&mut self, schema: &dyn Schema, value: &Blob) -> Result<(), Self::Error>;
+    fn write_blob(&mut self, schema: &dyn Schema, value: &Blob) -> Result<(), SerdeError>;
 
     /// Writes a timestamp value.
-    fn write_timestamp(&mut self, schema: &dyn Schema, value: &DateTime)
-        -> Result<(), Self::Error>;
+    fn write_timestamp(&mut self, schema: &dyn Schema, value: &DateTime) -> Result<(), SerdeError>;
 
     /// Writes a document value.
-    fn write_document(&mut self, schema: &dyn Schema, value: &Document) -> Result<(), Self::Error>;
+    fn write_document(&mut self, schema: &dyn Schema, value: &Document) -> Result<(), SerdeError>;
 
     /// Writes a null value (for sparse collections).
-    fn write_null(&mut self, schema: &dyn Schema) -> Result<(), Self::Error>;
+    fn write_null(&mut self, schema: &dyn Schema) -> Result<(), SerdeError>;
 }
 
 /// Trait for structures that can be serialized.
 ///
 /// This trait is implemented by generated structure types to enable
 /// schema-based serialization.
-///
-/// # Example
-///
-/// ```ignore
-/// impl SerializableStruct for MyStruct {
-///     fn serialize<S: ShapeSerializer>(&self, serializer: &mut S) -> Result<(), S::Error> {
-///         serializer.write_struct(&Self::SCHEMA, |ser| {
-///             ser.write_string(&FIELD1_SCHEMA, &self.field1)?;
-///             ser.write_integer(&FIELD2_SCHEMA, self.field2)?;
-///             Ok(())
-///         })
-///     }
-/// }
-/// ```
 pub trait SerializableStruct {
     /// Serializes this structure using the provided serializer.
-    ///
-    /// # Arguments
-    ///
-    /// * `serializer` - The serializer to write to
-    fn serialize<S: ShapeSerializer>(&self, serializer: &mut S) -> Result<(), S::Error>;
+    fn serialize<S: ShapeSerializer>(&self, serializer: &mut S) -> Result<(), SerdeError>;
 }
