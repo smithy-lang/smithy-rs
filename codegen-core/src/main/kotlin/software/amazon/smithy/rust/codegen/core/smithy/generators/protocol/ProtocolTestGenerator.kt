@@ -127,8 +127,8 @@ abstract class ProtocolTestGenerator {
             // Something must change...
             if (it == fixed) {
                 PANIC(
-                    """$intro did not make any modifications. It is likely that the test case was 
-                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix 
+                    """$intro did not make any modifications. It is likely that the test case was
+                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix
                     |function, as the test is no longer broken.
                     |$moreInfo
                     """.trimMargin(),
@@ -249,10 +249,15 @@ abstract class ProtocolTestGenerator {
 
         // The `#[traced_test]` macro desugars to using `tracing`, so we need to depend on the latter explicitly in
         // case the code rendered by the test does not make use of `tracing` at all.
-        val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
-        testModuleWriter.rustInlineTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
+        val isBenchmark = testCase.tags.contains("serde-benchmark")
+        if (!isBenchmark) {
+            val tracingDevDependency = testDependenciesOnly { addDependency(CargoDependency.Tracing.toDevDependency()) }
+            testModuleWriter.rustInlineTemplate("#{TracingDevDependency:W}", "TracingDevDependency" to tracingDevDependency)
+        }
         Attribute.TokioTest.render(testModuleWriter)
-        Attribute.TracedTest.render(testModuleWriter)
+        if (!isBenchmark) {
+            Attribute.TracedTest.render(testModuleWriter)
+        }
 
         if (testCase.expectFail()) {
             shouldPanic().render(testModuleWriter)
@@ -535,5 +540,13 @@ sealed class TestCase {
                 is RequestTest -> this.testCase.documentation.orNull()
                 is ResponseTest -> this.testCase.documentation.orNull()
                 is MalformedRequestTest -> this.testCase.documentation.orNull()
+            }
+
+    val tags: List<String>
+        get() =
+            when (this) {
+                is RequestTest -> this.testCase.tags
+                is ResponseTest -> this.testCase.tags
+                is MalformedRequestTest -> this.testCase.tags
             }
 }
