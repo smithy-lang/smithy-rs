@@ -18,60 +18,53 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// The serializer accepts a schema along with the value to provide additional
 /// information about how to serialize the value (e.g., timestamp format, JSON name).
 ///
-/// # Type Parameter
-///
-/// * `Output` - The serialization target type (e.g., `Vec<u8>`, `String`)
+/// This trait is object-safe so that generated `SerializableStruct` implementations
+/// can use `&mut dyn ShapeSerializer`, producing one compiled `serialize_members()`
+/// per shape regardless of how many codecs exist (`shapes + codecs` rather than
+/// `shapes * codecs` in binary size).
 ///
 /// # Example
 ///
 /// ```ignore
 /// let mut serializer = JsonSerializer::new();
 /// serializer.write_string(&STRING_SCHEMA, "hello")?;
-/// let json_bytes = serializer.finish()?;
 /// ```
 pub trait ShapeSerializer {
-    /// The serialization target type (e.g., `Vec<u8>`, `String`).
-    type Output;
-
-    /// Finalizes the serialization and returns the serialized output.
-    fn finish(self) -> Result<Self::Output, SerdeError>;
-
     /// Writes a structure to the serializer.
-    ///
-    /// The structure serialization is driven by a callback that writes each member.
-    /// This avoids the need for trait objects while maintaining flexibility.
     ///
     /// # Arguments
     ///
     /// * `schema` - The schema of the structure being serialized
-    /// * `write_members` - Callback that writes the structure's members
-    fn write_struct<F>(&mut self, schema: &Schema, write_members: F) -> Result<(), SerdeError>
-    where
-        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
+    /// * `value` - The structure to serialize
+    fn write_struct(
+        &mut self,
+        schema: &Schema,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a list to the serializer.
-    ///
-    /// The list serialization is driven by a callback that writes each element.
     ///
     /// # Arguments
     ///
     /// * `schema` - The schema of the list being serialized
     /// * `write_elements` - Callback that writes the list elements
-    fn write_list<F>(&mut self, schema: &Schema, write_elements: F) -> Result<(), SerdeError>
-    where
-        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
+    fn write_list(
+        &mut self,
+        schema: &Schema,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a map to the serializer.
-    ///
-    /// The map serialization is driven by a callback that writes each entry.
     ///
     /// # Arguments
     ///
     /// * `schema` - The schema of the map being serialized
     /// * `write_entries` - Callback that writes the map entries
-    fn write_map<F>(&mut self, schema: &Schema, write_entries: F) -> Result<(), SerdeError>
-    where
-        F: FnOnce(&mut Self) -> Result<(), SerdeError>;
+    fn write_map(
+        &mut self,
+        schema: &Schema,
+        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a boolean value.
     fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError>;
@@ -116,11 +109,24 @@ pub trait ShapeSerializer {
     fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError>;
 }
 
-/// Trait for structures that can be serialized.
+/// Trait for structures that can be serialized via a schema.
 ///
-/// This trait is implemented by generated structure types to enable
-/// schema-based serialization.
+/// Implemented by generated structure types. Because `ShapeSerializer` is object-safe,
+/// each struct gets one compiled `serialize_members()` that works with any serializer
+/// through dynamic dispatch.
+///
+/// # Example
+///
+/// ```ignore
+/// impl SerializableStruct for MyStruct {
+///     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+///         serializer.write_string(&NAME_SCHEMA, &self.name)?;
+///         serializer.write_integer(&AGE_SCHEMA, self.age)?;
+///         Ok(())
+///     }
+/// }
+/// ```
 pub trait SerializableStruct {
-    /// Serializes this structure using the provided serializer.
-    fn serialize<S: ShapeSerializer>(&self, serializer: &mut S) -> Result<(), SerdeError>;
+    /// Serializes this structure's members using the provided serializer.
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }

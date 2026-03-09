@@ -15,7 +15,7 @@ pub use serializer::{SerializableStruct, ShapeSerializer};
 
 #[cfg(test)]
 mod test {
-    use crate::serde::{SerdeError, ShapeDeserializer, ShapeSerializer};
+    use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
     use crate::{prelude::*, Schema};
 
     // Mock serializer for testing
@@ -23,28 +23,30 @@ mod test {
         output: Vec<String>,
     }
 
-    impl ShapeSerializer for MockSerializer {
-        type Output = Vec<String>;
-
-        fn finish(self) -> Result<Self::Output, SerdeError> {
-            Ok(self.output)
+    impl MockSerializer {
+        fn finish(self) -> Vec<String> {
+            self.output
         }
+    }
 
-        fn write_struct<F>(&mut self, schema: &Schema, write_members: F) -> Result<(), SerdeError>
-        where
-            F: FnOnce(&mut Self) -> Result<(), SerdeError>,
-        {
+    impl ShapeSerializer for MockSerializer {
+        fn write_struct(
+            &mut self,
+            schema: &Schema,
+            value: &dyn SerializableStruct,
+        ) -> Result<(), SerdeError> {
             self.output
                 .push(format!("struct({})", schema.shape_id().as_str()));
-            write_members(self)?;
+            value.serialize_members(self)?;
             self.output.push("end_struct".to_string());
             Ok(())
         }
 
-        fn write_list<F>(&mut self, schema: &Schema, write_elements: F) -> Result<(), SerdeError>
-        where
-            F: FnOnce(&mut Self) -> Result<(), SerdeError>,
-        {
+        fn write_list(
+            &mut self,
+            schema: &Schema,
+            write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             self.output
                 .push(format!("list({})", schema.shape_id().as_str()));
             write_elements(self)?;
@@ -52,10 +54,11 @@ mod test {
             Ok(())
         }
 
-        fn write_map<F>(&mut self, schema: &Schema, write_entries: F) -> Result<(), SerdeError>
-        where
-            F: FnOnce(&mut Self) -> Result<(), SerdeError>,
-        {
+        fn write_map(
+            &mut self,
+            schema: &Schema,
+            write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             self.output
                 .push(format!("map({})", schema.shape_id().as_str()));
             write_entries(self)?;
@@ -303,22 +306,29 @@ mod test {
         ser.write_integer(&INTEGER, 42).unwrap();
         ser.write_string(&STRING, "hello").unwrap();
 
-        let output = ser.finish().unwrap();
+        let output = ser.finish();
         assert_eq!(output, vec!["bool(true)", "int(42)", "string(hello)"]);
     }
 
     #[test]
     fn test_serializer_struct() {
+        // A simple struct that serializes two fields
+        struct TestStruct;
+        impl SerializableStruct for TestStruct {
+            fn serialize_members(
+                &self,
+                serializer: &mut dyn ShapeSerializer,
+            ) -> Result<(), SerdeError> {
+                serializer.write_string(&STRING, "field1")?;
+                serializer.write_integer(&INTEGER, 123)?;
+                Ok(())
+            }
+        }
+
         let mut ser = MockSerializer { output: Vec::new() };
+        ser.write_struct(&STRING, &TestStruct).unwrap();
 
-        ser.write_struct(&STRING, |s| {
-            s.write_string(&STRING, "field1")?;
-            s.write_integer(&INTEGER, 123)?;
-            Ok(())
-        })
-        .unwrap();
-
-        let output = ser.finish().unwrap();
+        let output = ser.finish();
         assert_eq!(
             output,
             vec![
