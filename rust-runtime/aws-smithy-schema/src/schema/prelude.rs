@@ -11,91 +11,91 @@
 use crate::{shape_id, Schema, ShapeType, TraitMap};
 
 /// Schema for `smithy.api#String`
-pub const STRING: Schema = Schema::new(
+pub static STRING: Schema = Schema::new(
     shape_id!("smithy.api", "String"),
     ShapeType::String,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Boolean`
-pub const BOOLEAN: Schema = Schema::new(
+pub static BOOLEAN: Schema = Schema::new(
     shape_id!("smithy.api", "Boolean"),
     ShapeType::Boolean,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Byte`
-pub const BYTE: Schema = Schema::new(
+pub static BYTE: Schema = Schema::new(
     shape_id!("smithy.api", "Byte"),
     ShapeType::Byte,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Short`
-pub const SHORT: Schema = Schema::new(
+pub static SHORT: Schema = Schema::new(
     shape_id!("smithy.api", "Short"),
     ShapeType::Short,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Integer`
-pub const INTEGER: Schema = Schema::new(
+pub static INTEGER: Schema = Schema::new(
     shape_id!("smithy.api", "Integer"),
     ShapeType::Integer,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Long`
-pub const LONG: Schema = Schema::new(
+pub static LONG: Schema = Schema::new(
     shape_id!("smithy.api", "Long"),
     ShapeType::Long,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Float`
-pub const FLOAT: Schema = Schema::new(
+pub static FLOAT: Schema = Schema::new(
     shape_id!("smithy.api", "Float"),
     ShapeType::Float,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Double`
-pub const DOUBLE: Schema = Schema::new(
+pub static DOUBLE: Schema = Schema::new(
     shape_id!("smithy.api", "Double"),
     ShapeType::Double,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#BigInteger`
-pub const BIG_INTEGER: Schema = Schema::new(
+pub static BIG_INTEGER: Schema = Schema::new(
     shape_id!("smithy.api", "BigInteger"),
     ShapeType::BigInteger,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#BigDecimal`
-pub const BIG_DECIMAL: Schema = Schema::new(
+pub static BIG_DECIMAL: Schema = Schema::new(
     shape_id!("smithy.api", "BigDecimal"),
     ShapeType::BigDecimal,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Blob`
-pub const BLOB: Schema = Schema::new(
+pub static BLOB: Schema = Schema::new(
     shape_id!("smithy.api", "Blob"),
     ShapeType::Blob,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Timestamp`
-pub const TIMESTAMP: Schema = Schema::new(
+pub static TIMESTAMP: Schema = Schema::new(
     shape_id!("smithy.api", "Timestamp"),
     ShapeType::Timestamp,
     TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Document`
-pub const DOCUMENT: Schema = Schema::new(
+pub static DOCUMENT: Schema = Schema::new(
     shape_id!("smithy.api", "Document"),
     ShapeType::Document,
     TraitMap::EMPTY,
