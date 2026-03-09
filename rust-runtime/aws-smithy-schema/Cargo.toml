@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-schema"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Schema types for the smithy-rs ecosystem"
 edition = "2021"

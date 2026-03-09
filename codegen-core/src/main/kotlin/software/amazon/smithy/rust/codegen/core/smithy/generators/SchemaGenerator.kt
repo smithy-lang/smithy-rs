@@ -250,7 +250,7 @@ class SchemaGenerator(
 
             impl $structName {
                 /// Writes this structure's members to the serializer without the struct wrapper.
-                ##[allow(unused_variables)]
+                ##[allow(unused_variables, clippy::diverging_sub_expression)]
                 pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> ::std::result::Result<(), S::Error> {
                     #{memberWrites}
                     Ok(())
@@ -357,7 +357,7 @@ class SchemaGenerator(
             }
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, |ser| val.serialize_members(ser))?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
-            else -> "// TODO(schema) unsupported shape type for serialization"
+            else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
 
     /** Returns a write expression for a list element (no member name needed). */
@@ -389,7 +389,7 @@ class SchemaGenerator(
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, |ser| $varName.serialize_members(ser))?;"
             }
-            else -> "// TODO(schema) unsupported list element type"
+            else -> "todo!(\"schema: unsupported list element type\");"
         }
     }
 
@@ -418,7 +418,7 @@ class SchemaGenerator(
             is BlobShape -> "ser.write_blob(&entry, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&entry, $varName)?;"
             is StructureShape -> "ser.write_struct(&entry, |ser| $varName.serialize_members(ser))?;"
-            else -> "// TODO(schema) unsupported map value type"
+            else -> "todo!(\"schema: unsupported map value type\");"
         }
 
     private fun renderDeserializeMethod(
@@ -440,10 +440,10 @@ class SchemaGenerator(
                 /// Deserializes this structure from a [`ShapeDeserializer`].
                 pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, D::Error> {
                     ##[derive(Default)]
-                    struct Builder {
+                    struct DeserializerBuilder {
                         #{builderFields}
                     }
-                    let builder = Builder::default();
+                    let builder = DeserializerBuilder::default();
                     ##[allow(unused_variables, unused_mut, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
                     let builder = deserializer.read_struct(&$schemaStructName, builder, |mut builder, member, deser| {
                         match member.member_index() {
