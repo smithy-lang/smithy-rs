@@ -3,137 +3,121 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::borrow::Cow;
+use std::fmt;
+
+/// Creates a [`ShapeId`] from a namespace and shape name at compile time.
+///
+/// The fully qualified name (`namespace#ShapeName`) is computed via `concat!`,
+/// eliminating the risk of the FQN getting out of sync with the parts.
+///
+/// # Examples
+/// ```
+/// use aws_smithy_schema::{shape_id, ShapeId};
+///
+/// const ID: ShapeId = shape_id!("smithy.api", "String");
+/// assert_eq!(ID.as_str(), "smithy.api#String");
+/// ```
+#[macro_export]
+macro_rules! shape_id {
+    ($ns:literal, $name:literal) => {
+        $crate::ShapeId::from_static(concat!($ns, "#", $name), $ns, $name)
+    };
+    ($ns:literal, $name:literal, $member:literal) => {
+        $crate::ShapeId::from_static_with_member(
+            concat!($ns, "#", $name, "$", $member),
+            $ns,
+            $name,
+            $member,
+        )
+    };
+}
 
 /// A Smithy Shape ID.
 ///
 /// Shape IDs uniquely identify shapes in a Smithy model.
-/// - `fqn` is `"smithy.example#Foo"`
-/// - `namespace` is `"smithy.example"`
-/// - `shape_name` is `"Foo"`
+/// Use the [`shape_id!`] macro to construct instances — it computes the
+/// fully qualified name at compile time from the namespace and shape name,
+/// preventing the parts from getting out of sync.
+///
+/// # Examples
+/// ```
+/// use aws_smithy_schema::{shape_id, ShapeId};
+///
+/// const ID: ShapeId = shape_id!("smithy.api", "String");
+/// assert_eq!(ID.namespace(), "smithy.api");
+/// assert_eq!(ID.shape_name(), "String");
+/// assert_eq!(ID.as_str(), "smithy.api#String");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ShapeId {
-    fqn: Cow<'static, str>,
-    namespace: Cow<'static, str>,
-    shape_name: Cow<'static, str>,
+    fqn: &'static str,
+    namespace: &'static str,
+    shape_name: &'static str,
+    member_name: Option<&'static str>,
 }
 
 impl ShapeId {
-    /// Creates a ShapeId from a static string at compile time.
+    /// Creates a ShapeId from pre-computed static strings.
     ///
-    /// This is used for const initialization of prelude schemas.
+    /// Prefer the [`shape_id!`] macro which computes `fqn` via `concat!`
+    /// to prevent the parts from getting out of sync.
+    #[doc(hidden)]
     pub const fn from_static(
         fqn: &'static str,
         namespace: &'static str,
         shape_name: &'static str,
     ) -> Self {
         Self {
-            fqn: Cow::Borrowed(fqn),
-            namespace: Cow::Borrowed(namespace),
-            shape_name: Cow::Borrowed(shape_name),
-        }
-    }
-
-    /// Creates a new ShapeId from a namespace and a shape_name.
-    ///
-    /// # Examples
-    /// ```
-    /// use aws_smithy_schema::ShapeId;
-    ///
-    /// let shape_id = ShapeId::new("smithy.api#String");
-    /// ```
-    pub fn new_from_parts(
-        namespace: impl Into<Cow<'static, str>>,
-        shape_name: impl Into<Cow<'static, str>>,
-    ) -> Self {
-        let namespace = namespace.into();
-        let shape_name = shape_name.into();
-        Self {
-            fqn: format!("{}#{}", namespace.as_ref(), shape_name.as_ref()).into(),
+            fqn,
             namespace,
             shape_name,
+            member_name: None,
         }
     }
 
-    /// Creates a new ShapeId from a fully qualified name.
-    pub fn new_from_fqn(fqn: impl Into<Cow<'static, str>>) -> Option<Self> {
-        let fqn = fqn.into();
-        let (namespace, shape_name) = fqn.as_ref().split_once('#').map(|(ns, rest)| {
-            (
-                ns.to_string(),
-                rest.split_once('$')
-                    .map_or(rest, |(name, _)| name)
-                    .to_string(),
-            )
-        })?;
-        Some(Self {
+    /// Creates a ShapeId with a member name from pre-computed static strings.
+    ///
+    /// Prefer the [`shape_id!`] macro which computes `fqn` via `concat!`
+    /// to prevent the parts from getting out of sync.
+    #[doc(hidden)]
+    pub const fn from_static_with_member(
+        fqn: &'static str,
+        namespace: &'static str,
+        shape_name: &'static str,
+        member_name: &'static str,
+    ) -> Self {
+        Self {
             fqn,
-            namespace: namespace.into(),
-            shape_name: shape_name.into(),
-        })
+            namespace,
+            shape_name,
+            member_name: Some(member_name),
+        }
     }
 
-    /// Creates a new ShapeId from a fully qualified name.
-    pub fn new(fqn: impl Into<Cow<'static, str>>) -> Self {
-        Self::new_from_fqn(fqn).expect("invalid shape ID")
-    }
-
-    /// Returns the string representation of this ShapeId.
+    /// Returns the fully qualified string representation (e.g. `"smithy.api#String"`).
     pub fn as_str(&self) -> &str {
-        self.fqn.as_ref()
+        self.fqn
     }
 
     /// Returns the namespace portion of the ShapeId.
-    ///
-    /// # Examples
-    /// ```
-    /// use aws_smithy_schema::ShapeId;
-    ///
-    /// let shape_id = ShapeId::new("smithy.api#String");
-    /// assert_eq!(shape_id.namespace(), "smithy.api");
-    /// ```
     pub fn namespace(&self) -> &str {
-        self.namespace.as_ref()
+        self.namespace
     }
 
     /// Returns the shape name portion of the ShapeId.
-    ///
-    /// # Examples
-    /// ```
-    /// use aws_smithy_schema::ShapeId;
-    ///
-    /// let shape_id = ShapeId::new("smithy.api#String");
-    /// assert_eq!(shape_id.shape_name(), "String");
-    /// ```
     pub fn shape_name(&self) -> &str {
-        self.shape_name.as_ref()
+        self.shape_name
     }
 
     /// Returns the member name if this is a member shape ID.
-    ///
-    /// # Examples
-    /// ```
-    /// use aws_smithy_schema::ShapeId;
-    ///
-    /// let shape_id = ShapeId::new("com.example#MyStruct$member");
-    /// assert_eq!(shape_id.member_name(), Some("member"));
-    /// ```
     pub fn member_name(&self) -> Option<&str> {
-        self.fqn
-            .split_once('#')
-            .and_then(|(_, rest)| rest.split_once('$').map(|(_, member)| member))
+        self.member_name
     }
 }
 
-impl From<String> for ShapeId {
-    fn from(value: String) -> Self {
-        Self::new(value)
-    }
-}
-
-impl From<&str> for ShapeId {
-    fn from(value: &str) -> Self {
-        Self::new(value.to_string())
+impl fmt::Display for ShapeId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.fqn)
     }
 }
 
@@ -142,54 +126,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_new() {
-        let shape_id = ShapeId::new("smithy.api#String");
-        assert_eq!(shape_id.as_str(), "smithy.api#String");
+    fn test_shape_id_macro() {
+        const ID: ShapeId = shape_id!("smithy.api", "String");
+        assert_eq!(ID.as_str(), "smithy.api#String");
+        assert_eq!(ID.namespace(), "smithy.api");
+        assert_eq!(ID.shape_name(), "String");
+        assert_eq!(ID.member_name(), None);
     }
 
     #[test]
-    fn test_namespace() {
-        assert_eq!(ShapeId::new("smithy.api#String").namespace(), "smithy.api");
-        assert_eq!(
-            ShapeId::new("com.example#MyStruct$member").namespace(),
-            "com.example"
-        );
+    fn test_shape_id_macro_with_member() {
+        const ID: ShapeId = shape_id!("com.example", "MyStruct", "field");
+        assert_eq!(ID.as_str(), "com.example#MyStruct$field");
+        assert_eq!(ID.namespace(), "com.example");
+        assert_eq!(ID.shape_name(), "MyStruct");
+        assert_eq!(ID.member_name(), Some("field"));
     }
 
     #[test]
-    fn test_shape_name() {
-        assert_eq!(ShapeId::new("smithy.api#String").shape_name(), "String");
-        assert_eq!(
-            ShapeId::new("com.example#MyStruct$member").shape_name(),
-            "MyStruct"
-        );
+    fn test_display() {
+        let id = shape_id!("smithy.api", "String");
+        assert_eq!(format!("{id}"), "smithy.api#String");
     }
 
     #[test]
-    fn test_member_name() {
-        assert_eq!(
-            ShapeId::new("com.example#MyStruct$member").member_name(),
-            Some("member")
-        );
-        assert_eq!(ShapeId::new("smithy.api#String").member_name(), None);
+    fn test_equality() {
+        let a = shape_id!("smithy.api", "String");
+        let b = shape_id!("smithy.api", "String");
+        assert_eq!(a, b);
     }
 
     #[test]
-    fn test_from_string() {
-        let shape_id: ShapeId = String::from("smithy.api#String").into();
-        assert_eq!(shape_id.as_str(), "smithy.api#String");
-    }
-
-    #[test]
-    fn test_from_str() {
-        let shape_id: ShapeId = "smithy.api#String".into();
-        assert_eq!(shape_id.as_str(), "smithy.api#String");
-    }
-
-    #[test]
-    fn test_clone_and_equality() {
-        let shape_id1 = ShapeId::new("smithy.api#String");
-        let shape_id2 = shape_id1.clone();
-        assert_eq!(shape_id1, shape_id2);
+    fn test_clone() {
+        let a = shape_id!("smithy.api", "String");
+        let b = a.clone();
+        assert_eq!(a, b);
     }
 }

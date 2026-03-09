@@ -77,9 +77,9 @@ pub trait Schema: Send + Sync {
         None
     }
 
-    /// Returns an iterator over member schemas (for structures and unions).
-    fn members(&self) -> Box<dyn Iterator<Item = &dyn Schema> + '_> {
-        Box::new(std::iter::empty())
+    /// Returns the member schemas (for structures and unions).
+    fn members(&self) -> &[&dyn Schema] {
+        &[]
     }
 
     /// Returns the member index for member schemas.
@@ -133,7 +133,7 @@ impl<T: Schema + ?Sized> SchemaExt for T {}
 
 #[cfg(test)]
 mod test {
-    use crate::{Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
+    use crate::{shape_id, Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
     #[derive(Debug)]
@@ -201,7 +201,7 @@ mod test {
 
     #[test]
     fn test_shape_id_parsing() {
-        let id = ShapeId::new("smithy.api#String");
+        let id = shape_id!("smithy.api", "String");
         assert_eq!(id.namespace(), "smithy.api");
         assert_eq!(id.shape_name(), "String");
         assert_eq!(id.member_name(), None);
@@ -209,7 +209,7 @@ mod test {
 
     #[test]
     fn test_shape_id_with_member() {
-        let id = ShapeId::new("com.example#MyStruct$member");
+        let id = shape_id!("com.example", "MyStruct", "member");
         assert_eq!(id.namespace(), "com.example");
         assert_eq!(id.shape_name(), "MyStruct");
         assert_eq!(id.member_name(), Some("member"));
@@ -221,7 +221,7 @@ mod test {
         assert!(map.is_empty());
         assert_eq!(map.len(), 0);
 
-        let trait_id = ShapeId::new("smithy.api#required");
+        let trait_id = shape_id!("smithy.api", "required");
         let test_trait = Box::new(TestTrait {
             id: trait_id.clone(),
             value: "test".to_string(),
@@ -239,7 +239,7 @@ mod test {
     #[test]
     fn test_schema_ext() {
         let schema = TestSchema {
-            id: ShapeId::new("com.example#MyStruct"),
+            id: shape_id!("com.example", "MyStruct"),
             shape_type: ShapeType::Structure,
             traits: TraitMap::new(),
         };
@@ -253,7 +253,7 @@ mod test {
     #[test]
     fn test_schema_basic() {
         let schema = TestSchema {
-            id: ShapeId::new("smithy.api#String"),
+            id: shape_id!("smithy.api", "String"),
             shape_type: ShapeType::String,
             traits: TraitMap::new(),
         };
