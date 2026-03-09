@@ -48,7 +48,7 @@ impl TraitMap {
 
     /// Returns true if the map contains a trait with the given Shape ID.
     pub fn contains(&self, id: &ShapeId) -> bool {
-        self.traits.as_ref().map_or(false, |m| m.contains_key(id))
+        self.traits.as_ref().is_some_and(|m| m.contains_key(id))
     }
 
     /// Returns the number of traits in the map.
@@ -58,6 +58,6 @@ impl TraitMap {
 
     /// Returns true if the map is empty.
     pub fn is_empty(&self) -> bool {
-        self.traits.as_ref().map_or(true, |m| m.is_empty())
+        self.traits.as_ref().is_none_or(|m| m.is_empty())
     }
 }
