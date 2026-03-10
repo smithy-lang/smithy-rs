@@ -5,7 +5,7 @@
 
 use aws_config::Region;
 use aws_sdk_s3 as s3;
-use aws_smithy_wasm::wasi::{WasiHttpClientBuilder, WasiSleep};
+use aws_smithy_wasm::wasi::{WasiHttpClient, WasiSleep};
 
 //Generates the Rust bindings from the wit file
 wit_bindgen::generate!({
@@ -23,7 +23,7 @@ impl exports::aws::component::canary_interface::Guest for Component {
 }
 
 async fn run() -> Result<Vec<String>, String> {
-    let http_client = WasiHttpClientBuilder::new().build();
+    let http_client = WasiHttpClient::default();
     let sleep = WasiSleep;
     let config = aws_config::from_env()
         .region(Region::new("us-east-2"))

@@ -61,6 +61,12 @@ impl WasiHttpClientBuilder {
 #[non_exhaustive]
 pub struct WasiHttpClient {}
 
+impl Default for WasiHttpClient {
+    fn default() -> Self {
+        WasiHttpClient {}
+    }
+}
+
 impl HttpClient for WasiHttpClient {
     fn http_connector(
         &self,
