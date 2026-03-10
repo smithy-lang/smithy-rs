@@ -35,142 +35,252 @@ pub mod serde {
     pub use crate::schema::serde::*;
 }
 
-/// Core trait representing a Smithy schema at runtime.
+/// A Smithy schema — a lightweight runtime representation of a Smithy shape.
 ///
-/// A schema is a lightweight runtime representation of a Smithy shape,
-/// containing the shape's ID, type, traits, and references to member schemas.
-pub trait Schema: Send + Sync {
+/// Contains the shape's ID, type, traits relevant to serialization, and
+/// references to member schemas (for aggregate types).
+///
+/// Schemas are constructed at compile time (via `const`) for generated code
+/// and prelude types. The Smithy type system is closed, so no extensibility
+/// via trait objects is needed.
+#[derive(Debug)]
+pub struct Schema {
+    id: ShapeId,
+    shape_type: ShapeType,
+    traits: TraitMap,
+    /// Member name if this is a member schema.
+    member_name: Option<&'static str>,
+    /// Member index for position-based lookup in generated code.
+    member_index: Option<usize>,
+    /// Shape-type-specific member data.
+    members: SchemaMembers,
+}
+
+/// Shape-type-specific member references.
+#[derive(Debug)]
+enum SchemaMembers {
+    /// No members (simple types).
+    None,
+    /// Structure or union members.
+    Struct { members: &'static [&'static Schema] },
+    /// List member schema.
+    List { member: &'static Schema },
+    /// Map key and value schemas.
+    Map {
+        key: &'static Schema,
+        value: &'static Schema,
+    },
+}
+
+impl Schema {
+    /// Creates a schema for a simple type (no members).
+    pub const fn new(id: ShapeId, shape_type: ShapeType, traits: TraitMap) -> Self {
+        Self {
+            id,
+            shape_type,
+            traits,
+            member_name: None,
+            member_index: None,
+            members: SchemaMembers::None,
+        }
+    }
+
+    /// Creates a schema for a structure or union type.
+    pub const fn new_struct(
+        id: ShapeId,
+        shape_type: ShapeType,
+        traits: TraitMap,
+        members: &'static [&'static Schema],
+    ) -> Self {
+        Self {
+            id,
+            shape_type,
+            traits,
+            member_name: None,
+            member_index: None,
+            members: SchemaMembers::Struct { members },
+        }
+    }
+
+    /// Creates a schema for a list type.
+    pub const fn new_list(id: ShapeId, traits: TraitMap, member: &'static Schema) -> Self {
+        Self {
+            id,
+            shape_type: ShapeType::List,
+            traits,
+            member_name: None,
+            member_index: None,
+            members: SchemaMembers::List { member },
+        }
+    }
+
+    /// Creates a schema for a map type.
+    pub const fn new_map(
+        id: ShapeId,
+        traits: TraitMap,
+        key: &'static Schema,
+        value: &'static Schema,
+    ) -> Self {
+        Self {
+            id,
+            shape_type: ShapeType::Map,
+            traits,
+            member_name: None,
+            member_index: None,
+            members: SchemaMembers::Map { key, value },
+        }
+    }
+
+    /// Creates a member schema wrapping a target schema.
+    pub const fn new_member(
+        id: ShapeId,
+        shape_type: ShapeType,
+        traits: TraitMap,
+        member_name: &'static str,
+        member_index: usize,
+    ) -> Self {
+        Self {
+            id,
+            shape_type,
+            traits,
+            member_name: Some(member_name),
+            member_index: Some(member_index),
+            members: SchemaMembers::None,
+        }
+    }
+
     /// Returns the Shape ID of this schema.
-    fn shape_id(&self) -> &ShapeId;
+    pub fn shape_id(&self) -> &ShapeId {
+        &self.id
+    }
 
     /// Returns the shape type.
-    fn shape_type(&self) -> ShapeType;
+    pub fn shape_type(&self) -> ShapeType {
+        self.shape_type
+    }
 
     /// Returns the traits associated with this schema.
-    fn traits(&self) -> &TraitMap;
+    pub fn traits(&self) -> &TraitMap {
+        &self.traits
+    }
 
     /// Returns the member name if this is a member schema.
-    fn member_name(&self) -> Option<&str> {
-        None
+    pub fn member_name(&self) -> Option<&str> {
+        self.member_name
+    }
+
+    /// Returns the member index for member schemas.
+    ///
+    /// This is used internally by generated code for efficient member lookup.
+    /// Consumer code should not rely on specific position values as they may change.
+    pub fn member_index(&self) -> Option<usize> {
+        self.member_index
     }
 
     /// Returns the member schema by name (for structures and unions).
-    fn member_schema(&self, _name: &str) -> Option<&dyn Schema> {
-        None
+    pub fn member_schema(&self, name: &str) -> Option<&Schema> {
+        match &self.members {
+            SchemaMembers::Struct { members } => members
+                .iter()
+                .find(|m| m.member_name == Some(name))
+                .copied(),
+            _ => None,
+        }
     }
 
     /// Returns the member schema by position index (for structures and unions).
     ///
     /// This is an optimization for generated code to avoid string lookups.
     /// Consumer code should not rely on specific position values as they may change.
-    fn member_schema_by_index(&self, _index: usize) -> Option<&dyn Schema> {
-        None
+    pub fn member_schema_by_index(&self, index: usize) -> Option<&Schema> {
+        match &self.members {
+            SchemaMembers::Struct { members } => members.get(index).copied(),
+            _ => None,
+        }
+    }
+
+    /// Returns the member schemas (for structures and unions).
+    pub fn members(&self) -> &[&Schema] {
+        match &self.members {
+            SchemaMembers::Struct { members } => members,
+            _ => &[],
+        }
     }
 
     /// Returns the member schema for collections (list member or map value).
-    fn member(&self) -> Option<&dyn Schema> {
-        None
+    pub fn member(&self) -> Option<&Schema> {
+        match &self.members {
+            SchemaMembers::List { member } => Some(member),
+            SchemaMembers::Map { value, .. } => Some(value),
+            _ => None,
+        }
     }
 
     /// Returns the key schema for maps.
-    fn key(&self) -> Option<&dyn Schema> {
-        None
+    pub fn key(&self) -> Option<&Schema> {
+        match &self.members {
+            SchemaMembers::Map { key, .. } => Some(key),
+            _ => None,
+        }
     }
 
-    /// Returns an iterator over member schemas (for structures and unions).
-    fn members(&self) -> Box<dyn Iterator<Item = &dyn Schema> + '_> {
-        Box::new(std::iter::empty())
-    }
+    // -- convenience predicates --
 
-    /// Returns the member index for member schemas.
-    ///
-    /// This is used internally by generated code for efficient member lookup.
-    /// Returns None if not applicable or not a member schema.
-    fn member_index(&self) -> Option<usize> {
-        None
-    }
-}
-
-/// Helper methods for Schema trait.
-pub trait SchemaExt: Schema {
     /// Returns true if this is a member schema.
-    fn is_member(&self) -> bool {
-        self.shape_type().is_member()
+    pub fn is_member(&self) -> bool {
+        self.shape_type.is_member()
     }
 
     /// Returns true if this is a structure schema.
-    fn is_structure(&self) -> bool {
-        self.shape_type() == ShapeType::Structure
+    pub fn is_structure(&self) -> bool {
+        self.shape_type == ShapeType::Structure
     }
 
     /// Returns true if this is a union schema.
-    fn is_union(&self) -> bool {
-        self.shape_type() == ShapeType::Union
+    pub fn is_union(&self) -> bool {
+        self.shape_type == ShapeType::Union
     }
 
     /// Returns true if this is a list schema.
-    fn is_list(&self) -> bool {
-        self.shape_type() == ShapeType::List
+    pub fn is_list(&self) -> bool {
+        self.shape_type == ShapeType::List
     }
 
     /// Returns true if this is a map schema.
-    fn is_map(&self) -> bool {
-        self.shape_type() == ShapeType::Map
+    pub fn is_map(&self) -> bool {
+        self.shape_type == ShapeType::Map
     }
 
     /// Returns true if this is a blob schema.
-    fn is_blob(&self) -> bool {
-        self.shape_type() == ShapeType::Blob
+    pub fn is_blob(&self) -> bool {
+        self.shape_type == ShapeType::Blob
     }
 
     /// Returns true if this is a string schema.
-    fn is_string(&self) -> bool {
-        self.shape_type() == ShapeType::String
+    pub fn is_string(&self) -> bool {
+        self.shape_type == ShapeType::String
     }
 }
 
-impl<T: Schema + ?Sized> SchemaExt for T {}
-
 #[cfg(test)]
 mod test {
-    use crate::{Schema, SchemaExt, ShapeId, ShapeType, Trait, TraitMap};
+    use crate::{shape_id, Schema, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
     #[derive(Debug)]
     struct TestTrait {
-        id: ShapeId,
+        id: crate::ShapeId,
         #[allow(dead_code)]
         value: String,
     }
 
     impl Trait for TestTrait {
-        fn trait_id(&self) -> &ShapeId {
+        fn trait_id(&self) -> &crate::ShapeId {
             &self.id
         }
 
         fn as_any(&self) -> &dyn std::any::Any {
             self
-        }
-    }
-
-    // Simple test schema implementation
-    struct TestSchema {
-        id: ShapeId,
-        shape_type: ShapeType,
-        traits: TraitMap,
-    }
-
-    impl Schema for TestSchema {
-        fn shape_id(&self) -> &ShapeId {
-            &self.id
-        }
-
-        fn shape_type(&self) -> ShapeType {
-            self.shape_type
-        }
-
-        fn traits(&self) -> &TraitMap {
-            &self.traits
         }
     }
 
@@ -201,7 +311,7 @@ mod test {
 
     #[test]
     fn test_shape_id_parsing() {
-        let id = ShapeId::new("smithy.api#String");
+        let id = shape_id!("smithy.api", "String");
         assert_eq!(id.namespace(), "smithy.api");
         assert_eq!(id.shape_name(), "String");
         assert_eq!(id.member_name(), None);
@@ -209,7 +319,7 @@ mod test {
 
     #[test]
     fn test_shape_id_with_member() {
-        let id = ShapeId::new("com.example#MyStruct$member");
+        let id = shape_id!("com.example", "MyStruct", "member");
         assert_eq!(id.namespace(), "com.example");
         assert_eq!(id.shape_name(), "MyStruct");
         assert_eq!(id.member_name(), Some("member"));
@@ -221,7 +331,7 @@ mod test {
         assert!(map.is_empty());
         assert_eq!(map.len(), 0);
 
-        let trait_id = ShapeId::new("smithy.api#required");
+        let trait_id = shape_id!("smithy.api", "required");
         let test_trait = Box::new(TestTrait {
             id: trait_id.clone(),
             value: "test".to_string(),
@@ -237,12 +347,12 @@ mod test {
     }
 
     #[test]
-    fn test_schema_ext() {
-        let schema = TestSchema {
-            id: ShapeId::new("com.example#MyStruct"),
-            shape_type: ShapeType::Structure,
-            traits: TraitMap::new(),
-        };
+    fn test_schema_predicates() {
+        let schema = Schema::new(
+            shape_id!("com.example", "MyStruct"),
+            ShapeType::Structure,
+            TraitMap::new(),
+        );
 
         assert!(schema.is_structure());
         assert!(!schema.is_union());
@@ -252,11 +362,11 @@ mod test {
 
     #[test]
     fn test_schema_basic() {
-        let schema = TestSchema {
-            id: ShapeId::new("smithy.api#String"),
-            shape_type: ShapeType::String,
-            traits: TraitMap::new(),
-        };
+        let schema = Schema::new(
+            shape_id!("smithy.api", "String"),
+            ShapeType::String,
+            TraitMap::new(),
+        );
 
         assert_eq!(schema.shape_id().as_str(), "smithy.api#String");
         assert_eq!(schema.shape_type(), ShapeType::String);

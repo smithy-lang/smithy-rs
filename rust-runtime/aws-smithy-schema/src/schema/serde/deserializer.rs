@@ -5,9 +5,9 @@
 
 //! Shape deserialization interfaces for the Smithy data model.
 
+use super::error::SerdeError;
 use crate::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
-use std::error::Error;
 
 /// Deserializes Smithy shapes from a serial format.
 ///
@@ -48,9 +48,6 @@ use std::error::Error;
 /// let my_struct = builder.build();
 /// ```
 pub trait ShapeDeserializer {
-    /// The error type returned by deserialization operations.
-    type Error: Error;
-
     /// Reads a structure from the deserializer.
     ///
     /// The structure deserialization is driven by a consumer callback that is called
@@ -68,12 +65,12 @@ pub trait ShapeDeserializer {
     /// The final state after processing all members
     fn read_struct<T, F>(
         &mut self,
-        schema: &dyn Schema,
+        schema: &Schema,
         state: T,
         consumer: F,
-    ) -> Result<T, Self::Error>
+    ) -> Result<T, SerdeError>
     where
-        F: FnMut(T, &dyn Schema, &mut Self) -> Result<T, Self::Error>;
+        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>;
 
     /// Reads a list from the deserializer.
     ///
@@ -90,14 +87,9 @@ pub trait ShapeDeserializer {
     /// # Returns
     ///
     /// The final state after processing all elements
-    fn read_list<T, F>(
-        &mut self,
-        schema: &dyn Schema,
-        state: T,
-        consumer: F,
-    ) -> Result<T, Self::Error>
+    fn read_list<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
     where
-        F: FnMut(T, &mut Self) -> Result<T, Self::Error>;
+        F: FnMut(T, &mut Self) -> Result<T, SerdeError>;
 
     /// Reads a map from the deserializer.
     ///
@@ -114,53 +106,48 @@ pub trait ShapeDeserializer {
     /// # Returns
     ///
     /// The final state after processing all entries
-    fn read_map<T, F>(
-        &mut self,
-        schema: &dyn Schema,
-        state: T,
-        consumer: F,
-    ) -> Result<T, Self::Error>
+    fn read_map<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
     where
-        F: FnMut(T, String, &mut Self) -> Result<T, Self::Error>;
+        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>;
 
     /// Reads a boolean value.
-    fn read_boolean(&mut self, schema: &dyn Schema) -> Result<bool, Self::Error>;
+    fn read_boolean(&mut self, schema: &Schema) -> Result<bool, SerdeError>;
 
     /// Reads a byte (i8) value.
-    fn read_byte(&mut self, schema: &dyn Schema) -> Result<i8, Self::Error>;
+    fn read_byte(&mut self, schema: &Schema) -> Result<i8, SerdeError>;
 
     /// Reads a short (i16) value.
-    fn read_short(&mut self, schema: &dyn Schema) -> Result<i16, Self::Error>;
+    fn read_short(&mut self, schema: &Schema) -> Result<i16, SerdeError>;
 
     /// Reads an integer (i32) value.
-    fn read_integer(&mut self, schema: &dyn Schema) -> Result<i32, Self::Error>;
+    fn read_integer(&mut self, schema: &Schema) -> Result<i32, SerdeError>;
 
     /// Reads a long (i64) value.
-    fn read_long(&mut self, schema: &dyn Schema) -> Result<i64, Self::Error>;
+    fn read_long(&mut self, schema: &Schema) -> Result<i64, SerdeError>;
 
     /// Reads a float (f32) value.
-    fn read_float(&mut self, schema: &dyn Schema) -> Result<f32, Self::Error>;
+    fn read_float(&mut self, schema: &Schema) -> Result<f32, SerdeError>;
 
     /// Reads a double (f64) value.
-    fn read_double(&mut self, schema: &dyn Schema) -> Result<f64, Self::Error>;
+    fn read_double(&mut self, schema: &Schema) -> Result<f64, SerdeError>;
 
     /// Reads a big integer value.
-    fn read_big_integer(&mut self, schema: &dyn Schema) -> Result<BigInteger, Self::Error>;
+    fn read_big_integer(&mut self, schema: &Schema) -> Result<BigInteger, SerdeError>;
 
     /// Reads a big decimal value.
-    fn read_big_decimal(&mut self, schema: &dyn Schema) -> Result<BigDecimal, Self::Error>;
+    fn read_big_decimal(&mut self, schema: &Schema) -> Result<BigDecimal, SerdeError>;
 
     /// Reads a string value.
-    fn read_string(&mut self, schema: &dyn Schema) -> Result<String, Self::Error>;
+    fn read_string(&mut self, schema: &Schema) -> Result<String, SerdeError>;
 
     /// Reads a blob (byte array) value.
-    fn read_blob(&mut self, schema: &dyn Schema) -> Result<Blob, Self::Error>;
+    fn read_blob(&mut self, schema: &Schema) -> Result<Blob, SerdeError>;
 
     /// Reads a timestamp value.
-    fn read_timestamp(&mut self, schema: &dyn Schema) -> Result<DateTime, Self::Error>;
+    fn read_timestamp(&mut self, schema: &Schema) -> Result<DateTime, SerdeError>;
 
     /// Reads a document value.
-    fn read_document(&mut self, schema: &dyn Schema) -> Result<Document, Self::Error>;
+    fn read_document(&mut self, schema: &Schema) -> Result<Document, SerdeError>;
 
     /// Checks if the current value is null.
     ///
