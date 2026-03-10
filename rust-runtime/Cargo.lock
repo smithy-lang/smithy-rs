@@ -570,7 +570,7 @@ version = "0.66.3"
 dependencies = [
  "aws-smithy-cbor 0.61.6",
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-types 1.4.6",
  "aws-smithy-xml 0.60.15",
@@ -636,7 +636,7 @@ name = "aws-smithy-http-server-python"
 version = "0.67.1"
 dependencies = [
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-legacy-http-server",
  "aws-smithy-types 1.4.6",
  "aws-smithy-xml 0.60.15",
@@ -681,7 +681,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.5"
+version = "0.62.6"
 dependencies = [
  "aws-smithy-schema",
  "aws-smithy-types 1.4.6",
@@ -718,7 +718,7 @@ name = "aws-smithy-legacy-http-server"
 version = "0.65.14"
 dependencies = [
  "aws-smithy-cbor 0.61.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-types 1.4.6",
@@ -2421,7 +2421,7 @@ dependencies = [
  "aws-smithy-cbor 0.61.6",
  "aws-smithy-compression",
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-types 1.4.6",

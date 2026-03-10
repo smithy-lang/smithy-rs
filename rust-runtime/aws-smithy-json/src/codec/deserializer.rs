@@ -5,30 +5,13 @@
 
 //! JSON deserializer implementation.
 
+use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, Number};
-use std::fmt;
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
-
-/// Error type for JSON deserialization.
-#[derive(Debug)]
-pub enum JsonDeserializerError {
-    /// An error occurred during JSON parsing.
-    ParseError(String),
-}
-
-impl fmt::Display for JsonDeserializerError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ParseError(msg) => write!(f, "JSON parse error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for JsonDeserializerError {}
 
 /// JSON deserializer that implements the ShapeDeserializer trait.
 pub struct JsonDeserializer<'a> {
@@ -59,21 +42,21 @@ impl<'a> JsonDeserializer<'a> {
 }
 
 impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
-    type Error = JsonDeserializerError;
-
     fn read_struct<T, F>(
         &mut self,
-        schema: &dyn Schema,
+        schema: &Schema,
         mut state: T,
         mut consumer: F,
-    ) -> Result<T, Self::Error>
+    ) -> Result<T, SerdeError>
     where
-        F: FnMut(T, &dyn Schema, &mut Self) -> Result<T, Self::Error>,
+        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
     {
         // Expect opening brace
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
-            return Err(JsonDeserializerError::ParseError("Expected object".into()));
+            return Err(SerdeError::TypeMismatch {
+                message: "expected object".into(),
+            });
         }
         self.advance_by(1);
 
@@ -88,9 +71,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
             // Expect a key (quoted string)
             if self.remaining().first() != Some(&b'"') {
-                return Err(JsonDeserializerError::ParseError(
-                    "Expected object key".into(),
-                ));
+                return Err(SerdeError::InvalidInput {
+                    message: "expected object key".into(),
+                });
             }
 
             // Parse the key using the token iterator
@@ -100,25 +83,27 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     let key_len = value.as_escaped_str().len();
                     let key = value
                         .to_unescaped()
-                        .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))?
+                        .map_err(|e| SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        })?
                         .into_owned();
                     // Advance past opening quote + key + closing quote
                     self.advance_by(key_len + 2);
                     key
                 }
                 _ => {
-                    return Err(JsonDeserializerError::ParseError(
-                        "Expected object key".into(),
-                    ))
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected object key".into(),
+                    })
                 }
             };
 
             // Skip whitespace and expect colon
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
-                return Err(JsonDeserializerError::ParseError(
-                    "Expected colon after key".into(),
-                ));
+                return Err(SerdeError::InvalidInput {
+                    message: "expected colon after key".into(),
+                });
             }
             self.advance_by(1);
             self.skip_whitespace();
@@ -136,16 +121,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_list<T, F>(
         &mut self,
-        _schema: &dyn Schema,
+        _schema: &Schema,
         mut state: T,
         mut consumer: F,
-    ) -> Result<T, Self::Error>
+    ) -> Result<T, SerdeError>
     where
-        F: FnMut(T, &mut Self) -> Result<T, Self::Error>,
+        F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
     {
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(JsonDeserializerError::ParseError("Expected array".into()));
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
         }
         self.advance_by(1);
 
@@ -163,16 +150,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_map<T, F>(
         &mut self,
-        _schema: &dyn Schema,
+        _schema: &Schema,
         mut state: T,
         mut consumer: F,
-    ) -> Result<T, Self::Error>
+    ) -> Result<T, SerdeError>
     where
-        F: FnMut(T, String, &mut Self) -> Result<T, Self::Error>,
+        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
     {
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
-            return Err(JsonDeserializerError::ParseError("Expected object".into()));
+            return Err(SerdeError::TypeMismatch {
+                message: "expected object".into(),
+            });
         }
         self.advance_by(1);
 
@@ -184,7 +173,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
 
             if self.remaining().first() != Some(&b'"') {
-                return Err(JsonDeserializerError::ParseError("Expected key".into()));
+                return Err(SerdeError::InvalidInput {
+                    message: "expected key".into(),
+                });
             }
 
             let mut iter = json_token_iter(self.remaining());
@@ -193,17 +184,25 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     let len = value.as_escaped_str().len();
                     let key = value
                         .to_unescaped()
-                        .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))?
+                        .map_err(|e| SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        })?
                         .into_owned();
                     self.advance_by(len + 2);
                     key
                 }
-                _ => return Err(JsonDeserializerError::ParseError("Expected key".into())),
+                _ => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected key".into(),
+                    })
+                }
             };
 
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
-                return Err(JsonDeserializerError::ParseError("Expected colon".into()));
+                return Err(SerdeError::InvalidInput {
+                    message: "expected colon".into(),
+                });
             }
             self.advance_by(1);
             self.skip_whitespace();
@@ -214,101 +213,112 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(state)
     }
 
-    fn read_boolean(&mut self, _schema: &dyn Schema) -> Result<bool, Self::Error> {
+    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueBool { value, .. })) => {
                 self.advance_by(if value { 4 } else { 5 });
                 Ok(value)
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected boolean".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected boolean".into(),
+            }),
         }
     }
 
-    fn read_byte(&mut self, _schema: &dyn Schema) -> Result<i8, Self::Error> {
+    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i8::try_from(n).map_err(|_| {
-                JsonDeserializerError::ParseError("Value out of range for byte".into())
+            i8::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for byte".into(),
             })
         })
     }
 
-    fn read_short(&mut self, _schema: &dyn Schema) -> Result<i16, Self::Error> {
+    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i16::try_from(n).map_err(|_| {
-                JsonDeserializerError::ParseError("Value out of range for short".into())
+            i16::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for short".into(),
             })
         })
     }
 
-    fn read_integer(&mut self, _schema: &dyn Schema) -> Result<i32, Self::Error> {
+    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i32::try_from(n).map_err(|_| {
-                JsonDeserializerError::ParseError("Value out of range for integer".into())
+            i32::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for integer".into(),
             })
         })
     }
 
-    fn read_long(&mut self, _schema: &dyn Schema) -> Result<i64, Self::Error> {
+    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
         self.read_integer_value()
     }
 
-    fn read_float(&mut self, _schema: &dyn Schema) -> Result<f32, Self::Error> {
+    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
         self.read_float_value().map(|f| f as f32)
     }
 
-    fn read_double(&mut self, _schema: &dyn Schema) -> Result<f64, Self::Error> {
+    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
         self.read_float_value()
     }
 
-    fn read_big_integer(&mut self, _schema: &dyn Schema) -> Result<BigInteger, Self::Error> {
+    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNumber { .. })) => {
                 self.consume_number();
-                BigInteger::from_str("0")
-                    .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))
+                BigInteger::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected number".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
         }
     }
 
-    fn read_big_decimal(&mut self, _schema: &dyn Schema) -> Result<BigDecimal, Self::Error> {
+    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNumber { .. })) => {
                 self.consume_number();
-                BigDecimal::from_str("0")
-                    .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))
+                BigDecimal::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected number".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
         }
     }
 
-    fn read_string(&mut self, _schema: &dyn Schema) -> Result<String, Self::Error> {
+    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueString { value, .. })) => {
                 let len = value.as_escaped_str().len();
-                let result = value
-                    .to_unescaped()
-                    .map(|s| s.into_owned())
-                    .map_err(|e| JsonDeserializerError::ParseError(e.to_string()))?;
+                let result = value.to_unescaped().map(|s| s.into_owned()).map_err(|e| {
+                    SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    }
+                })?;
                 self.advance_by(len + 2);
                 Ok(result)
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected string".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected string".into(),
+            }),
         }
     }
 
-    fn read_blob(&mut self, _schema: &dyn Schema) -> Result<Blob, Self::Error> {
+    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
         let s = self.read_string(_schema)?;
         Ok(Blob::new(s.into_bytes()))
     }
 
-    fn read_timestamp(&mut self, _schema: &dyn Schema) -> Result<DateTime, Self::Error> {
+    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNumber {
@@ -325,22 +335,22 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 self.consume_number();
                 Ok(DateTime::from_secs(n))
             }
-            _ => Err(JsonDeserializerError::ParseError(
-                "Expected timestamp".into(),
-            )),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected timestamp".into(),
+            }),
         }
     }
 
-    fn read_document(&mut self, _schema: &dyn Schema) -> Result<Document, Self::Error> {
+    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNull { .. })) => {
                 self.advance_by(4);
                 Ok(Document::Null)
             }
-            _ => Err(JsonDeserializerError::ParseError(
-                "Document deserialization not fully implemented".into(),
-            )),
+            _ => Err(SerdeError::UnsupportedOperation {
+                message: "document deserialization not fully implemented".into(),
+            }),
         }
     }
 
@@ -427,7 +437,7 @@ impl<'a> JsonDeserializer<'a> {
         self.advance_by(len);
     }
 
-    fn skip_value(&mut self) -> Result<(), JsonDeserializerError> {
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
         let mut depth = 0;
         loop {
             let mut iter = json_token_iter(self.remaining());
@@ -439,9 +449,9 @@ impl<'a> JsonDeserializer<'a> {
                 Some(Ok(Token::EndObject { .. })) | Some(Ok(Token::EndArray { .. })) => {
                     self.advance_by(1);
                     if depth == 0 {
-                        return Err(JsonDeserializerError::ParseError(
-                            "Unexpected end token".into(),
-                        ));
+                        return Err(SerdeError::InvalidInput {
+                            message: "unexpected end token".into(),
+                        });
                     }
                     depth -= 1;
                     if depth == 0 {
@@ -468,17 +478,21 @@ impl<'a> JsonDeserializer<'a> {
                     self.advance_by(key.as_escaped_str().len() + 3);
                 }
                 Some(Ok(_)) => {}
-                Some(Err(e)) => return Err(JsonDeserializerError::ParseError(e.to_string())),
+                Some(Err(e)) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })
+                }
                 None => {
-                    return Err(JsonDeserializerError::ParseError(
-                        "Unexpected end of input".into(),
-                    ))
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input".into(),
+                    })
                 }
             }
         }
     }
 
-    fn read_integer_value(&mut self) -> Result<i64, JsonDeserializerError> {
+    fn read_integer_value(&mut self) -> Result<i64, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNumber {
@@ -486,8 +500,9 @@ impl<'a> JsonDeserializer<'a> {
                 ..
             })) => {
                 self.consume_number();
-                i64::try_from(n)
-                    .map_err(|_| JsonDeserializerError::ParseError("Value out of range".into()))
+                i64::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                    message: "value out of range".into(),
+                })
             }
             Some(Ok(Token::ValueNumber {
                 value: Number::NegInt(n),
@@ -496,11 +511,13 @@ impl<'a> JsonDeserializer<'a> {
                 self.consume_number();
                 Ok(n)
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected integer".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected integer".into(),
+            }),
         }
     }
 
-    fn read_float_value(&mut self) -> Result<f64, JsonDeserializerError> {
+    fn read_float_value(&mut self) -> Result<f64, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {
             Some(Ok(Token::ValueNumber {
@@ -524,7 +541,9 @@ impl<'a> JsonDeserializer<'a> {
                 self.consume_number();
                 Ok(n as f64)
             }
-            _ => Err(JsonDeserializerError::ParseError("Expected number".into())),
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
         }
     }
 }
@@ -533,17 +552,17 @@ impl<'a> JsonDeserializer<'a> {
 mod tests {
     use super::*;
 
-    fn dummy_schema() -> &'static impl aws_smithy_schema::Schema {
+    fn dummy_schema() -> &'static aws_smithy_schema::Schema {
         &aws_smithy_schema::prelude::STRING
     }
 
     #[test]
     fn test_read_boolean() {
         let mut deser = JsonDeserializer::new(b"true", JsonCodecSettings::default());
-        assert_eq!(deser.read_boolean(dummy_schema()).unwrap(), true);
+        assert!(deser.read_boolean(dummy_schema()).unwrap());
 
         let mut deser = JsonDeserializer::new(b"false", JsonCodecSettings::default());
-        assert_eq!(deser.read_boolean(dummy_schema()).unwrap(), false);
+        assert!(!(deser.read_boolean(dummy_schema()).unwrap()));
     }
 
     #[test]
@@ -563,14 +582,14 @@ mod tests {
 
     #[test]
     fn test_read_float() {
-        let mut deser = JsonDeserializer::new(b"3.14", JsonCodecSettings::default());
-        assert!((deser.read_float(dummy_schema()).unwrap() - 3.14).abs() < 0.01);
+        let mut deser = JsonDeserializer::new(b"3.15", JsonCodecSettings::default());
+        assert!((deser.read_float(dummy_schema()).unwrap() - 3.15).abs() < 0.01);
     }
 
     #[test]
     fn test_read_double() {
-        let mut deser = JsonDeserializer::new(b"2.718", JsonCodecSettings::default());
-        assert!((deser.read_double(dummy_schema()).unwrap() - 2.718).abs() < 0.001);
+        let mut deser = JsonDeserializer::new(b"2.72", JsonCodecSettings::default());
+        assert!((deser.read_double(dummy_schema()).unwrap() - 2.72).abs() < 0.001);
     }
 
     #[test]
@@ -602,7 +621,7 @@ mod tests {
 
     #[test]
     fn test_read_struct() {
-        use aws_smithy_schema::{prelude, Schema, ShapeId, ShapeType, TraitMap};
+        use aws_smithy_schema::Schema;
 
         #[derive(Debug, Default, PartialEq)]
         struct Person {
@@ -611,76 +630,39 @@ mod tests {
             age: i32,
         }
 
-        struct MemberSchema {
-            name: &'static str,
-            target: &'static dyn Schema,
-        }
-
-        impl Schema for MemberSchema {
-            fn shape_id(&self) -> &ShapeId {
-                self.target.shape_id()
-            }
-            fn shape_type(&self) -> ShapeType {
-                self.target.shape_type()
-            }
-            fn traits(&self) -> &TraitMap {
-                self.target.traits()
-            }
-            fn member_name(&self) -> Option<&str> {
-                Some(self.name)
-            }
-        }
-
-        static FIRST_NAME: MemberSchema = MemberSchema {
-            name: "firstName",
-            target: &prelude::STRING,
-        };
-        static LAST_NAME: MemberSchema = MemberSchema {
-            name: "lastName",
-            target: &prelude::STRING,
-        };
-        static AGE: MemberSchema = MemberSchema {
-            name: "age",
-            target: &prelude::INTEGER,
-        };
-
-        struct TestSchema;
-        impl Schema for TestSchema {
-            fn shape_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> =
-                    std::sync::LazyLock::new(|| ShapeId::from_static("test#Test", "test", "Test"));
-                &ID
-            }
-            fn shape_type(&self) -> ShapeType {
-                ShapeType::Structure
-            }
-            fn traits(&self) -> &TraitMap {
-                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
-                &MAP
-            }
-            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
-                match name {
-                    "firstName" => Some(&FIRST_NAME),
-                    "lastName" => Some(&LAST_NAME),
-                    "age" => Some(&AGE),
-                    _ => None,
-                }
-            }
-            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
-                match index {
-                    0 => Some(("firstName", &FIRST_NAME)),
-                    1 => Some(("lastName", &LAST_NAME)),
-                    2 => Some(("age", &AGE)),
-                    _ => None,
-                }
-            }
-        }
+        static FIRST_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "firstName",
+            0,
+        );
+        static LAST_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "lastName",
+            1,
+        );
+        static AGE: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::Integer,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "age",
+            2,
+        );
+        static PERSON_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&FIRST_NAME, &LAST_NAME, &AGE],
+        );
 
         fn consume_person(
             mut person: Person,
-            schema: &dyn Schema,
+            schema: &Schema,
             deser: &mut JsonDeserializer,
-        ) -> Result<Person, JsonDeserializerError> {
+        ) -> Result<Person, SerdeError> {
             match schema.member_name() {
                 Some("firstName") => person.first_name = deser.read_string(schema)?,
                 Some("lastName") => person.last_name = deser.read_string(schema)?,
@@ -693,7 +675,7 @@ mod tests {
         let json = br#"{"lastName":"Smithy","firstName":"Alice","age":30}"#;
         let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
         let person = deser
-            .read_struct(&TestSchema, Person::default(), consume_person)
+            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
             .unwrap();
         assert_eq!(
             person,
@@ -708,7 +690,7 @@ mod tests {
             br#"{"firstName":          "Alice","age":12345678,     "lastName":"\"Smithy\""}"#;
         let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
         let person = deser
-            .read_struct(&TestSchema, Person::default(), consume_person)
+            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
             .unwrap();
         assert_eq!(
             person,
@@ -848,7 +830,7 @@ mod tests {
 
     #[test]
     fn test_nested_complex_deserialization() {
-        use aws_smithy_schema::{prelude, Schema, ShapeId, ShapeType, TraitMap};
+        use aws_smithy_schema::Schema;
         use std::collections::HashMap;
 
         #[derive(Debug, Default, PartialEq)]
@@ -857,7 +839,6 @@ mod tests {
             city: String,
             zip: i32,
         }
-
         #[derive(Debug, Default, PartialEq)]
         struct Company {
             name: String,
@@ -865,7 +846,6 @@ mod tests {
             metadata: HashMap<String, i32>,
             active: bool,
         }
-
         #[derive(Debug, Default, PartialEq)]
         struct User {
             id: i64,
@@ -876,186 +856,133 @@ mod tests {
             tags: HashMap<String, String>,
         }
 
-        struct MemberSchema {
-            name: &'static str,
-            target: &'static dyn Schema,
-        }
+        // Address members & schema
+        static ADDR_STREET: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "street",
+            0,
+        );
+        static ADDR_CITY: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "city",
+            1,
+        );
+        static ADDR_ZIP: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::Integer,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "zip",
+            2,
+        );
+        static ADDRESS_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&ADDR_STREET, &ADDR_CITY, &ADDR_ZIP],
+        );
 
-        impl Schema for MemberSchema {
-            fn shape_id(&self) -> &ShapeId {
-                self.target.shape_id()
-            }
-            fn shape_type(&self) -> ShapeType {
-                self.target.shape_type()
-            }
-            fn traits(&self) -> &TraitMap {
-                self.target.traits()
-            }
-            fn member_name(&self) -> Option<&str> {
-                Some(self.name)
-            }
-        }
+        // Company members & schema
+        static COMP_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "name",
+            0,
+        );
+        static COMP_EMPLOYEES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "employees",
+            1,
+        );
+        static COMP_METADATA: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Map,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "metadata",
+            2,
+        );
+        static COMP_ACTIVE: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Boolean,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "active",
+            3,
+        );
+        static COMPANY_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&COMP_NAME, &COMP_EMPLOYEES, &COMP_METADATA, &COMP_ACTIVE],
+        );
 
-        static ADDR_STREET: MemberSchema = MemberSchema {
-            name: "street",
-            target: &prelude::STRING,
-        };
-        static ADDR_CITY: MemberSchema = MemberSchema {
-            name: "city",
-            target: &prelude::STRING,
-        };
-        static ADDR_ZIP: MemberSchema = MemberSchema {
-            name: "zip",
-            target: &prelude::INTEGER,
-        };
-
-        struct AddressSchema;
-        impl Schema for AddressSchema {
-            fn shape_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> = std::sync::LazyLock::new(|| {
-                    ShapeId::from_static("test#Address", "test", "Address")
-                });
-                &ID
-            }
-            fn shape_type(&self) -> ShapeType {
-                ShapeType::Structure
-            }
-            fn traits(&self) -> &TraitMap {
-                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
-                &MAP
-            }
-            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
-                match name {
-                    "street" => Some(&ADDR_STREET),
-                    "city" => Some(&ADDR_CITY),
-                    "zip" => Some(&ADDR_ZIP),
-                    _ => None,
-                }
-            }
-            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
-                match index {
-                    0 => Some(("street", &ADDR_STREET)),
-                    1 => Some(("city", &ADDR_CITY)),
-                    2 => Some(("zip", &ADDR_ZIP)),
-                    _ => None,
-                }
-            }
-        }
-
-        static COMP_NAME: MemberSchema = MemberSchema {
-            name: "name",
-            target: &prelude::STRING,
-        };
-        static COMP_ACTIVE: MemberSchema = MemberSchema {
-            name: "active",
-            target: &prelude::BOOLEAN,
-        };
-        static COMP_EMPLOYEES: MemberSchema = MemberSchema {
-            name: "employees",
-            target: &prelude::STRING,
-        };
-        static COMP_METADATA: MemberSchema = MemberSchema {
-            name: "metadata",
-            target: &prelude::STRING,
-        };
-
-        struct CompanySchema;
-        impl Schema for CompanySchema {
-            fn shape_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> = std::sync::LazyLock::new(|| {
-                    ShapeId::from_static("test#Company", "test", "Company")
-                });
-                &ID
-            }
-            fn shape_type(&self) -> ShapeType {
-                ShapeType::Structure
-            }
-            fn traits(&self) -> &TraitMap {
-                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
-                &MAP
-            }
-            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
-                match name {
-                    "name" => Some(&COMP_NAME),
-                    "active" => Some(&COMP_ACTIVE),
-                    "employees" => Some(&COMP_EMPLOYEES),
-                    "metadata" => Some(&COMP_METADATA),
-                    _ => None,
-                }
-            }
-            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
-                match index {
-                    0 => Some(("name", &COMP_NAME)),
-                    1 => Some(("active", &COMP_ACTIVE)),
-                    _ => None,
-                }
-            }
-        }
-
-        static USER_ID: MemberSchema = MemberSchema {
-            name: "id",
-            target: &prelude::LONG,
-        };
-        static USER_NAME: MemberSchema = MemberSchema {
-            name: "name",
-            target: &prelude::STRING,
-        };
-        static USER_SCORES: MemberSchema = MemberSchema {
-            name: "scores",
-            target: &prelude::STRING,
-        };
-        static USER_ADDRESS: MemberSchema = MemberSchema {
-            name: "address",
-            target: &prelude::STRING,
-        };
-        static USER_COMPANIES: MemberSchema = MemberSchema {
-            name: "companies",
-            target: &prelude::STRING,
-        };
-        static USER_TAGS: MemberSchema = MemberSchema {
-            name: "tags",
-            target: &prelude::STRING,
-        };
-
-        struct UserSchema;
-        impl Schema for UserSchema {
-            fn shape_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> =
-                    std::sync::LazyLock::new(|| ShapeId::from_static("test#User", "test", "User"));
-                &ID
-            }
-            fn shape_type(&self) -> ShapeType {
-                ShapeType::Structure
-            }
-            fn traits(&self) -> &TraitMap {
-                static MAP: std::sync::LazyLock<TraitMap> = std::sync::LazyLock::new(TraitMap::new);
-                &MAP
-            }
-            fn member_schema(&self, name: &str) -> Option<&dyn Schema> {
-                match name {
-                    "id" => Some(&USER_ID),
-                    "name" => Some(&USER_NAME),
-                    "scores" => Some(&USER_SCORES),
-                    "address" => Some(&USER_ADDRESS),
-                    "companies" => Some(&USER_COMPANIES),
-                    "tags" => Some(&USER_TAGS),
-                    _ => None,
-                }
-            }
-            fn member_schema_by_index(&self, index: usize) -> Option<(&str, &dyn Schema)> {
-                match index {
-                    0 => Some(("id", &USER_ID)),
-                    1 => Some(("name", &USER_NAME)),
-                    _ => None,
-                }
-            }
-        }
+        // User members & schema
+        static USER_ID: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Long,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "id",
+            0,
+        );
+        static USER_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "name",
+            1,
+        );
+        static USER_SCORES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "scores",
+            2,
+        );
+        static USER_ADDRESS: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "address",
+            3,
+        );
+        static USER_COMPANIES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "companies",
+            4,
+        );
+        static USER_TAGS: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Map,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "tags",
+            5,
+        );
+        static USER_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[
+                &USER_ID,
+                &USER_NAME,
+                &USER_SCORES,
+                &USER_ADDRESS,
+                &USER_COMPANIES,
+                &USER_TAGS,
+            ],
+        );
 
         fn consume_address(
             mut addr: Address,
-            schema: &dyn Schema,
+            schema: &Schema,
             deser: &mut JsonDeserializer,
-        ) -> Result<Address, JsonDeserializerError> {
+        ) -> Result<Address, SerdeError> {
             match schema.member_name() {
                 Some("street") => addr.street = deser.read_string(schema)?,
                 Some("city") => addr.city = deser.read_string(schema)?,
@@ -1067,9 +994,9 @@ mod tests {
 
         fn consume_company(
             mut comp: Company,
-            schema: &dyn Schema,
+            schema: &Schema,
             deser: &mut JsonDeserializer,
-        ) -> Result<Company, JsonDeserializerError> {
+        ) -> Result<Company, SerdeError> {
             match schema.member_name() {
                 Some("name") => comp.name = deser.read_string(schema)?,
                 Some("active") => comp.active = deser.read_boolean(schema)?,
@@ -1092,9 +1019,9 @@ mod tests {
 
         fn consume_user(
             mut user: User,
-            schema: &dyn Schema,
+            schema: &Schema,
             deser: &mut JsonDeserializer,
-        ) -> Result<User, JsonDeserializerError> {
+        ) -> Result<User, SerdeError> {
             match schema.member_name() {
                 Some("id") => user.id = deser.read_long(schema)?,
                 Some("name") => user.name = deser.read_string(schema)?,
@@ -1106,12 +1033,12 @@ mod tests {
                 }
                 Some("address") => {
                     user.address =
-                        deser.read_struct(&AddressSchema, Address::default(), consume_address)?
+                        deser.read_struct(&ADDRESS_SCHEMA, Address::default(), consume_address)?
                 }
                 Some("companies") => {
                     user.companies = deser.read_list(schema, Vec::new(), |mut v, d| {
                         v.push(d.read_struct(
-                            &CompanySchema,
+                            &COMPANY_SCHEMA,
                             Company::default(),
                             consume_company,
                         )?);
@@ -1157,7 +1084,7 @@ mod tests {
 
         let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
         let user = deser
-            .read_struct(&UserSchema, User::default(), consume_user)
+            .read_struct(&USER_SCHEMA, User::default(), consume_user)
             .unwrap();
 
         assert_eq!(user.id, 12345);
@@ -1171,11 +1098,11 @@ mod tests {
         assert_eq!(user.companies[0].employees, vec!["Alice", "Bob"]);
         assert_eq!(user.companies[0].metadata.get("founded"), Some(&2010));
         assert_eq!(user.companies[0].metadata.get("size"), Some(&500));
-        assert_eq!(user.companies[0].active, true);
+        assert!(user.companies[0].active);
         assert_eq!(user.companies[1].name, "StartupInc");
         assert_eq!(user.companies[1].employees, vec!["Charlie"]);
         assert_eq!(user.companies[1].metadata.get("founded"), Some(&2020));
-        assert_eq!(user.companies[1].active, false);
+        assert!(!user.companies[1].active);
         assert_eq!(user.tags.get("role"), Some(&"admin".to_string()));
         assert_eq!(user.tags.get("level"), Some(&"senior".to_string()));
     }

@@ -238,11 +238,11 @@ mod test {
         }
 
         fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
-            Ok(3.14)
+            Ok(3.15)
         }
 
         fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
-            Ok(2.71828)
+            Ok(2.72)
         }
 
         fn read_big_integer(
@@ -344,7 +344,7 @@ mod test {
     fn test_deserializer_simple_types() {
         let mut deser = MockDeserializer::new(vec!["test".to_string()]);
 
-        assert_eq!(deser.read_boolean(&BOOLEAN).unwrap(), true);
+        assert!(deser.read_boolean(&BOOLEAN).unwrap());
         assert_eq!(deser.read_integer(&INTEGER).unwrap(), 123456);
         assert_eq!(deser.read_string(&STRING).unwrap(), "test");
         assert_eq!(deser.container_size(), Some(10));
