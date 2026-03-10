@@ -578,6 +578,68 @@ async fn test_mixed_protocol_concurrent_connections() {
     let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
 }
 
+/// Test that `serve` works with a custom request body type (`Body`) instead of `Incoming`.
+///
+/// This exercises the `ReqBody: From<Incoming>` conversion path in `MapRequestBody`.
+/// The service expects `Request<Body>`, and `serve` converts `Incoming → Body` at the
+/// hyper boundary via `From<Incoming> for Body`.
+#[tokio::test]
+async fn test_serve_with_custom_request_body_type() {
+    use aws_smithy_http_server::body::Body;
+
+    /// Service that accepts `Request<Body>` — NOT `Request<Incoming>`.
+    async fn body_service(request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
+        // Read the request body to prove the conversion worked
+        let collected = http_body_util::BodyExt::collect(request.into_body())
+            .await
+            .expect("body should be readable");
+        let len = collected.to_bytes().len();
+        Ok(http::Response::builder()
+            .status(200)
+            .body(to_boxed(format!("received {len} bytes")))
+            .unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(body_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+    tokio::time::sleep(Duration::from_millis(50)).await;
+
+    // Send a request with a body
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+    let uri = format!("http://{addr}/test");
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&uri)
+        .body(http_body_util::Full::new(bytes::Bytes::from("hello world")))
+        .unwrap();
+
+    let response = client.request(request).await.expect("request failed");
+    assert_eq!(response.status(), 200);
+
+    let body_bytes = http_body_util::BodyExt::collect(response.into_body())
+        .await
+        .unwrap()
+        .to_bytes();
+    assert_eq!(body_bytes.as_ref(), b"received 11 bytes");
+
+    shutdown_tx.send(()).unwrap();
+    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+}
+
 /// Test that `limit_connections()` enforces the connection limit correctly using semaphores.
 #[tokio::test]
 async fn test_limit_connections_blocks_excess() {

@@ -284,6 +284,7 @@ use std::io;
 use std::marker::PhantomData;
 use std::pin::Pin;
 use std::sync::Arc;
+use std::task::{Context as TaskContext, Poll};
 use std::time::Duration;
 
 use http_body::Body as HttpBody;
@@ -301,11 +302,23 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 // Type Bounds Documentation
 // ============================================================================
 //
-// ## Body Bounds (B)
+// ## Response Body Bounds (RespBody)
 // HTTP response bodies must satisfy:
-// - `B: HttpBody + Send + 'static` - Implement the body trait and be sendable
-// - `B::Data: Send` - Data chunks must be sendable across threads
-// - `B::Error: Into<Box<dyn StdError + Send + Sync>>` - Errors must be convertible
+// - `RespBody: HttpBody + Send + 'static` - Implement the body trait and be sendable
+// - `RespBody::Data: Send` - Data chunks must be sendable across threads
+// - `RespBody::Error: Into<Box<dyn StdError + Send + Sync>>` - Errors must be convertible
+//
+// ## Request Body Bounds (ReqBody)
+//
+// The `ReqBody` type parameter represents the HTTP request body type that the
+// service expects. It must be convertible from `Incoming` via `From<Incoming>`:
+// - `ReqBody: From<Incoming> + Send + 'static`
+//
+// This allows the `serve` function to accept services parameterized over any
+// body type, not just `Incoming`. At the hyper boundary, `Incoming` is converted
+// to `ReqBody` via the `From` impl:
+// - When `ReqBody = Incoming`: `From<T> for T` is the identity — zero cost.
+// - When `ReqBody = Body`: `Body::from(incoming)` boxes once — one heap alloc per request.
 //
 // ## Service Bounds (S)
 //
@@ -313,11 +326,11 @@ pub use self::listener::{ConnLimiter, ConnLimiterIo, Listener, ListenerExt, TapI
 // that handles individual HTTP requests and returns HTTP responses.
 //
 // Required bounds:
-// - `S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible>`
+// - `S: Service<http::Request<ReqBody>, Response = http::Response<RespBody>, Error = Infallible>`
 //
 //   This is the core Tower Service trait. It means:
-//   * **Input**: Takes an HTTP request with a streaming body (`Incoming` from Hyper)
-//   * **Output**: Returns an HTTP response with body type `B`
+//   * **Input**: Takes an HTTP request with body type `ReqBody`
+//   * **Output**: Returns an HTTP response with body type `RespBody`
 //   * **Error**: Must be `Infallible`, meaning the service never returns errors at the
 //     Tower level. Any application errors must be converted into HTTP responses
 //     (e.g., 500 Internal Server Error) before reaching this layer.
@@ -528,15 +541,17 @@ where
 /// .await
 /// .unwrap();
 /// ```
-pub fn serve<L, M, S, B>(listener: L, make_service: M) -> Serve<L, M, S, B>
+pub fn serve<L, M, S, ReqBody, RespBody>(listener: L, make_service: M) -> Serve<L, M, S, ReqBody, RespBody>
 where
     L: Listener,
-    // Body bounds: see module documentation for details
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Request body bounds: see module documentation for details
+    ReqBody: From<Incoming> + Send + 'static,
+    // Response body bounds: see module documentation for details
+    RespBody: HttpBody + Send + 'static,
+    RespBody::Data: Send,
+    RespBody::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds: see module documentation for details
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<ReqBody>, Response = http::Response<RespBody>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds: see module documentation for details
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S>,
@@ -560,14 +575,14 @@ where
 ///
 /// Created by [`serve`].
 #[must_use = "Serve does nothing until you `.await` or call `.into_future()` on it"]
-pub struct Serve<L, M, S, B> {
+pub struct Serve<L, M, S, ReqBody, RespBody> {
     listener: L,
     make_service: M,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
-    _marker: PhantomData<(S, B)>,
+    _marker: PhantomData<(S, ReqBody, RespBody)>,
 }
 
-impl<L, M, S, B> fmt::Debug for Serve<L, M, S, B>
+impl<L, M, S, ReqBody, RespBody> fmt::Debug for Serve<L, M, S, ReqBody, RespBody>
 where
     L: fmt::Debug,
 {
@@ -579,7 +594,7 @@ where
     }
 }
 
-impl<L, M, S, B> Serve<L, M, S, B>
+impl<L, M, S, ReqBody, RespBody> Serve<L, M, S, ReqBody, RespBody>
 where
     L: Listener,
 {
@@ -633,7 +648,7 @@ where
     }
 
     /// Enable graceful shutdown for the server.
-    pub fn with_graceful_shutdown<F>(self, signal: F) -> ServeWithGracefulShutdown<L, M, S, F, B>
+    pub fn with_graceful_shutdown<F>(self, signal: F) -> ServeWithGracefulShutdown<L, M, S, F, ReqBody, RespBody>
     where
         F: Future<Output = ()> + Send + 'static,
     {
@@ -653,7 +668,7 @@ macro_rules! accept_loop {
     ($listener:expr, $make_service:expr, $hyper_builder:expr) => {
         loop {
             let (io, remote_addr) = $listener.accept().await;
-            handle_connection::<L, M, S, B>(&mut $make_service, io, remote_addr, $hyper_builder.as_ref(), true, None)
+            handle_connection::<L, M, S, ReqBody, RespBody>(&mut $make_service, io, remote_addr, $hyper_builder.as_ref(), true, None)
                 .await;
         }
     };
@@ -670,7 +685,7 @@ macro_rules! accept_loop_with_shutdown {
             tokio::select! {
                 result = $listener.accept() => {
                     let (io, remote_addr) = result;
-                    handle_connection::<L, M, S, B>(
+                    handle_connection::<L, M, S, ReqBody, RespBody>(
                         &mut $make_service,
                         io,
                         remote_addr,
@@ -690,16 +705,18 @@ macro_rules! accept_loop_with_shutdown {
 }
 
 // Implement IntoFuture so we can await Serve directly
-impl<L, M, S, B> IntoFuture for Serve<L, M, S, B>
+impl<L, M, S, ReqBody, RespBody> IntoFuture for Serve<L, M, S, ReqBody, RespBody>
 where
     L: Listener,
     L::Addr: Debug,
-    // Body bounds
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Request body bounds
+    ReqBody: From<Incoming> + Send + 'static,
+    // Response body bounds
+    RespBody: HttpBody + Send + 'static,
+    RespBody::Data: Send,
+    RespBody::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<ReqBody>, Response = http::Response<RespBody>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -736,16 +753,16 @@ where
 ///
 /// Created by [`Serve::with_graceful_shutdown`].
 #[must_use = "ServeWithGracefulShutdown does nothing until you `.await` or call `.into_future()` on it"]
-pub struct ServeWithGracefulShutdown<L, M, S, F, B> {
+pub struct ServeWithGracefulShutdown<L, M, S, F, ReqBody, RespBody> {
     listener: L,
     make_service: M,
     signal: F,
     hyper_builder: Option<Arc<Builder<TokioExecutor>>>,
     shutdown_timeout: Option<Duration>,
-    _marker: PhantomData<(S, B)>,
+    _marker: PhantomData<(S, ReqBody, RespBody)>,
 }
 
-impl<L, M, S, F, B> fmt::Debug for ServeWithGracefulShutdown<L, M, S, F, B>
+impl<L, M, S, F, ReqBody, RespBody> fmt::Debug for ServeWithGracefulShutdown<L, M, S, F, ReqBody, RespBody>
 where
     L: Listener + fmt::Debug,
 {
@@ -758,7 +775,7 @@ where
     }
 }
 
-impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
+impl<L: Listener, M, S, F, ReqBody, RespBody> ServeWithGracefulShutdown<L, M, S, F, ReqBody, RespBody> {
     fn new(listener: L, make_service: M, signal: F, hyper_builder: Option<Arc<Builder<TokioExecutor>>>) -> Self
     where
         F: Future<Output = ()> + Send + 'static,
@@ -801,16 +818,18 @@ impl<L: Listener, M, S, F, B> ServeWithGracefulShutdown<L, M, S, F, B> {
 }
 
 // Implement IntoFuture so we can await WithGracefulShutdown directly
-impl<L, M, S, F, B> IntoFuture for ServeWithGracefulShutdown<L, M, S, F, B>
+impl<L, M, S, F, ReqBody, RespBody> IntoFuture for ServeWithGracefulShutdown<L, M, S, F, ReqBody, RespBody>
 where
     L: Listener,
     L::Addr: Debug,
-    // Body bounds
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Request body bounds
+    ReqBody: From<Incoming> + Send + 'static,
+    // Response body bounds
+    RespBody: HttpBody + Send + 'static,
+    RespBody::Data: Send,
+    RespBody::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<ReqBody>, Response = http::Response<RespBody>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -869,8 +888,10 @@ where
 /// Connection handling function.
 ///
 /// Handles connections by using runtime branching on `use_upgrades` and optional
-/// `graceful` shutdown.
-async fn handle_connection<L, M, S, B>(
+/// `graceful` shutdown. Wraps the tower service with [`MapRequestBody`] so that
+/// hyper sees `Service<Request<Incoming>>` while the inner service sees
+/// `Service<Request<ReqBody>>`.
+async fn handle_connection<L, M, S, ReqBody, RespBody>(
     make_service: &mut M,
     conn_io: <L as Listener>::Io,
     remote_addr: <L as Listener>::Addr,
@@ -880,12 +901,14 @@ async fn handle_connection<L, M, S, B>(
 ) where
     L: Listener,
     L::Addr: Debug,
-    // Body bounds
-    B: HttpBody + Send + 'static,
-    B::Data: Send,
-    B::Error: Into<Box<dyn StdError + Send + Sync>>,
+    // Request body bounds
+    ReqBody: From<Incoming> + Send + 'static,
+    // Response body bounds
+    RespBody: HttpBody + Send + 'static,
+    RespBody::Data: Send,
+    RespBody::Error: Into<Box<dyn StdError + Send + Sync>>,
     // Service bounds
-    S: Service<http::Request<Incoming>, Response = http::Response<B>, Error = Infallible> + Clone + Send + 'static,
+    S: Service<http::Request<ReqBody>, Response = http::Response<RespBody>, Error = Infallible> + Clone + Send + 'static,
     S::Future: Send,
     // MakeService bounds
     M: for<'a> Service<IncomingStream<'a, L>, Error = Infallible, Response = S> + Send + 'static,
@@ -909,7 +932,14 @@ async fn handle_connection<L, M, S, B>(
         .await
         .expect("make_service error type is Infallible and cannot fail");
 
-    let hyper_service = TowerToHyperService::new(tower_service);
+    // Wrap so hyper sees Service<Request<Incoming>> while the inner service
+    // sees Service<Request<ReqBody>>. When ReqBody = Incoming, the compiler
+    // can see that From is the identity and should optimize this to a no-op.
+    let mapped = MapRequestBody {
+        inner: tower_service,
+        _marker: PhantomData::<fn() -> ReqBody>,
+    };
+    let hyper_service = TowerToHyperService::new(mapped);
 
     // Clone the Arc (cheap - just increments refcount) or create a default builder
     let builder = hyper_builder
@@ -939,4 +969,44 @@ async fn handle_connection<L, M, S, B>(
             tracing::trace!(error = ?err, "failed to serve connection");
         }
     });
+}
+
+// ---------------------------------------------------------------------------
+// MapRequestBody — thin adapter: Request<Incoming> → Request<ReqBody>
+// ---------------------------------------------------------------------------
+
+/// Maps `Request<Incoming>` to `Request<ReqBody>` via `From<Incoming>`.
+///
+/// When `ReqBody = Incoming`, the compiler can see that `From` is the identity
+/// (`impl<T> From<T> for T`) and should optimize this to a no-op.
+struct MapRequestBody<S, ReqBody> {
+    inner: S,
+    _marker: PhantomData<fn() -> ReqBody>,
+}
+
+impl<S: Clone, ReqBody> Clone for MapRequestBody<S, ReqBody> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<S, ReqBody, ResBody> Service<http::Request<Incoming>> for MapRequestBody<S, ReqBody>
+where
+    ReqBody: From<Incoming>,
+    S: Service<http::Request<ReqBody>, Response = http::Response<ResBody>, Error = Infallible>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut TaskContext<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<Incoming>) -> Self::Future {
+        self.inner.call(req.map(ReqBody::from))
+    }
 }
