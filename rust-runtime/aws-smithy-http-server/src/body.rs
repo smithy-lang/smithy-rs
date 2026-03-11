@@ -10,10 +10,9 @@
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
-use futures_util::{Stream, TryStream};
+use futures_util::Stream;
 use http_body::Frame;
 use hyper::body::Incoming;
-use pin_project_lite::pin_project;
 use std::pin::Pin;
 use std::task::{Context, Poll, ready};
 
@@ -133,22 +132,13 @@ impl Body {
         B: http_body::Body<Data = Bytes> + Send + 'static,
         B::Error: Into<BoxError>,
     {
+        // If the body is already a `Body`, avoid double-boxing by extracting it directly.
         try_downcast(body).unwrap_or_else(|body| Self(boxed(body)))
     }
 
     /// Create an empty body.
     pub fn empty() -> Self {
         Self::new(http_body_util::Empty::new())
-    }
-
-    /// Create a new `Body` from a [`Stream`].
-    pub fn from_stream<S>(stream: S) -> Self
-    where
-        S: TryStream + Send + 'static,
-        S::Ok: Into<Bytes>,
-        S::Error: Into<BoxError>,
-    {
-        Self::new(StreamBody { stream })
     }
 
     /// Convert the body into a [`Stream`] of data frames, discarding non-data frames.
@@ -186,10 +176,10 @@ macro_rules! body_from_impl {
 }
 
 body_from_impl!(&'static [u8]);
-body_from_impl!(std::borrow::Cow<'static, [u8]>);
-body_from_impl!(Vec<u8>);
 body_from_impl!(&'static str);
+body_from_impl!(std::borrow::Cow<'static, [u8]>);
 body_from_impl!(std::borrow::Cow<'static, str>);
+body_from_impl!(Vec<u8>);
 body_from_impl!(String);
 body_from_impl!(Bytes);
 
@@ -263,38 +253,6 @@ impl http_body::Body for BodyDataStream {
     #[inline]
     fn size_hint(&self) -> http_body::SizeHint {
         self.inner.size_hint()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// StreamBody — private: TryStream → http_body::Body
-// ---------------------------------------------------------------------------
-
-pin_project! {
-    struct StreamBody<S> {
-        #[pin]
-        stream: S,
-    }
-}
-
-impl<S> http_body::Body for StreamBody<S>
-where
-    S: TryStream,
-    S::Ok: Into<Bytes>,
-    S::Error: Into<BoxError>,
-{
-    type Data = Bytes;
-    type Error = Error;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        match ready!(self.project().stream.try_poll_next(cx)) {
-            Some(Ok(chunk)) => Poll::Ready(Some(Ok(Frame::data(chunk.into())))),
-            Some(Err(err)) => Poll::Ready(Some(Err(Error::new(err)))),
-            None => Poll::Ready(None),
-        }
     }
 }
 
