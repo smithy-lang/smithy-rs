@@ -31,6 +31,16 @@ pub enum SerdeError {
         /// Description of the problem.
         message: String,
     },
+    /// The operation is not supported by this serializer or deserializer.
+    UnsupportedOperation {
+        /// Description of what was attempted.
+        message: String,
+    },
+    /// An error occurred while writing output during serialization.
+    WriteFailed {
+        /// Description of the write failure.
+        message: String,
+    },
     /// Catch-all for errors not covered by other variants.
     Custom {
         /// Explanatory message.
@@ -49,6 +59,10 @@ impl fmt::Display for SerdeError {
                 write!(f, "unknown member: {member_name}")
             }
             SerdeError::InvalidInput { message } => write!(f, "invalid input: {message}"),
+            SerdeError::UnsupportedOperation { message } => {
+                write!(f, "unsupported operation: {message}")
+            }
+            SerdeError::WriteFailed { message } => write!(f, "write failed: {message}"),
             SerdeError::Custom { message } => f.write_str(message),
         }
     }

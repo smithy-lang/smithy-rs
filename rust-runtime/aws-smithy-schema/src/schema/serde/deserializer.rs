@@ -159,5 +159,10 @@ pub trait ShapeDeserializer {
     /// This is an optimization hint that allows pre-allocating collections
     /// with the correct capacity. Returns `None` if the size is unknown or
     /// not applicable.
+    ///
+    /// Implementations MUST cap the returned value at a reasonable maximum
+    /// (e.g. 10,000) to prevent denial-of-service from untrusted payloads
+    /// that claim excessively large container sizes (e.g. a CBOR header
+    /// declaring billions of elements).
     fn container_size(&self) -> Option<usize>;
 }

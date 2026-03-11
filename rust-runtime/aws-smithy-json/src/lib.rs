@@ -17,6 +17,7 @@
 
 //! JSON Abstractions for Smithy
 
+pub mod codec;
 pub mod deserialize;
 mod escape;
 pub mod serialize;

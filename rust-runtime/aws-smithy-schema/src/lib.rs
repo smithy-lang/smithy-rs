@@ -18,8 +18,10 @@ mod schema {
     pub mod trait_map;
     pub mod trait_type;
 
+    pub mod codec;
     pub mod prelude;
     pub mod serde;
+    pub mod serde_traits;
 }
 
 pub use schema::shape_id::ShapeId;
@@ -33,6 +35,14 @@ pub mod prelude {
 
 pub mod serde {
     pub use crate::schema::serde::*;
+}
+
+pub mod serde_traits {
+    pub use crate::schema::serde_traits::*;
+}
+
+pub mod codec {
+    pub use crate::schema::codec::*;
 }
 
 /// A Smithy schema — a lightweight runtime representation of a Smithy shape.
@@ -188,7 +198,7 @@ impl Schema {
         }
     }
 
-    /// Returns the member schema by position index (for structures and unions).
+    /// Returns the member name and schema by position index (for structures and unions).
     ///
     /// This is an optimization for generated code to avoid string lookups.
     /// Consumer code should not rely on specific position values as they may change.

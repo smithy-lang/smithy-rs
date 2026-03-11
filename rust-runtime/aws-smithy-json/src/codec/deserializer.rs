@@ -1,0 +1,1215 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! JSON deserializer implementation.
+
+use aws_smithy_schema::serde::SerdeError;
+use aws_smithy_schema::serde::ShapeDeserializer;
+use aws_smithy_schema::Schema;
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, Number};
+
+use crate::codec::JsonCodecSettings;
+use crate::deserialize::{json_token_iter, Token};
+
+use std::sync::Arc;
+
+/// JSON deserializer that implements the ShapeDeserializer trait.
+pub struct JsonDeserializer<'a> {
+    input: &'a [u8],
+    position: usize,
+    settings: Arc<JsonCodecSettings>,
+}
+
+impl<'a> JsonDeserializer<'a> {
+    /// Creates a new JSON deserializer with the given settings.
+    pub(crate) fn new(input: &'a [u8], settings: Arc<JsonCodecSettings>) -> Self {
+        Self {
+            input,
+            position: 0,
+            settings,
+        }
+    }
+
+    /// Resolves a JSON field name to a member schema.
+    fn resolve_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
+        self.settings.field_to_member(schema, field_name)
+    }
+
+    fn remaining(&self) -> &[u8] {
+        &self.input[self.position..]
+    }
+
+    fn advance_by(&mut self, n: usize) {
+        self.position += n;
+    }
+}
+
+impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
+    fn read_struct<T, F>(
+        &mut self,
+        schema: &Schema,
+        mut state: T,
+        mut consumer: F,
+    ) -> Result<T, SerdeError>
+    where
+        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
+    {
+        // Expect opening brace
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'{') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected object".into(),
+            });
+        }
+        self.advance_by(1);
+
+        loop {
+            self.skip_whitespace();
+
+            // Check for end of object
+            if self.remaining().first() == Some(&b'}') {
+                self.advance_by(1);
+                break;
+            }
+
+            // Expect a key (quoted string)
+            if self.remaining().first() != Some(&b'"') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected object key".into(),
+                });
+            }
+
+            // Parse the key using the token iterator
+            let mut iter = json_token_iter(self.remaining());
+            let key_str = match iter.next() {
+                Some(Ok(Token::ValueString { value, .. })) => {
+                    let key_len = value.as_escaped_str().len();
+                    let key = value
+                        .to_unescaped()
+                        .map_err(|e| SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        })?
+                        .into_owned();
+                    // Advance past opening quote + key + closing quote
+                    self.advance_by(key_len + 2);
+                    key
+                }
+                _ => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected object key".into(),
+                    })
+                }
+            };
+
+            // Skip whitespace and expect colon
+            self.skip_whitespace();
+            if self.remaining().first() != Some(&b':') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected colon after key".into(),
+                });
+            }
+            self.advance_by(1);
+            self.skip_whitespace();
+
+            // Process the value
+            if let Some(member_schema) = self.resolve_member(schema, &key_str) {
+                state = consumer(state, member_schema, self)?;
+            } else {
+                self.skip_value()?;
+            }
+        }
+
+        Ok(state)
+    }
+
+    fn read_list<T, F>(
+        &mut self,
+        _schema: &Schema,
+        mut state: T,
+        mut consumer: F,
+    ) -> Result<T, SerdeError>
+    where
+        F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
+    {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
+        }
+        self.advance_by(1);
+
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            state = consumer(state, self)?;
+        }
+
+        Ok(state)
+    }
+
+    fn read_map<T, F>(
+        &mut self,
+        _schema: &Schema,
+        mut state: T,
+        mut consumer: F,
+    ) -> Result<T, SerdeError>
+    where
+        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
+    {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'{') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected object".into(),
+            });
+        }
+        self.advance_by(1);
+
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b'}') {
+                self.advance_by(1);
+                break;
+            }
+
+            if self.remaining().first() != Some(&b'"') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected key".into(),
+                });
+            }
+
+            let mut iter = json_token_iter(self.remaining());
+            let key = match iter.next() {
+                Some(Ok(Token::ValueString { value, .. })) => {
+                    let len = value.as_escaped_str().len();
+                    let key = value
+                        .to_unescaped()
+                        .map_err(|e| SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        })?
+                        .into_owned();
+                    self.advance_by(len + 2);
+                    key
+                }
+                _ => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected key".into(),
+                    })
+                }
+            };
+
+            self.skip_whitespace();
+            if self.remaining().first() != Some(&b':') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected colon".into(),
+                });
+            }
+            self.advance_by(1);
+            self.skip_whitespace();
+
+            state = consumer(state, key, self)?;
+        }
+
+        Ok(state)
+    }
+
+    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueBool { value, .. })) => {
+                self.advance_by(if value { 4 } else { 5 });
+                Ok(value)
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected boolean".into(),
+            }),
+        }
+    }
+
+    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+        self.read_integer_value().and_then(|n| {
+            i8::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for byte".into(),
+            })
+        })
+    }
+
+    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+        self.read_integer_value().and_then(|n| {
+            i16::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for short".into(),
+            })
+        })
+    }
+
+    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+        self.read_integer_value().and_then(|n| {
+            i32::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                message: "value out of range for integer".into(),
+            })
+        })
+    }
+
+    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+        self.read_integer_value()
+    }
+
+    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+        self.read_float_value().map(|f| f as f32)
+    }
+
+    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+        self.read_float_value()
+    }
+
+    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
+        use std::str::FromStr;
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNumber { .. })) => {
+                self.consume_number();
+                BigInteger::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
+        }
+    }
+
+    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
+        use std::str::FromStr;
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNumber { .. })) => {
+                self.consume_number();
+                BigDecimal::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
+        }
+    }
+
+    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueString { value, .. })) => {
+                let len = value.as_escaped_str().len();
+                let result = value.to_unescaped().map(|s| s.into_owned()).map_err(|e| {
+                    SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    }
+                })?;
+                self.advance_by(len + 2);
+                Ok(result)
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected string".into(),
+            }),
+        }
+    }
+
+    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+        let s = self.read_string(_schema)?;
+        Ok(Blob::new(s.into_bytes()))
+    }
+
+    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(DateTime::from_secs(n as i64))
+            }
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(DateTime::from_secs(n))
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected timestamp".into(),
+            }),
+        }
+    }
+
+    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNull { .. })) => {
+                self.advance_by(4);
+                Ok(Document::Null)
+            }
+            _ => Err(SerdeError::UnsupportedOperation {
+                message: "document deserialization not fully implemented".into(),
+            }),
+        }
+    }
+
+    fn is_null(&self) -> bool {
+        let mut iter = json_token_iter(self.remaining());
+        matches!(iter.next(), Some(Ok(Token::ValueNull { .. })))
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next()? {
+            Ok(Token::StartArray { .. }) => {
+                let mut count = 0;
+                let mut depth = 1;
+                for token in iter {
+                    match token {
+                        Ok(Token::StartArray { .. }) | Ok(Token::StartObject { .. }) => {
+                            if depth == 1 {
+                                count += 1;
+                            }
+                            depth += 1;
+                        }
+                        Ok(Token::EndArray { .. }) | Ok(Token::EndObject { .. }) => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(count);
+                            }
+                        }
+                        Ok(Token::ValueBool { .. })
+                        | Ok(Token::ValueNull { .. })
+                        | Ok(Token::ValueString { .. })
+                        | Ok(Token::ValueNumber { .. })
+                            if depth == 1 =>
+                        {
+                            count += 1
+                        }
+                        _ => {}
+                    }
+                }
+                None
+            }
+            Ok(Token::StartObject { .. }) => {
+                let mut count = 0;
+                let mut depth = 1;
+                for token in iter {
+                    match token {
+                        Ok(Token::StartArray { .. }) | Ok(Token::StartObject { .. }) => depth += 1,
+                        Ok(Token::EndArray { .. }) | Ok(Token::EndObject { .. }) => {
+                            depth -= 1;
+                            if depth == 0 {
+                                return Some(count);
+                            }
+                        }
+                        Ok(Token::ObjectKey { .. }) if depth == 1 => count += 1,
+                        _ => {}
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+}
+
+impl<'a> JsonDeserializer<'a> {
+    fn skip_whitespace(&mut self) {
+        while self.position < self.input.len() {
+            match self.input[self.position] {
+                b' ' | b'\t' | b'\n' | b'\r' | b',' => self.position += 1,
+                _ => break,
+            }
+        }
+    }
+
+    fn consume_number(&mut self) {
+        let mut len = 0;
+        for &b in self.remaining() {
+            if b.is_ascii_digit() || b == b'-' || b == b'.' || b == b'e' || b == b'E' || b == b'+' {
+                len += 1;
+            } else {
+                break;
+            }
+        }
+        self.advance_by(len);
+    }
+
+    fn skip_value(&mut self) -> Result<(), SerdeError> {
+        let mut depth = 0;
+        loop {
+            let mut iter = json_token_iter(self.remaining());
+            match iter.next() {
+                Some(Ok(Token::StartObject { .. })) | Some(Ok(Token::StartArray { .. })) => {
+                    self.advance_by(1);
+                    depth += 1;
+                }
+                Some(Ok(Token::EndObject { .. })) | Some(Ok(Token::EndArray { .. })) => {
+                    self.advance_by(1);
+                    if depth == 0 {
+                        return Err(SerdeError::InvalidInput {
+                            message: "unexpected end token".into(),
+                        });
+                    }
+                    depth -= 1;
+                    if depth == 0 {
+                        return Ok(());
+                    }
+                }
+                Some(Ok(Token::ValueBool { value, .. })) if depth == 0 => {
+                    self.advance_by(if value { 4 } else { 5 });
+                    return Ok(());
+                }
+                Some(Ok(Token::ValueNull { .. })) if depth == 0 => {
+                    self.advance_by(4);
+                    return Ok(());
+                }
+                Some(Ok(Token::ValueString { value, .. })) if depth == 0 => {
+                    self.advance_by(value.as_escaped_str().len() + 2);
+                    return Ok(());
+                }
+                Some(Ok(Token::ValueNumber { .. })) if depth == 0 => {
+                    self.consume_number();
+                    return Ok(());
+                }
+                Some(Ok(Token::ObjectKey { key, .. })) => {
+                    self.advance_by(key.as_escaped_str().len() + 3);
+                }
+                Some(Ok(_)) => {}
+                Some(Err(e)) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input".into(),
+                    })
+                }
+            }
+        }
+    }
+
+    fn read_integer_value(&mut self) -> Result<i64, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                i64::try_from(n).map_err(|_| SerdeError::InvalidInput {
+                    message: "value out of range".into(),
+                })
+            }
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(n)
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected integer".into(),
+            }),
+        }
+    }
+
+    fn read_float_value(&mut self) -> Result<f64, SerdeError> {
+        let mut iter = json_token_iter(self.remaining());
+        match iter.next() {
+            Some(Ok(Token::ValueNumber {
+                value: Number::Float(f),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(f)
+            }
+            Some(Ok(Token::ValueNumber {
+                value: Number::PosInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(n as f64)
+            }
+            Some(Ok(Token::ValueNumber {
+                value: Number::NegInt(n),
+                ..
+            })) => {
+                self.consume_number();
+                Ok(n as f64)
+            }
+            _ => Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dummy_schema() -> &'static aws_smithy_schema::Schema {
+        &aws_smithy_schema::prelude::STRING
+    }
+
+    #[test]
+    fn test_read_boolean() {
+        let mut deser = JsonDeserializer::new(b"true", Arc::new(JsonCodecSettings::default()));
+        assert!(deser.read_boolean(dummy_schema()).unwrap());
+
+        let mut deser = JsonDeserializer::new(b"false", Arc::new(JsonCodecSettings::default()));
+        assert!(!(deser.read_boolean(dummy_schema()).unwrap()));
+    }
+
+    #[test]
+    fn test_read_integer() {
+        let mut deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.read_integer(dummy_schema()).unwrap(), 42);
+
+        let mut deser = JsonDeserializer::new(b"-123", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.read_integer(dummy_schema()).unwrap(), -123);
+    }
+
+    #[test]
+    fn test_read_long() {
+        let mut deser = JsonDeserializer::new(
+            b"9223372036854775807",
+            Arc::new(JsonCodecSettings::default()),
+        );
+        assert_eq!(deser.read_long(dummy_schema()).unwrap(), i64::MAX);
+    }
+
+    #[test]
+    fn test_read_float() {
+        let mut deser = JsonDeserializer::new(b"3.15", Arc::new(JsonCodecSettings::default()));
+        assert!((deser.read_float(dummy_schema()).unwrap() - 3.15).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_read_double() {
+        let mut deser = JsonDeserializer::new(b"2.72", Arc::new(JsonCodecSettings::default()));
+        assert!((deser.read_double(dummy_schema()).unwrap() - 2.72).abs() < 0.001);
+    }
+
+    #[test]
+    fn test_read_string() {
+        let mut deser =
+            JsonDeserializer::new(br#""hello world""#, Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.read_string(dummy_schema()).unwrap(), "hello world");
+
+        let mut deser =
+            JsonDeserializer::new(br#""hello\nworld""#, Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.read_string(dummy_schema()).unwrap(), "hello\nworld");
+    }
+
+    #[test]
+    fn test_is_null() {
+        let deser = JsonDeserializer::new(b"null", Arc::new(JsonCodecSettings::default()));
+        assert!(deser.is_null());
+
+        let deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
+        assert!(!deser.is_null());
+    }
+
+    #[test]
+    fn test_read_byte_range() {
+        let mut deser = JsonDeserializer::new(b"127", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.read_byte(dummy_schema()).unwrap(), 127);
+
+        let mut deser = JsonDeserializer::new(b"128", Arc::new(JsonCodecSettings::default()));
+        assert!(deser.read_byte(dummy_schema()).is_err());
+    }
+
+    #[test]
+    fn test_read_struct() {
+        use aws_smithy_schema::Schema;
+
+        #[derive(Debug, Default, PartialEq)]
+        struct Person {
+            first_name: String,
+            last_name: String,
+            age: i32,
+        }
+
+        static FIRST_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "firstName",
+            0,
+        );
+        static LAST_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "lastName",
+            1,
+        );
+        static AGE: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::Integer,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "age",
+            2,
+        );
+        static PERSON_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Person"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&FIRST_NAME, &LAST_NAME, &AGE],
+        );
+
+        fn consume_person(
+            mut person: Person,
+            schema: &Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Person, SerdeError> {
+            match schema.member_name() {
+                Some("firstName") => person.first_name = deser.read_string(schema)?,
+                Some("lastName") => person.last_name = deser.read_string(schema)?,
+                Some("age") => person.age = deser.read_integer(schema)?,
+                _ => {}
+            }
+            Ok(person)
+        }
+
+        let json = br#"{"lastName":"Smithy","firstName":"Alice","age":30}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let person = deser
+            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
+            .unwrap();
+        assert_eq!(
+            person,
+            Person {
+                first_name: "Alice".to_string(),
+                last_name: "Smithy".to_string(),
+                age: 30
+            }
+        );
+
+        let json =
+            br#"{"firstName":          "Alice","age":12345678,     "lastName":"\"Smithy\""}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let person = deser
+            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
+            .unwrap();
+        assert_eq!(
+            person,
+            Person {
+                first_name: "Alice".to_string(),
+                last_name: "\"Smithy\"".to_string(),
+                age: 12345678
+            }
+        );
+    }
+
+    #[test]
+    fn test_read_list() {
+        let json = b"[1, 2, 3, 4, 5]";
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_integer(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, vec![1, 2, 3, 4, 5]);
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = b"[]";
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_integer(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, Vec::<i32>::new());
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = br#"["hello", "world"]"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let capacity = deser.container_size().unwrap_or(0);
+        let container = Vec::with_capacity(capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_list(dummy_schema(), container, |mut vec, deser| {
+                vec.push(deser.read_string(dummy_schema())?);
+                Ok(vec)
+            })
+            .unwrap();
+        assert_eq!(result, vec!["hello", "world"]);
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+    }
+
+    #[test]
+    fn test_container_size() {
+        let deser =
+            JsonDeserializer::new(b"[1, 2, 3, 4, 5]", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.container_size(), Some(5));
+
+        let deser = JsonDeserializer::new(b"[]", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.container_size(), Some(0));
+
+        let deser = JsonDeserializer::new(
+            br#"{"a": 1, "b": 2, "c": 3}"#,
+            Arc::new(JsonCodecSettings::default()),
+        );
+        assert_eq!(deser.container_size(), Some(3));
+
+        let deser = JsonDeserializer::new(b"{}", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.container_size(), Some(0));
+
+        let deser = JsonDeserializer::new(
+            b"[[1, 2], [3, 4], [5, 6]]",
+            Arc::new(JsonCodecSettings::default()),
+        );
+        assert_eq!(deser.container_size(), Some(3));
+
+        let deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
+        assert_eq!(deser.container_size(), None);
+    }
+
+    #[test]
+    fn test_read_map() {
+        use std::collections::HashMap;
+
+        let json = br#"{"a": 1, "b": 2, "c": 3}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result.len(), 3);
+        assert_eq!(result.get("a"), Some(&1));
+        assert_eq!(result.get("b"), Some(&2));
+        assert_eq!(result.get("c"), Some(&3));
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = b"{}";
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result, HashMap::<String, i32>::new());
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+
+        let json = br#"{"name": "Alice", "city": "Seattle"}"#;
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let calculated_capacity = deser.container_size().unwrap_or(0);
+        let container = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = container.capacity();
+        let result = deser
+            .read_map(dummy_schema(), container, |mut map, key, deser| {
+                map.insert(key, deser.read_string(dummy_schema())?);
+                Ok(map)
+            })
+            .unwrap();
+        assert_eq!(result.len(), 2);
+        assert_eq!(result.get("name"), Some(&"Alice".to_string()));
+        assert_eq!(result.get("city"), Some(&"Seattle".to_string()));
+        // Ensure no more memory was allocated for the container
+        assert_eq!(result.capacity(), allocated_capacity);
+    }
+
+    #[test]
+    fn test_nested_complex_deserialization() {
+        use aws_smithy_schema::Schema;
+        use std::collections::HashMap;
+
+        #[derive(Debug, Default, PartialEq)]
+        struct Address {
+            street: String,
+            city: String,
+            zip: i32,
+        }
+        #[derive(Debug, Default, PartialEq)]
+        struct Company {
+            name: String,
+            employees: Vec<String>,
+            metadata: HashMap<String, i32>,
+            active: bool,
+        }
+        #[derive(Debug, Default, PartialEq)]
+        struct User {
+            id: i64,
+            name: String,
+            scores: Vec<f64>,
+            address: Address,
+            companies: Vec<Company>,
+            tags: HashMap<String, String>,
+        }
+
+        // Address members & schema
+        static ADDR_STREET: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "street",
+            0,
+        );
+        static ADDR_CITY: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "city",
+            1,
+        );
+        static ADDR_ZIP: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::Integer,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "zip",
+            2,
+        );
+        static ADDRESS_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Address"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&ADDR_STREET, &ADDR_CITY, &ADDR_ZIP],
+        );
+
+        // Company members & schema
+        static COMP_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "name",
+            0,
+        );
+        static COMP_EMPLOYEES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "employees",
+            1,
+        );
+        static COMP_METADATA: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Map,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "metadata",
+            2,
+        );
+        static COMP_ACTIVE: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Boolean,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "active",
+            3,
+        );
+        static COMPANY_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Company"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[&COMP_NAME, &COMP_EMPLOYEES, &COMP_METADATA, &COMP_ACTIVE],
+        );
+
+        // User members & schema
+        static USER_ID: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Long,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "id",
+            0,
+        );
+        static USER_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "name",
+            1,
+        );
+        static USER_SCORES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "scores",
+            2,
+        );
+        static USER_ADDRESS: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "address",
+            3,
+        );
+        static USER_COMPANIES: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::List,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "companies",
+            4,
+        );
+        static USER_TAGS: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Map,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "tags",
+            5,
+        );
+        static USER_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "User"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+            &[
+                &USER_ID,
+                &USER_NAME,
+                &USER_SCORES,
+                &USER_ADDRESS,
+                &USER_COMPANIES,
+                &USER_TAGS,
+            ],
+        );
+
+        fn consume_address(
+            mut addr: Address,
+            schema: &Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Address, SerdeError> {
+            match schema.member_name() {
+                Some("street") => addr.street = deser.read_string(schema)?,
+                Some("city") => addr.city = deser.read_string(schema)?,
+                Some("zip") => addr.zip = deser.read_integer(schema)?,
+                _ => {}
+            }
+            Ok(addr)
+        }
+
+        fn consume_company(
+            mut comp: Company,
+            schema: &Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<Company, SerdeError> {
+            match schema.member_name() {
+                Some("name") => comp.name = deser.read_string(schema)?,
+                Some("active") => comp.active = deser.read_boolean(schema)?,
+                Some("employees") => {
+                    comp.employees = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_string(dummy_schema())?);
+                        Ok(v)
+                    })?
+                }
+                Some("metadata") => {
+                    comp.metadata = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                        m.insert(k, d.read_integer(dummy_schema())?);
+                        Ok(m)
+                    })?
+                }
+                _ => {}
+            }
+            Ok(comp)
+        }
+
+        fn consume_user(
+            mut user: User,
+            schema: &Schema,
+            deser: &mut JsonDeserializer,
+        ) -> Result<User, SerdeError> {
+            match schema.member_name() {
+                Some("id") => user.id = deser.read_long(schema)?,
+                Some("name") => user.name = deser.read_string(schema)?,
+                Some("scores") => {
+                    user.scores = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_double(dummy_schema())?);
+                        Ok(v)
+                    })?
+                }
+                Some("address") => {
+                    user.address =
+                        deser.read_struct(&ADDRESS_SCHEMA, Address::default(), consume_address)?
+                }
+                Some("companies") => {
+                    user.companies = deser.read_list(schema, Vec::new(), |mut v, d| {
+                        v.push(d.read_struct(
+                            &COMPANY_SCHEMA,
+                            Company::default(),
+                            consume_company,
+                        )?);
+                        Ok(v)
+                    })?
+                }
+                Some("tags") => {
+                    user.tags = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                        m.insert(k, d.read_string(dummy_schema())?);
+                        Ok(m)
+                    })?
+                }
+                _ => {}
+            }
+            Ok(user)
+        }
+
+        let json = br#"{
+            "id": 12345,
+            "name": "John Doe",
+            "scores": [95.5, 87.3, 92.1],
+            "address": {
+                "street": "123 Main St",
+                "city": "Seattle",
+                "zip": 98101
+            },
+            "companies": [
+                {
+                    "name": "TechCorp",
+                    "employees": ["Alice", "Bob"],
+                    "metadata": {"founded": 2010, "size": 500},
+                    "active": true
+                },
+                {
+                    "name": "StartupInc",
+                    "employees": ["Charlie"],
+                    "metadata": {"founded": 2020},
+                    "active": false
+                }
+            ],
+            "tags": {"role": "admin", "level": "senior"}
+        }"#;
+
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let user = deser
+            .read_struct(&USER_SCHEMA, User::default(), consume_user)
+            .unwrap();
+
+        assert_eq!(user.id, 12345);
+        assert_eq!(user.name, "John Doe");
+        assert_eq!(user.scores, vec![95.5, 87.3, 92.1]);
+        assert_eq!(user.address.street, "123 Main St");
+        assert_eq!(user.address.city, "Seattle");
+        assert_eq!(user.address.zip, 98101);
+        assert_eq!(user.companies.len(), 2);
+        assert_eq!(user.companies[0].name, "TechCorp");
+        assert_eq!(user.companies[0].employees, vec!["Alice", "Bob"]);
+        assert_eq!(user.companies[0].metadata.get("founded"), Some(&2010));
+        assert_eq!(user.companies[0].metadata.get("size"), Some(&500));
+        assert!(user.companies[0].active);
+        assert_eq!(user.companies[1].name, "StartupInc");
+        assert_eq!(user.companies[1].employees, vec!["Charlie"]);
+        assert_eq!(user.companies[1].metadata.get("founded"), Some(&2020));
+        assert!(!user.companies[1].active);
+        assert_eq!(user.tags.get("role"), Some(&"admin".to_string()));
+        assert_eq!(user.tags.get("level"), Some(&"senior".to_string()));
+    }
+
+    #[test]
+    fn test_json_name_deserialization() {
+        use aws_smithy_schema::Schema;
+
+        #[derive(Debug)]
+        struct StringTrait {
+            id: aws_smithy_schema::ShapeId,
+            value: String,
+        }
+        impl aws_smithy_schema::Trait for StringTrait {
+            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
+                &self.id
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                &self.value
+            }
+        }
+
+        fn json_name_traits(name: &str) -> aws_smithy_schema::TraitMap {
+            let mut map = aws_smithy_schema::TraitMap::new();
+            map.insert(Box::new(StringTrait {
+                id: aws_smithy_schema::shape_id!("smithy.api", "jsonName"),
+                value: name.to_string(),
+            }));
+            map
+        }
+
+        static FOO_MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "foo",
+            0,
+        );
+        // "bar" member has @jsonName("Baz")
+        static BAR_MEMBER: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
+            Schema::new_member(
+                aws_smithy_schema::shape_id!("test", "MyStruct"),
+                aws_smithy_schema::ShapeType::Integer,
+                json_name_traits("Baz"),
+                "bar",
+                1,
+            )
+        });
+        static STRUCT_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
+            Schema::new_struct(
+                aws_smithy_schema::shape_id!("test", "MyStruct"),
+                aws_smithy_schema::ShapeType::Structure,
+                aws_smithy_schema::TraitMap::EMPTY,
+                Box::leak(Box::new([&FOO_MEMBER, &*BAR_MEMBER])),
+            )
+        });
+
+        let json = br#"{"foo":"hello","Baz":42}"#;
+
+        // With use_json_name=true, "Baz" resolves to the "bar" member
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let (mut foo, mut bar) = (None::<String>, None::<i32>);
+        deser
+            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+                match member.member_name() {
+                    Some("foo") => foo = Some(d.read_string(member)?),
+                    Some("bar") => bar = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(foo.as_deref(), Some("hello"));
+        assert_eq!(bar, Some(42));
+
+        // With use_json_name=false, "Baz" is unknown and gets skipped
+        let mut deser = JsonDeserializer::new(
+            json,
+            Arc::new(JsonCodecSettings::builder().use_json_name(false).build()),
+        );
+        let (mut foo, mut bar) = (None::<String>, None::<i32>);
+        deser
+            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+                match member.member_name() {
+                    Some("foo") => foo = Some(d.read_string(member)?),
+                    Some("bar") => bar = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(foo.as_deref(), Some("hello"));
+        assert_eq!(bar, None); // "Baz" not recognized without jsonName
+    }
+}
