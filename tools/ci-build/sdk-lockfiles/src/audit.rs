@@ -15,7 +15,6 @@ use std::collections::HashSet;
 use std::env;
 use std::fmt;
 use std::hash::{Hash, Hasher};
-use std::iter;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::LazyLock;
@@ -27,6 +26,7 @@ use std::sync::LazyLock;
 // This dependency might be an indirect dependency, meaning that the crate `from` transitively depends on the crate `to`.
 // Given collected `SuspectDependency` instances, the `audit` subcommand refers to `FALSE_POSITIVES` to determine
 // whether a `SuspectDependency` should be reported as an audit error.
+#[derive(Clone)]
 struct SuspectDependency {
     from: Package,
     to: Package,
@@ -46,7 +46,7 @@ impl fmt::Debug for SuspectDependency {
 impl PartialEq for SuspectDependency {
     fn eq(&self, other: &Self) -> bool {
         // `true` if two `SuspectDependency` share the same names `from`s and `to`s, ignoring package versions.
-        self.from.name == other.from.name || self.to.name == other.to.name
+        self.from.name == other.from.name && self.to.name == other.to.name
     }
 }
 
@@ -235,16 +235,9 @@ fn audit_runtime_lockfile_covered_by_sdk_lockfile<'a>(
         }
     }
     if let Some(false_positives) = false_positives {
-        // Any entry in `false_positives` that is not reported in `suspect_dependencies` may be removed,
-        // as it is no longer considered a false positive.
-        for fp in false_positives.difference(&suspect_dependencies) {
-            tracing::warn!("{fp:?} may potentially be removed from `{false_positives:?}`");
-        }
         suspect_dependencies.retain(|dep| !false_positives.contains(dep));
-        suspect_dependencies
-    } else {
-        suspect_dependencies
     }
+    suspect_dependencies
 }
 
 fn lockfile_for(
@@ -282,7 +275,8 @@ pub(super) fn audit(args: AuditArgs) -> Result<()> {
         lockfile_for(smithy_rs_root, "aws/rust-runtime/aws-config/Cargo.lock")?,
     ];
 
-    let mut crates_to_report: Vec<(Package, &str)> = Vec::new();
+    let mut crates_to_report: Vec<(Package, Package, &str)> = Vec::new();
+    let mut all_suspect_dependencies: HashSet<SuspectDependency> = HashSet::new();
 
     for (runtime_lockfile, path) in &runtime_lockfiles {
         tracing::info!(
@@ -290,30 +284,37 @@ pub(super) fn audit(args: AuditArgs) -> Result<()> {
             path
         );
 
-        let crates_uncovered_by_sdk = audit_runtime_lockfile_covered_by_sdk_lockfile(
+        let mut crates_uncovered_by_sdk = audit_runtime_lockfile_covered_by_sdk_lockfile(
             runtime_lockfile,
             &sdk_dependency_set,
-            Some(&FALSE_POSITIVES),
+            None,
         );
+        all_suspect_dependencies.extend(crates_uncovered_by_sdk.iter().cloned());
+        crates_uncovered_by_sdk.retain(|dep| !FALSE_POSITIVES.contains(dep));
 
         crates_to_report.extend(
             crates_uncovered_by_sdk
                 .into_iter()
-                .map(|c| c.to)
-                .zip(iter::repeat(*path)),
+                .map(|c| (c.from, c.to, *path)),
         );
+    }
+
+    // Warn about false-positive entries that are no longer needed
+    for fp in FALSE_POSITIVES.difference(&all_suspect_dependencies) {
+        tracing::warn!("{fp:?} may potentially be removed from `false-positives.txt`");
     }
 
     if crates_to_report.is_empty() {
         println!("SUCCESS");
         Ok(())
     } else {
-        for (pkg, origin_lockfile) in crates_to_report {
+        for (from, to, origin_lockfile) in &crates_to_report {
             eprintln!(
-                "`{}` ({}), used by `{}`, is not contained in the SDK lockfile!",
-                pkg.name.as_str(),
-                pkg.version,
+                "`{}` ({}), used by `{}`, is not contained in the SDK lockfile! (brought in by `{}`)",
+                to.name.as_str(),
+                to.version,
                 origin_lockfile,
+                from.name.as_str(),
             );
         }
         bail!("there are lockfile audit failures")
