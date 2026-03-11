@@ -123,7 +123,6 @@ pub fn from_bytes(bytes: Bytes) -> BoxBody {
 /// Wraps any `http_body::Body<Data = Bytes>` behind a single heap allocation.
 /// Use `Body` as `Route<Body>` when you want simple, constructable request bodies
 /// without generic bounds in your middleware.
-#[must_use]
 #[derive(Debug)]
 pub struct Body(BoxBody);
 
@@ -149,9 +148,7 @@ impl Body {
         S::Ok: Into<Bytes>,
         S::Error: Into<BoxError>,
     {
-        Self::new(StreamBody {
-            stream: SyncWrapper(stream),
-        })
+        Self::new(StreamBody { stream })
     }
 
     /// Convert the body into a [`Stream`] of data frames, discarding non-data frames.
@@ -224,7 +221,6 @@ impl http_body::Body for Body {
 // ---------------------------------------------------------------------------
 
 /// A stream of data frames, created with [`Body::into_data_stream`].
-#[must_use]
 #[derive(Debug)]
 pub struct BodyDataStream {
     inner: Body,
@@ -271,32 +267,13 @@ impl http_body::Body for BodyDataStream {
 }
 
 // ---------------------------------------------------------------------------
-// StreamBody + SyncWrapper — private: TryStream → http_body::Body
+// StreamBody — private: TryStream → http_body::Body
 // ---------------------------------------------------------------------------
-
-/// Minimal `SyncWrapper` so we don't need an external dep for temporary use.
-struct SyncWrapper<T>(T);
-
-// SAFETY: Access is only through Pin projection, never shared across threads.
-unsafe impl<T: Send> Sync for SyncWrapper<T> {}
-
-impl<T> SyncWrapper<T> {
-    fn get_pin_mut(self: Pin<&mut Self>) -> Pin<&mut T> {
-        // SAFETY: pinning is structural for the inner field.
-        unsafe { self.map_unchecked_mut(|s| &mut s.0) }
-    }
-}
-
-impl<T: std::fmt::Debug> std::fmt::Debug for SyncWrapper<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
-}
 
 pin_project! {
     struct StreamBody<S> {
         #[pin]
-        stream: SyncWrapper<S>,
+        stream: S,
     }
 }
 
@@ -313,8 +290,7 @@ where
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        let stream = self.project().stream.get_pin_mut();
-        match ready!(stream.try_poll_next(cx)) {
+        match ready!(self.project().stream.try_poll_next(cx)) {
             Some(Ok(chunk)) => Poll::Ready(Some(Ok(Frame::data(chunk.into())))),
             Some(Err(err)) => Poll::Ready(Some(Err(Error::new(err)))),
             None => Poll::Ready(None),
