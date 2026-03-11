@@ -125,6 +125,7 @@ path = "src/main.rs"
 [dependencies]
 anyhow = "1"
 async-stream = "0.3"
+aws-lc-rs = "=1.14.0"
 bytes = "1"
 hound = "3.4"
 async-trait = "0.1"
