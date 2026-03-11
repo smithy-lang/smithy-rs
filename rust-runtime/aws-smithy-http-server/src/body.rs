@@ -141,6 +141,16 @@ impl Body {
         Self::new(http_body_util::Empty::new())
     }
 
+    /// Create a new `Body` from a [`Stream`].
+    pub fn from_stream<S, O, E>(stream: S) -> Self
+    where
+        S: futures_util::Stream<Item = Result<O, E>> + Send + 'static,
+        O: Into<Bytes> + 'static,
+        E: Into<BoxError> + 'static,
+    {
+        Self::new(wrap_stream(stream))
+    }
+
     /// Convert the body into a [`Stream`] of data frames, discarding non-data frames.
     pub fn into_data_stream(self) -> BodyDataStream {
         BodyDataStream { inner: self }
@@ -182,6 +192,12 @@ body_from_impl!(std::borrow::Cow<'static, str>);
 body_from_impl!(Vec<u8>);
 body_from_impl!(String);
 body_from_impl!(Bytes);
+
+impl From<&[u8]> for Body {
+    fn from(buf: &[u8]) -> Self {
+        Self::new(http_body_util::Full::from(Bytes::copy_from_slice(buf)))
+    }
+}
 
 impl http_body::Body for Body {
     type Data = Bytes;
@@ -230,6 +246,14 @@ impl Stream for BodyDataStream {
                 None => return Poll::Ready(None),
             }
         }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let hint = http_body::Body::size_hint(&self.inner);
+        let lower = usize::try_from(hint.lower()).unwrap_or_default();
+        let upper = hint.upper().and_then(|v| usize::try_from(v).ok());
+        (lower, upper)
     }
 }
 
