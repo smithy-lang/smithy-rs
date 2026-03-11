@@ -10,11 +10,10 @@
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
-use futures_util::Stream;
 use http_body::Frame;
 use hyper::body::Incoming;
 use std::pin::Pin;
-use std::task::{Context, Poll, ready};
+use std::task::{Context, Poll};
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -151,10 +150,6 @@ impl Body {
         Self::new(wrap_stream(stream))
     }
 
-    /// Convert the body into a [`Stream`] of data frames, discarding non-data frames.
-    pub fn into_data_stream(self) -> BodyDataStream {
-        BodyDataStream { inner: self }
-    }
 }
 
 impl Default for Body {
@@ -193,12 +188,6 @@ body_from_impl!(Vec<u8>);
 body_from_impl!(String);
 body_from_impl!(Bytes);
 
-impl From<&[u8]> for Body {
-    fn from(buf: &[u8]) -> Self {
-        Self::new(http_body_util::Full::from(Bytes::copy_from_slice(buf)))
-    }
-}
-
 impl http_body::Body for Body {
     type Data = Bytes;
     type Error = Error;
@@ -219,64 +208,6 @@ impl http_body::Body for Body {
     #[inline]
     fn is_end_stream(&self) -> bool {
         self.0.is_end_stream()
-    }
-}
-
-// ---------------------------------------------------------------------------
-// BodyDataStream — Body → Stream<Item = Result<Bytes, Error>>
-// ---------------------------------------------------------------------------
-
-/// A stream of data frames, created with [`Body::into_data_stream`].
-#[derive(Debug)]
-pub struct BodyDataStream {
-    inner: Body,
-}
-
-impl Stream for BodyDataStream {
-    type Item = Result<Bytes, Error>;
-
-    #[inline]
-    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
-            match ready!(Pin::new(&mut self.inner).poll_frame(cx)?) {
-                Some(frame) => match frame.into_data() {
-                    Ok(data) => return Poll::Ready(Some(Ok(data))),
-                    Err(_frame) => {}
-                },
-                None => return Poll::Ready(None),
-            }
-        }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let hint = http_body::Body::size_hint(&self.inner);
-        let lower = usize::try_from(hint.lower()).unwrap_or_default();
-        let upper = hint.upper().and_then(|v| usize::try_from(v).ok());
-        (lower, upper)
-    }
-}
-
-impl http_body::Body for BodyDataStream {
-    type Data = Bytes;
-    type Error = Error;
-
-    #[inline]
-    fn poll_frame(
-        mut self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        Pin::new(&mut self.inner).poll_frame(cx)
-    }
-
-    #[inline]
-    fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
-    }
-
-    #[inline]
-    fn size_hint(&self) -> http_body::SizeHint {
-        self.inner.size_hint()
     }
 }
 
