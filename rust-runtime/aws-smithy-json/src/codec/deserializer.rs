@@ -13,23 +13,28 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, Number}
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
 
+use std::sync::Arc;
+
 /// JSON deserializer that implements the ShapeDeserializer trait.
 pub struct JsonDeserializer<'a> {
     input: &'a [u8],
     position: usize,
-    // TODO(schema): Need to figure out how this will work with traits like
-    // jsonName. Will figure that out once I am codegening real Schemas
-    _settings: JsonCodecSettings,
+    settings: Arc<JsonCodecSettings>,
 }
 
 impl<'a> JsonDeserializer<'a> {
     /// Creates a new JSON deserializer with the given settings.
-    pub fn new(input: &'a [u8], settings: JsonCodecSettings) -> Self {
+    pub(crate) fn new(input: &'a [u8], settings: Arc<JsonCodecSettings>) -> Self {
         Self {
             input,
             position: 0,
-            _settings: settings,
+            settings,
         }
+    }
+
+    /// Resolves a JSON field name to a member schema.
+    fn resolve_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
+        self.settings.field_to_member(schema, field_name)
     }
 
     fn remaining(&self) -> &[u8] {
@@ -109,7 +114,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.skip_whitespace();
 
             // Process the value
-            if let Some(member_schema) = schema.member_schema(&key_str) {
+            if let Some(member_schema) = self.resolve_member(schema, &key_str) {
                 state = consumer(state, member_schema, self)?;
             } else {
                 self.skip_value()?;
@@ -558,64 +563,69 @@ mod tests {
 
     #[test]
     fn test_read_boolean() {
-        let mut deser = JsonDeserializer::new(b"true", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"true", Arc::new(JsonCodecSettings::default()));
         assert!(deser.read_boolean(dummy_schema()).unwrap());
 
-        let mut deser = JsonDeserializer::new(b"false", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"false", Arc::new(JsonCodecSettings::default()));
         assert!(!(deser.read_boolean(dummy_schema()).unwrap()));
     }
 
     #[test]
     fn test_read_integer() {
-        let mut deser = JsonDeserializer::new(b"42", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.read_integer(dummy_schema()).unwrap(), 42);
 
-        let mut deser = JsonDeserializer::new(b"-123", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"-123", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.read_integer(dummy_schema()).unwrap(), -123);
     }
 
     #[test]
     fn test_read_long() {
-        let mut deser = JsonDeserializer::new(b"9223372036854775807", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(
+            b"9223372036854775807",
+            Arc::new(JsonCodecSettings::default()),
+        );
         assert_eq!(deser.read_long(dummy_schema()).unwrap(), i64::MAX);
     }
 
     #[test]
     fn test_read_float() {
-        let mut deser = JsonDeserializer::new(b"3.15", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"3.15", Arc::new(JsonCodecSettings::default()));
         assert!((deser.read_float(dummy_schema()).unwrap() - 3.15).abs() < 0.01);
     }
 
     #[test]
     fn test_read_double() {
-        let mut deser = JsonDeserializer::new(b"2.72", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"2.72", Arc::new(JsonCodecSettings::default()));
         assert!((deser.read_double(dummy_schema()).unwrap() - 2.72).abs() < 0.001);
     }
 
     #[test]
     fn test_read_string() {
-        let mut deser = JsonDeserializer::new(br#""hello world""#, JsonCodecSettings::default());
+        let mut deser =
+            JsonDeserializer::new(br#""hello world""#, Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.read_string(dummy_schema()).unwrap(), "hello world");
 
-        let mut deser = JsonDeserializer::new(br#""hello\nworld""#, JsonCodecSettings::default());
+        let mut deser =
+            JsonDeserializer::new(br#""hello\nworld""#, Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.read_string(dummy_schema()).unwrap(), "hello\nworld");
     }
 
     #[test]
     fn test_is_null() {
-        let deser = JsonDeserializer::new(b"null", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(b"null", Arc::new(JsonCodecSettings::default()));
         assert!(deser.is_null());
 
-        let deser = JsonDeserializer::new(b"42", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
         assert!(!deser.is_null());
     }
 
     #[test]
     fn test_read_byte_range() {
-        let mut deser = JsonDeserializer::new(b"127", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"127", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.read_byte(dummy_schema()).unwrap(), 127);
 
-        let mut deser = JsonDeserializer::new(b"128", JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(b"128", Arc::new(JsonCodecSettings::default()));
         assert!(deser.read_byte(dummy_schema()).is_err());
     }
 
@@ -673,7 +683,7 @@ mod tests {
         }
 
         let json = br#"{"lastName":"Smithy","firstName":"Alice","age":30}"#;
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let person = deser
             .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
             .unwrap();
@@ -688,7 +698,7 @@ mod tests {
 
         let json =
             br#"{"firstName":          "Alice","age":12345678,     "lastName":"\"Smithy\""}"#;
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let person = deser
             .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
             .unwrap();
@@ -705,7 +715,7 @@ mod tests {
     #[test]
     fn test_read_list() {
         let json = b"[1, 2, 3, 4, 5]";
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
         let container = Vec::with_capacity(capacity);
         let allocated_capacity = container.capacity();
@@ -720,7 +730,7 @@ mod tests {
         assert_eq!(result.capacity(), allocated_capacity);
 
         let json = b"[]";
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
         let container = Vec::with_capacity(capacity);
         let allocated_capacity = container.capacity();
@@ -735,7 +745,7 @@ mod tests {
         assert_eq!(result.capacity(), allocated_capacity);
 
         let json = br#"["hello", "world"]"#;
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
         let container = Vec::with_capacity(capacity);
         let allocated_capacity = container.capacity();
@@ -752,24 +762,29 @@ mod tests {
 
     #[test]
     fn test_container_size() {
-        let deser = JsonDeserializer::new(b"[1, 2, 3, 4, 5]", JsonCodecSettings::default());
+        let deser =
+            JsonDeserializer::new(b"[1, 2, 3, 4, 5]", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.container_size(), Some(5));
 
-        let deser = JsonDeserializer::new(b"[]", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(b"[]", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.container_size(), Some(0));
 
-        let deser =
-            JsonDeserializer::new(br#"{"a": 1, "b": 2, "c": 3}"#, JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(
+            br#"{"a": 1, "b": 2, "c": 3}"#,
+            Arc::new(JsonCodecSettings::default()),
+        );
         assert_eq!(deser.container_size(), Some(3));
 
-        let deser = JsonDeserializer::new(b"{}", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(b"{}", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.container_size(), Some(0));
 
-        let deser =
-            JsonDeserializer::new(b"[[1, 2], [3, 4], [5, 6]]", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(
+            b"[[1, 2], [3, 4], [5, 6]]",
+            Arc::new(JsonCodecSettings::default()),
+        );
         assert_eq!(deser.container_size(), Some(3));
 
-        let deser = JsonDeserializer::new(b"42", JsonCodecSettings::default());
+        let deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
         assert_eq!(deser.container_size(), None);
     }
 
@@ -778,7 +793,7 @@ mod tests {
         use std::collections::HashMap;
 
         let json = br#"{"a": 1, "b": 2, "c": 3}"#;
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
         let container = HashMap::with_capacity(calculated_capacity);
         let allocated_capacity = container.capacity();
@@ -796,7 +811,7 @@ mod tests {
         assert_eq!(result.capacity(), allocated_capacity);
 
         let json = b"{}";
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
         let container = HashMap::with_capacity(calculated_capacity);
         let allocated_capacity = container.capacity();
@@ -811,7 +826,7 @@ mod tests {
         assert_eq!(result.capacity(), allocated_capacity);
 
         let json = br#"{"name": "Alice", "city": "Seattle"}"#;
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
         let container = HashMap::with_capacity(calculated_capacity);
         let allocated_capacity = container.capacity();
@@ -1082,7 +1097,7 @@ mod tests {
             "tags": {"role": "admin", "level": "senior"}
         }"#;
 
-        let mut deser = JsonDeserializer::new(json, JsonCodecSettings::default());
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let user = deser
             .read_struct(&USER_SCHEMA, User::default(), consume_user)
             .unwrap();
@@ -1105,5 +1120,96 @@ mod tests {
         assert!(!user.companies[1].active);
         assert_eq!(user.tags.get("role"), Some(&"admin".to_string()));
         assert_eq!(user.tags.get("level"), Some(&"senior".to_string()));
+    }
+
+    #[test]
+    fn test_json_name_deserialization() {
+        use aws_smithy_schema::Schema;
+
+        #[derive(Debug)]
+        struct StringTrait {
+            id: aws_smithy_schema::ShapeId,
+            value: String,
+        }
+        impl aws_smithy_schema::Trait for StringTrait {
+            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
+                &self.id
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                &self.value
+            }
+        }
+
+        fn json_name_traits(name: &str) -> aws_smithy_schema::TraitMap {
+            let mut map = aws_smithy_schema::TraitMap::new();
+            map.insert(Box::new(StringTrait {
+                id: aws_smithy_schema::shape_id!("smithy.api", "jsonName"),
+                value: name.to_string(),
+            }));
+            map
+        }
+
+        static FOO_MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "foo",
+            0,
+        );
+        // "bar" member has @jsonName("Baz")
+        static BAR_MEMBER: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
+            Schema::new_member(
+                aws_smithy_schema::shape_id!("test", "MyStruct"),
+                aws_smithy_schema::ShapeType::Integer,
+                json_name_traits("Baz"),
+                "bar",
+                1,
+            )
+        });
+        static STRUCT_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
+            Schema::new_struct(
+                aws_smithy_schema::shape_id!("test", "MyStruct"),
+                aws_smithy_schema::ShapeType::Structure,
+                aws_smithy_schema::TraitMap::EMPTY,
+                Box::leak(Box::new([&FOO_MEMBER, &*BAR_MEMBER])),
+            )
+        });
+
+        let json = br#"{"foo":"hello","Baz":42}"#;
+
+        // With use_json_name=true, "Baz" resolves to the "bar" member
+        let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
+        let (mut foo, mut bar) = (None::<String>, None::<i32>);
+        deser
+            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+                match member.member_name() {
+                    Some("foo") => foo = Some(d.read_string(member)?),
+                    Some("bar") => bar = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(foo.as_deref(), Some("hello"));
+        assert_eq!(bar, Some(42));
+
+        // With use_json_name=false, "Baz" is unknown and gets skipped
+        let mut deser = JsonDeserializer::new(
+            json,
+            Arc::new(JsonCodecSettings::builder().use_json_name(false).build()),
+        );
+        let (mut foo, mut bar) = (None::<String>, None::<i32>);
+        deser
+            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+                match member.member_name() {
+                    Some("foo") => foo = Some(d.read_string(member)?),
+                    Some("bar") => bar = Some(d.read_integer(member)?),
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(foo.as_deref(), Some("hello"));
+        assert_eq!(bar, None); // "Baz" not recognized without jsonName
     }
 }

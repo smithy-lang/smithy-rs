@@ -12,17 +12,19 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::codec::JsonCodecSettings;
 
+use std::sync::Arc;
+
 /// JSON serializer that implements the ShapeSerializer trait.
 pub struct JsonSerializer {
     output: String,
-    settings: JsonCodecSettings,
+    settings: Arc<JsonCodecSettings>,
     // Tracks whether a comma is needed before the next value in the current container.
     needs_comma: bool,
 }
 
 impl JsonSerializer {
     /// Creates a new JSON serializer with the given settings.
-    pub fn new(settings: JsonCodecSettings) -> Self {
+    pub(crate) fn new(settings: Arc<JsonCodecSettings>) -> Self {
         Self {
             output: String::new(),
             settings,
@@ -36,12 +38,13 @@ impl JsonSerializer {
     }
 
     /// Inserts a comma separator if needed, then writes the member name if the
-    /// schema is a member schema. Marks that the next value will need a comma.
+    /// schema is a member schema. When `use_json_name` is enabled, checks for
+    /// a `@jsonName` trait and uses that value instead of the member name.
     fn prefix(&mut self, schema: &Schema) {
         if self.needs_comma {
             self.output.push(',');
         }
-        if let Some(name) = schema.member_name() {
+        if let Some(name) = self.field_name(schema) {
             self.output.push('"');
             self.output.push_str(name);
             self.output.push_str("\":");
@@ -49,11 +52,17 @@ impl JsonSerializer {
         self.needs_comma = true;
     }
 
+    /// Resolves the JSON field name for a member schema.
+    fn field_name<'a>(&self, schema: &'a Schema) -> Option<&'a str> {
+        self.settings.member_to_field(schema)
+    }
+
     /// Gets the timestamp format to use, respecting @timestampFormat trait.
     fn get_timestamp_format(&self, schema: &Schema) -> TimestampFormat {
-        let timestamp_format_trait_id =
-            aws_smithy_schema::shape_id!("smithy.api", "timestampFormat");
-        if let Some(trait_obj) = schema.traits().get(&timestamp_format_trait_id) {
+        if let Some(trait_obj) = schema
+            .traits()
+            .get(&aws_smithy_schema::serde_traits::TIMESTAMP_FORMAT)
+        {
             if let Some(format_str) = trait_obj.as_any().downcast_ref::<String>() {
                 return match format_str.as_str() {
                     "epoch-seconds" => TimestampFormat::EpochSeconds,
@@ -246,7 +255,7 @@ mod tests {
 
     #[test]
     fn test_write_boolean() {
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_boolean(&BOOLEAN, true).unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "true");
@@ -254,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_write_string() {
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_string(&STRING, "hello").unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "\"hello\"");
@@ -262,7 +271,7 @@ mod tests {
 
     #[test]
     fn test_write_integer() {
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_integer(&INTEGER, 42).unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "42");
@@ -270,7 +279,7 @@ mod tests {
 
     #[test]
     fn test_write_null() {
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_null(&STRING).unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "null");
@@ -278,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_write_list() {
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         let list_schema = aws_smithy_schema::Schema::new(
             aws_smithy_schema::shape_id!("test", "List"),
             aws_smithy_schema::ShapeType::List,
@@ -356,7 +365,7 @@ mod tests {
             aws_smithy_schema::ShapeType::Structure,
             aws_smithy_schema::TraitMap::EMPTY,
         );
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_struct(&struct_schema, &TestObject).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(
@@ -571,11 +580,88 @@ mod tests {
             aws_smithy_schema::ShapeType::Structure,
             aws_smithy_schema::TraitMap::EMPTY,
         );
-        let mut ser = JsonSerializer::new(JsonCodecSettings::default());
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_struct(&struct_schema, &UserStruct).unwrap();
         let output = ser.finish();
         // Expected compact JSON (br# avoids escape noise)
         let expected: &[u8] = br#"{"id":12345,"name":"John Doe","scores":[95.5,87.3,92.1],"address":{"street":"123 Main St","city":"Seattle","zip":98101},"companies":[{"name":"TechCorp","employees":["Alice","Bob"],"metadata":{"founded":2010,"size":500},"active":true},{"name":"StartupInc","employees":["Charlie"],"metadata":{"founded":2020},"active":false}],"tags":{"role":"admin","level":"senior"}}"#;
         assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn test_json_name_serialization() {
+        use aws_smithy_schema::serde::SerializableStruct;
+
+        // A simple string-valued trait for testing
+        #[derive(Debug)]
+        struct StringTrait {
+            id: aws_smithy_schema::ShapeId,
+            value: String,
+        }
+        impl aws_smithy_schema::Trait for StringTrait {
+            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
+                &self.id
+            }
+            fn as_any(&self) -> &dyn std::any::Any {
+                &self.value
+            }
+        }
+
+        fn json_name_traits(name: &str) -> aws_smithy_schema::TraitMap {
+            let mut map = aws_smithy_schema::TraitMap::new();
+            map.insert(Box::new(StringTrait {
+                id: aws_smithy_schema::shape_id!("smithy.api", "jsonName"),
+                value: name.to_string(),
+            }));
+            map
+        }
+
+        static FOO_MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::String,
+            aws_smithy_schema::TraitMap::EMPTY,
+            "foo",
+            0,
+        );
+        // bar has @jsonName("Baz")
+        // Can't use static because TraitMap with data isn't const.
+        // Use a lazy static instead.
+        static BAR_MEMBER: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
+            Schema::new_member(
+                aws_smithy_schema::shape_id!("test", "MyStruct"),
+                aws_smithy_schema::ShapeType::Integer,
+                json_name_traits("Baz"),
+                "bar",
+                1,
+            )
+        });
+
+        struct TestStruct;
+        impl SerializableStruct for TestStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&FOO_MEMBER, "hello")?;
+                s.write_integer(&BAR_MEMBER, 42)?;
+                Ok(())
+            }
+        }
+
+        // With use_json_name=true (default), "bar" should serialize as "Baz"
+        let struct_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Structure,
+            aws_smithy_schema::TraitMap::EMPTY,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(&struct_schema, &TestStruct).unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"foo":"hello","Baz":42}"#);
+
+        // With use_json_name=false, "bar" should stay as "bar"
+        let mut ser = JsonSerializer::new(Arc::new(
+            JsonCodecSettings::builder().use_json_name(false).build(),
+        ));
+        ser.write_struct(&struct_schema, &TestStruct).unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"foo":"hello","bar":42}"#);
     }
 }

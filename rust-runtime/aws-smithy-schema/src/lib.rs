@@ -21,6 +21,7 @@ mod schema {
     pub mod codec;
     pub mod prelude;
     pub mod serde;
+    pub mod serde_traits;
 }
 
 pub use schema::shape_id::ShapeId;
@@ -34,6 +35,10 @@ pub mod prelude {
 
 pub mod serde {
     pub use crate::schema::serde::*;
+}
+
+pub mod serde_traits {
+    pub use crate::schema::serde_traits::*;
 }
 
 pub mod codec {
