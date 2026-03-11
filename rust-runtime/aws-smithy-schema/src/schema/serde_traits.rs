@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Well-known trait [`ShapeId`](crate::ShapeId)s relevant to serialization and deserialization.
+//! Well-known trait [`ShapeId`]s relevant to serialization and deserialization.
 //!
 //! These are provided as statics so that codec and protocol implementations can
-//! reference them without constructing a new [`ShapeId`](crate::ShapeId) on each use.
+//! reference them without constructing a new [`ShapeId`] on each use.
 
 use crate::ShapeId;
 
