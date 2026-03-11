@@ -21,10 +21,12 @@ pub trait Trait: Any + Send + Sync + fmt::Debug {
 
 /// An annotation trait (no value), e.g. `@sensitive`, `@sparse`, `@httpPayload`.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Will be used by generated code
 pub struct AnnotationTrait {
     id: ShapeId,
 }
 
+#[allow(dead_code)]
 impl AnnotationTrait {
     /// Creates a new annotation trait.
     pub fn new(id: ShapeId) -> Self {
@@ -44,11 +46,13 @@ impl Trait for AnnotationTrait {
 
 /// A trait with a string value, e.g. `@jsonName("foo")`, `@xmlName("bar")`.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Will be used by generated code
 pub struct StringTrait {
     id: ShapeId,
     value: String,
 }
 
+#[allow(dead_code)]
 impl StringTrait {
     /// Creates a new string-valued trait.
     pub fn new(id: ShapeId, value: impl Into<String>) -> Self {
@@ -79,11 +83,13 @@ impl Trait for StringTrait {
 /// When a trait is included in a schema but has no typed Rust representation,
 /// its value is stored as a [`Document`](aws_smithy_types::Document).
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Will be used by generated code
 pub struct DocumentTrait {
     id: ShapeId,
     value: aws_smithy_types::Document,
 }
 
+#[allow(dead_code)]
 impl DocumentTrait {
     /// Creates a new document-valued trait.
     pub fn new(id: ShapeId, value: aws_smithy_types::Document) -> Self {

@@ -48,7 +48,7 @@ macro_rules! shape_id {
 /// assert_eq!(ID.shape_name(), "String");
 /// assert_eq!(ID.as_str(), "smithy.api#String");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShapeId {
     fqn: &'static str,
     namespace: &'static str,

@@ -36,7 +36,6 @@ import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
-import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -121,11 +120,9 @@ class SchemaGenerator(
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
                 "TraitMap" to smithySchema.resolve("TraitMap"),
-                "MemberSchema" to smithySchema.resolve("MemberSchema"),
             )
 
         val schemaPrefix = symbol.name.uppercase()
-        val schemaStructName = "${symbol.name}Schema"
 
         // Write module-level statics and the schema unit struct
         val ns = shape.id.namespace
@@ -135,56 +132,20 @@ class SchemaGenerator(
         writer.rustTemplate(
             """
             static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
-            static ${schemaPrefix}_SCHEMA_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
-                // Allow unused mut: shapes with no serialization-relevant traits produce no insertions.
-                ##[allow(unused_mut)]
-                let mut map = #{TraitMap}::new();
-                #{traitInsertions}
-                map
-            });
             """,
             *codegenScope,
-            "traitInsertions" to generateTraitInsertions(shape),
         )
         renderMemberSchemas(writer, schemaPrefix)
 
-        // Generate the single schema unit struct with the full Schema impl
-        writer.rustTemplate(
-            """
-            /// Schema type for [`${symbol.name}`]. This zero-sized struct is the single
-            /// source of truth for the shape's schema, used by both the `Schema` impl
-            /// on the data type and by deserialization.
-            pub struct $schemaStructName;
-            """,
-            *codegenScope,
-        )
-        writer.rustBlockTemplate("impl #{Schema} for $schemaStructName", *codegenScope) {
-            rustTemplate(
-                """
-                fn shape_id(&self) -> &#{ShapeId} {
-                    &${schemaPrefix}_SCHEMA_ID
-                }
-
-                fn shape_type(&self) -> #{ShapeType} {
-                    #{ShapeType}::${shapeTypeVariant(shape)}
-                }
-
-                fn traits(&self) -> &#{TraitMap} {
-                    &${schemaPrefix}_SCHEMA_TRAITS
-                }
-                """,
-                *codegenScope,
-            )
-            renderMembers(writer, schemaPrefix)
-        }
-        writer.write("")
+        // Generate the static Schema value
+        renderSchemaStatic(writer, schemaPrefix, symbol.name)
 
         // Provide access to the schema from the data type
         writer.rustTemplate(
             """
             impl ${symbol.name} {
                 /// The schema for this shape.
-                pub const SCHEMA: &'static $schemaStructName = &$schemaStructName;
+                pub const SCHEMA: &'static #{Schema} = &${schemaPrefix}_SCHEMA;
             }
             """,
             *codegenScope,
@@ -193,7 +154,7 @@ class SchemaGenerator(
         // Write SerializableStruct impl for structures
         if (shape is StructureShape) {
             renderSerializableStruct(writer, symbol.name, schemaPrefix)
-            renderDeserializeMethod(writer, symbol.name, schemaPrefix, schemaStructName)
+            renderDeserializeMethod(writer, symbol.name, schemaPrefix)
         }
     }
 
@@ -206,6 +167,7 @@ class SchemaGenerator(
             arrayOf(
                 "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
                 "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
             )
         val members = (shape as StructureShape).allMembers.values.toList()
 
@@ -241,17 +203,8 @@ class SchemaGenerator(
         writer.rustTemplate(
             """
             impl #{SerializableStruct} for $structName {
-                fn serialize<S: #{ShapeSerializer}>(&self, serializer: &mut S) -> ::std::result::Result<(), S::Error> {
-                    serializer.write_struct(Self::SCHEMA, |ser| {
-                        self.serialize_members(ser)
-                    })
-                }
-            }
-
-            impl $structName {
-                /// Writes this structure's members to the serializer without the struct wrapper.
                 ##[allow(unused_variables, clippy::diverging_sub_expression)]
-                pub fn serialize_members<S: #{ShapeSerializer}>(&self, ser: &mut S) -> ::std::result::Result<(), S::Error> {
+                fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
                     #{memberWrites}
                     Ok(())
                 }
@@ -302,7 +255,7 @@ class SchemaGenerator(
                 val elementWrite = elementWriteExpr(elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list(&$memberSchemaRef, |ser| {
+                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in val {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -314,7 +267,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&$memberSchemaRef, |ser| {
+                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in val {
                             $elementWrite
                         }
@@ -328,16 +281,15 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueShapeType = shapeTypeVariant(valueTarget)
                 val valueWrite = mapValueWriteExpr(valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&$memberSchemaRef, |ser| {
+                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in val {
-                            let entry = aws_smithy_schema::MapEntrySchema::new($keyExpr, aws_smithy_schema::ShapeType::$valueShapeType);
+                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
                                 Some(value) => { $valueWrite }
-                                None => { ser.write_null(&entry)?; }
+                                None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
                             }
                         }
                         Ok(())
@@ -345,9 +297,9 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&$memberSchemaRef, |ser| {
+                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in val {
-                            let entry = aws_smithy_schema::MapEntrySchema::new($keyExpr, aws_smithy_schema::ShapeType::$valueShapeType);
+                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
                         }
                         Ok(())
@@ -355,7 +307,7 @@ class SchemaGenerator(
                     """
                 }
             }
-            is StructureShape -> "ser.write_struct(&$memberSchemaRef, |ser| val.serialize_members(ser))?;"
+            is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
@@ -387,49 +339,54 @@ class SchemaGenerator(
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "ser.write_struct($targetQualified::SCHEMA, |ser| $varName.serialize_members(ser))?;"
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
             else -> "todo!(\"schema: unsupported list element type\");"
         }
     }
 
-    /** Returns a write expression for a map value (uses `entry` schema for the key). */
+    /** Returns a write expression for a map value. */
     private fun mapValueWriteExpr(
         target: Shape,
         varName: String,
-    ): String =
-        when (target) {
-            is BooleanShape -> "ser.write_boolean(&entry, *$varName)?;"
-            is ByteShape -> "ser.write_byte(&entry, *$varName)?;"
-            is ShortShape -> "ser.write_short(&entry, *$varName)?;"
-            is IntegerShape -> "ser.write_integer(&entry, *$varName)?;"
-            is LongShape -> "ser.write_long(&entry, *$varName)?;"
-            is FloatShape -> "ser.write_float(&entry, *$varName)?;"
-            is DoubleShape -> "ser.write_double(&entry, *$varName)?;"
-            is BigIntegerShape -> "ser.write_big_integer(&entry, $varName)?;"
-            is BigDecimalShape -> "ser.write_big_decimal(&entry, $varName)?;"
-            is EnumShape -> "ser.write_string(&entry, $varName.as_str())?;"
+    ): String {
+        val prelude = "::aws_smithy_schema::prelude"
+        return when (target) {
+            is BooleanShape -> "ser.write_boolean(&$prelude::BOOLEAN, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$prelude::BYTE, *$varName)?;"
+            is ShortShape -> "ser.write_short(&$prelude::SHORT, *$varName)?;"
+            is IntegerShape -> "ser.write_integer(&$prelude::INTEGER, *$varName)?;"
+            is LongShape -> "ser.write_long(&$prelude::LONG, *$varName)?;"
+            is FloatShape -> "ser.write_float(&$prelude::FLOAT, *$varName)?;"
+            is DoubleShape -> "ser.write_double(&$prelude::DOUBLE, *$varName)?;"
+            is BigIntegerShape -> "ser.write_big_integer(&$prelude::BIG_INTEGER, $varName)?;"
+            is BigDecimalShape -> "ser.write_big_decimal(&$prelude::BIG_DECIMAL, $varName)?;"
+            is EnumShape -> "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
             is StringShape ->
                 if (isStringEnum(target)) {
-                    "ser.write_string(&entry, $varName.as_str())?;"
+                    "ser.write_string(&$prelude::STRING, $varName.as_str())?;"
                 } else {
-                    "ser.write_string(&entry, $varName)?;"
+                    "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
-            is BlobShape -> "ser.write_blob(&entry, $varName)?;"
-            is TimestampShape -> "ser.write_timestamp(&entry, $varName)?;"
-            is StructureShape -> "ser.write_struct(&entry, |ser| $varName.serialize_members(ser))?;"
+            is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
+            is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is StructureShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
+            }
             else -> "todo!(\"schema: unsupported map value type\");"
         }
+    }
 
     private fun renderDeserializeMethod(
         writer: RustWriter,
         structName: String,
         schemaPrefix: String,
-        schemaStructName: String,
     ) {
         val codegenScope =
             arrayOf(
                 "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
                 "Schema" to smithySchema.resolve("Schema"),
             )
         val members = (shape as StructureShape).allMembers.values.toList()
@@ -438,14 +395,14 @@ class SchemaGenerator(
             """
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
-                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, D::Error> {
+                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, #{SerdeError}> {
                     ##[derive(Default)]
                     struct DeserializerBuilder {
                         #{builderFields}
                     }
                     let builder = DeserializerBuilder::default();
                     ##[allow(unused_variables, unused_mut, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
-                    let builder = deserializer.read_struct(&$schemaStructName, builder, |mut builder, member, deser| {
+                    let builder = deserializer.read_struct(&${schemaPrefix}_SCHEMA, builder, |mut builder, member, deser| {
                         match member.member_index() {
                             #{memberArms}
                             _ => {}
@@ -761,72 +718,53 @@ class SchemaGenerator(
         }
     }
 
-    private fun renderMembers(
+    private fun renderSchemaStatic(
         writer: RustWriter,
         schemaPrefix: String,
+        structName: String,
     ) {
         val codegenScope =
             arrayOf(
                 "Schema" to smithySchema.resolve("Schema"),
+                "ShapeType" to smithySchema.resolve("ShapeType"),
+                "TraitMap" to smithySchema.resolve("TraitMap"),
             )
 
         when (shape) {
             is StructureShape, is UnionShape -> {
                 val members = shape.members()
-                if (members.isEmpty()) {
-                    // No members — default Schema trait methods already return None/empty
-                } else {
-                    val memberMatchArms =
-                        members.joinToString("\n") { member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            val escapedName = templateEscape(memberName)
-                            "\"$escapedName\" => Some(&${schemaPrefix}_MEMBER_${constantName(memberName)}),"
-                        }
-                    val indexMatchArms =
-                        members.withIndex().joinToString("\n") { (idx, member) ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            val escapedName = templateEscape(memberName)
-                            "$idx => Some((\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)})),"
-                        }
-                    val membersArray =
-                        members.joinToString(",\n") { member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            val escapedName = templateEscape(memberName)
-                            "(\"$escapedName\", &${schemaPrefix}_MEMBER_${constantName(memberName)} as &dyn #{Schema})"
-                        }
-                    writer.rustTemplate(
-                        """
-                        fn member_schema(&self, name: &str) -> ::std::option::Option<&dyn #{Schema}> {
-                            match name {
-                                $memberMatchArms
-                                _ => None,
+                val membersArray =
+                    if (members.isEmpty()) {
+                        "&[]"
+                    } else {
+                        val refs =
+                            members.joinToString(", ") { member ->
+                                val memberName = symbolProvider.toMemberName(member)
+                                "&${schemaPrefix}_MEMBER_${constantName(memberName)}"
                             }
-                        }
-
-                        fn member_schema_by_index(&self, index: usize) -> ::std::option::Option<(&str, &dyn #{Schema})> {
-                            match index {
-                                $indexMatchArms
-                                _ => None,
-                            }
-                        }
-
-                        fn members(&self) -> Box<dyn Iterator<Item = (&str, &dyn #{Schema})> + '_> {
-                            Box::new([
-                                $membersArray
-                            ].into_iter())
-                        }
-                        """,
-                        *codegenScope,
-                    )
-                }
+                        "&[$refs]"
+                    }
+                writer.rustTemplate(
+                    """
+                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                        ${schemaPrefix}_SCHEMA_ID,
+                        #{ShapeType}::${shapeTypeVariant(shape)},
+                        #{TraitMap}::EMPTY,
+                        $membersArray,
+                    );
+                    """,
+                    *codegenScope,
+                )
             }
 
             is ListShape -> {
                 writer.rustTemplate(
                     """
-                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> {
-                        Some(&${schemaPrefix}_MEMBER)
-                    }
+                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_list(
+                        ${schemaPrefix}_SCHEMA_ID,
+                        #{TraitMap}::EMPTY,
+                        &${schemaPrefix}_MEMBER,
+                    );
                     """,
                     *codegenScope,
                 )
@@ -835,25 +773,27 @@ class SchemaGenerator(
             is MapShape -> {
                 writer.rustTemplate(
                     """
-                    fn key(&self) -> ::std::option::Option<&dyn #{Schema}> {
-                        Some(&${schemaPrefix}_KEY)
-                    }
-
-                    fn member(&self) -> ::std::option::Option<&dyn #{Schema}> {
-                        Some(&${schemaPrefix}_VALUE)
-                    }
+                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_map(
+                        ${schemaPrefix}_SCHEMA_ID,
+                        #{TraitMap}::EMPTY,
+                        &${schemaPrefix}_KEY,
+                        &${schemaPrefix}_VALUE,
+                    );
                     """,
                     *codegenScope,
                 )
             }
 
-            is MemberShape -> {
-                writer.rust(
+            else -> {
+                writer.rustTemplate(
                     """
-                    fn member_name(&self) -> ::std::option::Option<&str> {
-                        Some(${symbolProvider.toMemberName(shape).dq()})
-                    }
+                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new(
+                        ${schemaPrefix}_SCHEMA_ID,
+                        #{ShapeType}::${shapeTypeVariant(shape)},
+                        #{TraitMap}::EMPTY,
+                    );
                     """,
+                    *codegenScope,
                 )
             }
         }
@@ -865,9 +805,10 @@ class SchemaGenerator(
     ) {
         val codegenScope =
             arrayOf(
-                "MemberSchema" to smithySchema.resolve("MemberSchema"),
+                "Schema" to smithySchema.resolve("Schema"),
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
+                "TraitMap" to smithySchema.resolve("TraitMap"),
             )
 
         when (shape) {
@@ -878,13 +819,14 @@ class SchemaGenerator(
                     val escapedMemberId = member.id.toString().replace("#", "##")
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(memberName)}: #{MemberSchema} = #{MemberSchema}::new(
+                        static ${schemaPrefix}_MEMBER_${constantName(memberName)}: #{Schema} = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
                                 "${member.id.name}",
                             ),
                             #{ShapeType}::${shapeTypeVariant(target)},
+                            #{TraitMap}::EMPTY,
                             ${templateEscape(memberName.dq())},
                             $idx,
                         );
@@ -899,13 +841,14 @@ class SchemaGenerator(
                 val escapedMemberId = shape.member.id.toString().replace("#", "##")
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_MEMBER: #{MemberSchema} = #{MemberSchema}::new(
+                    static ${schemaPrefix}_MEMBER: #{Schema} = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedMemberId",
                             "${shape.member.id.namespace}",
                             "${shape.member.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(target)},
+                        #{TraitMap}::EMPTY,
                         "member",
                         0,
                     );
@@ -921,24 +864,26 @@ class SchemaGenerator(
                 val escapedValueId = shape.value.id.toString().replace("#", "##")
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_KEY: #{MemberSchema} = #{MemberSchema}::new(
+                    static ${schemaPrefix}_KEY: #{Schema} = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedKeyId",
                             "${shape.key.id.namespace}",
                             "${shape.key.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(keyTarget)},
+                        #{TraitMap}::EMPTY,
                         "key",
                         0,
                     );
 
-                    static ${schemaPrefix}_VALUE: #{MemberSchema} = #{MemberSchema}::new(
+                    static ${schemaPrefix}_VALUE: #{Schema} = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedValueId",
                             "${shape.value.id.namespace}",
                             "${shape.value.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(valueTarget)},
+                        #{TraitMap}::EMPTY,
                         "value",
                         1,
                     );
