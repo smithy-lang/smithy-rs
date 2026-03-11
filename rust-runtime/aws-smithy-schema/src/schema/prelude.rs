@@ -8,124 +8,102 @@
 //! This module provides const schemas for Smithy's prelude types,
 //! which are the fundamental types available in all Smithy models.
 
-use std::sync::LazyLock;
-
-use crate::{Schema, ShapeId, ShapeType, TraitMap};
-
-/// A simple schema implementation for prelude types.
-#[derive(Debug)]
-pub struct PreludeSchema {
-    id: ShapeId,
-    shape_type: ShapeType,
-}
-
-impl PreludeSchema {
-    /// Creates a new prelude schema.
-    pub const fn new(id: ShapeId, shape_type: ShapeType) -> Self {
-        Self { id, shape_type }
-    }
-}
-
-impl Schema for PreludeSchema {
-    fn shape_id(&self) -> &ShapeId {
-        &self.id
-    }
-
-    fn shape_type(&self) -> ShapeType {
-        self.shape_type
-    }
-
-    fn traits(&self) -> &TraitMap {
-        static MAP: LazyLock<TraitMap> = LazyLock::new(TraitMap::empty);
-
-        &MAP
-    }
-}
-
-// Static schemas for prelude types to allow static lifetime references
+use crate::{shape_id, Schema, ShapeType, TraitMap};
 
 /// Schema for `smithy.api#String`
-pub static STRING: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#String", "smithy.api", "String"),
+pub static STRING: Schema = Schema::new(
+    shape_id!("smithy.api", "String"),
     ShapeType::String,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Boolean`
-pub static BOOLEAN: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Boolean", "smithy.api", "Boolean"),
+pub static BOOLEAN: Schema = Schema::new(
+    shape_id!("smithy.api", "Boolean"),
     ShapeType::Boolean,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Byte`
-pub static BYTE: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Byte", "smithy.api", "Byte"),
+pub static BYTE: Schema = Schema::new(
+    shape_id!("smithy.api", "Byte"),
     ShapeType::Byte,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Short`
-pub static SHORT: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Short", "smithy.api", "Short"),
+pub static SHORT: Schema = Schema::new(
+    shape_id!("smithy.api", "Short"),
     ShapeType::Short,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Integer`
-pub static INTEGER: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Integer", "smithy.api", "Integer"),
+pub static INTEGER: Schema = Schema::new(
+    shape_id!("smithy.api", "Integer"),
     ShapeType::Integer,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Long`
-pub static LONG: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Long", "smithy.api", "Long"),
+pub static LONG: Schema = Schema::new(
+    shape_id!("smithy.api", "Long"),
     ShapeType::Long,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Float`
-pub static FLOAT: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Float", "smithy.api", "Float"),
+pub static FLOAT: Schema = Schema::new(
+    shape_id!("smithy.api", "Float"),
     ShapeType::Float,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Double`
-pub static DOUBLE: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Double", "smithy.api", "Double"),
+pub static DOUBLE: Schema = Schema::new(
+    shape_id!("smithy.api", "Double"),
     ShapeType::Double,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#BigInteger`
-pub static BIG_INTEGER: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#BigInteger", "smithy.api", "BigInteger"),
+pub static BIG_INTEGER: Schema = Schema::new(
+    shape_id!("smithy.api", "BigInteger"),
     ShapeType::BigInteger,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#BigDecimal`
-pub static BIG_DECIMAL: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#BigDecimal", "smithy.api", "BigDecimal"),
+pub static BIG_DECIMAL: Schema = Schema::new(
+    shape_id!("smithy.api", "BigDecimal"),
     ShapeType::BigDecimal,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Blob`
-pub static BLOB: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Blob", "smithy.api", "Blob"),
+pub static BLOB: Schema = Schema::new(
+    shape_id!("smithy.api", "Blob"),
     ShapeType::Blob,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Timestamp`
-pub static TIMESTAMP: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Timestamp", "smithy.api", "Timestamp"),
+pub static TIMESTAMP: Schema = Schema::new(
+    shape_id!("smithy.api", "Timestamp"),
     ShapeType::Timestamp,
+    TraitMap::EMPTY,
 );
 
 /// Schema for `smithy.api#Document`
-pub static DOCUMENT: PreludeSchema = PreludeSchema::new(
-    ShapeId::from_static("smithy.api#Document", "smithy.api", "Document"),
+pub static DOCUMENT: Schema = Schema::new(
+    shape_id!("smithy.api", "Document"),
     ShapeType::Document,
+    TraitMap::EMPTY,
 );
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SchemaExt;
 
     #[test]
     fn test_string_schema() {

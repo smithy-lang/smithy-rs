@@ -59,141 +59,118 @@ pub trait Codec {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::serde::{ShapeDeserializer, ShapeSerializer};
+    use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
     use crate::{prelude::*, Schema};
-    use std::fmt;
-
-    // Mock error type
-    #[derive(Debug)]
-    struct MockError;
-
-    impl fmt::Display for MockError {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "mock error")
-        }
-    }
-
-    impl std::error::Error for MockError {}
 
     // Mock serializer
     struct MockSerializer {
         output: Vec<u8>,
     }
 
+    impl MockSerializer {
+        fn finish(self) -> Vec<u8> {
+            self.output
+        }
+    }
+
     impl ShapeSerializer for MockSerializer {
-        type Output = Vec<u8>;
-        type Error = MockError;
-
-        fn finish(self) -> Result<Self::Output, Self::Error> {
-            Ok(self.output)
-        }
-
-        fn write_struct<F>(
+        fn write_struct(
             &mut self,
-            _schema: &dyn Schema,
-            _write_members: F,
-        ) -> Result<(), Self::Error>
-        where
-            F: FnOnce(&mut Self) -> Result<(), Self::Error>,
-        {
+            _schema: &Schema,
+            _value: &dyn SerializableStruct,
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_list<F>(
+        fn write_list(
             &mut self,
-            _schema: &dyn Schema,
-            _write_elements: F,
-        ) -> Result<(), Self::Error>
-        where
-            F: FnOnce(&mut Self) -> Result<(), Self::Error>,
-        {
+            _schema: &Schema,
+            _write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_map<F>(
+        fn write_map(
             &mut self,
-            _schema: &dyn Schema,
-            _write_entries: F,
-        ) -> Result<(), Self::Error>
-        where
-            F: FnOnce(&mut Self) -> Result<(), Self::Error>,
-        {
+            _schema: &Schema,
+            _write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_boolean(&mut self, _schema: &dyn Schema, _value: bool) -> Result<(), Self::Error> {
+        fn write_boolean(&mut self, _schema: &Schema, _value: bool) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_byte(&mut self, _schema: &dyn Schema, _value: i8) -> Result<(), Self::Error> {
+        fn write_byte(&mut self, _schema: &Schema, _value: i8) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_short(&mut self, _schema: &dyn Schema, _value: i16) -> Result<(), Self::Error> {
+        fn write_short(&mut self, _schema: &Schema, _value: i16) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_integer(&mut self, _schema: &dyn Schema, _value: i32) -> Result<(), Self::Error> {
+        fn write_integer(&mut self, _schema: &Schema, _value: i32) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_long(&mut self, _schema: &dyn Schema, _value: i64) -> Result<(), Self::Error> {
+        fn write_long(&mut self, _schema: &Schema, _value: i64) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_float(&mut self, _schema: &dyn Schema, _value: f32) -> Result<(), Self::Error> {
+        fn write_float(&mut self, _schema: &Schema, _value: f32) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_double(&mut self, _schema: &dyn Schema, _value: f64) -> Result<(), Self::Error> {
+        fn write_double(&mut self, _schema: &Schema, _value: f64) -> Result<(), SerdeError> {
             Ok(())
         }
 
         fn write_big_integer(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::BigInteger,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
         fn write_big_decimal(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::BigDecimal,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_string(&mut self, _schema: &dyn Schema, _value: &str) -> Result<(), Self::Error> {
+        fn write_string(&mut self, _schema: &Schema, _value: &str) -> Result<(), SerdeError> {
             Ok(())
         }
 
         fn write_blob(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::Blob,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
         fn write_timestamp(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::DateTime,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
         fn write_document(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             _value: &aws_smithy_types::Document,
-        ) -> Result<(), Self::Error> {
+        ) -> Result<(), SerdeError> {
             Ok(())
         }
 
-        fn write_null(&mut self, _schema: &dyn Schema) -> Result<(), Self::Error> {
+        fn write_null(&mut self, _schema: &Schema) -> Result<(), SerdeError> {
             Ok(())
         }
     }
@@ -205,110 +182,105 @@ mod test {
     }
 
     impl<'a> ShapeDeserializer for MockDeserializer<'a> {
-        type Error = MockError;
-
         fn read_struct<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             state: T,
             _consumer: F,
-        ) -> Result<T, Self::Error>
+        ) -> Result<T, SerdeError>
         where
-            F: FnMut(T, &dyn Schema, &mut Self) -> Result<T, Self::Error>,
+            F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
         {
             Ok(state)
         }
 
         fn read_list<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             state: T,
             _consumer: F,
-        ) -> Result<T, Self::Error>
+        ) -> Result<T, SerdeError>
         where
-            F: FnMut(T, &mut Self) -> Result<T, Self::Error>,
+            F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
         {
             Ok(state)
         }
 
         fn read_map<T, F>(
             &mut self,
-            _schema: &dyn Schema,
+            _schema: &Schema,
             state: T,
             _consumer: F,
-        ) -> Result<T, Self::Error>
+        ) -> Result<T, SerdeError>
         where
-            F: FnMut(T, String, &mut Self) -> Result<T, Self::Error>,
+            F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
         {
             Ok(state)
         }
 
-        fn read_boolean(&mut self, _schema: &dyn Schema) -> Result<bool, Self::Error> {
+        fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
             Ok(false)
         }
 
-        fn read_byte(&mut self, _schema: &dyn Schema) -> Result<i8, Self::Error> {
+        fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
             Ok(0)
         }
 
-        fn read_short(&mut self, _schema: &dyn Schema) -> Result<i16, Self::Error> {
+        fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
             Ok(0)
         }
 
-        fn read_integer(&mut self, _schema: &dyn Schema) -> Result<i32, Self::Error> {
+        fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
             Ok(0)
         }
 
-        fn read_long(&mut self, _schema: &dyn Schema) -> Result<i64, Self::Error> {
+        fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
             Ok(0)
         }
 
-        fn read_float(&mut self, _schema: &dyn Schema) -> Result<f32, Self::Error> {
+        fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
             Ok(0.0)
         }
 
-        fn read_double(&mut self, _schema: &dyn Schema) -> Result<f64, Self::Error> {
+        fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
             Ok(0.0)
         }
 
         fn read_big_integer(
             &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::BigInteger, Self::Error> {
+            _schema: &Schema,
+        ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigInteger::from_str("0").unwrap())
         }
 
         fn read_big_decimal(
             &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::BigDecimal, Self::Error> {
+            _schema: &Schema,
+        ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigDecimal::from_str("0").unwrap())
         }
 
-        fn read_string(&mut self, _schema: &dyn Schema) -> Result<String, Self::Error> {
+        fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
             Ok(String::new())
         }
 
-        fn read_blob(
-            &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::Blob, Self::Error> {
+        fn read_blob(&mut self, _schema: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
             Ok(aws_smithy_types::Blob::new(Vec::new()))
         }
 
         fn read_timestamp(
             &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::DateTime, Self::Error> {
+            _schema: &Schema,
+        ) -> Result<aws_smithy_types::DateTime, SerdeError> {
             Ok(aws_smithy_types::DateTime::from_secs(0))
         }
 
         fn read_document(
             &mut self,
-            _schema: &dyn Schema,
-        ) -> Result<aws_smithy_types::Document, Self::Error> {
+            _schema: &Schema,
+        ) -> Result<aws_smithy_types::Document, SerdeError> {
             Ok(aws_smithy_types::Document::Null)
         }
 
@@ -344,7 +316,7 @@ mod test {
 
         // Test that we can use the serializer
         serializer.write_string(&STRING, "test").unwrap();
-        let output = serializer.finish().unwrap();
+        let output = serializer.finish();
         assert_eq!(output, Vec::<u8>::new());
     }
 
@@ -366,7 +338,7 @@ mod test {
         // Serialize
         let mut serializer = codec.create_serializer();
         serializer.write_integer(&INTEGER, 42).unwrap();
-        let bytes = serializer.finish().unwrap();
+        let bytes = serializer.finish();
 
         // Deserialize
         let mut deserializer = codec.create_deserializer(&bytes);
