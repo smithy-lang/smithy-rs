@@ -714,6 +714,10 @@ class SchemaGenerator(
     /**
      * Returns a `.with_*()` call for a known trait, or null if the trait
      * is not a known direct field on Schema.
+     *
+     * IMPORTANT: This must stay in sync with the `with_*` setters and known trait
+     * fields on `Schema` in `aws-smithy-schema/src/lib.rs`. If a new known trait
+     * is added to `Schema`, a corresponding entry must be added here.
      */
     private fun knownTraitSetter(trait: software.amazon.smithy.model.traits.Trait): String? {
         val id = trait.toShapeId().toString()

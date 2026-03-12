@@ -68,6 +68,9 @@ pub struct Schema {
     members: SchemaMembers,
 
     // -- Known serde trait fields (const-constructable) --
+    // IMPORTANT: These fields and their `with_*` setters must stay in sync with
+    // `knownTraitSetter` in `SchemaGenerator.kt`. If a new known trait is added
+    // here, a corresponding entry must be added in the codegen.
     sensitive: Option<trait_types::SensitiveTrait>,
     json_name: Option<trait_types::JsonNameTrait>,
     timestamp_format: Option<trait_types::TimestampFormatTrait>,
@@ -109,7 +112,7 @@ enum SchemaMembers {
 }
 
 impl Schema {
-    /// Default values for all trait fields (used by constructors).
+    /// Default values for all trait fields (should only be used by constructors as a spread source).
     const EMPTY_TRAITS: Self = Self {
         id: ShapeId::from_static("", "", ""),
         shape_type: ShapeType::Boolean,

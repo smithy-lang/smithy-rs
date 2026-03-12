@@ -16,7 +16,7 @@ macro_rules! annotation_trait {
     ($(#[$meta:meta])* $name:ident, $ns:literal, $trait_name:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone)]
-        #[allow(dead_code)]
+        #[allow(dead_code)] // Used by generated schema code
         pub struct $name;
 
         impl $name {
@@ -35,12 +35,12 @@ macro_rules! string_trait {
     ($(#[$meta:meta])* $name:ident, $ns:literal, $trait_name:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone)]
-        #[allow(dead_code)]
+        #[allow(dead_code)] // Used by generated schema code
         pub struct $name {
             value: &'static str,
         }
 
-        #[allow(dead_code)]
+        #[allow(dead_code)] // Used by generated schema code
         impl $name {
             /// The Shape ID for this trait.
             pub const TRAIT_ID: ShapeId = crate::shape_id!($ns, $trait_name);
@@ -107,7 +107,7 @@ annotation_trait!(
 
 /// The `@timestampFormat` trait — specifies the serialization format for timestamps.
 #[derive(Debug, Clone, Copy)]
-#[allow(dead_code)]
+#[allow(dead_code)] // Used by generated schema code
 pub struct TimestampFormatTrait {
     format: TimestampFormat,
 }
@@ -123,7 +123,7 @@ pub enum TimestampFormat {
     HttpDate,
 }
 
-#[allow(dead_code)]
+#[allow(dead_code)] // Used by generated schema code
 impl TimestampFormatTrait {
     /// The Shape ID for this trait.
     pub const TRAIT_ID: ShapeId = crate::shape_id!("smithy.api", "timestampFormat");

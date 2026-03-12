@@ -102,6 +102,8 @@ impl ShapeSerializer for JsonSerializer {
         let saved = self.needs_comma;
         let saved_depth = self.map_depth;
         self.needs_comma = false;
+        // Reset map_depth so struct members don't trigger map-key logic in prefix().
+        // Restored after the struct body so an enclosing map resumes correctly.
         self.map_depth = 0;
         value.serialize_members(self)?;
         self.output.push('}');
@@ -120,6 +122,7 @@ impl ShapeSerializer for JsonSerializer {
         let saved = self.needs_comma;
         let saved_depth = self.map_depth;
         self.needs_comma = false;
+        // Reset map_depth so list elements don't trigger map-key logic in prefix().
         self.map_depth = 0;
         write_elements(self)?;
         self.output.push(']');
@@ -140,6 +143,9 @@ impl ShapeSerializer for JsonSerializer {
         let saved_depth = self.map_depth;
         self.needs_comma = false;
         self.expecting_map_key = true;
+        // Increment depth so prefix() knows to restore expecting_map_key after
+        // each value write. write_string checks expecting_map_key *before* calling
+        // prefix(), so the flag only affects the *next* write_string (the next key).
         self.map_depth += 1;
         write_entries(self)?;
         self.map_depth = saved_depth;
