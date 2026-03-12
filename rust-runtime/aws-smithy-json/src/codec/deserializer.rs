@@ -1110,20 +1110,6 @@ mod tests {
     fn test_json_name_deserialization() {
         use aws_smithy_schema::Schema;
 
-        #[derive(Debug)]
-        struct StringTrait {
-            id: aws_smithy_schema::ShapeId,
-            value: String,
-        }
-        impl aws_smithy_schema::Trait for StringTrait {
-            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
-                &self.id
-            }
-            fn as_any(&self) -> &dyn std::any::Any {
-                &self.value
-            }
-        }
-
         static FOO_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,

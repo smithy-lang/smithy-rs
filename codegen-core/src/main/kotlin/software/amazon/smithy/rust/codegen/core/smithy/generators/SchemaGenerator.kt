@@ -240,12 +240,14 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$memberSchemaRef, val)?;"
                 }
+
             is BlobShape ->
                 if (target.hasTrait(StreamingTrait::class.java)) {
                     "// streaming blob is serialized as the HTTP body by the protocol, not the codec"
                 } else {
                     "ser.write_blob(&$memberSchemaRef, val)?;"
                 }
+
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
             is ListShape -> {
@@ -275,6 +277,7 @@ class SchemaGenerator(
                     """
                 }
             }
+
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val keyTarget = model.expectShape(target.key.target)
@@ -306,6 +309,7 @@ class SchemaGenerator(
                     """
                 }
             }
+
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
             is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
@@ -334,12 +338,14 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
+
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
+
             else -> "todo!(\"schema: unsupported list element type\");"
         }
     }
@@ -367,12 +373,14 @@ class SchemaGenerator(
                 } else {
                     "ser.write_string(&$prelude::STRING, $varName)?;"
                 }
+
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
+
             else -> "todo!(\"schema: unsupported map value type\");"
         }
     }
@@ -421,7 +429,9 @@ class SchemaGenerator(
                         val memberName = symbolProvider.toMemberName(member)
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val target = model.expectShape(member.target)
-                        val rustType = memberSymbol.rustType().stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
+                        val rustType =
+                            memberSymbol.rustType()
+                                .stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
                         rust("$memberName: ::std::option::Option<${rustType.render()}>,")
                     }
                 },
@@ -490,6 +500,7 @@ class SchemaGenerator(
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "$enumName::from(deser.read_string($memberRef)?.as_str())"
             }
+
             is StringShape ->
                 if (isStringEnum(target)) {
                     val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
@@ -497,12 +508,14 @@ class SchemaGenerator(
                 } else {
                     "deser.read_string($memberRef)?"
                 }
+
             is BlobShape ->
                 if (target.hasTrait(StreamingTrait::class.java)) {
                     "{ let _ = $memberRef; ::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty()) }"
                 } else {
                     "deser.read_blob($memberRef)?"
                 }
+
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is ListShape -> {
@@ -515,6 +528,7 @@ class SchemaGenerator(
                     "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push($elementRead); Ok(list) })?"
                 }
             }
+
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val keyTarget = model.expectShape(target.key.target)
@@ -533,10 +547,12 @@ class SchemaGenerator(
                     "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert($keyInsert, $valueRead); Ok(map) })?"
                 }
             }
+
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
+
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
         }
 
@@ -559,6 +575,7 @@ class SchemaGenerator(
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "$enumName::from(deser.read_string($memberRef)?.as_str())"
             }
+
             is StringShape ->
                 if (isStringEnum(target)) {
                     val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
@@ -566,6 +583,7 @@ class SchemaGenerator(
                 } else {
                     "deser.read_string($memberRef)?"
                 }
+
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
@@ -574,6 +592,7 @@ class SchemaGenerator(
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
+
             else -> "todo!(\"deserialize nested aggregate\")"
         }
 
@@ -590,6 +609,7 @@ class SchemaGenerator(
                 } else {
                     "::aws_smithy_types::Blob::new(Vec::new())"
                 }
+
             is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
             is ListShape -> "Default::default()"
             is MapShape -> "Default::default()"
@@ -619,11 +639,8 @@ class SchemaGenerator(
             else -> throw IllegalArgumentException("Unsupported shape type: ${shape.type}")
         }
 
-    /**
-     * Generates a Writable that emits `map.insert(...)` calls for each
-     * included trait on the given shape.
-     */
-    private fun generateTraitInsertions(shape: Shape) =
+    /** Generates `map.insert(...)` calls for traits that are NOT known direct fields on Schema. */
+    private fun generateUnknownTraitInsertions(shape: Shape) =
         writable {
             val traits = traitFilter.traitsFor(shape)
             val codegenScope =
@@ -636,7 +653,10 @@ class SchemaGenerator(
                     "traits" to smithySchema.resolve("traits"),
                 )
             for (trait in traits) {
-                // 1. Check extension for custom rendering
+                // Skip known traits — they're handled by with_*() setters
+                if (knownTraitSetter(trait) != null) continue
+
+                // Check extension for custom rendering
                 val customProvider = traitExtension.providerFor(trait)
                 if (customProvider != null) {
                     val customWritable = customProvider.render(trait)
@@ -648,37 +668,24 @@ class SchemaGenerator(
                     }
                 }
 
-                // 2. Use typed trait if available
-                val typedInsert = typedTraitInsert(trait)
-                if (typedInsert != null) {
-                    rustTemplate(
-                        """map.insert(Box::new(#{traits}::$typedInsert));""",
-                        *codegenScope,
-                    )
-                    continue
-                }
-
-                // 3. Fall back: annotation, string, or document
-                val traitId = trait.toShapeId().toString().replace("#", "##")
+                // Fall back: annotation, string, or document
+                val traitNs = trait.toShapeId().namespace
+                val traitName = trait.toShapeId().name
                 val stringValue = trait.stringValue()
                 if (trait.isAnnotationTrait()) {
                     rustTemplate(
-                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::new("$traitId"))));""",
+                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
                         *codegenScope,
                     )
                 } else if (stringValue != null) {
                     rustTemplate(
-                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::new("$traitId"), ${stringValue.dq()})));""",
+                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
                         *codegenScope,
                     )
                 } else {
-                    // TODO(schema) Evaluate creating a Document that fully models the trait data
-                    //  rather than holding it as a JSON string. The existing serde trait
-                    //  implementations on aws_smithy_types::Document could be used to convert
-                    //  the Smithy Node directly into a structured Document value.
                     val jsonValue = Node.printJson(trait.toNode()).replace("\\", "\\\\").replace("\"", "\\\"")
                     rustTemplate(
-                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::new("$traitId"), #{Document}::String("$jsonValue".to_string()))));""",
+                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), #{Document}::String("$jsonValue".to_string()))));""",
                         *codegenScope,
                     )
                 }
@@ -686,33 +693,61 @@ class SchemaGenerator(
         }
 
     /**
-     * Returns a Rust expression for constructing a typed trait, or null if no
-     * typed representation exists (falls back to generic AnnotationTrait/StringTrait).
+     * Returns the `.with_*()` chain for known serde traits on a shape.
+     * Returns empty string if the shape has no known traits.
      */
-    private fun typedTraitInsert(trait: SmithyTrait): String? {
+    private fun traitSetterChain(shape: Shape): String {
+        val setters = mutableListOf<String>()
+        for (trait in traitFilter.traitsFor(shape)) {
+            val setter = knownTraitSetter(trait)
+            if (setter != null) {
+                setters.add(setter)
+            }
+        }
+        return setters.joinToString("")
+    }
+
+    /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
+    private fun hasUnknownTraits(shape: Shape): Boolean =
+        traitFilter.traitsFor(shape).any { knownTraitSetter(it) == null }
+
+    /**
+     * Returns a `.with_*()` call for a known trait, or null if the trait
+     * is not a known direct field on Schema.
+     */
+    private fun knownTraitSetter(trait: software.amazon.smithy.model.traits.Trait): String? {
         val id = trait.toShapeId().toString()
         val stringValue = trait.stringValue()
         return when (id) {
-            // String-valued traits
-            "smithy.api#jsonName" -> "JsonNameTrait::new(${stringValue!!.dq()})"
-            "smithy.api#xmlName" -> "XmlNameTrait::new(${stringValue!!.dq()})"
-            "smithy.api#mediaType" -> "MediaTypeTrait::new(${stringValue!!.dq()})"
-            "smithy.api#timestampFormat" -> "TimestampFormatTrait::new(${stringValue!!.dq()})"
-            "smithy.api#httpHeader" -> "HttpHeaderTrait::new(${stringValue!!.dq()})"
-            "smithy.api#httpQuery" -> "HttpQueryTrait::new(${stringValue!!.dq()})"
-            "smithy.api#httpPrefixHeaders" -> "HttpPrefixHeadersTrait::new(${stringValue!!.dq()})"
-            // Annotation traits
-            "smithy.api#sensitive" -> "SensitiveTrait"
-            "smithy.api#xmlAttribute" -> "XmlAttributeTrait"
-            "smithy.api#xmlFlattened" -> "XmlFlattenedTrait"
-            "smithy.api#httpLabel" -> "HttpLabelTrait"
-            "smithy.api#httpPayload" -> "HttpPayloadTrait"
-            "smithy.api#httpQueryParams" -> "HttpQueryParamsTrait"
-            "smithy.api#httpResponseCode" -> "HttpResponseCodeTrait"
-            "smithy.api#streaming" -> "StreamingTrait"
-            "smithy.api#eventHeader" -> "EventHeaderTrait"
-            "smithy.api#eventPayload" -> "EventPayloadTrait"
-            "smithy.api#hostLabel" -> "HostLabelTrait"
+            "smithy.api#sensitive" -> "\n    .with_sensitive()"
+            "smithy.api#jsonName" -> "\n    .with_json_name(${stringValue!!.dq()})"
+            "smithy.api#timestampFormat" -> {
+                val variant =
+                    when (stringValue) {
+                        "epoch-seconds" -> "EpochSeconds"
+                        "date-time" -> "DateTime"
+                        "http-date" -> "HttpDate"
+                        else -> return null
+                    }
+                "\n    .with_timestamp_format(aws_smithy_schema::traits::TimestampFormat::$variant)"
+            }
+
+            "smithy.api#xmlName" -> "\n    .with_xml_name(${stringValue!!.dq()})"
+            "smithy.api#xmlAttribute" -> "\n    .with_xml_attribute()"
+            "smithy.api#xmlFlattened" -> "\n    .with_xml_flattened()"
+            "smithy.api#xmlNamespace" -> "\n    .with_xml_namespace()"
+            "smithy.api#mediaType" -> "\n    .with_media_type(${stringValue!!.dq()})"
+            "smithy.api#httpHeader" -> "\n    .with_http_header(${stringValue!!.dq()})"
+            "smithy.api#httpLabel" -> "\n    .with_http_label()"
+            "smithy.api#httpPayload" -> "\n    .with_http_payload()"
+            "smithy.api#httpPrefixHeaders" -> "\n    .with_http_prefix_headers(${stringValue!!.dq()})"
+            "smithy.api#httpQuery" -> "\n    .with_http_query(${stringValue!!.dq()})"
+            "smithy.api#httpQueryParams" -> "\n    .with_http_query_params()"
+            "smithy.api#httpResponseCode" -> "\n    .with_http_response_code()"
+            "smithy.api#streaming" -> "\n    .with_streaming()"
+            "smithy.api#eventHeader" -> "\n    .with_event_header()"
+            "smithy.api#eventPayload" -> "\n    .with_event_payload()"
+            "smithy.api#hostLabel" -> "\n    .with_host_label()"
             else -> null
         }
     }
@@ -742,16 +777,38 @@ class SchemaGenerator(
                             }
                         "&[$refs]"
                     }
-                writer.rustTemplate(
-                    """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
-                        ${schemaPrefix}_SCHEMA_ID,
-                        #{ShapeType}::${shapeTypeVariant(shape)},
-                        $membersArray,
-                    );
-                    """,
-                    *codegenScope,
-                )
+                val traitChain = traitSetterChain(shape)
+                if (hasUnknownTraits(shape)) {
+                    writer.rustTemplate(
+                        """
+                        static ${schemaPrefix}_TRAITS: std::sync::LazyLock<#{TraitMap}> = std::sync::LazyLock::new(|| {
+                            let mut map = #{TraitMap}::new();
+                            #{insertions}
+                            map
+                        });
+                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                            ${schemaPrefix}_SCHEMA_ID,
+                            #{ShapeType}::${shapeTypeVariant(shape)},
+                            $membersArray,
+                        )$traitChain
+                        .with_traits(&${schemaPrefix}_TRAITS);
+                        """,
+                        *codegenScope,
+                        "TraitMap" to smithySchema.resolve("TraitMap"),
+                        "insertions" to generateUnknownTraitInsertions(shape),
+                    )
+                } else {
+                    writer.rustTemplate(
+                        """
+                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                            ${schemaPrefix}_SCHEMA_ID,
+                            #{ShapeType}::${shapeTypeVariant(shape)},
+                            $membersArray,
+                        )$traitChain;
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
 
             is ListShape -> {
@@ -810,6 +867,7 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
+                    val memberTraitChain = traitSetterChain(member)
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(memberName)}: #{Schema} = #{Schema}::new_member(
@@ -821,7 +879,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(memberName.dq())},
                             $idx,
-                        );
+                        )$memberTraitChain;
                         """,
                         *codegenScope,
                     )

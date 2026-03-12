@@ -340,12 +340,6 @@ class SchemaGeneratorTest {
         project.compileAndTest()
     }
 
-    // TODO(schema): Re-enable trait tests once trait data is wired into Schema statics.
-    // Trait generation was removed when Schema became a concrete struct because
-    // TraitMap with data requires runtime allocation (incompatible with static Schema).
-    // The original test logic is preserved below for reference when implementing this.
-
-    /*
     @Test
     fun `trait filtering includes sensitive and jsonName`() {
         val traitModel =
@@ -371,22 +365,19 @@ class SchemaGeneratorTest {
             unitTest(
                 "trait_filtering",
                 """
-                use aws_smithy_schema::{Schema, ShapeId, Trait};
                 use aws_smithy_schema::traits::SensitiveTrait;
                 let s = SecretData::SCHEMA;
 
-                // @sensitive is included and uses the typed SensitiveTrait
-                let sensitive_id = ShapeId::new("smithy.api#sensitive");
-                assert!(s.traits().contains(&sensitive_id), "should include @sensitive");
-                let sensitive = s.traits().get(&sensitive_id).unwrap();
-                assert!(sensitive.as_any().downcast_ref::<SensitiveTrait>().is_some(),
-                    "should be a typed SensitiveTrait");
+                // @sensitive is included as a direct field
+                assert!(s.sensitive().is_some(), "should include @sensitive");
 
-                // @deprecated is NOT in the inclusion list
-                let deprecated_id = ShapeId::new("smithy.api#deprecated");
-                assert!(!s.traits().contains(&deprecated_id), "should exclude @deprecated");
+                // @jsonName is on the member schema, not the struct
+                let name_member = s.member_schema("name").expect("should have name member");
+                assert_eq!(name_member.json_name().map(|j| j.value()), Some("user_name"));
 
-                assert_eq!(s.traits().len(), 1);
+                // password has no jsonName
+                let pw_member = s.member_schema("password").expect("should have password member");
+                assert!(pw_member.json_name().is_none());
                 """,
             )
         }
@@ -394,7 +385,7 @@ class SchemaGeneratorTest {
     }
 
     @Test
-    fun `unknown traits stored as DocumentTrait`() {
+    fun `unknown traits stored in fallback TraitMap`() {
         val customTraitModel =
             """
             namespace test
@@ -405,7 +396,6 @@ class SchemaGeneratorTest {
             }
 
             @trait(selector: "structure")
-            @tags(["custom"])
             structure myAnnotationCustomTrait {}
 
             @myCustomTrait(setting: "hello")
@@ -417,7 +407,6 @@ class SchemaGeneratorTest {
 
         val customProvider = testSymbolProvider(customTraitModel)
         val customContext = testCodegenContext(customTraitModel)
-        // Add the custom traits to the filter so they're included
         val filter =
             SchemaTraitFilter(
                 customTraitModel,
@@ -434,16 +423,17 @@ class SchemaGeneratorTest {
             unitTest(
                 "unknown_traits",
                 """
-                use aws_smithy_schema::{Schema, ShapeId, Trait, DocumentTrait};
+                use aws_smithy_schema::{DocumentTrait, Trait};
                 let s = Tagged::SCHEMA;
 
+                // Unknown traits are stored in the fallback TraitMap
+                let traits = s.traits().expect("should have a fallback trait map");
+
                 // Complex custom trait is stored as DocumentTrait
-                let custom_id = ShapeId::new("test#myCustomTrait");
-                assert!(s.traits().contains(&custom_id), "should include custom trait");
-                let custom = s.traits().get(&custom_id).unwrap();
+                let custom_id = aws_smithy_schema::shape_id!("test", "myCustomTrait");
+                let custom = traits.get(&custom_id).expect("should include custom trait");
                 let doc_trait = custom.as_any().downcast_ref::<DocumentTrait>()
                     .expect("unknown complex trait should be a DocumentTrait");
-                // The value is stored as a JSON string
                 match doc_trait.value() {
                     aws_smithy_types::Document::String(json) => {
                         assert!(json.contains("hello"), "should contain the setting value: {json}");
@@ -452,74 +442,15 @@ class SchemaGeneratorTest {
                 }
 
                 // Annotation custom trait is stored as AnnotationTrait
-                let ann_id = ShapeId::new("test#myAnnotationCustomTrait");
-                assert!(s.traits().contains(&ann_id), "should include annotation custom trait");
+                let ann_id = aws_smithy_schema::shape_id!("test", "myAnnotationCustomTrait");
+                assert!(traits.get(&ann_id).is_some(), "should include annotation custom trait");
 
-                assert_eq!(s.traits().len(), 2);
+                assert_eq!(traits.len(), 2);
                 """,
             )
         }
         project.compileAndTest()
     }
-
-    @Test
-    fun `custom TraitCodegenProvider overrides rendering`() {
-        val customTraitModel =
-            """
-            namespace test
-
-            @trait(selector: "structure")
-            structure myCustomTrait {
-                setting: String
-            }
-
-            @myCustomTrait(setting: "world")
-            structure Overridden {
-                value: String
-            }
-            """.asSmithyModel()
-
-        val customProvider = testSymbolProvider(customTraitModel)
-        val customContext = testCodegenContext(customTraitModel)
-        val filter =
-            SchemaTraitFilter(
-                customTraitModel,
-                setOf(software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait")),
-            )
-        val extension = SchemaTraitExtension()
-        extension.add(software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait")) { trait ->
-            // Render as a StringTrait with the "setting" value extracted
-            val node = trait.toNode().expectObjectNode()
-            val setting = node.getStringMember("setting").get().value
-            software.amazon.smithy.rust.codegen.core.rustlang.writable {
-                rustTemplate(
-                    """Box::new(#{StringTrait}::new(#{ShapeId}::new("test##myCustomTrait"), ${setting.dq()}))""",
-                    "StringTrait" to RuntimeType.smithySchema(customContext.runtimeConfig).resolve("StringTrait"),
-                    "ShapeId" to RuntimeType.smithySchema(customContext.runtimeConfig).resolve("ShapeId"),
-                )
-            }
-        }
-        val project = TestWorkspace.testProject(customProvider)
-        val shape = customTraitModel.lookup<StructureShape>("test#Overridden")
-        project.useShapeWriter(shape) {
-            StructureGenerator(customTraitModel, customProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
-            SchemaGenerator(customContext, this, shape, filter, extension).render()
-            unitTest(
-                "custom_provider",
-                """
-                use aws_smithy_schema::{Schema, ShapeId, Trait, StringTrait};
-                let s = Overridden::SCHEMA;
-                let id = ShapeId::new("test#myCustomTrait");
-                let t = s.traits().get(&id).unwrap();
-                let st = t.as_any().downcast_ref::<StringTrait>()
-                    .expect("custom provider should render as StringTrait");
-                assert_eq!(st.value(), "world");
-                """,
-            )
-        }
-        project.compileAndTest()
-    }
-     */
 
     @Test
     fun `schema for recursive structure compiles`() {

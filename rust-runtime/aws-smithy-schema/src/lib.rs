@@ -89,7 +89,7 @@ pub struct Schema {
     media_type: Option<trait_types::MediaTypeTrait>,
 
     /// Fallback for unknown/custom traits. `None` in const contexts (no allocation).
-    traits: Option<TraitMap>,
+    traits: Option<&'static std::sync::LazyLock<TraitMap>>,
 }
 
 /// Shape-type-specific member references.
@@ -208,8 +208,8 @@ impl Schema {
     }
 
     /// Returns the fallback trait map for unknown/custom traits.
-    pub fn traits(&self) -> &Option<TraitMap> {
-        &self.traits
+    pub fn traits(&self) -> Option<&TraitMap> {
+        self.traits.map(|lazy| &**lazy)
     }
 
     // -- Known trait accessors --
@@ -357,6 +357,12 @@ impl Schema {
     /// Sets the `@xmlNamespace` trait.
     pub const fn with_xml_namespace(mut self) -> Self {
         self.xml_namespace = Some(trait_types::XmlNamespaceTrait);
+        self
+    }
+
+    /// Sets the fallback trait map for unknown/custom traits.
+    pub const fn with_traits(mut self, traits: &'static std::sync::LazyLock<TraitMap>) -> Self {
+        self.traits = Some(traits);
         self
     }
 
@@ -529,7 +535,7 @@ mod test {
 
         let trait_id = shape_id!("smithy.api", "required");
         let test_trait = Box::new(TestTrait {
-            id: trait_id.clone(),
+            id: trait_id,
             value: "test".to_string(),
         });
 

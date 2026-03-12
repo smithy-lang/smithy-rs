@@ -154,12 +154,9 @@ mod tests {
         let a = shape_id!("smithy.api", "String");
         let b = shape_id!("smithy.api", "String");
         assert_eq!(a, b);
-    }
 
-    #[test]
-    fn test_clone() {
-        let a = shape_id!("smithy.api", "String");
-        let b = a.clone();
-        assert_eq!(a, b);
+        let c = shape_id!("smithy.api", "String", "foo");
+        let d = shape_id!("smithy.api", "String", "foo");
+        assert_eq!(c, d);
     }
 }

@@ -484,18 +484,6 @@ mod tests {
             "active",
             3,
         );
-        static ROLE: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Tags"),
-            aws_smithy_schema::ShapeType::String,
-            "role",
-            0,
-        );
-        static LEVEL: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Tags"),
-            aws_smithy_schema::ShapeType::String,
-            "level",
-            1,
-        );
 
         struct AddressStruct;
         impl SerializableStruct for AddressStruct {
@@ -597,21 +585,6 @@ mod tests {
     #[test]
     fn test_json_name_serialization() {
         use aws_smithy_schema::serde::SerializableStruct;
-
-        // A simple string-valued trait for testing
-        #[derive(Debug)]
-        struct StringTrait {
-            id: aws_smithy_schema::ShapeId,
-            value: String,
-        }
-        impl aws_smithy_schema::Trait for StringTrait {
-            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
-                &self.id
-            }
-            fn as_any(&self) -> &dyn std::any::Any {
-                &self.value
-            }
-        }
 
         static FOO_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
