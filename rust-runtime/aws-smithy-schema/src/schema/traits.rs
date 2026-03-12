@@ -13,63 +13,52 @@ use crate::{ShapeId, Trait};
 use std::any::Any;
 
 macro_rules! annotation_trait {
-    ($(#[$meta:meta])* $name:ident, $id:expr) => {
+    ($(#[$meta:meta])* $name:ident, $ns:literal, $trait_name:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone)]
+        #[allow(dead_code)]
         pub struct $name;
 
         impl $name {
-            /// The Shape ID of this trait.
-            pub const ID: &'static str = $id;
+            /// The Shape ID for this trait.
+            pub const TRAIT_ID: ShapeId = crate::shape_id!($ns, $trait_name);
         }
 
         impl Trait for $name {
-            fn trait_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> =
-                    std::sync::LazyLock::new(|| ShapeId::new($name::ID));
-                &ID
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
+            fn trait_id(&self) -> &ShapeId { &Self::TRAIT_ID }
+            fn as_any(&self) -> &dyn Any { self }
         }
     };
 }
 
 macro_rules! string_trait {
-    ($(#[$meta:meta])* $name:ident, $id:expr) => {
+    ($(#[$meta:meta])* $name:ident, $ns:literal, $trait_name:literal) => {
         $(#[$meta])*
         #[derive(Debug, Clone)]
+        #[allow(dead_code)]
         pub struct $name {
-            value: String,
+            value: &'static str,
         }
 
+        #[allow(dead_code)]
         impl $name {
-            /// The Shape ID of this trait.
-            pub const ID: &'static str = $id;
+            /// The Shape ID for this trait.
+            pub const TRAIT_ID: ShapeId = crate::shape_id!($ns, $trait_name);
 
             /// Creates a new instance.
-            pub fn new(value: impl Into<String>) -> Self {
-                Self { value: value.into() }
+            pub const fn new(value: &'static str) -> Self {
+                Self { value }
             }
 
             /// Returns the trait value.
             pub fn value(&self) -> &str {
-                &self.value
+                self.value
             }
         }
 
         impl Trait for $name {
-            fn trait_id(&self) -> &ShapeId {
-                static ID: std::sync::LazyLock<ShapeId> =
-                    std::sync::LazyLock::new(|| ShapeId::new($name::ID));
-                &ID
-            }
-
-            fn as_any(&self) -> &dyn Any {
-                self
-            }
+            fn trait_id(&self) -> &ShapeId { &Self::TRAIT_ID }
+            fn as_any(&self) -> &dyn Any { self }
         }
     };
 }
@@ -79,37 +68,46 @@ macro_rules! string_trait {
 string_trait!(
     /// The `@jsonName` trait — overrides the JSON key for a member.
     JsonNameTrait,
-    "smithy.api#jsonName"
+    "smithy.api", "jsonName"
 );
 
 string_trait!(
     /// The `@xmlName` trait — overrides the XML element name.
     XmlNameTrait,
-    "smithy.api#xmlName"
+    "smithy.api", "xmlName"
 );
 
 string_trait!(
     /// The `@mediaType` trait — specifies the media type of a blob/string.
     MediaTypeTrait,
-    "smithy.api#mediaType"
+    "smithy.api", "mediaType"
 );
 
 annotation_trait!(
     /// The `@xmlAttribute` trait — serializes a member as an XML attribute.
     XmlAttributeTrait,
-    "smithy.api#xmlAttribute"
+    "smithy.api", "xmlAttribute"
 );
 
 annotation_trait!(
     /// The `@xmlFlattened` trait — removes the wrapping element for lists/maps in XML.
     XmlFlattenedTrait,
-    "smithy.api#xmlFlattened"
+    "smithy.api", "xmlFlattened"
+);
+
+// xmlNamespace is a structured trait (uri + optional prefix). For now we only
+// need its ShapeId for lookups; the full value can be stored as a DocumentTrait.
+annotation_trait!(
+    /// The `@xmlNamespace` trait — adds an XML namespace to an element.
+    XmlNamespaceTrait,
+    "smithy.api", "xmlNamespace"
 );
 
 // --- Timestamp ---
 
 /// The `@timestampFormat` trait — specifies the serialization format for timestamps.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
+#[allow(dead_code)]
 pub struct TimestampFormatTrait {
     format: TimestampFormat,
 }
@@ -125,20 +123,14 @@ pub enum TimestampFormat {
     HttpDate,
 }
 
+#[allow(dead_code)]
 impl TimestampFormatTrait {
-    /// The Shape ID of this trait.
-    pub const ID: &'static str = "smithy.api#timestampFormat";
+    /// The Shape ID for this trait.
+    pub const TRAIT_ID: ShapeId = crate::shape_id!("smithy.api", "timestampFormat");
 
-    /// Creates a new instance from a format string.
-    pub fn new(format: &str) -> Self {
-        Self {
-            format: match format {
-                "epoch-seconds" => TimestampFormat::EpochSeconds,
-                "date-time" => TimestampFormat::DateTime,
-                "http-date" => TimestampFormat::HttpDate,
-                other => panic!("unknown timestamp format: {other}"),
-            },
-        }
+    /// Creates a new instance.
+    pub const fn new(format: TimestampFormat) -> Self {
+        Self { format }
     }
 
     /// Returns the timestamp format.
@@ -149,11 +141,8 @@ impl TimestampFormatTrait {
 
 impl Trait for TimestampFormatTrait {
     fn trait_id(&self) -> &ShapeId {
-        static ID: std::sync::LazyLock<ShapeId> =
-            std::sync::LazyLock::new(|| ShapeId::new(TimestampFormatTrait::ID));
-        &ID
+        &Self::TRAIT_ID
     }
-
     fn as_any(&self) -> &dyn Any {
         self
     }
@@ -164,43 +153,43 @@ impl Trait for TimestampFormatTrait {
 string_trait!(
     /// The `@httpHeader` trait — binds a member to an HTTP header.
     HttpHeaderTrait,
-    "smithy.api#httpHeader"
+    "smithy.api", "httpHeader"
 );
 
 string_trait!(
     /// The `@httpQuery` trait — binds a member to a query parameter.
     HttpQueryTrait,
-    "smithy.api#httpQuery"
+    "smithy.api", "httpQuery"
 );
 
 string_trait!(
     /// The `@httpPrefixHeaders` trait — binds a map to prefixed HTTP headers.
     HttpPrefixHeadersTrait,
-    "smithy.api#httpPrefixHeaders"
+    "smithy.api", "httpPrefixHeaders"
 );
 
 annotation_trait!(
     /// The `@httpLabel` trait — binds a member to a URI label.
     HttpLabelTrait,
-    "smithy.api#httpLabel"
+    "smithy.api", "httpLabel"
 );
 
 annotation_trait!(
     /// The `@httpPayload` trait — binds a member to the HTTP body.
     HttpPayloadTrait,
-    "smithy.api#httpPayload"
+    "smithy.api", "httpPayload"
 );
 
 annotation_trait!(
     /// The `@httpQueryParams` trait — binds a map to query parameters.
     HttpQueryParamsTrait,
-    "smithy.api#httpQueryParams"
+    "smithy.api", "httpQueryParams"
 );
 
 annotation_trait!(
     /// The `@httpResponseCode` trait — binds a member to the HTTP status code.
     HttpResponseCodeTrait,
-    "smithy.api#httpResponseCode"
+    "smithy.api", "httpResponseCode"
 );
 
 // --- Streaming traits ---
@@ -208,19 +197,19 @@ annotation_trait!(
 annotation_trait!(
     /// The `@streaming` trait — marks a blob or union as streaming.
     StreamingTrait,
-    "smithy.api#streaming"
+    "smithy.api", "streaming"
 );
 
 annotation_trait!(
     /// The `@eventHeader` trait — binds a member to an event stream header.
     EventHeaderTrait,
-    "smithy.api#eventHeader"
+    "smithy.api", "eventHeader"
 );
 
 annotation_trait!(
     /// The `@eventPayload` trait — binds a member to an event stream payload.
     EventPayloadTrait,
-    "smithy.api#eventPayload"
+    "smithy.api", "eventPayload"
 );
 
 // --- Documentation / behavior traits ---
@@ -228,7 +217,7 @@ annotation_trait!(
 annotation_trait!(
     /// The `@sensitive` trait — marks data as sensitive for logging redaction.
     SensitiveTrait,
-    "smithy.api#sensitive"
+    "smithy.api", "sensitive"
 );
 
 // --- Endpoint traits ---
@@ -236,7 +225,7 @@ annotation_trait!(
 annotation_trait!(
     /// The `@hostLabel` trait — binds a member to a host prefix label.
     HostLabelTrait,
-    "smithy.api#hostLabel"
+    "smithy.api", "hostLabel"
 );
 
 #[cfg(test)]
@@ -260,17 +249,8 @@ mod tests {
 
     #[test]
     fn timestamp_format_parsing() {
-        assert_eq!(
-            TimestampFormatTrait::new("epoch-seconds").format(),
-            TimestampFormat::EpochSeconds
-        );
-        assert_eq!(
-            TimestampFormatTrait::new("date-time").format(),
-            TimestampFormat::DateTime
-        );
-        assert_eq!(
-            TimestampFormatTrait::new("http-date").format(),
-            TimestampFormat::HttpDate
-        );
+        let t = TimestampFormatTrait::new(TimestampFormat::EpochSeconds);
+        assert_eq!(t.format(), TimestampFormat::EpochSeconds);
+        assert_eq!(t.trait_id().as_str(), "smithy.api#timestampFormat");
     }
 }

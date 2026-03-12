@@ -320,7 +320,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
         let s = self.read_string(_schema)?;
-        Ok(Blob::new(s.into_bytes()))
+        let decoded =
+            aws_smithy_types::base64::decode(&s).map_err(|e| SerdeError::InvalidInput {
+                message: format!("invalid base64: {}", e),
+            })?;
+        Ok(Blob::new(decoded))
     }
 
     fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
@@ -643,28 +647,24 @@ mod tests {
         static FIRST_NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "firstName",
             0,
         );
         static LAST_NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "lastName",
             1,
         );
         static AGE: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Integer,
-            aws_smithy_schema::TraitMap::EMPTY,
             "age",
             2,
         );
         static PERSON_SCHEMA: Schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             &[&FIRST_NAME, &LAST_NAME, &AGE],
         );
 
@@ -875,28 +875,24 @@ mod tests {
         static ADDR_STREET: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "street",
             0,
         );
         static ADDR_CITY: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "city",
             1,
         );
         static ADDR_ZIP: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Integer,
-            aws_smithy_schema::TraitMap::EMPTY,
             "zip",
             2,
         );
         static ADDRESS_SCHEMA: Schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             &[&ADDR_STREET, &ADDR_CITY, &ADDR_ZIP],
         );
 
@@ -904,35 +900,30 @@ mod tests {
         static COMP_NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "name",
             0,
         );
         static COMP_EMPLOYEES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "employees",
             1,
         );
         static COMP_METADATA: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Map,
-            aws_smithy_schema::TraitMap::EMPTY,
             "metadata",
             2,
         );
         static COMP_ACTIVE: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Boolean,
-            aws_smithy_schema::TraitMap::EMPTY,
             "active",
             3,
         );
         static COMPANY_SCHEMA: Schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             &[&COMP_NAME, &COMP_EMPLOYEES, &COMP_METADATA, &COMP_ACTIVE],
         );
 
@@ -940,49 +931,42 @@ mod tests {
         static USER_ID: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Long,
-            aws_smithy_schema::TraitMap::EMPTY,
             "id",
             0,
         );
         static USER_NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "name",
             1,
         );
         static USER_SCORES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "scores",
             2,
         );
         static USER_ADDRESS: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             "address",
             3,
         );
         static USER_COMPANIES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "companies",
             4,
         );
         static USER_TAGS: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Map,
-            aws_smithy_schema::TraitMap::EMPTY,
             "tags",
             5,
         );
         static USER_SCHEMA: Schema = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             &[
                 &USER_ID,
                 &USER_NAME,
@@ -1140,40 +1124,25 @@ mod tests {
             }
         }
 
-        fn json_name_traits(name: &str) -> aws_smithy_schema::TraitMap {
-            let mut map = aws_smithy_schema::TraitMap::new();
-            map.insert(Box::new(StringTrait {
-                id: aws_smithy_schema::shape_id!("smithy.api", "jsonName"),
-                value: name.to_string(),
-            }));
-            map
-        }
-
         static FOO_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "foo",
             0,
         );
         // "bar" member has @jsonName("Baz")
-        static BAR_MEMBER: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
-            Schema::new_member(
-                aws_smithy_schema::shape_id!("test", "MyStruct"),
-                aws_smithy_schema::ShapeType::Integer,
-                json_name_traits("Baz"),
-                "bar",
-                1,
-            )
-        });
-        static STRUCT_SCHEMA: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
-            Schema::new_struct(
-                aws_smithy_schema::shape_id!("test", "MyStruct"),
-                aws_smithy_schema::ShapeType::Structure,
-                aws_smithy_schema::TraitMap::EMPTY,
-                Box::leak(Box::new([&FOO_MEMBER, &*BAR_MEMBER])),
-            )
-        });
+        static BAR_MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Integer,
+            "bar",
+            1,
+        )
+        .with_json_name("Baz");
+        static STRUCT_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&FOO_MEMBER, &BAR_MEMBER],
+        );
 
         let json = br#"{"foo":"hello","Baz":42}"#;
 

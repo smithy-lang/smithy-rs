@@ -17,7 +17,6 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
-import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
 class SchemaGeneratorTest {
@@ -66,7 +65,14 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                shape,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, shape).render()
             unitTest(
                 "schema_structure",
@@ -81,10 +87,10 @@ class SchemaGeneratorTest {
                 assert!(schema.member_schema("active").is_some());
                 assert!(schema.member_schema("nonexistent").is_none());
                 // member lookup by index
-                let (name, _) = schema.member_schema_by_index(0).expect("index 0");
-                assert_eq!(name, "name");
-                // members iterator
-                let names: Vec<&str> = schema.members().map(|(n, _)| n).collect();
+                let m = schema.member_schema_by_index(0).expect("index 0");
+                assert_eq!(m.member_name(), Some("name"));
+                // members slice
+                let names: Vec<&str> = schema.members().iter().filter_map(|m| m.member_name()).collect();
                 assert_eq!(names, vec!["name", "age", "active"]);
                 """,
             )
@@ -97,7 +103,14 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                shape,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, shape).render()
             unitTest(
                 "member_schema_types",
@@ -128,11 +141,25 @@ class SchemaGeneratorTest {
         val myStruct = model.lookup<StructureShape>("test#MyStruct")
         val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
         project.useShapeWriter(myStruct) {
-            StructureGenerator(model, provider, this, myStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                myStruct,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, myStruct).render()
         }
         project.useShapeWriter(complexStruct) {
-            StructureGenerator(model, provider, this, complexStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                complexStruct,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, complexStruct).render()
             unitTest(
                 "complex_schema",
@@ -159,14 +186,14 @@ class SchemaGeneratorTest {
                 // Map member
                 assert_eq!(s.member_schema("metadata").unwrap().shape_type(), ShapeType::Map);
 
-                // All 9 members present via iterator
-                let names: Vec<&str> = s.members().map(|(n, _)| n).collect();
+                // All 9 members present via slice
+                let names: Vec<&str> = s.members().iter().filter_map(|m| m.member_name()).collect();
                 assert_eq!(names.len(), 9);
 
-                // Index-based access consistent with iterator order
-                for (i, (name, _)) in s.members().enumerate() {
-                    let (idx_name, _) = s.member_schema_by_index(i).unwrap();
-                    assert_eq!(name, idx_name);
+                // Index-based access consistent with members order
+                for (i, member) in s.members().iter().enumerate() {
+                    let by_idx = s.member_schema_by_index(i).unwrap();
+                    assert_eq!(member.member_name(), by_idx.member_name());
                 }
                 """,
             )
@@ -200,7 +227,14 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                shape,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, shape).render()
             // Reference JsonCodec via rustTemplate to auto-add the aws-smithy-json dependency
             rustTemplate(
@@ -226,8 +260,8 @@ class SchemaGeneratorTest {
                 let s = MyStruct { name: Some("Alice".to_string()), age: Some(30), active: Some(true) };
                 let codec = JsonCodec::new(JsonCodecSettings::default());
                 let mut ser = codec.create_serializer();
-                s.serialize(&mut ser).expect("serialization should succeed");
-                let bytes = ser.finish().expect("finish should succeed");
+                ser.write_struct(MyStruct::SCHEMA, &s).expect("serialization should succeed");
+                let bytes = ser.finish();
                 let json = String::from_utf8(bytes).unwrap();
                 assert_eq!(json, r#"{"name":"Alice","age":30,"active":true}"#);
                 """,
@@ -243,8 +277,8 @@ class SchemaGeneratorTest {
                 let s = MyStruct { name: Some("Bob".to_string()), age: None, active: None };
                 let codec = JsonCodec::new(JsonCodecSettings::default());
                 let mut ser = codec.create_serializer();
-                s.serialize(&mut ser).expect("serialization should succeed");
-                let bytes = ser.finish().expect("finish should succeed");
+                ser.write_struct(MyStruct::SCHEMA, &s).expect("serialization should succeed");
+                let bytes = ser.finish();
                 let json = String::from_utf8(bytes).unwrap();
                 assert_eq!(json, r#"{"name":"Bob"}"#);
                 """,
@@ -258,7 +292,14 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(model, provider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                shape,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, shape).render()
             // Add aws-smithy-json dependency
             rustTemplate(
@@ -299,6 +340,12 @@ class SchemaGeneratorTest {
         project.compileAndTest()
     }
 
+    // TODO(schema): Re-enable trait tests once trait data is wired into Schema statics.
+    // Trait generation was removed when Schema became a concrete struct because
+    // TraitMap with data requires runtime allocation (incompatible with static Schema).
+    // The original test logic is preserved below for reference when implementing this.
+
+    /*
     @Test
     fun `trait filtering includes sensitive and jsonName`() {
         val traitModel =
@@ -472,6 +519,7 @@ class SchemaGeneratorTest {
         }
         project.compileAndTest()
     }
+     */
 
     @Test
     fun `schema for recursive structure compiles`() {
@@ -500,7 +548,14 @@ class SchemaGeneratorTest {
         // Recursive through a list
         val treeNode = recursiveModel.lookup<StructureShape>("test#TreeNode")
         project.useShapeWriter(treeNode) {
-            StructureGenerator(recursiveModel, recProvider, this, treeNode, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                recursiveModel,
+                recProvider,
+                this,
+                treeNode,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(recContext, this, treeNode).render()
             unitTest(
                 "recursive_via_list",
@@ -516,7 +571,14 @@ class SchemaGeneratorTest {
         // Directly recursive (uses Box via RecursiveShapeBoxer)
         val linkedNode = recursiveModel.lookup<StructureShape>("test#LinkedNode")
         project.useShapeWriter(linkedNode) {
-            StructureGenerator(recursiveModel, recProvider, this, linkedNode, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                recursiveModel,
+                recProvider,
+                this,
+                linkedNode,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(recContext, this, linkedNode).render()
             unitTest(
                 "directly_recursive",
@@ -565,11 +627,25 @@ class SchemaGeneratorTest {
         val myStruct = model.lookup<StructureShape>("test#MyStruct")
         val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
         project.useShapeWriter(myStruct) {
-            StructureGenerator(model, provider, this, myStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                myStruct,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, myStruct).render()
         }
         project.useShapeWriter(complexStruct) {
-            StructureGenerator(model, provider, this, complexStruct, emptyList(), StructSettings(flattenVecAccessors = true)).render()
+            StructureGenerator(
+                model,
+                provider,
+                this,
+                complexStruct,
+                emptyList(),
+                StructSettings(flattenVecAccessors = true),
+            ).render()
             SchemaGenerator(codegenContext, this, complexStruct).render()
             // Pull in JsonCodec dependency
             rustTemplate(
@@ -593,7 +669,7 @@ class SchemaGeneratorTest {
                 let original = ComplexStruct {
                     label: Some("test-label".to_string()),
                     count: Some(42),
-                    ratio: Some(3.14),
+                    ratio: Some(3.15),
                     enabled: Some(true),
                     data: Some(Blob::new(vec![1, 2, 3, 4, 5])),
                     created_at: Some(DateTime::from_secs(1700000000)),
@@ -609,8 +685,8 @@ class SchemaGeneratorTest {
                 // Serialize
                 let codec = JsonCodec::new(JsonCodecSettings::default());
                 let mut ser = codec.create_serializer();
-                original.serialize(&mut ser).expect("serialization should succeed");
-                let bytes = ser.finish().expect("finish should succeed");
+                ser.write_struct(ComplexStruct::SCHEMA, &original).expect("serialization should succeed");
+                let bytes = ser.finish();
 
                 // Deserialize
                 let mut deser = codec.create_deserializer(&bytes);
@@ -619,7 +695,7 @@ class SchemaGeneratorTest {
                 // Assert all fields round-tripped
                 assert_eq!(result.label, Some("test-label".to_string()));
                 assert_eq!(result.count, Some(42));
-                assert_eq!(result.ratio, Some(3.14));
+                assert_eq!(result.ratio, Some(3.15));
                 assert_eq!(result.enabled, Some(true));
                 assert_eq!(result.data, Some(Blob::new(vec![1, 2, 3, 4, 5])));
                 assert_eq!(result.created_at, Some(DateTime::from_secs(1700000000)));

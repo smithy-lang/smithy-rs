@@ -119,7 +119,6 @@ class SchemaGenerator(
                 "Schema" to smithySchema.resolve("Schema"),
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
-                "TraitMap" to smithySchema.resolve("TraitMap"),
             )
 
         val schemaPrefix = symbol.name.uppercase()
@@ -727,7 +726,6 @@ class SchemaGenerator(
             arrayOf(
                 "Schema" to smithySchema.resolve("Schema"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
-                "TraitMap" to smithySchema.resolve("TraitMap"),
             )
 
         when (shape) {
@@ -749,7 +747,6 @@ class SchemaGenerator(
                     static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
                         ${schemaPrefix}_SCHEMA_ID,
                         #{ShapeType}::${shapeTypeVariant(shape)},
-                        #{TraitMap}::EMPTY,
                         $membersArray,
                     );
                     """,
@@ -762,7 +759,6 @@ class SchemaGenerator(
                     """
                     static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_list(
                         ${schemaPrefix}_SCHEMA_ID,
-                        #{TraitMap}::EMPTY,
                         &${schemaPrefix}_MEMBER,
                     );
                     """,
@@ -775,7 +771,6 @@ class SchemaGenerator(
                     """
                     static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_map(
                         ${schemaPrefix}_SCHEMA_ID,
-                        #{TraitMap}::EMPTY,
                         &${schemaPrefix}_KEY,
                         &${schemaPrefix}_VALUE,
                     );
@@ -790,7 +785,6 @@ class SchemaGenerator(
                     static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new(
                         ${schemaPrefix}_SCHEMA_ID,
                         #{ShapeType}::${shapeTypeVariant(shape)},
-                        #{TraitMap}::EMPTY,
                     );
                     """,
                     *codegenScope,
@@ -808,7 +802,6 @@ class SchemaGenerator(
                 "Schema" to smithySchema.resolve("Schema"),
                 "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
-                "TraitMap" to smithySchema.resolve("TraitMap"),
             )
 
         when (shape) {
@@ -826,7 +819,6 @@ class SchemaGenerator(
                                 "${member.id.name}",
                             ),
                             #{ShapeType}::${shapeTypeVariant(target)},
-                            #{TraitMap}::EMPTY,
                             ${templateEscape(memberName.dq())},
                             $idx,
                         );
@@ -848,7 +840,6 @@ class SchemaGenerator(
                             "${shape.member.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(target)},
-                        #{TraitMap}::EMPTY,
                         "member",
                         0,
                     );
@@ -871,7 +862,6 @@ class SchemaGenerator(
                             "${shape.key.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(keyTarget)},
-                        #{TraitMap}::EMPTY,
                         "key",
                         0,
                     );
@@ -883,7 +873,6 @@ class SchemaGenerator(
                             "${shape.value.id.name}",
                         ),
                         #{ShapeType}::${shapeTypeVariant(valueTarget)},
-                        #{TraitMap}::EMPTY,
                         "value",
                         1,
                     );

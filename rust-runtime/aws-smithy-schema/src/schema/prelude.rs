@@ -8,98 +8,49 @@
 //! This module provides const schemas for Smithy's prelude types,
 //! which are the fundamental types available in all Smithy models.
 
-use crate::{shape_id, Schema, ShapeType, TraitMap};
+use crate::{shape_id, Schema, ShapeType};
 
 /// Schema for `smithy.api#String`
-pub static STRING: Schema = Schema::new(
-    shape_id!("smithy.api", "String"),
-    ShapeType::String,
-    TraitMap::EMPTY,
-);
+pub static STRING: Schema = Schema::new(shape_id!("smithy.api", "String"), ShapeType::String);
 
 /// Schema for `smithy.api#Boolean`
-pub static BOOLEAN: Schema = Schema::new(
-    shape_id!("smithy.api", "Boolean"),
-    ShapeType::Boolean,
-    TraitMap::EMPTY,
-);
+pub static BOOLEAN: Schema = Schema::new(shape_id!("smithy.api", "Boolean"), ShapeType::Boolean);
 
 /// Schema for `smithy.api#Byte`
-pub static BYTE: Schema = Schema::new(
-    shape_id!("smithy.api", "Byte"),
-    ShapeType::Byte,
-    TraitMap::EMPTY,
-);
+pub static BYTE: Schema = Schema::new(shape_id!("smithy.api", "Byte"), ShapeType::Byte);
 
 /// Schema for `smithy.api#Short`
-pub static SHORT: Schema = Schema::new(
-    shape_id!("smithy.api", "Short"),
-    ShapeType::Short,
-    TraitMap::EMPTY,
-);
+pub static SHORT: Schema = Schema::new(shape_id!("smithy.api", "Short"), ShapeType::Short);
 
 /// Schema for `smithy.api#Integer`
-pub static INTEGER: Schema = Schema::new(
-    shape_id!("smithy.api", "Integer"),
-    ShapeType::Integer,
-    TraitMap::EMPTY,
-);
+pub static INTEGER: Schema = Schema::new(shape_id!("smithy.api", "Integer"), ShapeType::Integer);
 
 /// Schema for `smithy.api#Long`
-pub static LONG: Schema = Schema::new(
-    shape_id!("smithy.api", "Long"),
-    ShapeType::Long,
-    TraitMap::EMPTY,
-);
+pub static LONG: Schema = Schema::new(shape_id!("smithy.api", "Long"), ShapeType::Long);
 
 /// Schema for `smithy.api#Float`
-pub static FLOAT: Schema = Schema::new(
-    shape_id!("smithy.api", "Float"),
-    ShapeType::Float,
-    TraitMap::EMPTY,
-);
+pub static FLOAT: Schema = Schema::new(shape_id!("smithy.api", "Float"), ShapeType::Float);
 
 /// Schema for `smithy.api#Double`
-pub static DOUBLE: Schema = Schema::new(
-    shape_id!("smithy.api", "Double"),
-    ShapeType::Double,
-    TraitMap::EMPTY,
-);
+pub static DOUBLE: Schema = Schema::new(shape_id!("smithy.api", "Double"), ShapeType::Double);
 
 /// Schema for `smithy.api#BigInteger`
-pub static BIG_INTEGER: Schema = Schema::new(
-    shape_id!("smithy.api", "BigInteger"),
-    ShapeType::BigInteger,
-    TraitMap::EMPTY,
-);
+pub static BIG_INTEGER: Schema =
+    Schema::new(shape_id!("smithy.api", "BigInteger"), ShapeType::BigInteger);
 
 /// Schema for `smithy.api#BigDecimal`
-pub static BIG_DECIMAL: Schema = Schema::new(
-    shape_id!("smithy.api", "BigDecimal"),
-    ShapeType::BigDecimal,
-    TraitMap::EMPTY,
-);
+pub static BIG_DECIMAL: Schema =
+    Schema::new(shape_id!("smithy.api", "BigDecimal"), ShapeType::BigDecimal);
 
 /// Schema for `smithy.api#Blob`
-pub static BLOB: Schema = Schema::new(
-    shape_id!("smithy.api", "Blob"),
-    ShapeType::Blob,
-    TraitMap::EMPTY,
-);
+pub static BLOB: Schema = Schema::new(shape_id!("smithy.api", "Blob"), ShapeType::Blob);
 
 /// Schema for `smithy.api#Timestamp`
-pub static TIMESTAMP: Schema = Schema::new(
-    shape_id!("smithy.api", "Timestamp"),
-    ShapeType::Timestamp,
-    TraitMap::EMPTY,
-);
+pub static TIMESTAMP: Schema =
+    Schema::new(shape_id!("smithy.api", "Timestamp"), ShapeType::Timestamp);
 
 /// Schema for `smithy.api#Document`
-pub static DOCUMENT: Schema = Schema::new(
-    shape_id!("smithy.api", "Document"),
-    ShapeType::Document,
-    TraitMap::EMPTY,
-);
+pub static DOCUMENT: Schema = Schema::new(shape_id!("smithy.api", "Document"), ShapeType::Document);
 
 #[cfg(test)]
 mod tests {
@@ -110,14 +61,14 @@ mod tests {
         assert_eq!(STRING.shape_id().as_str(), "smithy.api#String");
         assert_eq!(STRING.shape_type(), ShapeType::String);
         assert!(STRING.is_string());
-        assert!(STRING.traits().is_empty());
+        assert!(STRING.traits().is_none());
     }
 
     #[test]
     fn test_boolean_schema() {
         assert_eq!(BOOLEAN.shape_id().as_str(), "smithy.api#Boolean");
         assert_eq!(BOOLEAN.shape_type(), ShapeType::Boolean);
-        assert!(BOOLEAN.traits().is_empty());
+        assert!(BOOLEAN.traits().is_none());
     }
 
     #[test]
