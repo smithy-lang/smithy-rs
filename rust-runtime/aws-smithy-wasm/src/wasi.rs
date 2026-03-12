@@ -57,15 +57,9 @@ impl WasiHttpClientBuilder {
 /// An HTTP client that can be used during instantiation of the client SDK in
 /// order to route the HTTP requests through the WebAssembly host. The host must
 /// support the wasi-http interface as defined in the WASIp2 specification.
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone)]
 #[non_exhaustive]
 pub struct WasiHttpClient {}
-
-impl Default for WasiHttpClient {
-    fn default() -> Self {
-        WasiHttpClient {}
-    }
-}
 
 impl HttpClient for WasiHttpClient {
     fn http_connector(
