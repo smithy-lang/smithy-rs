@@ -27,7 +27,6 @@ import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -87,8 +86,6 @@ class SchemaGenerator(
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
-    /** Extra field initializers for the deserialize constructor (e.g. `_request_id: None,`). */
-    private val extraConstructFields: List<String> = emptyList(),
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -393,7 +390,6 @@ class SchemaGenerator(
                 "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
                 "Schema" to smithySchema.resolve("Schema"),
-                "Builder" to symbolProvider.symbolForBuilder(shape),
             )
         val members = (shape as StructureShape).allMembers.values.toList()
 
@@ -403,7 +399,7 @@ class SchemaGenerator(
                 /// Deserializes this structure from a [`ShapeDeserializer`].
                 pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, #{SerdeError}> {
                     ##[allow(unused_variables, unused_mut)]
-                    let mut builder = #{Builder}::default();
+                    let mut builder = Self::builder();
                     ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
                     deserializer.read_struct(&${schemaPrefix}_SCHEMA, (), |_, member, deser| {
                         match member.member_index() {
@@ -412,13 +408,19 @@ class SchemaGenerator(
                         }
                         Ok(())
                     })?;
-                    Ok($structName {
-                        #{constructFields}
-                    })
+                    #{buildExpr}
                 }
             }
             """,
             *codegenScope,
+            "buildExpr" to
+                writable {
+                    if (BuilderGenerator.hasFallibleBuilder(shape as StructureShape, symbolProvider)) {
+                        rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                    } else {
+                        rust("Ok(builder.build())")
+                    }
+                },
             "memberArms" to
                 writable {
                     members.forEachIndexed { idx, member ->
@@ -433,34 +435,6 @@ class SchemaGenerator(
                                 readExpr
                             }
                         rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
-                    }
-                },
-            "constructFields" to
-                writable {
-                    members.forEach { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val memberSymbol = symbolProvider.toSymbol(member)
-                        if (memberSymbol.isOptional()) {
-                            rust("$memberName: builder.$memberName,")
-                        } else {
-                            val target = model.expectShape(member.target)
-                            val fallback = defaultValueForShape(target)
-                            if (fallback == "Default::default()") {
-                                rust("$memberName: builder.$memberName.unwrap_or_default(),")
-                            } else if (fallback != null) {
-                                rust("$memberName: builder.$memberName.unwrap_or_else(|| $fallback),")
-                            } else {
-                                rust("$memberName: builder.$memberName.expect(${("missing required field: $memberName").dq()}),")
-                            }
-                        }
-                    }
-                    // Error shapes have an extra `meta` field added by ErrorGenerator
-                    if (shape.hasTrait(ErrorTrait::class.java)) {
-                        rust("meta: Default::default(),")
-                    }
-                    // Extra fields added by decorators (e.g. _request_id for output shapes)
-                    for (field in extraConstructFields) {
-                        rust(field)
                     }
                 },
         )
@@ -585,25 +559,6 @@ class SchemaGenerator(
         }
 
     /** Returns a Rust default value expression for a shape, or null if no sensible default exists. */
-    private fun defaultValueForShape(target: Shape): String? =
-        when (target) {
-            is BooleanShape -> "Default::default()"
-            is ByteShape, is ShortShape, is IntegerShape, is LongShape -> "Default::default()"
-            is FloatShape, is DoubleShape -> "Default::default()"
-            is StringShape -> if (isStringEnum(target)) null else "Default::default()"
-            is BlobShape ->
-                if (target.hasTrait(StreamingTrait::class.java)) {
-                    "::aws_smithy_types::byte_stream::ByteStream::new(::aws_smithy_types::body::SdkBody::empty())"
-                } else {
-                    "::aws_smithy_types::Blob::new(Vec::new())"
-                }
-
-            is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
-            is ListShape -> "Default::default()"
-            is MapShape -> "Default::default()"
-            else -> null
-        }
-
     private fun shapeTypeVariant(shape: Shape): String =
         when (shape) {
             is BooleanShape -> "Boolean"
