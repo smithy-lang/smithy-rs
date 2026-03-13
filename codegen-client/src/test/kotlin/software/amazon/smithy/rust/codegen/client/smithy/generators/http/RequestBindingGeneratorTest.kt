@@ -11,6 +11,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.traits.HttpTrait
+import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.client.testutil.testClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.TestRuntimeConfig
 import software.amazon.smithy.rust.codegen.core.testutil.TestWorkspace
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
+import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.renderWithModelBuilder
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -389,5 +391,61 @@ class RequestBindingGeneratorTest {
         }
 
         project.compileAndTest()
+    }
+
+    @Test
+    fun `unnamed enums in query params and labels use as_str`() {
+        val testModel =
+            """
+            namespace smithy.example
+
+            use aws.protocols#restJson1
+
+            @restJson1
+            service TestService {
+                operations: [GetThing]
+            }
+
+            @http(method: "GET", uri: "/things/{label}", code: 200)
+            operation GetThing {
+                input: GetThingInput
+            }
+
+            @enum([
+                { value: "a" },
+                { value: "b" },
+            ])
+            string UnnamedEnum
+
+            structure GetThingInput {
+                @required
+                @httpLabel
+                label: UnnamedEnum,
+
+                @httpQuery("q")
+                query: UnnamedEnum,
+            }
+            """.asSmithyModel()
+
+        clientIntegrationTest(testModel) { codegenContext, rustCrate ->
+            val moduleName = codegenContext.moduleUseName()
+            rustCrate.integrationTest("unnamed_enum_query_and_label") {
+                rust(
+                    """
+                    ##[test]
+                    fn unnamed_enum_in_query_and_label() {
+                        let conf = $moduleName::Config::builder()
+                            .endpoint_url("http://localhost")
+                            .behavior_version_latest()
+                            .build();
+                        let client = $moduleName::Client::from_conf(conf);
+                        let _ = client.get_thing()
+                            .label($moduleName::types::UnnamedEnum::from("a"))
+                            .query($moduleName::types::UnnamedEnum::from("b"));
+                    }
+                    """,
+                )
+            }
+        }
     }
 }
