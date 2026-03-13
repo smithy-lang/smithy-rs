@@ -20,6 +20,11 @@ pub struct JsonSerializer {
     settings: Arc<JsonCodecSettings>,
     // Tracks whether a comma is needed before the next value in the current container.
     needs_comma: bool,
+    // When true, the next write_string is a map key — emit "key": instead of ,"key"
+    expecting_map_key: bool,
+    // Nesting depth of write_map calls. When >0, prefix() restores expecting_map_key
+    // after each value write so the next write_string is treated as a key.
+    map_depth: usize,
 }
 
 impl JsonSerializer {
@@ -29,6 +34,8 @@ impl JsonSerializer {
             output: String::new(),
             settings,
             needs_comma: false,
+            expecting_map_key: false,
+            map_depth: 0,
         }
     }
 
@@ -37,9 +44,9 @@ impl JsonSerializer {
         self.output.into_bytes()
     }
 
-    /// Inserts a comma separator if needed, then writes the member name if the
-    /// schema is a member schema. When `use_json_name` is enabled, checks for
-    /// a `@jsonName` trait and uses that value instead of the member name.
+    /// Handles comma separators and member names before writing a value.
+    /// When inside a map (map_depth > 0), restores expecting_map_key after
+    /// the value so the next write_string is treated as a map key.
     fn prefix(&mut self, schema: &Schema) {
         if self.needs_comma {
             self.output.push(',');
@@ -50,6 +57,12 @@ impl JsonSerializer {
             self.output.push_str("\":");
         }
         self.needs_comma = true;
+        // Inside a map, after writing a value the next write_string should be a key.
+        // This is safe because write_string checks expecting_map_key *before* calling
+        // prefix(), so this only affects the *next* write_string call.
+        if self.map_depth > 0 {
+            self.expecting_map_key = true;
+        }
     }
 
     /// Resolves the JSON field name for a member schema.
@@ -59,18 +72,14 @@ impl JsonSerializer {
 
     /// Gets the timestamp format to use, respecting @timestampFormat trait.
     fn get_timestamp_format(&self, schema: &Schema) -> TimestampFormat {
-        if let Some(trait_obj) = schema
-            .traits()
-            .get(&aws_smithy_schema::serde_traits::TIMESTAMP_FORMAT)
-        {
-            if let Some(format_str) = trait_obj.as_any().downcast_ref::<String>() {
-                return match format_str.as_str() {
-                    "epoch-seconds" => TimestampFormat::EpochSeconds,
-                    "http-date" => TimestampFormat::HttpDate,
-                    "date-time" => TimestampFormat::DateTime,
-                    _ => self.settings.default_timestamp_format,
-                };
-            }
+        if let Some(ts_trait) = schema.timestamp_format() {
+            return match ts_trait.format() {
+                aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
+                    TimestampFormat::EpochSeconds
+                }
+                aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
+                aws_smithy_schema::traits::TimestampFormat::DateTime => TimestampFormat::DateTime,
+            };
         }
         self.settings.default_timestamp_format
     }
@@ -91,10 +100,15 @@ impl ShapeSerializer for JsonSerializer {
         self.prefix(schema);
         self.output.push('{');
         let saved = self.needs_comma;
+        let saved_depth = self.map_depth;
         self.needs_comma = false;
+        // Reset map_depth so struct members don't trigger map-key logic in prefix().
+        // Restored after the struct body so an enclosing map resumes correctly.
+        self.map_depth = 0;
         value.serialize_members(self)?;
         self.output.push('}');
         self.needs_comma = saved;
+        self.map_depth = saved_depth;
         Ok(())
     }
 
@@ -106,10 +120,14 @@ impl ShapeSerializer for JsonSerializer {
         self.prefix(schema);
         self.output.push('[');
         let saved = self.needs_comma;
+        let saved_depth = self.map_depth;
         self.needs_comma = false;
+        // Reset map_depth so list elements don't trigger map-key logic in prefix().
+        self.map_depth = 0;
         write_elements(self)?;
         self.output.push(']');
         self.needs_comma = saved;
+        self.map_depth = saved_depth;
         Ok(())
     }
 
@@ -120,11 +138,20 @@ impl ShapeSerializer for JsonSerializer {
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push('{');
-        let saved = self.needs_comma;
+        let saved_comma = self.needs_comma;
+        let saved_map_key = self.expecting_map_key;
+        let saved_depth = self.map_depth;
         self.needs_comma = false;
+        self.expecting_map_key = true;
+        // Increment depth so prefix() knows to restore expecting_map_key after
+        // each value write. write_string checks expecting_map_key *before* calling
+        // prefix(), so the flag only affects the *next* write_string (the next key).
+        self.map_depth += 1;
         write_entries(self)?;
+        self.map_depth = saved_depth;
         self.output.push('}');
-        self.needs_comma = saved;
+        self.needs_comma = saved_comma;
+        self.expecting_map_key = saved_map_key;
         Ok(())
     }
 
@@ -196,10 +223,23 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
         use crate::escape::escape_string;
-        self.prefix(schema);
-        self.output.push('"');
-        self.output.push_str(&escape_string(value));
-        self.output.push('"');
+        if self.expecting_map_key {
+            // Map key: comma before (if not first entry), then "key":
+            if self.needs_comma {
+                self.output.push(',');
+            }
+            self.output.push('"');
+            self.output.push_str(&escape_string(value));
+            self.output.push_str("\":");
+            // The next write is the value — no comma before it
+            self.needs_comma = false;
+            self.expecting_map_key = false;
+        } else {
+            self.prefix(schema);
+            self.output.push('"');
+            self.output.push_str(&escape_string(value));
+            self.output.push('"');
+        }
         Ok(())
     }
 
@@ -291,7 +331,6 @@ mod tests {
         let list_schema = aws_smithy_schema::Schema::new(
             aws_smithy_schema::shape_id!("test", "List"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
         );
         ser.write_list(&list_schema, &|s: &mut dyn ShapeSerializer| {
             s.write_integer(&INTEGER, 1)?;
@@ -311,35 +350,30 @@ mod tests {
         static ACTIVE_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Boolean,
-            aws_smithy_schema::TraitMap::EMPTY,
             "active",
             0,
         );
         static NAME_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "name",
             1,
         );
         static COUNT_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Integer,
-            aws_smithy_schema::TraitMap::EMPTY,
             "count",
             2,
         );
         static PRICE_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Float,
-            aws_smithy_schema::TraitMap::EMPTY,
             "price",
             3,
         );
         static ITEMS_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "items",
             4,
         );
@@ -363,7 +397,6 @@ mod tests {
         let struct_schema = aws_smithy_schema::Schema::new(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
         );
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_struct(&struct_schema, &TestObject).unwrap();
@@ -382,107 +415,80 @@ mod tests {
         static ID: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Long,
-            aws_smithy_schema::TraitMap::EMPTY,
             "id",
             0,
         );
         static NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "name",
             1,
         );
         static SCORES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "scores",
             2,
         );
         static ADDRESS: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
             "address",
             3,
         );
         static COMPANIES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "companies",
             4,
         );
         static TAGS: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Map,
-            aws_smithy_schema::TraitMap::EMPTY,
             "tags",
             5,
         );
         static STREET: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "street",
             0,
         );
         static CITY: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "city",
             1,
         );
         static ZIP: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Integer,
-            aws_smithy_schema::TraitMap::EMPTY,
             "zip",
             2,
         );
         static COMP_NAME: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "name",
             0,
         );
         static EMPLOYEES: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::List,
-            aws_smithy_schema::TraitMap::EMPTY,
             "employees",
             1,
         );
         static METADATA: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Map,
-            aws_smithy_schema::TraitMap::EMPTY,
             "metadata",
             2,
         );
         static ACTIVE: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Boolean,
-            aws_smithy_schema::TraitMap::EMPTY,
             "active",
             3,
-        );
-        static ROLE: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Tags"),
-            aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
-            "role",
-            0,
-        );
-        static LEVEL: Schema = Schema::new_member(
-            aws_smithy_schema::shape_id!("test", "Tags"),
-            aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
-            "level",
-            1,
         );
 
         struct AddressStruct;
@@ -512,14 +518,8 @@ mod tests {
                 })?;
                 s.write_map(&METADATA, &|s| {
                     for (k, v) in self.metadata {
-                        let member = Schema::new_member(
-                            aws_smithy_schema::shape_id!("test", "Meta"),
-                            aws_smithy_schema::ShapeType::Integer,
-                            aws_smithy_schema::TraitMap::EMPTY,
-                            k,
-                            0,
-                        );
-                        s.write_integer(&member, *v)?;
+                        s.write_string(&::aws_smithy_schema::prelude::STRING, k)?;
+                        s.write_integer(&::aws_smithy_schema::prelude::INTEGER, *v)?;
                     }
                     Ok(())
                 })?;
@@ -544,7 +544,6 @@ mod tests {
                     let struct_schema = Schema::new(
                         aws_smithy_schema::shape_id!("test", "Company"),
                         aws_smithy_schema::ShapeType::Structure,
-                        aws_smithy_schema::TraitMap::EMPTY,
                     );
                     s.write_struct(
                         &struct_schema,
@@ -567,8 +566,10 @@ mod tests {
                     Ok(())
                 })?;
                 s.write_map(&TAGS, &|s| {
-                    s.write_string(&ROLE, "admin")?;
-                    s.write_string(&LEVEL, "senior")?;
+                    s.write_string(&::aws_smithy_schema::prelude::STRING, "role")?;
+                    s.write_string(&::aws_smithy_schema::prelude::STRING, "admin")?;
+                    s.write_string(&::aws_smithy_schema::prelude::STRING, "level")?;
+                    s.write_string(&::aws_smithy_schema::prelude::STRING, "senior")?;
                     Ok(())
                 })?;
                 Ok(())
@@ -578,7 +579,6 @@ mod tests {
         let struct_schema = Schema::new(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
         );
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_struct(&struct_schema, &UserStruct).unwrap();
@@ -592,49 +592,20 @@ mod tests {
     fn test_json_name_serialization() {
         use aws_smithy_schema::serde::SerializableStruct;
 
-        // A simple string-valued trait for testing
-        #[derive(Debug)]
-        struct StringTrait {
-            id: aws_smithy_schema::ShapeId,
-            value: String,
-        }
-        impl aws_smithy_schema::Trait for StringTrait {
-            fn trait_id(&self) -> &aws_smithy_schema::ShapeId {
-                &self.id
-            }
-            fn as_any(&self) -> &dyn std::any::Any {
-                &self.value
-            }
-        }
-
-        fn json_name_traits(name: &str) -> aws_smithy_schema::TraitMap {
-            let mut map = aws_smithy_schema::TraitMap::new();
-            map.insert(Box::new(StringTrait {
-                id: aws_smithy_schema::shape_id!("smithy.api", "jsonName"),
-                value: name.to_string(),
-            }));
-            map
-        }
-
         static FOO_MEMBER: Schema = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,
-            aws_smithy_schema::TraitMap::EMPTY,
             "foo",
             0,
         );
         // bar has @jsonName("Baz")
-        // Can't use static because TraitMap with data isn't const.
-        // Use a lazy static instead.
-        static BAR_MEMBER: std::sync::LazyLock<Schema> = std::sync::LazyLock::new(|| {
-            Schema::new_member(
-                aws_smithy_schema::shape_id!("test", "MyStruct"),
-                aws_smithy_schema::ShapeType::Integer,
-                json_name_traits("Baz"),
-                "bar",
-                1,
-            )
-        });
+        static BAR_MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Integer,
+            "bar",
+            1,
+        )
+        .with_json_name("Baz");
 
         struct TestStruct;
         impl SerializableStruct for TestStruct {
@@ -649,7 +620,6 @@ mod tests {
         let struct_schema = Schema::new(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Structure,
-            aws_smithy_schema::TraitMap::EMPTY,
         );
         let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
         ser.write_struct(&struct_schema, &TestStruct).unwrap();

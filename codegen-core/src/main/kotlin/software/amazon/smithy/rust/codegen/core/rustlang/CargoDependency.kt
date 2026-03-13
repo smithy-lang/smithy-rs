@@ -448,6 +448,8 @@ data class CargoDependency(
         fun smithyObservabilityOtel(runtimeConfig: RuntimeConfig) =
             runtimeConfig.smithyRuntimeCrate("smithy-observability-otel")
 
+        fun smithySchema(runtimeConfig: RuntimeConfig) = runtimeConfig.smithyRuntimeCrate("smithy-schema")
+
         // behind feature-gate
         val Serde =
             CargoDependency("serde", CratesIo("1.0"), features = setOf("derive"), scope = DependencyScope.CfgUnstable)

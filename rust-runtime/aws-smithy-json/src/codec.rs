@@ -42,13 +42,8 @@ impl JsonFieldMapper {
         match self {
             JsonFieldMapper::UseMemberName => Some(name),
             JsonFieldMapper::UseJsonName { .. } => {
-                if let Some(trait_obj) = member
-                    .traits()
-                    .get(&aws_smithy_schema::serde_traits::JSON_NAME)
-                {
-                    if let Some(json_name) = trait_obj.as_any().downcast_ref::<String>() {
-                        return Some(json_name.as_str());
-                    }
+                if let Some(jn) = member.json_name() {
+                    return Some(jn.value());
                 }
                 Some(name)
             }
@@ -65,13 +60,8 @@ impl JsonFieldMapper {
                 let map = cache.entry(key).or_insert_with(|| {
                     let mut map = HashMap::new();
                     for (idx, member) in schema.members().iter().enumerate() {
-                        if let Some(trait_obj) = member
-                            .traits()
-                            .get(&aws_smithy_schema::serde_traits::JSON_NAME)
-                        {
-                            if let Some(json_name) = trait_obj.as_any().downcast_ref::<String>() {
-                                map.insert(json_name.clone(), idx);
-                            }
+                        if let Some(jn) = member.json_name() {
+                            map.insert(jn.value().to_string(), idx);
                         }
                     }
                     map

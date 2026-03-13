@@ -29,6 +29,7 @@ object CrateSet {
             "aws-smithy-async",
             "aws-smithy-runtime-api",
             "aws-smithy-runtime",
+            "aws-smithy-schema",
             "aws-smithy-types",
             "aws-smithy-http-client",
         )

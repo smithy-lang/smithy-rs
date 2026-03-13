@@ -48,7 +48,7 @@ macro_rules! shape_id {
 /// assert_eq!(ID.shape_name(), "String");
 /// assert_eq!(ID.as_str(), "smithy.api#String");
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ShapeId {
     fqn: &'static str,
     namespace: &'static str,
@@ -154,12 +154,9 @@ mod tests {
         let a = shape_id!("smithy.api", "String");
         let b = shape_id!("smithy.api", "String");
         assert_eq!(a, b);
-    }
 
-    #[test]
-    fn test_clone() {
-        let a = shape_id!("smithy.api", "String");
-        let b = a.clone();
-        assert_eq!(a, b);
+        let c = shape_id!("smithy.api", "String", "foo");
+        let d = shape_id!("smithy.api", "String", "foo");
+        assert_eq!(c, d);
     }
 }
