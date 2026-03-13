@@ -30,14 +30,12 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
-import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
 import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.stripOuter
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -395,6 +393,7 @@ class SchemaGenerator(
                 "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                 "SerdeError" to smithySchema.resolve("serde::SerdeError"),
                 "Schema" to smithySchema.resolve("Schema"),
+                "Builder" to symbolProvider.symbolForBuilder(shape),
             )
         val members = (shape as StructureShape).allMembers.values.toList()
 
@@ -403,18 +402,15 @@ class SchemaGenerator(
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
                 pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, #{SerdeError}> {
-                    ##[derive(Default)]
-                    struct DeserializerBuilder {
-                        #{builderFields}
-                    }
-                    let builder = DeserializerBuilder::default();
-                    ##[allow(unused_variables, unused_mut, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
-                    let builder = deserializer.read_struct(&${schemaPrefix}_SCHEMA, builder, |mut builder, member, deser| {
+                    ##[allow(unused_variables, unused_mut)]
+                    let mut builder = #{Builder}::default();
+                    ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
+                    deserializer.read_struct(&${schemaPrefix}_SCHEMA, (), |_, member, deser| {
                         match member.member_index() {
                             #{memberArms}
                             _ => {}
                         }
-                        Ok(builder)
+                        Ok(())
                     })?;
                     Ok($structName {
                         #{constructFields}
@@ -423,18 +419,6 @@ class SchemaGenerator(
             }
             """,
             *codegenScope,
-            "builderFields" to
-                writable {
-                    members.forEach { member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val memberSymbol = symbolProvider.toSymbol(member)
-                        val target = model.expectShape(member.target)
-                        val rustType =
-                            memberSymbol.rustType()
-                                .stripOuter<software.amazon.smithy.rust.codegen.core.rustlang.RustType.Option>()
-                        rust("$memberName: ::std::option::Option<${rustType.render()}>,")
-                    }
-                },
             "memberArms" to
                 writable {
                     members.forEachIndexed { idx, member ->
@@ -522,11 +506,13 @@ class SchemaGenerator(
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
                 val elementRead = elementReadExpr(elementTarget, memberRef)
-                if (isSparse) {
-                    "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) }); Ok(list) })?"
-                } else {
-                    "deser.read_list($memberRef, Vec::new(), |mut list, deser| { list.push($elementRead); Ok(list) })?"
-                }
+                val pushExpr =
+                    if (isSparse) {
+                        "list.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
+                    } else {
+                        "list.push($elementRead)"
+                    }
+                "{ let container = if let Some(cap) = deser.container_size() { Vec::with_capacity(cap) } else { Vec::new() }; deser.read_list($memberRef, container, |mut list, deser| { $pushExpr; Ok(list) })? }"
             }
 
             is MapShape -> {
@@ -541,11 +527,13 @@ class SchemaGenerator(
                     }
                 val valueTarget = model.expectShape(target.value.target)
                 val valueRead = elementReadExpr(valueTarget, memberRef)
-                if (isSparse) {
-                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) }); Ok(map) })?"
-                } else {
-                    "deser.read_map($memberRef, std::collections::HashMap::new(), |mut map, key, deser| { map.insert($keyInsert, $valueRead); Ok(map) })?"
-                }
+                val insertExpr =
+                    if (isSparse) {
+                        "map.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
+                    } else {
+                        "map.insert($keyInsert, $valueRead)"
+                    }
+                "{ let container = if let Some(cap) = deser.container_size() { std::collections::HashMap::with_capacity(cap) } else { std::collections::HashMap::new() }; deser.read_map($memberRef, container, |mut map, key, deser| { $insertExpr; Ok(map) })? }"
             }
 
             is StructureShape -> {

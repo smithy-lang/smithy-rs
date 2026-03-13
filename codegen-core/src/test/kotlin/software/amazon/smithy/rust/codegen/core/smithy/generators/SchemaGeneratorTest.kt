@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.core.smithy.generators
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.RecursiveShapeBoxer
@@ -60,20 +61,35 @@ class SchemaGeneratorTest {
     private val provider = testSymbolProvider(model)
     private val codegenContext = testCodegenContext(model)
 
+    /** Renders a structure, its builder, and its schema into the given writer. */
+    private fun renderStructWithSchema(
+        writer: software.amazon.smithy.rust.codegen.core.rustlang.RustWriter,
+        testModel: software.amazon.smithy.model.Model,
+        testProvider: software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider,
+        testContext: software.amazon.smithy.rust.codegen.core.smithy.CodegenContext,
+        shape: StructureShape,
+        project: software.amazon.smithy.rust.codegen.core.testutil.TestWriterDelegator,
+        traitFilter: SchemaTraitFilter = SchemaTraitFilter(testModel),
+    ) {
+        StructureGenerator(
+            testModel, testProvider, writer, shape, emptyList(),
+            StructSettings(flattenVecAccessors = true),
+        ).render()
+        writer.implBlock(testProvider.toSymbol(shape)) {
+            BuilderGenerator.renderConvenienceMethod(this, testProvider, shape)
+        }
+        project.withModule(testProvider.moduleForBuilder(shape)) {
+            BuilderGenerator(testModel, testProvider, shape, emptyList()).render(this)
+        }
+        SchemaGenerator(testContext, writer, shape, traitFilter).render()
+    }
+
     @Test
     fun `schema for structure compiles and works at runtime`() {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                shape,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, shape).render()
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
             unitTest(
                 "schema_structure",
                 """
@@ -103,15 +119,7 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                shape,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, shape).render()
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
             unitTest(
                 "member_schema_types",
                 """
@@ -141,26 +149,10 @@ class SchemaGeneratorTest {
         val myStruct = model.lookup<StructureShape>("test#MyStruct")
         val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
         project.useShapeWriter(myStruct) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                myStruct,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, myStruct).render()
+            renderStructWithSchema(this, model, provider, codegenContext, myStruct, project)
         }
         project.useShapeWriter(complexStruct) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                complexStruct,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, complexStruct).render()
+            renderStructWithSchema(this, model, provider, codegenContext, complexStruct, project)
             unitTest(
                 "complex_schema",
                 """
@@ -227,15 +219,7 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                shape,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, shape).render()
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
             // Reference JsonCodec via rustTemplate to auto-add the aws-smithy-json dependency
             rustTemplate(
                 "use #{JsonCodec};",
@@ -292,15 +276,7 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(provider)
         val shape = model.lookup<StructureShape>("test#MyStruct")
         project.useShapeWriter(shape) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                shape,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, shape).render()
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
             // Add aws-smithy-json dependency
             rustTemplate(
                 "use #{JsonCodec};",
@@ -360,8 +336,7 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(traitProvider)
         val shape = traitModel.lookup<StructureShape>("test#SecretData")
         project.useShapeWriter(shape) {
-            StructureGenerator(traitModel, traitProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
-            SchemaGenerator(traitContext, this, shape).render()
+            renderStructWithSchema(this, traitModel, traitProvider, traitContext, shape, project)
             unitTest(
                 "trait_filtering",
                 """
@@ -418,8 +393,7 @@ class SchemaGeneratorTest {
         val project = TestWorkspace.testProject(customProvider)
         val shape = customTraitModel.lookup<StructureShape>("test#Tagged")
         project.useShapeWriter(shape) {
-            StructureGenerator(customTraitModel, customProvider, this, shape, emptyList(), StructSettings(flattenVecAccessors = true)).render()
-            SchemaGenerator(customContext, this, shape, filter).render()
+            renderStructWithSchema(this, customTraitModel, customProvider, customContext, shape, project, filter)
             unitTest(
                 "unknown_traits",
                 """
@@ -479,15 +453,7 @@ class SchemaGeneratorTest {
         // Recursive through a list
         val treeNode = recursiveModel.lookup<StructureShape>("test#TreeNode")
         project.useShapeWriter(treeNode) {
-            StructureGenerator(
-                recursiveModel,
-                recProvider,
-                this,
-                treeNode,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(recContext, this, treeNode).render()
+            renderStructWithSchema(this, recursiveModel, recProvider, recContext, treeNode, project)
             unitTest(
                 "recursive_via_list",
                 """
@@ -502,15 +468,7 @@ class SchemaGeneratorTest {
         // Directly recursive (uses Box via RecursiveShapeBoxer)
         val linkedNode = recursiveModel.lookup<StructureShape>("test#LinkedNode")
         project.useShapeWriter(linkedNode) {
-            StructureGenerator(
-                recursiveModel,
-                recProvider,
-                this,
-                linkedNode,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(recContext, this, linkedNode).render()
+            renderStructWithSchema(this, recursiveModel, recProvider, recContext, linkedNode, project)
             unitTest(
                 "directly_recursive",
                 """
@@ -538,6 +496,12 @@ class SchemaGeneratorTest {
                 listOf(SchemaStructureCustomization(codegenContext)),
                 StructSettings(flattenVecAccessors = true),
             ).render()
+            this.implBlock(provider.toSymbol(shape)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, shape)
+            }
+            project.withModule(provider.moduleForBuilder(shape)) {
+                BuilderGenerator(model, provider, shape, emptyList()).render(this)
+            }
             unitTest(
                 "auto_schema",
                 """
@@ -558,26 +522,10 @@ class SchemaGeneratorTest {
         val myStruct = model.lookup<StructureShape>("test#MyStruct")
         val complexStruct = model.lookup<StructureShape>("test#ComplexStruct")
         project.useShapeWriter(myStruct) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                myStruct,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, myStruct).render()
+            renderStructWithSchema(this, model, provider, codegenContext, myStruct, project)
         }
         project.useShapeWriter(complexStruct) {
-            StructureGenerator(
-                model,
-                provider,
-                this,
-                complexStruct,
-                emptyList(),
-                StructSettings(flattenVecAccessors = true),
-            ).render()
-            SchemaGenerator(codegenContext, this, complexStruct).render()
+            renderStructWithSchema(this, model, provider, codegenContext, complexStruct, project)
             // Pull in JsonCodec dependency
             rustTemplate(
                 "use #{JsonCodec};",
