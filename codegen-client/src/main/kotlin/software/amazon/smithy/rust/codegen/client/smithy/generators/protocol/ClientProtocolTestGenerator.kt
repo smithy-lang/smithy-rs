@@ -114,6 +114,9 @@ class ClientProtocolTestGenerator(
 
     private val rc = codegenContext.runtimeConfig
 
+    private val defaultBodyMediaType: String =
+        if (codegenContext.protocol.toString() == "smithy.protocols#rpcv2Cbor") "application/cbor" else "unknown"
+
     private val inputShape = operationShape.inputShape(codegenContext.model)
     private val outputShape = operationShape.outputShape(codegenContext.model)
 
@@ -353,7 +356,7 @@ class ClientProtocolTestGenerator(
             let parsed = de.deserialize_streaming(&mut http_response_clone);
             let parsed = parsed.unwrap_or_else(|| {
             let http_response_clone = http_response_clone.map(|body| {
-                #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
+                #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))
             });
             de.deserialize_nonstreaming(&http_response_clone)
             });
@@ -390,7 +393,7 @@ class ClientProtocolTestGenerator(
             let parsed = de.deserialize_streaming(&mut http_response);
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
-                    #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
+                    #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))
                 });
                 de.deserialize_nonstreaming(&http_response)
             });
@@ -516,7 +519,7 @@ class ClientProtocolTestGenerator(
                 rustWriter.write(
                     "#T(body, ${
                         rustWriter.escape(body).dq()
-                    }, #T::from(${(mediaType ?: "unknown").dq()}))",
+                    }, #T::from(${(mediaType ?: defaultBodyMediaType).dq()}))",
                     RT.protocolTest(rc, "validate_body"),
                     RT.protocolTest(rc, "MediaType"),
                 )
