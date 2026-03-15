@@ -20,7 +20,9 @@ mod schema {
     pub mod traits;
 
     pub mod codec;
+    pub mod http_protocol;
     pub mod prelude;
+    pub mod protocol;
     pub mod serde;
 }
 
@@ -44,6 +46,14 @@ pub mod traits {
 
 pub mod codec {
     pub use crate::schema::codec::*;
+}
+
+pub mod protocol {
+    pub use crate::schema::protocol::*;
+}
+
+pub mod http_protocol {
+    pub use crate::schema::http_protocol::*;
 }
 
 /// A Smithy schema — a lightweight runtime representation of a Smithy shape.

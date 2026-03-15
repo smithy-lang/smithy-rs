@@ -28,6 +28,12 @@ impl HttpStringSerializer {
     }
 }
 
+impl super::FinishSerializer for HttpStringSerializer {
+    fn finish(self) -> Vec<u8> {
+        self.output.into_bytes()
+    }
+}
+
 impl Default for HttpStringSerializer {
     fn default() -> Self {
         Self::new()

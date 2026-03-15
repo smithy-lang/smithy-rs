@@ -12,6 +12,15 @@ pub mod http_string;
 
 use crate::serde::{ShapeDeserializer, ShapeSerializer};
 
+/// Trait for serializers that can produce a final byte output.
+///
+/// This is separate from [`ShapeSerializer`] to preserve object safety on
+/// `ShapeSerializer` (which is used as `&mut dyn ShapeSerializer` in generated code).
+pub trait FinishSerializer {
+    /// Consumes the serializer and returns the serialized bytes.
+    fn finish(self) -> Vec<u8>;
+}
+
 /// A codec for a specific serialization format.
 ///
 /// Codecs are responsible for creating [`ShapeSerializer`] and [`ShapeDeserializer`]
@@ -44,7 +53,7 @@ use crate::serde::{ShapeDeserializer, ShapeSerializer};
 /// ```
 pub trait Codec {
     /// The serializer type for this codec.
-    type Serializer: ShapeSerializer;
+    type Serializer: ShapeSerializer + FinishSerializer;
 
     /// The deserializer type for this codec.
     type Deserializer<'a>: ShapeDeserializer;
@@ -68,6 +77,12 @@ mod test {
     }
 
     impl MockSerializer {
+        fn finish(self) -> Vec<u8> {
+            self.output
+        }
+    }
+
+    impl FinishSerializer for MockSerializer {
         fn finish(self) -> Vec<u8> {
             self.output
         }

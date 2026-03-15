@@ -91,6 +91,12 @@ impl JsonSerializer {
     }
 }
 
+impl aws_smithy_schema::codec::FinishSerializer for JsonSerializer {
+    fn finish(self) -> Vec<u8> {
+        self.output.into_bytes()
+    }
+}
+
 impl ShapeSerializer for JsonSerializer {
     fn write_struct(
         &mut self,

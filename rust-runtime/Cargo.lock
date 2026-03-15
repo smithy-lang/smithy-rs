@@ -683,6 +683,7 @@ dependencies = [
 name = "aws-smithy-json"
 version = "0.62.6"
 dependencies = [
+ "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-schema",
  "aws-smithy-types 1.4.6",
  "proptest",
@@ -870,6 +871,7 @@ dependencies = [
 name = "aws-smithy-schema"
 version = "1.0.0"
 dependencies = [
+ "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-types 1.4.6",
 ]
 
