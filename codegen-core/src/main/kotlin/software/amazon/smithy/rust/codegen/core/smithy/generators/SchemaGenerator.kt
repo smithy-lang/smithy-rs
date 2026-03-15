@@ -397,11 +397,11 @@ class SchemaGenerator(
             """
             impl $structName {
                 /// Deserializes this structure from a [`ShapeDeserializer`].
-                pub fn deserialize<D: #{ShapeDeserializer}>(deserializer: &mut D) -> ::std::result::Result<Self, #{SerdeError}> {
+                pub fn deserialize(deserializer: &mut dyn #{ShapeDeserializer}) -> ::std::result::Result<Self, #{SerdeError}> {
                     ##[allow(unused_variables, unused_mut)]
                     let mut builder = Self::builder();
                     ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
-                    deserializer.read_struct(&${schemaPrefix}_SCHEMA, (), |_, member, deser| {
+                    deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
                         match member.member_index() {
                             #{memberArms}
                             _ => {}
@@ -482,11 +482,11 @@ class SchemaGenerator(
                 val elementRead = elementReadExpr(elementTarget, memberRef)
                 val pushExpr =
                     if (isSparse) {
-                        "list.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
+                        "container.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
                     } else {
-                        "list.push($elementRead)"
+                        "container.push($elementRead)"
                     }
-                "{ let container = if let Some(cap) = deser.container_size() { Vec::with_capacity(cap) } else { Vec::new() }; deser.read_list($memberRef, container, |mut list, deser| { $pushExpr; Ok(list) })? }"
+                "{ let mut container = if let Some(cap) = deser.container_size() { Vec::with_capacity(cap) } else { Vec::new() }; deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
             }
 
             is MapShape -> {
@@ -503,11 +503,11 @@ class SchemaGenerator(
                 val valueRead = elementReadExpr(valueTarget, memberRef)
                 val insertExpr =
                     if (isSparse) {
-                        "map.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
+                        "container.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
                     } else {
-                        "map.insert($keyInsert, $valueRead)"
+                        "container.insert($keyInsert, $valueRead)"
                     }
-                "{ let container = if let Some(cap) = deser.container_size() { std::collections::HashMap::with_capacity(cap) } else { std::collections::HashMap::new() }; deser.read_map($memberRef, container, |mut map, key, deser| { $insertExpr; Ok(map) })? }"
+                "{ let mut container = if let Some(cap) = deser.container_size() { std::collections::HashMap::with_capacity(cap) } else { std::collections::HashMap::new() }; deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
             }
 
             is StructureShape -> {

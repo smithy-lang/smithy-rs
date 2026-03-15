@@ -47,15 +47,11 @@ impl<'a> JsonDeserializer<'a> {
 }
 
 impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
-    fn read_struct<T, F>(
+    fn read_struct(
         &mut self,
         schema: &Schema,
-        mut state: T,
-        mut consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
-    {
+        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         // Expect opening brace
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
@@ -115,24 +111,20 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
             // Process the value
             if let Some(member_schema) = self.resolve_member(schema, &key_str) {
-                state = consumer(state, member_schema, self)?;
+                consumer(member_schema, self)?;
             } else {
                 self.skip_value()?;
             }
         }
 
-        Ok(state)
+        Ok(())
     }
 
-    fn read_list<T, F>(
+    fn read_list(
         &mut self,
         _schema: &Schema,
-        mut state: T,
-        mut consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
-    {
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -147,21 +139,17 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 self.advance_by(1);
                 break;
             }
-            state = consumer(state, self)?;
+            consumer(self)?;
         }
 
-        Ok(state)
+        Ok(())
     }
 
-    fn read_map<T, F>(
+    fn read_map(
         &mut self,
         _schema: &Schema,
-        mut state: T,
-        mut consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
-    {
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
             return Err(SerdeError::TypeMismatch {
@@ -212,10 +200,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
 
-            state = consumer(state, key, self)?;
+            consumer(key, self)?;
         }
 
-        Ok(state)
+        Ok(())
     }
 
     fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
@@ -669,23 +657,26 @@ mod tests {
         );
 
         fn consume_person(
-            mut person: Person,
+            person: &mut Person,
             schema: &Schema,
-            deser: &mut JsonDeserializer,
-        ) -> Result<Person, SerdeError> {
+            deser: &mut dyn ShapeDeserializer,
+        ) -> Result<(), SerdeError> {
             match schema.member_name() {
                 Some("firstName") => person.first_name = deser.read_string(schema)?,
                 Some("lastName") => person.last_name = deser.read_string(schema)?,
                 Some("age") => person.age = deser.read_integer(schema)?,
                 _ => {}
             }
-            Ok(person)
+            Ok(())
         }
 
         let json = br#"{"lastName":"Smithy","firstName":"Alice","age":30}"#;
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
-        let person = deser
-            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
+        let mut person = Person::default();
+        deser
+            .read_struct(&PERSON_SCHEMA, &mut |member, d| {
+                consume_person(&mut person, member, d)
+            })
             .unwrap();
         assert_eq!(
             person,
@@ -699,8 +690,11 @@ mod tests {
         let json =
             br#"{"firstName":          "Alice","age":12345678,     "lastName":"\"Smithy\""}"#;
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
-        let person = deser
-            .read_struct(&PERSON_SCHEMA, Person::default(), consume_person)
+        let mut person = Person::default();
+        deser
+            .read_struct(&PERSON_SCHEMA, &mut |member, d| {
+                consume_person(&mut person, member, d)
+            })
             .unwrap();
         assert_eq!(
             person,
@@ -717,12 +711,12 @@ mod tests {
         let json = b"[1, 2, 3, 4, 5]";
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
-        let container = Vec::with_capacity(capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_list(dummy_schema(), container, |mut vec, deser| {
-                vec.push(deser.read_integer(dummy_schema())?);
-                Ok(vec)
+        let mut result = Vec::with_capacity(capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_list(dummy_schema(), &mut |deser| {
+                result.push(deser.read_integer(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result, vec![1, 2, 3, 4, 5]);
@@ -732,12 +726,12 @@ mod tests {
         let json = b"[]";
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
-        let container = Vec::with_capacity(capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_list(dummy_schema(), container, |mut vec, deser| {
-                vec.push(deser.read_integer(dummy_schema())?);
-                Ok(vec)
+        let mut result = Vec::<i32>::with_capacity(capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_list(dummy_schema(), &mut |deser| {
+                result.push(deser.read_integer(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result, Vec::<i32>::new());
@@ -747,12 +741,12 @@ mod tests {
         let json = br#"["hello", "world"]"#;
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let capacity = deser.container_size().unwrap_or(0);
-        let container = Vec::with_capacity(capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_list(dummy_schema(), container, |mut vec, deser| {
-                vec.push(deser.read_string(dummy_schema())?);
-                Ok(vec)
+        let mut result = Vec::with_capacity(capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_list(dummy_schema(), &mut |deser| {
+                result.push(deser.read_string(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result, vec!["hello", "world"]);
@@ -795,12 +789,12 @@ mod tests {
         let json = br#"{"a": 1, "b": 2, "c": 3}"#;
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
-        let container = HashMap::with_capacity(calculated_capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_map(dummy_schema(), container, |mut map, key, deser| {
-                map.insert(key, deser.read_integer(dummy_schema())?);
-                Ok(map)
+        let mut result = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_map(dummy_schema(), &mut |key, deser| {
+                result.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result.len(), 3);
@@ -813,12 +807,12 @@ mod tests {
         let json = b"{}";
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
-        let container = HashMap::with_capacity(calculated_capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_map(dummy_schema(), container, |mut map, key, deser| {
-                map.insert(key, deser.read_integer(dummy_schema())?);
-                Ok(map)
+        let mut result = HashMap::<String, i32>::with_capacity(calculated_capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_map(dummy_schema(), &mut |key, deser| {
+                result.insert(key, deser.read_integer(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result, HashMap::<String, i32>::new());
@@ -828,12 +822,12 @@ mod tests {
         let json = br#"{"name": "Alice", "city": "Seattle"}"#;
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let calculated_capacity = deser.container_size().unwrap_or(0);
-        let container = HashMap::with_capacity(calculated_capacity);
-        let allocated_capacity = container.capacity();
-        let result = deser
-            .read_map(dummy_schema(), container, |mut map, key, deser| {
-                map.insert(key, deser.read_string(dummy_schema())?);
-                Ok(map)
+        let mut result = HashMap::with_capacity(calculated_capacity);
+        let allocated_capacity = result.capacity();
+        deser
+            .read_map(dummy_schema(), &mut |key, deser| {
+                result.insert(key, deser.read_string(dummy_schema())?);
+                Ok(())
             })
             .unwrap();
         assert_eq!(result.len(), 2);
@@ -978,81 +972,94 @@ mod tests {
         );
 
         fn consume_address(
-            mut addr: Address,
+            addr: &mut Address,
             schema: &Schema,
-            deser: &mut JsonDeserializer,
-        ) -> Result<Address, SerdeError> {
+            deser: &mut dyn ShapeDeserializer,
+        ) -> Result<(), SerdeError> {
             match schema.member_name() {
                 Some("street") => addr.street = deser.read_string(schema)?,
                 Some("city") => addr.city = deser.read_string(schema)?,
                 Some("zip") => addr.zip = deser.read_integer(schema)?,
                 _ => {}
             }
-            Ok(addr)
+            Ok(())
         }
 
         fn consume_company(
-            mut comp: Company,
+            comp: &mut Company,
             schema: &Schema,
-            deser: &mut JsonDeserializer,
-        ) -> Result<Company, SerdeError> {
+            deser: &mut dyn ShapeDeserializer,
+        ) -> Result<(), SerdeError> {
             match schema.member_name() {
                 Some("name") => comp.name = deser.read_string(schema)?,
                 Some("active") => comp.active = deser.read_boolean(schema)?,
                 Some("employees") => {
-                    comp.employees = deser.read_list(schema, Vec::new(), |mut v, d| {
+                    let mut v = Vec::new();
+                    deser.read_list(schema, &mut |d| {
                         v.push(d.read_string(dummy_schema())?);
-                        Ok(v)
-                    })?
+                        Ok(())
+                    })?;
+                    comp.employees = v;
                 }
                 Some("metadata") => {
-                    comp.metadata = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                    let mut m = HashMap::new();
+                    deser.read_map(schema, &mut |k, d| {
                         m.insert(k, d.read_integer(dummy_schema())?);
-                        Ok(m)
-                    })?
+                        Ok(())
+                    })?;
+                    comp.metadata = m;
                 }
                 _ => {}
             }
-            Ok(comp)
+            Ok(())
         }
 
         fn consume_user(
-            mut user: User,
+            user: &mut User,
             schema: &Schema,
-            deser: &mut JsonDeserializer,
-        ) -> Result<User, SerdeError> {
+            deser: &mut dyn ShapeDeserializer,
+        ) -> Result<(), SerdeError> {
             match schema.member_name() {
                 Some("id") => user.id = deser.read_long(schema)?,
                 Some("name") => user.name = deser.read_string(schema)?,
                 Some("scores") => {
-                    user.scores = deser.read_list(schema, Vec::new(), |mut v, d| {
+                    let mut v = Vec::new();
+                    deser.read_list(schema, &mut |d| {
                         v.push(d.read_double(dummy_schema())?);
-                        Ok(v)
-                    })?
+                        Ok(())
+                    })?;
+                    user.scores = v;
                 }
                 Some("address") => {
-                    user.address =
-                        deser.read_struct(&ADDRESS_SCHEMA, Address::default(), consume_address)?
+                    let mut addr = Address::default();
+                    deser.read_struct(&ADDRESS_SCHEMA, &mut |member, d| {
+                        consume_address(&mut addr, member, d)
+                    })?;
+                    user.address = addr;
                 }
                 Some("companies") => {
-                    user.companies = deser.read_list(schema, Vec::new(), |mut v, d| {
-                        v.push(d.read_struct(
-                            &COMPANY_SCHEMA,
-                            Company::default(),
-                            consume_company,
-                        )?);
-                        Ok(v)
-                    })?
+                    let mut v = Vec::new();
+                    deser.read_list(schema, &mut |d| {
+                        let mut comp = Company::default();
+                        d.read_struct(&COMPANY_SCHEMA, &mut |member, d| {
+                            consume_company(&mut comp, member, d)
+                        })?;
+                        v.push(comp);
+                        Ok(())
+                    })?;
+                    user.companies = v;
                 }
                 Some("tags") => {
-                    user.tags = deser.read_map(schema, HashMap::new(), |mut m, k, d| {
+                    let mut m = HashMap::new();
+                    deser.read_map(schema, &mut |k, d| {
                         m.insert(k, d.read_string(dummy_schema())?);
-                        Ok(m)
-                    })?
+                        Ok(())
+                    })?;
+                    user.tags = m;
                 }
                 _ => {}
             }
-            Ok(user)
+            Ok(())
         }
 
         let json = br#"{
@@ -1082,8 +1089,11 @@ mod tests {
         }"#;
 
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
-        let user = deser
-            .read_struct(&USER_SCHEMA, User::default(), consume_user)
+        let mut user = User::default();
+        deser
+            .read_struct(&USER_SCHEMA, &mut |member, d| {
+                consume_user(&mut user, member, d)
+            })
             .unwrap();
 
         assert_eq!(user.id, 12345);
@@ -1136,7 +1146,7 @@ mod tests {
         let mut deser = JsonDeserializer::new(json, Arc::new(JsonCodecSettings::default()));
         let (mut foo, mut bar) = (None::<String>, None::<i32>);
         deser
-            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+            .read_struct(&STRUCT_SCHEMA, &mut |member, d| {
                 match member.member_name() {
                     Some("foo") => foo = Some(d.read_string(member)?),
                     Some("bar") => bar = Some(d.read_integer(member)?),
@@ -1155,7 +1165,7 @@ mod tests {
         );
         let (mut foo, mut bar) = (None::<String>, None::<i32>);
         deser
-            .read_struct(&STRUCT_SCHEMA, (), |_, member, d| {
+            .read_struct(&STRUCT_SCHEMA, &mut |member, d| {
                 match member.member_name() {
                     Some("foo") => foo = Some(d.read_string(member)?),
                     Some("bar") => bar = Some(d.read_integer(member)?),

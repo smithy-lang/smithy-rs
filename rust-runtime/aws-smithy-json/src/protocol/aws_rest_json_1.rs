@@ -58,7 +58,8 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
     type Request = aws_smithy_runtime_api::http::Request;
     type Response = aws_smithy_runtime_api::http::Response;
     type Codec = JsonCodec;
-    type ResponseDeserializer<'a> = JsonDeserializer<'a>;
+    type ResponseDeserializer<'a> =
+        aws_smithy_schema::http_protocol::HttpBindingDeserializer<'a, JsonDeserializer<'a>>;
 
     fn protocol_id(&self) -> &ShapeId {
         self.inner.protocol_id()

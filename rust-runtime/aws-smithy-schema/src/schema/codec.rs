@@ -197,40 +197,31 @@ mod test {
     }
 
     impl<'a> ShapeDeserializer for MockDeserializer<'a> {
-        fn read_struct<T, F>(
+        fn read_struct(
             &mut self,
             _schema: &Schema,
-            state: T,
-            _consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+            _consumer: &mut dyn FnMut(
+                &Schema,
+                &mut dyn ShapeDeserializer,
+            ) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
 
-        fn read_list<T, F>(
+        fn read_list(
             &mut self,
             _schema: &Schema,
-            state: T,
-            _consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+            _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
 
-        fn read_map<T, F>(
+        fn read_map(
             &mut self,
             _schema: &Schema,
-            state: T,
-            _consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+            _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
 
         fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {

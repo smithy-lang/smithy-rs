@@ -27,6 +27,9 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// - Enables zero-cost abstractions (closures can be inlined)
 /// - Allows caller to control deserialization order and state management
 /// - Matches the SEP's recommendation for compiled typed languages
+/// - Uses `&mut dyn ShapeDeserializer` so composite deserializers (e.g., HTTP
+///   binding + body) can transparently delegate without the consumer knowing
+///   the concrete deserializer type. This enables runtime protocol swapping.
 ///
 /// # Example
 ///
@@ -35,14 +38,13 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// let mut builder = MyStructBuilder::default();
 /// deserializer.read_struct(
 ///     &MY_STRUCT_SCHEMA,
-///     builder,
-///     |mut builder, member, deser| {
+///     &mut |member, deser| {
 ///         match member.member_index() {
-///             0 => builder.field1 = Some(deser.read_string(member)?),
-///             1 => builder.field2 = Some(deser.read_i32(member)?),
+///             Some(0) => builder.field1 = Some(deser.read_string(member)?),
+///             Some(1) => builder.field2 = Some(deser.read_integer(member)?),
 ///             _ => {}
 ///         }
-///         Ok(builder)
+///         Ok(())
 ///     },
 /// )?;
 /// let my_struct = builder.build();
@@ -50,65 +52,33 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 pub trait ShapeDeserializer {
     /// Reads a structure from the deserializer.
     ///
-    /// The structure deserialization is driven by a consumer callback that is called
-    /// for each member. The consumer receives the current state, the member schema,
-    /// and the deserializer, and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the structure being deserialized
-    /// * `state` - Initial state (typically a builder)
-    /// * `consumer` - Callback invoked for each member with (state, member_schema, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all members
-    fn read_struct<T, F>(
+    /// The consumer is called for each member with the member schema and a
+    /// `&mut dyn ShapeDeserializer` to read the member value. Using `dyn`
+    /// allows composite deserializers (e.g., HTTP binding + body) to
+    /// transparently delegate without the consumer knowing the concrete type.
+    fn read_struct(
         &mut self,
         schema: &Schema,
-        state: T,
-        consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>;
+        state: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a list from the deserializer.
     ///
-    /// The list deserialization is driven by a consumer callback that is called
-    /// for each element. The consumer receives the current state and the deserializer,
-    /// and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the list being deserialized
-    /// * `state` - Initial state (typically a Vec or collection)
-    /// * `consumer` - Callback invoked for each element with (state, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all elements
-    fn read_list<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &mut Self) -> Result<T, SerdeError>;
+    /// The consumer is called for each element with a `&mut dyn ShapeDeserializer`.
+    fn read_list(
+        &mut self,
+        schema: &Schema,
+        state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a map from the deserializer.
     ///
-    /// The map deserialization is driven by a consumer callback that is called
-    /// for each entry. The consumer receives the current state, the key, and the
-    /// deserializer, and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the map being deserialized
-    /// * `state` - Initial state (typically a HashMap or collection)
-    /// * `consumer` - Callback invoked for each entry with (state, key, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all entries
-    fn read_map<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>;
+    /// The consumer is called for each entry with the key and a `&mut dyn ShapeDeserializer`.
+    fn read_map(
+        &mut self,
+        schema: &Schema,
+        state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a boolean value.
     fn read_boolean(&mut self, schema: &Schema) -> Result<bool, SerdeError>;

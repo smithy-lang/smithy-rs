@@ -443,6 +443,227 @@ impl ShapeSerializer for MapEntryCollector {
     }
 }
 
+/// A composite deserializer that reads HTTP-bound members from the response
+/// headers/status and delegates body members to the inner codec deserializer.
+///
+/// Individual `read_*` methods check the member schema for HTTP binding traits
+/// and read from the response headers/status when present, falling through to
+/// the body deserializer otherwise.
+///
+/// `read_struct` iterates members: HTTP-bound members are read directly from
+/// this deserializer, while remaining members are delegated to the body
+/// deserializer via `body.read_struct`.
+pub struct HttpBindingDeserializer<'a, D> {
+    body: D,
+    response: &'a Response,
+}
+
+impl<'a, D: ShapeDeserializer> HttpBindingDeserializer<'a, D> {
+    fn read_header(&self, name: &str) -> Option<&str> {
+        self.response.headers().get(name)
+    }
+}
+
+impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a, D> {
+    fn read_struct(
+        &mut self,
+        schema: &Schema,
+        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        // Read HTTP-bound members directly from this composite deserializer
+        for member in schema.members() {
+            if member.http_header().is_some()
+                || member.http_response_code().is_some()
+                || member.http_prefix_headers().is_some()
+            {
+                consumer(member, self)?;
+            }
+        }
+        // Delegate body members to the body deserializer
+        self.body.read_struct(schema, consumer)
+    }
+
+    fn read_list(
+        &mut self,
+        schema: &Schema,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.body.read_list(schema, consumer)
+    }
+
+    fn read_map(
+        &mut self,
+        schema: &Schema,
+        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.body.read_map(schema, consumer)
+    }
+
+    fn read_boolean(&mut self, schema: &Schema) -> Result<bool, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid boolean header: {val}"),
+            });
+        }
+        self.body.read_boolean(schema)
+    }
+
+    fn read_byte(&mut self, schema: &Schema) -> Result<i8, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid byte header: {val}"),
+            });
+        }
+        self.body.read_byte(schema)
+    }
+
+    fn read_short(&mut self, schema: &Schema) -> Result<i16, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid short header: {val}"),
+            });
+        }
+        self.body.read_short(schema)
+    }
+
+    fn read_integer(&mut self, schema: &Schema) -> Result<i32, SerdeError> {
+        if schema.http_response_code().is_some() {
+            return Ok(self.response.status().as_u16() as i32);
+        }
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid integer header: {val}"),
+            });
+        }
+        self.body.read_integer(schema)
+    }
+
+    fn read_long(&mut self, schema: &Schema) -> Result<i64, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid long header: {val}"),
+            });
+        }
+        self.body.read_long(schema)
+    }
+
+    fn read_float(&mut self, schema: &Schema) -> Result<f32, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid float header: {val}"),
+            });
+        }
+        self.body.read_float(schema)
+    }
+
+    fn read_double(&mut self, schema: &Schema) -> Result<f64, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return val.parse().map_err(|_| SerdeError::InvalidInput {
+                message: format!("invalid double header: {val}"),
+            });
+        }
+        self.body.read_double(schema)
+    }
+
+    fn read_big_integer(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
+        self.body.read_big_integer(schema)
+    }
+
+    fn read_big_decimal(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
+        self.body.read_big_decimal(schema)
+    }
+
+    fn read_string(&mut self, schema: &Schema) -> Result<String, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            return self
+                .read_header(h.value())
+                .map(|v| v.to_string())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                });
+        }
+        self.body.read_string(schema)
+    }
+
+    fn read_blob(&mut self, schema: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
+        self.body.read_blob(schema)
+    }
+
+    fn read_timestamp(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<aws_smithy_types::DateTime, SerdeError> {
+        if let Some(h) = schema.http_header() {
+            let val = self
+                .read_header(h.value())
+                .ok_or_else(|| SerdeError::MissingMember {
+                    member_name: h.value().to_string(),
+                })?;
+            return aws_smithy_types::DateTime::from_str(
+                val,
+                aws_smithy_types::date_time::Format::HttpDate,
+            )
+            .map_err(|e| SerdeError::InvalidInput {
+                message: format!("invalid timestamp header: {e}"),
+            });
+        }
+        self.body.read_timestamp(schema)
+    }
+
+    fn read_document(&mut self, schema: &Schema) -> Result<aws_smithy_types::Document, SerdeError> {
+        self.body.read_document(schema)
+    }
+
+    fn is_null(&self) -> bool {
+        self.body.is_null()
+    }
+
+    fn container_size(&self) -> Option<usize> {
+        self.body.container_size()
+    }
+}
+
 impl<C> ClientProtocol for HttpBindingProtocol<C>
 where
     C: Codec + 'static,
@@ -452,7 +673,7 @@ where
     type Response = Response;
     type Codec = C;
     type ResponseDeserializer<'a>
-        = C::Deserializer<'a>
+        = HttpBindingDeserializer<'a, C::Deserializer<'a>>
     where
         C: 'a;
 
@@ -510,16 +731,14 @@ where
         response: &'a Self::Response,
         _output_schema: &Schema,
     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
-        // TODO(schema): Wrap the codec deserializer in a composite deserializer
-        // that intercepts read_struct and injects HTTP-bound member values
-        // (@httpHeader, @httpPrefixHeaders, @httpResponseCode) from the response
-        // headers and status code alongside body-deserialized members.
-
         let body = response
             .body()
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
-        Ok(self.codec.create_deserializer(body))
+        Ok(HttpBindingDeserializer {
+            body: self.codec.create_deserializer(body),
+            response,
+        })
     }
 
     fn update_endpoint(
@@ -737,23 +956,26 @@ mod tests {
     }
 
     impl ShapeDeserializer for TestDeserializer<'_> {
-        fn read_struct<T, F>(&mut self, _: &Schema, state: T, _: F) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+        fn read_struct(
+            &mut self,
+            _: &Schema,
+            _: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
-        fn read_list<T, F>(&mut self, _: &Schema, state: T, _: F) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+        fn read_list(
+            &mut self,
+            _: &Schema,
+            _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
-        fn read_map<T, F>(&mut self, _: &Schema, state: T, _: F) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
-        {
-            Ok(state)
+        fn read_map(
+            &mut self,
+            _: &Schema,
+            _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
         }
         fn read_boolean(&mut self, _: &Schema) -> Result<bool, SerdeError> {
             Ok(false)
