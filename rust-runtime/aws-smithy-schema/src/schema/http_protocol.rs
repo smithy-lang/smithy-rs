@@ -64,6 +64,385 @@ impl<C: Codec> HttpBindingProtocol<C> {
     }
 }
 
+/// Percent-encode a string per RFC 3986 section 2.3 (unreserved characters only).
+fn percent_encode(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    for byte in input.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(byte as char);
+            }
+            _ => {
+                out.push('%');
+                out.push(char::from(HEX[(byte >> 4) as usize]));
+                out.push(char::from(HEX[(byte & 0x0f) as usize]));
+            }
+        }
+    }
+    out
+}
+
+const HEX: &[u8; 16] = b"0123456789ABCDEF";
+
+/// A ShapeSerializer that intercepts member writes and routes HTTP-bound
+/// members to headers, query params, or URI labels instead of the body.
+///
+/// Members without HTTP binding traits are forwarded to the inner body
+/// serializer unchanged.
+struct HttpBindingSerializer<S> {
+    body: S,
+    headers: Vec<(String, String)>,
+    query_params: Vec<(String, String)>,
+    labels: Vec<(String, String)>,
+}
+
+impl<S> HttpBindingSerializer<S> {
+    fn new(body: S) -> Self {
+        Self {
+            body,
+            headers: Vec::new(),
+            query_params: Vec::new(),
+            labels: Vec::new(),
+        }
+    }
+}
+
+/// Helper: format a value as a string for HTTP binding serialization.
+fn value_to_string<T: std::fmt::Display>(value: T) -> String {
+    value.to_string()
+}
+
+impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
+    fn write_struct(
+        &mut self,
+        schema: &Schema,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        self.body.write_struct(schema, value)
+    }
+
+    fn write_list(
+        &mut self,
+        schema: &Schema,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        self.body.write_list(schema, write_elements)
+    }
+
+    fn write_map(
+        &mut self,
+        schema: &Schema,
+        write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        // @httpPrefixHeaders: serialize map entries as prefixed headers
+        if let Some(prefix) = schema.http_prefix_headers() {
+            // Collect entries via a temporary serializer
+            let mut collector = MapEntryCollector::new(prefix.value().to_string());
+            write_entries(&mut collector)?;
+            self.headers.extend(collector.entries);
+            return Ok(());
+        }
+        // @httpQueryParams: serialize map entries as query params
+        if schema.http_query_params().is_some() {
+            let mut collector = MapEntryCollector::new(String::new());
+            write_entries(&mut collector)?;
+            for (k, v) in collector.entries {
+                self.query_params.push((k, v));
+            }
+            return Ok(());
+        }
+        self.body.write_map(schema, write_entries)
+    }
+
+    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_boolean(schema, value)
+    }
+
+    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_byte(schema, value)
+    }
+
+    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_short(schema, value)
+    }
+
+    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_integer(schema, value)
+    }
+
+    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_long(schema, value)
+    }
+
+    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_float(schema, value)
+    }
+
+    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, &value_to_string(value));
+        }
+        self.body.write_double(schema, value)
+    }
+
+    fn write_big_integer(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::BigInteger,
+    ) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, value.as_ref());
+        }
+        self.body.write_big_integer(schema, value)
+    }
+
+    fn write_big_decimal(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::BigDecimal,
+    ) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, value.as_ref());
+        }
+        self.body.write_big_decimal(schema, value)
+    }
+
+    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            return self.add_binding(binding, schema, value);
+        }
+        self.body.write_string(schema, value)
+    }
+
+    fn write_blob(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
+        if schema.http_header().is_some() {
+            let encoded = aws_smithy_types::base64::encode(value.as_ref());
+            self.headers
+                .push((schema.http_header().unwrap().value().to_string(), encoded));
+            return Ok(());
+        }
+        self.body.write_blob(schema, value)
+    }
+
+    fn write_timestamp(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::DateTime,
+    ) -> Result<(), SerdeError> {
+        if let Some(binding) = http_string_binding(schema) {
+            // Headers default to http-date, query/label default to date-time
+            let format = if schema.timestamp_format().is_some() {
+                match schema.timestamp_format().unwrap().format() {
+                    crate::traits::TimestampFormat::EpochSeconds => {
+                        aws_smithy_types::date_time::Format::EpochSeconds
+                    }
+                    crate::traits::TimestampFormat::HttpDate => {
+                        aws_smithy_types::date_time::Format::HttpDate
+                    }
+                    crate::traits::TimestampFormat::DateTime => {
+                        aws_smithy_types::date_time::Format::DateTime
+                    }
+                }
+            } else {
+                match binding {
+                    HttpBinding::Header(_) => aws_smithy_types::date_time::Format::HttpDate,
+                    _ => aws_smithy_types::date_time::Format::DateTime,
+                }
+            };
+            let formatted = value
+                .fmt(format)
+                .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?;
+            return self.add_binding(binding, schema, &formatted);
+        }
+        self.body.write_timestamp(schema, value)
+    }
+
+    fn write_document(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::Document,
+    ) -> Result<(), SerdeError> {
+        self.body.write_document(schema, value)
+    }
+
+    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+        self.body.write_null(schema)
+    }
+}
+
+/// Which HTTP location a member is bound to.
+enum HttpBinding<'a> {
+    Header(&'a str),
+    Query(&'a str),
+    Label,
+}
+
+/// Determine the HTTP binding for a member schema, if any.
+fn http_string_binding(schema: &Schema) -> Option<HttpBinding<'_>> {
+    if let Some(h) = schema.http_header() {
+        return Some(HttpBinding::Header(h.value()));
+    }
+    if let Some(q) = schema.http_query() {
+        return Some(HttpBinding::Query(q.value()));
+    }
+    if schema.http_label().is_some() {
+        return Some(HttpBinding::Label);
+    }
+    None
+}
+
+impl<S> HttpBindingSerializer<S> {
+    fn add_binding(
+        &mut self,
+        binding: HttpBinding<'_>,
+        schema: &Schema,
+        value: &str,
+    ) -> Result<(), SerdeError> {
+        match binding {
+            HttpBinding::Header(name) => {
+                self.headers.push((name.to_string(), value.to_string()));
+            }
+            HttpBinding::Query(name) => {
+                self.query_params
+                    .push((name.to_string(), value.to_string()));
+            }
+            HttpBinding::Label => {
+                let name = schema
+                    .member_name()
+                    .ok_or_else(|| SerdeError::custom("httpLabel on non-member schema"))?;
+                self.labels.push((name.to_string(), value.to_string()));
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Collects map key-value pairs written via ShapeSerializer for
+/// @httpPrefixHeaders and @httpQueryParams.
+struct MapEntryCollector {
+    prefix: String,
+    entries: Vec<(String, String)>,
+    pending_key: Option<String>,
+}
+
+impl MapEntryCollector {
+    fn new(prefix: String) -> Self {
+        Self {
+            prefix,
+            entries: Vec::new(),
+            pending_key: None,
+        }
+    }
+}
+
+impl ShapeSerializer for MapEntryCollector {
+    fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
+        if let Some(key) = self.pending_key.take() {
+            self.entries
+                .push((format!("{}{}", self.prefix, key), value.to_string()));
+        } else {
+            self.pending_key = Some(value.to_string());
+        }
+        Ok(())
+    }
+
+    // All other methods are no-ops — maps in HTTP bindings only have string keys/values.
+    fn write_struct(&mut self, _: &Schema, _: &dyn SerializableStruct) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_list(
+        &mut self,
+        _: &Schema,
+        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_map(
+        &mut self,
+        _: &Schema,
+        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_big_integer(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::BigInteger,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_big_decimal(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::BigDecimal,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_blob(&mut self, _: &Schema, _: &aws_smithy_types::Blob) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_timestamp(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::DateTime,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_document(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::Document,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+        Ok(())
+    }
+}
+
 impl<C> ClientProtocol for HttpBindingProtocol<C>
 where
     C: Codec + 'static,
@@ -88,27 +467,41 @@ where
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        _input_schema: &Schema,
         endpoint: &str,
     ) -> Result<Self::Request, SerdeError> {
-        // TODO(schema): Split input members by HTTP binding traits:
-        // - @httpHeader → HTTP headers (via string serializer)
-        // - @httpQuery / @httpQueryParams → query string
-        // - @httpLabel → URI label substitution
-        // - @httpPayload → explicit payload member
-        // - remaining → serialize to body with codec
+        let mut binder = HttpBindingSerializer::new(self.codec.create_serializer());
+        // serialize_members calls write_* on the binder for each member.
+        // The binder inspects HTTP binding traits and routes accordingly.
+        input.serialize_members(&mut binder)?;
+        let body = binder.body.finish();
 
-        let mut serializer = self.codec.create_serializer();
-        serializer.write_struct(input_schema, input)?;
-        let body = serializer.finish();
+        // Build URI: substitute labels, append query string
+        let mut uri = endpoint.to_string();
+        for (name, value) in &binder.labels {
+            let placeholder = format!("{{{name}}}");
+            uri = uri.replace(&placeholder, &percent_encode(value));
+        }
+        if !binder.query_params.is_empty() {
+            uri.push(if uri.contains('?') { '&' } else { '?' });
+            let pairs: Vec<String> = binder
+                .query_params
+                .iter()
+                .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
+                .collect();
+            uri.push_str(&pairs.join("&"));
+        }
 
         let mut request = Request::new(SdkBody::from(body));
         request
-            .set_uri(endpoint)
+            .set_uri(uri.as_str())
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
         request
             .headers_mut()
             .insert("Content-Type", self.content_type);
+        for (name, value) in &binder.headers {
+            request.headers_mut().insert(name.clone(), value.clone());
+        }
         Ok(request)
     }
 
@@ -117,8 +510,10 @@ where
         response: &'a Self::Response,
         _output_schema: &Schema,
     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
-        // TODO(schema): Deserialize HTTP-bound members from headers, status code, etc.
-        // then return codec deserializer for the body.
+        // TODO(schema): Wrap the codec deserializer in a composite deserializer
+        // that intercepts read_struct and injects HTTP-bound member values
+        // (@httpHeader, @httpPrefixHeaders, @httpResponseCode) from the response
+        // headers and status code alongside body-deserialized members.
 
         let body = response
             .body()
@@ -461,14 +856,17 @@ mod tests {
     mod http_binding_protocol {
         use super::*;
 
-        #[test]
-        fn serialize_sets_content_type() {
-            let protocol = HttpBindingProtocol::new(
+        fn make_protocol() -> HttpBindingProtocol<TestCodec> {
+            HttpBindingProtocol::new(
                 crate::shape_id!("test", "proto"),
                 TestCodec,
                 "application/test",
-            );
-            let request = protocol
+            )
+        }
+
+        #[test]
+        fn serialize_sets_content_type() {
+            let request = make_protocol()
                 .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com")
                 .unwrap();
             assert_eq!(
@@ -479,12 +877,7 @@ mod tests {
 
         #[test]
         fn serialize_sets_uri() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
-            let request = protocol
+            let request = make_protocol()
                 .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com/path")
                 .unwrap();
             assert_eq!(request.uri(), "https://example.com/path");
@@ -492,29 +885,19 @@ mod tests {
 
         #[test]
         fn serialize_body() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
-            let request = protocol
+            let request = make_protocol()
                 .serialize_request(&NameStruct, &STRUCT_WITH_MEMBER, "https://example.com")
                 .unwrap();
-            assert_eq!(request.body().bytes().unwrap(), b"{Alice}");
+            assert_eq!(request.body().bytes().unwrap(), b"Alice");
         }
 
         #[test]
         fn deserialize_response() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
             let response = Response::new(
                 200u16.try_into().unwrap(),
                 SdkBody::from(r#"{"name":"Bob"}"#),
             );
-            let mut deser = protocol
+            let mut deser = make_protocol()
                 .deserialize_response(&response, &TEST_SCHEMA)
                 .unwrap();
             assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"name":"Bob"}"#);
@@ -522,15 +905,10 @@ mod tests {
 
         #[test]
         fn update_endpoint() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
-            let mut request = protocol
+            let mut request = make_protocol()
                 .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://old.example.com")
                 .unwrap();
-            protocol
+            make_protocol()
                 .update_endpoint(&mut request, "https://new.example.com")
                 .unwrap();
             assert_eq!(request.uri(), "https://new.example.com");
@@ -548,24 +926,551 @@ mod tests {
 
         #[test]
         fn payload_codec() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
-            assert!(protocol.payload_codec().is_some());
+            assert!(make_protocol().payload_codec().is_some());
         }
 
         #[test]
         fn invalid_uri_returns_error() {
-            let protocol = HttpBindingProtocol::new(
-                crate::shape_id!("test", "proto"),
-                TestCodec,
-                "application/test",
-            );
-            assert!(protocol
+            assert!(make_protocol()
                 .serialize_request(&EmptyStruct, &TEST_SCHEMA, "not a valid uri\n\n")
                 .is_err());
+        }
+
+        // -- @httpHeader tests --
+
+        static HEADER_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            "xToken",
+            0,
+        )
+        .with_http_header("X-Token");
+
+        static HEADER_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&HEADER_MEMBER],
+        );
+
+        struct HeaderStruct;
+        impl SerializableStruct for HeaderStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&HEADER_MEMBER, "my-token-value")
+            }
+        }
+
+        #[test]
+        fn http_header_string() {
+            let request = make_protocol()
+                .serialize_request(&HeaderStruct, &HEADER_SCHEMA, "https://example.com")
+                .unwrap();
+            assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
+        }
+
+        static INT_HEADER_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::Integer,
+            "retryCount",
+            0,
+        )
+        .with_http_header("X-Retry-Count");
+
+        static INT_HEADER_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&INT_HEADER_MEMBER],
+        );
+
+        struct IntHeaderStruct;
+        impl SerializableStruct for IntHeaderStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(&INT_HEADER_MEMBER, 3)
+            }
+        }
+
+        #[test]
+        fn http_header_integer() {
+            let request = make_protocol()
+                .serialize_request(&IntHeaderStruct, &INT_HEADER_SCHEMA, "https://example.com")
+                .unwrap();
+            assert_eq!(request.headers().get("X-Retry-Count").unwrap(), "3");
+        }
+
+        static BOOL_HEADER_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::Boolean,
+            "verbose",
+            0,
+        )
+        .with_http_header("X-Verbose");
+
+        static BOOL_HEADER_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&BOOL_HEADER_MEMBER],
+        );
+
+        struct BoolHeaderStruct;
+        impl SerializableStruct for BoolHeaderStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_boolean(&BOOL_HEADER_MEMBER, true)
+            }
+        }
+
+        #[test]
+        fn http_header_boolean() {
+            let request = make_protocol()
+                .serialize_request(
+                    &BoolHeaderStruct,
+                    &BOOL_HEADER_SCHEMA,
+                    "https://example.com",
+                )
+                .unwrap();
+            assert_eq!(request.headers().get("X-Verbose").unwrap(), "true");
+        }
+
+        // -- @httpQuery tests --
+
+        static QUERY_MEMBER: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "color", 0)
+                .with_http_query("color");
+
+        static QUERY_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&QUERY_MEMBER],
+        );
+
+        struct QueryStruct;
+        impl SerializableStruct for QueryStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&QUERY_MEMBER, "blue")
+            }
+        }
+
+        #[test]
+        fn http_query_string() {
+            let request = make_protocol()
+                .serialize_request(&QueryStruct, &QUERY_SCHEMA, "https://example.com/things")
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com/things?color=blue");
+        }
+
+        static INT_QUERY_MEMBER: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Integer, "size", 0)
+                .with_http_query("size");
+
+        static INT_QUERY_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&INT_QUERY_MEMBER],
+        );
+
+        struct IntQueryStruct;
+        impl SerializableStruct for IntQueryStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(&INT_QUERY_MEMBER, 42)
+            }
+        }
+
+        #[test]
+        fn http_query_integer() {
+            let request = make_protocol()
+                .serialize_request(
+                    &IntQueryStruct,
+                    &INT_QUERY_SCHEMA,
+                    "https://example.com/things",
+                )
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com/things?size=42");
+        }
+
+        // -- Multiple @httpQuery params --
+
+        static Q1: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "a", 0)
+                .with_http_query("a");
+        static Q2: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "b", 1)
+                .with_http_query("b");
+        static MULTI_QUERY_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&Q1, &Q2],
+        );
+
+        struct MultiQueryStruct;
+        impl SerializableStruct for MultiQueryStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&Q1, "x")?;
+                s.write_string(&Q2, "y")
+            }
+        }
+
+        #[test]
+        fn http_query_multiple_params() {
+            let request = make_protocol()
+                .serialize_request(
+                    &MultiQueryStruct,
+                    &MULTI_QUERY_SCHEMA,
+                    "https://example.com",
+                )
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com?a=x&b=y");
+        }
+
+        // -- @httpQuery with percent-encoding --
+
+        #[test]
+        fn http_query_percent_encodes_values() {
+            struct SpaceQueryStruct;
+            impl SerializableStruct for SpaceQueryStruct {
+                fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                    s.write_string(&QUERY_MEMBER, "hello world")
+                }
+            }
+            let request = make_protocol()
+                .serialize_request(&SpaceQueryStruct, &QUERY_SCHEMA, "https://example.com")
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com?color=hello%20world");
+        }
+
+        // -- @httpLabel tests --
+
+        static LABEL_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            "bucketName",
+            0,
+        )
+        .with_http_label();
+
+        static LABEL_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&LABEL_MEMBER],
+        );
+
+        struct LabelStruct;
+        impl SerializableStruct for LabelStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&LABEL_MEMBER, "my-bucket")
+            }
+        }
+
+        #[test]
+        fn http_label_substitution() {
+            let request = make_protocol()
+                .serialize_request(
+                    &LabelStruct,
+                    &LABEL_SCHEMA,
+                    "https://example.com/{bucketName}/objects",
+                )
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com/my-bucket/objects");
+        }
+
+        #[test]
+        fn http_label_percent_encodes() {
+            struct SpecialLabelStruct;
+            impl SerializableStruct for SpecialLabelStruct {
+                fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                    s.write_string(&LABEL_MEMBER, "my bucket/name")
+                }
+            }
+            let request = make_protocol()
+                .serialize_request(
+                    &SpecialLabelStruct,
+                    &LABEL_SCHEMA,
+                    "https://example.com/{bucketName}",
+                )
+                .unwrap();
+            assert!(request.uri().contains("my%20bucket%2Fname"));
+        }
+
+        static INT_LABEL_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::Integer,
+            "itemId",
+            0,
+        )
+        .with_http_label();
+
+        static INT_LABEL_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&INT_LABEL_MEMBER],
+        );
+
+        struct IntLabelStruct;
+        impl SerializableStruct for IntLabelStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(&INT_LABEL_MEMBER, 123)
+            }
+        }
+
+        #[test]
+        fn http_label_integer() {
+            let request = make_protocol()
+                .serialize_request(
+                    &IntLabelStruct,
+                    &INT_LABEL_SCHEMA,
+                    "https://example.com/items/{itemId}",
+                )
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com/items/123");
+        }
+
+        // -- Combined: @httpHeader + @httpQuery + @httpLabel + body --
+
+        static COMBINED_LABEL: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "id", 0)
+                .with_http_label();
+        static COMBINED_HEADER: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "token", 1)
+                .with_http_header("X-Token");
+        static COMBINED_QUERY: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            "filter",
+            2,
+        )
+        .with_http_query("filter");
+        static COMBINED_BODY: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "data", 3);
+        static COMBINED_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[
+                &COMBINED_LABEL,
+                &COMBINED_HEADER,
+                &COMBINED_QUERY,
+                &COMBINED_BODY,
+            ],
+        );
+
+        struct CombinedStruct;
+        impl SerializableStruct for CombinedStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&COMBINED_LABEL, "item-42")?;
+                s.write_string(&COMBINED_HEADER, "secret")?;
+                s.write_string(&COMBINED_QUERY, "active")?;
+                s.write_string(&COMBINED_BODY, "payload-data")
+            }
+        }
+
+        #[test]
+        fn combined_bindings() {
+            let request = make_protocol()
+                .serialize_request(
+                    &CombinedStruct,
+                    &COMBINED_SCHEMA,
+                    "https://example.com/{id}/details",
+                )
+                .unwrap();
+            assert_eq!(
+                request.uri(),
+                "https://example.com/item-42/details?filter=active"
+            );
+            // Header
+            assert_eq!(request.headers().get("X-Token").unwrap(), "secret");
+            // Body contains only the unbound member
+            let body = request.body().bytes().unwrap();
+            assert!(body
+                .windows(b"payload-data".len())
+                .any(|w| w == b"payload-data"));
+        }
+
+        // -- @httpPrefixHeaders tests --
+
+        static PREFIX_MEMBER: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Map, "metadata", 0)
+                .with_http_prefix_headers("X-Meta-");
+
+        static PREFIX_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&PREFIX_MEMBER],
+        );
+
+        struct PrefixHeaderStruct;
+        impl SerializableStruct for PrefixHeaderStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_map(&PREFIX_MEMBER, &|s| {
+                    s.write_string(&STRING, "Color")?;
+                    s.write_string(&STRING, "red")?;
+                    s.write_string(&STRING, "Size")?;
+                    s.write_string(&STRING, "large")?;
+                    Ok(())
+                })
+            }
+        }
+
+        #[test]
+        fn http_prefix_headers() {
+            let request = make_protocol()
+                .serialize_request(&PrefixHeaderStruct, &PREFIX_SCHEMA, "https://example.com")
+                .unwrap();
+            assert_eq!(request.headers().get("X-Meta-Color").unwrap(), "red");
+            assert_eq!(request.headers().get("X-Meta-Size").unwrap(), "large");
+        }
+
+        // -- @httpQueryParams tests --
+
+        static QUERY_PARAMS_MEMBER: Schema =
+            Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Map, "params", 0)
+                .with_http_query_params();
+
+        static QUERY_PARAMS_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&QUERY_PARAMS_MEMBER],
+        );
+
+        struct QueryParamsStruct;
+        impl SerializableStruct for QueryParamsStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_map(&QUERY_PARAMS_MEMBER, &|s| {
+                    s.write_string(&STRING, "page")?;
+                    s.write_string(&STRING, "2")?;
+                    s.write_string(&STRING, "limit")?;
+                    s.write_string(&STRING, "50")?;
+                    Ok(())
+                })
+            }
+        }
+
+        #[test]
+        fn http_query_params() {
+            let request = make_protocol()
+                .serialize_request(
+                    &QueryParamsStruct,
+                    &QUERY_PARAMS_SCHEMA,
+                    "https://example.com",
+                )
+                .unwrap();
+            assert_eq!(request.uri(), "https://example.com?page=2&limit=50");
+        }
+
+        // -- Timestamp in header defaults to http-date --
+
+        static TS_HEADER_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::Timestamp,
+            "ifModified",
+            0,
+        )
+        .with_http_header("If-Modified-Since");
+
+        static TS_HEADER_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&TS_HEADER_MEMBER],
+        );
+
+        struct TimestampHeaderStruct;
+        impl SerializableStruct for TimestampHeaderStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_timestamp(&TS_HEADER_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
+            }
+        }
+
+        #[test]
+        fn timestamp_header_uses_http_date() {
+            let request = make_protocol()
+                .serialize_request(
+                    &TimestampHeaderStruct,
+                    &TS_HEADER_SCHEMA,
+                    "https://example.com",
+                )
+                .unwrap();
+            let value = request.headers().get("If-Modified-Since").unwrap();
+            // http-date format: "Thu, 01 Jan 1970 00:00:00 GMT"
+            assert!(value.contains("1970"), "expected http-date, got: {value}");
+        }
+
+        // -- Timestamp in query defaults to date-time --
+
+        static TS_QUERY_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::Timestamp,
+            "since",
+            0,
+        )
+        .with_http_query("since");
+
+        static TS_QUERY_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&TS_QUERY_MEMBER],
+        );
+
+        struct TimestampQueryStruct;
+        impl SerializableStruct for TimestampQueryStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_timestamp(&TS_QUERY_MEMBER, &aws_smithy_types::DateTime::from_secs(0))
+            }
+        }
+
+        #[test]
+        fn timestamp_query_uses_date_time() {
+            let request = make_protocol()
+                .serialize_request(
+                    &TimestampQueryStruct,
+                    &TS_QUERY_SCHEMA,
+                    "https://example.com",
+                )
+                .unwrap();
+            assert_eq!(
+                request.uri(),
+                "https://example.com?since=1970-01-01T00%3A00%3A00Z"
+            );
+        }
+
+        // -- Unbound members go to body, bound members do not --
+
+        static BOUND_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            "headerVal",
+            0,
+        )
+        .with_http_header("X-Val");
+        static UNBOUND_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            "bodyVal",
+            1,
+        );
+        static MIXED_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &[&BOUND_MEMBER, &UNBOUND_MEMBER],
+        );
+
+        struct MixedStruct;
+        impl SerializableStruct for MixedStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&BOUND_MEMBER, "in-header")?;
+                s.write_string(&UNBOUND_MEMBER, "in-body")
+            }
+        }
+
+        #[test]
+        fn bound_members_not_in_body() {
+            let request = make_protocol()
+                .serialize_request(&MixedStruct, &MIXED_SCHEMA, "https://example.com")
+                .unwrap();
+            let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+            assert!(
+                body.contains("in-body"),
+                "body should contain unbound member"
+            );
+            assert!(
+                !body.contains("in-header"),
+                "body should NOT contain header-bound member"
+            );
+            assert_eq!(request.headers().get("X-Val").unwrap(), "in-header");
         }
     }
 

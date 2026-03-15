@@ -257,6 +257,31 @@ impl Schema {
         self.http_query.as_ref()
     }
 
+    /// Returns the `@httpLabel` trait if present.
+    pub fn http_label(&self) -> Option<&trait_types::HttpLabelTrait> {
+        self.http_label.as_ref()
+    }
+
+    /// Returns the `@httpPayload` trait if present.
+    pub fn http_payload(&self) -> Option<&trait_types::HttpPayloadTrait> {
+        self.http_payload.as_ref()
+    }
+
+    /// Returns the `@httpPrefixHeaders` value if present.
+    pub fn http_prefix_headers(&self) -> Option<&trait_types::HttpPrefixHeadersTrait> {
+        self.http_prefix_headers.as_ref()
+    }
+
+    /// Returns the `@httpQueryParams` trait if present.
+    pub fn http_query_params(&self) -> Option<&trait_types::HttpQueryParamsTrait> {
+        self.http_query_params.as_ref()
+    }
+
+    /// Returns the `@httpResponseCode` trait if present.
+    pub fn http_response_code(&self) -> Option<&trait_types::HttpResponseCodeTrait> {
+        self.http_response_code.as_ref()
+    }
+
     // -- Const setters for builder-style construction in generated code --
 
     /// Sets the `@sensitive` trait.

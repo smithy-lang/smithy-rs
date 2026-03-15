@@ -13,9 +13,9 @@
 //! - Default timestamp format: `epoch-seconds`
 //! - Content-Type: `application/json`
 
-use crate::codec::{JsonCodec, JsonCodecSettings};
+use crate::codec::{JsonCodec, JsonCodecSettings, JsonDeserializer};
 use aws_smithy_schema::http_protocol::HttpBindingProtocol;
-use aws_smithy_schema::ShapeId;
+use aws_smithy_schema::{Schema, ShapeId};
 
 static PROTOCOL_ID: ShapeId = ShapeId::from_static("aws.protocols", "restJson1", "");
 
@@ -54,10 +54,42 @@ impl Default for AwsRestJsonProtocol {
     }
 }
 
-impl std::ops::Deref for AwsRestJsonProtocol {
-    type Target = HttpBindingProtocol<JsonCodec>;
+impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
+    type Request = aws_smithy_runtime_api::http::Request;
+    type Response = aws_smithy_runtime_api::http::Response;
+    type Codec = JsonCodec;
+    type ResponseDeserializer<'a> = JsonDeserializer<'a>;
 
-    fn deref(&self) -> &Self::Target {
-        &self.inner
+    fn protocol_id(&self) -> &ShapeId {
+        self.inner.protocol_id()
+    }
+
+    fn payload_codec(&self) -> Option<&Self::Codec> {
+        self.inner.payload_codec()
+    }
+
+    fn serialize_request(
+        &self,
+        input: &dyn aws_smithy_schema::serde::SerializableStruct,
+        input_schema: &Schema,
+        endpoint: &str,
+    ) -> Result<Self::Request, aws_smithy_schema::serde::SerdeError> {
+        self.inner.serialize_request(input, input_schema, endpoint)
+    }
+
+    fn deserialize_response<'a>(
+        &self,
+        response: &'a Self::Response,
+        output_schema: &Schema,
+    ) -> Result<Self::ResponseDeserializer<'a>, aws_smithy_schema::serde::SerdeError> {
+        self.inner.deserialize_response(response, output_schema)
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut Self::Request,
+        endpoint: &str,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        self.inner.update_endpoint(request, endpoint)
     }
 }
