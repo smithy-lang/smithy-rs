@@ -16,6 +16,7 @@
 use crate::codec::{JsonCodec, JsonCodecSettings, JsonDeserializer};
 use aws_smithy_schema::http_protocol::HttpBindingProtocol;
 use aws_smithy_schema::{Schema, ShapeId};
+use aws_smithy_types::config_bag::ConfigBag;
 
 static PROTOCOL_ID: ShapeId = ShapeId::from_static("aws.protocols", "restJson1", "");
 
@@ -74,16 +75,20 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
         input: &dyn aws_smithy_schema::serde::SerializableStruct,
         input_schema: &Schema,
         endpoint: &str,
+        cfg: &ConfigBag,
     ) -> Result<Self::Request, aws_smithy_schema::serde::SerdeError> {
-        self.inner.serialize_request(input, input_schema, endpoint)
+        self.inner
+            .serialize_request(input, input_schema, endpoint, cfg)
     }
 
     fn deserialize_response<'a>(
         &self,
         response: &'a Self::Response,
         output_schema: &Schema,
+        cfg: &ConfigBag,
     ) -> Result<Self::ResponseDeserializer<'a>, aws_smithy_schema::serde::SerdeError> {
-        self.inner.deserialize_response(response, output_schema)
+        self.inner
+            .deserialize_response(response, output_schema, cfg)
     }
 
     fn update_endpoint(

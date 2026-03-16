@@ -11,6 +11,7 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSeria
 use crate::{Schema, ShapeId};
 use aws_smithy_runtime_api::http::{Request, Response};
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 
 /// An HTTP protocol for REST-style APIs that use HTTP bindings.
 ///
@@ -667,6 +668,7 @@ where
         input: &dyn SerializableStruct,
         _input_schema: &Schema,
         endpoint: &str,
+        _cfg: &ConfigBag,
     ) -> Result<Self::Request, SerdeError> {
         let mut binder = HttpBindingSerializer::new(self.codec.create_serializer());
         // serialize_members calls write_* on the binder for each member.
@@ -707,6 +709,7 @@ where
         &self,
         response: &'a Self::Response,
         _output_schema: &Schema,
+        _cfg: &ConfigBag,
     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
         let body = response
             .body()
@@ -966,7 +969,12 @@ mod tests {
     #[test]
     fn serialize_sets_content_type() {
         let request = make_protocol()
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(
             request.headers().get("Content-Type").unwrap(),
@@ -977,7 +985,12 @@ mod tests {
     #[test]
     fn serialize_sets_uri() {
         let request = make_protocol()
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com/path")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://example.com/path",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/path");
     }
@@ -985,7 +998,12 @@ mod tests {
     #[test]
     fn serialize_body() {
         let request = make_protocol()
-            .serialize_request(&NameStruct, &STRUCT_WITH_MEMBER, "https://example.com")
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.body().bytes().unwrap(), b"Alice");
     }
@@ -997,7 +1015,7 @@ mod tests {
             SdkBody::from(r#"{"name":"Bob"}"#),
         );
         let mut deser = make_protocol()
-            .deserialize_response(&response, &TEST_SCHEMA)
+            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
             .unwrap();
         assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"name":"Bob"}"#);
     }
@@ -1005,7 +1023,12 @@ mod tests {
     #[test]
     fn update_endpoint() {
         let mut request = make_protocol()
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://old.example.com")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://old.example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         make_protocol()
             .update_endpoint(&mut request, "https://new.example.com")
@@ -1031,7 +1054,12 @@ mod tests {
     #[test]
     fn invalid_uri_returns_error() {
         assert!(make_protocol()
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "not a valid uri\n\n")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "not a valid uri\n\n",
+                &ConfigBag::base()
+            )
             .is_err());
     }
 
@@ -1061,7 +1089,12 @@ mod tests {
     #[test]
     fn http_header_string() {
         let request = make_protocol()
-            .serialize_request(&HeaderStruct, &HEADER_SCHEMA, "https://example.com")
+            .serialize_request(
+                &HeaderStruct,
+                &HEADER_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
     }
@@ -1090,7 +1123,12 @@ mod tests {
     #[test]
     fn http_header_integer() {
         let request = make_protocol()
-            .serialize_request(&IntHeaderStruct, &INT_HEADER_SCHEMA, "https://example.com")
+            .serialize_request(
+                &IntHeaderStruct,
+                &INT_HEADER_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.headers().get("X-Retry-Count").unwrap(), "3");
     }
@@ -1123,6 +1161,7 @@ mod tests {
                 &BoolHeaderStruct,
                 &BOOL_HEADER_SCHEMA,
                 "https://example.com",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.headers().get("X-Verbose").unwrap(), "true");
@@ -1150,7 +1189,12 @@ mod tests {
     #[test]
     fn http_query_string() {
         let request = make_protocol()
-            .serialize_request(&QueryStruct, &QUERY_SCHEMA, "https://example.com/things")
+            .serialize_request(
+                &QueryStruct,
+                &QUERY_SCHEMA,
+                "https://example.com/things",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/things?color=blue");
     }
@@ -1179,6 +1223,7 @@ mod tests {
                 &IntQueryStruct,
                 &INT_QUERY_SCHEMA,
                 "https://example.com/things",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/things?size=42");
@@ -1213,6 +1258,7 @@ mod tests {
                 &MultiQueryStruct,
                 &MULTI_QUERY_SCHEMA,
                 "https://example.com",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com?a=x&b=y");
@@ -1229,7 +1275,12 @@ mod tests {
             }
         }
         let request = make_protocol()
-            .serialize_request(&SpaceQueryStruct, &QUERY_SCHEMA, "https://example.com")
+            .serialize_request(
+                &SpaceQueryStruct,
+                &QUERY_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com?color=hello%20world");
     }
@@ -1264,6 +1315,7 @@ mod tests {
                 &LabelStruct,
                 &LABEL_SCHEMA,
                 "https://example.com/{bucketName}/objects",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/my-bucket/objects");
@@ -1282,6 +1334,7 @@ mod tests {
                 &SpecialLabelStruct,
                 &LABEL_SCHEMA,
                 "https://example.com/{bucketName}",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert!(request.uri().contains("my%20bucket%2Fname"));
@@ -1315,6 +1368,7 @@ mod tests {
                 &IntLabelStruct,
                 &INT_LABEL_SCHEMA,
                 "https://example.com/items/{itemId}",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com/items/123");
@@ -1365,6 +1419,7 @@ mod tests {
                 &CombinedStruct,
                 &COMBINED_SCHEMA,
                 "https://example.com/{id}/details",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(
@@ -1408,7 +1463,12 @@ mod tests {
     #[test]
     fn http_prefix_headers() {
         let request = make_protocol()
-            .serialize_request(&PrefixHeaderStruct, &PREFIX_SCHEMA, "https://example.com")
+            .serialize_request(
+                &PrefixHeaderStruct,
+                &PREFIX_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.headers().get("X-Meta-Color").unwrap(), "red");
         assert_eq!(request.headers().get("X-Meta-Size").unwrap(), "large");
@@ -1446,6 +1506,7 @@ mod tests {
                 &QueryParamsStruct,
                 &QUERY_PARAMS_SCHEMA,
                 "https://example.com",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(request.uri(), "https://example.com?page=2&limit=50");
@@ -1481,6 +1542,7 @@ mod tests {
                 &TimestampHeaderStruct,
                 &TS_HEADER_SCHEMA,
                 "https://example.com",
+                &ConfigBag::base(),
             )
             .unwrap();
         let value = request.headers().get("If-Modified-Since").unwrap();
@@ -1518,6 +1580,7 @@ mod tests {
                 &TimestampQueryStruct,
                 &TS_QUERY_SCHEMA,
                 "https://example.com",
+                &ConfigBag::base(),
             )
             .unwrap();
         assert_eq!(
@@ -1558,7 +1621,12 @@ mod tests {
     #[test]
     fn bound_members_not_in_body() {
         let request = make_protocol()
-            .serialize_request(&MixedStruct, &MIXED_SCHEMA, "https://example.com")
+            .serialize_request(
+                &MixedStruct,
+                &MIXED_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
         assert!(

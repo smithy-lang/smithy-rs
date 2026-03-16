@@ -42,6 +42,7 @@
 //!         input: &dyn SerializableStruct,
 //!         input_schema: &Schema,
 //!         endpoint: &str,
+//!         cfg: &ConfigBag,
 //!     ) -> Result<MyRequest, SerdeError> {
 //!         todo!()
 //!     }
@@ -50,6 +51,7 @@
 //!         &self,
 //!         response: &'a Self::Response,
 //!         output_schema: &Schema,
+//!         cfg: &ConfigBag,
 //!     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
 //!         todo!()
 //!     }
@@ -66,6 +68,7 @@
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
+use aws_smithy_types::config_bag::ConfigBag;
 
 /// A client protocol for serializing requests and deserializing responses.
 ///
@@ -137,11 +140,14 @@ pub trait ClientProtocol {
     /// * `input` - The operation input to serialize.
     /// * `input_schema` - Schema describing the operation's input shape.
     /// * `endpoint` - The target endpoint URI as a string.
+    /// * `cfg` - The config bag containing request-scoped configuration
+    ///   (e.g., service name, operation name for RPC protocols).
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
         input_schema: &Schema,
         endpoint: &str,
+        cfg: &ConfigBag,
     ) -> Result<Self::Request, SerdeError>;
 
     /// Deserializes a protocol-specific response message.
@@ -155,10 +161,12 @@ pub trait ClientProtocol {
     ///
     /// * `response` - The protocol response message to deserialize.
     /// * `output_schema` - Schema describing the operation's output shape.
+    /// * `cfg` - The config bag containing request-scoped configuration.
     fn deserialize_response<'a>(
         &self,
         response: &'a Self::Response,
         output_schema: &Schema,
+        cfg: &ConfigBag,
     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError>;
 
     /// Updates a previously serialized request with a new endpoint.

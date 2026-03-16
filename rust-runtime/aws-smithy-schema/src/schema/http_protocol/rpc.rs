@@ -11,6 +11,7 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSeria
 use crate::{Schema, ShapeId};
 use aws_smithy_runtime_api::http::{Request, Response};
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 
 /// An HTTP protocol for RPC-style APIs that put everything in the body.
 ///
@@ -64,6 +65,7 @@ where
         input: &dyn SerializableStruct,
         input_schema: &Schema,
         endpoint: &str,
+        _cfg: &ConfigBag,
     ) -> Result<Self::Request, SerdeError> {
         let mut serializer = self.codec.create_serializer();
         serializer.write_struct(input_schema, input)?;
@@ -83,6 +85,7 @@ where
         &self,
         response: &'a Self::Response,
         _output_schema: &Schema,
+        _cfg: &ConfigBag,
     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
         let body = response
             .body()
@@ -336,7 +339,12 @@ mod tests {
             "application/x-amz-json-1.0",
         );
         let request = protocol
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(
             request.headers().get("Content-Type").unwrap(),
@@ -352,7 +360,12 @@ mod tests {
             "application/x-amz-json-1.0",
         );
         let request = protocol
-            .serialize_request(&NameStruct, &STRUCT_WITH_MEMBER, "https://example.com")
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         assert_eq!(request.body().bytes().unwrap(), b"{Alice}");
     }
@@ -369,7 +382,7 @@ mod tests {
             SdkBody::from(r#"{"result":42}"#),
         );
         let mut deser = protocol
-            .deserialize_response(&response, &TEST_SCHEMA)
+            .deserialize_response(&response, &TEST_SCHEMA, &ConfigBag::base())
             .unwrap();
         assert_eq!(deser.read_string(&STRING).unwrap(), r#"{"result":42}"#);
     }
@@ -382,7 +395,12 @@ mod tests {
             "application/x-amz-json-1.0",
         );
         let mut request = protocol
-            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://old.example.com")
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://old.example.com",
+                &ConfigBag::base(),
+            )
             .unwrap();
         protocol
             .update_endpoint(&mut request, "https://new.example.com")
