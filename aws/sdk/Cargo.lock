@@ -1513,7 +1513,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-wasm"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api",
