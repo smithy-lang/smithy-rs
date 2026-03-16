@@ -8,13 +8,31 @@
 //! - Reading from the file system
 
 use std::collections::HashMap;
-use std::env::VarError;
 use std::ffi::OsString;
-use std::fmt::Debug;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 use crate::os_shim_internal::fs::Fake;
+
+// Re-export the Env trait and types from the env module
+pub use env::Env as EnvTrait;
+pub use env::FakeEnv;
+pub use env::RealEnv;
+pub use env::SharedEnv;
+
+/// Environment variable abstraction.
+///
+/// This type alias provides backward compatibility with existing code.
+/// New code should use `SharedEnv` directly.
+///
+/// Environment variables are global to a process, and, as such, are difficult to test with a multi-
+/// threaded test runner like Rust's. This enables loading environment variables either from the
+/// actual process environment ([`std::env::var`]) or from a hash map.
+///
+/// Process environments are cheap to clone:
+/// - Faked process environments are wrapped in an internal Arc
+/// - Real process environments are pointer-sized
+pub type Env = SharedEnv;
 
 /// File system abstraction
 ///
@@ -208,76 +226,183 @@ mod fs {
     }
 }
 
-/// Environment variable abstraction
-///
-/// Environment variables are global to a process, and, as such, are difficult to test with a multi-
-/// threaded test runner like Rust's. This enables loading environment variables either from the
-/// actual process environment ([`std::env::var`]) or from a hash map.
-///
-/// Process environments are cheap to clone:
-/// - Faked process environments are wrapped in an internal Arc
-/// - Real process environments are pointer-sized
-#[derive(Clone, Debug)]
-pub struct Env(env::Inner);
+mod env {
+    use std::collections::HashMap;
+    use std::env::VarError;
+    use std::fmt;
+    use std::sync::Arc;
 
-impl Default for Env {
-    fn default() -> Self {
-        Self::real()
+    /// Trait for accessing environment variables.
+    ///
+    /// This trait enables custom environment variable providers for testing,
+    /// containerized environments, secrets managers, or other custom sources.
+    ///
+    /// # Thread Safety
+    ///
+    /// Implementations must be `Send + Sync` for thread-safe sharing across async contexts.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use std::env::VarError;
+    /// use aws_types::os_shim_internal::EnvTrait;
+    ///
+    /// #[derive(Debug)]
+    /// struct MyCustomEnv;
+    ///
+    /// impl EnvTrait for MyCustomEnv {
+    ///     fn get(&self, key: &str) -> Result<String, VarError> {
+    ///         // Custom implementation
+    ///         Err(VarError::NotPresent)
+    ///     }
+    /// }
+    /// ```
+    pub trait Env: Send + Sync + fmt::Debug {
+        /// Retrieve the value for the given key.
+        ///
+        /// Returns `VarError::NotPresent` if the key is not found.
+        fn get(&self, key: &str) -> Result<String, VarError>;
     }
-}
 
-impl Env {
-    /// Retrieve a value for the given `k` and return `VarError` is that key is not present.
-    pub fn get(&self, k: &str) -> Result<String, VarError> {
-        use env::Inner;
-        match &self.0 {
-            Inner::Real => std::env::var(k),
-            Inner::Fake(map) => map.get(k).cloned().ok_or(VarError::NotPresent),
+    /// Environment implementation that reads from the actual process environment.
+    ///
+    /// This is the default implementation used when no custom `Env` is provided.
+    #[derive(Clone, Debug, Default)]
+    pub struct RealEnv;
+
+    impl Env for RealEnv {
+        fn get(&self, key: &str) -> Result<String, VarError> {
+            std::env::var(key)
         }
     }
 
-    /// Create a fake process environment from a slice of tuples.
+    /// Environment implementation backed by a HashMap for testing.
+    ///
+    /// This implementation allows deterministic testing by providing
+    /// controlled environment variable values.
+    #[derive(Clone, Debug)]
+    pub struct FakeEnv(Arc<HashMap<String, String>>);
+
+    impl FakeEnv {
+        /// Creates a `FakeEnv` from a slice of key-value pairs.
+        ///
+        /// # Examples
+        /// ```rust
+        /// use aws_types::os_shim_internal::{FakeEnv, EnvTrait};
+        /// let env = FakeEnv::from_slice(&[
+        ///     ("HOME", "/home/user"),
+        ///     ("AWS_REGION", "us-west-2"),
+        /// ]);
+        /// // Note: FakeEnv requires EnvTrait import to call get()
+        /// // For convenience, use SharedEnv which has an inherent get() method
+        /// assert_eq!(env.get("HOME").unwrap(), "/home/user");
+        /// ```
+        pub fn from_slice(vars: &[(&str, &str)]) -> Self {
+            let map: HashMap<String, String> = vars
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            Self(Arc::new(map))
+        }
+    }
+
+    impl From<HashMap<String, String>> for FakeEnv {
+        fn from(map: HashMap<String, String>) -> Self {
+            Self(Arc::new(map))
+        }
+    }
+
+    impl Env for FakeEnv {
+        fn get(&self, key: &str) -> Result<String, VarError> {
+            self.0.get(key).cloned().ok_or(VarError::NotPresent)
+        }
+    }
+
+    /// A shared [`Env`] implementation.
+    ///
+    /// This wrapper enables sharing an environment provider across multiple
+    /// components and threads. It implements `Env` by delegating to the
+    /// wrapped implementation.
     ///
     /// # Examples
     /// ```rust
-    /// use aws_types::os_shim_internal::Env;
-    /// let mock_env = Env::from_slice(&[
-    ///     ("HOME", "/home/myname"),
-    ///     ("AWS_REGION", "us-west-2")
-    /// ]);
-    /// assert_eq!(mock_env.get("HOME").unwrap(), "/home/myname");
-    /// ```
-    pub fn from_slice<'a>(vars: &[(&'a str, &'a str)]) -> Self {
-        let map: HashMap<_, _> = vars
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect();
-        Self::from(map)
-    }
-
-    /// Create a process environment that uses the real process environment
+    /// use aws_types::os_shim_internal::{SharedEnv, FakeEnv};
     ///
-    /// Calls will be delegated to [`std::env::var`].
-    pub fn real() -> Self {
-        Self(env::Inner::Real)
-    }
-}
+    /// let fake = FakeEnv::from_slice(&[("HOME", "/home/user")]);
+    /// let shared = SharedEnv::new(fake);
+    /// assert_eq!(shared.get("HOME").unwrap(), "/home/user");
+    /// ```
+    #[derive(Clone)]
+    pub struct SharedEnv(Arc<dyn Env>);
 
-impl From<HashMap<String, String>> for Env {
-    fn from(hash_map: HashMap<String, String>) -> Self {
-        Self(env::Inner::Fake(Arc::new(hash_map)))
-    }
-}
+    impl SharedEnv {
+        /// Creates a new `SharedEnv` from any `Env` implementation.
+        pub fn new(env: impl Env + 'static) -> Self {
+            Self(Arc::new(env))
+        }
 
-mod env {
-    use std::collections::HashMap;
-    use std::sync::Arc;
+        /// Create a process environment that uses the real process environment.
+        ///
+        /// Calls will be delegated to [`std::env::var`].
+        pub fn real() -> Self {
+            Self::new(RealEnv)
+        }
 
-    #[derive(Clone, Debug)]
-    pub(super) enum Inner {
-        Real,
-        Fake(Arc<HashMap<String, String>>),
+        /// Create a fake process environment from a slice of tuples.
+        ///
+        /// # Examples
+        /// ```rust
+        /// use aws_types::os_shim_internal::Env;
+        /// let mock_env = Env::from_slice(&[
+        ///     ("HOME", "/home/myname"),
+        ///     ("AWS_REGION", "us-west-2")
+        /// ]);
+        /// assert_eq!(mock_env.get("HOME").unwrap(), "/home/myname");
+        /// ```
+        pub fn from_slice(vars: &[(&str, &str)]) -> Self {
+            Self::new(FakeEnv::from_slice(vars))
+        }
+
+        /// Retrieve the value for the given key.
+        ///
+        /// Returns `VarError::NotPresent` if the key is not found.
+        ///
+        /// # Examples
+        /// ```rust
+        /// use aws_types::os_shim_internal::Env;
+        /// let env = Env::from_slice(&[("HOME", "/home/user")]);
+        /// assert_eq!(env.get("HOME").unwrap(), "/home/user");
+        /// ```
+        pub fn get(&self, key: &str) -> Result<String, VarError> {
+            self.0.get(key)
+        }
     }
+
+    impl Default for SharedEnv {
+        fn default() -> Self {
+            Self::real()
+        }
+    }
+
+    impl From<HashMap<String, String>> for SharedEnv {
+        fn from(map: HashMap<String, String>) -> Self {
+            Self::new(FakeEnv::from(map))
+        }
+    }
+
+    impl fmt::Debug for SharedEnv {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            f.debug_struct("SharedEnv").finish()
+        }
+    }
+
+    impl Env for SharedEnv {
+        fn get(&self, key: &str) -> Result<String, VarError> {
+            self.0.get(key)
+        }
+    }
+
+    aws_smithy_runtime_api::impl_shared_conversions!(convert SharedEnv from Env using SharedEnv::new);
 }
 
 #[cfg(test)]

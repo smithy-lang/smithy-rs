@@ -367,7 +367,35 @@ impl ProviderConfig {
         }
     }
 
-    pub(crate) fn with_env(self, env: Env) -> Self {
+    /// Override the environment variable provider for this configuration.
+    ///
+    /// This allows using custom environment variable sources for testing,
+    /// containerized environments, secrets managers, or other custom sources.
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// use aws_config::provider_config::ProviderConfig;
+    /// use aws_types::os_shim_internal::{Env, SharedEnv, FakeEnv};
+    ///
+    /// // Use a fake environment for testing
+    /// let fake_env = Env::from_slice(&[
+    ///     ("AWS_REGION", "us-west-2"),
+    ///     ("AWS_ACCESS_KEY_ID", "test-key"),
+    /// ]);
+    /// let config = ProviderConfig::empty().with_env(fake_env);
+    ///
+    /// // Or use a custom implementation
+    /// #[derive(Debug)]
+    /// struct MyCustomEnv;
+    /// impl aws_types::os_shim_internal::EnvTrait for MyCustomEnv {
+    ///     fn get(&self, key: &str) -> Result<String, std::env::VarError> {
+    ///         // Custom implementation
+    ///         Err(std::env::VarError::NotPresent)
+    ///     }
+    /// }
+    /// let config = ProviderConfig::empty().with_env(SharedEnv::new(MyCustomEnv));
+    /// ```
+    pub fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
