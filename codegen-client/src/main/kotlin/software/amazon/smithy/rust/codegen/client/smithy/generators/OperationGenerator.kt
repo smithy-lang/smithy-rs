@@ -84,7 +84,20 @@ open class OperationGenerator(
                 rust("Self")
             }
 
+            val inputType = symbolProvider.toSymbol(operationShape.inputShape(model))
             val outputType = symbolProvider.toSymbol(operationShape.outputShape(model))
+
+            rustTemplate(
+                """
+                /// The schema for this operation's input shape.
+                pub const INPUT_SCHEMA: &'static #{Schema} = #{InputType}::SCHEMA;
+                /// The schema for this operation's output shape.
+                pub const OUTPUT_SCHEMA: &'static #{Schema} = #{OutputType}::SCHEMA;
+                """,
+                "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
+                "InputType" to inputType,
+                "OutputType" to outputType,
+            )
             val errorType = symbolProvider.symbolForOperationError(operationShape)
             val codegenScope =
                 arrayOf(
