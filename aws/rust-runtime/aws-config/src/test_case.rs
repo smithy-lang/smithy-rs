@@ -12,7 +12,7 @@ use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::{date_time::Format, error::display::DisplayErrorContext, DateTime};
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Env, SharedEnv, SharedFs};
 use aws_types::sdk_config::SharedHttpClient;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -268,8 +268,8 @@ where
             .map_err(|e| format!("failed to load env: {}", e))?;
         let env: HashMap<String, String> =
             serde_json::from_str(&env).map_err(|e| format!("failed to parse env: {}", e))?;
-        let env = Env::from(env);
-        let fs = Fs::from_test_dir(dir.join("fs"), "/");
+        let env = SharedEnv::from(env);
+        let fs = SharedFs::from_test_dir(dir.join("fs"), "/");
         let network_traffic = std::fs::read_to_string(dir.join("http-traffic.json"))
             .map_err(|e| format!("failed to load http traffic: {}", e))?;
         let mut network_traffic: NetworkTraffic = serde_json::from_str(&network_traffic)?;

@@ -63,7 +63,7 @@ use aws_smithy_runtime_api::client::dns::{ResolveDns, ResolveDnsError, SharedDns
 use aws_smithy_runtime_api::client::http::HttpConnectorSettings;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Env, Fs, SharedEnv, SharedFs};
 use http::header::InvalidHeaderValue;
 use http::uri::{InvalidUri, PathAndQuery, Scheme};
 use http::{HeaderValue, Uri};
@@ -91,8 +91,8 @@ const ENV_AUTHORIZATION_TOKEN_FILE: &str = "AWS_CONTAINER_AUTHORIZATION_TOKEN_FI
 #[derive(Debug)]
 pub struct EcsCredentialsProvider {
     inner: OnceCell<Provider>,
-    env: Env,
-    fs: Fs,
+    env: SharedEnv,
+    fs: SharedFs,
     builder: Builder,
 }
 
@@ -109,7 +109,7 @@ impl EcsCredentialsProvider {
         let auth = if let Some(auth_token_file) = env_token_file {
             let auth = self
                 .fs
-                .read_to_end(auth_token_file)
+                .read_to_end(auth_token_file.as_ref())
                 .await
                 .map_err(CredentialsError::provider_error)?;
             Some(HeaderValue::from_bytes(auth.as_slice()).map_err(|err| {
@@ -120,12 +120,12 @@ impl EcsCredentialsProvider {
                     value: auth_token,
                 })
             })?)
-        } else if let Some(auth_token) = env_token {
-            Some(HeaderValue::from_str(&auth_token).map_err(|err| {
+        } else if let Some(auth_token) = &env_token {
+            Some(HeaderValue::from_str(auth_token).map_err(|err| {
                 tracing::warn!(token = %auth_token, "invalid auth token");
                 CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
                     err,
-                    value: auth_token,
+                    value: auth_token.to_string(),
                 })
             })?)
         } else {
@@ -168,7 +168,7 @@ enum Provider {
 }
 
 impl Provider {
-    async fn uri(env: Env, dns: Option<SharedDnsResolver>) -> Result<Uri, EcsConfigurationError> {
+    async fn uri(env: SharedEnv, dns: Option<SharedDnsResolver>) -> Result<Uri, EcsConfigurationError> {
         let relative_uri = env.get(ENV_RELATIVE_URI).ok();
         let full_uri = env.get(ENV_FULL_URI).ok();
         if let Some(relative_uri) = relative_uri {
@@ -503,7 +503,7 @@ mod test {
     use aws_smithy_runtime_api::client::http::HttpClient;
     use aws_smithy_runtime_api::shared::IntoShared;
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use futures_util::FutureExt;
     use http::header::AUTHORIZATION;
     use http::Uri;
@@ -516,8 +516,8 @@ mod test {
     use tracing_test::traced_test;
 
     fn provider(
-        env: Env,
-        fs: Fs,
+        env: SharedEnv,
+        fs: SharedFs,
         http_client: impl HttpClient + 'static,
     ) -> EcsCredentialsProvider {
         let provider_config = ProviderConfig::empty()
@@ -536,7 +536,7 @@ mod test {
 
     impl EcsUriTest {
         async fn check(&self) {
-            let env = Env::from(self.env.clone());
+            let env = SharedEnv::from(self.env.clone());
             let uri = Provider::uri(env, Some(TestDns::default().into_shared()))
                 .await
                 .map(|uri| uri.to_string());
@@ -742,7 +742,7 @@ mod test {
 
     #[tokio::test]
     async fn load_valid_creds_auth() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials"),
             ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "Basic password"),
         ]);
@@ -750,7 +750,7 @@ mod test {
             creds_request("http://169.254.170.2/credentials", Some("Basic password")),
             ok_creds_response(),
         )]);
-        let provider = provider(env, Fs::default(), http_client.clone());
+        let provider = provider(env, SharedFs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await
@@ -761,7 +761,7 @@ mod test {
 
     #[tokio::test]
     async fn load_valid_creds_auth_file() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             (
                 "AWS_CONTAINER_CREDENTIALS_FULL_URI",
                 "http://169.254.170.23/v1/credentials",
@@ -771,7 +771,7 @@ mod test {
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
         ]);
-        let fs = Fs::from_raw_map(HashMap::from([(
+        let fs = SharedFs::from_raw_map(HashMap::from([(
             OsString::from(
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
@@ -796,7 +796,7 @@ mod test {
 
     #[tokio::test]
     async fn auth_file_precedence_over_env() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             (
                 "AWS_CONTAINER_CREDENTIALS_FULL_URI",
                 "http://169.254.170.23/v1/credentials",
@@ -807,7 +807,7 @@ mod test {
             ),
             ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "unused"),
         ]);
-        let fs = Fs::from_raw_map(HashMap::from([(
+        let fs = SharedFs::from_raw_map(HashMap::from([(
             OsString::from(
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
@@ -832,7 +832,7 @@ mod test {
 
     #[tokio::test]
     async fn query_params_should_be_included_in_credentials_http_request() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             (
                 "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI",
                 "/my-credentials/?applicationName=test2024",
@@ -843,7 +843,7 @@ mod test {
             ),
             ("AWS_CONTAINER_AUTHORIZATION_TOKEN", "unused"),
         ]);
-        let fs = Fs::from_raw_map(HashMap::from([(
+        let fs = SharedFs::from_raw_map(HashMap::from([(
             OsString::from(
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
@@ -868,7 +868,7 @@ mod test {
 
     #[tokio::test]
     async fn fs_missing_file() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             (
                 "AWS_CONTAINER_CREDENTIALS_FULL_URI",
                 "http://169.254.170.23/v1/credentials",
@@ -878,7 +878,7 @@ mod test {
                 "/var/run/secrets/pods.eks.amazonaws.com/serviceaccount/eks-pod-identity-token",
             ),
         ]);
-        let fs = Fs::from_raw_map(HashMap::new());
+        let fs = SharedFs::from_raw_map(HashMap::new());
 
         let provider = provider(env, fs, no_traffic_client());
         let err = provider.credentials().await.expect_err("no JWT token file");
@@ -890,7 +890,7 @@ mod test {
 
     #[tokio::test]
     async fn retry_5xx() {
-        let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
         let http_client = StaticReplayClient::new(vec![
             ReplayEvent::new(
                 creds_request("http://169.254.170.2/credentials", None),
@@ -905,7 +905,7 @@ mod test {
             ),
         ]);
         tokio::time::pause();
-        let provider = provider(env, Fs::default(), http_client.clone());
+        let provider = provider(env, SharedFs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await
@@ -915,12 +915,12 @@ mod test {
 
     #[tokio::test]
     async fn load_valid_creds_no_auth() {
-        let env = Env::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI", "/credentials")]);
         let http_client = StaticReplayClient::new(vec![ReplayEvent::new(
             creds_request("http://169.254.170.2/credentials", None),
             ok_creds_response(),
         )]);
-        let provider = provider(env, Fs::default(), http_client.clone());
+        let provider = provider(env, SharedFs::default(), http_client.clone());
         let creds = provider
             .provide_credentials()
             .await

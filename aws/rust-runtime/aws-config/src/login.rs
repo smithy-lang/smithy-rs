@@ -23,7 +23,7 @@ use aws_sdk_signin::types::{CreateOAuth2TokenRequestBody, OAuth2ErrorCode};
 use aws_sdk_signin::Client as SignInClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_runtime::expiring_cache::ExpiringCache;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 use aws_types::SdkConfig;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -47,8 +47,8 @@ pub struct LoginCredentialsProvider {
 
 #[derive(Debug)]
 struct Inner {
-    fs: Fs,
-    env: Env,
+    fs: SharedFs,
+    env: SharedEnv,
     session_arn: String,
     enabled_from_profile: bool,
     sdk_config: SdkConfig,
@@ -278,7 +278,7 @@ mod test {
         orchestrator::{HttpRequest, HttpResponse},
     };
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{Fs, SharedEnv, SharedFs};
     use aws_types::region::Region;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -377,9 +377,9 @@ mod test {
                 let json = serde_json::to_string(&contents).expect("valid json");
                 fs_map.insert(path, json.into_bytes());
             }
-            let fs = Fs::from_map(fs_map);
+            let fs = SharedFs::from_map(fs_map);
 
-            let env = Env::from_slice(&[("HOME", "/home/user")]);
+            let env = SharedEnv::from_slice(&[("HOME", "/home/user")]);
 
             // Setup mock HTTP client
             let http_client = if self.mock_api_calls.is_empty() {
@@ -427,7 +427,7 @@ mod test {
                         // Verify cache was updated after provider call
                         for (filename, expected) in expected_cache {
                             let path = format!("/home/user/.aws/login/cache/{}", filename);
-                            let actual = fs.read_to_end(&path).await.expect("cache file exists");
+                            let actual = fs.read_to_end(path.as_ref()).await.expect("cache file exists");
                             let actual: serde_json::Value =
                                 serde_json::from_slice(&actual).expect("valid json");
                             // Compare only the fields that matter (ignore formatting differences)

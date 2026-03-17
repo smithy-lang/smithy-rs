@@ -649,7 +649,7 @@ mod sso_tests {
         orchestrator::{HttpRequest, HttpResponse},
     };
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{Fs, SharedEnv, SharedFs};
     use std::collections::HashMap;
 
     #[derive(Debug)]
@@ -689,8 +689,8 @@ mod sso_tests {
         }
     }
 
-    fn create_test_fs() -> Fs {
-        Fs::from_map({
+    fn create_test_fs() -> SharedFs {
+        SharedFs::from_map({
             let mut map = HashMap::new();
             map.insert(
                 "/home/.aws/config".to_string(),
@@ -737,7 +737,7 @@ sso_start_url = https://d-abc123.awsapps.com/start
 
         let provider_config = ProviderConfig::empty()
             .with_fs(fs.clone())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(Client::new("secret-access-token"));
         let provider = Builder::default().configure(&provider_config).build();
 
@@ -746,8 +746,8 @@ sso_start_url = https://d-abc123.awsapps.com/start
         // Write to the token cache with an access token that won't match the fake client's
         // expected access token, and thus, won't return SSO credentials.
         fs.write(
-            "/home/.aws/sso/cache/34c6fceca75e456f25e7e99531e2425c6c1de443.json",
-            r#"
+            "/home/.aws/sso/cache/34c6fceca75e456f25e7e99531e2425c6c1de443.json".as_ref(),
+            br#"
             {
                 "accessToken": "NEW!!secret-access-token",
                 "expiresAt": "2199-11-14T04:05:45Z",
@@ -776,7 +776,7 @@ sso_start_url = https://d-abc123.awsapps.com/start
         // actually worked correctly.
         let provider_config = ProviderConfig::empty()
             .with_fs(fs.clone())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(Client::new("NEW!!secret-access-token"));
         let provider = Builder::default().configure(&provider_config).build();
         let third_creds = provider.provide_credentials().await.unwrap();
@@ -790,7 +790,7 @@ sso_start_url = https://d-abc123.awsapps.com/start
 
         let provider_config = ProviderConfig::empty()
             .with_fs(fs.clone())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(Client::new("secret-access-token"));
         let provider = Builder::default().configure(&provider_config).build();
 
@@ -820,7 +820,7 @@ mod login_tests {
         orchestrator::{HttpRequest, HttpResponse},
     };
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use std::collections::HashMap;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
@@ -903,8 +903,8 @@ mod login_tests {
         }
     }
 
-    fn create_test_fs_unexpired() -> Fs {
-        Fs::from_map({
+    fn create_test_fs_unexpired() -> SharedFs {
+        SharedFs::from_map({
             let mut map = HashMap::new();
             map.insert(
                 "/home/.aws/config".to_string(),
@@ -937,8 +937,8 @@ region = us-east-1
         })
     }
 
-    fn create_test_fs_expired() -> Fs {
-        Fs::from_map({
+    fn create_test_fs_expired() -> SharedFs {
+        SharedFs::from_map({
             let mut map = HashMap::new();
             map.insert(
                 "/home/.aws/config".to_string(),
@@ -978,7 +978,7 @@ region = us-east-1
 
         let provider_config = ProviderConfig::empty()
             .with_fs(create_test_fs_unexpired())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(client.clone())
             .with_region(Some(aws_types::region::Region::new("us-east-1")));
 
@@ -998,7 +998,7 @@ region = us-east-1
 
         let provider_config = ProviderConfig::empty()
             .with_fs(create_test_fs_expired())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(client.clone())
             .with_region(Some(aws_types::region::Region::new("us-east-1")));
 
@@ -1018,7 +1018,7 @@ region = us-east-1
 
         let provider_config = ProviderConfig::empty()
             .with_fs(create_test_fs_expired())
-            .with_env(Env::from_slice(&[("HOME", "/home")]))
+            .with_env(SharedEnv::from_slice(&[("HOME", "/home")]))
             .with_http_client(client)
             .with_region(Some(aws_types::region::Region::new("us-east-1")));
 

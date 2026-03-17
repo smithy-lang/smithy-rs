@@ -240,7 +240,7 @@ mod loader {
     use aws_types::docs_for;
     use aws_types::endpoint_config::AccountIdEndpointMode;
     use aws_types::origin::Origin;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
 
@@ -296,8 +296,8 @@ mod loader {
         disable_request_compression: Option<bool>,
         request_min_compression_size_bytes: Option<u32>,
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
-        env: Option<Env>,
-        fs: Option<Fs>,
+        env: Option<SharedEnv>,
+        fs: Option<SharedFs>,
         behavior_version: Option<BehaviorVersion>,
         request_checksum_calculation: Option<RequestChecksumCalculation>,
         response_checksum_validation: Option<ResponseChecksumValidation>,
@@ -534,7 +534,7 @@ mod loader {
         /// environment variables from the host do not influence environment variable
         /// resolution.
         pub fn empty_test_environment(mut self) -> Self {
-            self.env = Some(Env::from_slice(&[]));
+            self.env = Some(SharedEnv::from_slice(&[]));
             self
         }
 
@@ -1024,12 +1024,12 @@ mod loader {
 
     #[cfg(test)]
     impl ConfigLoader {
-        pub(crate) fn env(mut self, env: Env) -> Self {
+        pub(crate) fn env(mut self, env: SharedEnv) -> Self {
             self.env = Some(env);
             self
         }
 
-        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+        pub(crate) fn fs(mut self, fs: SharedFs) -> Self {
             self.fs = Some(fs);
             self
         }
@@ -1048,7 +1048,7 @@ mod loader {
         use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
         use aws_types::app_name::AppName;
         use aws_types::origin::Origin;
-        use aws_types::os_shim_internal::{Env, Fs};
+        use aws_types::os_shim_internal::{SharedEnv, SharedFs};
         use aws_types::sdk_config::{RequestChecksumCalculation, ResponseChecksumValidation};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
@@ -1056,14 +1056,14 @@ mod loader {
         #[tokio::test]
         async fn provider_config_used() {
             let (_guard, logs_rx) = capture_test_logs();
-            let env = Env::from_slice(&[
+            let env = SharedEnv::from_slice(&[
                 ("AWS_MAX_ATTEMPTS", "10"),
                 ("AWS_REGION", "us-west-4"),
                 ("AWS_ACCESS_KEY_ID", "akid"),
                 ("AWS_SECRET_ACCESS_KEY", "secret"),
             ]);
             let fs =
-                Fs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
+                SharedFs::from_slice(&[("test_config", "[profile custom]\nsdk-ua-app-id = correct")]);
             let loader = defaults(BehaviorVersion::latest())
                 .sleep_impl(TokioSleep::new())
                 .env(env)
@@ -1140,7 +1140,7 @@ mod loader {
         #[tokio::test]
         async fn test_origin_env() {
             let _ = tracing_subscriber::fmt::try_init();
-            let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://localhost:7878")]);
+            let env = SharedEnv::from_slice(&[("AWS_ENDPOINT_URL", "http://localhost:7878")]);
             let loader = base_conf()
                 .test_credentials()
                 .env(env)
@@ -1290,8 +1290,8 @@ mod loader {
                 http::Response::new("ok!")
             });
             let config = defaults(BehaviorVersion::latest())
-                .fs(Fs::from_slice(&[]))
-                .env(Env::from_slice(&[]))
+                .fs(SharedFs::from_slice(&[]))
+                .env(SharedEnv::from_slice(&[]))
                 .http_client(http_client.clone())
                 .load()
                 .await;
@@ -1307,11 +1307,11 @@ mod loader {
 
         #[tokio::test]
         async fn endpoint_urls_may_be_ignored_from_env() {
-            let fs = Fs::from_slice(&[(
+            let fs = SharedFs::from_slice(&[(
                 "test_config",
                 "[profile custom]\nendpoint_url = http://profile",
             )]);
-            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+            let env = SharedEnv::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
 
             let conf = base_conf().use_dual_stack(false).load().await;
             assert_eq!(Some(false), conf.use_dual_stack());
@@ -1359,11 +1359,11 @@ mod loader {
 
         #[tokio::test]
         async fn endpoint_urls_may_be_ignored_from_profile() {
-            let fs = Fs::from_slice(&[(
+            let fs = SharedFs::from_slice(&[(
                 "test_config",
                 "[profile custom]\nignore_configured_endpoint_urls = true",
             )]);
-            let env = Env::from_slice(&[("AWS_ENDPOINT_URL", "http://environment")]);
+            let env = SharedEnv::from_slice(&[("AWS_ENDPOINT_URL", "http://environment")]);
 
             // Check that we get nothing back because the profile said we should ignore endpoints
             let config = base_conf()
@@ -1391,11 +1391,11 @@ mod loader {
 
         #[tokio::test]
         async fn programmatic_endpoint_urls_may_not_be_ignored() {
-            let fs = Fs::from_slice(&[(
+            let fs = SharedFs::from_slice(&[(
                 "test_config",
                 "[profile custom]\nignore_configured_endpoint_urls = true",
             )]);
-            let env = Env::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
+            let env = SharedEnv::from_slice(&[("AWS_IGNORE_CONFIGURED_ENDPOINT_URLS", "true")]);
 
             // Check that we get something back because we explicitly set the loader's endpoint URL
             let config = base_conf()

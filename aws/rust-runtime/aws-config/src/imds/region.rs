@@ -12,7 +12,7 @@ use crate::imds::{self, Client};
 use crate::meta::region::{future, ProvideRegion};
 use crate::provider_config::ProviderConfig;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use aws_types::region::Region;
 use std::fmt::Debug;
 use tracing::Instrument;
@@ -22,7 +22,7 @@ use tracing::Instrument;
 /// This provider is included in the default region chain, so it does not need to be used manually.
 pub struct ImdsRegionProvider {
     client: Client,
-    env: Env,
+    env: SharedEnv,
 }
 
 impl Debug for ImdsRegionProvider {

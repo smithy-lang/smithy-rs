@@ -786,7 +786,7 @@ pub(crate) mod runtime_plugin {
         client::{runtime_components::RuntimeComponentsBuilder, runtime_plugin::RuntimePlugin},
     };
     use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::{Env, SharedEnv};
 
     mod env {
         pub(super) const S3_DISABLE_EXPRESS_SESSION_AUTH: &str =
@@ -804,10 +804,10 @@ pub(crate) mod runtime_plugin {
         // This guarantees that `new` receives a fully constructed service config, with required
         // runtime components registered with `RuntimeComponents`.
         pub(crate) fn new(service_config: crate::config::Config) -> Self {
-            Self::new_with(service_config, Env::real())
+            Self::new_with(service_config, SharedEnv::real())
         }
 
-        fn new_with(service_config: crate::config::Config, env: Env) -> Self {
+        fn new_with(service_config: crate::config::Config, env: SharedEnv) -> Self {
             Self {
                 config: config(
                     service_config
@@ -823,7 +823,7 @@ pub(crate) mod runtime_plugin {
 
     fn config(
         disable_s3_express_session_token: Option<crate::config::DisableS3ExpressSessionAuth>,
-        env: Env,
+        env: SharedEnv,
     ) -> FrozenLayer {
         let mut layer = Layer::new("S3ExpressRuntimePlugin");
         if disable_s3_express_session_token.is_none() {
@@ -936,7 +936,7 @@ pub(crate) mod runtime_plugin {
             // but it will be overruled by what is in `layer`.
             let actual = config(
                 Some(disable_s3_express_session_token),
-                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
+                SharedEnv::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "false")]),
             );
 
             // A config layer from this runtime plugin should not provide
@@ -951,7 +951,7 @@ pub(crate) mod runtime_plugin {
             // Disable option is set from environment variable.
             let actual = config(
                 None,
-                Env::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
+                SharedEnv::from_slice(&[(super::env::S3_DISABLE_EXPRESS_SESSION_AUTH, "true")]),
             );
 
             // The config layer should provide `DisableS3ExpressSessionAuth` from the environment variable.
@@ -972,7 +972,7 @@ pub(crate) mod runtime_plugin {
         #[test]
         fn disable_option_should_be_unspecified_if_unset() {
             // Disable option is not set anywhere.
-            let actual = config(None, Env::from_slice(&[]));
+            let actual = config(None, SharedEnv::from_slice(&[]));
 
             // The config layer should not provide `DisableS3ExpressSessionAuth` when it's not configured.
             assert!(actual

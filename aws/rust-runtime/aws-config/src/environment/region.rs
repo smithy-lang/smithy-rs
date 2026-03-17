@@ -4,7 +4,7 @@
  */
 
 use crate::meta::region::{future, ProvideRegion};
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use aws_types::region::Region;
 
 /// Load a region from environment variables
@@ -13,19 +13,21 @@ use aws_types::region::Region;
 /// when `AWS_REGION` is unset.
 #[derive(Debug, Default)]
 pub struct EnvironmentVariableRegionProvider {
-    env: Env,
+    env: SharedEnv,
 }
 
 impl EnvironmentVariableRegionProvider {
     /// Create a new `EnvironmentVariableRegionProvider`
     pub fn new() -> Self {
-        EnvironmentVariableRegionProvider { env: Env::real() }
+        EnvironmentVariableRegionProvider {
+            env: SharedEnv::real(),
+        }
     }
 
     /// Create an region provider from a given `Env`
     ///
     /// This method is used for tests that need to override environment variables.
-    pub(crate) fn new_with_env(env: Env) -> Self {
+    pub(crate) fn new_with_env(env: SharedEnv) -> Self {
         EnvironmentVariableRegionProvider { env }
     }
 }
@@ -45,12 +47,12 @@ impl ProvideRegion for EnvironmentVariableRegionProvider {
 mod test {
     use crate::environment::region::EnvironmentVariableRegionProvider;
     use crate::meta::region::ProvideRegion;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use aws_types::region::Region;
     use futures_util::FutureExt;
 
     fn test_provider(vars: &[(&str, &str)]) -> EnvironmentVariableRegionProvider {
-        EnvironmentVariableRegionProvider::new_with_env(Env::from_slice(vars))
+        EnvironmentVariableRegionProvider::new_with_env(SharedEnv::from_slice(vars))
     }
 
     #[test]

@@ -161,14 +161,14 @@ mod test {
     use crate::profile::ProfileFileRegionProvider;
     use crate::provider_config::ProviderConfig;
     use crate::test_case::no_traffic_client;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use aws_types::region::Region;
     use futures_util::FutureExt;
     use tracing_test::traced_test;
 
     fn provider_config(dir_name: &str) -> ProviderConfig {
-        let fs = Fs::from_test_dir(format!("test-data/profile-provider/{}/fs", dir_name), "/");
-        let env = Env::from_slice(&[("HOME", "/home")]);
+        let fs = SharedFs::from_test_dir(format!("test-data/profile-provider/{}/fs", dir_name), "/");
+        let env = SharedEnv::from_slice(&[("HOME", "/home")]);
         ProviderConfig::empty()
             .with_fs(fs)
             .with_env(env)
@@ -189,7 +189,7 @@ mod test {
 
     #[test]
     fn load_region_env_profile_override() {
-        let conf = provider_config("region_override").with_env(Env::from_slice(&[
+        let conf = provider_config("region_override").with_env(SharedEnv::from_slice(&[
             ("HOME", "/home"),
             ("AWS_PROFILE", "base"),
         ]));
@@ -204,7 +204,7 @@ mod test {
 
     #[test]
     fn load_region_nonexistent_profile() {
-        let conf = provider_config("region_override").with_env(Env::from_slice(&[
+        let conf = provider_config("region_override").with_env(SharedEnv::from_slice(&[
             ("HOME", "/home"),
             ("AWS_PROFILE", "doesnotexist"),
         ]));
@@ -242,8 +242,8 @@ role_arn = arn:aws:iam::123456789012:role/test
 "#
         .trim();
 
-        let fs = Fs::from_slice(&[("test_config", config)]);
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
+        let fs = SharedFs::from_slice(&[("test_config", config)]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
         let provider_config = ProviderConfig::empty()
             .with_fs(fs)
             .with_env(env)

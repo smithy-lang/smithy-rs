@@ -5,12 +5,12 @@
 
 use aws_runtime::env_config::section::EnvConfigSections;
 use aws_runtime::env_config::EnvConfigValue;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::SharedEnv;
 use aws_types::service_config::{LoadServiceConfig, ServiceConfigKey};
 
 #[derive(Debug)]
 pub(crate) struct EnvServiceConfig {
-    pub(crate) env: Env,
+    pub(crate) env: SharedEnv,
     pub(crate) env_config_sections: EnvConfigSections,
 }
 

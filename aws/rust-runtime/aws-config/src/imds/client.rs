@@ -36,7 +36,7 @@ use aws_smithy_types::config_bag::{FrozenLayer, Layer};
 use aws_smithy_types::endpoint::Endpoint;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use http::Uri;
 use std::borrow::Cow;
 use std::error::Error as _;
@@ -57,7 +57,7 @@ const DEFAULT_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
 const DEFAULT_OPERATION_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(10);
 
 fn user_agent() -> AwsUserAgent {
-    AwsUserAgent::new_from_environment(Env::real(), ApiMetadata::new("imds", PKG_VERSION))
+    AwsUserAgent::new_from_environment(SharedEnv::real(), ApiMetadata::new("imds", PKG_VERSION))
 }
 
 /// IMDSv2 Client
@@ -660,7 +660,7 @@ pub(crate) mod test {
     };
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::SharedFs;
     use http::header::USER_AGENT;
     use http::Uri;
     use serde::Deserialize;
@@ -1215,8 +1215,8 @@ pub(crate) mod test {
         let (http_client, watcher) = capture_request(None);
         let provider_config = ProviderConfig::no_configuration()
             .with_sleep_impl(TokioSleep::new())
-            .with_env(Env::from(test_case.env))
-            .with_fs(Fs::from_map(test_case.fs))
+            .with_env(test_case.env.into())
+            .with_fs(SharedFs::from_map(test_case.fs))
             .with_http_client(http_client);
         let mut imds_client = Client::builder().configure(&provider_config);
         if let Some(endpoint_override) = test_case.endpoint_override {

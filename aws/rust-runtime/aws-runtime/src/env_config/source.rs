@@ -9,7 +9,7 @@ use super::error::{CouldNotReadConfigFile, EnvConfigFileLoadError};
 use crate::env_config::file::{EnvConfigFile, EnvConfigFileKind, EnvConfigFiles};
 use crate::fs_util::{home_dir, Os};
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::os_shim_internal;
+use aws_types::os_shim_internal::{Env, Fs, SharedEnv, SharedFs};
 use std::borrow::Cow;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
@@ -41,8 +41,8 @@ pub struct File {
 
 /// Load a [`Source`] from a given environment and filesystem.
 pub async fn load(
-    proc_env: &os_shim_internal::Env,
-    fs: &os_shim_internal::Fs,
+    proc_env: &SharedEnv,
+    fs: &SharedFs,
     profile_files: &EnvConfigFiles,
 ) -> Result<Source, EnvConfigFileLoadError> {
     let home = home_dir(proc_env, Os::real());
@@ -88,8 +88,8 @@ fn file_contents_to_string(path: &Path, contents: Vec<u8>) -> String {
 async fn load_config_file(
     source: &EnvConfigFile,
     home_directory: &Option<String>,
-    fs: &os_shim_internal::Fs,
-    environment: &os_shim_internal::Env,
+    fs: &SharedFs,
+    environment: &SharedEnv,
 ) -> Result<File, EnvConfigFileLoadError> {
     let (path, kind, contents) = match source {
         EnvConfigFile::Default(kind) => {
@@ -128,7 +128,7 @@ async fn load_config_file(
             (Some(Cow::Owned(expanded)), kind, contents)
         }
         EnvConfigFile::FilePath { kind, path } => {
-            let data = match fs.read_to_end(&path).await {
+            let data = match fs.read_to_end(path).await {
                 Ok(data) => data,
                 Err(e) => {
                     return Err(EnvConfigFileLoadError::CouldNotReadFile(
@@ -204,7 +204,7 @@ mod tests {
     use crate::env_config::source::{
         expand_home, load, load_config_file, HOME_EXPANSION_FAILURE_WARNING,
     };
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use futures_util::future::FutureExt;
     use serde::Deserialize;
     use std::collections::HashMap;
@@ -256,14 +256,14 @@ mod tests {
     #[traced_test]
     #[test]
     fn logs_produced_default() {
-        let env = Env::from_slice(&[("HOME", "/user/name")]);
+        let env = SharedEnv::from_slice(&[("HOME", "/user/name")]);
         let mut fs = HashMap::new();
         fs.insert(
             "/user/name/.aws/config".to_string(),
             "[default]\nregion = us-east-1",
         );
 
-        let fs = Fs::from_map(fs);
+        let fs = SharedFs::from_map(fs);
 
         let _src = load(&env, &fs, &Default::default()).now_or_never();
         assert!(logs_contain("config file loaded"));
@@ -273,8 +273,8 @@ mod tests {
     #[traced_test]
     #[test]
     fn load_config_file_should_not_emit_warning_when_path_not_explicitly_set() {
-        let env = Env::from_slice(&[]);
-        let fs = Fs::from_slice(&[]);
+        let env = SharedEnv::from_slice(&[]);
+        let fs = SharedFs::from_slice(&[]);
 
         let _src = load_config_file(
             &EnvConfigFile::Default(EnvConfigFileKind::Config),
@@ -289,8 +289,8 @@ mod tests {
     #[traced_test]
     #[test]
     fn load_config_file_should_emit_warning_when_path_explicitly_set() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "~/some/path")]);
-        let fs = Fs::from_slice(&[]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "~/some/path")]);
+        let fs = SharedFs::from_slice(&[]);
 
         let _src = load_config_file(
             &EnvConfigFile::Default(EnvConfigFileKind::Config),
@@ -303,8 +303,8 @@ mod tests {
     }
 
     async fn check(test_case: TestCase) {
-        let fs = Fs::real();
-        let env = Env::from(test_case.environment);
+        let fs = SharedFs::real();
+        let env = SharedEnv::from(test_case.environment);
         let platform_matches = (cfg!(windows) && test_case.platform == "windows")
             || (!cfg!(windows) && test_case.platform != "windows");
         if platform_matches {
@@ -380,8 +380,8 @@ mod tests {
             aws_access_key_id = AKIAFAKE\n\
             aws_secret_access_key = FAKE\n\
             ";
-        let env = Env::from_slice(&[]);
-        let fs = Fs::from_slice(&[]);
+        let env = SharedEnv::from_slice(&[]);
+        let fs = SharedFs::from_slice(&[]);
         let profile_files = EnvConfigFiles::builder()
             .with_contents(EnvConfigFileKind::Credentials, contents)
             .build();
@@ -403,8 +403,8 @@ mod tests {
             contents.to_string(),
         );
 
-        let fs = Fs::from_map(fs);
-        let env = Env::from_slice(&[]);
+        let fs = SharedFs::from_map(fs);
+        let env = SharedEnv::from_slice(&[]);
         let profile_files = EnvConfigFiles::builder()
             .with_file(
                 EnvConfigFileKind::Credentials,
@@ -440,8 +440,8 @@ mod tests {
             credentials_contents.to_string(),
         );
 
-        let fs = Fs::from_map(fs);
-        let env = Env::from_slice(&[("HOME", "/user/name")]);
+        let fs = SharedFs::from_map(fs);
+        let env = SharedEnv::from_slice(&[("HOME", "/user/name")]);
         let profile_files = EnvConfigFiles::builder()
             .with_contents(EnvConfigFileKind::Config, custom_contents)
             .include_default_credentials_file(true)
@@ -462,8 +462,8 @@ mod tests {
             aws_secret_access_key = FAKEOTHER\n\
             ";
 
-        let fs = Fs::from_slice(&[]);
-        let env = Env::from_slice(&[("HOME", "/user/name")]);
+        let fs = SharedFs::from_slice(&[]);
+        let env = SharedEnv::from_slice(&[("HOME", "/user/name")]);
         let profile_files = EnvConfigFiles::builder()
             .with_contents(EnvConfigFileKind::Config, custom_contents)
             .include_default_credentials_file(true)
@@ -479,8 +479,8 @@ mod tests {
 
     #[tokio::test]
     async fn misconfigured_programmatic_custom_profile_path_must_error() {
-        let fs = Fs::from_slice(&[]);
-        let env = Env::from_slice(&[]);
+        let fs = SharedFs::from_slice(&[]);
+        let env = SharedEnv::from_slice(&[]);
         let profile_files = EnvConfigFiles::builder()
             .with_file(EnvConfigFileKind::Config, "definitely-doesnt-exist")
             .build();

@@ -16,7 +16,7 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_async::time::SharedTimeSource;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
@@ -51,7 +51,7 @@ impl StdError for ImdsCommunicationError {
 #[derive(Debug)]
 pub struct ImdsCredentialsProvider {
     client: Client,
-    env: Env,
+    env: SharedEnv,
     profile: Option<String>,
     time_source: SharedTimeSource,
     last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,

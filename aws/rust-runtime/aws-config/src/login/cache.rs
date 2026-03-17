@@ -13,8 +13,8 @@ use aws_smithy_json::deserialize::{json_token_iter, Token};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_types::date_time::Format;
 use aws_smithy_types::DateTime;
-use aws_types::os_shim_internal::Env;
-use aws_types::os_shim_internal::Fs;
+use aws_types::os_shim_internal::{Env, SharedEnv};
+use aws_types::os_shim_internal::{Fs, SharedFs};
 use sha2::Digest;
 use sha2::Sha256;
 use std::path::Path;
@@ -24,7 +24,7 @@ use zeroize::Zeroizing;
 const LOGIN_CACHE_DIRECTORY_ENV_VAR: &str = "AWS_LOGIN_CACHE_DIRECTORY";
 
 /// Get the cache directory for Login (Sign-In) tokens
-fn get_cache_dir(env: &Env) -> Result<PathBuf, LoginTokenError> {
+fn get_cache_dir(env: &SharedEnv) -> Result<PathBuf, LoginTokenError> {
     match env.get(LOGIN_CACHE_DIRECTORY_ENV_VAR).ok() {
         Some(cache_dir) => Ok(PathBuf::from(cache_dir)),
         None => {
@@ -48,8 +48,8 @@ fn cached_token_path(cache_dir: &Path, login_session: &str) -> PathBuf {
 ///
 /// The `identifier` is the `login_session` ARN to load the token for
 pub(super) async fn load_cached_token(
-    env: &Env,
-    fs: &Fs,
+    env: &SharedEnv,
+    fs: &SharedFs,
     identifier: &str,
 ) -> Result<LoginToken, LoginTokenError> {
     let cache_dir = get_cache_dir(env)?;
@@ -71,8 +71,8 @@ pub(super) async fn load_cached_token(
 ///
 /// The `identifier` is the `login_session` ARN to save the token for
 pub(super) async fn save_cached_token(
-    env: &Env,
-    fs: &Fs,
+    env: &SharedEnv,
+    fs: &SharedFs,
     identifier: &str,
     token: &LoginToken,
 ) -> Result<(), LoginTokenError> {
@@ -438,8 +438,8 @@ mod tests {
             "dpopKey": "-----BEGIN EC PRIVATE KEY-----\ntest\n-----END EC PRIVATE KEY-----\n"
         }"#;
 
-        let env = Env::from_slice(&[("HOME", "/home/user")]);
-        let fs = Fs::from_map(HashMap::from([(
+        let env = SharedEnv::from_slice(&[("HOME", "/home/user")]);
+        let fs = SharedFs::from_map(HashMap::from([(
             "/home/user/.aws/login/cache/36db1d138ff460920374e4c3d8e01f53f9f73537e89c88d639f68393df0e2726.json".to_string(),
             token_json.as_bytes().to_vec(),
         )]));
@@ -462,8 +462,8 @@ mod tests {
     #[tokio::test]
     async fn error_on_missing_file() {
         let err = load_cached_token(
-            &Env::from_slice(&[("HOME", "/home")]),
-            &Fs::from_slice(&[]),
+            &SharedEnv::from_slice(&[("HOME", "/home")]),
+            &SharedFs::from_slice(&[]),
             "arn:aws:iam::123456789012:user/test",
         )
         .await

@@ -68,7 +68,7 @@ use aws_credential_types::provider::{self, error::CredentialsError, future, Prov
 use aws_sdk_sts::{types::PolicyDescriptorType, Client as StsClient};
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_types::error::display::DisplayErrorContext;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Env, Fs, SharedEnv, SharedFs};
 
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
@@ -84,7 +84,7 @@ const ENV_VAR_SESSION_NAME: &str = "AWS_ROLE_SESSION_NAME";
 pub struct WebIdentityTokenCredentialsProvider {
     source: Source,
     time_source: SharedTimeSource,
-    fs: Fs,
+    fs: SharedFs,
     sts_client: StsClient,
     policy: Option<String>,
     policy_arns: Option<Vec<PolicyDescriptorType>>,
@@ -99,7 +99,7 @@ impl WebIdentityTokenCredentialsProvider {
 
 #[derive(Debug)]
 enum Source {
-    Env(Env),
+    Env(SharedEnv),
     Static(StaticConfiguration),
 }
 
@@ -252,7 +252,7 @@ impl Builder {
 }
 
 async fn load_credentials(
-    fs: &Fs,
+    fs: &SharedFs,
     sts_client: &StsClient,
     policy: Option<String>,
     policy_arns: Option<Vec<PolicyDescriptorType>>,
@@ -261,7 +261,7 @@ async fn load_credentials(
     session_name: &str,
 ) -> provider::Result {
     let token = fs
-        .read_to_end(token_file)
+        .read_to_end(token_file.as_ref())
         .await
         .map_err(CredentialsError::provider_error)?;
     let token = String::from_utf8(token).map_err(|_utf_8_error| {
@@ -293,7 +293,7 @@ mod test {
     use aws_credential_types::provider::error::CredentialsError;
     use aws_smithy_async::rt::sleep::TokioSleep;
     use aws_smithy_types::error::display::DisplayErrorContext;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use aws_types::region::Region;
     use std::collections::HashMap;
 
@@ -302,7 +302,7 @@ mod test {
         // empty environment
         let conf = ProviderConfig::empty()
             .with_sleep_impl(TokioSleep::new())
-            .with_env(Env::from_slice(&[]))
+            .with_env(SharedEnv::from_slice(&[]))
             .with_http_client(no_traffic_client())
             .with_region(Some(Region::from_static("us-east-1")));
 
@@ -319,7 +319,7 @@ mod test {
 
     #[tokio::test]
     async fn missing_env_var() {
-        let env = Env::from_slice(&[(ENV_VAR_TOKEN_FILE, "/token.jwt")]);
+        let env = SharedEnv::from_slice(&[(ENV_VAR_TOKEN_FILE, "/token.jwt")]);
         let region = Some(Region::new("us-east-1"));
         let provider = Builder::default()
             .configure(
@@ -347,12 +347,12 @@ mod test {
 
     #[tokio::test]
     async fn fs_missing_file() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             (ENV_VAR_TOKEN_FILE, "/token.jwt"),
             (ENV_VAR_ROLE_ARN, "arn:aws:iam::123456789123:role/test-role"),
             (ENV_VAR_SESSION_NAME, "test-session"),
         ]);
-        let fs = Fs::from_raw_map(HashMap::new());
+        let fs = SharedFs::from_raw_map(HashMap::new());
         let provider = Builder::default()
             .configure(
                 &ProviderConfig::empty()

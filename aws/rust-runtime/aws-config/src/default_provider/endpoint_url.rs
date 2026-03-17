@@ -68,14 +68,14 @@ mod test {
     #[allow(deprecated)]
     use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use tracing_test::traced_test;
 
     #[tokio::test]
     #[traced_test]
     async fn log_error_on_invalid_value() {
         let conf =
-            ProviderConfig::empty().with_env(Env::from_slice(&[(env::ENDPOINT_URL, "not-a-url")]));
+            ProviderConfig::empty().with_env(SharedEnv::from_slice(&[(env::ENDPOINT_URL, "not-a-url")]));
         assert_eq!(None, endpoint_url_provider(&conf).await);
         assert!(logs_contain("invalid value for endpoint URL setting"));
         assert!(logs_contain(env::ENDPOINT_URL));
@@ -85,7 +85,7 @@ mod test {
     #[traced_test]
     async fn environment_priority() {
         let conf = ProviderConfig::empty()
-            .with_env(Env::from_slice(&[(env::ENDPOINT_URL, "http://localhost")]))
+            .with_env(SharedEnv::from_slice(&[(env::ENDPOINT_URL, "http://localhost")]))
             .with_profile_config(
                 Some(
                     #[allow(deprecated)]
@@ -99,7 +99,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nendpoint_url = http://production",
             )]));

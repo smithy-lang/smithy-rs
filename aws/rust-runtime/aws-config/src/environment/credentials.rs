@@ -9,7 +9,7 @@ use aws_credential_types::attributes::AccountId;
 use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 
 /// Load Credentials from Environment Variables
 ///
@@ -20,7 +20,7 @@ use aws_types::os_shim_internal::Env;
 /// - `AWS_ACCOUNT_ID` (optional)
 #[derive(Debug, Clone)]
 pub struct EnvironmentVariableCredentialsProvider {
-    env: Env,
+    env: SharedEnv,
 }
 
 impl EnvironmentVariableCredentialsProvider {
@@ -70,13 +70,13 @@ impl EnvironmentVariableCredentialsProvider {
 impl EnvironmentVariableCredentialsProvider {
     /// Create a `EnvironmentVariableCredentialsProvider`
     pub fn new() -> Self {
-        Self::new_with_env(Env::real())
+        Self::new_with_env(SharedEnv::real())
     }
 
     /// Create a new `EnvironmentVariableCredentialsProvider` with `Env` overridden
     ///
     /// This function is intended for tests that mock out the process environment.
-    pub(crate) fn new_with_env(env: Env) -> Self {
+    pub(crate) fn new_with_env(env: SharedEnv) -> Self {
         Self { env }
     }
 }
@@ -117,14 +117,14 @@ fn err_if_blank(value: String) -> Result<String, VarError> {
 mod test {
     use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::{error::CredentialsError, ProvideCredentials};
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use futures_util::FutureExt;
 
     use super::EnvironmentVariableCredentialsProvider;
 
     fn make_provider(vars: &[(&str, &str)]) -> EnvironmentVariableCredentialsProvider {
         EnvironmentVariableCredentialsProvider {
-            env: Env::from_slice(vars),
+            env: SharedEnv::from_slice(vars),
         }
     }
 

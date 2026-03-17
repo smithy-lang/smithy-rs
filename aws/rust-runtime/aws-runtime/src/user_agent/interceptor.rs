@@ -19,7 +19,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::SharedEnv;
 
 use crate::sdk_feature::AwsSdkFeature;
 use crate::user_agent::metrics::ProvideBusinessMetric;
@@ -140,7 +140,7 @@ impl Intercept for UserAgentInterceptor {
         let api_metadata = cfg
             .load::<ApiMetadata>()
             .ok_or(UserAgentInterceptorError::MissingApiMetadata)?;
-        let mut ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata.clone());
+        let mut ua = AwsUserAgent::new_from_environment(SharedEnv::real(), api_metadata.clone());
 
         let maybe_app_name = cfg.load::<AppName>();
         if let Some(app_name) = maybe_app_name {
@@ -265,7 +265,7 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut config)
             .unwrap();
 
-        let expected_ua = AwsUserAgent::new_from_environment(Env::real(), api_metadata);
+        let expected_ua = AwsUserAgent::new_from_environment(SharedEnv::real(), api_metadata);
         assert!(
             expected_ua.aws_ua_header().contains("some-service"),
             "precondition"

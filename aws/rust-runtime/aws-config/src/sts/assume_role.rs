@@ -380,7 +380,7 @@ mod test {
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use aws_types::region::Region;
     use aws_types::SdkConfig;
     use http::header::AUTHORIZATION;
@@ -453,7 +453,7 @@ mod test {
                 .unwrap(),
         ));
         let conf = crate::defaults(BehaviorVersion::latest())
-            .env(Env::from_slice(&[
+            .env(SharedEnv::from_slice(&[
                 ("AWS_ACCESS_KEY_ID", "123-key"),
                 ("AWS_SECRET_ACCESS_KEY", "456"),
                 ("AWS_REGION", "us-west-17"),

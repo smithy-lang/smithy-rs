@@ -16,7 +16,7 @@ use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::RetryConfig;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 use aws_types::region::Region;
 use aws_types::sdk_config::SharedHttpClient;
 use aws_types::SdkConfig;
@@ -35,8 +35,8 @@ use tokio::sync::OnceCell;
 /// to be explicitly set.
 #[derive(Clone)]
 pub struct ProviderConfig {
-    env: Env,
-    fs: Fs,
+    env: SharedEnv,
+    fs: SharedFs,
     time_source: SharedTimeSource,
     http_client: Option<SharedHttpClient>,
     retry_config: Option<RetryConfig>,
@@ -73,8 +73,8 @@ impl Debug for ProviderConfig {
 impl Default for ProviderConfig {
     fn default() -> Self {
         Self {
-            env: Env::default(),
-            fs: Fs::default(),
+            env: SharedEnv::default(),
+            fs: SharedFs::default(),
             time_source: SharedTimeSource::default(),
             http_client: None,
             retry_config: None,
@@ -100,8 +100,8 @@ impl ProviderConfig {
         use aws_smithy_async::time::StaticTimeSource;
         use std::collections::HashMap;
         use std::time::UNIX_EPOCH;
-        let fs = Fs::from_raw_map(HashMap::new());
-        let env = Env::from_slice(&[]);
+        let fs = SharedFs::from_raw_map(HashMap::new());
+        let env = SharedEnv::from_slice(&[]);
         Self {
             parsed_profile: Default::default(),
             #[allow(deprecated)]
@@ -149,8 +149,8 @@ impl ProviderConfig {
     /// Constructs a ProviderConfig with no fields set
     pub fn empty() -> Self {
         ProviderConfig {
-            env: Env::default(),
-            fs: Fs::default(),
+            env: SharedEnv::default(),
+            fs: SharedFs::default(),
             time_source: SharedTimeSource::default(),
             http_client: None,
             retry_config: None,
@@ -174,8 +174,8 @@ impl ProviderConfig {
             parsed_profile: Default::default(),
             #[allow(deprecated)]
             profile_files: ProfileFiles::default(),
-            env: Env::default(),
-            fs: Fs::default(),
+            env: SharedEnv::default(),
+            fs: SharedFs::default(),
             time_source,
             http_client: None,
             retry_config: None,
@@ -236,12 +236,12 @@ impl ProviderConfig {
     // When all crate features are disabled, these accessors are unused
 
     #[allow(dead_code)]
-    pub(crate) fn env(&self) -> Env {
+    pub(crate) fn env(&self) -> SharedEnv {
         self.env.clone()
     }
 
     #[allow(dead_code)]
-    pub(crate) fn fs(&self) -> Fs {
+    pub(crate) fn fs(&self) -> SharedFs {
         self.fs.clone()
     }
 
@@ -359,7 +359,23 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    pub(crate) fn with_fs(self, fs: Fs) -> Self {
+    /// Override the file system provider for this configuration.
+    ///
+    /// This allows using custom file system sources for testing,
+    /// containerized environments, or other custom sources.
+    ///
+    /// # Examples
+    /// ```rust,no_run
+    /// use aws_config::provider_config::ProviderConfig;
+    /// use aws_types::os_shim_internal::SharedFs;
+    ///
+    /// // Use a fake file system for testing
+    /// let fake_fs = SharedFs::from_slice(&[
+    ///     ("config", "[default]\nregion = us-west-2"),
+    /// ]);
+    /// let config = ProviderConfig::empty().with_fs(fake_fs);
+    /// ```
+    pub fn with_fs(self, fs: SharedFs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -375,10 +391,10 @@ impl ProviderConfig {
     /// # Examples
     /// ```rust,no_run
     /// use aws_config::provider_config::ProviderConfig;
-    /// use aws_types::os_shim_internal::{Env, SharedEnv, FakeEnv};
+    /// use aws_types::os_shim_internal::{Env, SharedEnv};
     ///
     /// // Use a fake environment for testing
-    /// let fake_env = Env::from_slice(&[
+    /// let fake_env = SharedEnv::from_slice(&[
     ///     ("AWS_REGION", "us-west-2"),
     ///     ("AWS_ACCESS_KEY_ID", "test-key"),
     /// ]);
@@ -387,7 +403,7 @@ impl ProviderConfig {
     /// // Or use a custom implementation
     /// #[derive(Debug)]
     /// struct MyCustomEnv;
-    /// impl aws_types::os_shim_internal::EnvTrait for MyCustomEnv {
+    /// impl Env for MyCustomEnv {
     ///     fn get(&self, key: &str) -> Result<String, std::env::VarError> {
     ///         // Custom implementation
     ///         Err(std::env::VarError::NotPresent)
@@ -395,7 +411,7 @@ impl ProviderConfig {
     /// }
     /// let config = ProviderConfig::empty().with_env(SharedEnv::new(MyCustomEnv));
     /// ```
-    pub fn with_env(self, env: Env) -> Self {
+    pub fn with_env(self, env: SharedEnv) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,

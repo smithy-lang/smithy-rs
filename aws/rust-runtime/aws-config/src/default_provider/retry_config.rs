@@ -149,21 +149,21 @@ mod test {
         error::RetryConfigError, error::RetryConfigErrorKind, RetryConfig, RetryMode,
     };
     use aws_runtime::env_config::EnvConfigError;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 
     async fn test_provider(
         vars: &[(&str, &str)],
     ) -> Result<RetryConfig, EnvConfigError<RetryConfigError>> {
         super::Builder::default()
-            .configure(&ProviderConfig::no_configuration().with_env(Env::from_slice(vars)))
+            .configure(&ProviderConfig::no_configuration().with_env(SharedEnv::from_slice(vars)))
             .try_retry_config()
             .await
     }
 
     #[tokio::test]
     async fn test_returns_default_retry_config_from_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+        let fs = SharedFs::from_slice(&[("config", "[default]\n")]);
 
         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
 
@@ -183,8 +183,8 @@ mod test {
 
     #[tokio::test]
     async fn test_no_retry_config_in_empty_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[("config", "[default]\n")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+        let fs = SharedFs::from_slice(&[("config", "[default]\n")]);
 
         let provider_config = ProviderConfig::no_configuration().with_env(env).with_fs(fs);
 
@@ -200,11 +200,11 @@ mod test {
 
     #[tokio::test]
     async fn test_creation_of_retry_config_from_profile() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "config")]);
         // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247): standard is the default mode;
         // this test would be better if it was setting it to adaptive mode
         // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "config",
             // If the lines with the vars have preceding spaces, they don't get read
             r#"[default]
@@ -227,7 +227,7 @@ retry_mode = standard
 
     #[tokio::test]
     async fn test_env_retry_config_takes_precedence_over_profile_retry_config() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONFIG_FILE", "config"),
             ("AWS_MAX_ATTEMPTS", "42"),
             ("AWS_RETRY_MODE", "standard"),
@@ -235,7 +235,7 @@ retry_mode = standard
         // TODO(https://github.com/awslabs/aws-sdk-rust/issues/247) standard is the default mode;
         // this test would be better if it was setting it to adaptive mode
         // adaptive mode is currently unsupported so that would panic
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "config",
             // If the lines with the vars have preceding spaces, they don't get read
             r#"[default]
@@ -259,8 +259,8 @@ retry_mode = standard
     #[tokio::test]
     #[should_panic = "failed to parse max attempts. source: global profile (`default`) key: `max_attempts`: invalid digit found in string"]
     async fn test_invalid_profile_retry_config_panics() {
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "config")]);
-        let fs = Fs::from_slice(&[(
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "config")]);
+        let fs = SharedFs::from_slice(&[(
             "config",
             // If the lines with the vars have preceding spaces, they don't get read
             r#"[default]

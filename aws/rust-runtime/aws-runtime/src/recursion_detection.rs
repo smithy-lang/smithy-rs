@@ -8,7 +8,7 @@ use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterce
 use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use http_1x::HeaderValue;
 use percent_encoding::{percent_encode, CONTROLS};
 use std::borrow::Cow;
@@ -29,7 +29,7 @@ mod env {
 #[non_exhaustive]
 #[derive(Debug, Default)]
 pub struct RecursionDetectionInterceptor {
-    env: Env,
+    env: SharedEnv,
 }
 
 impl RecursionDetectionInterceptor {
@@ -82,7 +82,7 @@ mod tests {
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::body::SdkBody;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use http_1x::HeaderValue;
     use proptest::{prelude::*, proptest};
     use serde::Deserialize;
@@ -125,8 +125,8 @@ mod tests {
     }
 
     impl TestCase {
-        fn env(&self) -> Env {
-            Env::from(self.env.clone())
+        fn env(&self) -> SharedEnv {
+            SharedEnv::from(self.env.clone())
         }
 
         /// Headers on the input request

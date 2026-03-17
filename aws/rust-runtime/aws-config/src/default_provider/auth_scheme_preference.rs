@@ -83,13 +83,13 @@ mod test {
         default_provider::auth_scheme_preference::auth_scheme_preference_provider,
         provider_config::ProviderConfig,
     };
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use tracing_test::traced_test;
 
     #[tokio::test]
     #[traced_test]
     async fn log_error_on_invalid_value() {
-        let conf = ProviderConfig::empty().with_env(Env::from_slice(&[(
+        let conf = ProviderConfig::empty().with_env(SharedEnv::from_slice(&[(
             env::AUTH_SCHEME_PREFERENCE,
             "scheme1, , \tscheme2",
         )]));
@@ -109,12 +109,12 @@ mod test {
             provider_config::ProviderConfig,
         };
         use aws_smithy_runtime_api::client::auth::AuthSchemePreference;
-        use aws_types::os_shim_internal::{Env, Fs};
+        use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 
         #[tokio::test]
         async fn environment_priority() {
             let conf = ProviderConfig::empty()
-            .with_env(Env::from_slice(&[(
+            .with_env(SharedEnv::from_slice(&[(
                 env::AUTH_SCHEME_PREFERENCE,
                 "aws.auth#sigv4, smithy.api#httpBasicAuth, smithy.api#httpDigestAuth, smithy.api#httpBearerAuth, smithy.api#httpApiKeyAuth",
             )]))
@@ -131,7 +131,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nauth_scheme_preference = scheme1, scheme2 , \tscheme3 \t",
             )]));
@@ -163,7 +163,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nauth_scheme_preference = sigv4, httpBasicAuth, httpDigestAuth, \thttpBearerAuth \t, httpApiKeyAuth ",
             )]));

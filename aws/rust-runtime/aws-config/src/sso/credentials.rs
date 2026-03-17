@@ -21,7 +21,7 @@ use aws_sdk_sso::types::RoleCredentials;
 use aws_sdk_sso::Client as SsoClient;
 use aws_smithy_async::time::SharedTimeSource;
 use aws_smithy_types::DateTime;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 use aws_types::region::Region;
 use aws_types::SdkConfig;
 
@@ -35,8 +35,8 @@ use aws_types::SdkConfig;
 /// 2. The configured [`start_url`](Builder::start_url).
 #[derive(Debug)]
 pub struct SsoCredentialsProvider {
-    fs: Fs,
-    env: Env,
+    fs: SharedFs,
+    env: SharedEnv,
     sso_provider_config: SsoProviderConfig,
     sdk_config: SdkConfig,
     token_provider: Option<SsoTokenProvider>,
@@ -240,8 +240,8 @@ async fn load_sso_credentials(
     sso_provider_config: &SsoProviderConfig,
     sdk_config: &SdkConfig,
     token_provider: Option<&SsoTokenProvider>,
-    env: &Env,
-    fs: &Fs,
+    env: &SharedEnv,
+    fs: &SharedFs,
     time_source: SharedTimeSource,
 ) -> provider::Result {
     let token = if let Some(token_provider) = token_provider {

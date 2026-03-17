@@ -13,13 +13,13 @@ use aws_smithy_http_client::test_util::capture_request;
 use aws_smithy_runtime::assert_str_contains;
 use aws_smithy_runtime_api::client::auth::http::HTTP_BEARER_AUTH_SCHEME_ID;
 use aws_types::origin::Origin;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::SharedEnv;
 use aws_types::service_config::{LoadServiceConfig, ServiceConfigKey};
 use aws_types::SdkConfig;
 
 #[derive(Debug)]
 struct TestEnv {
-    env: Env,
+    env: SharedEnv,
 }
 
 impl LoadServiceConfig for TestEnv {
@@ -42,7 +42,7 @@ async fn test_valid_service_specific_token_configured() {
         .region(Region::new("us-west-2"))
         .http_client(http_client)
         .service_config(TestEnv {
-            env: Env::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", expected_token)]),
+            env: SharedEnv::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", expected_token)]),
         })
         .build();
     let client = aws_sdk_bedrockruntime::Client::new(&shared_config);
@@ -67,7 +67,7 @@ async fn test_token_configured_for_different_service() {
         .region(Region::new("us-west-2"))
         .http_client(http_client)
         .service_config(TestEnv {
-            env: Env::from_slice(&[("AWS_BEARER_TOKEN_FOO", "foo-token")]),
+            env: SharedEnv::from_slice(&[("AWS_BEARER_TOKEN_FOO", "foo-token")]),
         })
         .build();
     let client = aws_sdk_bedrockruntime::Client::new(&shared_config);
@@ -91,7 +91,7 @@ async fn test_token_configured_with_auth_scheme_preference_also_set_in_env() {
         .region(Region::new("us-west-2"))
         .http_client(http_client)
         .service_config(TestEnv {
-            env: Env::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", expected_token)]),
+            env: SharedEnv::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", expected_token)]),
         })
         .auth_scheme_preference([
             aws_runtime::auth::sigv4::SCHEME_ID,
@@ -125,7 +125,7 @@ async fn test_explicit_service_config_takes_precedence() {
         .region(Region::new("us-west-2"))
         .http_client(http_client)
         .service_config(TestEnv {
-            env: Env::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", "bedrock-token")]),
+            env: SharedEnv::from_slice(&[("AWS_BEARER_TOKEN_BEDROCK", "bedrock-token")]),
         })
         .build();
     let expected_token = "explicit-code-token";

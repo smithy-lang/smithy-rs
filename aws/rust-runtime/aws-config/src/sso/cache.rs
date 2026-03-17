@@ -10,7 +10,7 @@ use aws_smithy_json::deserialize::{json_token_iter, EscapeError};
 use aws_smithy_json::serialize::JsonObjectWriter;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::DateTime;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Fs, SharedEnv, SharedFs};
 use sha1::{Digest, Sha1};
 use std::borrow::Cow;
 use std::error::Error as StdError;
@@ -149,8 +149,8 @@ fn cached_token_path(identifier: &str, home: &str) -> PathBuf {
 ///
 /// The `identifier` is the `sso_start_url` for credentials providers, and `sso_session_name` for token providers.
 pub(super) async fn load_cached_token(
-    env: &Env,
-    fs: &Fs,
+    env: &SharedEnv,
+    fs: &SharedFs,
     identifier: &str,
 ) -> Result<CachedSsoToken, CachedSsoTokenError> {
     let home = home_dir(env, Os::real()).ok_or(CachedSsoTokenError::NoHomeDirectory)?;
@@ -305,8 +305,8 @@ fn json_parse_loop<'a>(
 }
 
 pub(super) async fn save_cached_token(
-    env: &Env,
-    fs: &Fs,
+    env: &SharedEnv,
+    fs: &SharedFs,
     identifier: &str,
     token: &CachedSsoToken,
 ) -> Result<(), CachedSsoTokenError> {
@@ -498,8 +498,8 @@ mod tests {
     #[tokio::test]
     async fn gracefully_handle_missing_files() {
         let err = load_cached_token(
-            &Env::from_slice(&[("HOME", "/home")]),
-            &Fs::from_slice(&[]),
+            &SharedEnv::from_slice(&[("HOME", "/home")]),
+            &SharedFs::from_slice(&[]),
             "asdf",
         )
         .await
@@ -550,14 +550,14 @@ mod tests {
             start_url: Some("start-url".into()),
         };
 
-        let env = Env::from_slice(&[("HOME", "/home/user")]);
-        let fs = Fs::from_map(HashMap::<_, Vec<u8>>::new());
+        let env = SharedEnv::from_slice(&[("HOME", "/home/user")]);
+        let fs = SharedFs::from_map(HashMap::<_, Vec<u8>>::new());
         super::save_cached_token(&env, &fs, "test", &token)
             .await
             .expect("success");
 
         let contents = fs
-            .read_to_end("/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json")
+            .read_to_end("/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json".as_ref())
             .await
             .expect("correct file written");
         let contents_str = String::from_utf8(contents).expect("valid utf8");
@@ -582,8 +582,8 @@ mod tests {
             start_url: Some("start-url".into()),
         };
 
-        let env = Env::from_slice(&[("HOME", "/home/user")]);
-        let fs = Fs::from_map(HashMap::<_, Vec<u8>>::new());
+        let env = SharedEnv::from_slice(&[("HOME", "/home/user")]);
+        let fs = SharedFs::from_map(HashMap::<_, Vec<u8>>::new());
 
         super::save_cached_token(&env, &fs, "test", &original)
             .await

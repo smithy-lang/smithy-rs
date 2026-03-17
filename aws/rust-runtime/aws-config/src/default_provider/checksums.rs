@@ -84,13 +84,13 @@ mod test {
     use aws_smithy_types::checksum_config::{
         RequestChecksumCalculation, ResponseChecksumValidation,
     };
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use tracing_test::traced_test;
 
     #[tokio::test]
     #[traced_test]
     async fn log_error_on_invalid_value_request() {
-        let conf = ProviderConfig::empty().with_env(Env::from_slice(&[(
+        let conf = ProviderConfig::empty().with_env(SharedEnv::from_slice(&[(
             "AWS_REQUEST_CHECKSUM_CALCULATION",
             "not-a-valid-value",
         )]));
@@ -108,7 +108,7 @@ mod test {
     #[traced_test]
     async fn environment_priority_request() {
         let conf = ProviderConfig::empty()
-            .with_env(Env::from_slice(&[(
+            .with_env(SharedEnv::from_slice(&[(
                 "AWS_REQUEST_CHECKSUM_CALCULATION",
                 "WHEN_REQUIRED",
             )]))
@@ -125,7 +125,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nrequest_checksum_calculation = WHEN_SUPPORTED",
             )]));
@@ -152,7 +152,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nrequest_checksum_calculation = WHEN_REQUIRED",
             )]));
@@ -175,7 +175,7 @@ mod test {
     #[tokio::test]
     #[traced_test]
     async fn log_error_on_invalid_value_response() {
-        let conf = ProviderConfig::empty().with_env(Env::from_slice(&[(
+        let conf = ProviderConfig::empty().with_env(SharedEnv::from_slice(&[(
             "AWS_RESPONSE_CHECKSUM_VALIDATION",
             "not-a-valid-value",
         )]));
@@ -193,7 +193,7 @@ mod test {
     #[traced_test]
     async fn environment_priority_response() {
         let conf = ProviderConfig::empty()
-            .with_env(Env::from_slice(&[(
+            .with_env(SharedEnv::from_slice(&[(
                 "AWS_RESPONSE_CHECKSUM_VALIDATION",
                 "WHEN_SUPPORTED",
             )]))
@@ -210,7 +210,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\response_checksum_validation = WHEN_REQUIRED",
             )]));
@@ -237,7 +237,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\nresponse_checksum_validation = WHEN_REQUIRED",
             )]));

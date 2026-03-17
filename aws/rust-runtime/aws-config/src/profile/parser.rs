@@ -7,7 +7,7 @@
 
 use aws_runtime::env_config::file::EnvConfigFiles as ProfileFiles;
 use aws_runtime::env_config::source;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 use std::borrow::Cow;
 
 pub use aws_runtime::env_config::error::EnvConfigFileLoadError as ProfileFileLoadError;
@@ -51,8 +51,8 @@ pub use aws_runtime::env_config::section::{EnvConfigSections as ProfileSet, Prof
 /// aws_access_key_id = 456
 /// ```
 pub async fn load(
-    fs: &Fs,
-    env: &Env,
+    fs: &SharedFs,
+    env: &SharedEnv,
     profile_files: &ProfileFiles,
     selected_profile_override: Option<Cow<'static, str>>,
 ) -> Result<ProfileSet, ProfileFileLoadError> {

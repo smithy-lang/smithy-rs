@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use aws_types::os_shim_internal;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 
 /// An operating system, like Windows or Linux
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
@@ -26,7 +26,7 @@ impl Os {
 }
 
 /// Resolve a home directory given a set of environment variables
-pub fn home_dir(env_var: &os_shim_internal::Env, os: Os) -> Option<String> {
+pub fn home_dir(env_var: &SharedEnv, os: Os) -> Option<String> {
     if let Ok(home) = env_var.get("HOME") {
         tracing::debug!(src = "HOME", "loaded home directory");
         return Some(home);
@@ -52,12 +52,12 @@ pub fn home_dir(env_var: &os_shim_internal::Env, os: Os) -> Option<String> {
 #[cfg(test)]
 mod test {
     use super::{home_dir, Os};
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
 
     #[test]
     fn homedir_profile_only_windows() {
         // windows specific variables should only be considered when the platform is windows
-        let env = Env::from_slice(&[("USERPROFILE", "C:\\Users\\name")]);
+        let env = SharedEnv::from_slice(&[("USERPROFILE", "C:\\Users\\name")]);
         assert_eq!(
             home_dir(&env, Os::Windows),
             Some("C:\\Users\\name".to_string())

@@ -27,7 +27,7 @@ use aws_smithy_runtime_api::client::identity::http::Token;
 use aws_smithy_runtime_api::client::identity::{IdentityFuture, ResolveIdentity};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 use aws_types::region::Region;
 use aws_types::SdkConfig;
 use std::error::Error as StdError;
@@ -53,8 +53,8 @@ pub struct SsoTokenProvider {
 
 #[derive(Debug)]
 struct Inner {
-    env: Env,
-    fs: Fs,
+    env: SharedEnv,
+    fs: SharedFs,
     region: Region,
     session_name: String,
     start_url: String,
@@ -341,10 +341,10 @@ impl Builder {
         if self.sdk_config.is_none() {
             self.sdk_config = Some(crate::load_defaults(crate::BehaviorVersion::latest()).await);
         }
-        self.build_with(Env::real(), Fs::real())
+        self.build_with(SharedEnv::real(), SharedFs::real())
     }
 
-    pub(crate) fn build_with(self, env: Env, fs: Fs) -> SsoTokenProvider {
+    pub(crate) fn build_with(self, env: SharedEnv, fs: SharedFs) -> SsoTokenProvider {
         SsoTokenProvider {
             inner: Arc::new(Inner {
                 env,
@@ -424,8 +424,8 @@ mod tests {
     struct TestHarness {
         time_source: SharedTimeSource,
         token_provider: SsoTokenProvider,
-        env: Env,
-        fs: Fs,
+        env: SharedEnv,
+        fs: SharedFs,
     }
 
     impl TestHarness {
@@ -433,9 +433,9 @@ mod tests {
             time_source: impl TimeSource + 'static,
             sleep_impl: impl AsyncSleep + 'static,
             http_client: impl HttpClient + 'static,
-            fs: Fs,
+            fs: SharedFs,
         ) -> Self {
-            let env = Env::from_slice(&[("HOME", "/home/user")]);
+            let env = SharedEnv::from_slice(&[("HOME", "/home/user")]);
             let time_source = SharedTimeSource::new(time_source);
             let config = SdkConfig::builder()
                 .http_client(http_client)
@@ -516,7 +516,7 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn use_unexpired_cached_token() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "accessToken": "some-token",
@@ -541,7 +541,7 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_cached_token() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "accessToken": "some-token",
@@ -564,7 +564,7 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_and_expired_client_registration() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "startUrl": "https://d-123.awsapps.com/start",
@@ -593,7 +593,7 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_refresh_with_refresh_token() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "startUrl": "https://d-123.awsapps.com/start",
@@ -677,7 +677,7 @@ mod tests {
     #[cfg_attr(windows, ignore)]
     #[tokio::test]
     async fn expired_token_refresh_fails() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "startUrl": "https://d-123.awsapps.com/start",
@@ -719,7 +719,7 @@ mod tests {
     // Expired token refresh without new refresh token
     #[tokio::test]
     async fn expired_token_refresh_without_new_refresh_token() {
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "startUrl": "https://d-123.awsapps.com/start",
@@ -776,7 +776,7 @@ mod tests {
         let (time_source, sleep_impl) = instant_time_and_sleep(start_time.try_into().unwrap());
         let shared_time_source = SharedTimeSource::new(time_source.clone());
 
-        let fs = Fs::from_slice(&[(
+        let fs = SharedFs::from_slice(&[(
             "/home/user/.aws/sso/cache/a94a8fe5ccb19ba61c4c0873d391e987982fbbd3.json",
             r#"
             { "startUrl": "https://d-123.awsapps.com/start",

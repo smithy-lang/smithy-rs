@@ -6,7 +6,7 @@
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use aws_types::app_name::AppName;
 use aws_types::build_metadata::{OsFamily, BUILD_METADATA};
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use std::borrow::Cow;
 use std::error::Error;
 use std::fmt;
@@ -48,7 +48,7 @@ impl AwsUserAgent {
     /// This utilizes [`BUILD_METADATA`](const@aws_types::build_metadata::BUILD_METADATA) from `aws_types`
     /// to capture the Rust version & target platform. `ApiMetadata` provides
     /// the version & name of the specific service.
-    pub fn new_from_environment(env: Env, api_metadata: ApiMetadata) -> Self {
+    pub fn new_from_environment(env: SharedEnv, api_metadata: ApiMetadata) -> Self {
         let build_metadata = &BUILD_METADATA;
         let sdk_metadata = SdkMetadata {
             name: "rust",
@@ -615,7 +615,7 @@ mod test {
     use super::*;
     use aws_types::app_name::AppName;
     use aws_types::build_metadata::OsFamily;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use std::borrow::Cow;
 
     fn make_deterministic(ua: &mut AwsUserAgent) {
@@ -633,7 +633,7 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata);
+        let mut ua = AwsUserAgent::new_from_environment(SharedEnv::from_slice(&[]), api_metadata);
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
@@ -652,7 +652,7 @@ mod test {
             version: "123",
         };
         let mut ua = AwsUserAgent::new_from_environment(
-            Env::from_slice(&[("AWS_EXECUTION_ENV", "lambda")]),
+            SharedEnv::from_slice(&[("AWS_EXECUTION_ENV", "lambda")]),
             api_metadata,
         );
         make_deterministic(&mut ua);
@@ -672,7 +672,7 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+        let mut ua = AwsUserAgent::new_from_environment(SharedEnv::from_slice(&[]), api_metadata)
             .with_framework_metadata(
                 FrameworkMetadata::new("some-framework", Some(Cow::Borrowed("1.3")))
                     .unwrap()
@@ -696,7 +696,7 @@ mod test {
             service_id: "dynamodb".into(),
             version: "123",
         };
-        let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
+        let mut ua = AwsUserAgent::new_from_environment(SharedEnv::from_slice(&[]), api_metadata)
             .with_app_name(AppName::new("my_app").unwrap());
         make_deterministic(&mut ua);
         assert_eq!(

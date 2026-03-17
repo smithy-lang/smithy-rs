@@ -45,13 +45,13 @@ mod test {
     #[allow(deprecated)]
     use crate::profile::profile_file::{ProfileFileKind, ProfileFiles};
     use crate::provider_config::ProviderConfig;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
     use tracing_test::traced_test;
 
     #[tokio::test]
     #[traced_test]
     async fn log_error_on_invalid_value() {
-        let conf = ProviderConfig::empty().with_env(Env::from_slice(&[(
+        let conf = ProviderConfig::empty().with_env(SharedEnv::from_slice(&[(
             "AWS_DISABLE_REQUEST_COMPRESSION",
             "not-a-boolean",
         )]));
@@ -66,7 +66,7 @@ mod test {
     #[traced_test]
     async fn environment_priority() {
         let conf = ProviderConfig::empty()
-            .with_env(Env::from_slice(&[(
+            .with_env(SharedEnv::from_slice(&[(
                 "AWS_DISABLE_REQUEST_COMPRESSION",
                 "TRUE",
             )]))
@@ -83,7 +83,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\ndisable_request_compression = false",
             )]));
@@ -110,7 +110,7 @@ mod test {
                 ),
                 None,
             )
-            .with_fs(Fs::from_slice(&[(
+            .with_fs(SharedFs::from_slice(&[(
                 "conf",
                 "[default]\ndisable_request_compression = true",
             )]));

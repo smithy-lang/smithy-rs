@@ -94,12 +94,12 @@ mod tests {
     use crate::provider_config::ProviderConfig;
     use crate::test_case::{no_traffic_client, InstantSleep};
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{SharedEnv, SharedFs};
 
     #[tokio::test]
     async fn prefer_env_to_profile() {
-        let fs = Fs::from_slice(&[("test_config", "[default]\nsdk-ua-app-id = wrong")]);
-        let env = Env::from_slice(&[
+        let fs = SharedFs::from_slice(&[("test_config", "[default]\nsdk-ua-app-id = wrong")]);
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONFIG_FILE", "test_config"),
             ("AWS_SDK_UA_APP_ID", "correct"),
         ]);
@@ -119,7 +119,7 @@ mod tests {
     // test that overriding profile_name on the root level is deprecated
     #[tokio::test]
     async fn profile_name_override() {
-        let fs = Fs::from_slice(&[("test_config", "[profile custom]\nsdk_ua_app_id = correct")]);
+        let fs = SharedFs::from_slice(&[("test_config", "[profile custom]\nsdk_ua_app_id = correct")]);
         let conf = crate::defaults(BehaviorVersion::latest())
             .sleep_impl(InstantSleep)
             .fs(fs)
@@ -142,8 +142,8 @@ mod tests {
 
     #[tokio::test]
     async fn load_from_profile() {
-        let fs = Fs::from_slice(&[("test_config", "[default]\nsdk_ua_app_id = correct")]);
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
+        let fs = SharedFs::from_slice(&[("test_config", "[default]\nsdk_ua_app_id = correct")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
         let app_name = Builder::default()
             .configure(
                 &ProviderConfig::empty()
@@ -159,8 +159,8 @@ mod tests {
 
     #[tokio::test]
     async fn load_from_profile_old_name() {
-        let fs = Fs::from_slice(&[("test_config", "[default]\nsdk-ua-app-id = correct")]);
-        let env = Env::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
+        let fs = SharedFs::from_slice(&[("test_config", "[default]\nsdk-ua-app-id = correct")]);
+        let env = SharedEnv::from_slice(&[("AWS_CONFIG_FILE", "test_config")]);
         let app_name = Builder::default()
             .configure(
                 &ProviderConfig::empty()

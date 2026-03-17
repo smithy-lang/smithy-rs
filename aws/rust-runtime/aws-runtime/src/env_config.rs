@@ -6,7 +6,7 @@
 use crate::env_config::property::PropertiesKey;
 use crate::env_config::section::EnvConfigSections;
 use aws_types::origin::Origin;
-use aws_types::os_shim_internal::Env;
+use aws_types::os_shim_internal::{Env, SharedEnv};
 use aws_types::service_config::ServiceConfigKey;
 use std::borrow::Cow;
 use std::error::Error;
@@ -23,7 +23,7 @@ pub mod source;
 /// Given a key, access to the environment, and a validator, return a config value if one was set.
 pub fn get_service_env_config<'a, T, E>(
     key: ServiceConfigKey<'a>,
-    env: &'a Env,
+    env: &'a SharedEnv,
     shared_config_sections: Option<&'a EnvConfigSections>,
     validator: impl Fn(&str) -> Result<T, E>,
 ) -> Result<Option<T>, EnvConfigError<E>>
@@ -204,7 +204,7 @@ impl<'a> EnvConfigValue<'a> {
     /// Load the value from the env or profile files, validating with `validator`
     pub fn validate<T, E: Error + Send + Sync + 'static>(
         self,
-        env: &Env,
+        env: &SharedEnv,
         profiles: Option<&EnvConfigSections>,
         validator: impl Fn(&str) -> Result<T, E>,
     ) -> Result<Option<T>, EnvConfigError<E>> {
@@ -224,7 +224,7 @@ impl<'a> EnvConfigValue<'a> {
     /// This version of the function will also return the origin of the config.
     pub fn validate_and_return_origin<T, E: Error + Send + Sync + 'static>(
         self,
-        env: &Env,
+        env: &SharedEnv,
         profiles: Option<&EnvConfigSections>,
         validator: impl Fn(&str) -> Result<T, E>,
     ) -> Result<(Option<T>, Origin), EnvConfigError<E>> {
@@ -246,7 +246,7 @@ impl<'a> EnvConfigValue<'a> {
     /// Load the value from the environment
     pub fn load(
         &self,
-        env: &'a Env,
+        env: &'a SharedEnv,
         profiles: Option<&'a EnvConfigSections>,
     ) -> Option<(Cow<'a, str>, EnvConfigSource<'a>)> {
         let env_value = self.environment_variable.as_ref().and_then(|env_var| {
@@ -310,7 +310,7 @@ impl<'a> EnvConfigValue<'a> {
 }
 
 fn get_service_config_from_env<'a>(
-    env: &'a Env,
+    env: &SharedEnv,
     service_id: Option<Cow<'a, str>>,
     env_var: Cow<'a, str>,
 ) -> Option<(Cow<'a, str>, EnvConfigSource<'a>)> {
@@ -360,7 +360,7 @@ fn format_service_id_for_profile(service_id: impl AsRef<str>) -> String {
 mod test {
     use crate::env_config::property::{Properties, PropertiesKey};
     use crate::env_config::section::EnvConfigSections;
-    use aws_types::os_shim_internal::Env;
+    use aws_types::os_shim_internal::SharedEnv;
     use std::borrow::Cow;
     use std::collections::HashMap;
     use std::num::ParseIntError;
@@ -391,7 +391,7 @@ mod test {
 
     #[tokio::test]
     async fn test_service_config_multiple_services() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONFIG_FILE", "config"),
             ("AWS_SOME_KEY", "1"),
             ("AWS_SOME_KEY_SERVICE", "2"),
@@ -465,7 +465,7 @@ mod test {
 
     #[tokio::test]
     async fn test_service_config_precedence() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONFIG_FILE", "config"),
             ("AWS_SOME_KEY", "1"),
             ("AWS_SOME_KEY_S3", "2"),
@@ -518,7 +518,7 @@ mod test {
 
     #[tokio::test]
     async fn test_multiple_services() {
-        let env = Env::from_slice(&[
+        let env = SharedEnv::from_slice(&[
             ("AWS_CONFIG_FILE", "config"),
             ("AWS_SOME_KEY", "1"),
             ("AWS_SOME_KEY_S3", "2"),
