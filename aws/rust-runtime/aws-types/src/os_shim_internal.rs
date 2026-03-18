@@ -11,10 +11,34 @@ use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
 use std::fmt::Debug;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::{Arc, Mutex};
 
 use crate::os_shim_internal::fs::Fake;
+
+/// Trait for custom environment variable providers.
+pub trait ProvideEnv: Debug + Send + Sync {
+    /// Get the value of environment variable `k`.
+    fn get(&self, k: &str) -> Result<String, VarError>;
+}
+
+/// Trait for custom filesystem providers.
+pub trait ProvideFs: Debug + Send + Sync {
+    /// Read the entire contents of the file at `path`.
+    fn read_to_end(
+        &self,
+        path: &Path,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<Vec<u8>>> + Send + '_>>;
+
+    /// Write `contents` to the file at `path`.
+    fn write(
+        &self,
+        path: &Path,
+        contents: &[u8],
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>>;
+}
 
 /// File system abstraction
 ///
@@ -48,6 +72,11 @@ impl Fs {
     /// Create `Fs` representing a real file system.
     pub fn real() -> Self {
         Fs(fs::Inner::Real)
+    }
+
+    /// Create an `Fs` backed by a custom `ProvideFs` implementation.
+    pub fn from_custom(provider: impl ProvideFs + 'static) -> Self {
+        Self(fs::Inner::Custom(Arc::new(provider)))
     }
 
     /// Create `Fs` from a map of `OsString` to `Vec<u8>`.
@@ -147,6 +176,7 @@ impl Fs {
                     std::fs::read(real_path.join(actual_path))
                 }
             },
+            Inner::Custom(provider) => provider.read_to_end(path).await,
         }
     }
 
@@ -181,6 +211,9 @@ impl Fs {
                     std::fs::write(real_path.join(actual_path), contents)?;
                 }
             },
+            Inner::Custom(provider) => {
+                return provider.write(path.as_ref(), contents.as_ref()).await
+            }
         }
         Ok(())
     }
@@ -192,10 +225,13 @@ mod fs {
     use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
+    use super::ProvideFs;
+
     #[derive(Clone, Debug)]
     pub(super) enum Inner {
         Real,
         Fake(Arc<Fake>),
+        Custom(Arc<dyn ProvideFs>),
     }
 
     #[derive(Debug)]
@@ -233,6 +269,7 @@ impl Env {
         match &self.0 {
             Inner::Real => std::env::var(k),
             Inner::Fake(map) => map.get(k).cloned().ok_or(VarError::NotPresent),
+            Inner::Custom(provider) => provider.get(k),
         }
     }
 
@@ -261,6 +298,11 @@ impl Env {
     pub fn real() -> Self {
         Self(env::Inner::Real)
     }
+
+    /// Create an `Env` backed by a custom `ProvideEnv` implementation.
+    pub fn from_custom(provider: impl ProvideEnv + 'static) -> Self {
+        Self(env::Inner::Custom(Arc::new(provider)))
+    }
 }
 
 impl From<HashMap<String, String>> for Env {
@@ -273,18 +315,26 @@ mod env {
     use std::collections::HashMap;
     use std::sync::Arc;
 
+    use super::ProvideEnv;
+
     #[derive(Clone, Debug)]
     pub(super) enum Inner {
         Real,
         Fake(Arc<HashMap<String, String>>),
+        Custom(Arc<dyn ProvideEnv>),
     }
 }
 
 #[cfg(test)]
 mod test {
+    use std::collections::HashMap;
     use std::env::VarError;
+    use std::future::Future;
+    use std::path::{Path, PathBuf};
+    use std::pin::Pin;
+    use std::sync::Mutex;
 
-    use crate::os_shim_internal::{Env, Fs};
+    use crate::os_shim_internal::{Env, Fs, ProvideEnv, ProvideFs};
 
     #[test]
     fn env_works() {
@@ -324,5 +374,82 @@ mod test {
 
         let result = fs.read_to_end(&path).await.expect("success");
         assert_eq!(b"test", &result[..]);
+    }
+
+    #[test]
+    fn custom_env_works() {
+        #[derive(Debug)]
+        struct CustomEnvProvider {
+            vars: HashMap<String, String>,
+        }
+
+        impl ProvideEnv for CustomEnvProvider {
+            fn get(&self, k: &str) -> Result<String, VarError> {
+                self.vars.get(k).cloned().ok_or(VarError::NotPresent)
+            }
+        }
+
+        let mut vars = HashMap::new();
+        vars.insert("FOO".to_string(), "BAR".to_string());
+        let env = Env::from_custom(CustomEnvProvider { vars });
+        assert_eq!(env.get("FOO").unwrap(), "BAR");
+        assert_eq!(
+            env.get("OTHER").expect_err("not present"),
+            VarError::NotPresent
+        );
+    }
+
+    #[tokio::test]
+    async fn custom_fs_round_trip() {
+        #[derive(Debug)]
+        struct InMemoryFs {
+            files: Mutex<HashMap<PathBuf, Vec<u8>>>,
+        }
+
+        impl ProvideFs for InMemoryFs {
+            fn read_to_end(
+                &self,
+                path: &Path,
+            ) -> Pin<Box<dyn Future<Output = std::io::Result<Vec<u8>>> + Send + '_>> {
+                let path = path.to_path_buf();
+                Box::pin(async move {
+                    self.files
+                        .lock()
+                        .unwrap()
+                        .get(&path)
+                        .cloned()
+                        .ok_or_else(|| std::io::ErrorKind::NotFound.into())
+                })
+            }
+
+            fn write(
+                &self,
+                path: &Path,
+                contents: &[u8],
+            ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>> {
+                let path = path.to_path_buf();
+                let contents = contents.to_vec();
+                Box::pin(async move {
+                    self.files.lock().unwrap().insert(path, contents);
+                    Ok(())
+                })
+            }
+        }
+
+        let provider = InMemoryFs {
+            files: Mutex::new(HashMap::new()),
+        };
+        let fs = Fs::from_custom(provider);
+
+        fs.read_to_end("/missing")
+            .await
+            .expect_err("file doesn't exist yet");
+
+        fs.write("/test-file", b"hello")
+            .await
+            .expect("write succeeds");
+
+        let result = fs.read_to_end("/test-file").await.expect("read succeeds");
+        assert_eq!(result, b"hello");
     }
 }
