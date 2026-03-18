@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_s3::config::endpoint::{DefaultResolver, Params, ResolveEndpoint};
+use aws_smithy_types::endpoint::Endpoint;
 
 pub struct S3EndpointBenchmark {
     resolver: DefaultResolver,
@@ -18,8 +19,11 @@ impl S3EndpointBenchmark {
         }
     }
 
-    pub fn resolve(&self) {
-        let _ = self.resolver.resolve_endpoint(&self.params);
+    pub async fn resolve(&self) -> Endpoint {
+        self.resolver
+            .resolve_endpoint(&self.params)
+            .await
+            .expect("valid endpoint")
     }
 
     pub fn s3_outposts() -> Self {

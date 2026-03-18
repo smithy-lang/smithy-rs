@@ -4,6 +4,7 @@
  */
 
 use aws_sdk_lambda::config::endpoint::{DefaultResolver, Params, ResolveEndpoint};
+use aws_smithy_types::endpoint::Endpoint;
 
 pub struct LambdaEndpointBenchmark {
     resolver: DefaultResolver,
@@ -18,8 +19,11 @@ impl LambdaEndpointBenchmark {
         }
     }
 
-    pub fn resolve(&self) {
-        let _ = self.resolver.resolve_endpoint(&self.params);
+    pub async fn resolve(&self) -> Endpoint {
+        self.resolver
+            .resolve_endpoint(&self.params)
+            .await
+            .expect("valid endpoint")
     }
 
     pub fn standard() -> Self {

@@ -5,6 +5,7 @@
 
 use clap::Parser;
 use sdk_perf::lambda_endpoint::LambdaEndpointBenchmark;
+use std::hint::black_box;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -21,15 +22,18 @@ struct BenchmarkConfig {
     runs: usize,
 }
 
-fn run_benchmark(config: &BenchmarkConfig, bench: &LambdaEndpointBenchmark) -> serde_json::Value {
+async fn run_benchmark(
+    config: &BenchmarkConfig,
+    bench: &LambdaEndpointBenchmark,
+) -> serde_json::Value {
     for _ in 0..5 {
-        bench.resolve();
+        black_box(bench.resolve().await);
     }
 
     let mut timings = Vec::with_capacity(config.runs);
     loop {
         let start = Instant::now();
-        bench.resolve();
+        black_box(bench.resolve().await);
         let elapsed = start.elapsed().as_nanos() as u64;
         timings.push(elapsed);
         if timings.len() >= config.runs {
@@ -64,7 +68,8 @@ fn run_benchmark(config: &BenchmarkConfig, bench: &LambdaEndpointBenchmark) -> s
     })
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let args = Args::parse();
 
     let benchmarks: Vec<(BenchmarkConfig, LambdaEndpointBenchmark)> = vec![
@@ -88,7 +93,7 @@ fn main() {
 
     let mut results = Vec::new();
     for (config, bench) in &benchmarks {
-        results.push(run_benchmark(config, bench));
+        results.push(run_benchmark(config, bench).await);
     }
 
     let output = serde_json::json!({
