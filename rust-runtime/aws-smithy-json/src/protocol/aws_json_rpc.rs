@@ -19,13 +19,14 @@
 //! - Error `__type` serialization differs on the server side, but clients MUST
 //!   accept either format for both versions.
 
-use crate::codec::{JsonCodec, JsonCodecSettings, JsonDeserializer};
+use crate::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_runtime_api::client::orchestrator::Metadata;
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
 /// AWS JSON RPC protocol (`awsJson1_0` / `awsJson1_1`).
+#[derive(Debug)]
 pub struct AwsJsonRpcProtocol {
     inner: HttpRpcProtocol<JsonCodec>,
 }
@@ -61,17 +62,8 @@ impl AwsJsonRpcProtocol {
 }
 
 impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
-    type Request = aws_smithy_runtime_api::http::Request;
-    type Response = aws_smithy_runtime_api::http::Response;
-    type Codec = JsonCodec;
-    type ResponseDeserializer<'a> = JsonDeserializer<'a>;
-
     fn protocol_id(&self) -> &ShapeId {
         self.inner.protocol_id()
-    }
-
-    fn payload_codec(&self) -> Option<&Self::Codec> {
-        self.inner.payload_codec()
     }
 
     fn serialize_request(
@@ -80,7 +72,7 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
         input_schema: &Schema,
         endpoint: &str,
         cfg: &ConfigBag,
-    ) -> Result<Self::Request, aws_smithy_schema::serde::SerdeError> {
+    ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
         let mut request = self
             .inner
             .serialize_request(input, input_schema, endpoint, cfg)?;
@@ -95,17 +87,20 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
 
     fn deserialize_response<'a>(
         &self,
-        response: &'a Self::Response,
+        response: &'a aws_smithy_runtime_api::http::Response,
         output_schema: &Schema,
         cfg: &ConfigBag,
-    ) -> Result<Self::ResponseDeserializer<'a>, aws_smithy_schema::serde::SerdeError> {
+    ) -> Result<
+        Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
+        aws_smithy_schema::serde::SerdeError,
+    > {
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }
 
     fn update_endpoint(
         &self,
-        request: &mut Self::Request,
+        request: &mut aws_smithy_runtime_api::http::Request,
         endpoint: &str,
     ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
         self.inner.update_endpoint(request, endpoint)

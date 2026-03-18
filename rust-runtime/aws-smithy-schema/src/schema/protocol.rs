@@ -9,10 +9,6 @@
 //! serialize requests and deserialize responses for a specific Smithy protocol
 //! (e.g., AWS JSON 1.0, REST JSON, REST XML, RPCv2 CBOR).
 //!
-//! This trait is intentionally **not** HTTP-specific. Smithy is protocol-agnostic, and
-//! implementations could support HTTP, MQTT, Unix domain sockets, or in-memory transports.
-//! The request and response types are associated types chosen by each protocol implementation.
-//!
 //! # Implementing a custom protocol
 //!
 //! Third parties can create custom protocols and use them with any client without
@@ -23,19 +19,13 @@
 //! use aws_smithy_schema::{Schema, ShapeId};
 //! use aws_smithy_schema::serde::SerializableStruct;
 //!
+//! #[derive(Debug)]
 //! struct MyProtocol {
 //!     codec: MyJsonCodec,
 //! }
 //!
 //! impl ClientProtocol for MyProtocol {
-//!     type Request = MyRequest;
-//!     type Response = MyResponse;
-//!     type Codec = MyJsonCodec;
-//!     type ResponseDeserializer<'a> = MyJsonDeserializer<'a>;
-//!
 //!     fn protocol_id(&self) -> &ShapeId { &MY_PROTOCOL_ID }
-//!
-//!     fn payload_codec(&self) -> Option<&MyJsonCodec> { Some(&self.codec) }
 //!
 //!     fn serialize_request(
 //!         &self,
@@ -43,22 +33,22 @@
 //!         input_schema: &Schema,
 //!         endpoint: &str,
 //!         cfg: &ConfigBag,
-//!     ) -> Result<MyRequest, SerdeError> {
+//!     ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError> {
 //!         todo!()
 //!     }
 //!
 //!     fn deserialize_response<'a>(
 //!         &self,
-//!         response: &'a Self::Response,
+//!         response: &'a aws_smithy_runtime_api::http::Response,
 //!         output_schema: &Schema,
 //!         cfg: &ConfigBag,
-//!     ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
+//!     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
 //!         todo!()
 //!     }
 //!
 //!     fn update_endpoint(
 //!         &self,
-//!         request: &mut Self::Request,
+//!         request: &mut aws_smithy_runtime_api::http::Request,
 //!         endpoint: &str,
 //!     ) -> Result<(), SerdeError> {
 //!         todo!()
@@ -70,70 +60,33 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
-/// A client protocol for serializing requests and deserializing responses.
+// Implementation note. We hardcode aws_smithy_runtime_api::http::{Request | Response} for the types here.
+// Some other SDKs (mostly very new ones like smithy-java and smithy-python) have separated their transport
+// layer into another abstraction, so you could plug in something like MQTT instead of HTTP. It is likely
+// too late for us to do that given how deeply the assumptions about using HTTP are baked into the SDK. But
+// if we want to keep that option open we could make Request/Response associated types and maintain the object
+// safety of this trait.
+
+/// An object-safe client protocol for serializing requests and deserializing responses.
 ///
 /// Each Smithy protocol (e.g., `aws.protocols#restJson1`, `smithy.protocols#rpcv2Cbor`)
 /// is represented by an implementation of this trait. Protocols combine one or more
 /// codecs and serializers to produce protocol-specific request messages and parse
 /// response messages.
 ///
-/// # Protocol agnosticism
-///
-/// This trait does not assume HTTP or any specific transport. The `Request` and `Response`
-/// associated types are defined by each implementation. For HTTP-based protocols these
-/// would be HTTP request/response types; for other transports they could be anything.
-///
-/// # Codec access
-///
-/// [`payload_codec`](ClientProtocol::payload_codec) exposes the protocol's payload codec
-/// so callers can serialize shapes independently of operations. The codec instance should
-/// be static within the protocol, allowing access to the canonical codec settings of
-/// implemented protocols (e.g., the differently configured JSON codecs of AWS JSON RPC
-/// vs AWS REST JSON). Asymmetric protocols (e.g., AWS Query) that use different formats
-/// for serialization and deserialization return `None`.
-///
 /// # Lifecycle
 ///
 /// `ClientProtocol` instances are immutable and thread-safe. They are typically created
 /// once and shared across all requests for a client. Serializers and deserializers are
 /// created per-request internally.
-pub trait ClientProtocol {
-    /// The request message type produced by this protocol (e.g., an HTTP request).
-    type Request;
-
-    /// The response message type consumed by this protocol (e.g., an HTTP response).
-    type Response;
-
-    /// The payload codec type used by this protocol.
-    ///
-    /// For protocols that use a single symmetric codec (e.g., JSON for `restJson1`,
-    /// CBOR for `rpcv2Cbor`), this is that codec's concrete type. For asymmetric
-    /// protocols (e.g., AWS Query), this can be any type — those protocols return
-    /// `None` from [`payload_codec`](ClientProtocol::payload_codec).
-    type Codec;
-
-    /// The deserializer type returned by [`deserialize_response`](ClientProtocol::deserialize_response).
-    ///
-    /// This is the [`ShapeDeserializer`] that callers use with a generated builder's
-    /// consumer pattern to construct the typed operation output.
-    type ResponseDeserializer<'a>: ShapeDeserializer
-    where
-        Self: 'a;
-
+pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
     /// Returns the Smithy shape ID of this protocol.
     ///
     /// This enables runtime protocol selection and differentiation. For example,
     /// `aws.protocols#restJson1` or `smithy.protocols#rpcv2Cbor`.
     fn protocol_id(&self) -> &ShapeId;
 
-    /// Returns the payload codec used by this protocol, if applicable.
-    ///
-    /// Returns `None` for asymmetric protocols like AWS Query and EC2 Query that
-    /// use different formats for serialization and deserialization, or for protocols
-    /// that use multiple codecs.
-    fn payload_codec(&self) -> Option<&Self::Codec>;
-
-    /// Serializes an operation input into a protocol-specific request message.
+    /// Serializes an operation input into an HTTP request.
     ///
     /// # Arguments
     ///
@@ -148,26 +101,26 @@ pub trait ClientProtocol {
         input_schema: &Schema,
         endpoint: &str,
         cfg: &ConfigBag,
-    ) -> Result<Self::Request, SerdeError>;
+    ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError>;
 
-    /// Deserializes a protocol-specific response message.
+    /// Deserializes an HTTP response, returning a boxed [`ShapeDeserializer`].
     ///
-    /// Returns a [`ShapeDeserializer`] that the caller uses with a generated builder's
+    /// The caller uses the returned deserializer with a generated builder's
     /// consumer pattern to construct the typed operation output. The protocol handles
     /// transport framing (e.g., extracting the HTTP body) and returns a deserializer
     /// positioned to read the output shape.
     ///
     /// # Arguments
     ///
-    /// * `response` - The protocol response message to deserialize.
+    /// * `response` - The HTTP response to deserialize.
     /// * `output_schema` - Schema describing the operation's output shape.
     /// * `cfg` - The config bag containing request-scoped configuration.
     fn deserialize_response<'a>(
         &self,
-        response: &'a Self::Response,
+        response: &'a aws_smithy_runtime_api::http::Response,
         output_schema: &Schema,
         cfg: &ConfigBag,
-    ) -> Result<Self::ResponseDeserializer<'a>, SerdeError>;
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
     /// Updates a previously serialized request with a new endpoint.
     ///
@@ -175,7 +128,37 @@ pub trait ClientProtocol {
     /// interceptors that modify the endpoint after initial serialization.
     fn update_endpoint(
         &self,
-        request: &mut Self::Request,
+        request: &mut aws_smithy_runtime_api::http::Request,
         endpoint: &str,
     ) -> Result<(), SerdeError>;
+}
+
+/// A shared, type-erased client protocol stored in a [`ConfigBag`].
+///
+/// This wraps an `Arc<dyn ClientProtocol>` so it can be stored
+/// and retrieved from the config bag for runtime protocol selection.
+#[derive(Clone, Debug)]
+pub struct SharedClientProtocol {
+    inner: std::sync::Arc<dyn ClientProtocol>,
+}
+
+impl SharedClientProtocol {
+    /// Creates a new shared protocol from any `ClientProtocol` implementation.
+    pub fn new(protocol: impl ClientProtocol + 'static) -> Self {
+        Self {
+            inner: std::sync::Arc::new(protocol),
+        }
+    }
+}
+
+impl std::ops::Deref for SharedClientProtocol {
+    type Target = dyn ClientProtocol;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for SharedClientProtocol {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
 }

@@ -23,6 +23,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 /// # Type parameters
 ///
 /// * `C` — the payload codec (e.g., `JsonCodec`, `XmlCodec`)
+#[derive(Debug)]
 pub struct HttpBindingProtocol<C> {
     protocol_id: ShapeId,
     codec: C,
@@ -644,23 +645,11 @@ impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a,
 
 impl<C> ClientProtocol for HttpBindingProtocol<C>
 where
-    C: Codec + 'static,
+    C: Codec + Send + Sync + std::fmt::Debug + 'static,
     for<'a> C::Deserializer<'a>: ShapeDeserializer,
 {
-    type Request = Request;
-    type Response = Response;
-    type Codec = C;
-    type ResponseDeserializer<'a>
-        = HttpBindingDeserializer<'a, C::Deserializer<'a>>
-    where
-        C: 'a;
-
     fn protocol_id(&self) -> &ShapeId {
         &self.protocol_id
-    }
-
-    fn payload_codec(&self) -> Option<&Self::Codec> {
-        Some(&self.codec)
     }
 
     fn serialize_request(
@@ -669,7 +658,7 @@ where
         _input_schema: &Schema,
         endpoint: &str,
         _cfg: &ConfigBag,
-    ) -> Result<Self::Request, SerdeError> {
+    ) -> Result<Request, SerdeError> {
         let mut binder = HttpBindingSerializer::new(self.codec.create_serializer());
         // serialize_members calls write_* on the binder for each member.
         // The binder inspects HTTP binding traits and routes accordingly.
@@ -707,25 +696,21 @@ where
 
     fn deserialize_response<'a>(
         &self,
-        response: &'a Self::Response,
+        response: &'a Response,
         _output_schema: &Schema,
         _cfg: &ConfigBag,
-    ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         let body = response
             .body()
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
-        Ok(HttpBindingDeserializer {
+        Ok(Box::new(HttpBindingDeserializer {
             body: self.codec.create_deserializer(body),
             response,
-        })
+        }))
     }
 
-    fn update_endpoint(
-        &self,
-        request: &mut Self::Request,
-        endpoint: &str,
-    ) -> Result<(), SerdeError> {
+    fn update_endpoint(&self, request: &mut Request, endpoint: &str) -> Result<(), SerdeError> {
         request
             .set_uri(endpoint)
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))
@@ -915,6 +900,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     struct TestCodec;
 
     impl Codec for TestCodec {
@@ -1044,11 +1030,6 @@ mod tests {
             "application/json",
         );
         assert_eq!(protocol.protocol_id().as_str(), "aws.protocols#restJson1");
-    }
-
-    #[test]
-    fn payload_codec() {
-        assert!(make_protocol().payload_codec().is_some());
     }
 
     #[test]

@@ -22,6 +22,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 /// # Type parameters
 ///
 /// * `C` — the payload codec (ex: `JsonCodec`, `CborCodec`)
+#[derive(Debug)]
 pub struct HttpRpcProtocol<C> {
     protocol_id: ShapeId,
     codec: C,
@@ -41,23 +42,11 @@ impl<C: Codec> HttpRpcProtocol<C> {
 
 impl<C> ClientProtocol for HttpRpcProtocol<C>
 where
-    C: Codec + 'static,
+    C: Codec + Send + Sync + std::fmt::Debug + 'static,
     for<'a> C::Deserializer<'a>: ShapeDeserializer,
 {
-    type Request = Request;
-    type Response = Response;
-    type Codec = C;
-    type ResponseDeserializer<'a>
-        = C::Deserializer<'a>
-    where
-        C: 'a;
-
     fn protocol_id(&self) -> &ShapeId {
         &self.protocol_id
-    }
-
-    fn payload_codec(&self) -> Option<&Self::Codec> {
-        Some(&self.codec)
     }
 
     fn serialize_request(
@@ -66,7 +55,7 @@ where
         input_schema: &Schema,
         endpoint: &str,
         _cfg: &ConfigBag,
-    ) -> Result<Self::Request, SerdeError> {
+    ) -> Result<Request, SerdeError> {
         let mut serializer = self.codec.create_serializer();
         serializer.write_struct(input_schema, input)?;
         let body = serializer.finish();
@@ -83,22 +72,18 @@ where
 
     fn deserialize_response<'a>(
         &self,
-        response: &'a Self::Response,
+        response: &'a Response,
         _output_schema: &Schema,
         _cfg: &ConfigBag,
-    ) -> Result<Self::ResponseDeserializer<'a>, SerdeError> {
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         let body = response
             .body()
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
-        Ok(self.codec.create_deserializer(body))
+        Ok(Box::new(self.codec.create_deserializer(body)))
     }
 
-    fn update_endpoint(
-        &self,
-        request: &mut Self::Request,
-        endpoint: &str,
-    ) -> Result<(), SerdeError> {
+    fn update_endpoint(&self, request: &mut Request, endpoint: &str) -> Result<(), SerdeError> {
         request
             .set_uri(endpoint)
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))
@@ -288,6 +273,7 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
     struct TestCodec;
 
     impl Codec for TestCodec {
