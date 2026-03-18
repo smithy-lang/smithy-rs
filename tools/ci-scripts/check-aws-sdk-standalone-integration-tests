@@ -43,9 +43,13 @@ cargo check --tests --all-features
 # Running WebAssembly (WASI) specific integration tests
 # Note that the --release here is required since debug builds can create binaries with too many symbols
 # for wasmtime to run.
-pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly" &>/dev/null
+pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly-no-os" &>/dev/null
 RUSTFLAGS='--cfg getrandom_backend="wasm_js"' cargo test --target wasm32-unknown-unknown --release
 cargo test --target wasm32-wasip2 --release
-
 popd
+
+pushd "${tmp_dir}/aws/sdk/integration-tests/webassembly-wstd" &>/dev/null
+cargo test --target wasm32-wasip2 --release
+popd
+
 popd
