@@ -5,28 +5,42 @@
 
 use aws_sdk_lambda::config::endpoint::{DefaultResolver, Params, ResolveEndpoint};
 
-pub fn resolve_lambda_standard_endpoint() {
-    let resolver = DefaultResolver::new();
-
-    let params = Params::builder()
-        .set_region(Some("us-east-1".to_owned()))
-        .set_use_fips(Some(false))
-        .set_use_dual_stack(Some(false))
-        .build()
-        .expect("valid params");
-
-    let _ = resolver.resolve_endpoint(&params);
+pub struct LambdaEndpointBenchmark {
+    resolver: DefaultResolver,
+    params: Params,
 }
 
-pub fn resolve_lambda_govcloud_fips_dualstack_endpoint() {
-    let resolver = DefaultResolver::new();
+impl LambdaEndpointBenchmark {
+    fn new(params: Params) -> Self {
+        Self {
+            resolver: DefaultResolver::new(),
+            params,
+        }
+    }
 
-    let params = Params::builder()
-        .set_region(Some("us-gov-east-1".to_owned()))
-        .set_use_fips(Some(true))
-        .set_use_dual_stack(Some(true))
-        .build()
-        .expect("valid params");
+    pub fn resolve(&self) {
+        let _ = self.resolver.resolve_endpoint(&self.params);
+    }
 
-    let _ = resolver.resolve_endpoint(&params);
+    pub fn standard() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-east-1".to_owned()))
+                .set_use_fips(Some(false))
+                .set_use_dual_stack(Some(false))
+                .build()
+                .expect("valid params"),
+        )
+    }
+
+    pub fn govcloud_fips_dualstack() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-gov-east-1".to_owned()))
+                .set_use_fips(Some(true))
+                .set_use_dual_stack(Some(true))
+                .build()
+                .expect("valid params"),
+        )
+    }
 }

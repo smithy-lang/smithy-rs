@@ -4,7 +4,7 @@
  */
 
 use clap::Parser;
-use sdk_perf::s3_endpoint::S3EndpointBenchmark;
+use sdk_perf::lambda_endpoint::LambdaEndpointBenchmark;
 use std::time::Instant;
 
 #[derive(Parser, Debug)]
@@ -21,8 +21,7 @@ struct BenchmarkConfig {
     runs: usize,
 }
 
-fn run_benchmark(config: &BenchmarkConfig, bench: &S3EndpointBenchmark) -> serde_json::Value {
-    // warmup
+fn run_benchmark(config: &BenchmarkConfig, bench: &LambdaEndpointBenchmark) -> serde_json::Value {
     for _ in 0..5 {
         bench.resolve();
     }
@@ -68,46 +67,22 @@ fn run_benchmark(config: &BenchmarkConfig, bench: &S3EndpointBenchmark) -> serde
 fn main() {
     let args = Args::parse();
 
-    let benchmarks: Vec<(BenchmarkConfig, S3EndpointBenchmark)> = vec![
+    let benchmarks: Vec<(BenchmarkConfig, LambdaEndpointBenchmark)> = vec![
         (
             BenchmarkConfig {
-                id: "s3_outposts_endpoint_resolution",
-                description: "S3 outposts vanilla test",
+                id: "lambda_standard_endpoint_resolution",
+                description: "Lambda standard endpoint resolution",
                 runs: 10000,
             },
-            S3EndpointBenchmark::s3_outposts(),
+            LambdaEndpointBenchmark::standard(),
         ),
         (
             BenchmarkConfig {
-                id: "s3_accesspoint_endpoint_resolution",
-                description: "S3 Access Point endpoint resolution benchmark",
+                id: "lambda_govcloud_fips_dualstack_endpoint_resolution",
+                description: "Lambda GovCloud FIPS dual-stack endpoint resolution",
                 runs: 10000,
             },
-            S3EndpointBenchmark::s3_accesspoint(),
-        ),
-        (
-            BenchmarkConfig {
-                id: "s3express_endpoint_resolution",
-                description: "Data Plane with short zone name",
-                runs: 10000,
-            },
-            S3EndpointBenchmark::s3express(),
-        ),
-        (
-            BenchmarkConfig {
-                id: "s3_path_style_endpoint_resolution",
-                description: "vanilla path style@us-west-2",
-                runs: 10000,
-            },
-            S3EndpointBenchmark::s3_path_style(),
-        ),
-        (
-            BenchmarkConfig {
-                id: "s3_virtual_addressing_endpoint_resolution",
-                description: "vanilla virtual addressing@us-west-2",
-                runs: 10000,
-            },
-            S3EndpointBenchmark::s3_virtual_addressing(),
+            LambdaEndpointBenchmark::govcloud_fips_dualstack(),
         ),
     ];
 

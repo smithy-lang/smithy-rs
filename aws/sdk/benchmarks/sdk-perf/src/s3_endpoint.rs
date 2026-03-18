@@ -5,72 +5,80 @@
 
 use aws_sdk_s3::config::endpoint::{DefaultResolver, Params, ResolveEndpoint};
 
-pub fn resolve_s3_outposts_endpoint() {
-    let resolver = DefaultResolver::new();
-
-    let params = Params::builder()
-        .set_region(Some("us-west-2".to_owned()))
-        .set_bucket(Some(
-            "arn:aws:s3-outposts:us-west-2:123456789012:outpost/op-01234567890123456/accesspoint/reports".to_owned()
-        ))
-        .set_key(Some("key".to_owned()))
-        .build()
-        .expect("valid params");
-
-    let _ = resolver.resolve_endpoint(&params);
+pub struct S3EndpointBenchmark {
+    resolver: DefaultResolver,
+    params: Params,
 }
 
-pub fn resolve_s3_accesspoint_endpoint() {
-    let resolver = DefaultResolver::new();
+impl S3EndpointBenchmark {
+    fn new(params: Params) -> Self {
+        Self {
+            resolver: DefaultResolver::new(),
+            params,
+        }
+    }
 
-    let params = Params::builder()
-        .set_region(Some("us-west-2".to_owned()))
-        .set_bucket(Some(
-            "arn:aws:s3:us-west-2:123456789012:accesspoint:myendpoint".to_owned(),
-        ))
-        .set_key(Some("key".to_owned()))
-        .build()
-        .expect("valid params");
+    pub fn resolve(&self) {
+        let _ = self.resolver.resolve_endpoint(&self.params);
+    }
 
-    let _ = resolver.resolve_endpoint(&params);
-}
+    pub fn s3_outposts() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-west-2".to_owned()))
+                .set_bucket(Some(
+                    "arn:aws:s3-outposts:us-west-2:123456789012:outpost/op-01234567890123456/accesspoint/reports".to_owned()
+                ))
+                .set_key(Some("key".to_owned()))
+                .build()
+                .expect("valid params"),
+        )
+    }
 
-pub fn resolve_s3express_endpoint() {
-    let resolver = DefaultResolver::new();
+    pub fn s3_accesspoint() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-west-2".to_owned()))
+                .set_bucket(Some(
+                    "arn:aws:s3:us-west-2:123456789012:accesspoint:myendpoint".to_owned(),
+                ))
+                .set_key(Some("key".to_owned()))
+                .build()
+                .expect("valid params"),
+        )
+    }
 
-    let params = Params::builder()
-        .set_region(Some("us-east-1".to_owned()))
-        .set_bucket(Some("mybucket--abcd-ab1--x-s3".to_owned()))
-        .set_key(Some("key".to_owned()))
-        .build()
-        .expect("valid params");
+    pub fn s3express() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-east-1".to_owned()))
+                .set_bucket(Some("mybucket--abcd-ab1--x-s3".to_owned()))
+                .set_key(Some("key".to_owned()))
+                .build()
+                .expect("valid params"),
+        )
+    }
 
-    let _ = resolver.resolve_endpoint(&params);
-}
+    pub fn s3_path_style() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-west-2".to_owned()))
+                .set_bucket(Some("bucket-name".to_owned()))
+                .set_key(Some("key".to_owned()))
+                .set_force_path_style(Some(true))
+                .build()
+                .expect("valid params"),
+        )
+    }
 
-pub fn resolve_s3_path_style_endpoint() {
-    let resolver = DefaultResolver::new();
-
-    let params = Params::builder()
-        .set_region(Some("us-west-2".to_owned()))
-        .set_bucket(Some("bucket-name".to_owned()))
-        .set_key(Some("key".to_owned()))
-        .set_force_path_style(Some(true))
-        .build()
-        .expect("valid params");
-
-    let _ = resolver.resolve_endpoint(&params);
-}
-
-pub fn resolve_s3_virtual_addressing_endpoint() {
-    let resolver = DefaultResolver::new();
-
-    let params = Params::builder()
-        .set_region(Some("us-west-2".to_owned()))
-        .set_bucket(Some("bucket-name".to_owned()))
-        .set_key(Some("key".to_owned()))
-        .build()
-        .expect("valid params");
-
-    let _ = resolver.resolve_endpoint(&params);
+    pub fn s3_virtual_addressing() -> Self {
+        Self::new(
+            Params::builder()
+                .set_region(Some("us-west-2".to_owned()))
+                .set_bucket(Some("bucket-name".to_owned()))
+                .set_key(Some("key".to_owned()))
+                .build()
+                .expect("valid params"),
+        )
+    }
 }
