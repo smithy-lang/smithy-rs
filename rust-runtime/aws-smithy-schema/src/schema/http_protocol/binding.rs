@@ -709,12 +709,6 @@ where
             response,
         }))
     }
-
-    fn update_endpoint(&self, request: &mut Request, endpoint: &str) -> Result<(), SerdeError> {
-        request
-            .set_uri(endpoint)
-            .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))
-    }
 }
 
 #[cfg(test)]
@@ -1016,10 +1010,13 @@ mod tests {
                 &ConfigBag::base(),
             )
             .unwrap();
+        let endpoint = aws_smithy_types::endpoint::Endpoint::builder()
+            .url("https://new.example.com")
+            .build();
         make_protocol()
-            .update_endpoint(&mut request, "https://new.example.com")
+            .update_endpoint(&mut request, &endpoint, &ConfigBag::base())
             .unwrap();
-        assert_eq!(request.uri(), "https://new.example.com");
+        assert_eq!(request.uri(), "https://new.example.com/");
     }
 
     #[test]

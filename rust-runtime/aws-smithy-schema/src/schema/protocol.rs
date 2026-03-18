@@ -45,14 +45,6 @@
 //!     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
 //!         todo!()
 //!     }
-//!
-//!     fn update_endpoint(
-//!         &self,
-//!         request: &mut aws_smithy_runtime_api::http::Request,
-//!         endpoint: &str,
-//!     ) -> Result<(), SerdeError> {
-//!         todo!()
-//!     }
 //! }
 //! ```
 
@@ -126,11 +118,52 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
     ///
     /// This is required by the Smithy Reference Architecture (SRA) to support
     /// interceptors that modify the endpoint after initial serialization.
+    ///
+    /// The default implementation applies the endpoint URL (with prefix if present),
+    /// sets the request URI, and copies any endpoint headers onto the request.
     fn update_endpoint(
         &self,
         request: &mut aws_smithy_runtime_api::http::Request,
-        endpoint: &str,
-    ) -> Result<(), SerdeError>;
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), SerdeError> {
+        use std::borrow::Cow;
+
+        let endpoint_prefix =
+            cfg.load::<aws_smithy_runtime_api::client::endpoint::EndpointPrefix>();
+        let endpoint_url = match endpoint_prefix {
+            None => Cow::Borrowed(endpoint.url()),
+            Some(prefix) => {
+                let parsed: http::Uri = endpoint
+                    .url()
+                    .parse()
+                    .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
+                let scheme = parsed.scheme_str().unwrap_or_default();
+                let prefix = prefix.as_str();
+                let authority = parsed.authority().map(|a| a.as_str()).unwrap_or_default();
+                let path_and_query = parsed
+                    .path_and_query()
+                    .map(|pq| pq.as_str())
+                    .unwrap_or_default();
+                Cow::Owned(format!("{scheme}://{prefix}{authority}{path_and_query}"))
+            }
+        };
+
+        request.uri_mut().set_endpoint(&endpoint_url).map_err(|e| {
+            SerdeError::custom(format!("failed to apply endpoint `{endpoint_url}`: {e}"))
+        })?;
+
+        for (header_name, header_values) in endpoint.headers() {
+            request.headers_mut().remove(header_name);
+            for value in header_values {
+                request
+                    .headers_mut()
+                    .append(header_name.to_owned(), value.to_owned());
+            }
+        }
+
+        Ok(())
+    }
 }
 
 /// A shared, type-erased client protocol stored in a [`ConfigBag`].

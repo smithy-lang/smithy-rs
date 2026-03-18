@@ -97,14 +97,6 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }
-
-    fn update_endpoint(
-        &self,
-        request: &mut aws_smithy_runtime_api::http::Request,
-        endpoint: &str,
-    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
-        self.inner.update_endpoint(request, endpoint)
-    }
 }
 
 #[cfg(test)]

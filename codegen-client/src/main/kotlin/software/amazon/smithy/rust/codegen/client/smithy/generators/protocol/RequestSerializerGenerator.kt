@@ -46,6 +46,7 @@ class RequestSerializerGenerator(
             "HttpRequestBuilder" to RuntimeType.HttpRequestBuilder1x,
             "Input" to interceptorContext.resolve("Input"),
             "SerializeRequest" to runtimeApi.resolve("client::ser_de::SerializeRequest"),
+            "SharedClientProtocol" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("protocol::SharedClientProtocol"),
             "SdkBody" to RuntimeType.sdkBody(codegenContext.runtimeConfig),
             "HeaderSerializationSettings" to
                 RuntimeType.forInlineDependency(
@@ -72,6 +73,17 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
+                    // If a SharedClientProtocol is available, delegate serialization to it.
+                    if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
+                        // Endpoint is passed as "" because the orchestrator resolves the
+                        // endpoint after serialization and applies it via `update_endpoint`.
+                        return protocol.serialize_request(
+                            &input,
+                            $operationName::INPUT_SCHEMA,
+                            "",
+                            _cfg,
+                        ).map_err(#{BoxError}::from);
+                    }
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
