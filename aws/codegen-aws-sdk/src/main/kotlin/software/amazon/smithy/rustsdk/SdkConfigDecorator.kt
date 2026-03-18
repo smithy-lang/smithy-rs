@@ -110,6 +110,7 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
                     ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
                     ${section.serviceConfigBuilder}.set_auth_scheme_preference(${section.sdkConfig}.auth_scheme_preference().cloned());
+                    ${section.serviceConfigBuilder}.set_protocol(${section.sdkConfig}.protocol());
                     // setting `None` here removes the default
                     if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
                         ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));

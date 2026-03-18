@@ -12,10 +12,14 @@ import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 
@@ -53,6 +57,11 @@ class SchemaDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
     ): List<ServiceRuntimePluginCustomization> = baseCustomizations + SchemaProtocolCustomization(codegenContext)
+
+    override fun configCustomizations(
+        codegenContext: ClientCodegenContext,
+        baseCustomizations: List<ConfigCustomization>,
+    ): List<ConfigCustomization> = baseCustomizations + SchemaProtocolConfigCustomization(codegenContext)
 }
 
 /**
@@ -93,5 +102,70 @@ private class SchemaProtocolCustomization(
                 }
                 else -> {}
             }
+        }
+}
+
+/**
+ * Adds protocol getter/setter to the service config builder, allowing
+ * customers to override the default protocol at runtime.
+ */
+private class SchemaProtocolConfigCustomization(
+    codegenContext: ClientCodegenContext,
+) : ConfigCustomization() {
+    private val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
+    private val codegenScope =
+        arrayOf(
+            *preludeScope,
+            "ClientProtocol" to smithySchema.resolve("protocol::ClientProtocol"),
+            "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+        )
+
+    override fun section(section: ServiceConfig): Writable =
+        when (section) {
+            is ServiceConfig.ConfigImpl ->
+                writable {
+                    rustTemplate(
+                        """
+                        /// Returns the client protocol used for serialization and deserialization.
+                        pub fn protocol(&self) -> #{Option}<&#{SharedClientProtocol}> {
+                            self.config.load::<#{SharedClientProtocol}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+            ServiceConfig.BuilderImpl ->
+                writable {
+                    rustTemplate(
+                        """
+                        /// Sets the client protocol to use for serialization and deserialization.
+                        ///
+                        /// This overrides the default protocol determined by the service model,
+                        /// enabling runtime protocol selection.
+                        pub fn protocol(mut self, protocol: impl #{ClientProtocol} + 'static) -> Self {
+                            self.set_protocol(#{Some}(#{SharedClientProtocol}::new(protocol)));
+                            self
+                        }
+
+                        /// Sets the client protocol to use for serialization and deserialization.
+                        pub fn set_protocol(&mut self, protocol: #{Option}<#{SharedClientProtocol}>) -> &mut Self {
+                            self.config.store_or_unset(protocol);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+            is ServiceConfig.BuilderFromConfigBag ->
+                writable {
+                    rustTemplate(
+                        "${section.builder}.set_protocol(${section.configBag}.load::<#{SharedClientProtocol}>().cloned());",
+                        *codegenScope,
+                    )
+                }
+
+            else -> emptySection
         }
 }
