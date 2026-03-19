@@ -12,6 +12,7 @@ use std::env::VarError;
 use std::ffi::OsString;
 use std::fmt::Debug;
 use std::future::Future;
+use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
@@ -19,13 +20,13 @@ use std::sync::{Arc, Mutex};
 use crate::os_shim_internal::fs::Fake;
 
 /// Trait for custom environment variable providers.
-pub trait ProvideEnv: Debug + Send + Sync {
+pub trait ProvideEnv: Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Get the value of environment variable `k`.
     fn get(&self, k: &str) -> Result<String, VarError>;
 }
 
 /// Trait for custom filesystem providers.
-pub trait ProvideFs: Debug + Send + Sync {
+pub trait ProvideFs: Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
     /// Read the entire contents of the file at `path`.
     fn read_to_end(
         &self,
