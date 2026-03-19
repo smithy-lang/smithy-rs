@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.io.path.readText
 
 class ServerTypesReExportTest {
     private val sampleModel =
@@ -133,6 +134,18 @@ class ServerTypesReExportTest {
                         """,
                     )
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `ensure event stream types are not re-exported without event streams`() {
+        val generatedServers =
+            serverIntegrationTest(sampleModel, IntegrationTestParams(service = "amazon#SampleService"))
+        generatedServers.forEach { generatedServer ->
+            val typesModule = generatedServer.path.resolve("src/types.rs").readText()
+            assert(!typesModule.contains("EventStreamSender")) {
+                "EventStreamSender should not be re-exported for a service without event streams"
             }
         }
     }
