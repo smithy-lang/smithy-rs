@@ -376,8 +376,7 @@ impl ProviderConfig {
         self.with_region(provider_chain.region().await)
     }
 
-    /// Override the filesystem abstraction for this configuration.
-    pub fn with_fs(self, fs: Fs) -> Self {
+    pub(crate) fn with_fs(self, fs: Fs) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             fs,
@@ -385,8 +384,7 @@ impl ProviderConfig {
         }
     }
 
-    /// Override the environment variable abstraction for this configuration.
-    pub fn with_env(self, env: Env) -> Self {
+    pub(crate) fn with_env(self, env: Env) -> Self {
         ProviderConfig {
             parsed_profile: Default::default(),
             env,
