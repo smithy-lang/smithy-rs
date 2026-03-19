@@ -121,6 +121,8 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
     ///
     /// The default implementation applies the endpoint URL (with prefix if present),
     /// sets the request URI, and copies any endpoint headers onto the request.
+    ///
+    /// Note: the default implementation here should be sufficient for most protocols.
     fn update_endpoint(
         &self,
         request: &mut aws_smithy_runtime_api::http::Request,

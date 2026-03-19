@@ -95,6 +95,9 @@ pub struct Schema {
     http_query: Option<trait_types::HttpQueryTrait>,
     http_query_params: Option<trait_types::HttpQueryParamsTrait>,
     http_response_code: Option<trait_types::HttpResponseCodeTrait>,
+    /// The `@http` trait — an operation-level trait included on the input schema
+    /// for convenience so the protocol serializer can construct the request URI.
+    http: Option<trait_types::HttpTrait>,
     streaming: Option<trait_types::StreamingTrait>,
     event_header: Option<trait_types::EventHeaderTrait>,
     event_payload: Option<trait_types::EventPayloadTrait>,
@@ -143,6 +146,7 @@ impl Schema {
         http_query: None,
         http_query_params: None,
         http_response_code: None,
+        http: None,
         streaming: None,
         event_header: None,
         event_payload: None,
@@ -282,6 +286,14 @@ impl Schema {
         self.http_response_code.as_ref()
     }
 
+    /// Returns the `@http` trait if present.
+    ///
+    /// This is an operation-level trait included on the input schema for
+    /// convenience so the protocol serializer can construct the request URI.
+    pub fn http(&self) -> Option<&trait_types::HttpTrait> {
+        self.http.as_ref()
+    }
+
     // -- Const setters for builder-style construction in generated code --
 
     /// Sets the `@sensitive` trait.
@@ -359,6 +371,12 @@ impl Schema {
     /// Sets the `@httpResponseCode` trait.
     pub const fn with_http_response_code(mut self) -> Self {
         self.http_response_code = Some(trait_types::HttpResponseCodeTrait);
+        self
+    }
+
+    /// Sets the `@http` trait (operation-level, included on input schema for convenience).
+    pub const fn with_http(mut self, http: trait_types::HttpTrait) -> Self {
+        self.http = Some(http);
         self
     }
 

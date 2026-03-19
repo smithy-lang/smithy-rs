@@ -278,9 +278,10 @@ class ClientProtocolTestGenerator(
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
+                de.deserialize_nonstreaming(&http_response, &#{ConfigBag}::base())
             });
             """,
+            "ConfigBag" to RT.configBag(rc),
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
             "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
             "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),

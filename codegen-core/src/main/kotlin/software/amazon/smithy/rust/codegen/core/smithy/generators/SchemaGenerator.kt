@@ -650,6 +650,28 @@ class SchemaGenerator(
         return setters.joinToString("")
     }
 
+    /**
+     * If this shape is an operation input, returns a `.with_http(...)` chain
+     * for the operation's `@http` trait. The `@http` trait is operation-level
+     * but is included on the input schema for convenience so the protocol
+     * serializer can construct the request URI.
+     */
+    private fun httpTraitChain(shape: Shape): String {
+        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+        for (operation in model.operationShapes) {
+            if (operationIndex.getInputShape(operation).orElse(null)?.id == shape.id) {
+                val httpTrait =
+                    operation.getTrait(software.amazon.smithy.model.traits.HttpTrait::class.java).orElse(null)
+                        ?: return ""
+                val method = httpTrait.method.dq()
+                val uri = httpTrait.uri.toString().dq()
+                val code = httpTrait.code
+                return "\n    .with_http(aws_smithy_schema::traits::HttpTrait::new($method, $uri, ${if (code == 200) "None" else "Some($code)"}))"
+            }
+        }
+        return ""
+    }
+
     /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
     private fun hasUnknownTraits(shape: Shape): Boolean =
         traitFilter.traitsFor(shape).any { knownTraitSetter(it) == null }
@@ -724,7 +746,7 @@ class SchemaGenerator(
                             }
                         "&[$refs]"
                     }
-                val traitChain = traitSetterChain(shape)
+                val traitChain = traitSetterChain(shape) + httpTraitChain(shape)
                 if (hasUnknownTraits(shape)) {
                     writer.rustTemplate(
                         """
@@ -811,20 +833,21 @@ class SchemaGenerator(
         when (shape) {
             is StructureShape, is UnionShape -> {
                 shape.members().forEachIndexed { idx, member ->
-                    val memberName = symbolProvider.toMemberName(member)
+                    val rustMemberName = symbolProvider.toMemberName(member)
+                    val smithyMemberName = member.memberName
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
                     val memberTraitChain = traitSetterChain(member)
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(memberName)}: #{Schema} = #{Schema}::new_member(
+                        static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
                                 "${member.id.name}",
                             ),
                             #{ShapeType}::${shapeTypeVariant(target)},
-                            ${templateEscape(memberName.dq())},
+                            ${templateEscape(smithyMemberName.dq())},
                             $idx,
                         )$memberTraitChain;
                         """,

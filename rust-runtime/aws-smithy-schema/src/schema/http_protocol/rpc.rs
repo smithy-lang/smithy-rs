@@ -61,12 +61,18 @@ where
         let body = serializer.finish();
 
         let mut request = Request::new(SdkBody::from(body));
+        let uri = if endpoint.is_empty() { "/" } else { endpoint };
         request
-            .set_uri(endpoint)
+            .set_uri(uri)
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
         request
             .headers_mut()
             .insert("Content-Type", self.content_type);
+        if let Some(len) = request.body().content_length() {
+            request
+                .headers_mut()
+                .insert("Content-Length", len.to_string());
+        }
         Ok(request)
     }
 

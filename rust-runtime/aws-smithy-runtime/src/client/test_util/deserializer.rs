@@ -7,7 +7,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{Error, Output};
 use aws_smithy_runtime_api::client::orchestrator::{HttpResponse, OrchestratorError};
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::client::ser_de::{DeserializeResponse, SharedResponseDeserializer};
-use aws_smithy_types::config_bag::{FrozenLayer, Layer};
+use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::sync::Mutex;
 
 /// Test response deserializer that always returns the same canned response.
@@ -36,6 +36,7 @@ impl DeserializeResponse for CannedResponseDeserializer {
     fn deserialize_nonstreaming(
         &self,
         _response: &HttpResponse,
+        _cfg: &ConfigBag,
     ) -> Result<Output, OrchestratorError<Error>> {
         self.take()
             .ok_or("CannedResponseDeserializer's inner value has already been taken.")

@@ -29,26 +29,34 @@ use aws_smithy_types::config_bag::ConfigBag;
 #[derive(Debug)]
 pub struct AwsJsonRpcProtocol {
     inner: HttpRpcProtocol<JsonCodec>,
+    target_prefix: String,
 }
 
 impl AwsJsonRpcProtocol {
     /// Creates an AWS JSON 1.0 protocol instance.
-    pub fn aws_json_1_0() -> Self {
+    ///
+    /// `target_prefix` is the Smithy service shape name used in the `X-Amz-Target` header
+    /// (e.g., `"TrentService"` for KMS, `"DynamoDB_20120810"` for DynamoDB).
+    pub fn aws_json_1_0(target_prefix: impl Into<String>) -> Self {
         Self::new(
             shape_id!("aws.protocols", "awsJson1_0"),
             "application/x-amz-json-1.0",
+            target_prefix.into(),
         )
     }
 
     /// Creates an AWS JSON 1.1 protocol instance.
-    pub fn aws_json_1_1() -> Self {
+    ///
+    /// `target_prefix` is the Smithy service shape name used in the `X-Amz-Target` header.
+    pub fn aws_json_1_1(target_prefix: impl Into<String>) -> Self {
         Self::new(
             shape_id!("aws.protocols", "awsJson1_1"),
             "application/x-amz-json-1.1",
+            target_prefix.into(),
         )
     }
 
-    fn new(protocol_id: ShapeId, content_type: &'static str) -> Self {
+    fn new(protocol_id: ShapeId, content_type: &'static str, target_prefix: String) -> Self {
         let codec = JsonCodec::new(
             JsonCodecSettings::builder()
                 .use_json_name(false)
@@ -57,6 +65,7 @@ impl AwsJsonRpcProtocol {
         );
         Self {
             inner: HttpRpcProtocol::new(protocol_id, codec, content_type),
+            target_prefix,
         }
     }
 }
@@ -79,7 +88,7 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
         if let Some(metadata) = cfg.load::<Metadata>() {
             request.headers_mut().insert(
                 "X-Amz-Target",
-                format!("{}.{}", metadata.service(), metadata.name()),
+                format!("{}.{}", self.target_prefix, metadata.name()),
             );
         }
         Ok(request)
@@ -125,7 +134,7 @@ mod tests {
 
     #[test]
     fn json_1_0_content_type() {
-        let request = AwsJsonRpcProtocol::aws_json_1_0()
+        let request = AwsJsonRpcProtocol::aws_json_1_0("TestService")
             .serialize_request(
                 &EmptyStruct,
                 &TEST_SCHEMA,
@@ -141,7 +150,7 @@ mod tests {
 
     #[test]
     fn json_1_1_content_type() {
-        let request = AwsJsonRpcProtocol::aws_json_1_1()
+        let request = AwsJsonRpcProtocol::aws_json_1_1("TestService")
             .serialize_request(
                 &EmptyStruct,
                 &TEST_SCHEMA,
@@ -158,7 +167,7 @@ mod tests {
     #[test]
     fn sets_x_amz_target() {
         let cfg = cfg_with_metadata("MyService", "DoThing");
-        let request = AwsJsonRpcProtocol::aws_json_1_0()
+        let request = AwsJsonRpcProtocol::aws_json_1_0("MyService")
             .serialize_request(&EmptyStruct, &TEST_SCHEMA, "https://example.com", &cfg)
             .unwrap();
         assert_eq!(
@@ -170,7 +179,9 @@ mod tests {
     #[test]
     fn json_1_0_protocol_id() {
         assert_eq!(
-            AwsJsonRpcProtocol::aws_json_1_0().protocol_id().as_str(),
+            AwsJsonRpcProtocol::aws_json_1_0("Svc")
+                .protocol_id()
+                .as_str(),
             "aws.protocols#awsJson1_0"
         );
     }
@@ -178,7 +189,9 @@ mod tests {
     #[test]
     fn json_1_1_protocol_id() {
         assert_eq!(
-            AwsJsonRpcProtocol::aws_json_1_1().protocol_id().as_str(),
+            AwsJsonRpcProtocol::aws_json_1_1("Svc")
+                .protocol_id()
+                .as_str(),
             "aws.protocols#awsJson1_1"
         );
     }

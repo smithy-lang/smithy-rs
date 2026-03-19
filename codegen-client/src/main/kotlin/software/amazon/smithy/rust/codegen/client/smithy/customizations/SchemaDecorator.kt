@@ -22,6 +22,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
+import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
  * Generates Schema implementations for all structure shapes and stores the
@@ -78,15 +79,16 @@ private class SchemaProtocolCustomization(
                     val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
                     val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
                     val protocol = codegenContext.protocol
+                    val serviceShapeName = codegenContext.serviceShape.id.name
 
                     val (protocolType, constructor) =
                         when {
                             protocol == RestJson1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
                             protocol == AwsJson1_0Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0()"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1()"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
                             else -> return@writable // Other protocols not yet implemented
                         }
 

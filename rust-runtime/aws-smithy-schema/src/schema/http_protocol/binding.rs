@@ -44,7 +44,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
 // Note: there is a percent_encoding crate we use some other places for this, but I'm trying to keep
 // the dependencies to a minimum.
 /// Percent-encode a string per RFC 3986 section 2.3 (unreserved characters only).
-fn percent_encode(input: &str) -> String {
+pub(crate) fn percent_encode(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for byte in input.bytes() {
         match byte {
@@ -61,7 +61,7 @@ fn percent_encode(input: &str) -> String {
     out
 }
 
-const HEX: &[u8; 16] = b"0123456789ABCDEF";
+pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
 
 /// A ShapeSerializer that intercepts member writes and routes HTTP-bound
 /// members to headers, query params, or URI labels instead of the body.
@@ -73,6 +73,12 @@ struct HttpBindingSerializer<S> {
     headers: Vec<(String, String)>,
     query_params: Vec<(String, String)>,
     labels: Vec<(String, String)>,
+    /// Tracks whether any member was written to the body serializer (i.e., a member
+    /// without an HTTP binding trait). Used by `HttpBindingProtocol` to determine
+    /// whether to wrap the body in `{}` and set `Content-Type: application/json`.
+    /// Per the REST-JSON spec, operations with no body members must send an empty
+    /// body with no Content-Type header.
+    has_body_content: bool,
 }
 
 impl<S> HttpBindingSerializer<S> {
@@ -82,6 +88,7 @@ impl<S> HttpBindingSerializer<S> {
             headers: Vec::new(),
             query_params: Vec::new(),
             labels: Vec::new(),
+            has_body_content: false,
         }
     }
 }
@@ -97,6 +104,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         schema: &Schema,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
+        self.has_body_content = true;
         self.body.write_struct(schema, value)
     }
 
@@ -105,6 +113,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         schema: &Schema,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.has_body_content = true;
         self.body.write_list(schema, write_elements)
     }
 
@@ -130,6 +139,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
             }
             return Ok(());
         }
+        self.has_body_content = true;
         self.body.write_map(schema, write_entries)
     }
 
@@ -137,6 +147,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_boolean(schema, value)
     }
 
@@ -144,6 +155,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_byte(schema, value)
     }
 
@@ -151,6 +163,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_short(schema, value)
     }
 
@@ -158,6 +171,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_integer(schema, value)
     }
 
@@ -165,6 +179,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_long(schema, value)
     }
 
@@ -172,6 +187,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_float(schema, value)
     }
 
@@ -179,6 +195,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value_to_string(value));
         }
+        self.has_body_content = true;
         self.body.write_double(schema, value)
     }
 
@@ -190,6 +207,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value.as_ref());
         }
+        self.has_body_content = true;
         self.body.write_big_integer(schema, value)
     }
 
@@ -201,6 +219,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value.as_ref());
         }
+        self.has_body_content = true;
         self.body.write_big_decimal(schema, value)
     }
 
@@ -208,6 +227,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value);
         }
+        self.has_body_content = true;
         self.body.write_string(schema, value)
     }
 
@@ -222,6 +242,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
                 .push((schema.http_header().unwrap().value().to_string(), encoded));
             return Ok(());
         }
+        self.has_body_content = true;
         self.body.write_blob(schema, value)
     }
 
@@ -255,6 +276,7 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
                 .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?;
             return self.add_binding(binding, schema, &formatted);
         }
+        self.has_body_content = true;
         self.body.write_timestamp(schema, value)
     }
 
@@ -263,10 +285,12 @@ impl<S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<S> {
         schema: &Schema,
         value: &aws_smithy_types::Document,
     ) -> Result<(), SerdeError> {
+        self.has_body_content = true;
         self.body.write_document(schema, value)
     }
 
     fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+        self.has_body_content = true;
         self.body.write_null(schema)
     }
 }
@@ -655,22 +679,73 @@ where
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        _input_schema: &Schema,
+        input_schema: &Schema,
         endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
         let mut binder = HttpBindingSerializer::new(self.codec.create_serializer());
-        // serialize_members calls write_* on the binder for each member.
-        // The binder inspects HTTP binding traits and routes accordingly.
         input.serialize_members(&mut binder)?;
-        let body = binder.body.finish();
+        let mut body = binder.body.finish();
 
-        // Build URI: substitute labels, append query string
-        let mut uri = endpoint.to_string();
-        for (name, value) in &binder.labels {
-            let placeholder = format!("{{{name}}}");
-            uri = uri.replace(&placeholder, &percent_encode(value));
-        }
+        // Per the REST-JSON content-type handling spec:
+        // - If @httpPayload targets a blob/string: send raw bytes, no Content-Type when empty
+        // - If body members exist (even if all optional and unset): send `{}` with Content-Type
+        // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
+        let has_blob_or_string_payload = input_schema.members().iter().any(|m| {
+            m.http_payload().is_some()
+                && !matches!(
+                    m.shape_type(),
+                    crate::ShapeType::Structure | crate::ShapeType::Union
+                )
+        });
+        let has_body_members = input_schema.members().iter().any(|m| {
+            m.http_header().is_none()
+                && m.http_query().is_none()
+                && m.http_label().is_none()
+                && m.http_prefix_headers().is_none()
+                && m.http_query_params().is_none()
+        });
+
+        let set_content_type = if has_blob_or_string_payload {
+            // Blob/string payload: only set Content-Type if there's actual content
+            !body.is_empty()
+        } else if has_body_members && body.is_empty() {
+            // Operation has body members but none were set — send `{}`
+            body = b"{}".to_vec();
+            true
+        } else {
+            // Either body has content, or no body members exist
+            has_body_members
+        };
+
+        // Build URI: use @http trait if available (with label substitution from binder),
+        // otherwise fall back to endpoint with manual label substitution.
+        let mut uri = match input_schema.http() {
+            Some(h) => {
+                let mut path = h.uri().to_string();
+                for (name, value) in &binder.labels {
+                    let placeholder = format!("{{{name}}}");
+                    path = path.replace(&placeholder, &percent_encode(value));
+                }
+                if endpoint.is_empty() {
+                    path
+                } else {
+                    format!("{}{}", endpoint, path)
+                }
+            }
+            None => {
+                let mut u = if endpoint.is_empty() {
+                    "/".to_string()
+                } else {
+                    endpoint.to_string()
+                };
+                for (name, value) in &binder.labels {
+                    let placeholder = format!("{{{name}}}");
+                    u = u.replace(&placeholder, &percent_encode(value));
+                }
+                u
+            }
+        };
         if !binder.query_params.is_empty() {
             uri.push(if uri.contains('?') { '&' } else { '?' });
             let pairs: Vec<String> = binder
@@ -685,9 +760,18 @@ where
         request
             .set_uri(uri.as_str())
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
-        request
-            .headers_mut()
-            .insert("Content-Type", self.content_type);
+        if set_content_type {
+            request
+                .headers_mut()
+                .insert("Content-Type", self.content_type);
+        }
+        if let Some(len) = request.body().content_length() {
+            if len > 0 || set_content_type {
+                request
+                    .headers_mut()
+                    .insert("Content-Length", len.to_string());
+            }
+        }
         for (name, value) in &binder.headers {
             request.headers_mut().insert(name.clone(), value.clone());
         }
@@ -948,10 +1032,11 @@ mod tests {
 
     #[test]
     fn serialize_sets_content_type() {
+        // A struct with body members gets Content-Type
         let request = make_protocol()
             .serialize_request(
                 &EmptyStruct,
-                &TEST_SCHEMA,
+                &STRUCT_WITH_MEMBER,
                 "https://example.com",
                 &ConfigBag::base(),
             )
@@ -960,6 +1045,20 @@ mod tests {
             request.headers().get("Content-Type").unwrap(),
             "application/test"
         );
+    }
+
+    #[test]
+    fn serialize_no_body_members_omits_content_type() {
+        // A struct with no members gets no Content-Type per REST-JSON spec
+        let request = make_protocol()
+            .serialize_request(
+                &EmptyStruct,
+                &TEST_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert!(request.headers().get("Content-Type").is_none());
     }
 
     #[test]

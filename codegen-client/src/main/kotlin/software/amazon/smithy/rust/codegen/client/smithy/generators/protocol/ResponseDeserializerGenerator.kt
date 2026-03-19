@@ -38,6 +38,7 @@ class ResponseDeserializerGenerator(
             CargoDependency.smithyRuntimeApiClient(runtimeConfig).toType().resolve("client::orchestrator")
         arrayOf(
             *preludeScope,
+            "ConfigBag" to RuntimeType.configBag(runtimeConfig),
             "Error" to interceptorContext.resolve("Error"),
             "HttpResponse" to orchestrator.resolve("HttpResponse"),
             "Instrument" to CargoDependency.Tracing.toType().resolve("Instrument"),
@@ -45,6 +46,7 @@ class ResponseDeserializerGenerator(
             "OutputOrError" to interceptorContext.resolve("OutputOrError"),
             "OrchestratorError" to orchestrator.resolve("OrchestratorError"),
             "DeserializeResponse" to RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::ser_de::DeserializeResponse"),
+            "SharedClientProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "SdkError" to RuntimeType.sdkError(runtimeConfig),
             "debug_span" to RuntimeType.Tracing.resolve("debug_span"),
@@ -68,7 +70,7 @@ class ResponseDeserializerGenerator(
             impl #{DeserializeResponse} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
-                fn deserialize_nonstreaming(&self, response: &#{HttpResponse}) -> #{OutputOrError} {
+                fn deserialize_nonstreaming(&self, response: &#{HttpResponse}, _cfg: &#{ConfigBag}) -> #{OutputOrError} {
                     #{deserialize_nonstreaming}
                 }
             }
@@ -86,7 +88,7 @@ class ResponseDeserializerGenerator(
                 writable {
                     when (streaming) {
                         true -> deserializeStreamingError(operationShape, customizations)
-                        else -> deserializeNonStreaming(operationShape, customizations)
+                        else -> deserializeNonStreaming(operationShape, operationName, outputSymbol, customizations)
                     }
                 },
         )
@@ -137,11 +139,23 @@ class ResponseDeserializerGenerator(
 
     private fun RustWriter.deserializeNonStreaming(
         operationShape: OperationShape,
+        operationName: String,
+        outputSymbol: software.amazon.smithy.codegen.core.Symbol,
         customizations: List<OperationCustomization>,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
+            // If a SharedClientProtocol is available and the response is successful, delegate deserialization to it.
+            if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
+                if response.status().is_success() || response.status().as_u16() == $successCode {
+                    let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
+                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                    let output = #{ConcreteOutput}::deserialize(&mut *deser)
+                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                    return #{Ok}(#{Output}::erase(output));
+                }
+            }
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
@@ -156,6 +170,8 @@ class ResponseDeserializerGenerator(
             #{type_erase_result}(parse_result)
             """,
             *codegenScope,
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "ConcreteOutput" to outputSymbol,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
             "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
             "BeforeParseResponse" to
