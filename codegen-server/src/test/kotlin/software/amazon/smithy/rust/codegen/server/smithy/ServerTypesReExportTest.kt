@@ -29,6 +29,34 @@ class ServerTypesReExportTest {
         }
         """.asSmithyModel(smithyVersion = "2")
 
+    private val eventStreamModel =
+        """
+        ${'$'}version: "2.0"
+        namespace amazon
+        use smithy.protocols#rpcv2Cbor
+
+        @rpcv2Cbor
+        service EventStreamService {
+            operations: [StreamingOperation]
+        }
+
+        operation StreamingOperation {
+            input := {}
+            output := {
+                events: Events
+            }
+        }
+
+        @streaming
+        union Events {
+            event: Event
+        }
+
+        structure Event {
+            data: String
+        }
+        """.asSmithyModel()
+
     @Test
     fun `ensure types are exported from aws-smithy-http-server`() {
         serverIntegrationTest(sampleModel, IntegrationTestParams(service = "amazon#SampleService")) { _, rustCrate ->
@@ -87,6 +115,21 @@ class ServerTypesReExportTest {
                     rustTemplate(
                         """
                         ##[allow(unused_imports)] use crate::server::{request::lambda::Context, routing::LambdaHandler};
+                        """,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `ensure event stream types are re-exported`() {
+        serverIntegrationTest(eventStreamModel, IntegrationTestParams(service = "amazon#EventStreamService")) { _, rustCrate ->
+            rustCrate.testModule {
+                unitTest("event_stream_sender_reexport") {
+                    rustTemplate(
+                        """
+                        ##[allow(unused_imports)] use crate::types::EventStreamSender;
                         """,
                     )
                 }
