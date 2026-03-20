@@ -691,10 +691,11 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.13"
+version = "0.62.14"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
+ "aws-smithy-http 0.63.6",
  "aws-smithy-runtime-api 1.11.6",
  "aws-smithy-types 1.4.7",
  "bytes",
