@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
@@ -77,12 +78,7 @@ class RequestSerializerGenerator(
                     if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
                         // Endpoint is passed as "" because the orchestrator resolves the
                         // endpoint after serialization and applies it via `update_endpoint`.
-                        return protocol.serialize_request(
-                            &input,
-                            $operationName::INPUT_SCHEMA,
-                            "",
-                            _cfg,
-                        ).map_err(#{BoxError}::from);
+                        #{schema_serialize}
                     }
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
@@ -96,6 +92,7 @@ class RequestSerializerGenerator(
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
+            "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape),
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to
                 writable {
@@ -170,5 +167,42 @@ class RequestSerializerGenerator(
                 )
             }
             rust("builder")
+        }
+
+    private fun schemaSerialize(
+        operationShape: OperationShape,
+        operationName: String,
+        inputShape: StructureShape,
+    ): Writable =
+        writable {
+            val streamingMember = inputShape.findStreamingMember(codegenContext.model)
+            val isBlobStreaming =
+                streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
+            if (isBlobStreaming) {
+                val memberName = symbolProvider.toMemberName(streamingMember!!)
+                rustTemplate(
+                    """
+                    let mut request = protocol.serialize_request(
+                        &input, $operationName::INPUT_SCHEMA, "", _cfg,
+                    ).map_err(#{BoxError}::from)?;
+                    // Streaming blob payload: replace the body with the raw ByteStream.
+                    *request.body_mut() = input.$memberName.into_inner();
+                    if let #{Some}(content_length) = request.body().content_length() {
+                        request.headers_mut().insert("Content-Length", content_length.to_string());
+                    }
+                    return #{Ok}(request);
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                rustTemplate(
+                    """
+                    return protocol.serialize_request(
+                        &input, $operationName::INPUT_SCHEMA, "", _cfg,
+                    ).map_err(#{BoxError}::from);
+                    """,
+                    *codegenScope,
+                )
+            }
         }
 }

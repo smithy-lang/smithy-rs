@@ -757,6 +757,12 @@ where
         }
 
         let mut request = Request::new(SdkBody::from(body));
+        // Set HTTP method from @http trait
+        if let Some(http) = input_schema.http() {
+            request
+                .set_method(http.method())
+                .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
+        }
         request
             .set_uri(uri.as_str())
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
