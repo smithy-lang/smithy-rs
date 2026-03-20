@@ -185,6 +185,7 @@ class RequestSerializerGenerator(
             val streamingMember = inputShape.findStreamingMember(codegenContext.model)
             val isBlobStreaming =
                 streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
+            val isEventStream = streamingMember != null && !isBlobStreaming
             if (isBlobStreaming) {
                 val memberName = symbolProvider.toMemberName(streamingMember!!)
                 rustTemplate(
@@ -201,6 +202,31 @@ class RequestSerializerGenerator(
                     """,
                     *codegenScope,
                 )
+            } else if (isEventStream) {
+                // Event stream: use schema-based protocol for headers/URI/method,
+                // then replace the body with the event stream and set the correct Content-Type.
+                val eventStreamBody =
+                    writable {
+                        bodyGenerator?.generatePayload(this, "input", operationShape)
+                    }
+                // requestContentType returns the event stream content type for input streams
+                // (e.g., application/vnd.amazon.eventstream) or the normal protocol content type
+                // for output-only streams.
+                val contentType = httpBindingResolver.requestContentType(operationShape)
+                rustTemplate(
+                    """
+                    let mut request = protocol.serialize_request(
+                        &input, $schemaRef, "", _cfg,
+                    ).map_err(#{BoxError}::from)?;
+                    *request.body_mut() = #{SdkBody}::from(#{event_stream_body});
+                    """,
+                    *codegenScope,
+                    "event_stream_body" to eventStreamBody,
+                )
+                if (contentType != null) {
+                    rust("request.headers_mut().insert(\"Content-Type\", ${contentType.dq()});")
+                }
+                rustTemplate("return #{Ok}(request);", *codegenScope)
             } else {
                 rustTemplate(
                     """
