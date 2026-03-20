@@ -13,6 +13,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.customizations.AllowLints
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.CrateVersionCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customizations.pubUseSmithyPrimitives
 import software.amazon.smithy.rust.codegen.core.smithy.generators.LibRsCustomization
+import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule
@@ -73,6 +74,12 @@ class ServerRequiredCustomizations : ServerCodegenDecorator {
 
         rustCrate.withModule(ServerRustModule.Types) {
             pubUseSmithyPrimitives(codegenContext, codegenContext.model, rustCrate)(this)
+            if (codegenContext.serviceShape.hasEventStreamOperations(codegenContext.model)) {
+                rustTemplate(
+                    "pub use #{EventStreamSender};",
+                    "EventStreamSender" to RuntimeType.eventStreamSender(rc),
+                )
+            }
             rustTemplate(
                 """
                 pub use #{DisplayErrorContext};
