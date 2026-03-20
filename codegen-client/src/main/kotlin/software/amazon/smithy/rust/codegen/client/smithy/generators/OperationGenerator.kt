@@ -225,6 +225,8 @@ open class OperationGenerator(
             writeCustomizations(operationCustomizations, OperationSection.OperationImplBlock(operationCustomizations))
         }
 
+        operationWriter.writeCustomizations(operationCustomizations, OperationSection.AdditionalItems(operationCustomizations))
+
         OperationRuntimePluginGenerator(codegenContext).render(
             operationWriter,
             operationShape,

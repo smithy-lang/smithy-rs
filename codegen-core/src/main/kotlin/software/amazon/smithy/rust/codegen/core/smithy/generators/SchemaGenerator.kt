@@ -76,6 +76,21 @@ class SchemaTraitExtension {
 }
 
 /**
+ * Describes a synthetic member to add to a schema (e.g., `_request_id` from a response header).
+ * These are not in the Smithy model but are added by SDK-specific decorators.
+ */
+data class SyntheticSchemaMember(
+    /** The Rust field name on the builder (e.g., `_request_id`). */
+    val fieldName: String,
+    /** The Smithy member name for the schema (e.g., `requestId`). */
+    val schemaMemberName: String,
+    /** The shape type (e.g., `String`). */
+    val shapeType: String,
+    /** The HTTP header name to bind to (e.g., `x-amzn-requestid`). */
+    val httpHeaderName: String,
+)
+
+/**
  * Generates Schema implementations for Smithy shapes.
  *
  * Schemas are runtime representations of shapes that enable protocol-agnostic
@@ -87,6 +102,9 @@ class SchemaGenerator(
     private val shape: Shape,
     private val traitFilter: SchemaTraitFilter = SchemaTraitFilter(codegenContext.model),
     private val traitExtension: SchemaTraitExtension = SchemaTraitExtension(),
+    private val syntheticMembers: List<SyntheticSchemaMember> = emptyList(),
+    /** Override the prefix used for generated static names. Defaults to the symbol name uppercased. */
+    val schemaPrefix: String? = null,
 ) {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -108,6 +126,30 @@ class SchemaGenerator(
      */
     private fun templateEscape(name: String): String = name.replace("#", "##")
 
+    /** Renders only the schema statics (no impl blocks, no SerializableStruct, no deserialize). */
+    fun renderSchemaOnly() {
+        val symbol = symbolProvider.toSymbol(shape)
+        val codegenScope =
+            arrayOf(
+                "Schema" to smithySchema.resolve("Schema"),
+                "ShapeId" to smithySchema.resolve("ShapeId"),
+                "ShapeType" to smithySchema.resolve("ShapeType"),
+            )
+        val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
+        val ns = shape.id.namespace
+        val name = shape.id.name
+        val fqn = shape.id.toString()
+        val escapedFqn = fqn.replace("#", "##")
+        writer.rustTemplate(
+            """
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            """,
+            *codegenScope,
+        )
+        renderMemberSchemas(writer, schemaPrefix)
+        renderSchemaStatic(writer, schemaPrefix, symbol.name)
+    }
+
     fun render() {
         val symbol = symbolProvider.toSymbol(shape)
         val codegenScope =
@@ -117,7 +159,7 @@ class SchemaGenerator(
                 "ShapeType" to smithySchema.resolve("ShapeType"),
             )
 
-        val schemaPrefix = symbol.name.uppercase()
+        val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
 
         // Write module-level statics and the schema unit struct
         val ns = shape.id.namespace
@@ -709,7 +751,33 @@ class SchemaGenerator(
                             } else {
                                 readExpr
                             }
-                        rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                        if (memberSymbol.isOptional()) {
+                            rust(
+                                """
+                                Some($idx) => {
+                                    if !deser.is_null() {
+                                        builder.$memberName = Some($wrapped);
+                                    }
+                                }
+                                """,
+                            )
+                        } else {
+                            rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                        }
+                    }
+                    // Synthetic members (e.g., _request_id from response headers)
+                    val baseIndex = members.size
+                    syntheticMembers.forEachIndexed { i, synth ->
+                        val synthIdx = baseIndex + i
+                        rust(
+                            """
+                            Some($synthIdx) => {
+                                if !deser.is_null() {
+                                    builder.${synth.fieldName} = Some(deser.read_string(member)?);
+                                }
+                            }
+                            """,
+                        )
                     }
                 },
         )
@@ -1046,16 +1114,21 @@ class SchemaGenerator(
         when (shape) {
             is StructureShape, is UnionShape -> {
                 val members = shape.members()
+                val modelRefs =
+                    members.map { member ->
+                        val memberName = symbolProvider.toMemberName(member)
+                        "&${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                    }
+                val synthRefs =
+                    syntheticMembers.map { synth ->
+                        "&${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}"
+                    }
+                val allRefs = modelRefs + synthRefs
                 val membersArray =
-                    if (members.isEmpty()) {
+                    if (allRefs.isEmpty()) {
                         "&[]"
                     } else {
-                        val refs =
-                            members.joinToString(", ") { member ->
-                                val memberName = symbolProvider.toMemberName(member)
-                                "&${schemaPrefix}_MEMBER_${constantName(memberName)}"
-                            }
-                        "&[$refs]"
+                        "&[${allRefs.joinToString(", ")}]"
                     }
                 val traitChain = traitSetterChain(shape) + httpTraitChain(shape)
                 if (hasUnknownTraits(shape)) {
@@ -1161,6 +1234,26 @@ class SchemaGenerator(
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
                         )$memberTraitChain;
+                        """,
+                        *codegenScope,
+                    )
+                }
+                // Render synthetic members (e.g., _request_id from response headers)
+                val baseIndex = shape.members().size
+                syntheticMembers.forEachIndexed { i, synth ->
+                    val synthIdx = baseIndex + i
+                    writer.rustTemplate(
+                        """
+                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema} = #{Schema}::new_member(
+                            #{ShapeId}::from_static(
+                                "synthetic##${synth.schemaMemberName}",
+                                "synthetic",
+                                "${synth.schemaMemberName}",
+                            ),
+                            #{ShapeType}::${synth.shapeType},
+                            ${synth.schemaMemberName.dq()},
+                            $synthIdx,
+                        ).with_http_header(${synth.httpHeaderName.dq()});
                         """,
                         *codegenScope,
                     )

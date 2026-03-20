@@ -92,7 +92,13 @@ class RequestSerializerGenerator(
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
-            "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape),
+            "schema_serialize" to
+                schemaSerialize(
+                    operationShape,
+                    operationName,
+                    inputShape,
+                    schemaRef = if (nameOverride != null) "$operationName::PRESIGNED_INPUT_SCHEMA" else "$operationName::INPUT_SCHEMA",
+                ),
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to
                 writable {
@@ -173,6 +179,7 @@ class RequestSerializerGenerator(
         operationShape: OperationShape,
         operationName: String,
         inputShape: StructureShape,
+        schemaRef: String = "$operationName::INPUT_SCHEMA",
     ): Writable =
         writable {
             val streamingMember = inputShape.findStreamingMember(codegenContext.model)
@@ -183,7 +190,7 @@ class RequestSerializerGenerator(
                 rustTemplate(
                     """
                     let mut request = protocol.serialize_request(
-                        &input, $operationName::INPUT_SCHEMA, "", _cfg,
+                        &input, $schemaRef, "", _cfg,
                     ).map_err(#{BoxError}::from)?;
                     // Streaming blob payload: replace the body with the raw ByteStream.
                     *request.body_mut() = input.$memberName.into_inner();
@@ -198,7 +205,7 @@ class RequestSerializerGenerator(
                 rustTemplate(
                     """
                     return protocol.serialize_request(
-                        &input, $operationName::INPUT_SCHEMA, "", _cfg,
+                        &input, $schemaRef, "", _cfg,
                     ).map_err(#{BoxError}::from);
                     """,
                     *codegenScope,

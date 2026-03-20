@@ -109,8 +109,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
 
-            // Process the value
-            if let Some(member_schema) = self.resolve_member(schema, &key_str) {
+            // Process the value — skip nulls (they represent absent optional members)
+            let rem = self.remaining();
+            if rem.starts_with(b"null") && rem.get(4).map_or(true, |b| !b.is_ascii_alphanumeric()) {
+                self.advance_by(4);
+            } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
                 consumer(member_schema, self)?;
             } else {
                 self.skip_value()?;

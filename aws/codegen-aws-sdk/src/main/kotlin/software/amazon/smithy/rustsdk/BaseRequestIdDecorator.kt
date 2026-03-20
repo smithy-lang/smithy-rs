@@ -25,8 +25,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SyntheticSchemaMember
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.error.ErrorImplSection
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -63,7 +65,25 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> = baseCustomizations + listOf(RequestIdStructureCustomization(codegenContext))
+    ): List<StructureCustomization> {
+        // Replace SchemaStructureCustomization with one that includes the synthetic request ID member
+        val syntheticMember =
+            SyntheticSchemaMember(
+                fieldName = "_$fieldName",
+                schemaMemberName = fieldName,
+                shapeType = "String",
+                httpHeaderName = "x-amzn-requestid",
+            )
+        val updated =
+            baseCustomizations.map { c ->
+                if (c is SchemaStructureCustomization) {
+                    SchemaStructureCustomization(codegenContext, listOf(syntheticMember))
+                } else {
+                    c
+                }
+            }
+        return updated + listOf(RequestIdStructureCustomization(codegenContext))
+    }
 
     override fun builderCustomizations(
         codegenContext: ClientCodegenContext,
