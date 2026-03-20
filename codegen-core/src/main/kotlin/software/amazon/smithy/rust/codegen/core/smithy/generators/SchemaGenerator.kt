@@ -42,6 +42,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
 /**
@@ -145,10 +146,13 @@ class SchemaGenerator(
             *codegenScope,
         )
 
-        // Write SerializableStruct impl for structures
+        // Write SerializableStruct impl for structures and unions
         if (shape is StructureShape) {
             renderSerializableStruct(writer, symbol.name, schemaPrefix)
             renderDeserializeMethod(writer, symbol.name, schemaPrefix)
+        } else if (shape is UnionShape) {
+            renderSerializableUnion(writer, symbol.name, schemaPrefix)
+            renderDeserializeUnion(writer, symbol.name, schemaPrefix)
         }
     }
 
@@ -168,9 +172,12 @@ class SchemaGenerator(
         val memberWrites =
             writable {
                 members.forEachIndexed { idx, member ->
+                    val target = model.expectShape(member.target)
+                    // Skip streaming members (event streams, streaming blobs) — they are
+                    // serialized by the protocol layer, not the codec.
+                    if (target.hasTrait(StreamingTrait::class.java)) return@forEachIndexed
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
-                    val target = model.expectShape(member.target)
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
                     val writeCall = writeMethodForShape(target, memberSchemaRef)
                     if (memberSymbol.isOptional()) {
@@ -206,6 +213,170 @@ class SchemaGenerator(
             """,
             *codegenScope,
             "memberWrites" to memberWrites,
+        )
+    }
+
+    private fun renderSerializableUnion(
+        writer: RustWriter,
+        unionName: String,
+        schemaPrefix: String,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
+                "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+            )
+        val union = shape as UnionShape
+        val members = union.allMembers.values.toList()
+
+        val variantArms =
+            writable {
+                members.forEachIndexed { idx, member ->
+                    val rustMemberName = symbolProvider.toMemberName(member)
+                    val variantName = symbolProvider.toSymbol(member).name
+                    val target = model.expectShape(member.target)
+                    val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
+
+                    if (member.isTargetUnit()) {
+                        rust("Self::$variantName => ser.write_null(&$memberSchemaRef)?,")
+                    } else {
+                        val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val")
+                        rust("Self::$variantName(val) => { $writeExpr },")
+                    }
+                }
+                rustTemplate("Self::${UnionGenerator.UNKNOWN_VARIANT_NAME} => return Err(#{SerdeError}::custom(\"cannot serialize unknown union variant\")),", *codegenScope)
+            }
+
+        writer.rustTemplate(
+            """
+            impl #{SerializableStruct} for $unionName {
+                ##[allow(unused_variables, clippy::diverging_sub_expression)]
+                fn serialize_members(&self, ser: &mut dyn #{ShapeSerializer}) -> ::std::result::Result<(), #{SerdeError}> {
+                    match self {
+                        #{variantArms}
+                    }
+                    Ok(())
+                }
+            }
+            """,
+            *codegenScope,
+            "variantArms" to variantArms,
+        )
+    }
+
+    /** Returns a write expression for a union variant value. */
+    private fun unionVariantWriteExpr(
+        target: Shape,
+        memberSchemaRef: String,
+        varName: String,
+    ): String {
+        return when (target) {
+            is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *$varName)?;"
+            is ByteShape -> "ser.write_byte(&$memberSchemaRef, *$varName)?;"
+            is ShortShape -> "ser.write_short(&$memberSchemaRef, *$varName)?;"
+            is IntegerShape -> "ser.write_integer(&$memberSchemaRef, *$varName)?;"
+            is LongShape -> "ser.write_long(&$memberSchemaRef, *$varName)?;"
+            is FloatShape -> "ser.write_float(&$memberSchemaRef, *$varName)?;"
+            is DoubleShape -> "ser.write_double(&$memberSchemaRef, *$varName)?;"
+            is BigIntegerShape -> "ser.write_big_integer(&$memberSchemaRef, $varName)?;"
+            is BigDecimalShape -> "ser.write_big_decimal(&$memberSchemaRef, $varName)?;"
+            is EnumShape -> "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
+            is StringShape ->
+                if (isStringEnum(target)) {
+                    "ser.write_string(&$memberSchemaRef, $varName.as_str())?;"
+                } else {
+                    "ser.write_string(&$memberSchemaRef, $varName)?;"
+                }
+            is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName)?;"
+            is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, $varName)?;"
+            is StructureShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
+            }
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementWrite = elementWriteExpr(elementTarget, "item")
+                """
+                ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    for item in $varName {
+                        $elementWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val valueTarget = model.expectShape(target.value.target)
+                val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                """
+                ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    for (key, value) in $varName {
+                        ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                        $valueWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+            is UnionShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
+            }
+            is DocumentShape -> "ser.write_document(&$memberSchemaRef, $varName)?;"
+            else -> "todo!(\"schema: unsupported union variant type\");"
+        }
+    }
+
+    private fun renderDeserializeUnion(
+        writer: RustWriter,
+        unionName: String,
+        schemaPrefix: String,
+    ) {
+        val codegenScope =
+            arrayOf(
+                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+            )
+        val union = shape as UnionShape
+        val members = union.allMembers.values.toList()
+
+        val variantArms =
+            writable {
+                members.forEachIndexed { idx, member ->
+                    val variantName = symbolProvider.toSymbol(member).name
+                    val target = model.expectShape(member.target)
+                    if (member.isTargetUnit()) {
+                        rust("Some($idx) => Self::$variantName,")
+                    } else {
+                        val readExpr = readMethodForShape(target, "member")
+                        rust("Some($idx) => Self::$variantName($readExpr),")
+                    }
+                }
+                rust("_ => Self::${UnionGenerator.UNKNOWN_VARIANT_NAME},")
+            }
+
+        writer.rustTemplate(
+            """
+            impl $unionName {
+                /// Deserializes this union from a [`ShapeDeserializer`].
+                pub fn deserialize(deserializer: &mut dyn #{ShapeDeserializer}) -> ::std::result::Result<Self, #{SerdeError}> {
+                    let mut result: ::std::option::Option<Self> = ::std::option::Option::None;
+                    ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding)]
+                    deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
+                        result = ::std::option::Option::Some(match member.member_index() {
+                            #{variantArms}
+                        });
+                        Ok(())
+                    })?;
+                    result.ok_or_else(|| #{SerdeError}::custom("expected a union variant"))
+                }
+            }
+            """,
+            *codegenScope,
+            "variantArms" to variantArms,
         )
     }
 
@@ -306,7 +477,10 @@ class SchemaGenerator(
             }
 
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
-            is UnionShape -> "ser.write_null(&$memberSchemaRef)?;"
+            is UnionShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, val)?;"
+            }
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
 
@@ -337,6 +511,57 @@ class SchemaGenerator(
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
+            }
+
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val valueTarget = model.expectShape(target.value.target)
+                val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                if (isSparse) {
+                    """
+                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for (key, value) in $varName {
+                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                            match value {
+                                Some(value) => { $valueWrite }
+                                None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for (key, value) in $varName {
+                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                            $valueWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
+            }
+
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementWrite = elementWriteExpr(elementTarget, "item")
+                """
+                ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    for item in $varName {
+                        $elementWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+
+            is UnionShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
@@ -372,6 +597,56 @@ class SchemaGenerator(
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
             is StructureShape -> {
+                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
+            }
+
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                val valueTarget = model.expectShape(target.value.target)
+                val innerValueWrite = mapValueWriteExpr(valueTarget, "value")
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                if (isSparse) {
+                    """
+                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for (key, value) in $varName {
+                            ser.write_string(&$prelude::STRING, $keyExpr)?;
+                            match value {
+                                Some(value) => { $innerValueWrite }
+                                None => { ser.write_null(&$prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for (key, value) in $varName {
+                            ser.write_string(&$prelude::STRING, $keyExpr)?;
+                            $innerValueWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
+            }
+
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementWrite = elementWriteExpr(elementTarget, "item")
+                """
+                ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    for item in $varName {
+                        $elementWrite
+                    }
+                    Ok(())
+                })?;
+                """
+            }
+
+            is UnionShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
             }
@@ -553,6 +828,42 @@ class SchemaGenerator(
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
+            }
+
+            is UnionShape -> {
+                val targetSymbol = symbolProvider.toSymbol(target)
+                "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
+            }
+
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val elementRead = elementReadExpr(elementTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                """
+                {
+                    let mut list = Vec::new();
+                    deser.read_list(member, &mut |deser| {
+                        list.push($elementRead);
+                        Ok(())
+                    })?;
+                    list
+                }
+                """.trimIndent()
+            }
+
+            is MapShape -> {
+                val valueTarget = model.expectShape(target.value.target)
+                val valueRead = elementReadExpr(valueTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                """
+                {
+                    let mut map = ::std::collections::HashMap::new();
+                    deser.read_map(member, &mut |key, deser| {
+                        let value = $valueRead;
+                        map.insert(key, value);
+                        Ok(())
+                    })?;
+                    map
+                }
+                """.trimIndent()
             }
 
             else -> "todo!(\"deserialize nested aggregate\")"

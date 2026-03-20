@@ -56,6 +56,26 @@ class SchemaGeneratorTest {
             stringVariant: String,
             intVariant: Integer
         }
+
+        structure NestedAggregates {
+            structMap: StructMap,
+            unionList: UnionList,
+            mapOfMaps: MapOfMaps
+        }
+
+        map StructMap {
+            key: String,
+            value: MyStruct
+        }
+
+        list UnionList {
+            member: MyUnion
+        }
+
+        map MapOfMaps {
+            key: String,
+            value: StringMap
+        }
         """.asSmithyModel()
 
     private val provider = testSymbolProvider(model)
@@ -206,8 +226,96 @@ class SchemaGeneratorTest {
                 use aws_smithy_schema::Schema;
                 let schema = MyUnion::SCHEMA;
                 assert_eq!(schema.shape_type(), aws_smithy_schema::ShapeType::Union);
-                assert!(schema.member_schema("StringVariant").is_some());
-                assert!(schema.member_schema("IntVariant").is_some());
+                assert!(schema.member_schema("stringVariant").is_some());
+                assert!(schema.member_schema("intVariant").is_some());
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `union SerializableStruct impl serializes variants`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<UnionShape>("test#MyUnion")
+        project.useShapeWriter(shape) {
+            UnionGenerator(model, provider, this, shape).render()
+            SchemaGenerator(codegenContext, this, shape).render()
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "union_serializable_struct_string",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let val_str = MyUnion::StringVariant("hello".to_string());
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(MyUnion::SCHEMA, &val_str).expect("serialization should succeed");
+                let json = String::from_utf8(ser.finish()).unwrap();
+                assert_eq!(json, r#"{"stringVariant":"hello"}"#);
+                """,
+            )
+            unitTest(
+                "union_serializable_struct_int",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let val_int = MyUnion::IntVariant(42);
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(MyUnion::SCHEMA, &val_int).expect("serialization should succeed");
+                let json = String::from_utf8(ser.finish()).unwrap();
+                assert_eq!(json, r#"{"intVariant":42}"#);
+                """,
+            )
+            unitTest(
+                "union_deserialize_string",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let json = br#"{"stringVariant":"hello"}"#;
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut deser = codec.create_deserializer(json);
+                let result = MyUnion::deserialize(&mut deser).expect("deserialization should succeed");
+                assert!(matches!(result, MyUnion::StringVariant(ref s) if s == "hello"));
+                """,
+            )
+            unitTest(
+                "union_deserialize_int",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let json = br#"{"intVariant":42}"#;
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut deser = codec.create_deserializer(json);
+                let result = MyUnion::deserialize(&mut deser).expect("deserialization should succeed");
+                assert!(matches!(result, MyUnion::IntVariant(42)));
+                """,
+            )
+            unitTest(
+                "union_round_trip",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                let original = MyUnion::StringVariant("round-trip".to_string());
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(MyUnion::SCHEMA, &original).expect("serialization");
+                let bytes = ser.finish();
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = MyUnion::deserialize(&mut deser).expect("deserialization");
+                assert!(matches!(result, MyUnion::StringVariant(ref s) if s == "round-trip"));
                 """,
             )
         }
@@ -593,6 +701,87 @@ class SchemaGeneratorTest {
                 assert_eq!(meta.len(), 2);
                 assert_eq!(meta.get("env"), Some(&"prod".to_string()));
                 assert_eq!(meta.get("region"), Some(&"us-west-2".to_string()));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `json round trip with nested aggregates`() {
+        val project = TestWorkspace.testProject(provider)
+        val myStruct = model.lookup<StructureShape>("test#MyStruct")
+        val myUnion = model.lookup<UnionShape>("test#MyUnion")
+        val nestedAgg = model.lookup<StructureShape>("test#NestedAggregates")
+        project.useShapeWriter(myStruct) {
+            renderStructWithSchema(this, model, provider, codegenContext, myStruct, project)
+        }
+        project.useShapeWriter(myUnion) {
+            UnionGenerator(model, provider, this, myUnion).render()
+            SchemaGenerator(codegenContext, this, myUnion).render()
+        }
+        project.useShapeWriter(nestedAgg) {
+            renderStructWithSchema(this, model, provider, codegenContext, nestedAgg, project)
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "nested_aggregates_round_trip",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+                use std::collections::HashMap;
+
+                // Build a NestedAggregates with all fields populated.
+                let mut struct_map = HashMap::new();
+                struct_map.insert("alice".to_string(), MyStruct {
+                    name: Some("Alice".to_string()), age: Some(30), active: Some(true),
+                });
+
+                let union_list = vec![
+                    MyUnion::StringVariant("hello".to_string()),
+                    MyUnion::IntVariant(42),
+                ];
+
+                let mut inner_map = HashMap::new();
+                inner_map.insert("k1".to_string(), "v1".to_string());
+                let mut map_of_maps = HashMap::new();
+                map_of_maps.insert("outer".to_string(), inner_map);
+
+                let original = NestedAggregates {
+                    struct_map: Some(struct_map),
+                    union_list: Some(union_list),
+                    map_of_maps: Some(map_of_maps),
+                };
+
+                // Serialize
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(NestedAggregates::SCHEMA, &original).expect("serialization");
+                let bytes = ser.finish();
+
+                // Deserialize
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = NestedAggregates::deserialize(&mut deser).expect("deserialization");
+
+                // Assert struct map
+                let sm = result.struct_map.expect("struct_map");
+                let alice = sm.get("alice").expect("alice");
+                assert_eq!(alice.name, Some("Alice".to_string()));
+                assert_eq!(alice.age, Some(30));
+
+                // Assert union list
+                let ul = result.union_list.expect("union_list");
+                assert_eq!(ul.len(), 2);
+                assert!(matches!(&ul[0], MyUnion::StringVariant(s) if s == "hello"));
+                assert!(matches!(&ul[1], MyUnion::IntVariant(42)));
+
+                // Assert map of maps
+                let mm = result.map_of_maps.expect("map_of_maps");
+                let inner = mm.get("outer").expect("outer");
+                assert_eq!(inner.get("k1"), Some(&"v1".to_string()));
                 """,
             )
         }

@@ -105,16 +105,19 @@ impl ShapeSerializer for JsonSerializer {
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push('{');
-        let saved = self.needs_comma;
+        let saved_comma = self.needs_comma;
         let saved_depth = self.map_depth;
+        let saved_map_key = self.expecting_map_key;
         self.needs_comma = false;
-        // Reset map_depth so struct members don't trigger map-key logic in prefix().
+        // Reset map state so struct members don't trigger map-key logic.
         // Restored after the struct body so an enclosing map resumes correctly.
         self.map_depth = 0;
+        self.expecting_map_key = false;
         value.serialize_members(self)?;
         self.output.push('}');
-        self.needs_comma = saved;
+        self.needs_comma = saved_comma;
         self.map_depth = saved_depth;
+        self.expecting_map_key = saved_map_key;
         Ok(())
     }
 
@@ -298,6 +301,7 @@ impl ShapeSerializer for JsonSerializer {
 mod tests {
     use super::*;
     use aws_smithy_schema::prelude::*;
+    use aws_smithy_schema::ShapeType;
 
     #[test]
     fn test_write_boolean() {
@@ -639,5 +643,50 @@ mod tests {
         ser.write_struct(&struct_schema, &TestStruct).unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"foo":"hello","bar":42}"#);
+    }
+
+    #[test]
+    fn struct_inside_map_serializes_member_names_correctly() {
+        // Regression test: when a struct is a map value, the map's expecting_map_key
+        // flag must not leak into the struct's member serialization.
+        use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+
+        static INNER_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Inner"),
+            ShapeType::String,
+            "name",
+            0,
+        );
+        static INNER_MEMBERS: &[&Schema] = &[&INNER_NAME];
+        static INNER_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Inner"),
+            ShapeType::Structure,
+            INNER_MEMBERS,
+        );
+
+        struct Inner;
+        impl SerializableStruct for Inner {
+            fn serialize_members(
+                &self,
+                ser: &mut dyn ShapeSerializer,
+            ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+                ser.write_string(&INNER_NAME, "Alice")
+            }
+        }
+
+        static MAP_SCHEMA: Schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "MyMap"),
+            ShapeType::Map,
+        );
+
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_map(&MAP_SCHEMA, &|ser| {
+            ser.write_string(&aws_smithy_schema::prelude::STRING, "key1")?;
+            ser.write_struct(&INNER_SCHEMA, &Inner)?;
+            Ok(())
+        })
+        .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"key1":{"name":"Alice"}}"#);
     }
 }
