@@ -497,6 +497,7 @@ mod test {
                                 "secretAccessKey": "{}",
                                 "sessionToken": "{}"
                             }},
+                            "tokenType": "Bearer",
                             "expiresIn": {},
                             "refreshToken": "{}"
                         }}"#,

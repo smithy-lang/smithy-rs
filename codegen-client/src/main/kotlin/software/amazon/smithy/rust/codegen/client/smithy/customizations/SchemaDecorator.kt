@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -25,6 +26,37 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCusto
 import software.amazon.smithy.rust.codegen.core.util.dq
 
 /**
+ * Determines whether schema-based serialization/deserialization should be used
+ * for a given codegen context. This controls both:
+ * - Whether the schema path is the sole serialization path (no fallback to old codegen)
+ * - Whether the old protocol_serde code is generated
+ *
+ * The allowlist supports two dimensions:
+ * - Protocol trait IDs: all services using a given protocol are allowed
+ * - Service shape IDs: specific services are allowed regardless of protocol
+ *
+ * During phased rollout, protocols/services can be added incrementally.
+ * Once all protocols are listed, the allowlist can be removed entirely.
+ */
+object SchemaSerdeAllowlist {
+    /** Protocols for which schema-based serde is the sole path (no fallback). */
+    private val allowedProtocols: Set<ShapeId> =
+        setOf(
+            RestJson1Trait.ID,
+            AwsJson1_0Trait.ID,
+            AwsJson1_1Trait.ID,
+        )
+
+    /** Individual services allowed regardless of protocol. */
+    private val allowedServices: Set<String> = setOf<String>()
+
+    /** Returns true if schema-based serde should be used exclusively (no fallback). */
+    fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
+        codegenContext.protocol in allowedProtocols ||
+            codegenContext.serviceShape.id.toString() in allowedServices
+}
+
+/**
  * Generates Schema implementations for all structure shapes and stores the
  * default protocol in the service config bag, enabling protocol-agnostic
  * serialization and deserialization.
@@ -33,24 +65,10 @@ class SchemaDecorator : ClientCodegenDecorator {
     override val name: String = "SchemaDecorator"
     override val order: Byte = 0
 
-    // Uncomment the following to limit schema generation to specific services
-    // during phased rollout. When the list is empty or this is commented out,
-    // schemas are generated for all services.
-    //
-    // private val allowedServices = setOf(
-    //     "com.amazonaws.dynamodb#DynamoDB_20120810",
-    //     "com.amazonaws.sqs#AmazonSQS",
-    //     "com.amazonaws.s3#AmazonS3",
-    // )
-    //
-    // private fun isEnabled(codegenContext: ClientCodegenContext): Boolean =
-    //     allowedServices.contains(codegenContext.serviceShape.id.toString())
-
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
     ): List<StructureCustomization> {
-        // if (!isEnabled(codegenContext)) return baseCustomizations
         return baseCustomizations + SchemaStructureCustomization(codegenContext)
     }
 
@@ -163,7 +181,11 @@ private class SchemaProtocolConfigCustomization(
             is ServiceConfig.BuilderFromConfigBag ->
                 writable {
                     rustTemplate(
-                        "${section.builder}.set_protocol(${section.configBag}.load::<#{SharedClientProtocol}>().cloned());",
+                        """
+                        if let #{Some}(protocol) = ${section.configBag}.load::<#{SharedClientProtocol}>().cloned() {
+                            ${section.builder}.set_protocol(#{Some}(protocol));
+                        }
+                        """,
                         *codegenScope,
                     )
                 }

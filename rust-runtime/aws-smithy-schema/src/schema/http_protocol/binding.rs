@@ -77,6 +77,9 @@ struct HttpBindingSerializer<'a, S> {
     /// HTTP binding traits. This allows the protocol to override bindings
     /// (e.g., for presigning where body members become query params).
     input_schema: Option<&'a Schema>,
+    /// True for the top-level input struct in serialize_request.
+    /// Cleared after the first write_struct so nested structs delegate directly.
+    is_top_level: bool,
     /// Tracks whether any member was written to the body serializer (i.e., a member
     /// without an HTTP binding trait). Used by `HttpBindingProtocol` to determine
     /// whether to wrap the body in `{}` and set `Content-Type: application/json`.
@@ -93,6 +96,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             query_params: Vec::new(),
             labels: Vec::new(),
             input_schema,
+            is_top_level: true,
             has_body_content: false,
         }
     }
@@ -123,8 +127,53 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        self.has_body_content = true;
-        self.body.write_struct(schema, value)
+        if self.is_top_level {
+            // Top-level input struct: route serialize_members through the binder
+            // so HTTP-bound members are intercepted. The body serializer's
+            // write_struct is used for framing (e.g., { } for JSON), with a
+            // proxy whose serialize_members delegates back to the binder.
+            struct Proxy<'a, 'b, S> {
+                binder: &'a mut HttpBindingSerializer<'b, S>,
+                value: &'a dyn SerializableStruct,
+            }
+            impl<S: ShapeSerializer> SerializableStruct for Proxy<'_, '_, S> {
+                fn serialize_members(
+                    &self,
+                    _serializer: &mut dyn ShapeSerializer,
+                ) -> Result<(), SerdeError> {
+                    let binder = self.binder as *const HttpBindingSerializer<'_, S>
+                        as *mut HttpBindingSerializer<'_, S>;
+                    // SAFETY: The body serializer called serialize_members on
+                    // this proxy, passing &mut self (body). The binder wraps
+                    // that same body serializer. We need mutable access to the
+                    // binder to route writes. This is safe because:
+                    // 1. The body serializer's write_struct only calls
+                    //    serialize_members once, synchronously.
+                    // 2. Body member writes from the binder go back to the
+                    //    body serializer, which is in a valid state (between
+                    //    the { and } it emitted).
+                    self.value.serialize_members(unsafe { &mut *binder })
+                }
+            }
+            // Clear is_top_level so nested write_struct calls (from body members)
+            // take the else branch and delegate directly to the body serializer.
+            // input_schema is preserved so resolve_member continues to work.
+            self.is_top_level = false;
+            let result = {
+                let proxy = Proxy {
+                    binder: self,
+                    value,
+                };
+                let binder_ptr = &mut *proxy.binder as *mut HttpBindingSerializer<'_, S>;
+                unsafe { (*binder_ptr).body.write_struct(schema, &proxy) }
+            };
+            result
+        } else {
+            // Nested struct (a body member targeting a structure): delegate
+            // entirely to the body serializer.
+            self.has_body_content = true;
+            self.body.write_struct(schema, value)
+        }
     }
 
     fn write_list(
@@ -505,17 +554,35 @@ impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a,
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        // Read HTTP-bound members directly from this composite deserializer
+        // Read HTTP-bound members from the response.
+        // Only call the consumer for members whose data is actually present —
+        // absent headers/status represent optional members that weren't set.
+        let headers = self.response.headers();
+        let mut has_payload_member = false;
         for member in schema.members() {
-            if member.http_header().is_some()
-                || member.http_response_code().is_some()
-                || member.http_prefix_headers().is_some()
-            {
+            if let Some(h) = member.http_header() {
+                if headers.get(h.value()).is_some() {
+                    consumer(member, self)?;
+                }
+            } else if member.http_response_code().is_some() {
                 consumer(member, self)?;
+            } else if let Some(prefix) = member.http_prefix_headers() {
+                if headers.iter().any(|(k, _)| k.starts_with(prefix.value())) {
+                    consumer(member, self)?;
+                }
+            } else if member.http_payload().is_some() {
+                // @httpPayload: the entire body is this member's value.
+                // Pass the body deserializer directly to the consumer.
+                has_payload_member = true;
+                consumer(member, &mut self.body)?;
             }
         }
-        // Delegate body members to the body deserializer
-        self.body.read_struct(schema, consumer)
+        if !has_payload_member {
+            // No @httpPayload — body members are serialized as a protocol-specific
+            // document (e.g., JSON object). Delegate to the body deserializer.
+            self.body.read_struct(schema, consumer)?;
+        }
+        Ok(())
     }
 
     fn read_list(
@@ -717,7 +784,22 @@ where
     ) -> Result<Request, SerdeError> {
         let mut binder =
             HttpBindingSerializer::new(self.codec.create_serializer(), Some(input_schema));
-        input.serialize_members(&mut binder)?;
+
+        // Check if there's an @httpPayload member targeting a structure/union.
+        // In that case, the payload member's own write_struct provides the body
+        // framing, so we must not add top-level struct framing.
+        let has_struct_payload = input_schema.members().iter().any(|m| {
+            m.http_payload().is_some()
+                && matches!(
+                    m.shape_type(),
+                    crate::ShapeType::Structure | crate::ShapeType::Union
+                )
+        });
+        if has_struct_payload {
+            input.serialize_members(&mut binder)?;
+        } else {
+            binder.write_struct(input_schema, input)?;
+        }
         let mut body = binder.body.finish();
 
         // Per the REST-JSON content-type handling spec:
@@ -742,13 +824,14 @@ where
         let set_content_type = if has_blob_or_string_payload {
             // Blob/string payload: only set Content-Type if there's actual content
             !body.is_empty()
-        } else if has_body_members && body.is_empty() {
-            // Operation has body members but none were set — send `{}`
-            body = b"{}".to_vec();
+        } else if has_body_members {
+            // Operation has body members — body includes framing (e.g., `{}`).
+            // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
             true
         } else {
-            // Either body has content, or no body members exist
-            has_body_members
+            // No body members at all — empty body, no Content-Type.
+            body = Vec::new();
+            false
         };
 
         // Build URI: use @http trait if available (with label substitution from binder),
@@ -1123,7 +1206,7 @@ mod tests {
                 &ConfigBag::base(),
             )
             .unwrap();
-        assert_eq!(request.body().bytes().unwrap(), b"Alice");
+        assert_eq!(request.body().bytes().unwrap(), b"{Alice}");
     }
 
     #[test]

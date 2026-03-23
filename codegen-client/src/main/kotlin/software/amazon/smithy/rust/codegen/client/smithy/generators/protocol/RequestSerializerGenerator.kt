@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.RequestBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -58,6 +59,8 @@ class RequestSerializerGenerator(
         )
     }
 
+    private val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+
     fun render(
         writer: RustWriter,
         operationShape: OperationShape,
@@ -66,6 +69,26 @@ class RequestSerializerGenerator(
         val operationName = symbolProvider.toSymbol(operationShape).name
         val inputSymbol = symbolProvider.toSymbol(inputShape)
         val serializerName = nameOverride ?: "${operationName}RequestSerializer"
+        val schemaRef =
+            if (nameOverride != null) "$operationName::PRESIGNED_INPUT_SCHEMA" else "$operationName::INPUT_SCHEMA"
+
+        if (schemaExclusive) {
+            renderSchemaOnly(writer, operationShape, inputShape, operationName, inputSymbol, serializerName, schemaRef)
+        } else {
+            renderWithFallback(writer, operationShape, inputShape, operationName, inputSymbol, serializerName, schemaRef)
+        }
+    }
+
+    /** Schema-only path: no runtime check, no fallback to old codegen. */
+    private fun renderSchemaOnly(
+        writer: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape,
+        operationName: String,
+        inputSymbol: software.amazon.smithy.codegen.core.Symbol,
+        serializerName: String,
+        schemaRef: String,
+    ) {
         writer.rustTemplate(
             """
             ##[derive(Debug)]
@@ -74,10 +97,37 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
-                    // If a SharedClientProtocol is available, delegate serialization to it.
+                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                        .expect("a SharedClientProtocol is required");
+                    #{schema_serialize}
+                }
+            }
+            """,
+            *codegenScope,
+            "ConcreteInput" to inputSymbol,
+            "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape, schemaRef),
+        )
+    }
+
+    /** Fallback path: runtime check for SharedClientProtocol, falls back to old codegen. */
+    private fun renderWithFallback(
+        writer: RustWriter,
+        operationShape: OperationShape,
+        inputShape: StructureShape,
+        operationName: String,
+        inputSymbol: software.amazon.smithy.codegen.core.Symbol,
+        serializerName: String,
+        schemaRef: String,
+    ) {
+        writer.rustTemplate(
+            """
+            ##[derive(Debug)]
+            struct $serializerName;
+            impl #{SerializeRequest} for $serializerName {
+                ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
+                fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
+                    let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
                     if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
-                        // Endpoint is passed as "" because the orchestrator resolves the
-                        // endpoint after serialization and applies it via `update_endpoint`.
                         #{schema_serialize}
                     }
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
@@ -92,13 +142,7 @@ class RequestSerializerGenerator(
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
-            "schema_serialize" to
-                schemaSerialize(
-                    operationShape,
-                    operationName,
-                    inputShape,
-                    schemaRef = if (nameOverride != null) "$operationName::PRESIGNED_INPUT_SCHEMA" else "$operationName::INPUT_SCHEMA",
-                ),
+            "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape, schemaRef),
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to
                 writable {
@@ -111,7 +155,6 @@ class RequestSerializerGenerator(
                         val isBlobStreaming =
                             streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
                         if (isBlobStreaming) {
-                            // Consume the `ByteStream` into its inner `SdkBody`.
                             rust("#T.into_inner()", body)
                         } else {
                             rustTemplate("#{SdkBody}::from(#{body})", *codegenScope, "body" to body)

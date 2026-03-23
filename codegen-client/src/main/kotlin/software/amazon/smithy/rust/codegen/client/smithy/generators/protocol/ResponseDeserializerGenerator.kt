@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -30,6 +31,7 @@ class ResponseDeserializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val parserGenerator = ProtocolParserGenerator(codegenContext, protocol)
+    private val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
 
     private val codegenScope by lazy {
         val interceptorContext =
@@ -144,9 +146,62 @@ class ResponseDeserializerGenerator(
         customizations: List<OperationCustomization>,
     ) {
         val successCode = httpBindingResolver.httpTrait(operationShape).code
+        if (schemaExclusive) {
+            deserializeNonStreamingSchemaOnly(operationShape, operationName, outputSymbol, customizations, successCode)
+        } else {
+            deserializeNonStreamingWithFallback(operationShape, operationName, outputSymbol, customizations, successCode)
+        }
+    }
+
+    /** Schema-only: no runtime check, schema path for success, old parser for errors only. */
+    private fun RustWriter.deserializeNonStreamingSchemaOnly(
+        operationShape: OperationShape,
+        operationName: String,
+        outputSymbol: software.amazon.smithy.codegen.core.Symbol,
+        customizations: List<OperationCustomization>,
+        successCode: Int,
+    ) {
         rustTemplate(
             """
-            // If a SharedClientProtocol is available and the response is successful, delegate deserialization to it.
+            let (success, status) = (response.status().is_success(), response.status().as_u16());
+            ##[allow(unused_mut)]
+            let mut force_error = false;
+            #{BeforeParseResponse}
+            if !success && status != $successCode || force_error {
+                let headers = response.headers();
+                let body = response.body().bytes().expect("body loaded");
+                #{type_erase_result}(#{parse_error}(status, headers, body))
+            } else {
+                let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                    .expect("a SharedClientProtocol is required");
+                let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
+                    .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                let output = #{ConcreteOutput}::deserialize(&mut *deser)
+                    .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                #{Ok}(#{Output}::erase(output))
+            }
+            """,
+            *codegenScope,
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "ConcreteOutput" to outputSymbol,
+            "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+        )
+    }
+
+    /** Fallback: runtime check for SharedClientProtocol, falls back to old codegen. */
+    private fun RustWriter.deserializeNonStreamingWithFallback(
+        operationShape: OperationShape,
+        operationName: String,
+        outputSymbol: software.amazon.smithy.codegen.core.Symbol,
+        customizations: List<OperationCustomization>,
+        successCode: Int,
+    ) {
+        rustTemplate(
+            """
             if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
                 if response.status().is_success() || response.status().as_u16() == $successCode {
                     let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
