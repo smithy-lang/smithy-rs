@@ -6,25 +6,31 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
+import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
 class ResponseDeserializerGenerator(
-    codegenContext: ClientCodegenContext,
-    protocol: Protocol,
+    private val codegenContext: ClientCodegenContext,
+    private val protocol: Protocol,
 ) {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -128,15 +134,28 @@ class ResponseDeserializerGenerator(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
     ) {
-        rustTemplate(
-            """
-            // For streaming operations, we only hit this case if its an error
-            let body = response.body().bytes().expect("body loaded");
-            #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
-            """,
-            *codegenScope,
-            "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-        )
+        if (schemaExclusive) {
+            rustTemplate(
+                """
+                // For streaming operations, we only hit this case if its an error
+                let body = response.body().bytes().expect("body loaded");
+                let status = response.status().as_u16();
+                let headers = response.headers();
+                """,
+                *codegenScope,
+            )
+            renderSchemaErrorParsing(operationShape, customizations)
+        } else {
+            rustTemplate(
+                """
+                // For streaming operations, we only hit this case if its an error
+                let body = response.body().bytes().expect("body loaded");
+                #{type_erase_result}(#{parse_error}(response.status().as_u16(), response.headers(), body))
+                """,
+                *codegenScope,
+                "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
+            )
+        }
     }
 
     private fun RustWriter.deserializeNonStreaming(
@@ -153,7 +172,7 @@ class ResponseDeserializerGenerator(
         }
     }
 
-    /** Schema-only: no runtime check, schema path for success, old parser for errors only. */
+    /** Schema-only: schema path for success, schema-based error deserialization. */
     private fun RustWriter.deserializeNonStreamingSchemaOnly(
         operationShape: OperationShape,
         operationName: String,
@@ -170,7 +189,16 @@ class ResponseDeserializerGenerator(
             if !success && status != $successCode || force_error {
                 let headers = response.headers();
                 let body = response.body().bytes().expect("body loaded");
-                #{type_erase_result}(#{parse_error}(status, headers, body))
+            """,
+            *codegenScope,
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+        )
+        renderSchemaErrorParsing(operationShape, customizations)
+        rustTemplate(
+            """
             } else {
                 let protocol = _cfg.load::<#{SharedClientProtocol}>()
                     .expect("a SharedClientProtocol is required");
@@ -184,12 +212,114 @@ class ResponseDeserializerGenerator(
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
             "ConcreteOutput" to outputSymbol,
-            "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
-            "BeforeParseResponse" to
+        )
+    }
+
+    /**
+     * Renders schema-based error parsing code.
+     * Assumes `status`, `headers`, `body`, and `_cfg` are in scope.
+     * Emits a complete expression that returns `OutputOrError`.
+     */
+    private fun RustWriter.renderSchemaErrorParsing(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+        val errors = operationShape.operationErrors(model)
+
+        rustTemplate(
+            """
+            ##[allow(unused_mut)]
+            let mut generic_builder = #{parse_http_error_metadata}(status, headers, body)
+                .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+            #{PopulateErrorMetadataExtras}
+            let generic = generic_builder.build();
+            """,
+            *codegenScope,
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "parse_http_error_metadata" to protocol.parseHttpErrorMetadata(operationShape),
+            "PopulateErrorMetadataExtras" to
                 writable {
-                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                    writeCustomizations(
+                        customizations,
+                        OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "status", "headers"),
+                    )
                 },
         )
+
+        if (errors.isNotEmpty()) {
+            rustTemplate(
+                """
+                let error_code = match generic.code() {
+                    #{Some}(code) => code,
+                    #{None} => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(#{error_symbol}::unhandled(generic)))),
+                };
+                let _error_message = generic.message().map(|msg| msg.to_owned());
+                let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                    .expect("a SharedClientProtocol is required");
+                let error_response = #{HttpResponse}::new(
+                    status.try_into().unwrap(),
+                    #{SdkBody}::from(body),
+                );
+                """,
+                *codegenScope,
+                "BoxError" to RuntimeType.boxError(runtimeConfig),
+                "error_symbol" to errorSymbol,
+            )
+            rustTemplate("let err = match error_code {")
+            for (error in errors) {
+                val errorShape = model.expectShape(error.id, StructureShape::class.java)
+                val variantName = symbolProvider.toSymbol(errorShape).name
+                val errorCode = httpBindingResolver.errorCode(errorShape).dq()
+                val errorType = symbolProvider.toSymbol(errorShape)
+                val errorMessageMember = errorShape.errorMessageMember()
+
+                rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
+                rustTemplate(
+                    """
+                    let mut tmp = match protocol.deserialize_response(&error_response, #{ErrorType}::SCHEMA, _cfg)
+                        .and_then(|mut deser| #{ErrorType}::deserialize(&mut *deser))
+                    {
+                        #{Ok}(val) => val,
+                        #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                    };
+                    tmp.meta = generic;
+                    """,
+                    *codegenScope,
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
+                    "error_symbol" to errorSymbol,
+                    "ErrorType" to errorType,
+                )
+                if (errorMessageMember != null) {
+                    val symbol = symbolProvider.toSymbol(errorMessageMember)
+                    if (symbol.isOptional()) {
+                        rust(
+                            """
+                            if tmp.message.is_none() {
+                                tmp.message = _error_message;
+                            }
+                            """,
+                        )
+                    }
+                }
+                rust("tmp")
+                rust("}),")
+            }
+            rustTemplate("_ => #{error_symbol}::generic(generic)", "error_symbol" to errorSymbol)
+            rustTemplate(
+                """
+                };
+                #{Err}(#{OrchestratorError}::operation(#{Error}::erase(err)))
+                """,
+                *codegenScope,
+            )
+        } else {
+            rustTemplate(
+                "#{Err}(#{OrchestratorError}::operation(#{Error}::erase(#{error_symbol}::generic(generic))))",
+                *codegenScope,
+                "error_symbol" to errorSymbol,
+            )
+        }
     }
 
     /** Fallback: runtime check for SharedClientProtocol, falls back to old codegen. */
