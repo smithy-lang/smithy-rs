@@ -185,6 +185,7 @@ class SmithyTypesPubUseExtraTest {
         val eventStreamTypes =
             listOf(
                 "crate::event_receiver::EventReceiver",
+                "::aws_smithy_http::event_stream::EventStreamSender",
                 "::aws_smithy_types::event_stream::Header",
                 "::aws_smithy_types::event_stream::HeaderValue",
                 "::aws_smithy_types::event_stream::Message",

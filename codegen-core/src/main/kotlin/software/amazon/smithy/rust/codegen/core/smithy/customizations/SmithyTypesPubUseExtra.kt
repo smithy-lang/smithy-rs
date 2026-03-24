@@ -17,6 +17,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.eventReceiver
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.eventStreamSender
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
@@ -115,12 +116,14 @@ fun pubUseSmithyPrimitivesEventStream(
             rustTemplate(
                 """
                 pub use #{EventReceiver};
+                pub use #{EventStreamSender};
                 pub use #{Header};
                 pub use #{HeaderValue};
                 pub use #{Message};
                 pub use #{StrBytes};
                 """,
                 "EventReceiver" to eventReceiver(rc),
+                "EventStreamSender" to eventStreamSender(rc),
                 "Header" to RuntimeType.smithyTypes(rc).resolve("event_stream::Header"),
                 "HeaderValue" to RuntimeType.smithyTypes(rc).resolve("event_stream::HeaderValue"),
                 "Message" to RuntimeType.smithyTypes(rc).resolve("event_stream::Message"),
