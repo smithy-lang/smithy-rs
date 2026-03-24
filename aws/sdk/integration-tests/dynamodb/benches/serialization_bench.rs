@@ -42,7 +42,17 @@ fn do_bench(input: &PutItemInput) {
     let serializer = config
         .load::<SharedRequestSerializer>()
         .expect("operation should set a serializer");
+
+    // Create a config bag with the required SharedClientProtocol
     let mut config_bag = ConfigBag::base();
+    let protocol = aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(
+        "DynamoDB_20120810",
+    );
+    let shared_protocol = aws_smithy_schema::protocol::SharedClientProtocol::new(protocol);
+    let mut layer = aws_smithy_types::config_bag::Layer::new("bench");
+    layer.store_put(shared_protocol);
+    config_bag.push_shared_layer(layer.freeze());
+
     let input = Input::erase(input.clone());
 
     let request = serializer
