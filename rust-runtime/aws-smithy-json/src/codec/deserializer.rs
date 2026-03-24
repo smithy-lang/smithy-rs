@@ -210,15 +210,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueBool { value, .. })) => {
-                self.advance_by(if value { 4 } else { 5 });
-                Ok(value)
-            }
-            _ => Err(SerdeError::TypeMismatch {
+        self.skip_whitespace();
+        let rem = self.remaining();
+        if rem.starts_with(b"true") {
+            self.advance_by(4);
+            Ok(true)
+        } else if rem.starts_with(b"false") {
+            self.advance_by(5);
+            Ok(false)
+        } else {
+            Err(SerdeError::TypeMismatch {
                 message: "expected boolean".into(),
-            }),
+            })
         }
     }
 
@@ -291,22 +294,48 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueString { value, .. })) => {
-                let len = value.as_escaped_str().len();
-                let result = value.to_unescaped().map(|s| s.into_owned()).map_err(|e| {
-                    SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    }
-                })?;
-                self.advance_by(len + 2);
-                Ok(result)
-            }
-            _ => Err(SerdeError::TypeMismatch {
+        self.skip_whitespace();
+        let pos = self.position;
+        let input = self.input;
+        let rem = &input[pos..];
+        if rem.first() != Some(&b'"') {
+            return Err(SerdeError::TypeMismatch {
                 message: "expected string".into(),
-            }),
+            });
         }
+        // Scan for end of string, tracking whether escapes are present
+        let mut i = 1;
+        let mut has_escape = false;
+        while i < rem.len() {
+            if rem[i] == b'\\' {
+                has_escape = true;
+                i += 2;
+            } else if rem[i] == b'"' {
+                let raw = &input[pos + 1..pos + i];
+                self.position = pos + i + 1;
+                if !has_escape {
+                    return std::str::from_utf8(raw).map(|s| s.to_owned()).map_err(|e| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    });
+                }
+                let s = std::str::from_utf8(raw).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })?;
+                return crate::deserialize::EscapedStr::new(s)
+                    .to_unescaped()
+                    .map(|s| s.into_owned())
+                    .map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    });
+            } else {
+                i += 1;
+            }
+        }
+        Err(SerdeError::InvalidInput {
+            message: "unterminated string".into(),
+        })
     }
 
     fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
@@ -538,58 +567,55 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     fn read_integer_value(&mut self) -> Result<i64, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNumber {
-                value: Number::PosInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                i64::try_from(n).map_err(|_| SerdeError::InvalidInput {
-                    message: "value out of range".into(),
-                })
+        self.skip_whitespace();
+        let rem = self.remaining();
+        let mut len = 0;
+        for &b in rem {
+            if b.is_ascii_digit() || b == b'-' || b == b'+' {
+                len += 1;
+            } else {
+                break;
             }
-            Some(Ok(Token::ValueNumber {
-                value: Number::NegInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(n)
-            }
-            _ => Err(SerdeError::TypeMismatch {
-                message: "expected integer".into(),
-            }),
         }
+        if len == 0 {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected integer".into(),
+            });
+        }
+        let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        self.advance_by(len);
+        Ok(n)
     }
 
     fn read_float_value(&mut self) -> Result<f64, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNumber {
-                value: Number::Float(f),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(f)
+        self.skip_whitespace();
+        let rem = self.remaining();
+        let mut len = 0;
+        for &b in rem {
+            if b.is_ascii_digit() || b == b'-' || b == b'+' || b == b'.' || b == b'e' || b == b'E' {
+                len += 1;
+            } else {
+                break;
             }
-            Some(Ok(Token::ValueNumber {
-                value: Number::PosInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(n as f64)
-            }
-            Some(Ok(Token::ValueNumber {
-                value: Number::NegInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(n as f64)
-            }
-            _ => Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
-            }),
         }
+        if len == 0 {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected number".into(),
+            });
+        }
+        let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        let n = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+            message: e.to_string(),
+        })?;
+        self.advance_by(len);
+        Ok(n)
     }
 }
 
