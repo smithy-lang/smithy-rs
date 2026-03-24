@@ -829,7 +829,7 @@ class SchemaGenerator(
                     } else {
                         "container.push($elementRead)"
                     }
-                "{ let mut container = if let Some(cap) = deser.container_size() { Vec::with_capacity(cap) } else { Vec::new() }; deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
+                "{ let mut container = Vec::new(); deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
             }
 
             is MapShape -> {
@@ -850,7 +850,7 @@ class SchemaGenerator(
                     } else {
                         "container.insert($keyInsert, $valueRead)"
                     }
-                "{ let mut container = if let Some(cap) = deser.container_size() { std::collections::HashMap::with_capacity(cap) } else { std::collections::HashMap::new() }; deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
+                "{ let mut container = std::collections::HashMap::new(); deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
             }
 
             is StructureShape -> {
