@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.testModule
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.server.smithy.testutil.serverIntegrationTest
+import kotlin.io.path.readText
 
 class ServerTypesReExportTest {
     private val sampleModel =
@@ -28,6 +29,34 @@ class ServerTypesReExportTest {
             output := {}
         }
         """.asSmithyModel(smithyVersion = "2")
+
+    private val eventStreamModel =
+        """
+        ${'$'}version: "2.0"
+        namespace amazon
+        use smithy.protocols#rpcv2Cbor
+
+        @rpcv2Cbor
+        service EventStreamService {
+            operations: [StreamingOperation]
+        }
+
+        operation StreamingOperation {
+            input := {}
+            output := {
+                events: Events
+            }
+        }
+
+        @streaming
+        union Events {
+            event: Event
+        }
+
+        structure Event {
+            data: String
+        }
+        """.asSmithyModel()
 
     @Test
     fun `ensure types are exported from aws-smithy-http-server`() {
@@ -90,6 +119,33 @@ class ServerTypesReExportTest {
                         """,
                     )
                 }
+            }
+        }
+    }
+
+    @Test
+    fun `ensure event stream types are re-exported`() {
+        serverIntegrationTest(eventStreamModel, IntegrationTestParams(service = "amazon#EventStreamService")) { _, rustCrate ->
+            rustCrate.testModule {
+                unitTest("event_stream_sender_reexport") {
+                    rustTemplate(
+                        """
+                        ##[allow(unused_imports)] use crate::types::EventStreamSender;
+                        """,
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `ensure event stream types are not re-exported without event streams`() {
+        val generatedServers =
+            serverIntegrationTest(sampleModel, IntegrationTestParams(service = "amazon#SampleService"))
+        generatedServers.forEach { generatedServer ->
+            val typesModule = generatedServer.path.resolve("src/types.rs").readText()
+            assert(!typesModule.contains("EventStreamSender")) {
+                "EventStreamSender should not be re-exported for a service without event streams"
             }
         }
     }
