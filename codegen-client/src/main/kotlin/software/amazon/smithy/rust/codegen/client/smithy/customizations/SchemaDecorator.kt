@@ -75,12 +75,22 @@ class SchemaDecorator : ClientCodegenDecorator {
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ServiceRuntimePluginCustomization>,
-    ): List<ServiceRuntimePluginCustomization> = baseCustomizations + SchemaProtocolCustomization(codegenContext)
+    ): List<ServiceRuntimePluginCustomization> =
+        if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            baseCustomizations + SchemaProtocolCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
-    ): List<ConfigCustomization> = baseCustomizations + SchemaProtocolConfigCustomization(codegenContext)
+    ): List<ConfigCustomization> =
+        if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            baseCustomizations + SchemaProtocolConfigCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
 }
 
 /**

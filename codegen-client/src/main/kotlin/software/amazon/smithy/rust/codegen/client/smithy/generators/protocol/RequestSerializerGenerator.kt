@@ -75,7 +75,7 @@ class RequestSerializerGenerator(
         if (schemaExclusive) {
             renderSchemaOnly(writer, operationShape, inputShape, operationName, inputSymbol, serializerName, schemaRef)
         } else {
-            renderWithFallback(writer, operationShape, inputShape, operationName, inputSymbol, serializerName, schemaRef)
+            renderLegacy(writer, operationShape, inputShape, operationName, inputSymbol, serializerName)
         }
     }
 
@@ -109,15 +109,14 @@ class RequestSerializerGenerator(
         )
     }
 
-    /** Fallback path: runtime check for SharedClientProtocol, falls back to old codegen. */
-    private fun renderWithFallback(
+    /** Legacy path: old codegen only, no schema-based serialization. */
+    private fun renderLegacy(
         writer: RustWriter,
         operationShape: OperationShape,
         inputShape: StructureShape,
         operationName: String,
         inputSymbol: software.amazon.smithy.codegen.core.Symbol,
         serializerName: String,
-        schemaRef: String,
     ) {
         writer.rustTemplate(
             """
@@ -127,9 +126,6 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
-                    if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
-                        #{schema_serialize}
-                    }
                     let _header_serialization_settings = _cfg.load::<#{HeaderSerializationSettings}>().cloned().unwrap_or_default();
                     let mut request_builder = {
                         #{create_http_request}
@@ -142,7 +138,6 @@ class RequestSerializerGenerator(
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
-            "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape, schemaRef),
             "create_http_request" to createHttpRequest(operationShape),
             "generate_body" to
                 writable {

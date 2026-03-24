@@ -168,7 +168,7 @@ class ResponseDeserializerGenerator(
         if (schemaExclusive) {
             deserializeNonStreamingSchemaOnly(operationShape, operationName, outputSymbol, customizations, successCode)
         } else {
-            deserializeNonStreamingWithFallback(operationShape, operationName, outputSymbol, customizations, successCode)
+            deserializeNonStreamingLegacy(operationShape, customizations, successCode)
         }
     }
 
@@ -322,25 +322,14 @@ class ResponseDeserializerGenerator(
         }
     }
 
-    /** Fallback: runtime check for SharedClientProtocol, falls back to old codegen. */
-    private fun RustWriter.deserializeNonStreamingWithFallback(
+    /** Legacy path: old codegen only, no schema-based deserialization. */
+    private fun RustWriter.deserializeNonStreamingLegacy(
         operationShape: OperationShape,
-        operationName: String,
-        outputSymbol: software.amazon.smithy.codegen.core.Symbol,
         customizations: List<OperationCustomization>,
         successCode: Int,
     ) {
         rustTemplate(
             """
-            if let #{Some}(protocol) = _cfg.load::<#{SharedClientProtocol}>() {
-                if response.status().is_success() || response.status().as_u16() == $successCode {
-                    let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
-                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    let output = #{ConcreteOutput}::deserialize(&mut *deser)
-                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    return #{Ok}(#{Output}::erase(output));
-                }
-            }
             let (success, status) = (response.status().is_success(), response.status().as_u16());
             let headers = response.headers();
             let body = response.body().bytes().expect("body loaded");
@@ -355,8 +344,6 @@ class ResponseDeserializerGenerator(
             #{type_erase_result}(parse_result)
             """,
             *codegenScope,
-            "BoxError" to RuntimeType.boxError(runtimeConfig),
-            "ConcreteOutput" to outputSymbol,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
             "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
             "BeforeParseResponse" to
