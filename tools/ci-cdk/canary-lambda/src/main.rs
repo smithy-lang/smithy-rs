@@ -32,6 +32,11 @@ mod release_2023_10_26;
 #[cfg(feature = "release-2023-10-26")]
 pub(crate) use release_2023_10_26 as current_canary;
 
+#[cfg(feature = "lambda-benchmark")]
+mod benches;
+#[cfg(feature = "lambda-benchmark")]
+pub(crate) use benches as current_canary;
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let subscriber = tracing_subscriber::registry()

@@ -362,7 +362,10 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
         musl: options.musl,
+        architecture: crate::arch::Arch::X86_64,
         manifest_only: false,
+        disable_jitter_entropy: true,
+        feature_override: None,
     };
     info!("Compiling the canary bundle for Lambda with {build_args:?}. This may take a few minutes...");
     Ok(crate::build_bundle::build_bundle(build_args)
