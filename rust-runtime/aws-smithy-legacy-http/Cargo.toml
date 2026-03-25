@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-legacy-http"
-version = "0.62.13"
+version = "0.62.14"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -12,11 +12,12 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.91.1"
 
 [features]
-event-stream = ["aws-smithy-eventstream"]
+event-stream = ["aws-smithy-eventstream", "aws-smithy-http/event-stream"]
 rt-tokio = ["aws-smithy-types/rt-tokio"]
 
 [dependencies]
 aws-smithy-eventstream = { path = "../aws-smithy-eventstream", optional = true }
+aws-smithy-http = { path = "../aws-smithy-http", optional = true }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["byte-stream-poll-next", "http-body-0-4-x"] }
 bytes = "1.11.1"
