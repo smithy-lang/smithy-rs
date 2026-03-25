@@ -3,20 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use clap::Parser;
-use standardized_benches::bench_utils::{run_benchmark, BenchmarkConfig};
 use standardized_benches::endpoint::s3::S3EndpointBenchmark;
-
-#[derive(Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    #[arg(short, long)]
-    commit_id: String,
-}
+use standardized_benches::endpoint::{run_benchmark, BenchmarkConfig};
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
     let mut results = Vec::new();
 
     let benchmarks: Vec<(BenchmarkConfig, S3EndpointBenchmark)> = vec![
@@ -67,7 +58,6 @@ async fn main() {
 
     let output = serde_json::json!({
         "product_id": "aws-sdk-rust",
-        "commit_id": args.commit_id,
         "results": results,
     });
     println!(

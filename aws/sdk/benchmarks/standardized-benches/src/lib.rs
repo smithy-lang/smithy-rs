@@ -4,4 +4,5 @@
  */
 
 pub mod bench_utils;
+pub mod e2e;
 pub mod endpoint;
