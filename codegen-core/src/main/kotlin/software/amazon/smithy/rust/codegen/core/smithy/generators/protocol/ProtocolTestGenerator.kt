@@ -127,8 +127,8 @@ abstract class ProtocolTestGenerator {
             // Something must change...
             if (it == fixed) {
                 PANIC(
-                    """$intro did not make any modifications. It is likely that the test case was 
-                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix 
+                    """$intro did not make any modifications. It is likely that the test case was
+                    |fixed upstream, and you're now updating the Smithy version; in this case, remove the hotfix
                     |function, as the test is no longer broken.
                     |$moreInfo
                     """.trimMargin(),
@@ -535,5 +535,13 @@ sealed class TestCase {
                 is RequestTest -> this.testCase.documentation.orNull()
                 is ResponseTest -> this.testCase.documentation.orNull()
                 is MalformedRequestTest -> this.testCase.documentation.orNull()
+            }
+
+    val tags: List<String>
+        get() =
+            when (this) {
+                is RequestTest -> this.testCase.tags
+                is ResponseTest -> this.testCase.tags
+                is MalformedRequestTest -> this.testCase.tags
             }
 }
