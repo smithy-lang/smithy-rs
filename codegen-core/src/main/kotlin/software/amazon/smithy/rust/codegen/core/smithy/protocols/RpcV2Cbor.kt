@@ -188,13 +188,11 @@ open class RpcV2Cbor(
             codegenContext, httpBindingResolver,
             handleNullForNonSparseCollection = { collectionName: String ->
                 writable {
-                    // The client should drop a null value in a dense collection, see
-                    // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/cbor-maps.smithy#L158
                     rustTemplate(
                         """
-                        decoder.null()?;
-                        return #{Ok}($collectionName)
+                        return #{Err}(#{Error}::custom("dense $collectionName cannot contain null values", decoder.position()))
                         """,
+                        "Error" to RuntimeType.smithyCbor(runtimeConfig).resolve("decode::DeserializeError"),
                         *RuntimeType.preludeScope,
                     )
                 }
