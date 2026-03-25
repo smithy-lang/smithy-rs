@@ -868,7 +868,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "aws-smithy-types 1.4.6",
 ]

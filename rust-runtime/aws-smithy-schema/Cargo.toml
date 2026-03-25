@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-schema"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "Schema types for the smithy-rs ecosystem"
 edition = "2021"
@@ -19,3 +19,9 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+# make sure to keep crate stability in sync with the second element of the following tuple in
+# buildSrc/src/main/kotlin/CrateSet.kt:
+# Crate("aws-smithy-types", STABLE_VERSION_PROP_NAME),
+[package.metadata.smithy-rs-release-tooling]
+stable = true

@@ -130,3 +130,9 @@ pub trait SerializableStruct {
     /// Serializes this structure's members using the provided serializer.
     fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError>;
 }
+
+impl<T: SerializableStruct + ?Sized> SerializableStruct for Box<T> {
+    fn serialize_members(&self, serializer: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+        (**self).serialize_members(serializer)
+    }
+}

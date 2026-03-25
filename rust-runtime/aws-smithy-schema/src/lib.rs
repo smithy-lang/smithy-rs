@@ -17,17 +17,18 @@ mod schema {
     pub mod shape_type;
     pub mod trait_map;
     pub mod trait_type;
+    pub mod traits;
 
     pub mod codec;
     pub mod prelude;
     pub mod serde;
-    pub mod serde_traits;
 }
 
 pub use schema::shape_id::ShapeId;
 pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
 pub use schema::trait_type::Trait;
+pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait};
 
 pub mod prelude {
     pub use crate::schema::prelude::*;
@@ -37,8 +38,8 @@ pub mod serde {
     pub use crate::schema::serde::*;
 }
 
-pub mod serde_traits {
-    pub use crate::schema::serde_traits::*;
+pub mod traits {
+    pub use crate::schema::traits::*;
 }
 
 pub mod codec {
@@ -53,17 +54,45 @@ pub mod codec {
 /// Schemas are constructed at compile time (via `const`) for generated code
 /// and prelude types. The Smithy type system is closed, so no extensibility
 /// via trait objects is needed.
+use schema::traits as trait_types;
+
 #[derive(Debug)]
 pub struct Schema {
     id: ShapeId,
     shape_type: ShapeType,
-    traits: TraitMap,
     /// Member name if this is a member schema.
     member_name: Option<&'static str>,
     /// Member index for position-based lookup in generated code.
     member_index: Option<usize>,
     /// Shape-type-specific member data.
     members: SchemaMembers,
+
+    // -- Known serde trait fields (const-constructable) --
+    // IMPORTANT: These fields and their `with_*` setters must stay in sync with
+    // `knownTraitSetter` in `SchemaGenerator.kt`. If a new known trait is added
+    // here, a corresponding entry must be added in the codegen.
+    sensitive: Option<trait_types::SensitiveTrait>,
+    json_name: Option<trait_types::JsonNameTrait>,
+    timestamp_format: Option<trait_types::TimestampFormatTrait>,
+    xml_name: Option<trait_types::XmlNameTrait>,
+    xml_attribute: Option<trait_types::XmlAttributeTrait>,
+    xml_flattened: Option<trait_types::XmlFlattenedTrait>,
+    xml_namespace: Option<trait_types::XmlNamespaceTrait>,
+    http_header: Option<trait_types::HttpHeaderTrait>,
+    http_label: Option<trait_types::HttpLabelTrait>,
+    http_payload: Option<trait_types::HttpPayloadTrait>,
+    http_prefix_headers: Option<trait_types::HttpPrefixHeadersTrait>,
+    http_query: Option<trait_types::HttpQueryTrait>,
+    http_query_params: Option<trait_types::HttpQueryParamsTrait>,
+    http_response_code: Option<trait_types::HttpResponseCodeTrait>,
+    streaming: Option<trait_types::StreamingTrait>,
+    event_header: Option<trait_types::EventHeaderTrait>,
+    event_payload: Option<trait_types::EventPayloadTrait>,
+    host_label: Option<trait_types::HostLabelTrait>,
+    media_type: Option<trait_types::MediaTypeTrait>,
+
+    /// Fallback for unknown/custom traits. `None` in const contexts (no allocation).
+    traits: Option<&'static std::sync::LazyLock<TraitMap>>,
 }
 
 /// Shape-type-specific member references.
@@ -83,15 +112,41 @@ enum SchemaMembers {
 }
 
 impl Schema {
+    /// Default values for all trait fields (should only be used by constructors as a spread source).
+    const EMPTY_TRAITS: Self = Self {
+        id: ShapeId::from_static("", "", ""),
+        shape_type: ShapeType::Boolean,
+        member_name: None,
+        member_index: None,
+        members: SchemaMembers::None,
+        sensitive: None,
+        json_name: None,
+        timestamp_format: None,
+        xml_name: None,
+        xml_attribute: None,
+        xml_flattened: None,
+        xml_namespace: None,
+        http_header: None,
+        http_label: None,
+        http_payload: None,
+        http_prefix_headers: None,
+        http_query: None,
+        http_query_params: None,
+        http_response_code: None,
+        streaming: None,
+        event_header: None,
+        event_payload: None,
+        host_label: None,
+        media_type: None,
+        traits: None,
+    };
+
     /// Creates a schema for a simple type (no members).
-    pub const fn new(id: ShapeId, shape_type: ShapeType, traits: TraitMap) -> Self {
+    pub const fn new(id: ShapeId, shape_type: ShapeType) -> Self {
         Self {
             id,
             shape_type,
-            traits,
-            member_name: None,
-            member_index: None,
-            members: SchemaMembers::None,
+            ..Self::EMPTY_TRAITS
         }
     }
 
@@ -99,45 +154,33 @@ impl Schema {
     pub const fn new_struct(
         id: ShapeId,
         shape_type: ShapeType,
-        traits: TraitMap,
         members: &'static [&'static Schema],
     ) -> Self {
         Self {
             id,
             shape_type,
-            traits,
-            member_name: None,
-            member_index: None,
             members: SchemaMembers::Struct { members },
+            ..Self::EMPTY_TRAITS
         }
     }
 
     /// Creates a schema for a list type.
-    pub const fn new_list(id: ShapeId, traits: TraitMap, member: &'static Schema) -> Self {
+    pub const fn new_list(id: ShapeId, member: &'static Schema) -> Self {
         Self {
             id,
             shape_type: ShapeType::List,
-            traits,
-            member_name: None,
-            member_index: None,
             members: SchemaMembers::List { member },
+            ..Self::EMPTY_TRAITS
         }
     }
 
     /// Creates a schema for a map type.
-    pub const fn new_map(
-        id: ShapeId,
-        traits: TraitMap,
-        key: &'static Schema,
-        value: &'static Schema,
-    ) -> Self {
+    pub const fn new_map(id: ShapeId, key: &'static Schema, value: &'static Schema) -> Self {
         Self {
             id,
             shape_type: ShapeType::Map,
-            traits,
-            member_name: None,
-            member_index: None,
             members: SchemaMembers::Map { key, value },
+            ..Self::EMPTY_TRAITS
         }
     }
 
@@ -145,17 +188,15 @@ impl Schema {
     pub const fn new_member(
         id: ShapeId,
         shape_type: ShapeType,
-        traits: TraitMap,
         member_name: &'static str,
         member_index: usize,
     ) -> Self {
         Self {
             id,
             shape_type,
-            traits,
             member_name: Some(member_name),
             member_index: Some(member_index),
-            members: SchemaMembers::None,
+            ..Self::EMPTY_TRAITS
         }
     }
 
@@ -169,9 +210,163 @@ impl Schema {
         self.shape_type
     }
 
-    /// Returns the traits associated with this schema.
-    pub fn traits(&self) -> &TraitMap {
-        &self.traits
+    /// Returns the fallback trait map for unknown/custom traits.
+    pub fn traits(&self) -> Option<&TraitMap> {
+        self.traits.map(|lazy| &**lazy)
+    }
+
+    // -- Known trait accessors --
+
+    /// Returns the `@sensitive` trait if present.
+    pub fn sensitive(&self) -> Option<&trait_types::SensitiveTrait> {
+        self.sensitive.as_ref()
+    }
+
+    /// Returns the `@jsonName` value if present.
+    pub fn json_name(&self) -> Option<&trait_types::JsonNameTrait> {
+        self.json_name.as_ref()
+    }
+
+    /// Returns the `@timestampFormat` if present.
+    pub fn timestamp_format(&self) -> Option<&trait_types::TimestampFormatTrait> {
+        self.timestamp_format.as_ref()
+    }
+
+    /// Returns the `@xmlName` value if present.
+    pub fn xml_name(&self) -> Option<&trait_types::XmlNameTrait> {
+        self.xml_name.as_ref()
+    }
+
+    /// Returns the `@httpHeader` value if present.
+    pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait> {
+        self.http_header.as_ref()
+    }
+
+    /// Returns the `@httpQuery` value if present.
+    pub fn http_query(&self) -> Option<&trait_types::HttpQueryTrait> {
+        self.http_query.as_ref()
+    }
+
+    // -- Const setters for builder-style construction in generated code --
+
+    /// Sets the `@sensitive` trait.
+    pub const fn with_sensitive(mut self) -> Self {
+        self.sensitive = Some(trait_types::SensitiveTrait);
+        self
+    }
+
+    /// Sets the `@jsonName` trait.
+    pub const fn with_json_name(mut self, value: &'static str) -> Self {
+        self.json_name = Some(trait_types::JsonNameTrait::new(value));
+        self
+    }
+
+    /// Sets the `@timestampFormat` trait.
+    pub const fn with_timestamp_format(mut self, format: trait_types::TimestampFormat) -> Self {
+        self.timestamp_format = Some(trait_types::TimestampFormatTrait::new(format));
+        self
+    }
+
+    /// Sets the `@xmlName` trait.
+    pub const fn with_xml_name(mut self, value: &'static str) -> Self {
+        self.xml_name = Some(trait_types::XmlNameTrait::new(value));
+        self
+    }
+
+    /// Sets the `@xmlAttribute` trait.
+    pub const fn with_xml_attribute(mut self) -> Self {
+        self.xml_attribute = Some(trait_types::XmlAttributeTrait);
+        self
+    }
+
+    /// Sets the `@xmlFlattened` trait.
+    pub const fn with_xml_flattened(mut self) -> Self {
+        self.xml_flattened = Some(trait_types::XmlFlattenedTrait);
+        self
+    }
+
+    /// Sets the `@httpHeader` trait.
+    pub const fn with_http_header(mut self, value: &'static str) -> Self {
+        self.http_header = Some(trait_types::HttpHeaderTrait::new(value));
+        self
+    }
+
+    /// Sets the `@httpLabel` trait.
+    pub const fn with_http_label(mut self) -> Self {
+        self.http_label = Some(trait_types::HttpLabelTrait);
+        self
+    }
+
+    /// Sets the `@httpPayload` trait.
+    pub const fn with_http_payload(mut self) -> Self {
+        self.http_payload = Some(trait_types::HttpPayloadTrait);
+        self
+    }
+
+    /// Sets the `@httpPrefixHeaders` trait.
+    pub const fn with_http_prefix_headers(mut self, value: &'static str) -> Self {
+        self.http_prefix_headers = Some(trait_types::HttpPrefixHeadersTrait::new(value));
+        self
+    }
+
+    /// Sets the `@httpQuery` trait.
+    pub const fn with_http_query(mut self, value: &'static str) -> Self {
+        self.http_query = Some(trait_types::HttpQueryTrait::new(value));
+        self
+    }
+
+    /// Sets the `@httpQueryParams` trait.
+    pub const fn with_http_query_params(mut self) -> Self {
+        self.http_query_params = Some(trait_types::HttpQueryParamsTrait);
+        self
+    }
+
+    /// Sets the `@httpResponseCode` trait.
+    pub const fn with_http_response_code(mut self) -> Self {
+        self.http_response_code = Some(trait_types::HttpResponseCodeTrait);
+        self
+    }
+
+    /// Sets the `@streaming` trait.
+    pub const fn with_streaming(mut self) -> Self {
+        self.streaming = Some(trait_types::StreamingTrait);
+        self
+    }
+
+    /// Sets the `@eventHeader` trait.
+    pub const fn with_event_header(mut self) -> Self {
+        self.event_header = Some(trait_types::EventHeaderTrait);
+        self
+    }
+
+    /// Sets the `@eventPayload` trait.
+    pub const fn with_event_payload(mut self) -> Self {
+        self.event_payload = Some(trait_types::EventPayloadTrait);
+        self
+    }
+
+    /// Sets the `@hostLabel` trait.
+    pub const fn with_host_label(mut self) -> Self {
+        self.host_label = Some(trait_types::HostLabelTrait);
+        self
+    }
+
+    /// Sets the `@mediaType` trait.
+    pub const fn with_media_type(mut self, value: &'static str) -> Self {
+        self.media_type = Some(trait_types::MediaTypeTrait::new(value));
+        self
+    }
+
+    /// Sets the `@xmlNamespace` trait.
+    pub const fn with_xml_namespace(mut self) -> Self {
+        self.xml_namespace = Some(trait_types::XmlNamespaceTrait);
+        self
+    }
+
+    /// Sets the fallback trait map for unknown/custom traits.
+    pub const fn with_traits(mut self, traits: &'static std::sync::LazyLock<TraitMap>) -> Self {
+        self.traits = Some(traits);
+        self
     }
 
     /// Returns the member name if this is a member schema.
@@ -343,7 +538,7 @@ mod test {
 
         let trait_id = shape_id!("smithy.api", "required");
         let test_trait = Box::new(TestTrait {
-            id: trait_id.clone(),
+            id: trait_id,
             value: "test".to_string(),
         });
 
@@ -358,11 +553,7 @@ mod test {
 
     #[test]
     fn test_schema_predicates() {
-        let schema = Schema::new(
-            shape_id!("com.example", "MyStruct"),
-            ShapeType::Structure,
-            TraitMap::new(),
-        );
+        let schema = Schema::new(shape_id!("com.example", "MyStruct"), ShapeType::Structure);
 
         assert!(schema.is_structure());
         assert!(!schema.is_union());
@@ -372,15 +563,11 @@ mod test {
 
     #[test]
     fn test_schema_basic() {
-        let schema = Schema::new(
-            shape_id!("smithy.api", "String"),
-            ShapeType::String,
-            TraitMap::new(),
-        );
+        let schema = Schema::new(shape_id!("smithy.api", "String"), ShapeType::String);
 
         assert_eq!(schema.shape_id().as_str(), "smithy.api#String");
         assert_eq!(schema.shape_type(), ShapeType::String);
-        assert!(schema.traits().is_empty());
+        assert!(schema.traits().is_none());
         assert!(schema.member_name().is_none());
         assert!(schema.member_schema("test").is_none());
         assert!(schema.member_schema_by_index(0).is_none());
