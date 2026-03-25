@@ -135,4 +135,60 @@ pub trait ShapeDeserializer {
     /// that claim excessively large container sizes (e.g. a CBOR header
     /// declaring billions of elements).
     fn container_size(&self) -> Option<usize>;
+
+    /// Reads a list of strings.
+    fn read_string_list(&mut self, schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_string(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of blobs.
+    fn read_blob_list(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<Vec<aws_smithy_types::Blob>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_blob(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of integers.
+    fn read_integer_list(&mut self, schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_integer(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of longs.
+    fn read_long_list(&mut self, schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_long(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a map with string values.
+    fn read_string_string_map(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        let mut out = std::collections::HashMap::new();
+        self.read_map(schema, &mut |key, deser| {
+            out.insert(key, deser.read_string(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
 }

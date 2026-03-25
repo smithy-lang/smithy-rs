@@ -107,6 +107,65 @@ pub trait ShapeSerializer {
 
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError>;
+
+    /// Writes a list of strings.
+    fn write_string_list(&mut self, schema: &Schema, values: &[String]) -> Result<(), SerdeError> {
+        self.write_list(schema, &|ser| {
+            for item in values {
+                ser.write_string(&crate::prelude::STRING, item)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Writes a list of blobs.
+    fn write_blob_list(
+        &mut self,
+        schema: &Schema,
+        values: &[aws_smithy_types::Blob],
+    ) -> Result<(), SerdeError> {
+        self.write_list(schema, &|ser| {
+            for item in values {
+                ser.write_blob(&crate::prelude::BLOB, item)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Writes a list of integers.
+    fn write_integer_list(&mut self, schema: &Schema, values: &[i32]) -> Result<(), SerdeError> {
+        self.write_list(schema, &|ser| {
+            for item in values {
+                ser.write_integer(&crate::prelude::INTEGER, *item)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Writes a list of longs.
+    fn write_long_list(&mut self, schema: &Schema, values: &[i64]) -> Result<(), SerdeError> {
+        self.write_list(schema, &|ser| {
+            for item in values {
+                ser.write_long(&crate::prelude::LONG, *item)?;
+            }
+            Ok(())
+        })
+    }
+
+    /// Writes a map with string keys and string values.
+    fn write_string_string_map(
+        &mut self,
+        schema: &Schema,
+        values: &std::collections::HashMap<String, String>,
+    ) -> Result<(), SerdeError> {
+        self.write_map(schema, &|ser| {
+            for (key, value) in values {
+                ser.write_string(&crate::prelude::STRING, key)?;
+                ser.write_string(&crate::prelude::STRING, value)?;
+            }
+            Ok(())
+        })
+    }
 }
 
 /// Trait for structures that can be serialized via a schema.

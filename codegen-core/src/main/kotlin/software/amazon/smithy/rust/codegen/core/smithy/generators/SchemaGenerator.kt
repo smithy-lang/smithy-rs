@@ -15,6 +15,7 @@ import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
+import software.amazon.smithy.model.shapes.IntEnumShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
@@ -338,30 +339,44 @@ class SchemaGenerator(
             }
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for item in $varName {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                // Use helpers for simple non-enum element types
+                when (elementTarget) {
+                    is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
+                    is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
+                    is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
+                    is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                    else -> null
+                } ?: run {
+                    val elementWrite = elementWriteExpr(elementTarget, "item")
+                    """
+                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
-                val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueWrite = mapValueWriteExpr(valueTarget, "value")
-                """
-                ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for (key, value) in $varName {
-                        ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
-                        $valueWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                // Use helper for non-enum string key, string value maps
+                if (!isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
+                    "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
+                } else {
+                    val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
+                    val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                    """
+                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for (key, value) in $varName {
+                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                            $valueWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
             is UnionShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
@@ -822,35 +837,57 @@ class SchemaGenerator(
             is ListShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
-                val elementRead = elementReadExpr(elementTarget, memberRef)
-                val pushExpr =
-                    if (isSparse) {
-                        "container.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
+                // Use helper methods for common non-sparse simple-element lists
+                val helperExpr =
+                    if (!isSparse) {
+                        when (elementTarget) {
+                            is StringShape -> "deser.read_string_list($memberRef)?"
+                            is BlobShape -> "deser.read_blob_list($memberRef)?"
+                            is IntegerShape, is IntEnumShape -> "deser.read_integer_list($memberRef)?"
+                            is LongShape -> "deser.read_long_list($memberRef)?"
+                            else -> null
+                        }
                     } else {
-                        "container.push($elementRead)"
+                        null
                     }
-                "{ let mut container = Vec::new(); deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
+                if (helperExpr != null) {
+                    helperExpr
+                } else {
+                    val elementRead = elementReadExpr(elementTarget, memberRef)
+                    val pushExpr =
+                        if (isSparse) {
+                            "container.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
+                        } else {
+                            "container.push($elementRead)"
+                        }
+                    "{ let mut container = Vec::new(); deser.read_list($memberRef, &mut |deser| { $pushExpr; Ok(()) })?; container }"
+                }
             }
 
             is MapShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val keyTarget = model.expectShape(target.key.target)
-                val keyInsert =
-                    if (isStringEnum(keyTarget)) {
-                        val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
-                        "$enumName::from(key.as_str())"
-                    } else {
-                        "key"
-                    }
                 val valueTarget = model.expectShape(target.value.target)
-                val valueRead = elementReadExpr(valueTarget, memberRef)
-                val insertExpr =
-                    if (isSparse) {
-                        "container.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
-                    } else {
-                        "container.insert($keyInsert, $valueRead)"
-                    }
-                "{ let mut container = std::collections::HashMap::new(); deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
+                // Use helper for non-sparse, plain string key, string value maps
+                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape) {
+                    "deser.read_string_string_map($memberRef)?"
+                } else {
+                    val keyInsert =
+                        if (isStringEnum(keyTarget)) {
+                            val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
+                            "$enumName::from(key.as_str())"
+                        } else {
+                            "key"
+                        }
+                    val valueRead = elementReadExpr(valueTarget, memberRef)
+                    val insertExpr =
+                        if (isSparse) {
+                            "container.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
+                        } else {
+                            "container.insert($keyInsert, $valueRead)"
+                        }
+                    "{ let mut container = std::collections::HashMap::new(); deser.read_map($memberRef, &mut |key, deser| { $insertExpr; Ok(()) })?; container }"
+                }
             }
 
             is StructureShape -> {

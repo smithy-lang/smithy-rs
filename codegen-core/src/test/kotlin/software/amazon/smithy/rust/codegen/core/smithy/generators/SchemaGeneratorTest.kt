@@ -76,6 +76,30 @@ class SchemaGeneratorTest {
             key: String,
             value: StringMap
         }
+
+        structure CollectionHelperStruct {
+            stringList: StringList,
+            blobList: BlobList,
+            intList: IntList,
+            longList: LongList,
+            stringStringMap: StringMap
+        }
+
+        list StringList {
+            member: String
+        }
+
+        list BlobList {
+            member: Blob
+        }
+
+        list IntList {
+            member: Integer
+        }
+
+        list LongList {
+            member: Long
+        }
         """.asSmithyModel()
 
     private val provider = testSymbolProvider(model)
@@ -782,6 +806,59 @@ class SchemaGeneratorTest {
                 let mm = result.map_of_maps.expect("map_of_maps");
                 let inner = mm.get("outer").expect("outer");
                 assert_eq!(inner.get("k1"), Some(&"v1".to_string()));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `collection helper methods used for simple list and map deserialization`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#CollectionHelperStruct")
+        project.useShapeWriter(shape) {
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "collection_helpers_round_trip",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+                use aws_smithy_types::Blob;
+                use std::collections::HashMap;
+
+                let mut string_map = HashMap::new();
+                string_map.insert("k1".to_string(), "v1".to_string());
+                string_map.insert("k2".to_string(), "v2".to_string());
+
+                let original = CollectionHelperStruct {
+                    string_list: Some(vec!["a".to_string(), "b".to_string(), "c".to_string()]),
+                    blob_list: Some(vec![Blob::new(vec![1, 2]), Blob::new(vec![3, 4])]),
+                    int_list: Some(vec![10, 20, 30]),
+                    long_list: Some(vec![100, 200, 300]),
+                    string_string_map: Some(string_map),
+                };
+
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(CollectionHelperStruct::SCHEMA, &original).expect("serialize");
+                let bytes = ser.finish();
+
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = CollectionHelperStruct::deserialize(&mut deser).expect("deserialize");
+
+                assert_eq!(result.string_list, Some(vec!["a".to_string(), "b".to_string(), "c".to_string()]));
+                assert_eq!(result.blob_list, Some(vec![Blob::new(vec![1, 2]), Blob::new(vec![3, 4])]));
+                assert_eq!(result.int_list, Some(vec![10, 20, 30]));
+                assert_eq!(result.long_list, Some(vec![100, 200, 300]));
+                let meta = result.string_string_map.expect("map");
+                assert_eq!(meta.len(), 2);
+                assert_eq!(meta.get("k1"), Some(&"v1".to_string()));
+                assert_eq!(meta.get("k2"), Some(&"v2".to_string()));
                 """,
             )
         }
