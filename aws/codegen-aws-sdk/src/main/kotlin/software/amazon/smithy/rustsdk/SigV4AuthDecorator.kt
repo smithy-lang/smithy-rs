@@ -79,23 +79,20 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>,
             ): List<ConfigCustomization> =
-                baseCustomizations +
-                    SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait()) +
-                    if (codegenContext.usesSigV4a()) {
-                        listOf(SigningRegionSetConfigCustomization(codegenContext.runtimeConfig))
-                    } else {
-                        emptyList()
+                (
+                    baseCustomizations +
+                        SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
+                )
+                    .letIf(codegenContext.usesSigV4a()) {
+                        it + SigningRegionSetConfigCustomization(codegenContext.runtimeConfig)
                     }
 
             override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
-                if (codegenContext.usesSigV4a()) {
-                    listOf(
+                emptyList<AdHocCustomization>().letIf(codegenContext.usesSigV4a()) {
+                    it +
                         adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                             rust("${section.serviceConfigBuilder}.set_sigv4a_signing_region_set(${section.sdkConfig}.sigv4a_signing_region_set().cloned());")
-                        },
-                    )
-                } else {
-                    emptyList()
+                        }
                 }
 
             override fun extras(
