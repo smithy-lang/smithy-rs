@@ -31,6 +31,8 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
+import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.getTrait
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamOperations
@@ -77,7 +79,16 @@ class SigV4AuthDecorator : ConditionalDecorator(
                 codegenContext: ClientCodegenContext,
                 baseCustomizations: List<ConfigCustomization>,
             ): List<ConfigCustomization> =
-                baseCustomizations + SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait())
+                baseCustomizations +
+                    SigV4SigningConfig(codegenContext.runtimeConfig, codegenContext.serviceShape.getTrait()) +
+                    SigningRegionSetConfigCustomization(codegenContext.runtimeConfig)
+
+            override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
+                listOf(
+                    adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                        rust("${section.serviceConfigBuilder}.set_sigv4a_signing_region_set(${section.sdkConfig}.sigv4a_signing_region_set().cloned());")
+                    },
+                )
 
             override fun extras(
                 codegenContext: ClientCodegenContext,
@@ -347,6 +358,58 @@ private class AuthOperationCustomization(private val codegenContext: ClientCodeg
                                 },
                         )
                     }
+                }
+
+                else -> {}
+            }
+        }
+}
+
+private class SigningRegionSetConfigCustomization(runtimeConfig: RuntimeConfig) : ConfigCustomization() {
+    private val codegenScope =
+        arrayOf(
+            "SigningRegionSet" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("region::SigningRegionSet"),
+        )
+
+    override fun section(section: ServiceConfig): Writable =
+        writable {
+            when (section) {
+                ServiceConfig.ConfigImpl -> {
+                    rustTemplate(
+                        """
+                        /// Returns the SigV4a signing region set, if configured.
+                        pub fn sigv4a_signing_region_set(&self) -> Option<&#{SigningRegionSet}> {
+                            self.config.load::<#{SigningRegionSet}>()
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                ServiceConfig.BuilderImpl -> {
+                    rustTemplate(
+                        """
+                        /// Sets the SigV4a signing region set.
+                        pub fn sigv4a_signing_region_set(mut self, v: impl Into<#{SigningRegionSet}>) -> Self {
+                            self.set_sigv4a_signing_region_set(Some(v.into()));
+                            self
+                        }
+
+                        /// Sets the SigV4a signing region set.
+                        pub fn set_sigv4a_signing_region_set(&mut self, v: Option<#{SigningRegionSet}>) -> &mut Self {
+                            self.config.store_or_unset(v);
+                            self
+                        }
+                        """,
+                        *codegenScope,
+                    )
+                }
+
+                is ServiceConfig.BuilderFromConfigBag -> {
+                    rustTemplate(
+                        "${section.builder}.set_sigv4a_signing_region_set(${section.configBag}.load::<#{SigningRegionSet}>().cloned());",
+                        *codegenScope,
+                    )
                 }
 
                 else -> {}
