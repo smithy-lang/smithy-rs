@@ -348,6 +348,124 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(Blob::new(decoded))
     }
 
+    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
+        }
+        self.advance_by(1);
+        let mut out = Vec::new();
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            out.push(self.read_string(_schema)?);
+        }
+        Ok(out)
+    }
+
+    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
+        }
+        self.advance_by(1);
+        let mut out = Vec::new();
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            out.push(self.read_blob(_schema)?);
+        }
+        Ok(out)
+    }
+
+    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
+        }
+        self.advance_by(1);
+        let mut out = Vec::new();
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            out.push(self.read_integer(_schema)?);
+        }
+        Ok(out)
+    }
+
+    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'[') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected array".into(),
+            });
+        }
+        self.advance_by(1);
+        let mut out = Vec::new();
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b']') {
+                self.advance_by(1);
+                break;
+            }
+            out.push(self.read_long(_schema)?);
+        }
+        Ok(out)
+    }
+
+    fn read_string_string_map(
+        &mut self,
+        _schema: &Schema,
+    ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        self.skip_whitespace();
+        if self.remaining().first() != Some(&b'{') {
+            return Err(SerdeError::TypeMismatch {
+                message: "expected object".into(),
+            });
+        }
+        self.advance_by(1);
+        let mut out = std::collections::HashMap::new();
+        loop {
+            self.skip_whitespace();
+            if self.remaining().first() == Some(&b'}') {
+                self.advance_by(1);
+                break;
+            }
+            if self.remaining().first() != Some(&b'"') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected key".into(),
+                });
+            }
+            let key = self.parse_key()?;
+            self.skip_whitespace();
+            if self.remaining().first() != Some(&b':') {
+                return Err(SerdeError::InvalidInput {
+                    message: "expected colon".into(),
+                });
+            }
+            self.advance_by(1);
+            self.skip_whitespace();
+            let val = self.read_string(_schema)?;
+            out.insert(key, val);
+        }
+        Ok(out)
+    }
+
     fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
         let mut iter = json_token_iter(self.remaining());
         match iter.next() {

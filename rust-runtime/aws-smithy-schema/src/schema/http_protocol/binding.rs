@@ -559,14 +559,18 @@ impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a,
         // absent headers/status represent optional members that weren't set.
         let headers = self.response.headers();
         let mut has_payload_member = false;
+        let mut has_any_http_binding = false;
         for member in schema.members() {
             if let Some(h) = member.http_header() {
+                has_any_http_binding = true;
                 if headers.get(h.value()).is_some() {
                     consumer(member, self)?;
                 }
             } else if member.http_response_code().is_some() {
+                has_any_http_binding = true;
                 consumer(member, self)?;
             } else if let Some(prefix) = member.http_prefix_headers() {
+                has_any_http_binding = true;
                 if headers.iter().any(|(k, _)| k.starts_with(prefix.value())) {
                     consumer(member, self)?;
                 }
@@ -574,13 +578,20 @@ impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a,
                 // @httpPayload: the entire body is this member's value.
                 // Pass the body deserializer directly to the consumer.
                 has_payload_member = true;
+                has_any_http_binding = true;
                 consumer(member, &mut self.body)?;
             }
         }
         if !has_payload_member {
-            // No @httpPayload — body members are serialized as a protocol-specific
-            // document (e.g., JSON object). Delegate to the body deserializer.
-            self.body.read_struct(schema, consumer)?;
+            if has_any_http_binding {
+                // Has HTTP bindings but no @httpPayload — body members are in
+                // the protocol-specific document. Delegate to body deserializer.
+                self.body.read_struct(schema, consumer)?;
+            } else {
+                // No HTTP bindings at all — skip the overhead and delegate
+                // entirely to the body deserializer.
+                self.body.read_struct(schema, consumer)?;
+            }
         }
         Ok(())
     }

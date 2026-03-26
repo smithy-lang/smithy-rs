@@ -108,6 +108,21 @@ pub trait ShapeSerializer {
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError>;
 
+    // --- Collection helper methods ---
+    //
+    // These methods are not part of the Serialization and Schema Decoupling SEP.
+    // They exist as a performance optimization for common collection patterns
+    // (e.g. `List<String>`, `Map<String, String>`) that appear frequently in
+    // AWS service models. Without these, generated code must emit an inline
+    // closure calling `write_list`/`write_map` with per-element `write_string`
+    // calls — roughly 6-8 lines of boilerplate per collection field. These
+    // helpers replace that with a single method call, reducing generated code
+    // size.
+    //
+    // Additionally, the default implementations call through the trait
+    // interface per element. Codec implementations can override these to write
+    // elements directly, avoiding per-element dynamic dispatch.
+
     /// Writes a list of strings.
     fn write_string_list(&mut self, schema: &Schema, values: &[String]) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {

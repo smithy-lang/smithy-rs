@@ -136,6 +136,23 @@ pub trait ShapeDeserializer {
     /// declaring billions of elements).
     fn container_size(&self) -> Option<usize>;
 
+    // --- Collection helper methods ---
+    //
+    // These methods are not part of the Serialization and Schema Decoupling SEP.
+    // They exist as a performance optimization for common collection patterns
+    // (e.g. `List<String>`, `Map<String, String>`) that appear frequently in
+    // AWS service models. Without these, generated code must emit an inline
+    // closure calling `read_list`/`read_map` with per-element `read_string`
+    // calls — roughly 6-8 lines of boilerplate per collection field. These
+    // helpers replace that with a single method call, reducing generated code
+    // size (e.g. -43% for DynamoDB deserialize bodies).
+    //
+    // Additionally, the default implementations call through
+    // `&mut dyn ShapeDeserializer`, which introduces vtable dispatch on every
+    // element. Codec implementations (e.g. `JsonDeserializer`) can override
+    // these to call their concrete `read_string`/`read_integer`/etc. methods
+    // directly, eliminating the per-element dynamic dispatch overhead.
+
     /// Reads a list of strings.
     fn read_string_list(&mut self, schema: &Schema) -> Result<Vec<String>, SerdeError> {
         let mut out = Vec::new();

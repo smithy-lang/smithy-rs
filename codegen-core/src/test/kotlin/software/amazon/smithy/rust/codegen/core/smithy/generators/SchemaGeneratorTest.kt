@@ -864,4 +864,35 @@ class SchemaGeneratorTest {
         }
         project.compileAndTest()
     }
+
+    @Test
+    fun `null values in JSON are skipped during struct deserialization`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#MyStruct")
+        project.useShapeWriter(shape) {
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "null_values_skipped",
+                """
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+
+                // JSON with some fields set to null and some present
+                let json = br#"{"name":"hello","age":null,"active":true}"#;
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut deser = codec.create_deserializer(json);
+                let result = MyStruct::deserialize(&mut deser).expect("deserialize");
+
+                assert_eq!(result.name, Some("hello".to_string()));
+                assert_eq!(result.age, None);
+                assert_eq!(result.active, Some(true));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
 }

@@ -770,9 +770,7 @@ class SchemaGenerator(
                             rust(
                                 """
                                 Some($idx) => {
-                                    if !deser.is_null() {
-                                        builder.$memberName = Some($wrapped);
-                                    }
+                                    builder.$memberName = Some($wrapped);
                                 }
                                 """,
                             )
@@ -787,9 +785,7 @@ class SchemaGenerator(
                         rust(
                             """
                             Some($synthIdx) => {
-                                if !deser.is_null() {
-                                    builder.${synth.fieldName} = Some(deser.read_string(member)?);
-                                }
+                                builder.${synth.fieldName} = Some(deser.read_string(member)?);
                             }
                             """,
                         )
