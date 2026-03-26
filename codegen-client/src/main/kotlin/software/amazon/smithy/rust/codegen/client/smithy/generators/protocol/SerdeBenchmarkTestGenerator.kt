@@ -111,6 +111,7 @@ class SerdeBenchmarkTestGenerator(
             let mut timings = Vec::new();
             for _ in 0..10000 {
                 let mut config_bag = #{ConfigBag}::base();
+                config_bag.push_shared_layer(config.clone());
                 let input = #{Input}::erase(input.clone());
                 let start = std::time::Instant::now();
                 let _ = serializer.serialize_input(input, &mut config_bag);
@@ -137,6 +138,8 @@ class SerdeBenchmarkTestGenerator(
             let op = #{Operation}::new();
             let config = op.config().expect("the operation has config");
             let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+            let mut cfg = #{ConfigBag}::base();
+            cfg.push_shared_layer(config.clone());
 
             let mut timings = Vec::new();
             for _ in 0..10000 {
@@ -150,6 +153,7 @@ class SerdeBenchmarkTestGenerator(
                     .resolve("client::ser_de::SharedResponseDeserializer"),
             "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
             "HttpResponseBuilder" to RT.HttpResponseBuilder1x,
+            "ConfigBag" to RT.smithyTypes(rc).resolve("config_bag::ConfigBag"),
         )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
@@ -166,7 +170,7 @@ class SerdeBenchmarkTestGenerator(
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
+                de.deserialize_nonstreaming(&http_response, &cfg)
             });
             let _ = parsed;
             timings.push(start.elapsed().as_nanos() as u64);
