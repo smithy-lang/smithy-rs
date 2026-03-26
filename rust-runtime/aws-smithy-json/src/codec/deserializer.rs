@@ -44,6 +44,44 @@ impl<'a> JsonDeserializer<'a> {
     fn advance_by(&mut self, n: usize) {
         self.position += n;
     }
+
+    /// Parse a JSON quoted string key directly from bytes, advancing past it.
+    /// Assumes the current position is at the opening `"`.
+    fn parse_key(&mut self) -> Result<String, SerdeError> {
+        self.advance_by(1); // skip opening quote
+        let remaining = self.remaining();
+        let mut i = 0;
+        let mut has_escapes = false;
+        while i < remaining.len() {
+            match remaining[i] {
+                b'"' => break,
+                b'\\' => {
+                    has_escapes = true;
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        let key = if has_escapes {
+            let raw =
+                std::str::from_utf8(&remaining[..i]).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })?;
+            crate::escape::unescape_string(raw)
+                .map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })?
+                .into_owned()
+        } else {
+            std::str::from_utf8(&remaining[..i])
+                .map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })?
+                .to_owned()
+        };
+        self.advance_by(i + 1); // key bytes + closing quote
+        Ok(key)
+    }
 }
 
 impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
@@ -77,27 +115,8 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 });
             }
 
-            // Parse the key using the token iterator
-            let mut iter = json_token_iter(self.remaining());
-            let key_str = match iter.next() {
-                Some(Ok(Token::ValueString { value, .. })) => {
-                    let key_len = value.as_escaped_str().len();
-                    let key = value
-                        .to_unescaped()
-                        .map_err(|e| SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        })?
-                        .into_owned();
-                    // Advance past opening quote + key + closing quote
-                    self.advance_by(key_len + 2);
-                    key
-                }
-                _ => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "expected object key".into(),
-                    })
-                }
-            };
+            // Parse the key directly from bytes
+            let key_str = self.parse_key()?;
 
             // Skip whitespace and expect colon
             self.skip_whitespace();
@@ -174,25 +193,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 });
             }
 
-            let mut iter = json_token_iter(self.remaining());
-            let key = match iter.next() {
-                Some(Ok(Token::ValueString { value, .. })) => {
-                    let len = value.as_escaped_str().len();
-                    let key = value
-                        .to_unescaped()
-                        .map_err(|e| SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        })?
-                        .into_owned();
-                    self.advance_by(len + 2);
-                    key
-                }
-                _ => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "expected key".into(),
-                    })
-                }
-            };
+            let key = self.parse_key()?;
 
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
@@ -397,8 +398,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn is_null(&self) -> bool {
-        let mut iter = json_token_iter(self.remaining());
-        matches!(iter.next(), Some(Ok(Token::ValueNull { .. })))
+        let remaining = self.remaining();
+        remaining.len() >= 4
+            && &remaining[..4] == b"null"
+            && remaining
+                .get(4)
+                .map_or(true, |b| !b.is_ascii_alphanumeric())
     }
 
     fn container_size(&self) -> Option<usize> {
