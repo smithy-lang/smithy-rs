@@ -113,7 +113,7 @@ class SerdeBenchmarkTestGenerator(
                 let mut config_bag = #{ConfigBag}::base();
                 let input = #{Input}::erase(input.clone());
                 let start = std::time::Instant::now();
-                let _ = serializer.serialize_input(input, &mut config_bag);
+                let _ = std::hint::black_box(serializer.serialize_input(input, &mut config_bag));
                 timings.push(start.elapsed().as_nanos() as u64);
             }
             """,
@@ -168,7 +168,7 @@ class SerdeBenchmarkTestGenerator(
                 });
                 de.deserialize_nonstreaming(&http_response)
             });
-            let _ = parsed;
+            let _ = std::hint::black_box(parsed);
             timings.push(start.elapsed().as_nanos() as u64);
             }
             """,
