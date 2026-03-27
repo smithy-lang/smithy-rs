@@ -252,6 +252,15 @@ impl Schema {
     }
 
     /// Returns the `@httpHeader` value if present.
+    /// Returns `true` if this member schema has any HTTP response binding trait
+    /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
+    pub fn has_http_response_binding(&self) -> bool {
+        self.http_header.is_some()
+            || self.http_response_code.is_some()
+            || self.http_prefix_headers.is_some()
+            || self.http_payload.is_some()
+    }
+
     pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait> {
         self.http_header.as_ref()
     }

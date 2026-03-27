@@ -8,9 +8,6 @@
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
-use std::collections::HashMap;
-use std::sync::Mutex;
-
 use std::sync::Arc;
 
 mod deserializer;
@@ -28,11 +25,8 @@ pub use serializer::JsonSerializer;
 enum JsonFieldMapper {
     /// Uses member names directly, ignoring `@jsonName`.
     UseMemberName,
-    /// Uses `@jsonName` trait values when present, with a cached reverse map.
-    UseJsonName {
-        /// Cache from schema pointer → (wire name → member index).
-        cache: Mutex<HashMap<usize, HashMap<String, usize>>>,
-    },
+    /// Uses `@jsonName` trait values when present, falling back to member name.
+    UseJsonName,
 }
 
 impl JsonFieldMapper {
@@ -54,22 +48,20 @@ impl JsonFieldMapper {
     fn field_to_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
         match self {
             JsonFieldMapper::UseMemberName => schema.member_schema(field_name),
-            JsonFieldMapper::UseJsonName { cache } => {
-                let key = std::ptr::from_ref(schema) as usize;
-                let mut cache = cache.lock().unwrap();
-                let map = cache.entry(key).or_insert_with(|| {
-                    let mut map = HashMap::new();
-                    for (idx, member) in schema.members().iter().enumerate() {
-                        if let Some(jn) = member.json_name() {
-                            map.insert(jn.value().to_string(), idx);
+            JsonFieldMapper::UseJsonName => {
+                // Check @jsonName on each member. For typical struct sizes
+                // (< 50 members), linear scan is faster than a cached HashMap
+                // behind a Mutex.
+                for member in schema.members() {
+                    if let Some(jn) = member.json_name() {
+                        if jn.value() == field_name {
+                            return Some(member);
                         }
+                    } else if member.member_name() == Some(field_name) {
+                        return Some(member);
                     }
-                    map
-                });
-                if let Some(&idx) = map.get(field_name) {
-                    return schema.member_schema_by_index(idx);
                 }
-                schema.member_schema(field_name)
+                None
             }
         }
     }
@@ -120,9 +112,7 @@ impl JsonCodecSettings {
 impl Default for JsonCodecSettings {
     fn default() -> Self {
         Self {
-            field_mapper: JsonFieldMapper::UseJsonName {
-                cache: Mutex::new(HashMap::new()),
-            },
+            field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
         }
     }
@@ -160,9 +150,7 @@ impl JsonCodecSettingsBuilder {
     /// Builds the settings.
     pub fn build(self) -> JsonCodecSettings {
         let field_mapper = if self.use_json_name {
-            JsonFieldMapper::UseJsonName {
-                cache: Mutex::new(HashMap::new()),
-            }
+            JsonFieldMapper::UseJsonName
         } else {
             JsonFieldMapper::UseMemberName
         };
