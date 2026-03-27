@@ -110,6 +110,13 @@ class SerdeBenchmarkTestGenerator(
 
             let mut timings = Vec::new();
             for _ in 0..10000 {
+                // TODO(https://github.com/smithy-lang/smithy-rs/pull/4579##discussion_r2996838457)
+                // Consider hoisting `config_bag` creation outside the loop. For example:
+                //
+                // let config = op.config().expect("the operation has config");
+                // let mut config_bag = ::aws_smithy_types::config_bag::ConfigBag::base();
+                // config_bag.push_shared_layer(config.clone()); // Didn't want this bit in the loop
+                // for _ in 0..10000 { ... }
                 let mut config_bag = #{ConfigBag}::base();
                 let input = #{Input}::erase(input.clone());
                 let start = std::time::Instant::now();
