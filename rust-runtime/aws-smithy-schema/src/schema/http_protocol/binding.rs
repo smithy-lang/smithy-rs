@@ -86,6 +86,12 @@ struct HttpBindingSerializer<'a, S> {
     /// Per the REST-JSON spec, operations with no body members must send an empty
     /// body with no Content-Type header.
     has_body_content: bool,
+    /// Raw payload bytes for `@httpPayload` blob/string members. When a member
+    /// has `@httpPayload` and targets a blob or string, the raw bytes bypass
+    /// the codec serializer entirely and are used as the HTTP body directly.
+    /// Safety: the referenced bytes are borrowed from the input struct passed to
+    /// `serialize_request`, which outlives this serializer.
+    raw_payload: Option<&'a [u8]>,
 }
 
 impl<'a, S> HttpBindingSerializer<'a, S> {
@@ -98,6 +104,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             input_schema,
             is_top_level: true,
             has_body_content: false,
+            raw_payload: None,
         }
     }
 
@@ -306,6 +313,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value);
         }
+        if schema.http_payload().is_some() {
+            // Safety: same as write_blob — the string is borrowed from the input struct
+            // which outlives this serializer.
+            self.raw_payload =
+                Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_bytes()) });
+            return Ok(());
+        }
         self.has_body_content = true;
         self.body.write_string(schema, value)
     }
@@ -320,6 +334,14 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
             self.headers
                 .push((schema.http_header().unwrap().value().to_string(), encoded));
+            return Ok(());
+        }
+        if schema.http_payload().is_some() {
+            // Safety: the blob is borrowed from the input struct in serialize_request,
+            // which outlives this serializer. We extend the lifetime to 'a to avoid
+            // copying potentially multi-GB blob data.
+            self.raw_payload =
+                Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_ref()) });
             return Ok(());
         }
         self.has_body_content = true;
@@ -785,19 +807,19 @@ where
         } else {
             binder.write_struct(input_schema, input)?;
         }
-        let mut body = binder.body.finish();
+        let raw_payload = binder.raw_payload;
+        let mut body = if raw_payload.is_some() {
+            // @httpPayload blob/string — don't use the codec output
+            Vec::new()
+        } else {
+            binder.body.finish()
+        };
 
         // Per the REST-JSON content-type handling spec:
         // - If @httpPayload targets a blob/string: send raw bytes, no Content-Type when empty
         // - If body members exist (even if all optional and unset): send `{}` with Content-Type
         // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
-        let has_blob_or_string_payload = input_schema.members().iter().any(|m| {
-            m.http_payload().is_some()
-                && !matches!(
-                    m.shape_type(),
-                    crate::ShapeType::Structure | crate::ShapeType::Union
-                )
-        });
+        let has_blob_or_string_payload = raw_payload.is_some();
         let has_body_members = input_schema.members().iter().any(|m| {
             m.http_header().is_none()
                 && m.http_query().is_none()
@@ -808,7 +830,7 @@ where
 
         let set_content_type = if has_blob_or_string_payload {
             // Blob/string payload: only set Content-Type if there's actual content
-            !body.is_empty()
+            raw_payload.map_or(false, |p| !p.is_empty())
         } else if has_body_members {
             // Operation has body members — body includes framing (e.g., `{}`).
             // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
@@ -857,7 +879,11 @@ where
             uri.push_str(&pairs.join("&"));
         }
 
-        let mut request = Request::new(SdkBody::from(body));
+        let mut request = if let Some(payload) = raw_payload {
+            Request::new(SdkBody::from(payload))
+        } else {
+            Request::new(SdkBody::from(body))
+        };
         // Set HTTP method from @http trait
         if let Some(http) = input_schema.http() {
             request

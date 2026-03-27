@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.HttpPayloadTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
@@ -266,14 +268,46 @@ class RequestSerializerGenerator(
                 }
                 rustTemplate("return #{Ok}(request);", *codegenScope)
             } else {
-                rustTemplate(
-                    """
-                    return protocol.serialize_request(
-                        &input, $schemaRef, "", _cfg,
-                    ).map_err(#{BoxError}::from);
-                    """,
-                    *codegenScope,
-                )
+                // Check for @httpPayload targeting a non-streaming blob or string.
+                // In that case, we take the payload out of the input before serializing
+                // so the raw bytes become the body directly (zero-copy), rather than
+                // going through the codec serializer which would JSON-encode them.
+                val httpPayloadMember = inputShape.members().firstOrNull { it.hasTrait(HttpPayloadTrait::class.java) }
+                val payloadTarget = httpPayloadMember?.let { codegenContext.model.expectShape(it.target) }
+                val isBlobPayload = payloadTarget is BlobShape && httpPayloadMember != streamingMember
+                val isStringPayload = payloadTarget is StringShape
+                if (isBlobPayload || isStringPayload) {
+                    val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
+                    val bodyExpr =
+                        if (isBlobPayload) {
+                            "payload.into_inner()"
+                        } else {
+                            "payload.into_bytes()"
+                        }
+                    rustTemplate(
+                        """
+                        let mut input = input;
+                        let payload = input.$memberName.take();
+                        let mut request = protocol.serialize_request(
+                            &input, $schemaRef, "", _cfg,
+                        ).map_err(#{BoxError}::from)?;
+                        if let #{Some}(payload) = payload {
+                            *request.body_mut() = #{SdkBody}::from($bodyExpr);
+                        }
+                        return #{Ok}(request);
+                        """,
+                        *codegenScope,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        return protocol.serialize_request(
+                            &input, $schemaRef, "", _cfg,
+                        ).map_err(#{BoxError}::from);
+                        """,
+                        *codegenScope,
+                    )
+                }
             }
         }
 }
