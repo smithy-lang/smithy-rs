@@ -554,46 +554,20 @@ impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a,
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        // Read HTTP-bound members from the response.
-        // Only call the consumer for members whose data is actually present —
-        // absent headers/status represent optional members that weren't set.
-        let headers = self.response.headers();
-        let mut has_payload_member = false;
-        let mut has_any_http_binding = false;
+        // Check for @httpPayload — the entire body is a single member's value.
         for member in schema.members() {
-            if let Some(h) = member.http_header() {
-                has_any_http_binding = true;
-                if headers.get(h.value()).is_some() {
-                    consumer(member, self)?;
-                }
-            } else if member.http_response_code().is_some() {
-                has_any_http_binding = true;
-                consumer(member, self)?;
-            } else if let Some(prefix) = member.http_prefix_headers() {
-                has_any_http_binding = true;
-                if headers.iter().any(|(k, _)| k.starts_with(prefix.value())) {
-                    consumer(member, self)?;
-                }
-            } else if member.http_payload().is_some() {
-                // @httpPayload: the entire body is this member's value.
-                // Pass the body deserializer directly to the consumer.
-                has_payload_member = true;
-                has_any_http_binding = true;
+            if member.http_payload().is_some() {
                 consumer(member, &mut self.body)?;
+                return Ok(());
             }
         }
-        if !has_payload_member {
-            if has_any_http_binding {
-                // Has HTTP bindings but no @httpPayload — body members are in
-                // the protocol-specific document. Delegate to body deserializer.
-                self.body.read_struct(schema, consumer)?;
-            } else {
-                // No HTTP bindings at all — skip the overhead and delegate
-                // entirely to the body deserializer.
-                self.body.read_struct(schema, consumer)?;
-            }
-        }
-        Ok(())
+        // No @httpPayload — body members are in the protocol-specific document.
+        // Header-bound members are handled by generated code in
+        // `deserialize_nonstreaming` which reads them directly from the HTTP
+        // response before calling this deserializer. This avoids the overhead
+        // of iterating all schema members and checking HTTP binding traits at
+        // runtime.
+        self.body.read_struct(schema, consumer)
     }
 
     fn read_list(
@@ -925,6 +899,13 @@ where
             body: self.codec.create_deserializer(body),
             response,
         }))
+    }
+
+    fn deserialize_body<'a>(
+        &self,
+        body: &'a [u8],
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+        Ok(Box::new(self.codec.create_deserializer(body)))
     }
 }
 

@@ -88,6 +88,13 @@ where
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
+
+    fn deserialize_body<'a>(
+        &self,
+        body: &'a [u8],
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+        Ok(Box::new(self.codec.create_deserializer(body)))
+    }
 }
 
 #[cfg(test)]
