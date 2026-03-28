@@ -296,7 +296,11 @@ class RequestBindingGenerator(
         return when {
             target.isStringShape -> {
                 val func = writer.format(RuntimeType.queryFormat(runtimeConfig, "fmt_string"))
-                "&$func($targetName)"
+                if (target.hasTrait<EnumTrait>()) {
+                    "&$func($targetName.as_str())"
+                } else {
+                    "&$func($targetName)"
+                }
             }
 
             target.isTimestampShape -> {
@@ -343,7 +347,8 @@ class RequestBindingGenerator(
                     } else {
                         RuntimeType.labelFormat(runtimeConfig, "EncodingStrategy::Default")
                     }
-                rust("let $outputVar = $func($input, #T);", encodingStrategy)
+                val inputExpr = if (target.hasTrait<EnumTrait>()) "$input.as_str()" else "$input"
+                rust("let $outputVar = $func($inputExpr, #T);", encodingStrategy)
             }
 
             target.isTimestampShape -> {
