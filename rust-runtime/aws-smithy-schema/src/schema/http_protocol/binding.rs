@@ -44,7 +44,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
 // Note: there is a percent_encoding crate we use some other places for this, but I'm trying to keep
 // the dependencies to a minimum.
 /// Percent-encode a string per RFC 3986 section 2.3 (unreserved characters only).
-pub(crate) fn percent_encode(input: &str) -> String {
+pub fn percent_encode(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
     for byte in input.bytes() {
         match byte {
@@ -932,6 +932,50 @@ where
         body: &'a [u8],
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         Ok(Box::new(self.codec.create_deserializer(body)))
+    }
+
+    fn serialize_body(
+        &self,
+        input: &dyn SerializableStruct,
+        input_schema: &Schema,
+        _endpoint: &str,
+        _cfg: &ConfigBag,
+    ) -> Result<Request, SerdeError> {
+        // Serialize only body members using the codec directly — no HttpBindingSerializer.
+        let mut serializer = self.codec.create_serializer();
+        serializer.write_struct(input_schema, input)?;
+        let body = serializer.finish();
+
+        // Check if there are body members to determine Content-Type behavior.
+        let has_body_members = input_schema.members().iter().any(|m| {
+            m.http_header().is_none()
+                && m.http_query().is_none()
+                && m.http_label().is_none()
+                && m.http_prefix_headers().is_none()
+                && m.http_query_params().is_none()
+                && m.http_payload().is_none()
+        });
+
+        let mut request = Request::new(SdkBody::from(body));
+        // Set HTTP method from @http trait.
+        if let Some(http) = input_schema.http() {
+            request
+                .set_method(http.method())
+                .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
+        }
+        if has_body_members {
+            request
+                .headers_mut()
+                .insert("Content-Type", self.content_type);
+        }
+        if let Some(len) = request.body().content_length() {
+            if len > 0 || has_body_members {
+                request
+                    .headers_mut()
+                    .insert("Content-Length", len.to_string());
+            }
+        }
+        Ok(request)
     }
 }
 

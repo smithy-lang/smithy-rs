@@ -137,6 +137,32 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
         body: &'a [u8],
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
+    /// Serializes only the body members of an operation input into an HTTP request.
+    ///
+    /// This is the serialization counterpart to [`deserialize_body`](Self::deserialize_body).
+    /// For REST protocols, `serialize_request` routes each member through
+    /// `HttpBindingSerializer` which checks HTTP binding traits at runtime to
+    /// decide whether a member goes to a header, query param, URI label, or body.
+    /// For operations with many HTTP-bound members, this per-member routing adds
+    /// measurable overhead.
+    ///
+    /// This method bypasses that routing: it serializes only body members using
+    /// the codec directly, constructs the URI (with `@http` trait pattern), and
+    /// sets the HTTP method. Generated code then writes HTTP-bound members
+    /// (headers, query params, labels) directly onto the returned request.
+    ///
+    /// The default implementation delegates to `serialize_request`, which is
+    /// correct but slower for REST protocols with many HTTP bindings.
+    fn serialize_body(
+        &self,
+        input: &dyn SerializableStruct,
+        input_schema: &Schema,
+        endpoint: &str,
+        cfg: &ConfigBag,
+    ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError> {
+        self.serialize_request(input, input_schema, endpoint, cfg)
+    }
+
     /// Updates a previously serialized request with a new endpoint.
     ///
     /// This is required by the Smithy Reference Architecture (SRA) to support
