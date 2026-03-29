@@ -6,67 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Add support for Smithy bigInteger and bigDecimal types as string wrappers in aws-smithy-types, allowing users to parse with their preferred big number library.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": "AmitKulkarni23",
-      "references": [
-        "smithy-rs#312"
-      ],
-      "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 5
-    },
-    {
-      "message": "All Smithy-rs crates, for both servers and clients, now use the 1.x version of\nthe `http` crate for all internal processing. Utility methods are still provided\nfor users to convert between SDK types and both of the `http` 0.x and 1.x types.\n",
-      "meta": {
-        "bug": false,
-        "breaking": false,
-        "tada": true
-      },
-      "author": [
-        "landonxjames",
-        "drganjoo"
-      ],
-      "references": [
-        "smithy-rs#4484"
-      ],
-      "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 5
-    },
-    {
-      "message": "Fix JMESPath integer literal handling in waiters to support Smithy 1.66.0, which parses integer literals as `Long` instead of `Double`.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "vcjana",
-      "references": [
-        "smithy-rs#4500"
-      ],
-      "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 5
-    },
-    {
-      "message": "Enable retries by default for AWS SDK clients using `BehaviorVersion::v2026_01_12()` or later.\n\nPreviously, retries were only enabled when constructing clients via `aws_config::load_from_env()`. Clients constructed directly using `Client::from_conf()` did not have retries enabled, which was inconsistent with AWS SDK behavior in other languages.\n\nThis change affects AWS SDK clients constructed with `Client::from_conf()` when using `BehaviorVersion::v2026_01_12()` or `BehaviorVersion::latest()`. Generic Smithy clients (non-AWS) are not affected.\n\nTo disable retries:\n```rust\nlet config = aws_sdk_s3::Config::builder()\n    .retry_config(RetryConfig::disabled())\n    // ...\n    .build();\n```\n\nFor more context, see the [discussion on retry behavior](https://github.com/smithy-lang/smithy-rs/discussions/4466).\n",
-      "meta": {
-        "bug": false,
-        "breaking": true,
-        "tada": true
-      },
-      "author": "vcjana",
-      "references": [
-        "smithy-rs#4454",
-        "smithy-rs#4467",
-        "aws-sdk-rust#1389"
-      ],
-      "since-commit": "11e2c8376ff987e2d445f3e90d7d6bc16b1bb925",
-      "age": 5
-    },
-    {
       "message": "Upgrade MSRV to Rust 1.91.0.\n",
       "meta": {
         "bug": false,
@@ -76,7 +15,7 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "4fcd5503215ba832f29bb246e23e1d9b20510d14",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add full support for [AWS chunked content encoding](https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-streaming.html). AWS chunked content encoding enables streaming sigv4 for payloads without precomputing the sha256 of the entire payload. While this encoding was already used in S3's `PutObject` and `UploadPart` operations to support trailing checksums with non-chunked, unsigned streaming payloads, this release now splits streaming payloads into 64 KiB chunks by default (the last chunk may be smaller) and adds support for chunk signing (currently only activated for non-TLS requests).\n\nIf the default chunk size does not suit your use case, it can be configured via the service config:\n```\n// Custom chunk size\nlet config = aws_sdk_s3::Config::builder()\n    .aws_chunked_encoding_chunk_size(Some(10240)) // 10 KiB chunks\n    // other configurations\n    .build();\nlet client = aws_sdk_s3::Client::from_conf(config);\n```\n\n```\n// Disable chunking (buffers entire body in memory and sends it as one chunk)\nlet config = aws_sdk_s3::Config::builder()\n    .aws_chunked_encoding_chunk_size(None)\n    // other configurations\n    .build();\nlet client = aws_sdk_s3::Client::from_conf(config);\n```\n",
@@ -91,7 +30,7 @@
         "smithy-rs#4188"
       ],
       "since-commit": "4fcd5503215ba832f29bb246e23e1d9b20510d14",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Change sha1 calculation in aws-config from ring to sha1 crate.\n",
@@ -105,7 +44,7 @@
         "aws-sdk-rust#1317"
       ],
       "since-commit": "81d71b3312e7063e663909d5bb14443ad57c9e2a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix bug where initial-request messages in event stream operations are not signed.\n",
@@ -122,7 +61,7 @@
         "smithy-rs#4429"
       ],
       "since-commit": "81d71b3312e7063e663909d5bb14443ad57c9e2a",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix null value handling in dense collections: SDK now correctly rejects null values in non-sparse collections instead of silently dropping them.\n",
@@ -134,6 +73,62 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "2d226ef3c59de83febdc6790e2bf2a44f43f1d1f",
+      "age": 2
+    },
+    {
+      "message": "Add `sigv4a_signing_region_set` client configuration. Supports programmatic, environment variable (`AWS_SIGV4A_SIGNING_REGION_SET`), and shared config file (`sigv4a_signing_region_set`) configuration. User-provided values now take priority over endpoint-resolved values.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "vcjana",
+      "references": [
+        "smithy-rs#4521"
+      ],
+      "since-commit": "2b8456fc4b22dbc0c200aad59c6b26c41a028f34",
+      "age": 1
+    },
+    {
+      "message": "Make `ProviderConfig::with_use_fips()` and `ProviderConfig::with_use_dual_stack()` public so that applications constructing a `ProviderConfig` directly can propagate FIPS and dual-stack settings to credential providers.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "hligit",
+      "references": [
+        "smithy-rs#4551"
+      ],
+      "since-commit": "2b8456fc4b22dbc0c200aad59c6b26c41a028f34",
+      "age": 1
+    },
+    {
+      "message": "Add missing `EventOrInitial`, `EventOrInitialMarshaller`, and `EventStreamSender::into_inner` to `aws-smithy-legacy-http` event_stream module, fixing compilation failures in generated SDKs that reference these types.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "jlizen",
+      "references": [
+        "smithy-rs#4431"
+      ],
+      "since-commit": "2b8456fc4b22dbc0c200aad59c6b26c41a028f34",
+      "age": 1
+    },
+    {
+      "message": "Enables custom implementations of `Env` and `Fs` from `aws_types` using `Env::from_custom` and `Fs::from_custom` respectively.\nAlso updates `ProviderConfig` and `ConfigLoader` in `aws_config` to take advantage of this change.\n",
+      "meta": {
+        "bug": false,
+        "breaking": false,
+        "tada": true
+      },
+      "author": "codeshaunted",
+      "references": [
+        "smithy-rs#4570"
+      ],
+      "since-commit": "2b8456fc4b22dbc0c200aad59c6b26c41a028f34",
       "age": 1
     }
   ],
