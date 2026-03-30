@@ -6,15 +6,14 @@
 use std::future::Future;
 use std::marker::PhantomData;
 use std::pin::Pin;
-use std::sync::atomic::Ordering;
 use std::task::Context;
 use std::task::Poll;
 
-use http::Request;
-use http::Response;
 use pin_project_lite::pin_project;
 use tower::Service;
 
+use crate::default::service_counter::ServiceCounterGuard;
+use crate::default::DefaultMetricsServiceCounters;
 use crate::default::DefaultMetricsServiceState;
 use crate::default::DefaultRequestMetricsConfig;
 use crate::default::DefaultResponseMetricsConfig;
@@ -22,8 +21,8 @@ use crate::traits::InitMetrics;
 use crate::traits::ResponseMetrics;
 use crate::traits::ThreadSafeCloseEntry;
 use crate::traits::ThreadSafeEntrySink;
-use crate::types::ReqBody;
-use crate::types::ResBody;
+use crate::types::HttpRequest;
+use crate::types::HttpResponse;
 
 pin_project! {
     /// Future returned by [`MetricsLayerService`].
@@ -40,18 +39,19 @@ pin_project! {
         inner: F,
         metrics: metrique::AppendAndCloseOnDrop<Entry, Sink>,
         response_metrics: Option<Res>,
-        default_service_state: DefaultMetricsServiceState
+        default_service_state: DefaultMetricsServiceCounters,
+        outstanding_requests_counter_guard: ServiceCounterGuard
     }
 }
 
 impl<F, Entry, Sink, Res, Err> Future for MetricsLayerServiceFuture<F, Entry, Sink, Res>
 where
-    F: Future<Output = Result<Response<ResBody>, Err>>,
+    F: Future<Output = Result<HttpResponse, Err>>,
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
     Res: ResponseMetrics<Entry>,
 {
-    type Output = Result<Response<ResBody>, Err>;
+    type Output = Result<HttpResponse, Err>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // for safely accessing the pinned inner future
@@ -59,23 +59,13 @@ where
 
         match this.inner.poll(cx) {
             Poll::Ready(Ok(mut res)) => {
-                this.default_service_state
-                    .outstanding_requests_counter
-                    .fetch_sub(1, Ordering::Relaxed);
-
                 if let Some(response_metrics) = this.response_metrics {
                     (response_metrics)(&mut res, this.metrics);
                 }
 
                 Poll::Ready(Ok(res))
             }
-            Poll::Ready(Err(e)) => {
-                this.default_service_state
-                    .outstanding_requests_counter
-                    .fetch_sub(1, Ordering::Relaxed);
-
-                Poll::Ready(Err(e))
-            }
+            Poll::Ready(Err(e)) => Poll::Ready(Err(e)),
             Poll::Pending => Poll::Pending,
         }
     }
@@ -95,7 +85,7 @@ where
     pub(crate) init_metrics: Init,
     pub(crate) response_metrics: Option<Res>,
     pub(crate) default_metrics_extension_fn: fn(
-        &mut Request<ReqBody>,
+        &mut HttpRequest,
         &mut Entry,
         DefaultRequestMetricsConfig,
         DefaultResponseMetricsConfig,
@@ -103,7 +93,7 @@ where
     ),
     pub(crate) default_req_metrics_config: DefaultRequestMetricsConfig,
     pub(crate) default_res_metrics_config: DefaultResponseMetricsConfig,
-    pub(crate) default_service_state: DefaultMetricsServiceState,
+    pub(crate) default_service_counters: DefaultMetricsServiceCounters,
 
     pub(crate) _entry_sink: PhantomData<Sink>,
 }
@@ -123,16 +113,16 @@ where
             default_metrics_extension_fn: self.default_metrics_extension_fn,
             default_req_metrics_config: self.default_req_metrics_config.clone(),
             default_res_metrics_config: self.default_res_metrics_config.clone(),
-            default_service_state: self.default_service_state.clone(),
+            default_service_counters: self.default_service_counters.clone(),
 
             _entry_sink: PhantomData,
         }
     }
 }
-impl<Ser, Entry, Sink, Init, Res> Service<Request<ReqBody>>
+impl<Ser, Entry, Sink, Init, Res> Service<HttpRequest>
     for MetricsLayerService<Ser, Entry, Sink, Init, Res>
 where
-    Ser: Service<Request<ReqBody>, Response = Response<ResBody>> + Clone,
+    Ser: Service<HttpRequest, Response = HttpResponse> + Clone,
     Ser::Future: Send + 'static,
     Entry: ThreadSafeCloseEntry,
     Sink: ThreadSafeEntrySink<Entry>,
@@ -147,26 +137,33 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: Request<ReqBody>) -> Self::Future {
+    fn call(&mut self, mut req: HttpRequest) -> Self::Future {
         let mut metrics = (self.init_metrics)(&mut req);
 
-        self.default_service_state
+        // We increment the outstanding requests and get the count at this layer
+        // (typically outer middleware) so we can get this as close to the time
+        // this request entered the system as possible
+        let (outstanding_requests_counter_guard, outstanding_requests) = self
+            .default_service_counters
             .outstanding_requests_counter
-            .fetch_add(1, Ordering::Relaxed);
+            .increment();
 
         (self.default_metrics_extension_fn)(
             &mut req,
             &mut metrics,
             self.default_req_metrics_config.clone(),
             self.default_res_metrics_config.clone(),
-            self.default_service_state.clone(),
+            DefaultMetricsServiceState {
+                outstanding_requests,
+            },
         );
 
         MetricsLayerServiceFuture {
             inner: self.inner.call(req),
             metrics,
             response_metrics: self.response_metrics.clone(),
-            default_service_state: self.default_service_state.clone(),
+            default_service_state: self.default_service_counters.clone(),
+            outstanding_requests_counter_guard,
         }
     }
 }

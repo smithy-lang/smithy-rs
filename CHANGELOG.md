@@ -1,4 +1,16 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+March 16th, 2026
+================
+**New this release:**
+- :bug: (client) Fix null value handling in dense collections: SDK now correctly rejects null values in non-sparse collections instead of silently dropping them.
+
+
+March 2nd, 2026
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4429](https://github.com/smithy-lang/smithy-rs/issues/4429)) Fix bug where initial-request messages in event stream operations are not signed.
+
+
 February 16th, 2026
 ===================
 **New this release:**

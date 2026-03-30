@@ -45,13 +45,28 @@ import software.amazon.smithy.rust.codegen.core.util.serviceNameOrDefault
 abstract class CustomRuntimeFunction {
     abstract val id: String
 
+    /**
+     * The type returned by the function
+     */
+    abstract fun returnType(): RuntimeType
+
     /** Initialize the struct field to a default value */
     abstract fun structFieldInit(): Writable?
+
+    /** Initialize the struct field to a default value for BDD codegen */
+    abstract fun structFieldInitBdd(): Writable?
 
     /** The argument slot of the runtime function. MUST NOT end with `,`
      * e.g `partition_data: &PartitionData`
      * */
     abstract fun additionalArgsSignature(): Writable?
+
+    /** The argument slot of the runtime function for BDD codegen. Some refs in BDD's require
+     * a lifetime, so this is separate from the version for tree based codegen.
+     *  MUST NOT end with `,`
+     *  e.g `partition_data: &PartitionData`
+     * */
+    abstract fun additionalArgsSignatureBdd(): Writable?
 
     /**
      * A writable that passes additional args from `self` into the function.
@@ -65,6 +80,11 @@ abstract class CustomRuntimeFunction {
      * Any additional struct fields this runtime function adds to the resolver
      */
     abstract fun structField(): Writable?
+
+    /**
+     * Any additional struct fields this runtime function adds to the resolver for BDD codegen.
+     */
+    abstract fun structFieldBdd(): Writable?
 
     /**
      * Invoking the runtime function—(parens / args not needed): `$fn`

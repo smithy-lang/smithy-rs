@@ -1,12 +1,12 @@
 [package]
 name = "aws-smithy-runtime"
-version = "1.10.2"
+version = "1.10.3"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "The new smithy runtime crate"
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91"
+rust-version = "1.91.1"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -51,7 +51,7 @@ aws-smithy-observability = { path = "../aws-smithy-observability" }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x"] }
 aws-smithy-http-client = { path = "../aws-smithy-http-client", optional = true }
-bytes = "1.10.0"
+bytes = "1.11.1"
 # Make sure to update `fastrand` in [dev-dependencies] if we bump the major version
 # We probably need to update unit tests using the `fastrand` crate when that happens
 fastrand = "2.3.0"
