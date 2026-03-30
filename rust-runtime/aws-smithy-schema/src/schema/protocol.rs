@@ -95,12 +95,12 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError>;
 
-    /// Deserializes an HTTP response, returning a boxed [`ShapeDeserializer`].
+    /// Deserializes an HTTP response, returning a boxed [`ShapeDeserializer`]
+    /// for the response body.
     ///
-    /// The caller uses the returned deserializer with a generated builder's
-    /// consumer pattern to construct the typed operation output. The protocol handles
-    /// transport framing (e.g., extracting the HTTP body) and returns a deserializer
-    /// positioned to read the output shape.
+    /// The returned deserializer reads only body members. For outputs with
+    /// HTTP-bound members (headers, status code), generated code reads those
+    /// directly from the response before using this deserializer for body members.
     ///
     /// # Arguments
     ///
@@ -114,32 +114,7 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
-    /// Creates a body-only deserializer from the response payload bytes.
-    ///
-    /// For REST protocols, response deserialization involves two distinct sources:
-    /// HTTP metadata (headers, status code) and the serialized body (e.g. JSON).
-    /// The `deserialize_response` method wraps both sources into a single
-    /// `HttpBindingDeserializer` that routes each member to the correct source
-    /// at runtime by inspecting HTTP binding traits on the schema. This runtime
-    /// routing adds overhead: iterating all schema members, checking trait fields,
-    /// and dispatching through `dyn ShapeDeserializer` for each header member.
-    ///
-    /// This method provides an alternative: it returns a raw codec deserializer
-    /// for just the body. Generated code can then read HTTP-bound members
-    /// directly from the response headers (with no schema iteration or trait
-    /// checks) and use this deserializer only for body members. This splits the
-    /// work the same way the legacy (non-schema) codegen does — headers are read
-    /// inline, body is parsed by the codec — preserving the performance
-    /// characteristics of the legacy approach while still using the schema-driven
-    /// `ShapeDeserializer` interface for body parsing.
-    fn deserialize_body<'a>(
-        &self,
-        body: &'a [u8],
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
-
     /// Serializes only the body members of an operation input into an HTTP request.
-    ///
-    /// This is the serialization counterpart to [`deserialize_body`](Self::deserialize_body).
     /// For REST protocols, `serialize_request` routes each member through
     /// `HttpBindingSerializer` which checks HTTP binding traits at runtime to
     /// decide whether a member goes to a header, query param, URI label, or body.

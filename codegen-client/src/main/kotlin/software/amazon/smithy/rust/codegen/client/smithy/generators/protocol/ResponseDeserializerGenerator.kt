@@ -198,60 +198,29 @@ class ResponseDeserializerGenerator(
         )
         renderSchemaErrorParsing(operationShape, customizations)
 
-        // Check if the output has any HTTP response bindings (headers, status code,
-        // prefix headers). When present, we use `deserialize_with_response` which reads
-        // header-bound members directly from the HTTP response and uses a body-only
-        // deserializer (via `protocol.deserialize_body`) for the remaining members.
-        // This avoids the `HttpBindingDeserializer` wrapper which would otherwise
-        // iterate all schema members at runtime to route each one to headers vs body —
-        // matching the performance of the legacy codegen which reads headers inline.
-        val outputShape = operationShape.outputShape(model)
-        val hasHttpResponseBindings =
-            outputShape.allMembers.values.any { member ->
-                member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java) ||
-                    member.hasTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java) ||
-                    member.hasTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java)
+        // Always use deserialize_with_response — it handles both HTTP-bound members
+        // (headers, status code) and body members. When there are no HTTP bindings,
+        // it trivially delegates to deserialize(). This ensures synthetic members
+        // (e.g., request_id from x-amzn-requestid) are always read from headers.
+        rustTemplate(
+            """
+            } else {
+                let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                    .expect("a SharedClientProtocol is required");
+                let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
+                    .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                let output = #{ConcreteOutput}::deserialize_with_response(
+                    &mut *deser,
+                    response.headers(),
+                    response.status().into(),
+                ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                #{Ok}(#{Output}::erase(output))
             }
-
-        if (hasHttpResponseBindings) {
-            rustTemplate(
-                """
-                } else {
-                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required");
-                    let body = response.body().bytes().expect("body loaded");
-                    let mut deser = protocol.deserialize_body(body)
-                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    let output = #{ConcreteOutput}::deserialize_with_response(
-                        &mut *deser,
-                        response.headers(),
-                        response.status().into(),
-                    ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    #{Ok}(#{Output}::erase(output))
-                }
-                """,
-                *codegenScope,
-                "BoxError" to RuntimeType.boxError(runtimeConfig),
-                "ConcreteOutput" to outputSymbol,
-            )
-        } else {
-            rustTemplate(
-                """
-                } else {
-                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required");
-                    let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
-                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    let output = #{ConcreteOutput}::deserialize(&mut *deser)
-                        .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                    #{Ok}(#{Output}::erase(output))
-                }
-                """,
-                *codegenScope,
-                "BoxError" to RuntimeType.boxError(runtimeConfig),
-                "ConcreteOutput" to outputSymbol,
-            )
-        }
+            """,
+            *codegenScope,
+            "BoxError" to RuntimeType.boxError(runtimeConfig),
+            "ConcreteOutput" to outputSymbol,
+        )
     }
 
     /**
@@ -296,10 +265,6 @@ class ResponseDeserializerGenerator(
                 let _error_message = generic.message().map(|msg| msg.to_owned());
                 let protocol = _cfg.load::<#{SharedClientProtocol}>()
                     .expect("a SharedClientProtocol is required");
-                let error_response = #{HttpResponse}::new(
-                    status.try_into().unwrap(),
-                    #{SdkBody}::from(body),
-                );
                 """,
                 *codegenScope,
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
@@ -316,7 +281,7 @@ class ResponseDeserializerGenerator(
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
                 rustTemplate(
                     """
-                    let mut tmp = match protocol.deserialize_response(&error_response, #{ErrorType}::SCHEMA, _cfg)
+                    let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
                         .and_then(|mut deser| #{ErrorType}::deserialize(&mut *deser))
                     {
                         #{Ok}(val) => val,

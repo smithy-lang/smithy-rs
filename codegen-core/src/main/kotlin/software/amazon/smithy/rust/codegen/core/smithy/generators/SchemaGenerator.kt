@@ -844,6 +844,26 @@ class SchemaGenerator(
         }
 
         if (headerMembers.isEmpty() && statusMember == null && prefixMember == null) {
+            // No HTTP-bound members — generate a trivial deserialize_with_response
+            // that delegates to deserialize. This ensures the method always exists
+            // so the codegen can unconditionally use it.
+            writer.rustTemplate(
+                """
+                impl $structName {
+                    /// Deserializes this structure from a body deserializer and HTTP response.
+                    pub fn deserialize_with_response(
+                        deserializer: &mut dyn #{ShapeDeserializer},
+                        _headers: &#{Headers},
+                        _status: u16,
+                    ) -> ::std::result::Result<Self, #{SerdeError}> {
+                        Self::deserialize(deserializer)
+                    }
+                }
+                """,
+                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+            )
             return
         }
 
@@ -894,6 +914,22 @@ class SchemaGenerator(
                         } else {
                             "Some(val.to_string())"
                         }
+                    }
+                    is ListShape -> {
+                        val elementTarget = model.expectShape((hm.target as ListShape).member.target)
+                        val mapExpr =
+                            when {
+                                elementTarget is EnumShape -> {
+                                    val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
+                                    ".map(|s| $enumName::from(s.trim()))"
+                                }
+                                elementTarget is StringShape && elementTarget.hasTrait(EnumTrait::class.java) -> {
+                                    val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
+                                    ".map(|s| $enumName::from(s.trim()))"
+                                }
+                                else -> ".map(|s| s.trim().to_string())"
+                            }
+                        "Some(val.split(',')$mapExpr.collect())"
                     }
                     else -> "Some(val.to_string())"
                 }
@@ -1024,7 +1060,7 @@ class SchemaGenerator(
                 val helperExpr =
                     if (!isSparse) {
                         when (elementTarget) {
-                            is StringShape -> "deser.read_string_list($memberRef)?"
+                            is StringShape -> if (!isStringEnum(elementTarget)) "deser.read_string_list($memberRef)?" else null
                             is BlobShape -> "deser.read_blob_list($memberRef)?"
                             is IntegerShape, is IntEnumShape -> "deser.read_integer_list($memberRef)?"
                             is LongShape -> "deser.read_long_list($memberRef)?"
@@ -1052,7 +1088,7 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
                 // Use helper for non-sparse, plain string key, string value maps
-                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape) {
+                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
                     "deser.read_string_string_map($memberRef)?"
                 } else {
                     val keyInsert =

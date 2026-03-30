@@ -27,5 +27,5 @@
 mod binding;
 mod rpc;
 
-pub use binding::{percent_encode, HttpBindingDeserializer, HttpBindingProtocol};
+pub use binding::{percent_encode, HttpBindingProtocol};
 pub use rpc::HttpRpcProtocol;

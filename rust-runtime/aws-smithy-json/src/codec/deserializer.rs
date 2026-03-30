@@ -130,7 +130,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
             // Process the value — skip nulls (they represent absent optional members)
             let rem = self.remaining();
-            if rem.starts_with(b"null") && rem.get(4).map_or(true, |b| !b.is_ascii_alphanumeric()) {
+            if rem.starts_with(b"null") && !rem.get(4).is_some_and(|b| b.is_ascii_alphanumeric()) {
                 self.advance_by(4);
             } else if let Some(member_schema) = self.resolve_member(schema, &key_str) {
                 consumer(member_schema, self)?;
@@ -519,9 +519,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let remaining = self.remaining();
         remaining.len() >= 4
             && &remaining[..4] == b"null"
-            && remaining
-                .get(4)
-                .map_or(true, |b| !b.is_ascii_alphanumeric())
+            && !remaining.get(4).is_some_and(|b| b.is_ascii_alphanumeric())
     }
 
     fn container_size(&self) -> Option<usize> {

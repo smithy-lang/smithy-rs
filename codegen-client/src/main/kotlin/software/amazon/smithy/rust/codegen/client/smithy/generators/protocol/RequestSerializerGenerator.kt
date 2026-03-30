@@ -8,8 +8,10 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
 import software.amazon.smithy.model.shapes.DoubleShape
+import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
+import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShortShape
@@ -393,24 +395,51 @@ class RequestSerializerGenerator(
 
             if (httpHeader.isPresent) {
                 val headerName = httpHeader.get().value
-                val valueExpr = httpValueExpr("val", target, member)
-                rustTemplate(
-                    """
-                    if let Some(ref val) = input.$memberName {
-                        request.headers_mut().insert(${headerName.dq()}, $valueExpr);
-                    }
-                    """,
-                )
+                if (target is ListShape) {
+                    val elementTarget = model.expectShape(target.member.target)
+                    val elemExpr = httpValueExpr("item", elementTarget, member)
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            let header_val = val.iter().map(|item| $elemExpr).collect::<Vec<_>>().join(", ");
+                            request.headers_mut().insert(${headerName.dq()}, header_val);
+                        }
+                        """,
+                    )
+                } else {
+                    val valueExpr = httpValueExpr("val", target, member)
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            request.headers_mut().insert(${headerName.dq()}, $valueExpr);
+                        }
+                        """,
+                    )
+                }
             } else if (httpQuery.isPresent) {
                 val queryName = httpQuery.get().value
-                val valueExpr = httpValueExpr("val", target, member)
-                rustTemplate(
-                    """
-                    if let Some(ref val) = input.$memberName {
-                        query_params.push((${queryName.dq()}.to_string(), $valueExpr));
-                    }
-                    """,
-                )
+                if (target is ListShape) {
+                    val elementTarget = model.expectShape(target.member.target)
+                    val elemExpr = httpValueExpr("item", elementTarget, member)
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            for item in val {
+                                query_params.push((${queryName.dq()}.to_string(), $elemExpr));
+                            }
+                        }
+                        """,
+                    )
+                } else {
+                    val valueExpr = httpValueExpr("val", target, member)
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            query_params.push((${queryName.dq()}.to_string(), $valueExpr));
+                        }
+                        """,
+                    )
+                }
             } else if (httpLabel.isPresent) {
                 val valueExpr = httpValueExpr("val", target, member)
                 // Label name in the URI pattern matches the member name from the model
@@ -484,11 +513,12 @@ class RequestSerializerGenerator(
                         else -> "$varName.fmt(::aws_smithy_types::date_time::Format::HttpDate).expect(\"valid timestamp\")"
                     }
                 } else {
-                    // Default for headers is http-date
                     "$varName.fmt(::aws_smithy_types::date_time::Format::HttpDate).expect(\"valid timestamp\")"
                 }
             }
             is BlobShape -> "::aws_smithy_types::base64::encode($varName.as_ref())"
+            is EnumShape -> "$varName.as_str().to_string()"
+            is StringShape -> "$varName.to_string()"
             else -> "$varName.to_string()"
         }
     }

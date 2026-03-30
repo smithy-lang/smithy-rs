@@ -35,7 +35,7 @@ impl JsonFieldMapper {
         let name = member.member_name()?;
         match self {
             JsonFieldMapper::UseMemberName => Some(name),
-            JsonFieldMapper::UseJsonName { .. } => {
+            JsonFieldMapper::UseJsonName => {
                 if let Some(jn) = member.json_name() {
                     return Some(jn.value());
                 }

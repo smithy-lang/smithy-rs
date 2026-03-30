@@ -166,15 +166,22 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // take the else branch and delegate directly to the body serializer.
             // input_schema is preserved so resolve_member continues to work.
             self.is_top_level = false;
-            let result = {
-                let proxy = Proxy {
-                    binder: self,
-                    value,
-                };
-                let binder_ptr = &mut *proxy.binder as *mut HttpBindingSerializer<'_, S>;
-                unsafe { (*binder_ptr).body.write_struct(schema, &proxy) }
+            let proxy = Proxy {
+                binder: self,
+                value,
             };
-            result
+            let binder_ptr = &mut *proxy.binder as *mut HttpBindingSerializer<'_, S>;
+            // SAFETY: `proxy` holds a shared reference to `binder` (via &mut that
+            // we reborrow). We need to call `binder.body.write_struct(schema, &proxy)`
+            // but can't do so through normal references because `proxy` borrows `binder`.
+            // The raw pointer dereference is safe because:
+            // 1. `binder_ptr` points to a valid, live `HttpBindingSerializer` (it was
+            //    just derived from `proxy.binder`).
+            // 2. `body.write_struct` is called synchronously and returns before `proxy`
+            //    is dropped, so the binder is not moved or deallocated.
+            // 3. The only re-entrant access is through `proxy.serialize_members`, which
+            //    uses the same raw-pointer pattern with its own safety justification above.
+            unsafe { (*binder_ptr).body.write_struct(schema, &proxy) }
         } else {
             // Nested struct (a body member targeting a structure): delegate
             // entirely to the body serializer.
@@ -314,8 +321,16 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             return self.add_binding(binding, schema, value);
         }
         if schema.http_payload().is_some() {
-            // Safety: same as write_blob — the string is borrowed from the input struct
-            // which outlives this serializer.
+            // SAFETY: We extend the lifetime of `value.as_bytes()` from its anonymous
+            // lifetime to `'a`. This is sound because:
+            // 1. `value` is borrowed from the input struct passed to `serialize_request`.
+            // 2. `HttpBindingSerializer` is a local variable within `serialize_request`
+            //    and is dropped before `serialize_request` returns.
+            // 3. The input struct (and thus `value`) outlives the serializer.
+            // 4. `raw_payload` is read in `serialize_request` immediately after
+            //    `serialize_members` returns, before the input is dropped.
+            // We use transmute rather than copying to avoid allocating for potentially
+            // multi-GB string payloads.
             self.raw_payload =
                 Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_bytes()) });
             return Ok(());
@@ -337,9 +352,16 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             return Ok(());
         }
         if schema.http_payload().is_some() {
-            // Safety: the blob is borrowed from the input struct in serialize_request,
-            // which outlives this serializer. We extend the lifetime to 'a to avoid
-            // copying potentially multi-GB blob data.
+            // SAFETY: We extend the lifetime of `value.as_ref()` (a `&[u8]`) from its
+            // anonymous lifetime to `'a`. This is sound because:
+            // 1. `value` is borrowed from the input struct passed to `serialize_request`.
+            // 2. `HttpBindingSerializer` is a local variable within `serialize_request`
+            //    and is dropped before `serialize_request` returns.
+            // 3. The input struct (and thus `value`) outlives the serializer.
+            // 4. `raw_payload` is read in `serialize_request` immediately after
+            //    `serialize_members` returns, before the input is dropped.
+            // We use transmute rather than copying to avoid allocating for potentially
+            // multi-GB blob payloads.
             self.raw_payload =
                 Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_ref()) });
             return Ok(());
@@ -549,230 +571,6 @@ impl ShapeSerializer for MapEntryCollector {
     }
 }
 
-/// A composite deserializer that reads HTTP-bound members from the response
-/// headers/status and delegates body members to the inner codec deserializer.
-///
-/// Individual `read_*` methods check the member schema for HTTP binding traits
-/// and read from the response headers/status when present, falling through to
-/// the body deserializer otherwise.
-///
-/// `read_struct` iterates members: HTTP-bound members are read directly from
-/// this deserializer, while remaining members are delegated to the body
-/// deserializer via `body.read_struct`.
-pub struct HttpBindingDeserializer<'a, D> {
-    body: D,
-    response: &'a Response,
-}
-
-impl<'a, D: ShapeDeserializer> HttpBindingDeserializer<'a, D> {
-    fn read_header(&self, name: &str) -> Option<&str> {
-        self.response.headers().get(name)
-    }
-}
-
-impl<'a, D: ShapeDeserializer> ShapeDeserializer for HttpBindingDeserializer<'a, D> {
-    fn read_struct(
-        &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        // Check for @httpPayload — the entire body is a single member's value.
-        for member in schema.members() {
-            if member.http_payload().is_some() {
-                consumer(member, &mut self.body)?;
-                return Ok(());
-            }
-        }
-        // No @httpPayload — body members are in the protocol-specific document.
-        // Header-bound members are handled by generated code in
-        // `deserialize_nonstreaming` which reads them directly from the HTTP
-        // response before calling this deserializer. This avoids the overhead
-        // of iterating all schema members and checking HTTP binding traits at
-        // runtime.
-        self.body.read_struct(schema, consumer)
-    }
-
-    fn read_list(
-        &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.body.read_list(schema, consumer)
-    }
-
-    fn read_map(
-        &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        self.body.read_map(schema, consumer)
-    }
-
-    fn read_boolean(&mut self, schema: &Schema) -> Result<bool, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid boolean header: {val}"),
-            });
-        }
-        self.body.read_boolean(schema)
-    }
-
-    fn read_byte(&mut self, schema: &Schema) -> Result<i8, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid byte header: {val}"),
-            });
-        }
-        self.body.read_byte(schema)
-    }
-
-    fn read_short(&mut self, schema: &Schema) -> Result<i16, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid short header: {val}"),
-            });
-        }
-        self.body.read_short(schema)
-    }
-
-    fn read_integer(&mut self, schema: &Schema) -> Result<i32, SerdeError> {
-        if schema.http_response_code().is_some() {
-            return Ok(self.response.status().as_u16() as i32);
-        }
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid integer header: {val}"),
-            });
-        }
-        self.body.read_integer(schema)
-    }
-
-    fn read_long(&mut self, schema: &Schema) -> Result<i64, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid long header: {val}"),
-            });
-        }
-        self.body.read_long(schema)
-    }
-
-    fn read_float(&mut self, schema: &Schema) -> Result<f32, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid float header: {val}"),
-            });
-        }
-        self.body.read_float(schema)
-    }
-
-    fn read_double(&mut self, schema: &Schema) -> Result<f64, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return val.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid double header: {val}"),
-            });
-        }
-        self.body.read_double(schema)
-    }
-
-    fn read_big_integer(
-        &mut self,
-        schema: &Schema,
-    ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
-        self.body.read_big_integer(schema)
-    }
-
-    fn read_big_decimal(
-        &mut self,
-        schema: &Schema,
-    ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
-        self.body.read_big_decimal(schema)
-    }
-
-    fn read_string(&mut self, schema: &Schema) -> Result<String, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            return self
-                .read_header(h.value())
-                .map(|v| v.to_string())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                });
-        }
-        self.body.read_string(schema)
-    }
-
-    fn read_blob(&mut self, schema: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
-        self.body.read_blob(schema)
-    }
-
-    fn read_timestamp(
-        &mut self,
-        schema: &Schema,
-    ) -> Result<aws_smithy_types::DateTime, SerdeError> {
-        if let Some(h) = schema.http_header() {
-            let val = self
-                .read_header(h.value())
-                .ok_or_else(|| SerdeError::MissingMember {
-                    member_name: h.value().to_string(),
-                })?;
-            return aws_smithy_types::DateTime::from_str(
-                val,
-                aws_smithy_types::date_time::Format::HttpDate,
-            )
-            .map_err(|e| SerdeError::InvalidInput {
-                message: format!("invalid timestamp header: {e}"),
-            });
-        }
-        self.body.read_timestamp(schema)
-    }
-
-    fn read_document(&mut self, schema: &Schema) -> Result<aws_smithy_types::Document, SerdeError> {
-        self.body.read_document(schema)
-    }
-
-    fn is_null(&self) -> bool {
-        self.body.is_null()
-    }
-
-    fn container_size(&self) -> Option<usize> {
-        self.body.container_size()
-    }
-}
-
 impl<C> ClientProtocol for HttpBindingProtocol<C>
 where
     C: Codec + Send + Sync + std::fmt::Debug + 'static,
@@ -830,7 +628,7 @@ where
 
         let set_content_type = if has_blob_or_string_payload {
             // Blob/string payload: only set Content-Type if there's actual content
-            raw_payload.map_or(false, |p| !p.is_empty())
+            raw_payload.is_some_and(|p| !p.is_empty())
         } else if has_body_members {
             // Operation has body members — body includes framing (e.g., `{}`).
             // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
@@ -921,16 +719,6 @@ where
             .body()
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
-        Ok(Box::new(HttpBindingDeserializer {
-            body: self.codec.create_deserializer(body),
-            response,
-        }))
-    }
-
-    fn deserialize_body<'a>(
-        &self,
-        body: &'a [u8],
-    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
 
@@ -941,12 +729,7 @@ where
         _endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
-        // Serialize only body members using the codec directly — no HttpBindingSerializer.
-        let mut serializer = self.codec.create_serializer();
-        serializer.write_struct(input_schema, input)?;
-        let body = serializer.finish();
-
-        // Check if there are body members to determine Content-Type behavior.
+        // Check if there are body members to determine Content-Type and body behavior.
         let has_body_members = input_schema.members().iter().any(|m| {
             m.http_header().is_none()
                 && m.http_query().is_none()
@@ -956,24 +739,28 @@ where
                 && m.http_payload().is_none()
         });
 
-        let mut request = Request::new(SdkBody::from(body));
+        // Serialize only body members using the codec directly — no HttpBindingSerializer.
+        // When there are no body members (e.g., presigning where all members are query
+        // params), skip codec serialization entirely to produce an empty body.
+        let mut request = if has_body_members {
+            let mut serializer = self.codec.create_serializer();
+            serializer.write_struct(input_schema, input)?;
+            let body = serializer.finish();
+            let mut r = Request::new(SdkBody::from(body));
+            r.headers_mut().insert("Content-Type", self.content_type);
+            if let Some(len) = r.body().content_length() {
+                r.headers_mut().insert("Content-Length", len.to_string());
+            }
+            r
+        } else {
+            Request::new(SdkBody::empty())
+        };
+
         // Set HTTP method from @http trait.
         if let Some(http) = input_schema.http() {
             request
                 .set_method(http.method())
                 .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
-        }
-        if has_body_members {
-            request
-                .headers_mut()
-                .insert("Content-Type", self.content_type);
-        }
-        if let Some(len) = request.body().content_length() {
-            if len > 0 || has_body_members {
-                request
-                    .headers_mut()
-                    .insert("Content-Length", len.to_string());
-            }
         }
         Ok(request)
     }
