@@ -11,8 +11,11 @@ use std::pin::Pin;
 use aws_config::SdkConfig;
 use tracing::{info_span, Instrument};
 
-use crate::current_canary::paginator_canary;
-use crate::current_canary::{s3_canary, transcribe_canary, wasm_canary};
+#[cfg(not(feature = "lambda-benchmark"))]
+use crate::current_canary::{paginator_canary, s3_canary, transcribe_canary, wasm_canary};
+
+#[cfg(feature = "lambda-benchmark")]
+use crate::current_canary::{ec2_canary, s3_canary, sts_canary};
 
 #[macro_export]
 macro_rules! mk_canary {
@@ -31,11 +34,19 @@ pub fn get_canaries_to_run(
     sdk_config: SdkConfig,
     env: CanaryEnv,
 ) -> Vec<(&'static str, CanaryFuture)> {
+    #[cfg(not(feature = "lambda-benchmark"))]
     let canaries = vec![
         paginator_canary::mk_canary(&sdk_config, &env),
         s3_canary::mk_canary(&sdk_config, &env),
         transcribe_canary::mk_canary(&sdk_config, &env),
         wasm_canary::mk_canary(&sdk_config, &env),
+    ];
+
+    #[cfg(feature = "lambda-benchmark")]
+    let canaries = vec![
+        sts_canary::mk_canary(&sdk_config, &env),
+        s3_canary::mk_canary(&sdk_config, &env),
+        ec2_canary::mk_canary(&sdk_config, &env),
     ];
 
     canaries
@@ -80,11 +91,17 @@ impl CanaryEnv {
         let s3_bucket_name =
             env::var("CANARY_S3_BUCKET_NAME").expect("CANARY_S3_BUCKET_NAME must be set");
         // S3 MRAP bucket name to test against
-        let s3_mrap_bucket_arn =
-            env::var("CANARY_S3_MRAP_BUCKET_ARN").expect("CANARY_S3_MRAP_BUCKET_ARN must be set");
-        // S3 Express bucket name to test against
-        let s3_express_bucket_name = env::var("CANARY_S3_EXPRESS_BUCKET_NAME")
-            .expect("CANARY_S3_EXPRESS_BUCKET_NAME must be set");
+        #[cfg(not(feature = "lambda-benchmark"))]
+        let (s3_mrap_bucket_arn, s3_express_bucket_name) = (
+            env::var("CANARY_S3_MRAP_BUCKET_ARN").expect("CANARY_S3_MRAP_BUCKET_ARN must be set"),
+            env::var("CANARY_S3_EXPRESS_BUCKET_NAME")
+                .expect("CANARY_S3_EXPRESS_BUCKET_NAME must be set"),
+        );
+        #[cfg(feature = "lambda-benchmark")]
+        let (s3_mrap_bucket_arn, s3_express_bucket_name) = (
+            env::var("CANARY_S3_MRAP_BUCKET_ARN").unwrap_or_default(),
+            env::var("CANARY_S3_EXPRESS_BUCKET_NAME").unwrap_or_default(),
+        );
 
         // Expected transcription from Amazon Transcribe from the embedded audio file.
         // This is an environment variable so that the code doesn't need to be changed if

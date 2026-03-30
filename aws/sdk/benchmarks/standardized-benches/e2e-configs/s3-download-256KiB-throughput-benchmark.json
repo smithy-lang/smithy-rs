@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "name": "s3-download-256KiB-throughput-benchmark",
+  "description": "S3 GetObject throughput benchmark - measures maximum download throughput with 256KiB objects under high concurrency",
+  "service": "s3",
+  "action": "download",
+  "actionConfig": {
+    "bucketName": "replace with your bucket name",
+    "region": "us-east-1",
+    "objectSize": 262144,
+    "keyPrefix": "objects/256KiB/",
+    "cleanupObjectsAfterBenchmark": true
+  },
+  "batch": {
+    "description": "A batch is 10,000 GetObject actions executed concurrently with SDK's optimal concurrency",
+    "numberOfActions": 10000,
+    "sequentialExecution": false
+  },
+  "warmup": {
+    "batches": 2
+  },
+  "measurement": {
+    "batches": 3,
+    "collectMetrics": true,
+    "metricsInterval": 100
+  }
+}
