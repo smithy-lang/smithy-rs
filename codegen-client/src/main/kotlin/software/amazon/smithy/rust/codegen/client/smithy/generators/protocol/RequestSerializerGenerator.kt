@@ -299,8 +299,11 @@ class RequestSerializerGenerator(
                     }
 
                 if (hasHttpBindings) {
-                    // Use serialize_body() for body-only serialization, then write
-                    // HTTP-bound members directly — no runtime trait checks.
+                    // Fast path: protocol supports HTTP bindings, so use serialize_body()
+                    // for body-only serialization and write HTTP-bound members directly.
+                    // Falls back to serialize_request() if the protocol was swapped at
+                    // runtime to one that doesn't use HTTP bindings (e.g., an RPC protocol).
+                    rustTemplate("if protocol.supports_http_bindings() {")
                     if (isBlobPayload || isStringPayload) {
                         val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
                         val bodyExpr = if (isBlobPayload) "payload.into_inner()" else "payload.into_bytes()"
@@ -330,6 +333,17 @@ class RequestSerializerGenerator(
                     // Generate direct header/query/label writes
                     renderDirectHttpBindingWrites(inputShape, operationShape)
                     rustTemplate("return #{Ok}(request);", *codegenScope)
+                    // Fallback: protocol doesn't use HTTP bindings — let it handle everything.
+                    rustTemplate(
+                        """
+                        } else {
+                            return protocol.serialize_request(
+                                &input, $schemaRef, "", _cfg,
+                            ).map_err(#{BoxError}::from);
+                        }
+                        """,
+                        *codegenScope,
+                    )
                 } else if (isBlobPayload || isStringPayload) {
                     val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
                     val bodyExpr = if (isBlobPayload) "payload.into_inner()" else "payload.into_bytes()"

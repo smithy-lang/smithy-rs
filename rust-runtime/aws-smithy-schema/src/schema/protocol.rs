@@ -114,6 +114,24 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
+    /// Returns whether this protocol uses HTTP binding traits to route members
+    /// to headers, query strings, URI labels, etc.
+    ///
+    /// When `true`, generated code may use [`serialize_body`](Self::serialize_body)
+    /// for the payload and write HTTP-bound members directly onto the request at
+    /// compile time, avoiding per-member runtime trait checks.
+    ///
+    /// When `false` (the default), generated code calls
+    /// [`serialize_request`](Self::serialize_request) which gives the protocol
+    /// full control over where every member is placed.
+    ///
+    /// This enables correct behavior when a customer swaps protocols at runtime:
+    /// an RPC protocol that puts everything in the body will return `false`,
+    /// so generated code won't hardcode header/query writes.
+    fn supports_http_bindings(&self) -> bool {
+        false
+    }
+
     /// Serializes only the body members of an operation input into an HTTP request.
     /// For REST protocols, `serialize_request` routes each member through
     /// `HttpBindingSerializer` which checks HTTP binding traits at runtime to

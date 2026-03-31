@@ -61,6 +61,10 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
         self.inner.protocol_id()
     }
 
+    fn supports_http_bindings(&self) -> bool {
+        self.inner.supports_http_bindings()
+    }
+
     fn serialize_request(
         &self,
         input: &dyn aws_smithy_schema::serde::SerializableStruct,

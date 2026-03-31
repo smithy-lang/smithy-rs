@@ -580,6 +580,10 @@ where
         &self.protocol_id
     }
 
+    fn supports_http_bindings(&self) -> bool {
+        true
+    }
+
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,

@@ -13,7 +13,6 @@ import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
@@ -89,12 +88,7 @@ class SchemaDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         operation: OperationShape,
         baseCustomizations: List<OperationCustomization>,
-    ): List<OperationCustomization> =
-        if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
-            baseCustomizations + SchemaOperationProtocolCustomization(codegenContext)
-        } else {
-            baseCustomizations
-        }
+    ): List<OperationCustomization> = baseCustomizations
 
     override fun configCustomizations(
         codegenContext: ClientCodegenContext,
@@ -136,52 +130,11 @@ private class SchemaProtocolCustomization(
 
                     rustTemplate(
                         """
-                        ${section.newLayerName}.store_put(
-                            #{SharedClientProtocol}::new(#{ProtocolType}::$constructor)
-                        );
-                        """,
-                        "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
-                        "ProtocolType" to protocolType,
-                    )
-                }
-                else -> {}
-            }
-        }
-}
-
-/**
- * Stores the [SharedClientProtocol] in each operation's runtime plugin config layer,
- * so that the serializer and deserializer can access it without requiring the full
- * service config stack (e.g. in protocol tests and benchmarks).
- */
-private class SchemaOperationProtocolCustomization(
-    private val codegenContext: ClientCodegenContext,
-) : OperationCustomization() {
-    override fun section(section: OperationSection) =
-        writable {
-            when (section) {
-                is OperationSection.AdditionalRuntimePluginConfig -> {
-                    val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
-                    val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
-                    val protocol = codegenContext.protocol
-                    val serviceShapeName = codegenContext.serviceShape.id.name
-
-                    val (protocolType, constructor) =
-                        when {
-                            protocol == RestJson1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
-                            protocol == AwsJson1_0Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
-                            protocol == AwsJson1_1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
-                            else -> return@writable
+                        if ${section.serviceConfigName}.protocol().is_none() {
+                            ${section.newLayerName}.store_put(
+                                #{SharedClientProtocol}::new(#{ProtocolType}::$constructor)
+                            );
                         }
-
-                    rustTemplate(
-                        """
-                        ${section.newLayerName}.store_put(
-                            #{SharedClientProtocol}::new(#{ProtocolType}::$constructor)
-                        );
                         """,
                         "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
                         "ProtocolType" to protocolType,
