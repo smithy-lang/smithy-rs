@@ -172,7 +172,7 @@ class SerdeBenchmarkTestGenerator(
                 });
                 de.deserialize_nonstreaming(&http_response, &cfg)
             });
-            let _ = parsed;
+            let _ = std::hint::black_box(parsed);;
             timings.push(start.elapsed().as_nanos() as u64);
             }
             """,

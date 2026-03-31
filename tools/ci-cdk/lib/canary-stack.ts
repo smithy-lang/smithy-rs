@@ -207,7 +207,7 @@ export class CanaryStack extends Stack {
 
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"],
+                actions: ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListAllMyBuckets"],
                 effect: Effect.ALLOW,
                 resources: [`${canaryTestMrapBucketArn}`, `${canaryTestMrapBucketArn}/object/*`],
             }),
@@ -243,10 +243,19 @@ export class CanaryStack extends Stack {
             }),
         );
 
+        // Allow canaries to call STS
+        this.lambdaExecutionRole.addToPolicy(
+            new PolicyStatement({
+                actions: ["sts:GetCallerIdentity"],
+                effect: Effect.ALLOW,
+                resources: ["*"],
+            }),
+        );
+
         // Allow canaries to call EC2
         this.lambdaExecutionRole.addToPolicy(
             new PolicyStatement({
-                actions: ["ec2:DescribeSpotPriceHistory", "ec2:DescribeVpcs"],
+                actions: ["ec2:DescribeRegions"],
                 effect: Effect.ALLOW,
                 resources: ["*"],
             }),
