@@ -25,6 +25,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.client.Custo
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.ErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.error.OperationErrorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.ClientProtocolTestGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.SerdeBenchmarkTestGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.protocols.ClientProtocolLoader
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.AddErrorMessage
 import software.amazon.smithy.rust.codegen.client.smithy.transformers.DisableStalledStreamProtection
@@ -344,14 +345,19 @@ class ClientCodegenVisitor(
             )
 
             // render protocol tests into `operation.rs` (note operationWriter vs. inputWriter)
-            codegenDecorator.protocolTestGenerator(
-                codegenContext,
+            val baseGenerator =
                 ClientProtocolTestGenerator(
                     codegenContext,
                     protocolGeneratorFactory.support(),
                     operationShape,
-                ),
-            ).render(this)
+                )
+            val generator =
+                if (baseGenerator.allMatchingTestCases().any { it.tags.contains("serde-benchmark") }) {
+                    SerdeBenchmarkTestGenerator(codegenContext, protocolGeneratorFactory.support(), operationShape)
+                } else {
+                    baseGenerator
+                }
+            codegenDecorator.protocolTestGenerator(codegenContext, generator).render(this)
         }
 
         rustCrate.withModule(symbolProvider.moduleForOperationError(operationShape)) {

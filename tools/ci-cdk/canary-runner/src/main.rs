@@ -6,6 +6,8 @@
 use clap::Parser;
 use tracing_subscriber::{filter::EnvFilter, prelude::*};
 
+mod arch;
+mod bench;
 mod build_bundle;
 mod generate_matrix;
 mod run;
@@ -24,6 +26,10 @@ pub(crate) enum Args {
     /// Builds, uploads, and invokes the canary as a Lambda
     #[clap(alias = "run")]
     Run(run::RunArgs),
+
+    /// Runs cold-start benchmark against the canary Lambda
+    #[clap(alias = "bench")]
+    Bench(bench::BenchArgs),
 }
 
 #[tokio::main]
@@ -41,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
         Args::BuildBundle(subopt) => build_bundle::build_bundle(subopt).await.map(|_| ()),
         Args::GenerateMatrix(subopt) => generate_matrix::generate_matrix(subopt).await,
         Args::Run(subopt) => run::run(subopt).await,
+        Args::Bench(subopt) => bench::bench(subopt).await,
     }
 }
 

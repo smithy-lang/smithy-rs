@@ -19,6 +19,8 @@ use smithy_rs_tool_common::release_tag::ReleaseTag;
 use smithy_rs_tool_common::shell::handle_failure;
 use smithy_rs_tool_common::versions_manifest::VersionsManifest;
 
+use crate::arch::Arch;
+
 struct RequiredDependency {
     name: &'static str,
     features: Option<Vec<&'static str>>,
@@ -227,9 +229,21 @@ pub struct BuildBundleArgs {
     #[clap(long)]
     pub musl: bool,
 
+    /// Lambda architecture
+    #[clap(long, default_value = "x86_64")]
+    pub architecture: Arch,
+
     /// Only generate the `Cargo.toml` file rather than building the entire bundle
     #[clap(long)]
     pub manifest_only: bool,
+
+    /// Disable jitter entropy in AWS-LC
+    #[clap(long)]
+    pub disable_jitter_entropy: bool,
+
+    /// Override the default cargo feature for canary-lambda
+    #[clap(long)]
+    pub feature_override: Option<String>,
 }
 
 #[derive(Clone)]
@@ -255,9 +269,20 @@ fn enabled_feature(crate_source: &CrateSource) -> String {
     "latest".into()
 }
 
-fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
+fn generate_crate_manifest(
+    crate_source: CrateSource,
+    feature_override: Option<&str>,
+) -> Result<String> {
     let mut output = BASE_MANIFEST.to_string();
     write_dependencies(&REQUIRED_SDK_CRATES, &mut output, &crate_source)?;
+    if feature_override == Some("lambda-benchmark") {
+        writeln!(
+            output,
+            "{}",
+            RequiredDependency::new("aws-sdk-sts").to_string(&crate_source)?
+        )
+        .unwrap();
+    }
     write!(output, "\n[features]\n").unwrap();
     writeln!(output, "latest = []").unwrap();
     for release_tag in NOTABLE_SDK_RELEASE_TAGS.iter() {
@@ -268,12 +293,11 @@ fn generate_crate_manifest(crate_source: CrateSource) -> Result<String> {
         )
         .unwrap();
     }
-    writeln!(
-        output,
-        "default = [\"{enabled}\"]",
-        enabled = enabled_feature(&crate_source)
-    )
-    .unwrap();
+    writeln!(output, "\"lambda-benchmark\" = []").unwrap();
+    let enabled = feature_override
+        .map(String::from)
+        .unwrap_or_else(|| enabled_feature(&crate_source));
+    writeln!(output, "default = [\"{enabled}\"]").unwrap();
     Ok(output)
 }
 
@@ -338,66 +362,104 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
 
     // Generate the canary Lambda's Cargo.toml
     let manifest_path = canary_path.join("Cargo.toml");
-    let crate_manifest_content = generate_crate_manifest(crate_source.clone())?;
+    let crate_manifest_content =
+        generate_crate_manifest(crate_source.clone(), opt.feature_override.as_deref())?;
     fs::write(&manifest_path, crate_manifest_content)
         .context(format!("failed to write Cargo.toml in {manifest_path:?}"))?;
 
-    // Generate the canary-wasm's Cargo.toml
-    let wasm_manifest_path = canary_path.join("../canary-wasm/Cargo.toml");
-    let mut wasm_crate_manifest_content = WASM_BASE_MANIFEST.to_string();
-    write_dependencies(
-        &WASM_REQUIRED_SDK_CRATES,
-        &mut wasm_crate_manifest_content,
-        &crate_source,
-    )?;
-    fs::write(&wasm_manifest_path, wasm_crate_manifest_content).context(format!(
-        "failed to write Cargo.toml in {wasm_manifest_path:?}"
-    ))?;
+    let skip_wasm = opt.feature_override.as_deref() == Some("lambda-benchmark");
 
-    let wasm_manifest_path = std::env::current_dir()
-        .expect("Current dir")
-        .join("../canary-wasm/Cargo.toml");
+    // Generate the canary-wasm's Cargo.toml
+    let wasm_manifest_path = if skip_wasm {
+        None
+    } else {
+        let path = canary_path.join("../canary-wasm/Cargo.toml");
+        let mut wasm_crate_manifest_content = WASM_BASE_MANIFEST.to_string();
+        write_dependencies(
+            &WASM_REQUIRED_SDK_CRATES,
+            &mut wasm_crate_manifest_content,
+            &crate_source,
+        )?;
+        fs::write(&path, wasm_crate_manifest_content)
+            .context(format!("failed to write Cargo.toml in {path:?}"))?;
+        Some(
+            std::env::current_dir()
+                .expect("Current dir")
+                .join("../canary-wasm/Cargo.toml"),
+        )
+    };
 
     if !opt.manifest_only {
+        // Check if cross is needed and available
+        let use_cross = opt.architecture == Arch::Aarch64;
+        if use_cross {
+            let cross_check = Command::new("cross").arg("--version").output();
+            if cross_check.is_err() || !cross_check.unwrap().status.success() {
+                bail!("cross is required for Aarch64 builds but is not installed. Install it with: cargo install cross");
+            }
+        }
+
         // Compile the canary Lambda
-        let mut command = Command::new("cargo");
+        let build_cmd = if use_cross { "cross" } else { "cargo" };
+        let mut command = Command::new(build_cmd);
         command
             .arg("build")
             .arg("--release")
             .arg("--manifest-path")
             .arg(&manifest_path);
-        if opt.musl {
-            command.arg("--target=x86_64-unknown-linux-musl");
+
+        let target = match (opt.musl, opt.architecture) {
+            (true, Arch::X86_64) => Some("x86_64-unknown-linux-musl"),
+            (true, Arch::Aarch64) => Some("aarch64-unknown-linux-musl"),
+            (false, Arch::Aarch64) => Some("aarch64-unknown-linux-gnu"),
+            _ => None,
+        };
+
+        if let Some(target) = target {
+            command.arg(format!("--target={}", target));
         }
-        handle_failure("cargo build", &command.output()?)?;
+
+        if opt.disable_jitter_entropy {
+            command.env("AWS_LC_SYS_NO_JITTER_ENTROPY", "1");
+        }
+
+        handle_failure(&format!("{} build", build_cmd), &command.output()?)?;
 
         // Compile the wasm canary to a .wasm binary
-        let mut wasm_command = Command::new("cargo");
-        wasm_command
-            .arg("build")
-            .arg("--release")
-            .arg("--target")
-            .arg("wasm32-wasip2")
-            .arg("--manifest-path")
-            .arg(&wasm_manifest_path);
-        handle_failure("cargo build (WASM bin)", &wasm_command.output()?)?;
+        if let Some(wasm_manifest_path) = &wasm_manifest_path {
+            let mut wasm_command = Command::new("cargo");
+            wasm_command
+                .arg("build")
+                .arg("--release")
+                .arg("--target")
+                .arg("wasm32-wasip2")
+                .arg("--manifest-path")
+                .arg(wasm_manifest_path);
+            handle_failure("cargo build (WASM bin)", &wasm_command.output()?)?;
+        }
 
         // Bundle the Lambda
         let repository_root = find_git_repository_root("smithy-rs", canary_path)?;
         let target_path = {
             let mut path = repository_root.join("tools").join("target");
-            if opt.musl {
+            if let Some(target) = target {
+                path = path.join(target);
+            } else if opt.musl {
                 path = path.join("x86_64-unknown-linux-musl");
             }
             path.join("release")
         };
-        let wasm_bin_path = {
-            repository_root
-                .join("tools")
-                .join("target")
-                .join("wasm32-wasip2")
-                .join("release")
-                .join("aws_sdk_rust_lambda_canary_wasm.wasm")
+        let wasm_bin_path = if skip_wasm {
+            None
+        } else {
+            Some(
+                repository_root
+                    .join("tools")
+                    .join("target")
+                    .join("wasm32-wasip2")
+                    .join("release")
+                    .join("aws_sdk_rust_lambda_canary_wasm.wasm"),
+            )
         };
         let bin_path = target_path.join("bootstrap");
         let bundle_path = target_path.join(name_bundle(
@@ -420,13 +482,15 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
             .context(here!())?;
 
         // Write the wasm bin to the zip
-        zip.start_file(
-            "aws_sdk_rust_lambda_canary_wasm.wasm",
-            zip::write::FileOptions::default().unix_permissions(0o644),
-        )
-        .context(here!())?;
-        zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
+        if let Some(wasm_bin_path) = &wasm_bin_path {
+            zip.start_file(
+                "aws_sdk_rust_lambda_canary_wasm.wasm",
+                zip::write::FileOptions::default().unix_permissions(0o644),
+            )
             .context(here!())?;
+            zip.write_all(&fs::read(wasm_bin_path).context(here!("read wasm bin"))?)
+                .context(here!())?;
+        }
         zip.finish().context(here!())?;
 
         println!(
@@ -486,7 +550,10 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
+                feature_override: None,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -503,7 +570,10 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
+                feature_override: None,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -522,7 +592,10 @@ mod tests {
                 sdk_release_tag: Some(ReleaseTag::from_str("release-2022-07-26").unwrap()),
                 sdk_path: None,
                 musl: true,
+                architecture: Arch::X86_64,
                 manifest_only: true,
+                disable_jitter_entropy: false,
+                feature_override: None,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -541,7 +614,10 @@ mod tests {
                 sdk_release_tag: None,
                 sdk_path: Some("some-sdk-path".into()),
                 musl: false,
+                architecture: Arch::X86_64,
                 manifest_only: false,
+                disable_jitter_entropy: false,
+                feature_override: None,
             }),
             Args::try_parse_from([
                 "./canary-runner",
@@ -609,10 +685,22 @@ aws-smithy-wasm = { path = "some/sdk/path/aws-smithy-wasm" }
 [features]
 latest = []
 "release-2023-10-26" = []
+"lambda-benchmark" = []
 default = ["latest"]
 "#,
-            generate_crate_manifest(CrateSource::Path("some/sdk/path".into())).expect("success")
+            generate_crate_manifest(CrateSource::Path("some/sdk/path".into()), None)
+                .expect("success")
         );
+    }
+
+    #[test]
+    fn test_generate_crate_manifest_with_feature_override() {
+        let manifest = generate_crate_manifest(
+            CrateSource::Path("some/sdk/path".into()),
+            Some("lambda-benchmark"),
+        )
+        .expect("success");
+        assert!(manifest.contains(r#"default = ["lambda-benchmark"]"#));
     }
 
     #[test]
@@ -667,26 +755,30 @@ aws-smithy-wasm = { version = "0.1.0" }
 [features]
 latest = []
 "release-2023-10-26" = []
+"lambda-benchmark" = []
 default = ["latest"]
 "#,
-            generate_crate_manifest(CrateSource::VersionsManifest {
-                versions: VersionsManifest {
-                    smithy_rs_revision: "some-revision-smithy-rs".into(),
-                    aws_doc_sdk_examples_revision: None,
-                    manual_interventions: Default::default(),
-                    crates: [
-                        crate_version("aws-config", "0.46.0"),
-                        crate_version("aws-sdk-s3", "0.20.0"),
-                        crate_version("aws-sdk-ec2", "0.19.0"),
-                        crate_version("aws-sdk-transcribestreaming", "0.16.0"),
-                        crate_version("aws-smithy-wasm", "0.1.0"),
-                    ]
-                    .into_iter()
-                    .collect(),
-                    release: None,
+            generate_crate_manifest(
+                CrateSource::VersionsManifest {
+                    versions: VersionsManifest {
+                        smithy_rs_revision: "some-revision-smithy-rs".into(),
+                        aws_doc_sdk_examples_revision: None,
+                        manual_interventions: Default::default(),
+                        crates: [
+                            crate_version("aws-config", "0.46.0"),
+                            crate_version("aws-sdk-s3", "0.20.0"),
+                            crate_version("aws-sdk-ec2", "0.19.0"),
+                            crate_version("aws-sdk-transcribestreaming", "0.16.0"),
+                            crate_version("aws-smithy-wasm", "0.1.0"),
+                        ]
+                        .into_iter()
+                        .collect(),
+                        release: None,
+                    },
+                    release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
                 },
-                release_tag: ReleaseTag::from_str("release-9999-12-31").unwrap(),
-            })
+                None
+            )
             .expect("success")
         );
     }
