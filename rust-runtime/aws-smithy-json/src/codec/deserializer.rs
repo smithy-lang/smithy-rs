@@ -8,7 +8,7 @@
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, Number};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
@@ -47,9 +47,13 @@ impl<'a> JsonDeserializer<'a> {
 
     /// Parse a JSON quoted string key directly from bytes, advancing past it.
     /// Assumes the current position is at the opening `"`.
-    fn parse_key(&mut self) -> Result<String, SerdeError> {
-        self.advance_by(1); // skip opening quote
-        let remaining = self.remaining();
+    /// Returns a borrowed `&str` when no escape sequences are present (common case),
+    /// avoiding a heap allocation per JSON key.
+    fn parse_key(&mut self) -> Result<std::borrow::Cow<'a, str>, SerdeError> {
+        let start = self.position + 1; // skip opening quote
+        self.position += 1;
+        let input = self.input;
+        let remaining = &input[start..];
         let mut i = 0;
         let mut has_escapes = false;
         while i < remaining.len() {
@@ -62,25 +66,26 @@ impl<'a> JsonDeserializer<'a> {
                 _ => i += 1,
             }
         }
-        let key = if has_escapes {
-            let raw =
-                std::str::from_utf8(&remaining[..i]).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })?;
-            crate::escape::unescape_string(raw)
-                .map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })?
-                .into_owned()
+        self.position = start + i + 1; // advance past key bytes + closing quote
+        let key_bytes = &input[start..start + i];
+        if has_escapes {
+            let raw = std::str::from_utf8(key_bytes).map_err(|e| SerdeError::InvalidInput {
+                message: e.to_string(),
+            })?;
+            Ok(std::borrow::Cow::Owned(
+                crate::escape::unescape_string(raw)
+                    .map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?
+                    .into_owned(),
+            ))
         } else {
-            std::str::from_utf8(&remaining[..i])
-                .map_err(|e| SerdeError::InvalidInput {
+            Ok(std::borrow::Cow::Borrowed(
+                std::str::from_utf8(key_bytes).map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
-                })?
-                .to_owned()
-        };
-        self.advance_by(i + 1); // key bytes + closing quote
-        Ok(key)
+                })?,
+            ))
+        }
     }
 }
 
@@ -204,7 +209,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
 
-            consumer(key, self)?;
+            consumer(key.into_owned(), self)?;
         }
 
         Ok(())
@@ -264,9 +269,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNumber { .. })) => {
+        self.skip_whitespace();
+        match self.remaining().first() {
+            Some(b'-') | Some(b'0'..=b'9') => {
                 self.consume_number();
                 BigInteger::from_str("0").map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
@@ -280,9 +285,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNumber { .. })) => {
+        self.skip_whitespace();
+        match self.remaining().first() {
+            Some(b'-') | Some(b'0'..=b'9') => {
                 self.consume_number();
                 BigDecimal::from_str("0").map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
@@ -461,40 +466,53 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(1);
             self.skip_whitespace();
             let val = self.read_string(_schema)?;
-            out.insert(key, val);
+            out.insert(key.into_owned(), val);
         }
         Ok(out)
     }
 
     fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNumber {
-                value: Number::PosInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(DateTime::from_secs(n as i64))
-            }
-            Some(Ok(Token::ValueNumber {
-                value: Number::NegInt(n),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(DateTime::from_secs(n))
-            }
-            Some(Ok(Token::ValueNumber {
-                value: Number::Float(f),
-                ..
-            })) => {
-                self.consume_number();
-                Ok(DateTime::from_secs_f64(f))
-            }
-            Some(Ok(Token::ValueString { .. })) => {
-                // String timestamps — parse as date-time format
+        self.skip_whitespace();
+        let rem = self.remaining();
+        match rem.first() {
+            Some(b'"') => {
+                // String timestamp — parse as date-time format
                 let s = self.read_string(_schema)?;
                 DateTime::from_str(&s, aws_smithy_types::date_time::Format::DateTime)
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
+            }
+            Some(b'-') | Some(b'0'..=b'9') => {
+                // Numeric timestamp — epoch seconds
+                let start = self.position;
+                self.consume_number();
+                let num_str =
+                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                if num_str.contains('.') || num_str.contains('e') || num_str.contains('E') {
+                    let f: f64 = num_str.parse().map_err(|e: std::num::ParseFloatError| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(DateTime::from_secs_f64(f))
+                } else if num_str.starts_with('-') {
+                    let n: i64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(DateTime::from_secs(n))
+                } else {
+                    let n: u64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                    Ok(DateTime::from_secs(n as i64))
+                }
             }
             _ => Err(SerdeError::TypeMismatch {
                 message: "expected timestamp".into(),
@@ -503,15 +521,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
-        let mut iter = json_token_iter(self.remaining());
-        match iter.next() {
-            Some(Ok(Token::ValueNull { .. })) => {
-                self.advance_by(4);
-                Ok(Document::Null)
-            }
-            _ => Err(SerdeError::UnsupportedOperation {
+        self.skip_whitespace();
+        if self.remaining().starts_with(b"null") {
+            self.advance_by(4);
+            Ok(Document::Null)
+        } else {
+            Err(SerdeError::UnsupportedOperation {
                 message: "document deserialization not fully implemented".into(),
-            }),
+            })
         }
     }
 
