@@ -8,11 +8,15 @@ package software.amazon.smithy.rust.codegen.server.smithy.transformers
 import software.amazon.smithy.framework.rust.ValidationExceptionTrait
 import software.amazon.smithy.model.Model
 import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.traits.ErrorTrait
+import software.amazon.smithy.model.traits.RequiredTrait
 import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.util.hasEventStreamMember
@@ -31,6 +35,53 @@ private val logger: Logger = Logger.getLogger("AttachValidationExceptionToConstr
 private fun hasCustomValidationException(model: Model): Boolean =
     model.shapes(StructureShape::class.java).anyMatch { it.hasTrait(ValidationExceptionTrait.ID) }
 
+/**
+ * Ensures the `smithy.framework#ValidationException` shape and its dependencies exist in the model.
+ * The shape is normally provided by the `smithy-validation-model` dependency, but it may not be on
+ * the classpath for all consumers, or may be removed by Smithy build projection transforms. If the
+ * shape is missing, we add it programmatically so that adding a ShapeId reference to it doesn't
+ * result in a dangling reference.
+ */
+private fun ensureValidationExceptionShapeExists(model: Model): Model {
+    val shapeId = SmithyValidationExceptionConversionGenerator.SHAPE_ID
+    if (model.getShape(shapeId).isPresent) {
+        return model
+    }
+
+    val ns = shapeId.namespace
+    val fieldShape =
+        StructureShape.builder().id("$ns#ValidationExceptionField")
+            .addMember(
+                MemberShape.builder().id("$ns#ValidationExceptionField\$path")
+                    .target("smithy.api#String").addTrait(RequiredTrait()).build(),
+            )
+            .addMember(
+                MemberShape.builder().id("$ns#ValidationExceptionField\$message")
+                    .target("smithy.api#String").addTrait(RequiredTrait()).build(),
+            ).build()
+
+    val fieldListShape =
+        ListShape.builder().id("$ns#ValidationExceptionFieldList")
+            .member(ShapeId.from("$ns#ValidationExceptionField"))
+            .build()
+
+    val validationExceptionShape =
+        StructureShape.builder().id(shapeId)
+            .addTrait(ErrorTrait("client"))
+            .addMember(
+                MemberShape.builder().id("$ns#ValidationException\$message")
+                    .target("smithy.api#String").addTrait(RequiredTrait()).build(),
+            )
+            .addMember(
+                MemberShape.builder().id("$ns#ValidationException\$fieldList")
+                    .target("$ns#ValidationExceptionFieldList").build(),
+            ).build()
+
+    return model.toBuilder()
+        .addShapes(listOf(fieldShape, fieldListShape, validationExceptionShape))
+        .build()
+}
+
 private fun addValidationExceptionToMatchingServiceShapes(
     model: Model,
     filterPredicate: (ServiceShape) -> Boolean,
@@ -39,15 +90,26 @@ private fun addValidationExceptionToMatchingServiceShapes(
     val operationsWithConstrainedInputWithoutValidationException =
         model.serviceShapes
             .filter(filterPredicate)
-            .flatMap { it.operations }
-            .map { model.expectShape(it, OperationShape::class.java) }
+            .flatMap { service ->
+                // Walk the entire service closure to find all operations, including those on resources.
+                walker.walkShapes(service).filterIsInstance<OperationShape>()
+            }
             .filter { operationShape ->
                 walker.walkShapes(operationShape.inputShape(model))
                     .any { it is SetShape || it is EnumShape || it.hasConstraintTrait() || it.hasEventStreamMember(model) }
             }
             .filter { !it.errors.contains(SmithyValidationExceptionConversionGenerator.SHAPE_ID) }
 
-    return ModelTransformer.create().mapShapes(model) { shape ->
+    if (operationsWithConstrainedInputWithoutValidationException.isEmpty()) {
+        return model
+    }
+
+    // Ensure the smithy.framework#ValidationException shape and its dependencies exist in the model
+    // before adding references to it. The shape may be absent if it was not on the classpath or was
+    // removed by Smithy build projection transforms.
+    val modelWithShape = ensureValidationExceptionShapeExists(model)
+
+    return ModelTransformer.create().mapShapes(modelWithShape) { shape ->
         if (shape is OperationShape && operationsWithConstrainedInputWithoutValidationException.contains(shape)) {
             shape.toBuilder().addError(SmithyValidationExceptionConversionGenerator.SHAPE_ID).build()
         } else {
