@@ -61,6 +61,9 @@ where
         let body = serializer.finish();
 
         let mut request = Request::new(SdkBody::from(body));
+        request
+            .set_method("POST")
+            .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
         let uri = if endpoint.is_empty() { "/" } else { endpoint };
         request
             .set_uri(uri)

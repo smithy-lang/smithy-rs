@@ -97,6 +97,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     ) -> Result<(), SerdeError> {
         // Expect opening brace
         self.skip_whitespace();
+        if self.remaining().is_empty() {
+            // Treat empty input as an empty object (e.g., empty HTTP response body)
+            return Ok(());
+        }
         if self.remaining().first() != Some(&b'{') {
             return Err(SerdeError::TypeMismatch {
                 message: "expected object".into(),
@@ -272,8 +276,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         self.skip_whitespace();
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
+                let start = self.position;
                 self.consume_number();
-                BigInteger::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                let num_str =
+                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                BigInteger::from_str(num_str).map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
                 })
             }
@@ -288,8 +299,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         self.skip_whitespace();
         match self.remaining().first() {
             Some(b'-') | Some(b'0'..=b'9') => {
+                let start = self.position;
                 self.consume_number();
-                BigDecimal::from_str("0").map_err(|e| SerdeError::InvalidInput {
+                let num_str =
+                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
+                        SerdeError::InvalidInput {
+                            message: e.to_string(),
+                        }
+                    })?;
+                BigDecimal::from_str(num_str).map_err(|e| SerdeError::InvalidInput {
                     message: e.to_string(),
                 })
             }
@@ -471,14 +489,30 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, schema: &Schema) -> Result<DateTime, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
         match rem.first() {
             Some(b'"') => {
-                // String timestamp — parse as date-time format
-                let s = self.read_string(_schema)?;
-                DateTime::from_str(&s, aws_smithy_types::date_time::Format::DateTime)
+                let s = self.read_string(schema)?;
+                // Determine parse format from @timestampFormat trait or default
+                let format = if let Some(ts_trait) = schema.timestamp_format() {
+                    match ts_trait.format() {
+                        aws_smithy_schema::traits::TimestampFormat::HttpDate => {
+                            aws_smithy_types::date_time::Format::HttpDate
+                        }
+                        aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
+                            aws_smithy_types::date_time::Format::EpochSeconds
+                        }
+                        aws_smithy_schema::traits::TimestampFormat::DateTime => {
+                            aws_smithy_types::date_time::Format::DateTimeWithOffset
+                        }
+                    }
+                } else {
+                    // Default: try date-time with offsets allowed
+                    aws_smithy_types::date_time::Format::DateTimeWithOffset
+                };
+                DateTime::from_str(&s, format)
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
             }
             Some(b'-') | Some(b'0'..=b'9') => {
@@ -537,6 +571,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         remaining.len() >= 4
             && &remaining[..4] == b"null"
             && !remaining.get(4).is_some_and(|b| b.is_ascii_alphanumeric())
+    }
+
+    fn read_null(&mut self) -> Result<(), SerdeError> {
+        self.skip_whitespace();
+        if self.is_null() {
+            self.advance_by(4);
+        }
+        Ok(())
     }
 
     fn container_size(&self) -> Option<usize> {
@@ -733,6 +775,18 @@ impl<'a> JsonDeserializer<'a> {
     fn read_float_value(&mut self) -> Result<f64, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
+        // Handle string-encoded special float values: "NaN", "Infinity", "-Infinity"
+        if rem.first() == Some(&b'"') {
+            let s = self.read_string(&aws_smithy_schema::prelude::STRING)?;
+            return match s.as_str() {
+                "NaN" => Ok(f64::NAN),
+                "Infinity" => Ok(f64::INFINITY),
+                "-Infinity" => Ok(f64::NEG_INFINITY),
+                _ => s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                }),
+            };
+        }
         let mut len = 0;
         for &b in rem {
             if b.is_ascii_digit() || b == b'-' || b == b'+' || b == b'.' || b == b'e' || b == b'E' {

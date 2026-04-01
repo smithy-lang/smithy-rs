@@ -53,7 +53,7 @@ impl JsonSerializer {
         }
         if let Some(name) = self.field_name(schema) {
             self.output.push('"');
-            self.output.push_str(name);
+            self.output.push_str(&crate::escape::escape_string(name));
             self.output.push_str("\":");
         }
         self.needs_comma = true;
@@ -130,13 +130,16 @@ impl ShapeSerializer for JsonSerializer {
         self.output.push('[');
         let saved = self.needs_comma;
         let saved_depth = self.map_depth;
+        let saved_map_key = self.expecting_map_key;
         self.needs_comma = false;
-        // Reset map_depth so list elements don't trigger map-key logic in prefix().
+        // Reset map state so list elements don't trigger map-key logic in prefix().
         self.map_depth = 0;
+        self.expecting_map_key = false;
         write_elements(self)?;
         self.output.push(']');
         self.needs_comma = saved;
         self.map_depth = saved_depth;
+        self.expecting_map_key = saved_map_key;
         Ok(())
     }
 
@@ -205,17 +208,41 @@ impl ShapeSerializer for JsonSerializer {
     fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        if value.is_nan() {
+            self.output.push_str("\"NaN\"");
+            Ok(())
+        } else if value.is_infinite() {
+            if value.is_sign_positive() {
+                self.output.push_str("\"Infinity\"");
+            } else {
+                self.output.push_str("\"-Infinity\"");
+            }
+            Ok(())
+        } else {
+            write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
+                message: e.to_string(),
+            })
+        }
     }
 
     fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        if value.is_nan() {
+            self.output.push_str("\"NaN\"");
+            Ok(())
+        } else if value.is_infinite() {
+            if value.is_sign_positive() {
+                self.output.push_str("\"Infinity\"");
+            } else {
+                self.output.push_str("\"-Infinity\"");
+            }
+            Ok(())
+        } else {
+            write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
+                message: e.to_string(),
+            })
+        }
     }
 
     fn write_big_integer(&mut self, schema: &Schema, value: &BigInteger) -> Result<(), SerdeError> {

@@ -284,6 +284,7 @@ class ClientProtocolTestGenerator(
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
                 // Build a config bag with the protocol for schema-based deserialization
+                ##[allow(unused_mut)]
                 let mut test_cfg = #{ConfigBag}::base();
                 #{inject_protocol}
                 de.deserialize_nonstreaming(&http_response, &test_cfg)

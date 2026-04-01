@@ -13,11 +13,14 @@ import software.amazon.smithy.model.shapes.FloatShape
 import software.amazon.smithy.model.shapes.IntegerShape
 import software.amazon.smithy.model.shapes.ListShape
 import software.amazon.smithy.model.shapes.LongShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ShortShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
+import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.HttpHeaderTrait
 import software.amazon.smithy.model.traits.HttpLabelTrait
 import software.amazon.smithy.model.traits.HttpPayloadTrait
@@ -237,12 +240,24 @@ class RequestSerializerGenerator(
         schemaRef: String = "$operationName::INPUT_SCHEMA",
     ): Writable =
         writable {
+            val additionalHeaders = protocol.additionalRequestHeaders(operationShape)
+            // Helper: generates code to add protocol-level headers (e.g., x-amzn-query-mode)
+            // to a `request` variable. No-op when there are no additional headers.
+            val addAdditionalHeaders =
+                writable {
+                    for (header in additionalHeaders) {
+                        rust("request.headers_mut().insert(${header.first.dq()}, ${header.second.dq()});")
+                    }
+                }
             val streamingMember = inputShape.findStreamingMember(codegenContext.model)
             val isBlobStreaming =
                 streamingMember != null && codegenContext.model.expectShape(streamingMember.target) is BlobShape
             val isEventStream = streamingMember != null && !isBlobStreaming
             if (isBlobStreaming) {
                 val memberName = symbolProvider.toMemberName(streamingMember!!)
+                val streamingTarget = codegenContext.model.expectShape(streamingMember.target)
+                val mediaType = streamingTarget.getTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+                val contentType = if (mediaType.isPresent) mediaType.get().value else "application/octet-stream"
                 rustTemplate(
                     """
                     let mut request = protocol.serialize_request(
@@ -250,12 +265,15 @@ class RequestSerializerGenerator(
                     ).map_err(#{BoxError}::from)?;
                     // Streaming blob payload: replace the body with the raw ByteStream.
                     *request.body_mut() = input.$memberName.into_inner();
+                    request.headers_mut().insert("Content-Type", ${contentType.dq()});
                     if let #{Some}(content_length) = request.body().content_length() {
                         request.headers_mut().insert("Content-Length", content_length.to_string());
                     }
+                    #{add_headers}
                     return #{Ok}(request);
                     """,
                     *codegenScope,
+                    "add_headers" to addAdditionalHeaders,
                 )
             } else if (isEventStream) {
                 // Event stream: use schema-based protocol for headers/URI/method,
@@ -281,12 +299,14 @@ class RequestSerializerGenerator(
                 if (contentType != null) {
                     rust("request.headers_mut().insert(\"Content-Type\", ${contentType.dq()});")
                 }
+                rustTemplate("#{add_headers}", "add_headers" to addAdditionalHeaders)
                 rustTemplate("return #{Ok}(request);", *codegenScope)
             } else {
                 val httpPayloadMember = inputShape.members().firstOrNull { it.hasTrait(HttpPayloadTrait::class.java) }
                 val payloadTarget = httpPayloadMember?.let { codegenContext.model.expectShape(it.target) }
                 val isBlobPayload = payloadTarget is BlobShape && httpPayloadMember != streamingMember
                 val isStringPayload = payloadTarget is StringShape
+                val isEnumPayload = payloadTarget is StringShape && (payloadTarget.hasTrait(EnumTrait::class.java) || payloadTarget is EnumShape)
 
                 // Check if any members have HTTP request bindings
                 val hasHttpBindings =
@@ -306,7 +326,23 @@ class RequestSerializerGenerator(
                     rustTemplate("if protocol.supports_http_bindings() {")
                     if (isBlobPayload || isStringPayload) {
                         val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
-                        val bodyExpr = if (isBlobPayload) "payload.into_inner()" else "payload.into_bytes()"
+                        val bodyExpr =
+                            if (isBlobPayload) {
+                                "payload.into_inner()"
+                            } else if (isEnumPayload) {
+                                "payload.as_str().as_bytes().to_vec()"
+                            } else {
+                                "payload.into_bytes()"
+                            }
+                        val mediaType = payloadTarget!!.getTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+                        val contentType =
+                            if (mediaType.isPresent) {
+                                mediaType.get().value
+                            } else if (isStringPayload) {
+                                "text/plain"
+                            } else {
+                                "application/octet-stream"
+                            }
                         rustTemplate(
                             """
                             let mut input = input;
@@ -316,7 +352,24 @@ class RequestSerializerGenerator(
                             ).map_err(#{BoxError}::from)?;
                             if let #{Some}(payload) = payload {
                                 *request.body_mut() = #{SdkBody}::from($bodyExpr);
+                                request.headers_mut().insert("Content-Type", ${contentType.dq()});
+                                if let #{Some}(content_length) = request.body().content_length() {
+                                    request.headers_mut().insert("Content-Length", content_length.to_string());
+                                }
                             }
+                            """,
+                            *codegenScope,
+                        )
+                    } else if (httpPayloadMember != null && (payloadTarget is StructureShape || payloadTarget is UnionShape)) {
+                        // @httpPayload targeting a structure or union: use serialize_request
+                        // which handles payload member extraction and body framing correctly.
+                        // serialize_body can't handle this because it would wrap the payload
+                        // in the parent struct's JSON framing.
+                        rustTemplate(
+                            """
+                            let mut request = protocol.serialize_request(
+                                &input, $schemaRef, "", _cfg,
+                            ).map_err(#{BoxError}::from)?;
                             """,
                             *codegenScope,
                         )
@@ -332,21 +385,41 @@ class RequestSerializerGenerator(
                     }
                     // Generate direct header/query/label writes
                     renderDirectHttpBindingWrites(inputShape, operationShape)
+                    rustTemplate("#{add_headers}", "add_headers" to addAdditionalHeaders)
                     rustTemplate("return #{Ok}(request);", *codegenScope)
                     // Fallback: protocol doesn't use HTTP bindings — let it handle everything.
                     rustTemplate(
                         """
                         } else {
-                            return protocol.serialize_request(
+                            let mut request = protocol.serialize_request(
                                 &input, $schemaRef, "", _cfg,
-                            ).map_err(#{BoxError}::from);
+                            ).map_err(#{BoxError}::from)?;
+                            #{add_headers}
+                            return #{Ok}(request);
                         }
                         """,
                         *codegenScope,
+                        "add_headers" to addAdditionalHeaders,
                     )
                 } else if (isBlobPayload || isStringPayload) {
                     val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
-                    val bodyExpr = if (isBlobPayload) "payload.into_inner()" else "payload.into_bytes()"
+                    val bodyExpr =
+                        if (isBlobPayload) {
+                            "payload.into_inner()"
+                        } else if (isEnumPayload) {
+                            "payload.as_str().as_bytes().to_vec()"
+                        } else {
+                            "payload.into_bytes()"
+                        }
+                    val mediaType = payloadTarget!!.getTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+                    val contentType =
+                        if (mediaType.isPresent) {
+                            mediaType.get().value
+                        } else if (isStringPayload) {
+                            "text/plain"
+                        } else {
+                            "application/octet-stream"
+                        }
                     rustTemplate(
                         """
                         let mut input = input;
@@ -356,19 +429,28 @@ class RequestSerializerGenerator(
                         ).map_err(#{BoxError}::from)?;
                         if let #{Some}(payload) = payload {
                             *request.body_mut() = #{SdkBody}::from($bodyExpr);
+                            request.headers_mut().insert("Content-Type", ${contentType.dq()});
+                            if let #{Some}(content_length) = request.body().content_length() {
+                                request.headers_mut().insert("Content-Length", content_length.to_string());
+                            }
                         }
+                        #{add_headers}
                         return #{Ok}(request);
                         """,
                         *codegenScope,
+                        "add_headers" to addAdditionalHeaders,
                     )
                 } else {
                     rustTemplate(
                         """
-                        return protocol.serialize_request(
+                        let mut request = protocol.serialize_request(
                             &input, $schemaRef, "", _cfg,
-                        ).map_err(#{BoxError}::from);
+                        ).map_err(#{BoxError}::from)?;
+                        #{add_headers}
+                        return #{Ok}(request);
                         """,
                         *codegenScope,
+                        "add_headers" to addAdditionalHeaders,
                     )
                 }
             }
@@ -397,6 +479,13 @@ class RequestSerializerGenerator(
         // Collect query params in a vec, then append at the end
         rustTemplate("let mut query_params: Vec<(String, String)> = Vec::new();")
 
+        // Collect explicit @httpQuery param names for precedence filtering
+        val explicitQueryNames =
+            inputShape.members()
+                .filter { it.getTrait(HttpQueryTrait::class.java).isPresent }
+                .map { it.getTrait(HttpQueryTrait::class.java).get().value }
+                .toSet()
+
         for (member in inputShape.members()) {
             val memberName = symbolProvider.toMemberName(member)
             val target = model.expectShape(member.target)
@@ -409,14 +498,45 @@ class RequestSerializerGenerator(
 
             if (httpHeader.isPresent) {
                 val headerName = httpHeader.get().value
+                val hasMediaType =
+                    target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) ||
+                        member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
                 if (target is ListShape) {
                     val elementTarget = model.expectShape(target.member.target)
-                    val elemExpr = httpValueExpr("item", elementTarget, member)
+                    val needsQuoting = elementTarget is StringShape && elementTarget !is EnumShape && !elementTarget.hasTrait(EnumTrait::class.java)
+                    if (needsQuoting) {
+                        // String list values need RFC 7230 quoting if they contain commas or quotes
+                        rustTemplate(
+                            """
+                            if let Some(ref val) = input.$memberName {
+                                let header_val = val.iter().map(|item| {
+                                    let s = item.to_string();
+                                    if s.contains(',') || s.contains('"') {
+                                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                                    } else {
+                                        s
+                                    }
+                                }).collect::<Vec<_>>().join(", ");
+                                request.headers_mut().insert(${headerName.dq()}, header_val);
+                            }
+                            """,
+                        )
+                    } else {
+                        val elemExpr = httpValueExpr("item", elementTarget, member)
+                        rustTemplate(
+                            """
+                            if let Some(ref val) = input.$memberName {
+                                let header_val = val.iter().map(|item| $elemExpr).collect::<Vec<_>>().join(", ");
+                                request.headers_mut().insert(${headerName.dq()}, header_val);
+                            }
+                            """,
+                        )
+                    }
+                } else if (hasMediaType) {
                     rustTemplate(
                         """
                         if let Some(ref val) = input.$memberName {
-                            let header_val = val.iter().map(|item| $elemExpr).collect::<Vec<_>>().join(", ");
-                            request.headers_mut().insert(${headerName.dq()}, header_val);
+                            request.headers_mut().insert(${headerName.dq()}, ::aws_smithy_types::base64::encode(val.as_bytes()));
                         }
                         """,
                     )
@@ -434,7 +554,7 @@ class RequestSerializerGenerator(
                 val queryName = httpQuery.get().value
                 if (target is ListShape) {
                     val elementTarget = model.expectShape(target.member.target)
-                    val elemExpr = httpValueExpr("item", elementTarget, member)
+                    val elemExpr = httpValueExpr("item", elementTarget, member, "query")
                     rustTemplate(
                         """
                         if let Some(ref val) = input.$memberName {
@@ -445,7 +565,7 @@ class RequestSerializerGenerator(
                         """,
                     )
                 } else {
-                    val valueExpr = httpValueExpr("val", target, member)
+                    val valueExpr = httpValueExpr("val", target, member, "query")
                     rustTemplate(
                         """
                         if let Some(ref val) = input.$memberName {
@@ -455,17 +575,31 @@ class RequestSerializerGenerator(
                     )
                 }
             } else if (httpLabel.isPresent) {
-                val valueExpr = httpValueExpr("val", target, member)
-                // Label name in the URI pattern matches the member name from the model
+                val valueExpr = httpValueExpr("val", target, member, "label")
                 val labelName = member.memberName
-                rustTemplate(
-                    """
-                    if let Some(ref val) = input.$memberName {
-                        uri = uri.replace("{$labelName}", &#{percent_encode}(&$valueExpr));
-                    }
-                    """,
-                    "percent_encode" to percentEncode,
-                )
+                val isGreedy = uriPattern.contains("{$labelName+}")
+                val replacePattern = if (isGreedy) "{$labelName+}" else "{$labelName}"
+                if (isGreedy) {
+                    // Greedy labels preserve / — encode each segment separately
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            let encoded = $valueExpr.split('/').map(|seg| #{percent_encode}(seg)).collect::<Vec<_>>().join("/");
+                            uri = uri.replace("$replacePattern", &encoded);
+                        }
+                        """,
+                        "percent_encode" to percentEncode,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        if let Some(ref val) = input.$memberName {
+                            uri = uri.replace("$replacePattern", &#{percent_encode}(&$valueExpr));
+                        }
+                        """,
+                        "percent_encode" to percentEncode,
+                    )
+                }
             } else if (httpPrefixHeaders.isPresent) {
                 val prefix = httpPrefixHeaders.get().value
                 rustTemplate(
@@ -478,15 +612,42 @@ class RequestSerializerGenerator(
                     """,
                 )
             } else if (httpQueryParams.isPresent) {
-                rustTemplate(
-                    """
-                    if let Some(ref map) = input.$memberName {
-                        for (k, v) in map {
-                            query_params.push((k.clone(), v.clone()));
-                        }
+                // @httpQueryParams maps can have String or List<String> values
+                // Skip keys that are already covered by explicit @httpQuery params
+                val mapShape = target as MapShape
+                val valueTarget = model.expectShape(mapShape.value.target)
+                val filterExpr =
+                    if (explicitQueryNames.isNotEmpty()) {
+                        val names = explicitQueryNames.joinToString(" | ") { "\"${it}\"" }
+                        "if matches!(k.as_str(), $names) { continue; }"
+                    } else {
+                        ""
                     }
-                    """,
-                )
+                if (valueTarget is ListShape) {
+                    rustTemplate(
+                        """
+                        if let Some(ref map) = input.$memberName {
+                            for (k, v) in map {
+                                $filterExpr
+                                for item in v {
+                                    query_params.push((k.clone(), item.clone()));
+                                }
+                            }
+                        }
+                        """,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        if let Some(ref map) = input.$memberName {
+                            for (k, v) in map {
+                                $filterExpr
+                                query_params.push((k.clone(), v.clone()));
+                            }
+                        }
+                        """,
+                    )
+                }
             }
         }
 
@@ -507,19 +668,37 @@ class RequestSerializerGenerator(
         )
     }
 
-    /** Generate a string expression for an HTTP binding value based on the target shape type. */
+    /** Generate a string expression for an HTTP binding value based on the target shape type.
+     *  @param bindingType "header", "query", or "label" — controls default timestamp format.
+     */
     private fun httpValueExpr(
         varName: String,
         target: software.amazon.smithy.model.shapes.Shape,
         member: software.amazon.smithy.model.shapes.MemberShape,
+        bindingType: String = "header",
     ): String {
         return when (target) {
             is BooleanShape -> "$varName.to_string()"
             is IntegerShape, is ShortShape -> "$varName.to_string()"
             is LongShape -> "$varName.to_string()"
-            is FloatShape, is DoubleShape -> "$varName.to_string()"
+            is FloatShape, is DoubleShape -> {
+                // Rust's f32/f64 Display writes "inf"/"-inf"/"NaN" but HTTP headers/query
+                // params require "Infinity"/"-Infinity"/"NaN".
+                val inner = "$varName.to_string()"
+                "{ let s = $inner; match s.as_str() { \"inf\" => \"Infinity\".to_string(), \"-inf\" => \"-Infinity\".to_string(), _ => s } }"
+            }
             is TimestampShape -> {
-                val format = member.getTrait(TimestampFormatTrait::class.java)
+                // Check member first, then target shape for @timestampFormat
+                val format =
+                    member.getTrait(TimestampFormatTrait::class.java)
+                        .let { if (it.isPresent) it else target.getTrait(TimestampFormatTrait::class.java) }
+                // Per protocol spec: headers default to http-date, query/label default to date-time
+                val defaultFormat =
+                    if (bindingType == "header") {
+                        "::aws_smithy_types::date_time::Format::HttpDate"
+                    } else {
+                        "::aws_smithy_types::date_time::Format::DateTime"
+                    }
                 if (format.isPresent) {
                     when (format.get().format.toString()) {
                         "epoch-seconds" -> "$varName.fmt(::aws_smithy_types::date_time::Format::EpochSeconds).expect(\"valid timestamp\")"
@@ -527,12 +706,17 @@ class RequestSerializerGenerator(
                         else -> "$varName.fmt(::aws_smithy_types::date_time::Format::HttpDate).expect(\"valid timestamp\")"
                     }
                 } else {
-                    "$varName.fmt(::aws_smithy_types::date_time::Format::HttpDate).expect(\"valid timestamp\")"
+                    "$varName.fmt($defaultFormat).expect(\"valid timestamp\")"
                 }
             }
             is BlobShape -> "::aws_smithy_types::base64::encode($varName.as_ref())"
             is EnumShape -> "$varName.as_str().to_string()"
-            is StringShape -> "$varName.to_string()"
+            is StringShape ->
+                if (target.hasTrait(EnumTrait::class.java)) {
+                    "$varName.as_str().to_string()"
+                } else {
+                    "$varName.to_string()"
+                }
             else -> "$varName.to_string()"
         }
     }

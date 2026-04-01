@@ -124,6 +124,14 @@ pub trait ShapeDeserializer {
     /// This is used for sparse collections where null values are significant.
     fn is_null(&self) -> bool;
 
+    /// Consumes a null value, advancing past it.
+    ///
+    /// This should be called after `is_null()` returns true to advance the
+    /// deserializer past the null token.
+    fn read_null(&mut self) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
     /// Returns the size of the current container if known.
     ///
     /// This is an optimization hint that allows pre-allocating collections

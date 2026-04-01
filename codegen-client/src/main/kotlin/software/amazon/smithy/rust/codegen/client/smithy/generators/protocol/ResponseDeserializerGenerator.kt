@@ -209,10 +209,12 @@ class ResponseDeserializerGenerator(
                     .expect("a SharedClientProtocol is required");
                 let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                let body = response.body().bytes().expect("body loaded");
                 let output = #{ConcreteOutput}::deserialize_with_response(
                     &mut *deser,
                     response.headers(),
                     response.status().into(),
+                    body,
                 ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 #{Ok}(#{Output}::erase(output))
             }
@@ -282,7 +284,7 @@ class ResponseDeserializerGenerator(
                 rustTemplate(
                     """
                     let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
-                        .and_then(|mut deser| #{ErrorType}::deserialize(&mut *deser))
+                        .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
                     {
                         #{Ok}(val) => val,
                         #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),

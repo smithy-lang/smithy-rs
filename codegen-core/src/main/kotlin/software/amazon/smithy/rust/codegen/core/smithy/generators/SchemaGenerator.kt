@@ -30,6 +30,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
+import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
@@ -283,7 +284,18 @@ class SchemaGenerator(
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
 
                     if (member.isTargetUnit()) {
-                        rust("Self::$variantName => ser.write_null(&$memberSchemaRef)?,")
+                        // Unit variants serialize as empty objects {} in JSON, not null
+                        rust(
+                            """
+                            Self::$variantName => {
+                                struct Empty;
+                                impl ::aws_smithy_schema::serde::SerializableStruct for Empty {
+                                    fn serialize_members(&self, _ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer) -> ::std::result::Result<(), ::aws_smithy_schema::serde::SerdeError> { Ok(()) }
+                                }
+                                ser.write_struct(&$memberSchemaRef, &Empty)?;
+                            },
+                            """,
+                        )
                     } else {
                         val writeExpr = unionVariantWriteExpr(target, memberSchemaRef, "val")
                         rust("Self::$variantName(val) => { $writeExpr },")
@@ -334,10 +346,7 @@ class SchemaGenerator(
                 }
             is BlobShape -> "ser.write_blob(&$memberSchemaRef, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, $varName)?;"
-            is StructureShape -> {
-                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
-            }
+            is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
                 // Use helpers for simple non-enum element types
@@ -379,10 +388,7 @@ class SchemaGenerator(
                     """
                 }
             }
-            is UnionShape -> {
-                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
-            }
+            is UnionShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is DocumentShape -> "ser.write_document(&$memberSchemaRef, $varName)?;"
             else -> "todo!(\"schema: unsupported union variant type\");"
         }
@@ -405,12 +411,14 @@ class SchemaGenerator(
             writable {
                 members.forEachIndexed { idx, member ->
                     val variantName = symbolProvider.toSymbol(member).name
+                    val memberSymbol = symbolProvider.toSymbol(member)
                     val target = model.expectShape(member.target)
                     if (member.isTargetUnit()) {
-                        rust("Some($idx) => Self::$variantName,")
+                        rust("Some($idx) => { deser.read_struct(member, &mut |_, _| Ok(()))?; Self::$variantName },")
                     } else {
                         val readExpr = readMethodForShape(target, "member")
-                        rust("Some($idx) => Self::$variantName($readExpr),")
+                        val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
+                        rust("Some($idx) => Self::$variantName($wrapped),")
                     }
                 }
                 rust("_ => Self::${UnionGenerator.UNKNOWN_VARIANT_NAME},")
@@ -535,10 +543,7 @@ class SchemaGenerator(
             }
 
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
-            is UnionShape -> {
-                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "ser.write_struct($targetQualified::SCHEMA, val)?;"
-            }
+            is UnionShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
 
@@ -749,6 +754,33 @@ class SchemaGenerator(
             "buildExpr" to
                 writable {
                     if (BuilderGenerator.hasFallibleBuilder(shape as StructureShape, symbolProvider)) {
+                        // Set defaults for required members that are still None (error correction).
+                        // Only for types where we know a safe default value.
+                        for (member in members) {
+                            if (member.isRequired) {
+                                val memberName = symbolProvider.toMemberName(member)
+                                val target = model.expectShape(member.target)
+                                val defaultExpr =
+                                    when (target) {
+                                        is StringShape -> if (target is EnumShape || target.hasTrait(EnumTrait::class.java)) null else "String::new()"
+                                        is BooleanShape -> "false"
+                                        is ByteShape -> "0i8"
+                                        is ShortShape -> "0i16"
+                                        is IntegerShape, is IntEnumShape -> "0i32"
+                                        is LongShape -> "0i64"
+                                        is FloatShape -> "0.0f32"
+                                        is DoubleShape -> "0.0f64"
+                                        is ListShape -> "Vec::new()"
+                                        is MapShape -> "::std::collections::HashMap::new()"
+                                        is BlobShape -> if (target.hasTrait(software.amazon.smithy.model.traits.StreamingTrait::class.java)) null else "::aws_smithy_types::Blob::new(\"\")"
+                                        is TimestampShape -> "::aws_smithy_types::DateTime::from_secs(0)"
+                                        else -> null
+                                    }
+                                if (defaultExpr != null) {
+                                    rust("builder.$memberName = builder.$memberName.or_else(|| Some($defaultExpr));")
+                                }
+                            }
+                        }
                         rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
                     } else {
                         rust("Ok(builder.build())")
@@ -812,7 +844,7 @@ class SchemaGenerator(
         val structShape = shape as StructureShape
         val members = structShape.allMembers.values.toList()
 
-        data class HeaderMember(val memberName: String, val headerName: String, val isBool: Boolean, val target: Shape?)
+        data class HeaderMember(val memberName: String, val headerName: String, val isBool: Boolean, val target: Shape?, val member: MemberShape? = null, val hasMediaType: Boolean = false)
 
         data class StatusMember(val memberName: String)
 
@@ -830,7 +862,10 @@ class SchemaGenerator(
             val target = model.expectShape(member.target)
 
             if (httpHeader.isPresent) {
-                headerMembers.add(HeaderMember(memberName, httpHeader.get().value, target is BooleanShape, target))
+                val hasMediaType =
+                    target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) ||
+                        member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+                headerMembers.add(HeaderMember(memberName, httpHeader.get().value, target is BooleanShape, target, member, hasMediaType))
             } else if (httpResponseCode.isPresent) {
                 statusMember = StatusMember(memberName)
             } else if (httpPrefixHeaders.isPresent) {
@@ -843,10 +878,23 @@ class SchemaGenerator(
             headerMembers.add(HeaderMember(synth.fieldName, synth.httpHeaderName, false, null))
         }
 
-        if (headerMembers.isEmpty() && statusMember == null && prefixMember == null) {
-            // No HTTP-bound members — generate a trivial deserialize_with_response
-            // that delegates to deserialize. This ensures the method always exists
-            // so the codegen can unconditionally use it.
+        // Detect @httpPayload member early — needed for both early-return and main paths
+        val httpPayloadMember =
+            structShape.allMembers.values.firstOrNull {
+                it.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java)
+            }
+        val payloadTarget = httpPayloadMember?.let { model.expectShape(it.target) }
+        val isRawPayload =
+            (payloadTarget is BlobShape || payloadTarget is StringShape) &&
+                payloadTarget?.getTrait(software.amazon.smithy.model.traits.StreamingTrait::class.java)?.isPresent != true
+        val isStructPayload =
+            (payloadTarget is StructureShape || payloadTarget is UnionShape) &&
+                payloadTarget?.getTrait(software.amazon.smithy.model.traits.StreamingTrait::class.java)?.isPresent != true
+        val hasPayloadHandling = isRawPayload || isStructPayload
+
+        if (headerMembers.isEmpty() && statusMember == null && prefixMember == null && !hasPayloadHandling) {
+            // No HTTP-bound members and no @httpPayload — generate a trivial deserialize_with_response
+            // that delegates to deserialize.
             writer.rustTemplate(
                 """
                 impl $structName {
@@ -855,6 +903,7 @@ class SchemaGenerator(
                         deserializer: &mut dyn #{ShapeDeserializer},
                         _headers: &#{Headers},
                         _status: u16,
+                        _body: &[u8],
                     ) -> ::std::result::Result<Self, #{SerdeError}> {
                         Self::deserialize(deserializer)
                     }
@@ -867,6 +916,10 @@ class SchemaGenerator(
             return
         }
 
+        val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
+        val bodyParam = if (hasPayloadHandling) "body" else "_body"
+        val deserializerParam = if (isRawPayload) "_deserializer" else "deserializer"
+
         writer.rustTemplate(
             """
             impl $structName {
@@ -874,9 +927,10 @@ class SchemaGenerator(
                 /// Header-bound members are read directly from headers, avoiding runtime
                 /// member iteration overhead. Body members are read via the deserializer.
                 pub fn deserialize_with_response(
-                    deserializer: &mut dyn #{ShapeDeserializer},
-                    headers: &#{Headers},
+                    $deserializerParam: &mut dyn #{ShapeDeserializer},
+                    $headersParam: &#{Headers},
                     _status: u16,
+                    $bodyParam: &[u8],
                 ) -> ::std::result::Result<Self, #{SerdeError}> {
                     ##[allow(unused_variables, unused_mut)]
                     let mut builder = Self::builder();
@@ -897,7 +951,28 @@ class SchemaGenerator(
                     is LongShape -> "val.parse::<i64>().ok()"
                     is FloatShape -> "val.parse::<f32>().ok()"
                     is DoubleShape -> "val.parse::<f64>().ok()"
-                    is TimestampShape -> "::aws_smithy_types::DateTime::from_str(val, ::aws_smithy_types::date_time::Format::HttpDate).ok()"
+                    is TimestampShape -> {
+                        // Check @timestampFormat on member or target; default to HttpDate for headers
+                        val tsFormatOpt =
+                            hm.member?.getTrait(TimestampFormatTrait::class.java)
+                                ?.let { if (it.isPresent) it else hm.target?.getTrait(TimestampFormatTrait::class.java) }
+                                ?: hm.target?.getTrait(TimestampFormatTrait::class.java)
+                        val format =
+                            if (tsFormatOpt?.isPresent == true) {
+                                when (tsFormatOpt.get().format.toString()) {
+                                    "epoch-seconds" -> "EpochSeconds"
+                                    "date-time" -> "DateTime"
+                                    else -> "HttpDate"
+                                }
+                            } else {
+                                "HttpDate"
+                            }
+                        if (format == "EpochSeconds") {
+                            "val.parse::<f64>().ok().map(|s| ::aws_smithy_types::DateTime::from_secs_f64(s))"
+                        } else {
+                            "::aws_smithy_types::DateTime::from_str(val, ::aws_smithy_types::date_time::Format::$format).ok()"
+                        }
+                    }
                     is EnumShape -> {
                         val enumName = symbolProvider.toSymbol(hm.target).rustType().qualifiedName()
                         "Some($enumName::from(val))"
@@ -907,8 +982,10 @@ class SchemaGenerator(
                         "val.parse::<i32>().ok().map($enumName::from)"
                     }
                     is StringShape -> {
-                        // Check if the string has the @enum trait (deprecated enum)
-                        if (hm.target.hasTrait(EnumTrait::class.java)) {
+                        if (hm.hasMediaType) {
+                            // @mediaType on header: base64-decode the value
+                            "::aws_smithy_types::base64::decode(val).ok().and_then(|b| String::from_utf8(b).ok())"
+                        } else if (hm.target.hasTrait(EnumTrait::class.java)) {
                             val enumName = symbolProvider.toSymbol(hm.target).rustType().qualifiedName()
                             "Some($enumName::from(val))"
                         } else {
@@ -917,19 +994,106 @@ class SchemaGenerator(
                     }
                     is ListShape -> {
                         val elementTarget = model.expectShape((hm.target as ListShape).member.target)
-                        val mapExpr =
-                            when {
-                                elementTarget is EnumShape -> {
-                                    val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
-                                    ".map(|s| $enumName::from(s.trim()))"
+                        if (elementTarget is TimestampShape) {
+                            // HTTP-date contains commas — split on ", " followed by day-of-week
+                            val listMember = (hm.target as ListShape).member
+                            val tsFormatOpt =
+                                listMember.getTrait(TimestampFormatTrait::class.java)
+                                    .let { if (it.isPresent) it else elementTarget.getTrait(TimestampFormatTrait::class.java) }
+                            val format =
+                                if (tsFormatOpt.isPresent) {
+                                    when (tsFormatOpt.get().format.toString()) {
+                                        "epoch-seconds" -> "EpochSeconds"
+                                        "date-time" -> "DateTime"
+                                        else -> "HttpDate"
+                                    }
+                                } else {
+                                    "HttpDate"
                                 }
-                                elementTarget is StringShape && elementTarget.hasTrait(EnumTrait::class.java) -> {
-                                    val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
-                                    ".map(|s| $enumName::from(s.trim()))"
+                            if (format == "HttpDate") {
+                                // HTTP-date values are separated by ", " but also contain internal commas.
+                                // Each HTTP-date is exactly 29 chars. Split by regex for day-of-week boundary.
+                                """
+                                {
+                                    let mut timestamps = Vec::new();
+                                    let re_split: Vec<&str> = val.split(", ").collect();
+                                    let mut i = 0;
+                                    while i < re_split.len() {
+                                        if i + 1 < re_split.len() {
+                                            let combined = format!("{}, {}", re_split[i], re_split[i + 1]);
+                                            if let Ok(ts) = ::aws_smithy_types::DateTime::from_str(&combined, ::aws_smithy_types::date_time::Format::HttpDate) {
+                                                timestamps.push(ts);
+                                                i += 2;
+                                                continue;
+                                            }
+                                        }
+                                        if let Ok(ts) = ::aws_smithy_types::DateTime::from_str(re_split[i].trim(), ::aws_smithy_types::date_time::Format::HttpDate) {
+                                            timestamps.push(ts);
+                                        }
+                                        i += 1;
+                                    }
+                                    Some(timestamps)
                                 }
-                                else -> ".map(|s| s.trim().to_string())"
+                                """.trimIndent()
+                            } else if (format == "EpochSeconds") {
+                                "Some(val.split(',').filter_map(|s| s.trim().parse::<f64>().ok().map(|s| ::aws_smithy_types::DateTime::from_secs_f64(s))).collect())"
+                            } else {
+                                "Some(val.split(',').filter_map(|s| ::aws_smithy_types::DateTime::from_str(s.trim(), ::aws_smithy_types::date_time::Format::$format).ok()).collect())"
                             }
-                        "Some(val.split(',')$mapExpr.collect())"
+                        } else {
+                            val isPlainString = elementTarget is StringShape && !elementTarget.hasTrait(EnumTrait::class.java) && elementTarget !is EnumShape
+                            if (isPlainString) {
+                                // String lists need quoted-string-aware parsing (RFC 7230)
+                                """
+                                {
+                                    let mut items = Vec::new();
+                                    let mut chars = val.chars().peekable();
+                                    while chars.peek().is_some() {
+                                        // Skip whitespace
+                                        while chars.peek() == Some(&' ') { chars.next(); }
+                                        if chars.peek() == Some(&'"') {
+                                            chars.next(); // skip opening quote
+                                            let mut s = String::new();
+                                            while let Some(&c) = chars.peek() {
+                                                if c == '\\' { chars.next(); if let Some(escaped) = chars.next() { s.push(escaped); } }
+                                                else if c == '"' { chars.next(); break; }
+                                                else { s.push(c); chars.next(); }
+                                            }
+                                            items.push(s);
+                                        } else {
+                                            let s: String = chars.by_ref().take_while(|&c| c != ',').collect();
+                                            let trimmed = s.trim();
+                                            if !trimmed.is_empty() { items.push(trimmed.to_string()); }
+                                        }
+                                        // Skip comma separator
+                                        while chars.peek() == Some(&',') || chars.peek() == Some(&' ') { chars.next(); }
+                                    }
+                                    Some(items)
+                                }
+                                """.trimIndent()
+                            } else {
+                                val mapExpr =
+                                    when {
+                                        elementTarget is EnumShape -> {
+                                            val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
+                                            ".map(|s| $enumName::from(s.trim()))"
+                                        }
+                                        elementTarget is StringShape && elementTarget.hasTrait(EnumTrait::class.java) -> {
+                                            val enumName = symbolProvider.toSymbol(elementTarget).rustType().qualifiedName()
+                                            ".map(|s| $enumName::from(s.trim()))"
+                                        }
+                                        elementTarget is BooleanShape -> ".filter_map(|s| s.trim().parse::<bool>().ok())"
+                                        elementTarget is ByteShape -> ".filter_map(|s| s.trim().parse::<i8>().ok())"
+                                        elementTarget is ShortShape -> ".filter_map(|s| s.trim().parse::<i16>().ok())"
+                                        elementTarget is IntegerShape -> ".filter_map(|s| s.trim().parse::<i32>().ok())"
+                                        elementTarget is LongShape -> ".filter_map(|s| s.trim().parse::<i64>().ok())"
+                                        elementTarget is FloatShape -> ".filter_map(|s| s.trim().parse::<f32>().ok())"
+                                        elementTarget is DoubleShape -> ".filter_map(|s| s.trim().parse::<f64>().ok())"
+                                        else -> ".map(|s| s.trim().to_string())"
+                                    }
+                                "Some(val.split(',')$mapExpr.collect())"
+                            }
+                        }
                     }
                     else -> "Some(val.to_string())"
                 }
@@ -964,57 +1128,131 @@ class SchemaGenerator(
             )
         }
 
-        // Now deserialize body members
-        writer.rustTemplate(
-            """
-            ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
-            deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
-                match member.member_index() {
-                    #{memberArms}
-                    _ => {}
+        // @httpPayload handling — read body directly (variables detected earlier)
+        if (isStructPayload && httpPayloadMember != null) {
+            // @httpPayload struct/union: deserialize body directly as the target type
+            val memberName = symbolProvider.toMemberName(httpPayloadMember)
+            val targetQualified = symbolProvider.toSymbol(payloadTarget!!).rustType().qualifiedName()
+            writer.rust(
+                """
+                if !body.is_empty() {
+                    builder.$memberName = Some($targetQualified::deserialize(deserializer)?);
                 }
-                Ok(())
-            })?;
-            #{buildExpr}
-            }
-            }
-            """,
-            "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
-            "SerdeError" to smithySchema.resolve("serde::SerdeError"),
-            "buildExpr" to
-                writable {
-                    if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                        rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
-                    } else {
-                        rust("Ok(builder.build())")
-                    }
-                },
-            "memberArms" to
-                writable {
-                    val allMembers = structShape.allMembers.values.toList()
-                    allMembers.forEachIndexed { idx, member ->
-                        val memberName = symbolProvider.toMemberName(member)
-                        val memberSymbol = symbolProvider.toSymbol(member)
-                        val target = model.expectShape(member.target)
-                        // Skip HTTP-bound members — they're already set from headers above
-                        val hasHttpBinding =
-                            member.getTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java).isPresent ||
-                                member.getTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java).isPresent ||
-                                member.getTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java).isPresent
-                        if (hasHttpBinding) {
-                            rust("Some($idx) => { /* read from headers above */ }")
+                """,
+            )
+            // Build the output
+            writer.rustTemplate(
+                """
+                #{buildExpr}
+                }
+                }
+                """,
+                "buildExpr" to
+                    writable {
+                        if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
                         } else {
-                            val readExpr = readMethodForShape(target, "member")
-                            val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
-                            if (memberSymbol.isOptional()) {
-                                rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                            rust("Ok(builder.build())")
+                        }
+                    },
+            )
+        } else if (isRawPayload && httpPayloadMember != null) {
+            val memberName = symbolProvider.toMemberName(httpPayloadMember)
+            if (payloadTarget is BlobShape) {
+                writer.rust(
+                    """
+                    if !body.is_empty() {
+                        builder.$memberName = Some(::aws_smithy_types::Blob::new(body.to_vec()));
+                    }
+                    """,
+                )
+            } else {
+                // String or enum payload — read body as UTF-8 string
+                val targetQualified =
+                    if (payloadTarget is EnumShape || payloadTarget!!.hasTrait(EnumTrait::class.java)) {
+                        val enumName = symbolProvider.toSymbol(payloadTarget).rustType().qualifiedName()
+                        "$enumName::from(s.as_str())"
+                    } else {
+                        "s"
+                    }
+                writer.rust(
+                    """
+                    if !body.is_empty() {
+                        let s = ::std::string::String::from_utf8_lossy(body).into_owned();
+                        builder.$memberName = Some($targetQualified);
+                    }
+                    """,
+                )
+            }
+            // Build the output
+            writer.rustTemplate(
+                """
+                #{buildExpr}
+                }
+                }
+                """,
+                "buildExpr" to
+                    writable {
+                        if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                        } else {
+                            rust("Ok(builder.build())")
+                        }
+                    },
+            )
+        } else {
+            // Now deserialize body members
+            writer.rustTemplate(
+                """
+                ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
+                deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
+                    match member.member_index() {
+                        #{memberArms}
+                        _ => {}
+                    }
+                    Ok(())
+                })?;
+                #{buildExpr}
+                }
+                }
+                """,
+                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                "buildExpr" to
+                    writable {
+                        if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                        } else {
+                            rust("Ok(builder.build())")
+                        }
+                    },
+                "memberArms" to
+                    writable {
+                        val allMembers = structShape.allMembers.values.toList()
+                        allMembers.forEachIndexed { idx, member ->
+                            val memberName = symbolProvider.toMemberName(member)
+                            val memberSymbol = symbolProvider.toSymbol(member)
+                            val target = model.expectShape(member.target)
+                            // Skip HTTP-bound members — they're already set from headers above
+                            val hasHttpBinding =
+                                member.getTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java).isPresent ||
+                                    member.getTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java).isPresent ||
+                                    member.getTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java).isPresent
+                            if (hasHttpBinding) {
+                                rust("Some($idx) => { /* read from headers above */ }")
                             } else {
-                                rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                val readExpr = readMethodForShape(target, "member")
+                                val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
+                                if (memberSymbol.isOptional()) {
+                                    rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                } else {
+                                    rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                }
                             }
                         }
-                    }
-                },
-        )
+                    },
+            )
+        } // end else (non-raw-payload path)
     }
 
     private fun readMethodForShape(
@@ -1075,7 +1313,7 @@ class SchemaGenerator(
                     val elementRead = elementReadExpr(elementTarget, memberRef)
                     val pushExpr =
                         if (isSparse) {
-                            "container.push(if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($elementRead) })"
+                            "container.push(if deser.is_null() { deser.read_null()?; None } else { Some($elementRead) })"
                         } else {
                             "container.push($elementRead)"
                         }
@@ -1101,7 +1339,7 @@ class SchemaGenerator(
                     val valueRead = elementReadExpr(valueTarget, memberRef)
                     val insertExpr =
                         if (isSparse) {
-                            "container.insert($keyInsert, if deser.is_null() { deser.read_string($memberRef).ok(); None } else { Some($valueRead) })"
+                            "container.insert($keyInsert, if deser.is_null() { deser.read_null()?; None } else { Some($valueRead) })"
                         } else {
                             "container.insert($keyInsert, $valueRead)"
                         }
@@ -1112,6 +1350,15 @@ class SchemaGenerator(
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
+            }
+
+            is UnionShape -> {
+                if (target.hasTrait(StreamingTrait::class.java)) {
+                    "{ let _ = $memberRef; todo!(\"deserialize streaming union\") }"
+                } else {
+                    val targetSymbol = symbolProvider.toSymbol(target)
+                    "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
+                }
             }
 
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
@@ -1478,6 +1725,17 @@ class SchemaGenerator(
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
                     val memberTraitChain = traitSetterChain(member)
+                    // Include @timestampFormat from the target shape if not already on the member
+                    val targetTimestampFormat =
+                        if (
+                            target is software.amazon.smithy.model.shapes.TimestampShape &&
+                            !member.hasTrait(TimestampFormatTrait::class.java) &&
+                            target.hasTrait(TimestampFormatTrait::class.java)
+                        ) {
+                            knownTraitSetter(target.expectTrait(TimestampFormatTrait::class.java)) ?: ""
+                        } else {
+                            ""
+                        }
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
@@ -1489,7 +1747,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$memberTraitChain;
+                        )$memberTraitChain$targetTimestampFormat;
                         """,
                         *codegenScope,
                     )

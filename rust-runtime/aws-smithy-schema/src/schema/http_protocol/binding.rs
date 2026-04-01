@@ -108,6 +108,19 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
     }
 
+    /// Finish serialization and return only the body bytes, discarding
+    /// any collected headers/query/labels.
+    fn finish_body(self) -> Vec<u8>
+    where
+        S: FinishSerializer,
+    {
+        if self.raw_payload.is_some() {
+            self.raw_payload.unwrap().to_vec()
+        } else {
+            self.body.finish()
+        }
+    }
+
     /// Resolve the effective member schema: if an input_schema override is set,
     /// look up the member by name there (to get the correct HTTP bindings).
     /// Otherwise use the schema as-is.
@@ -185,6 +198,15 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         } else {
             // Nested struct (a body member targeting a structure): delegate
             // entirely to the body serializer.
+            let schema = self.resolve_member(schema);
+            if schema.http_payload().is_some() {
+                // @httpPayload struct/union: write as the body's top-level object
+                // without a member name prefix. Use a non-member schema for the
+                // write_struct call so prefix() doesn't emit a field name.
+                self.has_body_content = true;
+                self.body.write_struct(&crate::prelude::DOCUMENT, value)?;
+                return Ok(());
+            }
             self.has_body_content = true;
             self.body.write_struct(schema, value)
         }
@@ -605,6 +627,7 @@ where
                 )
         });
         if has_struct_payload {
+            binder.is_top_level = false;
             input.serialize_members(&mut binder)?;
         } else {
             binder.write_struct(input_schema, input)?;
@@ -733,7 +756,7 @@ where
         _endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
-        // Check if there are body members to determine Content-Type and body behavior.
+        // Check if there are body members (non-HTTP-bound) to determine Content-Type and body behavior.
         let has_body_members = input_schema.members().iter().any(|m| {
             m.http_header().is_none()
                 && m.http_query().is_none()
@@ -743,13 +766,13 @@ where
                 && m.http_payload().is_none()
         });
 
-        // Serialize only body members using the codec directly — no HttpBindingSerializer.
-        // When there are no body members (e.g., presigning where all members are query
-        // params), skip codec serialization entirely to produce an empty body.
+        // Use HttpBindingSerializer to filter out HTTP-bound members, keeping only body members.
+        // The collected headers/query/labels are discarded — the caller writes those directly.
         let mut request = if has_body_members {
-            let mut serializer = self.codec.create_serializer();
-            serializer.write_struct(input_schema, input)?;
-            let body = serializer.finish();
+            let serializer = self.codec.create_serializer();
+            let mut binding_ser = HttpBindingSerializer::new(serializer, None);
+            binding_ser.write_struct(input_schema, input)?;
+            let body = binding_ser.finish_body();
             let mut r = Request::new(SdkBody::from(body));
             r.headers_mut().insert("Content-Type", self.content_type);
             if let Some(len) = r.body().content_length() {
