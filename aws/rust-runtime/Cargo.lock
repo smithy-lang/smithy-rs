@@ -104,7 +104,7 @@ dependencies = [
  "bytes",
  "fastrand",
  "hex",
- "hmac 0.12.1",
+ "hmac 0.13.0",
  "http 0.2.12",
  "http 1.4.0",
  "http-body 0.4.6",
@@ -112,7 +112,7 @@ dependencies = [
  "http-body-util",
  "lru",
  "ring",
- "sha2 0.10.9",
+ "sha2 0.11.0",
  "tempfile",
  "tokio",
  "tracing",
@@ -165,7 +165,7 @@ version = "1.1.12"
 
 [[package]]
 name = "aws-sigv4"
-version = "1.4.2"
+version = "1.4.3"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-eventstream",
@@ -208,7 +208,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.6"
+version = "0.64.7"
 dependencies = [
  "aws-smithy-http",
  "aws-smithy-types",
