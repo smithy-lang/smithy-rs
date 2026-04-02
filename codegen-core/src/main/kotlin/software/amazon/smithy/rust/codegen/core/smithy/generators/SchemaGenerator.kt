@@ -779,7 +779,7 @@ class SchemaGenerator(
                                         else -> null
                                     }
                                 if (defaultExpr != null) {
-                                    rust("builder.$memberName = builder.$memberName.or_else(|| Some($defaultExpr));")
+                                    rust("builder.$memberName = builder.$memberName.or(Some($defaultExpr));")
                                 }
                             }
                         }
@@ -971,7 +971,7 @@ class SchemaGenerator(
                                 "HttpDate"
                             }
                         if (format == "EpochSeconds") {
-                            "val.parse::<f64>().ok().map(|s| ::aws_smithy_types::DateTime::from_secs_f64(s))"
+                            "val.parse::<f64>().ok().map(::aws_smithy_types::DateTime::from_secs_f64)"
                         } else {
                             "::aws_smithy_types::DateTime::from_str(val, ::aws_smithy_types::date_time::Format::$format).ok()"
                         }
@@ -1039,7 +1039,7 @@ class SchemaGenerator(
                                 }
                                 """.trimIndent()
                             } else if (format == "EpochSeconds") {
-                                "Some(val.split(',').filter_map(|s| s.trim().parse::<f64>().ok().map(|s| ::aws_smithy_types::DateTime::from_secs_f64(s))).collect())"
+                                "Some(val.split(',').filter_map(|s| s.trim().parse::<f64>().ok().map(::aws_smithy_types::DateTime::from_secs_f64)).collect())"
                             } else {
                                 "Some(val.split(',').filter_map(|s| ::aws_smithy_types::DateTime::from_str(s.trim(), ::aws_smithy_types::date_time::Format::$format).ok()).collect())"
                             }

@@ -628,10 +628,17 @@ class RequestSerializerGenerator(
                 val replacePattern = if (isGreedy) "{$labelName+}" else "{$labelName}"
                 if (isGreedy) {
                     // Greedy labels preserve / — encode each segment separately
+                    // For string types, avoid unnecessary .to_string() since split takes &str
+                    val splitExpr =
+                        if (target is StringShape && !target.hasTrait(EnumTrait::class.java) && target !is EnumShape) {
+                            "val.split('/')"
+                        } else {
+                            "$valueExpr.split('/')"
+                        }
                     rustTemplate(
                         """
                         if let Some(ref val) = input.$memberName {
-                            let encoded = $valueExpr.split('/').map(|seg| #{percent_encode}(seg)).collect::<Vec<_>>().join("/");
+                            let encoded = $splitExpr.map(#{percent_encode}).collect::<Vec<_>>().join("/");
                             uri = uri.replace("$replacePattern", &encoded);
                         }
                         """,
@@ -649,11 +656,12 @@ class RequestSerializerGenerator(
                 }
             } else if (httpPrefixHeaders.isPresent) {
                 val prefix = httpPrefixHeaders.get().value
+                val headerKeyExpr = if (prefix.isEmpty()) "k.to_string()" else "format!(\"$prefix{k}\")"
                 rustTemplate(
                     """
                     if let Some(ref map) = input.$memberName {
                         for (k, v) in map {
-                            request.headers_mut().insert(format!("$prefix{k}"), v.to_string());
+                            request.headers_mut().insert($headerKeyExpr, v.to_string());
                         }
                     }
                     """,
@@ -757,10 +765,19 @@ class RequestSerializerGenerator(
                 }
             }
             is BlobShape -> "::aws_smithy_types::base64::encode($varName.as_ref())"
-            is EnumShape -> "$varName.as_str().to_string()"
+            is EnumShape ->
+                if (bindingType == "label") {
+                    "$varName.as_str()"
+                } else {
+                    "$varName.as_str().to_string()"
+                }
             is StringShape ->
                 if (target.hasTrait(EnumTrait::class.java)) {
-                    "$varName.as_str().to_string()"
+                    if (bindingType == "label") {
+                        "$varName.as_str()"
+                    } else {
+                        "$varName.as_str().to_string()"
+                    }
                 } else {
                     "$varName.to_string()"
                 }
