@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.BooleanShape
+import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.DoubleShape
 import software.amazon.smithy.model.shapes.EnumShape
 import software.amazon.smithy.model.shapes.FloatShape
@@ -307,6 +308,7 @@ class RequestSerializerGenerator(
                 val isBlobPayload = payloadTarget is BlobShape && httpPayloadMember != streamingMember
                 val isStringPayload = payloadTarget is StringShape
                 val isEnumPayload = payloadTarget is StringShape && (payloadTarget.hasTrait(EnumTrait::class.java) || payloadTarget is EnumShape)
+                val isDocumentPayload = payloadTarget is DocumentShape
 
                 // Check if any members have HTTP request bindings
                 val hasHttpBindings =
@@ -373,6 +375,27 @@ class RequestSerializerGenerator(
                             """,
                             *codegenScope,
                         )
+                    } else if (isDocumentPayload) {
+                        val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
+                        rustTemplate(
+                            """
+                            let mut input = input;
+                            let payload = input.$memberName.take();
+                            let mut request = protocol.serialize_body(
+                                &input, $schemaRef, "", _cfg,
+                            ).map_err(#{BoxError}::from)?;
+                            if let #{Some}(payload) = payload {
+                                let mut json = String::new();
+                                ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
+                                *request.body_mut() = #{SdkBody}::from(json.into_bytes());
+                                request.headers_mut().insert("Content-Type", "application/json");
+                                if let #{Some}(content_length) = request.body().content_length() {
+                                    request.headers_mut().insert("Content-Length", content_length.to_string());
+                                }
+                            }
+                            """,
+                            *codegenScope,
+                        )
                     } else {
                         rustTemplate(
                             """
@@ -430,6 +453,30 @@ class RequestSerializerGenerator(
                         if let #{Some}(payload) = payload {
                             *request.body_mut() = #{SdkBody}::from($bodyExpr);
                             request.headers_mut().insert("Content-Type", ${contentType.dq()});
+                            if let #{Some}(content_length) = request.body().content_length() {
+                                request.headers_mut().insert("Content-Length", content_length.to_string());
+                            }
+                        }
+                        #{add_headers}
+                        return #{Ok}(request);
+                        """,
+                        *codegenScope,
+                        "add_headers" to addAdditionalHeaders,
+                    )
+                } else if (isDocumentPayload) {
+                    val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
+                    rustTemplate(
+                        """
+                        let mut input = input;
+                        let payload = input.$memberName.take();
+                        let mut request = protocol.serialize_request(
+                            &input, $schemaRef, "", _cfg,
+                        ).map_err(#{BoxError}::from)?;
+                        if let #{Some}(payload) = payload {
+                            let mut json = String::new();
+                            ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
+                            *request.body_mut() = #{SdkBody}::from(json.into_bytes());
+                            request.headers_mut().insert("Content-Type", "application/json");
                             if let #{Some}(content_length) = request.body().content_length() {
                                 request.headers_mut().insert("Content-Length", content_length.to_string());
                             }

@@ -573,6 +573,7 @@ class SchemaGenerator(
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
@@ -659,6 +660,7 @@ class SchemaGenerator(
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName)?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
+            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
@@ -890,7 +892,8 @@ class SchemaGenerator(
         val isStructPayload =
             (payloadTarget is StructureShape || payloadTarget is UnionShape) &&
                 payloadTarget?.getTrait(software.amazon.smithy.model.traits.StreamingTrait::class.java)?.isPresent != true
-        val hasPayloadHandling = isRawPayload || isStructPayload
+        val isDocumentPayload = payloadTarget is DocumentShape
+        val hasPayloadHandling = isRawPayload || isStructPayload || isDocumentPayload
 
         if (headerMembers.isEmpty() && statusMember == null && prefixMember == null && !hasPayloadHandling) {
             // No HTTP-bound members and no @httpPayload — generate a trivial deserialize_with_response
@@ -1200,6 +1203,32 @@ class SchemaGenerator(
                         }
                     },
             )
+        } else if (isDocumentPayload && httpPayloadMember != null) {
+            val memberName = symbolProvider.toMemberName(httpPayloadMember)
+            val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+            writer.rust(
+                """
+                if !body.is_empty() {
+                    builder.$memberName = Some(deserializer.read_document(&$memberSchemaRef)?);
+                }
+                """,
+            )
+            // Build the output
+            writer.rustTemplate(
+                """
+                #{buildExpr}
+                }
+                }
+                """,
+                "buildExpr" to
+                    writable {
+                        if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                        } else {
+                            rust("Ok(builder.build())")
+                        }
+                    },
+            )
         } else {
             // Now deserialize body members
             writer.rustTemplate(
@@ -1394,7 +1423,6 @@ class SchemaGenerator(
 
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
-            is DocumentShape -> "deser.read_document($memberRef)?"
             is DocumentShape -> "deser.read_document($memberRef)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)

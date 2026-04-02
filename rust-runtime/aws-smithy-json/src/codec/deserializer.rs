@@ -556,13 +556,99 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
         self.skip_whitespace();
-        if self.remaining().starts_with(b"null") {
-            self.advance_by(4);
-            Ok(Document::Null)
-        } else {
-            Err(SerdeError::UnsupportedOperation {
-                message: "document deserialization not fully implemented".into(),
-            })
+        match self.remaining().first() {
+            Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
+            Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
+            Some(b'n') => {
+                self.advance_by(4);
+                Ok(Document::Null)
+            }
+            Some(b'{') => {
+                self.advance_by(1);
+                let mut map = std::collections::HashMap::new();
+                loop {
+                    self.skip_whitespace();
+                    if self.remaining().first() == Some(&b'}') {
+                        self.advance_by(1);
+                        break;
+                    }
+                    if self.remaining().first() != Some(&b'"') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected object key in document".into(),
+                        });
+                    }
+                    let key = self.parse_key()?.into_owned();
+                    self.skip_whitespace();
+                    if self.remaining().first() != Some(&b':') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected colon in document object".into(),
+                        });
+                    }
+                    self.advance_by(1);
+                    let value = self.read_document(_schema)?;
+                    map.insert(key, value);
+                }
+                Ok(Document::Object(map))
+            }
+            Some(b'[') => {
+                self.advance_by(1);
+                let mut arr = Vec::new();
+                loop {
+                    self.skip_whitespace();
+                    if self.remaining().first() == Some(&b']') {
+                        self.advance_by(1);
+                        break;
+                    }
+                    arr.push(self.read_document(_schema)?);
+                }
+                Ok(Document::Array(arr))
+            }
+            Some(c) if *c == b'-' || c.is_ascii_digit() => {
+                // Parse number — determine if integer or float
+                let rem = self.remaining();
+                let mut len = 0;
+                let mut is_float = false;
+                let mut is_negative = false;
+                for (i, &b) in rem.iter().enumerate() {
+                    if b == b'-' && i == 0 {
+                        is_negative = true;
+                        len += 1;
+                    } else if b.is_ascii_digit() || b == b'+' {
+                        len += 1;
+                    } else if b == b'.' || b == b'e' || b == b'E' {
+                        is_float = true;
+                        len += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let pos = self.position;
+                self.advance_by(len);
+                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
+                    SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    }
+                })?;
+                if is_float {
+                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(aws_smithy_types::Number::Float(f)))
+                } else if is_negative {
+                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(aws_smithy_types::Number::NegInt(n)))
+                } else {
+                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(aws_smithy_types::Number::PosInt(n)))
+                }
+            }
+            _ => Err(SerdeError::InvalidInput {
+                message: "unexpected token in document".into(),
+            }),
         }
     }
 

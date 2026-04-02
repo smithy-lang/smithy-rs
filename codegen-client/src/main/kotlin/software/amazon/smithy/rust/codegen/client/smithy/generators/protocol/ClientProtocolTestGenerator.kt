@@ -92,7 +92,6 @@ class ClientProtocolTestGenerator(
                 // Failing due to bug in httpPreficHeaders serialization
                 // https://github.com/smithy-lang/smithy-rs/issues/4184
                 FailingTest.RequestTest(REST_XML, "HttpEmptyPrefixHeadersRequestClient"),
-                FailingTest.RequestTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersRequestClient"),
                 // Smithy protocol tests expect null to be silently dropped, but we now correctly reject it.
                 // These tests will be removed in https://github.com/smithy-lang/smithy/pull/2972
                 FailingTest.ResponseTest(REST_JSON, "RestJsonDeserializesDenseSetMapAndSkipsNull"),
