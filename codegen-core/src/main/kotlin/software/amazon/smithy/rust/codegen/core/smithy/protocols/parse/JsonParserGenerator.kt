@@ -157,10 +157,14 @@ class JsonParserGenerator(
             ) {
                 rustTemplate(
                     """
-                    let mut tokens_owned = #{json_token_iter}(#{or_empty}(_value)).peekable();
+                    if _value.is_empty() {
+                        return #{Ok}(builder);
+                    }
+                    let mut tokens_owned = #{json_token_iter}(_value).peekable();
                     let tokens = &mut tokens_owned;
                     #{expect_start_object}(tokens.next())?;
                     """,
+                    *preludeScope,
                     *codegenScope,
                 )
                 deserializeStructInner(includedMembers)
