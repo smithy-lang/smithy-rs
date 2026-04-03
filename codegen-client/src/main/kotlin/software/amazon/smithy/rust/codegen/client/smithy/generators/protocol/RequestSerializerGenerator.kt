@@ -296,6 +296,9 @@ class RequestSerializerGenerator(
                         &input, $schemaRef, "", _cfg,
                     ).map_err(#{BoxError}::from)?;
                     *request.body_mut() = #{SdkBody}::from(#{event_stream_body});
+                    // The protocol may have set Content-Length based on the initial empty body.
+                    // Remove it since the event stream body has unknown length.
+                    request.headers_mut().remove("Content-Length");
                     """,
                     *codegenScope,
                     "event_stream_body" to eventStreamBody,
