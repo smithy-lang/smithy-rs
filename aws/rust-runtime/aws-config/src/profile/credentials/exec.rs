@@ -99,7 +99,8 @@ impl ProviderChain {
                 {
                     Arc::new({
                         let mut builder = CredentialProcessProvider::builder()
-                            .command(command_with_sensitive_args.to_owned_string());
+                            .command(command_with_sensitive_args.to_owned_string())
+                            .process(provider_config.process());
                         builder.set_account_id(
                             account_id.map(aws_credential_types::attributes::AccountId::from),
                         );
