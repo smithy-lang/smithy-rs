@@ -242,11 +242,14 @@ class RequestSerializerGenerator(
     ): Writable =
         writable {
             val additionalHeaders = protocol.additionalRequestHeaders(operationShape)
-            // Helper: generates code to add protocol-level headers (e.g., x-amzn-query-mode)
-            // to a `request` variable. No-op when there are no additional headers.
+            // Helper: generates code to add protocol-level headers to a `request` variable.
+            // x-amz-target is excluded because the runtime protocol (AwsJsonRpcProtocol)
+            // sets it in serialize_request(). Emitting it here would prevent protocol swapping
+            // from removing it when switching to a non-RPC protocol like restJson1.
             val addAdditionalHeaders =
                 writable {
                     for (header in additionalHeaders) {
+                        if (header.first == "x-amz-target") continue
                         rust("request.headers_mut().insert(${header.first.dq()}, ${header.second.dq()});")
                     }
                 }

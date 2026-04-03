@@ -1517,14 +1517,22 @@ class SchemaGenerator(
             }
 
             is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
                 val valueRead = elementReadExpr(valueTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                val keyInsert =
+                    if (isStringEnum(keyTarget)) {
+                        val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
+                        "$enumName::from(key.as_str())"
+                    } else {
+                        "key"
+                    }
                 """
                 {
                     let mut map = ::std::collections::HashMap::new();
                     deser.read_map(member, &mut |key, deser| {
                         let value = $valueRead;
-                        map.insert(key, value);
+                        map.insert($keyInsert, value);
                         Ok(())
                     })?;
                     map
