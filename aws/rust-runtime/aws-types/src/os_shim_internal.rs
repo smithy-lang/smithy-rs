@@ -6,11 +6,12 @@
 //! Abstractions for testing code that interacts with the operating system:
 //! - Reading environment variables
 //! - Reading from the file system
+//! - Executing external processes
 
 use std::collections::HashMap;
 use std::env::VarError;
 use std::ffi::OsString;
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 use std::future::Future;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::path::{Path, PathBuf};
@@ -39,6 +40,76 @@ pub trait ProvideFs: Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
         path: &Path,
         contents: &[u8],
     ) -> Pin<Box<dyn Future<Output = std::io::Result<()>> + Send + '_>>;
+}
+
+/// Represents the exit status of a completed process.
+///
+/// Unlike [`std::process::ExitStatus`], this type can be constructed directly,
+/// making it usable in tests and custom implementations.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ExitStatus {
+    code: Option<i32>,
+}
+
+impl ExitStatus {
+    /// Create an `ExitStatus` from an exit code.
+    ///
+    /// A code of `0` represents success. `None` indicates the process
+    /// was terminated by a signal (Unix) or otherwise didn't return a code.
+    pub fn new(code: Option<i32>) -> Self {
+        Self { code }
+    }
+
+    /// Returns `true` if the exit code was `0`.
+    pub fn success(&self) -> bool {
+        self.code == Some(0)
+    }
+
+    /// Returns the exit code, if available.
+    pub fn code(&self) -> Option<i32> {
+        self.code
+    }
+}
+
+impl fmt::Display for ExitStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.code {
+            Some(code) => write!(f, "exit status: {code}"),
+            None => write!(f, "terminated by signal"),
+        }
+    }
+}
+
+impl From<std::process::ExitStatus> for ExitStatus {
+    fn from(status: std::process::ExitStatus) -> Self {
+        Self {
+            code: status.code(),
+        }
+    }
+}
+
+/// The output of a completed process, analogous to [`std::process::Output`].
+#[derive(Clone, Debug)]
+pub struct CommandOutput {
+    /// The exit status of the process.
+    pub status: ExitStatus,
+    /// The data written to stdout.
+    pub stdout: Vec<u8>,
+    /// The data written to stderr.
+    pub stderr: Vec<u8>,
+}
+
+/// Trait for custom process execution providers.
+pub trait ProvideProcess: Debug + Send + Sync + UnwindSafe + RefUnwindSafe {
+    /// Execute the given command string and return its output.
+    ///
+    /// The implementor is responsible for any shell wrapping or command
+    /// interpretation needed. The built-in `Real` implementation wraps
+    /// commands with `sh -c` (Unix) or `cmd.exe /C` (Windows).
+    fn execute(
+        &self,
+        command: &str,
+    ) -> Pin<Box<dyn Future<Output = std::io::Result<CommandOutput>> + Send + '_>>;
 }
 
 /// File system abstraction
@@ -332,6 +403,131 @@ mod env {
     }
 }
 
+/// Process execution abstraction
+///
+/// Simple abstraction enabling in-memory mocking of process execution
+///
+/// # Examples
+/// Construct a process executor that delegates to the OS:
+/// ```rust
+/// let process = aws_types::os_shim_internal::Process::real();
+/// ```
+///
+/// Construct a fake process executor for testing:
+/// ```rust
+/// use aws_types::os_shim_internal::{Process, CommandOutput, ExitStatus};
+/// let process = Process::from_fn(|_cmd| {
+///     Ok(CommandOutput {
+///         status: ExitStatus::new(Some(0)),
+///         stdout: b"hello".to_vec(),
+///         stderr: Vec::new(),
+///     })
+/// });
+/// ```
+#[derive(Clone, Debug)]
+pub struct Process(process::Inner);
+
+impl Default for Process {
+    fn default() -> Self {
+        Process::real()
+    }
+}
+
+impl Process {
+    /// Create a `Process` that executes real OS processes.
+    ///
+    /// Commands are wrapped with the platform-specific shell:
+    /// - Unix: `sh -c "<command>"`
+    /// - Windows: `cmd.exe /C "<command>"`
+    ///
+    /// _Note: This function currently uses blocking `std::process::Command`
+    /// for consistency with the `Fs` shim approach._
+    pub fn real() -> Self {
+        Process(process::Inner::Real)
+    }
+
+    /// Create a `Process` backed by a custom [`ProvideProcess`] implementation.
+    pub fn from_custom(provider: impl ProvideProcess + 'static) -> Self {
+        Self(process::Inner::Custom(Arc::new(provider)))
+    }
+
+    /// Create a `Process` from a function that maps command strings to outputs.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use aws_types::os_shim_internal::{Process, CommandOutput, ExitStatus};
+    /// let process = Process::from_fn(|cmd| {
+    ///     Ok(CommandOutput {
+    ///         status: ExitStatus::new(Some(0)),
+    ///         stdout: format!("ran: {cmd}").into_bytes(),
+    ///         stderr: Vec::new(),
+    ///     })
+    /// });
+    /// ```
+    pub fn from_fn(
+        f: impl Fn(&str) -> std::io::Result<CommandOutput> + Send + Sync + 'static,
+    ) -> Self {
+        Self(process::Inner::Fake(Arc::new(f)))
+    }
+
+    /// Execute a command string and return its output.
+    ///
+    /// For the `Real` variant, the command is wrapped in a platform-specific
+    /// shell (`sh -c` on Unix, `cmd.exe /C` on Windows).
+    ///
+    /// _Note: The `Real` variant uses blocking I/O. For custom implementations,
+    /// consider using [`Process::from_custom`] with a truly async provider._
+    pub async fn execute(&self, command: &str) -> std::io::Result<CommandOutput> {
+        use process::Inner;
+        match &self.0 {
+            Inner::Real => {
+                let mut std_command = if cfg!(windows) {
+                    let mut cmd = std::process::Command::new("cmd.exe");
+                    cmd.args(["/C", command]);
+                    cmd
+                } else {
+                    let mut cmd = std::process::Command::new("sh");
+                    cmd.args(["-c", command]);
+                    cmd
+                };
+                let output = std_command.output()?;
+                Ok(CommandOutput {
+                    status: ExitStatus::from(output.status),
+                    stdout: output.stdout,
+                    stderr: output.stderr,
+                })
+            }
+            Inner::Fake(f) => f(command),
+            Inner::Custom(provider) => provider.execute(command).await,
+        }
+    }
+}
+
+mod process {
+    use std::sync::Arc;
+
+    use super::ProvideProcess;
+
+    type FakeFn = dyn Fn(&str) -> std::io::Result<super::CommandOutput> + Send + Sync;
+
+    #[derive(Clone)]
+    pub(super) enum Inner {
+        Real,
+        Fake(Arc<FakeFn>),
+        Custom(Arc<dyn ProvideProcess>),
+    }
+
+    impl std::fmt::Debug for Inner {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Inner::Real => f.write_str("Real"),
+                Inner::Fake(_) => f.write_str("Fake(fn)"),
+                Inner::Custom(c) => write!(f, "Custom({c:?})"),
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use std::collections::HashMap;
@@ -341,7 +537,9 @@ mod test {
     use std::pin::Pin;
     use std::sync::Mutex;
 
-    use crate::os_shim_internal::{Env, Fs, ProvideEnv, ProvideFs};
+    use crate::os_shim_internal::{
+        CommandOutput, Env, ExitStatus, Fs, Process, ProvideEnv, ProvideFs, ProvideProcess,
+    };
 
     #[test]
     fn env_works() {
@@ -477,5 +675,87 @@ mod test {
             .mode()
             & 0o777; // mask off file type bits, keep only permission bits
         assert_eq!(mode, 0o600, "file should be owner read/write only");
+    }
+
+    #[tokio::test]
+    async fn process_real_works() {
+        let process = Process::real();
+        let output = process.execute("echo hello").await.expect("success");
+        assert!(output.status.success());
+        assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "hello");
+    }
+
+    #[tokio::test]
+    async fn process_real_failure() {
+        let process = Process::real();
+        let output = process.execute("exit 42").await.expect("io succeeds");
+        assert!(!output.status.success());
+        assert_eq!(output.status.code(), Some(42));
+    }
+
+    #[test]
+    fn exit_status_success() {
+        assert!(ExitStatus::new(Some(0)).success());
+        assert!(!ExitStatus::new(Some(1)).success());
+        assert!(!ExitStatus::new(None).success());
+        assert_eq!(ExitStatus::new(Some(0)).code(), Some(0));
+        assert_eq!(ExitStatus::new(None).code(), None);
+    }
+
+    #[tokio::test]
+    async fn process_from_fn_success() {
+        let process = Process::from_fn(|cmd| {
+            Ok(CommandOutput {
+                status: ExitStatus::new(Some(0)),
+                stdout: format!("output of: {cmd}").into_bytes(),
+                stderr: Vec::new(),
+            })
+        });
+        let output = process.execute("my-command").await.expect("success");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"output of: my-command");
+        assert!(output.stderr.is_empty());
+    }
+
+    #[tokio::test]
+    async fn process_from_fn_failure() {
+        let process = Process::from_fn(|_cmd| {
+            Ok(CommandOutput {
+                status: ExitStatus::new(Some(1)),
+                stdout: Vec::new(),
+                stderr: b"something went wrong".to_vec(),
+            })
+        });
+        let output = process.execute("bad-command").await.expect("io succeeds");
+        assert!(!output.status.success());
+        assert_eq!(output.stderr, b"something went wrong");
+    }
+
+    #[tokio::test]
+    async fn custom_process_works() {
+        #[derive(Debug)]
+        struct EchoProcess;
+
+        impl ProvideProcess for EchoProcess {
+            fn execute(
+                &self,
+                command: &str,
+            ) -> Pin<Box<dyn Future<Output = std::io::Result<CommandOutput>> + Send + '_>>
+            {
+                let stdout = command.as_bytes().to_vec();
+                Box::pin(async move {
+                    Ok(CommandOutput {
+                        status: ExitStatus::new(Some(0)),
+                        stdout,
+                        stderr: Vec::new(),
+                    })
+                })
+            }
+        }
+
+        let process = Process::from_custom(EchoProcess);
+        let output = process.execute("hello world").await.expect("success");
+        assert!(output.status.success());
+        assert_eq!(output.stdout, b"hello world");
     }
 }

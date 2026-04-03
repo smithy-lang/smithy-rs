@@ -240,7 +240,7 @@ mod loader {
     use aws_types::docs_for;
     use aws_types::endpoint_config::AccountIdEndpointMode;
     use aws_types::origin::Origin;
-    use aws_types::os_shim_internal::{Env, Fs};
+    use aws_types::os_shim_internal::{Env, Fs, Process};
     use aws_types::region::SigningRegionSet;
     use aws_types::sdk_config::SharedHttpClient;
     use aws_types::SdkConfig;
@@ -300,6 +300,7 @@ mod loader {
         stalled_stream_protection_config: Option<StalledStreamProtectionConfig>,
         env: Option<Env>,
         fs: Option<Fs>,
+        process: Option<Process>,
         behavior_version: Option<BehaviorVersion>,
         request_checksum_calculation: Option<RequestChecksumCalculation>,
         response_checksum_validation: Option<ResponseChecksumValidation>,
@@ -564,6 +565,15 @@ mod loader {
         /// backend (e.g., in-memory stores, encrypted filesystems).
         pub fn fs(mut self, fs: Fs) -> Self {
             self.fs = Some(fs);
+            self
+        }
+
+        /// Override the process execution abstraction used during config resolution.
+        ///
+        /// This can be used with [`Process::from_custom`] to provide a custom process
+        /// execution backend (e.g., sandboxed environments, remote execution).
+        pub fn process(mut self, process: Process) -> Self {
+            self.process = Some(process);
             self
         }
 
@@ -836,7 +846,8 @@ mod loader {
                 .unwrap_or_else(|| {
                     let mut config = ProviderConfig::init(time_source.clone(), sleep_impl.clone())
                         .with_fs(self.fs.unwrap_or_default())
-                        .with_env(self.env.unwrap_or_default());
+                        .with_env(self.env.unwrap_or_default())
+                        .with_process(self.process.unwrap_or_default());
                     if let Some(http_client) = self.http_client.clone() {
                         config = config.with_http_client(http_client);
                     }

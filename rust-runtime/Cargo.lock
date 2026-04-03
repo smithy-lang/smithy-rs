@@ -379,7 +379,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-checksums"
-version = "0.64.6"
+version = "0.64.7"
 dependencies = [
  "aws-smithy-http 0.63.6",
  "aws-smithy-types 1.4.7",
