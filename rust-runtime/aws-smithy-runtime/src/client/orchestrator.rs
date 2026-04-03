@@ -447,7 +447,7 @@ async fn try_attempt(
                 .and_then(|_| {
                     let _span = debug_span!("deserialize_nonstreaming").entered();
                     log_response_body(response, cfg);
-                    response_deserializer.deserialize_nonstreaming(response)
+                    response_deserializer.deserialize_nonstreaming(response, cfg)
                 }),
         }
     }

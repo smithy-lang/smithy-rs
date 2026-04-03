@@ -99,6 +99,7 @@ private class TestOperationCustomization(
                         fn deserialize_nonstreaming(
                             &self,
                             _response: &#{HttpResponse},
+                            _cfg: &#{ConfigBag},
                         ) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>> {
                             let fake_out: #{Result}<
                                 crate::operation::say_hello::SayHelloOutput,
@@ -120,6 +121,7 @@ private class TestOperationCustomization(
                     "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                     "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
                     "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
+                    "ConfigBag" to RT.configBag(rc),
                 )
             }
         }

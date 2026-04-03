@@ -36,8 +36,15 @@ pub(crate) fn deserialize() {
         .load::<SharedResponseDeserializer>()
         .expect("operation should set a deserializer");
 
+    let mut cfg = ConfigBag::base();
+    cfg.interceptor_state()
+        .store_put(aws_smithy_schema::protocol::SharedClientProtocol::new(
+            aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(
+                "DynamoDB_20120810",
+            ),
+        ));
     let output = deserializer
-        .deserialize_nonstreaming(&response)
+        .deserialize_nonstreaming(&response, &cfg)
         .expect("success");
     let output = output.downcast::<QueryOutput>().expect("correct type");
     assert_eq!(2, output.count);

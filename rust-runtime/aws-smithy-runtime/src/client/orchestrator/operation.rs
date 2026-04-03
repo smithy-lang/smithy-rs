@@ -94,6 +94,7 @@ where
     fn deserialize_nonstreaming(
         &self,
         response: &HttpResponse,
+        _cfg: &ConfigBag,
     ) -> Result<Output, OrchestratorError<Error>> {
         (self.f)(response)
             .map(|output| Output::erase(output))

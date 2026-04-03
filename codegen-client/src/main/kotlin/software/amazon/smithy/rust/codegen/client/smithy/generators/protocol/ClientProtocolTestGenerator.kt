@@ -92,7 +92,6 @@ class ClientProtocolTestGenerator(
                 // Failing due to bug in httpPreficHeaders serialization
                 // https://github.com/smithy-lang/smithy-rs/issues/4184
                 FailingTest.RequestTest(REST_XML, "HttpEmptyPrefixHeadersRequestClient"),
-                FailingTest.RequestTest(REST_JSON, "RestJsonHttpEmptyPrefixHeadersRequestClient"),
                 // Smithy protocol tests expect null to be silently dropped, but we now correctly reject it.
                 // These tests will be removed in https://github.com/smithy-lang/smithy/pull/2972
                 FailingTest.ResponseTest(REST_JSON, "RestJsonDeserializesDenseSetMapAndSkipsNull"),
@@ -283,9 +282,14 @@ class ClientProtocolTestGenerator(
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
+                // Build a config bag with the protocol for schema-based deserialization
+                ##[allow(unused_mut)]
+                let mut test_cfg = #{ConfigBag}::base();
+                #{inject_protocol}
+                de.deserialize_nonstreaming(&http_response, &test_cfg)
             });
             """,
+            "ConfigBag" to RT.configBag(rc),
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
             "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
             "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
@@ -296,6 +300,7 @@ class ClientProtocolTestGenerator(
             "SharedResponseDeserializer" to
                 RT.smithyRuntimeApiClient(rc)
                     .resolve("client::ser_de::SharedResponseDeserializer"),
+            "inject_protocol" to protocolTestConfigBagSetup(),
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
@@ -354,6 +359,41 @@ class ClientProtocolTestGenerator(
             }
         }
     }
+
+    /** Generates Rust code to inject the protocol into a test config bag. */
+    private fun protocolTestConfigBagSetup(): software.amazon.smithy.rust.codegen.core.rustlang.Writable =
+        writable {
+            if (software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                val smithySchema = RT.smithySchema(codegenContext.runtimeConfig)
+                val protocol = codegenContext.protocol
+                val serviceShapeName = codegenContext.serviceShape.id.name
+
+                val (protocolType, constructor) =
+                    when {
+                        protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        else -> return@writable
+                    }
+
+                rustTemplate(
+                    """
+                    {
+                        let mut layer = #{Layer}::new("test_protocol");
+                        layer.store_put(#{SharedClientProtocol}::new(#{ProtocolType}::$constructor));
+                        test_cfg.push_shared_layer(layer.freeze());
+                    }
+                    """,
+                    "Layer" to RT.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::Layer"),
+                    "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+                    "ProtocolType" to protocolType,
+                )
+            }
+        }
 
     private fun checkBody(
         rustWriter: RustWriter,

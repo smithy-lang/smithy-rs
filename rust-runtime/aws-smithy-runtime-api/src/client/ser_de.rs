@@ -71,6 +71,7 @@ pub trait DeserializeResponse: Send + Sync + fmt::Debug {
     fn deserialize_nonstreaming(
         &self,
         response: &HttpResponse,
+        cfg: &ConfigBag,
     ) -> Result<Output, OrchestratorError<Error>>;
 }
 
@@ -91,8 +92,9 @@ impl DeserializeResponse for SharedResponseDeserializer {
     fn deserialize_nonstreaming(
         &self,
         response: &HttpResponse,
+        cfg: &ConfigBag,
     ) -> Result<Output, OrchestratorError<Error>> {
-        self.0.deserialize_nonstreaming(response)
+        self.0.deserialize_nonstreaming(response, cfg)
     }
 
     fn deserialize_streaming(

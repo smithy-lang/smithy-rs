@@ -171,50 +171,38 @@ mod test {
     }
 
     impl ShapeDeserializer for MockDeserializer {
-        fn read_struct<T, F>(
+        fn read_struct(
             &mut self,
             _schema: &Schema,
-            state: T,
-            mut consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
-        {
+            consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             // Simulate reading 2 members
-            let state = consumer(state, &STRING, self)?;
-            let state = consumer(state, &INTEGER, self)?;
-            Ok(state)
+            consumer(&STRING, self)?;
+            consumer(&INTEGER, self)?;
+            Ok(())
         }
 
-        fn read_list<T, F>(
+        fn read_list(
             &mut self,
             _schema: &Schema,
-            mut state: T,
-            mut consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
-        {
+            consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             // Simulate reading 3 elements
             for _ in 0..3 {
-                state = consumer(state, self)?;
+                consumer(self)?;
             }
-            Ok(state)
+            Ok(())
         }
 
-        fn read_map<T, F>(
+        fn read_map(
             &mut self,
             _schema: &Schema,
-            mut state: T,
-            mut consumer: F,
-        ) -> Result<T, SerdeError>
-        where
-            F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
-        {
+            consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
             // Simulate reading 2 entries
-            state = consumer(state, "key1".to_string(), self)?;
-            state = consumer(state, "key2".to_string(), self)?;
-            Ok(state)
+            consumer("key1".to_string(), self)?;
+            consumer("key2".to_string(), self)?;
+            Ok(())
         }
 
         fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
@@ -357,9 +345,9 @@ mod test {
 
         let mut fields = Vec::new();
         deser
-            .read_struct(&STRING, &mut fields, |fields, _member, d| {
+            .read_struct(&STRING, &mut |_member, d| {
                 fields.push(d.read_string(&STRING)?);
-                Ok(fields)
+                Ok(())
             })
             .unwrap();
 
@@ -373,9 +361,9 @@ mod test {
 
         let mut elements = Vec::new();
         deser
-            .read_list(&STRING, &mut elements, |elements, d| {
+            .read_list(&STRING, &mut |d| {
                 elements.push(d.read_string(&STRING)?);
-                Ok(elements)
+                Ok(())
             })
             .unwrap();
 
@@ -388,10 +376,10 @@ mod test {
 
         let mut entries = Vec::new();
         deser
-            .read_map(&STRING, &mut entries, |entries, key, d| {
+            .read_map(&STRING, &mut |key, d| {
                 let value = d.read_string(&STRING)?;
                 entries.push((key, value));
-                Ok(entries)
+                Ok(())
             })
             .unwrap();
 

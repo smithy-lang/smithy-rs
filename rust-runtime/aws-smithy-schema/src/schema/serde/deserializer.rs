@@ -27,6 +27,9 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// - Enables zero-cost abstractions (closures can be inlined)
 /// - Allows caller to control deserialization order and state management
 /// - Matches the SEP's recommendation for compiled typed languages
+/// - Uses `&mut dyn ShapeDeserializer` so composite deserializers (e.g., HTTP
+///   binding + body) can transparently delegate without the consumer knowing
+///   the concrete deserializer type. This enables runtime protocol swapping.
 ///
 /// # Example
 ///
@@ -35,14 +38,13 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// let mut builder = MyStructBuilder::default();
 /// deserializer.read_struct(
 ///     &MY_STRUCT_SCHEMA,
-///     builder,
-///     |mut builder, member, deser| {
+///     &mut |member, deser| {
 ///         match member.member_index() {
-///             0 => builder.field1 = Some(deser.read_string(member)?),
-///             1 => builder.field2 = Some(deser.read_i32(member)?),
+///             Some(0) => builder.field1 = Some(deser.read_string(member)?),
+///             Some(1) => builder.field2 = Some(deser.read_integer(member)?),
 ///             _ => {}
 ///         }
-///         Ok(builder)
+///         Ok(())
 ///     },
 /// )?;
 /// let my_struct = builder.build();
@@ -50,65 +52,33 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 pub trait ShapeDeserializer {
     /// Reads a structure from the deserializer.
     ///
-    /// The structure deserialization is driven by a consumer callback that is called
-    /// for each member. The consumer receives the current state, the member schema,
-    /// and the deserializer, and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the structure being deserialized
-    /// * `state` - Initial state (typically a builder)
-    /// * `consumer` - Callback invoked for each member with (state, member_schema, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all members
-    fn read_struct<T, F>(
+    /// The consumer is called for each member with the member schema and a
+    /// `&mut dyn ShapeDeserializer` to read the member value. Using `dyn`
+    /// allows composite deserializers (e.g., HTTP binding + body) to
+    /// transparently delegate without the consumer knowing the concrete type.
+    fn read_struct(
         &mut self,
         schema: &Schema,
-        state: T,
-        consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>;
+        state: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a list from the deserializer.
     ///
-    /// The list deserialization is driven by a consumer callback that is called
-    /// for each element. The consumer receives the current state and the deserializer,
-    /// and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the list being deserialized
-    /// * `state` - Initial state (typically a Vec or collection)
-    /// * `consumer` - Callback invoked for each element with (state, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all elements
-    fn read_list<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &mut Self) -> Result<T, SerdeError>;
+    /// The consumer is called for each element with a `&mut dyn ShapeDeserializer`.
+    fn read_list(
+        &mut self,
+        schema: &Schema,
+        state: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a map from the deserializer.
     ///
-    /// The map deserialization is driven by a consumer callback that is called
-    /// for each entry. The consumer receives the current state, the key, and the
-    /// deserializer, and returns the updated state.
-    ///
-    /// # Arguments
-    ///
-    /// * `schema` - The schema of the map being deserialized
-    /// * `state` - Initial state (typically a HashMap or collection)
-    /// * `consumer` - Callback invoked for each entry with (state, key, deserializer)
-    ///
-    /// # Returns
-    ///
-    /// The final state after processing all entries
-    fn read_map<T, F>(&mut self, schema: &Schema, state: T, consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>;
+    /// The consumer is called for each entry with the key and a `&mut dyn ShapeDeserializer`.
+    fn read_map(
+        &mut self,
+        schema: &Schema,
+        state: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError>;
 
     /// Reads a boolean value.
     fn read_boolean(&mut self, schema: &Schema) -> Result<bool, SerdeError>;
@@ -154,6 +124,14 @@ pub trait ShapeDeserializer {
     /// This is used for sparse collections where null values are significant.
     fn is_null(&self) -> bool;
 
+    /// Consumes a null value, advancing past it.
+    ///
+    /// This should be called after `is_null()` returns true to advance the
+    /// deserializer past the null token.
+    fn read_null(&mut self) -> Result<(), SerdeError> {
+        Ok(())
+    }
+
     /// Returns the size of the current container if known.
     ///
     /// This is an optimization hint that allows pre-allocating collections
@@ -165,4 +143,77 @@ pub trait ShapeDeserializer {
     /// that claim excessively large container sizes (e.g. a CBOR header
     /// declaring billions of elements).
     fn container_size(&self) -> Option<usize>;
+
+    // --- Collection helper methods ---
+    //
+    // These methods are not part of the Serialization and Schema Decoupling SEP.
+    // They exist as a performance optimization for common collection patterns
+    // (e.g. `List<String>`, `Map<String, String>`) that appear frequently in
+    // AWS service models. Without these, generated code must emit an inline
+    // closure calling `read_list`/`read_map` with per-element `read_string`
+    // calls — roughly 6-8 lines of boilerplate per collection field. These
+    // helpers replace that with a single method call, reducing generated code
+    // size (e.g. -43% for DynamoDB deserialize bodies).
+    //
+    // Additionally, the default implementations call through
+    // `&mut dyn ShapeDeserializer`, which introduces vtable dispatch on every
+    // element. Codec implementations (e.g. `JsonDeserializer`) can override
+    // these to call their concrete `read_string`/`read_integer`/etc. methods
+    // directly, eliminating the per-element dynamic dispatch overhead.
+
+    /// Reads a list of strings.
+    fn read_string_list(&mut self, schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_string(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of blobs.
+    fn read_blob_list(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<Vec<aws_smithy_types::Blob>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_blob(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of integers.
+    fn read_integer_list(&mut self, schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_integer(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a list of longs.
+    fn read_long_list(&mut self, schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        let mut out = Vec::new();
+        self.read_list(schema, &mut |deser| {
+            out.push(deser.read_long(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
+
+    /// Reads a map with string values.
+    fn read_string_string_map(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        let mut out = std::collections::HashMap::new();
+        self.read_map(schema, &mut |key, deser| {
+            out.insert(key, deser.read_string(schema)?);
+            Ok(())
+        })?;
+        Ok(out)
+    }
 }

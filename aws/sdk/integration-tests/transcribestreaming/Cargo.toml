@@ -14,7 +14,8 @@ aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", 
 aws-sdk-transcribestreaming = { path = "../../build/aws-sdk/sdk/transcribestreaming", features = ["behavior-version-latest"] }
 aws-smithy-eventstream = { path = "../../build/aws-sdk/sdk/aws-smithy-eventstream", features = ["test-util"] }
 aws-smithy-http = { path = "../../build/aws-sdk/sdk/aws-smithy-http" }
-aws-smithy-http-client= { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
+aws-smithy-http-client= { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util", "legacy-test-util"] }
+aws-types = { path = "../../build/aws-sdk/sdk/aws-types" }
 bytes = "1.0.0"
 futures-core = "0.3.29"
 hound = "3.4.0"

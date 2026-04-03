@@ -19,6 +19,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.docs
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.BrokenTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.FailingTest
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolSupport
@@ -108,19 +109,14 @@ class SerdeBenchmarkTestGenerator(
                 .load::<#{SharedRequestSerializer}>()
                 .expect("operation should set a serializer");
 
+            let mut config_bag = #{ConfigBag}::base();
+            config_bag.push_shared_layer(config.clone());
+            #{inject_protocol_ser}
             let mut timings = Vec::new();
             for _ in 0..10000 {
-                // TODO(https://github.com/smithy-lang/smithy-rs/pull/4579##discussion_r2996838457)
-                // Consider hoisting `config_bag` creation outside the loop. For example:
-                //
-                // let config = op.config().expect("the operation has config");
-                // let mut config_bag = ::aws_smithy_types::config_bag::ConfigBag::base();
-                // config_bag.push_shared_layer(config.clone()); // Didn't want this bit in the loop
-                // for _ in 0..10000 { ... }
-                let mut config_bag = #{ConfigBag}::base();
                 let input = #{Input}::erase(input.clone());
                 let start = std::time::Instant::now();
-                let _ = std::hint::black_box(serializer.serialize_input(input, &mut config_bag));
+                let _ = serializer.serialize_input(input, &mut config_bag);
                 timings.push(start.elapsed().as_nanos() as u64);
             }
             """,
@@ -130,6 +126,7 @@ class SerdeBenchmarkTestGenerator(
             "SharedRequestSerializer" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::SharedRequestSerializer"),
             "ConfigBag" to RT.configBag(rc),
             "Input" to RT.smithyRuntimeApiClient(rc).resolve("client::interceptors::context::Input"),
+            "inject_protocol_ser" to protocolConfigBagSetup("config_bag"),
         )
         renderBenchmarkStats(testCase.id)
     }
@@ -144,6 +141,9 @@ class SerdeBenchmarkTestGenerator(
             let op = #{Operation}::new();
             let config = op.config().expect("the operation has config");
             let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
+            let mut cfg = #{ConfigBag}::base();
+            cfg.push_shared_layer(config.clone());
+            #{inject_protocol_de}
 
             let mut timings = Vec::new();
             for _ in 0..10000 {
@@ -157,6 +157,8 @@ class SerdeBenchmarkTestGenerator(
                     .resolve("client::ser_de::SharedResponseDeserializer"),
             "Response" to RT.smithyRuntimeApi(rc).resolve("http::Response"),
             "HttpResponseBuilder" to RT.HttpResponseBuilder1x,
+            "ConfigBag" to RT.smithyTypes(rc).resolve("config_bag::ConfigBag"),
+            "inject_protocol_de" to protocolConfigBagSetup("cfg"),
         )
         testCase.headers.forEach { (key, value) ->
             writeWithNoFormatting(".header(${key.dq()}, ${value.dq()})")
@@ -173,9 +175,9 @@ class SerdeBenchmarkTestGenerator(
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
+                de.deserialize_nonstreaming(&http_response, &cfg)
             });
-            let _ = std::hint::black_box(parsed);
+            let _ = std::hint::black_box(parsed);;
             timings.push(start.elapsed().as_nanos() as u64);
             }
             """,
@@ -214,4 +216,39 @@ class SerdeBenchmarkTestGenerator(
             "serde_json" to CargoDependency.SerdeJson.toDevDependency().toType(),
         )
     }
+
+    /** Generates Rust code to inject the protocol into a benchmark config bag. */
+    private fun protocolConfigBagSetup(cfgVarName: String): software.amazon.smithy.rust.codegen.core.rustlang.Writable =
+        writable {
+            if (software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                val smithySchema = RT.smithySchema(codegenContext.runtimeConfig)
+                val protocol = codegenContext.protocol
+                val serviceShapeName = codegenContext.serviceShape.id.name
+
+                val (protocolType, constructor) =
+                    when {
+                        protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        else -> return@writable
+                    }
+
+                rustTemplate(
+                    """
+                    {
+                        let mut layer = #{Layer}::new("bench_protocol");
+                        layer.store_put(#{SharedClientProtocol}::new(#{ProtocolType}::$constructor));
+                        $cfgVarName.push_shared_layer(layer.freeze());
+                    }
+                    """,
+                    "Layer" to RT.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::Layer"),
+                    "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+                    "ProtocolType" to protocolType,
+                )
+            }
+        }
 }
