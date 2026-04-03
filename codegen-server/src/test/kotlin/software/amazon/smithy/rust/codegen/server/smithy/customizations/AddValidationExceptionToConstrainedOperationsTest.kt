@@ -177,4 +177,63 @@ internal class AddValidationExceptionToConstrainedOperationsTest {
             transformedOperation.errors.contains(validationExceptionShapeId).shouldBeFalse()
         }
     }
+
+    /**
+     * Model with a constrained operation on a resource (not directly on the service), and without
+     * `smithy.framework#ValidationException` in the model.
+     */
+    private val testModelWithResourceOperationAndNoValidationException =
+        """
+        namespace test
+
+        use aws.protocols#restJson1
+
+        @restJson1
+        service ConstrainedService {
+            resources: [MyResource]
+        }
+
+        resource MyResource {
+            operations: [ResourceOperation]
+        }
+
+        @http(uri: "/resource", method: "POST")
+        operation ResourceOperation {
+            input: ResourceInput
+            output: ResourceOutput
+        }
+
+        structure ResourceInput {
+            @range(min: 0, max: 100)
+            constrainedInteger: Integer
+        }
+
+        structure ResourceOutput {}
+        """.asSmithyModel(
+            smithyVersion = "2",
+            // Exclude smithy-validation-model from discovery so the shape is not in the model,
+            // simulating the removeUnusedShapes projection transform pruning it.
+            additionalDeniedModels = arrayOf("smithy-validation-model"),
+        )
+
+    @Test
+    fun `resource operations get ValidationException even when the shape is not in the model`() {
+        // Verify the shape is missing and the operation has no ValidationException.
+        testModelWithResourceOperationAndNoValidationException
+            .getShape(validationExceptionShapeId).isPresent.shouldBeFalse()
+        testModelWithResourceOperationAndNoValidationException
+            .expectShape(ShapeId.from("test#ResourceOperation"), OperationShape::class.java)
+            .errors.contains(validationExceptionShapeId).shouldBeFalse()
+
+        serverIntegrationTest(
+            testModelWithResourceOperationAndNoValidationException,
+            testCoverage = HttpTestType.Default,
+        ) { codegenContext, _ ->
+            // The shape should have been added and attached to the resource operation.
+            codegenContext.model.getShape(validationExceptionShapeId).isPresent.shouldBeTrue()
+            codegenContext.model
+                .expectShape(ShapeId.from("test#ResourceOperation"), OperationShape::class.java)
+                .errors.contains(validationExceptionShapeId).shouldBeTrue()
+        }
+    }
 }
