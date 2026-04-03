@@ -896,32 +896,80 @@ class SchemaGenerator(
         val hasPayloadHandling = isRawPayload || isStructPayload || isDocumentPayload
 
         if (headerMembers.isEmpty() && statusMember == null && prefixMember == null && !hasPayloadHandling) {
-            // No HTTP-bound members and no @httpPayload — generate a trivial deserialize_with_response
-            // that delegates to deserialize.
-            writer.rustTemplate(
-                """
-                impl $structName {
-                    /// Deserializes this structure from a body deserializer and HTTP response.
-                    pub fn deserialize_with_response(
-                        deserializer: &mut dyn #{ShapeDeserializer},
-                        _headers: &#{Headers},
-                        _status: u16,
-                        _body: &[u8],
-                    ) -> ::std::result::Result<Self, #{SerdeError}> {
-                        Self::deserialize(deserializer)
-                    }
+            // No HTTP-bound members and no @httpPayload.
+            // Check if there are body members. Note: @httpQuery, @httpLabel, @httpQueryParams
+            // are request-only — on the response side those members are body members.
+            val hasBodyMembers =
+                structShape.allMembers.values.any { member ->
+                    !member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java) &&
+                        !member.hasTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java) &&
+                        !member.hasTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java) &&
+                        member.memberName != "_request_id"
                 }
-                """,
-                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
-                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
-                "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
-            )
+            if (hasBodyMembers) {
+                writer.rustTemplate(
+                    """
+                    impl $structName {
+                        /// Deserializes this structure from a body deserializer and HTTP response.
+                        pub fn deserialize_with_response(
+                            deserializer: &mut dyn #{ShapeDeserializer},
+                            _headers: &#{Headers},
+                            _status: u16,
+                            _body: &[u8],
+                        ) -> ::std::result::Result<Self, #{SerdeError}> {
+                            Self::deserialize(deserializer)
+                        }
+                    }
+                    """,
+                    "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                    "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                    "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+                )
+            } else {
+                // No body members — skip body deserialization. Per the Smithy HTTP binding spec,
+                // the body document only carries unbound members. With none present, the body
+                // content is irrelevant and may not be valid JSON (e.g. checksum-validated payloads).
+                writer.rustTemplate(
+                    """
+                    impl $structName {
+                        /// Deserializes this structure from a body deserializer and HTTP response.
+                        pub fn deserialize_with_response(
+                            _deserializer: &mut dyn #{ShapeDeserializer},
+                            _headers: &#{Headers},
+                            _status: u16,
+                            _body: &[u8],
+                        ) -> ::std::result::Result<Self, #{SerdeError}> {
+                            #{build}
+                        }
+                    }
+                    """,
+                    "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                    "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                    "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+                    "build" to
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust("Self::builder().build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                            } else {
+                                rust("Ok(Self::builder().build())")
+                            }
+                        },
+                )
+            }
             return
         }
 
         val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
         val bodyParam = if (hasPayloadHandling) "body" else "_body"
-        val deserializerParam = if (isRawPayload) "_deserializer" else "deserializer"
+        // Check if there are any body members (non-HTTP-bound, non-synthetic)
+        val hasBodyMembers =
+            structShape.allMembers.values.any { member ->
+                !member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java) &&
+                    !member.hasTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java) &&
+                    !member.hasTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java) &&
+                    member.memberName != "_request_id"
+            }
+        val deserializerParam = if (isRawPayload || !hasBodyMembers) "_deserializer" else "deserializer"
 
         writer.rustTemplate(
             """
@@ -1230,57 +1278,76 @@ class SchemaGenerator(
                     },
             )
         } else {
-            // Now deserialize body members
-            writer.rustTemplate(
-                """
-                ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
-                deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
-                    match member.member_index() {
-                        #{memberArms}
-                        _ => {}
+            if (!hasBodyMembers) {
+                // No body members — skip read_struct to tolerate non-JSON response bodies
+                writer.rustTemplate(
+                    """
+                    #{buildExpr}
                     }
-                    Ok(())
-                })?;
-                #{buildExpr}
-                }
-                }
-                """,
-                "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
-                "SerdeError" to smithySchema.resolve("serde::SerdeError"),
-                "buildExpr" to
-                    writable {
-                        if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
-                        } else {
-                            rust("Ok(builder.build())")
-                        }
-                    },
-                "memberArms" to
-                    writable {
-                        val allMembers = structShape.allMembers.values.toList()
-                        allMembers.forEachIndexed { idx, member ->
-                            val memberName = symbolProvider.toMemberName(member)
-                            val memberSymbol = symbolProvider.toSymbol(member)
-                            val target = model.expectShape(member.target)
-                            // Skip HTTP-bound members — they're already set from headers above
-                            val hasHttpBinding =
-                                member.getTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java).isPresent ||
-                                    member.getTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java).isPresent ||
-                                    member.getTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java).isPresent
-                            if (hasHttpBinding) {
-                                rust("Some($idx) => { /* read from headers above */ }")
+                    }
+                    """,
+                    "buildExpr" to
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
                             } else {
-                                val readExpr = readMethodForShape(target, "member")
-                                val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
-                                if (memberSymbol.isOptional()) {
-                                    rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                rust("Ok(builder.build())")
+                            }
+                        },
+                )
+            } else {
+                // Now deserialize body members
+                writer.rustTemplate(
+                    """
+                    ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
+                    deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
+                        match member.member_index() {
+                            #{memberArms}
+                            _ => {}
+                        }
+                        Ok(())
+                    })?;
+                    #{buildExpr}
+                    }
+                    }
+                    """,
+                    "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
+                    "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                    "buildExpr" to
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                            } else {
+                                rust("Ok(builder.build())")
+                            }
+                        },
+                    "memberArms" to
+                        writable {
+                            val allMembers = structShape.allMembers.values.toList()
+                            allMembers.forEachIndexed { idx, member ->
+                                val memberName = symbolProvider.toMemberName(member)
+                                val memberSymbol = symbolProvider.toSymbol(member)
+                                val target = model.expectShape(member.target)
+                                // Skip HTTP-bound members — they're already set from headers above
+                                val hasHttpBinding =
+                                    member.getTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java).isPresent ||
+                                        member.getTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java).isPresent ||
+                                        member.getTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java).isPresent
+                                if (hasHttpBinding) {
+                                    rust("Some($idx) => { /* read from headers above */ }")
                                 } else {
-                                    rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                    val readExpr = readMethodForShape(target, "member")
+                                    val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
+                                    if (memberSymbol.isOptional()) {
+                                        rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                    } else {
+                                        rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
+                                    }
                                 }
                             }
-                        }
-                    },
-            )
+                        },
+                )
+            } // end hasBodyMembers else
         } // end else (non-raw-payload path)
     }
 
