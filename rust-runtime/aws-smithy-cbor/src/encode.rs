@@ -51,8 +51,6 @@ impl Encoder {
         /// Used when it's not cheap to calculate the size, i.e. when the struct has one or more
         /// `Option`al members.
         begin_map => begin_map();
-        /// Writes a definite length string.
-        str => str(x: &str);
         /// Writes a boolean value.
         boolean => bool(x: bool);
         /// Writes a byte value.
@@ -73,8 +71,58 @@ impl Encoder {
         end => end();
     }
 
+    /// Maximum size of a CBOR type+length header: 1 byte major type + up to 8 bytes for the length.
+    const MAX_HEADER_LEN: usize = 9;
+
+    /// Writes a CBOR type+length header directly to the writer.
+    ///
+    /// Encodes the "additional information" field per RFC 8949 §3:
+    /// - 0..=23: length is stored directly in the low 5 bits of the initial byte.
+    /// - 24: one-byte uint follows (value 24..=0xff).
+    /// - 25: two-byte big-endian uint follows (value 0x100..=0xffff).
+    /// - 26: four-byte big-endian uint follows (value 0x1_0000..=0xffff_ffff).
+    /// - 27: eight-byte big-endian uint follows (larger values).
+    #[inline]
+    fn write_type_len(writer: &mut Vec<u8>, major: u8, len: usize) {
+        match len {
+            0..=23 => writer.push(major | len as u8),
+            24..=0xff => {
+                writer.push(major | 24);
+                writer.push(len as u8);
+            }
+            0x100..=0xffff => {
+                writer.push(major | 25);
+                writer.extend_from_slice(&(len as u16).to_be_bytes());
+            }
+            0x1_0000..=0xffff_ffff => {
+                writer.push(major | 26);
+                writer.extend_from_slice(&(len as u32).to_be_bytes());
+            }
+            _ => {
+                writer.push(major | 27);
+                writer.extend_from_slice(&(len as u64).to_be_bytes());
+            }
+        }
+    }
+
+    /// Writes a definite length string. Collapses header+data into a single reserve+write.
+    pub fn str(&mut self, x: &str) -> &mut Self {
+        let writer = self.encoder.writer_mut();
+        let len = x.len();
+        writer.reserve(Self::MAX_HEADER_LEN + len);
+        Self::write_type_len(writer, 0x60, len);
+        writer.extend_from_slice(x.as_bytes());
+        self
+    }
+
+    /// Writes a blob. Collapses header+data into a single reserve+write.
     pub fn blob(&mut self, x: &Blob) -> &mut Self {
-        self.encoder.bytes(x.as_ref()).expect(INFALLIBLE_WRITE);
+        let data = x.as_ref();
+        let writer = self.encoder.writer_mut();
+        let len = data.len();
+        writer.reserve(Self::MAX_HEADER_LEN + len);
+        Self::write_type_len(writer, 0x40, len);
+        writer.extend_from_slice(data);
         self
     }
 
@@ -113,5 +161,130 @@ impl Encoder {
 
     pub fn into_writer(self) -> Vec<u8> {
         self.encoder.into_writer()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Encoder;
+    use aws_smithy_types::Blob;
+
+    /// Verify our `str()` produces byte-identical output to minicbor's.
+    #[test]
+    fn str_matches_minicbor() {
+        let cases = [
+            "",                        // len 0
+            "a",                       // len 1 (in 0..=23 range)
+            "hello world!! test str",  // len 22 (still 0..=23)
+            "this is exactly 24 char", // len 24 (0x18, first 1-byte length)
+            &"x".repeat(0xff),         // len 255 (max 1-byte length)
+            &"y".repeat(0x100),        // len 256 (first 2-byte length)
+        ];
+        for input in &cases {
+            let mut ours = Encoder::new(Vec::new());
+            ours.str(input);
+
+            let mut theirs = minicbor::Encoder::new(Vec::new());
+            theirs.str(input).unwrap();
+
+            assert_eq!(
+                ours.into_writer(),
+                theirs.into_writer(),
+                "str mismatch for input len={}",
+                input.len()
+            );
+        }
+    }
+
+    /// Verify our `blob()` produces byte-identical output to minicbor's.
+    #[test]
+    fn blob_matches_minicbor() {
+        let cases: Vec<Vec<u8>> = vec![
+            vec![],            // empty
+            vec![0x42],        // 1 byte
+            vec![0xAB; 23],    // max inline length
+            vec![0xCD; 24],    // first 1-byte length
+            vec![0xEF; 0xff],  // max 1-byte length
+            vec![0x01; 0x100], // first 2-byte length
+        ];
+        for input in &cases {
+            let mut ours = Encoder::new(Vec::new());
+            ours.blob(&Blob::new(input.clone()));
+
+            let mut theirs = minicbor::Encoder::new(Vec::new());
+            theirs.bytes(input).unwrap();
+
+            assert_eq!(
+                ours.into_writer(),
+                theirs.into_writer(),
+                "blob mismatch for input len={}",
+                input.len()
+            );
+        }
+    }
+
+    /// Verify chained `str()` calls don't corrupt encoder state for subsequent writes.
+    #[test]
+    fn str_chained_matches_minicbor() {
+        let mut ours = Encoder::new(Vec::new());
+        ours.str("key1").str("value1").str("key2").str("value2");
+
+        let mut theirs = minicbor::Encoder::new(Vec::new());
+        theirs
+            .str("key1")
+            .unwrap()
+            .str("value1")
+            .unwrap()
+            .str("key2")
+            .unwrap()
+            .str("value2")
+            .unwrap();
+
+        assert_eq!(ours.into_writer(), theirs.into_writer());
+    }
+
+    /// Verify `str()` works correctly inside a map structure (the real-world hot path).
+    #[test]
+    fn str_inside_map_matches_minicbor() {
+        let mut ours = Encoder::new(Vec::new());
+        ours.begin_map().str("TableName").str("my-table").end();
+
+        let mut theirs = minicbor::Encoder::new(Vec::new());
+        theirs
+            .begin_map()
+            .unwrap()
+            .str("TableName")
+            .unwrap()
+            .str("my-table")
+            .unwrap()
+            .end()
+            .unwrap();
+
+        assert_eq!(ours.into_writer(), theirs.into_writer());
+    }
+
+    /// Verify `str()` handles multi-byte UTF-8 correctly (CBOR text strings must be valid UTF-8).
+    #[test]
+    fn str_utf8_matches_minicbor() {
+        let cases = [
+            "café",          // 2-byte UTF-8
+            "日本語",        // 3-byte UTF-8
+            "🦀🔥",          // 4-byte UTF-8 (emoji)
+            "mixed: aé日🦀", // all byte widths
+        ];
+        for input in &cases {
+            let mut ours = Encoder::new(Vec::new());
+            ours.str(input);
+
+            let mut theirs = minicbor::Encoder::new(Vec::new());
+            theirs.str(input).unwrap();
+
+            assert_eq!(
+                ours.into_writer(),
+                theirs.into_writer(),
+                "str UTF-8 mismatch for {:?}",
+                input
+            );
+        }
     }
 }
