@@ -16,7 +16,7 @@ use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::error::display::DisplayErrorContext;
 use aws_smithy_types::retry::RetryConfig;
-use aws_types::os_shim_internal::{Env, Fs};
+use aws_types::os_shim_internal::{Env, Fs, Process};
 use aws_types::region::Region;
 use aws_types::sdk_config::SharedHttpClient;
 use aws_types::SdkConfig;
@@ -37,6 +37,7 @@ use tokio::sync::OnceCell;
 pub struct ProviderConfig {
     env: Env,
     fs: Fs,
+    process: Process,
     time_source: SharedTimeSource,
     http_client: Option<SharedHttpClient>,
     retry_config: Option<RetryConfig>,
@@ -58,6 +59,7 @@ impl Debug for ProviderConfig {
         f.debug_struct("ProviderConfig")
             .field("env", &self.env)
             .field("fs", &self.fs)
+            .field("process", &self.process)
             .field("time_source", &self.time_source)
             .field("http_client", &self.http_client)
             .field("retry_config", &self.retry_config)
@@ -75,6 +77,7 @@ impl Default for ProviderConfig {
         Self {
             env: Env::default(),
             fs: Fs::default(),
+            process: Process::default(),
             time_source: SharedTimeSource::default(),
             http_client: None,
             retry_config: None,
@@ -108,6 +111,7 @@ impl ProviderConfig {
             profile_files: ProfileFiles::default(),
             env,
             fs,
+            process: Process::default(),
             time_source: SharedTimeSource::new(StaticTimeSource::new(UNIX_EPOCH)),
             http_client: None,
             retry_config: None,
@@ -151,6 +155,7 @@ impl ProviderConfig {
         ProviderConfig {
             env: Env::default(),
             fs: Fs::default(),
+            process: Process::default(),
             time_source: SharedTimeSource::default(),
             http_client: None,
             retry_config: None,
@@ -176,6 +181,7 @@ impl ProviderConfig {
             profile_files: ProfileFiles::default(),
             env: Env::default(),
             fs: Fs::default(),
+            process: Process::default(),
             time_source,
             http_client: None,
             retry_config: None,
@@ -243,6 +249,11 @@ impl ProviderConfig {
     #[allow(dead_code)]
     pub(crate) fn fs(&self) -> Fs {
         self.fs.clone()
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn process(&self) -> Process {
+        self.process.clone()
     }
 
     #[allow(dead_code)]
@@ -390,6 +401,10 @@ impl ProviderConfig {
             env,
             ..self
         }
+    }
+
+    pub(crate) fn with_process(self, process: Process) -> Self {
+        ProviderConfig { process, ..self }
     }
 
     /// Override the time source for this configuration
