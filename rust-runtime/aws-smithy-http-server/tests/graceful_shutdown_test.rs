@@ -47,8 +47,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
             .await
     });
 
-    // Give server time to start
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
 
     // Start a slow request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -65,7 +64,7 @@ async fn test_graceful_shutdown_waits_for_connections() {
     tokio::time::sleep(Duration::from_millis(20)).await;
 
     // Trigger shutdown while request is in flight
-    shutdown_tx.send(()).unwrap();
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 
     // The request should complete successfully
     let response = request_handle.await.unwrap().expect("request failed");
@@ -112,8 +111,7 @@ async fn test_graceful_shutdown_with_timeout() {
             .await
     });
 
-    // Give server time to start
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
 
     // Start a very slow request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -133,7 +131,7 @@ async fn test_graceful_shutdown_with_timeout() {
     tokio::time::sleep(Duration::from_millis(20)).await;
 
     // Trigger shutdown while request is in flight
-    shutdown_tx.send(()).unwrap();
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 
     // Server should shutdown after timeout (not waiting for slow request)
     let result = tokio::time::timeout(Duration::from_secs(2), server_handle)
@@ -147,6 +145,7 @@ async fn test_graceful_shutdown_with_timeout() {
 #[tokio::test]
 async fn test_with_connect_info() {
     use aws_smithy_http_server::request::connect_info::ConnectInfo;
+    use http_body_util::BodyExt;
     use std::net::SocketAddr;
 
     // Create a listener on a random port
@@ -185,8 +184,7 @@ async fn test_with_connect_info() {
         .await
     });
 
-    // Give server time to start
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
 
     // Make a request
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -201,15 +199,19 @@ async fn test_with_connect_info() {
     assert_eq!(response.status(), 200);
 
     // Read body to check ConnectInfo was present
-    let body_bytes = http_body_util::BodyExt::collect(response.into_body())
+    let body_bytes = response.into_body().collect()
         .await
-        .unwrap()
+        .expect("failed to collect response body")
         .to_bytes();
     assert_eq!(body_bytes, "ConnectInfo present");
 
     // Cleanup
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+    tokio::time::timeout(Duration::from_secs(2), server_handle)
+        .await
+        .expect("server did not shutdown in 2s")
+        .expect("server task panicked")
+        .expect("server returned an error");
 }
 
 // Note: configure_hyper is tested implicitly by the code compiling and the other tests working

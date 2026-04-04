@@ -10,6 +10,10 @@
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
+use http_body::Frame;
+use hyper::body::Incoming;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -106,6 +110,105 @@ where
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
     boxed(http_body_util::Full::new(bytes))
+}
+
+// ============================================================================
+// Body — opt-in, type-erased request body
+// ============================================================================
+
+/// A type-erased, constructable HTTP request body.
+///
+/// Wraps any `http_body::Body<Data = Bytes>` behind a single heap allocation.
+/// Use `Body` as `Route<Body>` when you want simple, constructable request bodies
+/// without generic bounds in your middleware.
+#[derive(Debug)]
+pub struct Body(BoxBody);
+
+impl Body {
+    /// Create a new `Body` that wraps another [`http_body::Body`].
+    pub fn new<B>(body: B) -> Self
+    where
+        B: http_body::Body<Data = Bytes> + Send + 'static,
+        B::Error: Into<BoxError>,
+    {
+        // If the body is already a `Body`, avoid double-boxing by extracting it directly.
+        try_downcast(body).unwrap_or_else(|body| Self(boxed(body)))
+    }
+
+    /// Create an empty body.
+    pub fn empty() -> Self {
+        Self::new(http_body_util::Empty::new())
+    }
+
+    /// Create a new `Body` from a [`Stream`].
+    pub fn from_stream<S, O, E>(stream: S) -> Self
+    where
+        S: futures_util::Stream<Item = Result<O, E>> + Send + 'static,
+        O: Into<Bytes> + 'static,
+        E: Into<BoxError> + 'static,
+    {
+        Self::new(wrap_stream(stream))
+    }
+
+}
+
+impl Default for Body {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
+impl From<()> for Body {
+    fn from(_: ()) -> Self {
+        Self::empty()
+    }
+}
+
+impl From<Incoming> for Body {
+    fn from(incoming: Incoming) -> Self {
+        Self::new(incoming)
+    }
+}
+
+macro_rules! body_from_impl {
+    ($ty:ty) => {
+        impl From<$ty> for Body {
+            fn from(buf: $ty) -> Self {
+                Self::new(http_body_util::Full::from(buf))
+            }
+        }
+    };
+}
+
+body_from_impl!(&'static [u8]);
+body_from_impl!(&'static str);
+body_from_impl!(std::borrow::Cow<'static, [u8]>);
+body_from_impl!(std::borrow::Cow<'static, str>);
+body_from_impl!(Vec<u8>);
+body_from_impl!(String);
+body_from_impl!(Bytes);
+
+impl http_body::Body for Body {
+    type Data = Bytes;
+    type Error = Error;
+
+    #[inline]
+    fn poll_frame(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        Pin::new(&mut self.0).poll_frame(cx)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.0.size_hint()
+    }
+
+    #[inline]
+    fn is_end_stream(&self) -> bool {
+        self.0.is_end_stream()
+    }
 }
 
 // ============================================================================
