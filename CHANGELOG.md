@@ -1,4 +1,24 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 5th, 2026
+===============
+**Breaking Changes:**
+- :bug::warning: (client, @lnj) Now files written by the SDK (like credential caches) are created with file
+    permissions `0o600` on unix systems. This could break customers who were relying
+    on the visibility of those files to other users on the system.
+
+**New this release:**
+- :tada: (client, [smithy-rs#4521](https://github.com/smithy-lang/smithy-rs/issues/4521)) Add `sigv4a_signing_region_set` client configuration. Supports programmatic, environment variable (`AWS_SIGV4A_SIGNING_REGION_SET`), and shared config file (`sigv4a_signing_region_set`) configuration. User-provided values now take priority over endpoint-resolved values.
+- :bug: (client, [smithy-rs#4431](https://github.com/smithy-lang/smithy-rs/issues/4431), @jlizen) Add missing `EventOrInitial`, `EventOrInitialMarshaller`, and `EventStreamSender::into_inner` to `aws-smithy-legacy-http` event_stream module, fixing compilation failures in generated SDKs that reference these types.
+- :bug: (all, [smithy-rs#4572](https://github.com/smithy-lang/smithy-rs/issues/4572), @jlizen) Re-export `EventStreamSender` from generated SDK crates when the service uses event streams, so users do not need a direct dependency on `aws-smithy-http` to construct event stream responses.
+- :bug: (client, [smithy-rs#4587](https://github.com/smithy-lang/smithy-rs/issues/4587), @awsaito) Upgrade `sha2` from 0.10.x to 0.11.x. The previous version defaulted to software-based compression instead of hardware-accelerated compression, resulting in lower throughput. The new version automatically detects and uses hardware-accelerated instructions when available.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @awsaito ([smithy-rs#4587](https://github.com/smithy-lang/smithy-rs/issues/4587))
+- @jlizen ([smithy-rs#4431](https://github.com/smithy-lang/smithy-rs/issues/4431), [smithy-rs#4572](https://github.com/smithy-lang/smithy-rs/issues/4572))
+- @lnj
+
+
 March 16th, 2026
 ================
 **New this release:**
