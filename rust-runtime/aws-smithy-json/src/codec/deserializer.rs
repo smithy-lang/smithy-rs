@@ -560,8 +560,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
             Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
             Some(b'n') => {
-                self.advance_by(4);
-                Ok(Document::Null)
+                if self.remaining().starts_with(b"null") {
+                    self.advance_by(4);
+                    Ok(Document::Null)
+                } else {
+                    Err(SerdeError::InvalidInput {
+                        message: "unexpected token in document".into(),
+                    })
+                }
             }
             Some(b'{') => {
                 self.advance_by(1);

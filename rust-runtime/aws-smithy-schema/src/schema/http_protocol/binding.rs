@@ -114,8 +114,8 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     where
         S: FinishSerializer,
     {
-        if self.raw_payload.is_some() {
-            self.raw_payload.unwrap().to_vec()
+        if let Some(payload) = self.raw_payload {
+            payload.to_vec()
         } else {
             self.body.finish()
         }
