@@ -181,6 +181,7 @@ mod tests {
             "this is exactly 24 char", // len 24 (0x18, first 1-byte length)
             &"x".repeat(0xff),         // len 255 (max 1-byte length)
             &"y".repeat(0x100),        // len 256 (first 2-byte length)
+            &"z".repeat(0x1_0000),     // len 65536 (first 4-byte length)
         ];
         for input in &cases {
             let mut ours = Encoder::new(Vec::new());
@@ -202,12 +203,13 @@ mod tests {
     #[test]
     fn blob_matches_minicbor() {
         let cases: Vec<Vec<u8>> = vec![
-            vec![],            // empty
-            vec![0x42],        // 1 byte
-            vec![0xAB; 23],    // max inline length
-            vec![0xCD; 24],    // first 1-byte length
-            vec![0xEF; 0xff],  // max 1-byte length
-            vec![0x01; 0x100], // first 2-byte length
+            vec![],               // empty
+            vec![0x42],           // 1 byte
+            vec![0xAB; 23],       // max inline length
+            vec![0xCD; 24],       // first 1-byte length
+            vec![0xEF; 0xff],     // max 1-byte length
+            vec![0x01; 0x100],    // first 2-byte length
+            vec![0x02; 0x1_0000], // first 4-byte length
         ];
         for input in &cases {
             let mut ours = Encoder::new(Vec::new());
