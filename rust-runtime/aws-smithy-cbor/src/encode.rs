@@ -84,25 +84,34 @@ impl Encoder {
     /// - 27: eight-byte big-endian uint follows (larger values).
     #[inline]
     fn write_type_len(writer: &mut Vec<u8>, major: u8, len: usize) {
-        match len {
-            0..=23 => writer.push(major | len as u8),
+        let mut buf = [0u8; Self::MAX_HEADER_LEN];
+        let n = match len {
+            0..=23 => {
+                buf[0] = major | len as u8;
+                1
+            }
             24..=0xff => {
-                writer.push(major | 24);
-                writer.push(len as u8);
+                buf[0] = major | 24;
+                buf[1] = len as u8;
+                2
             }
             0x100..=0xffff => {
-                writer.push(major | 25);
-                writer.extend_from_slice(&(len as u16).to_be_bytes());
+                buf[0] = major | 25;
+                buf[1..3].copy_from_slice(&(len as u16).to_be_bytes());
+                3
             }
             0x1_0000..=0xffff_ffff => {
-                writer.push(major | 26);
-                writer.extend_from_slice(&(len as u32).to_be_bytes());
+                buf[0] = major | 26;
+                buf[1..5].copy_from_slice(&(len as u32).to_be_bytes());
+                5
             }
             _ => {
-                writer.push(major | 27);
-                writer.extend_from_slice(&(len as u64).to_be_bytes());
+                buf[0] = major | 27;
+                buf[1..9].copy_from_slice(&(len as u64).to_be_bytes());
+                9
             }
-        }
+        };
+        writer.extend_from_slice(&buf[..n]);
     }
 
     /// Writes a definite length string. Collapses header+data into a single reserve+write.
@@ -128,12 +137,7 @@ impl Encoder {
 
     /// Writes a fixed length array of given length.
     pub fn array(&mut self, len: usize) -> &mut Self {
-        self.encoder
-            // `.expect()` safety: `From<u64> for usize` is not in the standard library,
-            // but the conversion should be infallible (unless we ever have 128-bit machines I
-            // guess). <See https://users.rust-lang.org/t/cant-convert-usize-to-u64/6243>.
-            .array(len.try_into().expect("`usize` to `u64` conversion failed"))
-            .expect(INFALLIBLE_WRITE);
+        Self::write_type_len(self.encoder.writer_mut(), 0x80, len);
         self
     }
 
@@ -143,9 +147,7 @@ impl Encoder {
     /// - when serializing `union` shapes (they can only have one member set).
     /// - when serializing a `map` shape.
     pub fn map(&mut self, len: usize) -> &mut Self {
-        self.encoder
-            .map(len.try_into().expect("`usize` to `u64` conversion failed"))
-            .expect(INFALLIBLE_WRITE);
+        Self::write_type_len(self.encoder.writer_mut(), 0xa0, len);
         self
     }
 
