@@ -10,6 +10,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.Section
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -78,6 +79,18 @@ sealed class OperationSection(name: String) : Section(name) {
         ) {
             writer.rustTemplate(
                 ".with_interceptor(#{interceptor})",
+                "interceptor" to interceptor,
+            )
+        }
+
+        fun registerPermanentInterceptor(
+            runtimeConfig: RuntimeConfig,
+            writer: RustWriter,
+            interceptor: Writable,
+        ) {
+            writer.rustTemplate(
+                ".with_interceptor(#{SharedInterceptor}::permanent(#{interceptor}))",
+                "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
                 "interceptor" to interceptor,
             )
         }

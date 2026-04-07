@@ -42,7 +42,7 @@ private class EndpointParametersCustomization(
             val symbolProvider = codegenContext.symbolProvider
             val operationName = symbolProvider.toSymbol(operation).name
             if (section is OperationSection.AdditionalInterceptors) {
-                section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     rust("${operationName}EndpointParamsInterceptor")
                 }
             }

@@ -30,7 +30,7 @@ private class RecursionDetectionRuntimePluginCustomization(
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     rust(
                         "#T::new()",
                         AwsRuntimeType.awsRuntime(codegenContext.runtimeConfig)

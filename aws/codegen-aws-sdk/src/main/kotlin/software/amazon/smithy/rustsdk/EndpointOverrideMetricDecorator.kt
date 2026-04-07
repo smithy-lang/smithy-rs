@@ -84,7 +84,7 @@ private class EndpointOverrideFeatureTrackerRegistration(
     override fun section(section: ServiceRuntimePluginSection) =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     rustTemplate("crate::config::endpoint::EndpointOverrideFeatureTrackerInterceptor")
                 }
             }

@@ -89,7 +89,7 @@ pub(crate) mod paginator {
                 runtime_components: RuntimeComponentsBuilder::new(
                     "PaginatorFeatureTrackerRuntimePlugin",
                 )
-                .with_interceptor(SharedInterceptor::new(
+                .with_interceptor(SharedInterceptor::permanent(
                     PaginatorFeatureTrackerInterceptor::new(),
                 )),
             }
@@ -156,7 +156,7 @@ pub(crate) mod waiter {
                 runtime_components: RuntimeComponentsBuilder::new(
                     "WaiterFeatureTrackerRuntimePlugin",
                 )
-                .with_interceptor(SharedInterceptor::new(
+                .with_interceptor(SharedInterceptor::permanent(
                     WaiterFeatureTrackerInterceptor::new(),
                 )),
             }

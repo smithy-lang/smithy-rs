@@ -10,6 +10,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeDeserializationInterceptorContextMut, BeforeTransmitInterceptorContextRef,
 };
 use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::interceptors::SharedInterceptor;
 use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
@@ -200,8 +201,9 @@ impl RuntimePlugin for EnforceContentLengthRuntimePlugin {
         _current_components: &RuntimeComponentsBuilder,
     ) -> Cow<'_, RuntimeComponentsBuilder> {
         Cow::Owned(
-            RuntimeComponentsBuilder::new("EnforceContentLength")
-                .with_interceptor(EnforceContentLengthInterceptor {}),
+            RuntimeComponentsBuilder::new("EnforceContentLength").with_interceptor(
+                SharedInterceptor::permanent(EnforceContentLengthInterceptor {}),
+            ),
         )
     }
 }

@@ -591,7 +591,8 @@ pub trait Intercept: fmt::Debug + Send + Sync {
 #[derive(Clone)]
 pub struct SharedInterceptor {
     interceptor: Arc<dyn Intercept>,
-    check_enabled: Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>,
+    /// When `None`, the interceptor is always enabled (permanent mode).
+    check_enabled: Option<Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>>,
 }
 
 impl fmt::Debug for SharedInterceptor {
@@ -607,15 +608,28 @@ impl SharedInterceptor {
     pub fn new<T: Intercept + 'static>(interceptor: T) -> Self {
         Self {
             interceptor: Arc::new(interceptor),
-            check_enabled: Arc::new(|conf: &ConfigBag| {
+            check_enabled: Some(Arc::new(|conf: &ConfigBag| {
                 conf.load::<DisableInterceptor<T>>().is_none()
-            }),
+            })),
+        }
+    }
+
+    /// Create a permanent `SharedInterceptor` that cannot be disabled.
+    ///
+    /// This skips the [`DisableInterceptor`] check on every invocation,
+    /// reducing overhead for built-in interceptors that are never disabled.
+    pub fn permanent(interceptor: impl Intercept + 'static) -> Self {
+        Self {
+            interceptor: Arc::new(interceptor),
+            check_enabled: None,
         }
     }
 
     /// Checks if this interceptor is enabled in the given config.
     pub fn enabled(&self, conf: &ConfigBag) -> bool {
-        (self.check_enabled)(conf)
+        self.check_enabled
+            .as_ref()
+            .map_or(true, |check| check(conf))
     }
 }
 

@@ -18,7 +18,9 @@ pub(crate) struct HttpChecksumRequiredRuntimePlugin;
 
 impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
     fn interceptors(&self, interceptors: &mut InterceptorRegistrar) {
-        interceptors.register(SharedInterceptor::new(HttpChecksumRequiredInterceptor));
+        interceptors.register(SharedInterceptor::permanent(
+            HttpChecksumRequiredInterceptor,
+        ));
     }
 }
 

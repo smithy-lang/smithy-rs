@@ -101,10 +101,9 @@ impl SigV4PresigningRuntimePlugin {
         let time_source = SharedTimeSource::new(StaticTimeSource::new(config.start_time()));
         Self {
             runtime_components: RuntimeComponentsBuilder::new("SigV4PresigningRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(SigV4PresigningInterceptor::new(
-                    config,
-                    payload_override,
-                )))
+                .with_interceptor(SharedInterceptor::permanent(
+                    SigV4PresigningInterceptor::new(config, payload_override),
+                ))
                 .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
                 .with_time_source(Some(time_source)),
         }

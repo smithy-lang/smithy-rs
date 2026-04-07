@@ -31,7 +31,7 @@ impl IdempotencyTokenRuntimePlugin {
     {
         Self {
             runtime_components: RuntimeComponentsBuilder::new("IdempotencyTokenRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(IdempotencyTokenInterceptor {
+                .with_interceptor(SharedInterceptor::permanent(IdempotencyTokenInterceptor {
                     set_token,
                 })),
         }

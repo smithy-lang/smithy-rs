@@ -566,7 +566,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server"
-version = "0.66.3"
+version = "0.66.4"
 dependencies = [
  "aws-smithy-cbor 0.61.7",
  "aws-smithy-http 0.63.6",
@@ -602,7 +602,7 @@ name = "aws-smithy-http-server-metrics"
 version = "0.1.2"
 dependencies = [
  "aws-smithy-http-server 0.65.10",
- "aws-smithy-http-server 0.66.3",
+ "aws-smithy-http-server 0.66.4",
  "aws-smithy-http-server-metrics-macro",
  "aws-smithy-legacy-http-server",
  "futures",
