@@ -72,6 +72,8 @@ fn is_ipv4(bytes: &[u8]) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+    use proptest::prelude::*;
+    use regex_lite::Regex;
 
     #[derive(Clone, Copy)]
     enum Subdomains {
@@ -167,6 +169,59 @@ mod test {
             "1a2.2b3.3c4.4d5.5e6",
             Subdomains::Allow
         ));
+    }
+
+    /// Original regex patterns removed from production code for performance but
+    /// retained here to verify equivalence with the hand-written replacements.
+    const REGEX_VIRTUAL_HOSTABLE_SEGMENT: &str = r"^[a-z\d][a-z\d\-.]{1,61}[a-z\d]$";
+    const REGEX_IPV4: &str = r"^(\d+\.){3}\d+$";
+    const REGEX_DOTS_AND_DASHES: &str = r"^.*((\.-)|(-\.)).*$";
+
+    // `Regex::new` isn't const, so regexes in the helpers below are compiled
+    // on each call. That's fine for test-only code.
+    fn regex_is_virtual_hostable_segment(label: &str) -> bool {
+        Regex::new(REGEX_VIRTUAL_HOSTABLE_SEGMENT)
+            .unwrap()
+            .is_match(label)
+            && !Regex::new(REGEX_IPV4).unwrap().is_match(label)
+            && !Regex::new(REGEX_DOTS_AND_DASHES).unwrap().is_match(label)
+    }
+    fn regex_is_ipv4(label: &str) -> bool {
+        Regex::new(REGEX_IPV4).unwrap().is_match(label)
+    }
+
+    proptest! {
+        #[test]
+        fn is_virtual_hostable_segment_equivalence(
+            // Valid bucket chars alone rarely produce invalid inputs, so we mix
+            // in arbitrary printable chars to exercise rejection paths as well.
+            s in prop_oneof![
+                "[a-z0-9.\\-]{0,80}",
+                "\\PC{0,80}",
+            ]
+        ) {
+            prop_assert_eq!(
+                is_virtual_hostable_segment(&s),
+                regex_is_virtual_hostable_segment(&s),
+                "mismatch for {:?}", s
+            );
+        }
+
+        #[test]
+        fn is_ipv4_equivalence(
+            // Random digit/dot strings rarely form valid IPv4, so we mix in
+            // valid-shaped inputs to exercise the accept path as well.
+            s in prop_oneof![
+                "[0-9.]{0,20}",
+                "\\d{1,3}(\\.\\d{1,3}){3}",
+            ]
+        ) {
+            prop_assert_eq!(
+                is_ipv4(s.as_bytes()),
+                regex_is_ipv4(&s),
+                "mismatch for {:?}", s
+            );
+        }
     }
 
     #[test]
