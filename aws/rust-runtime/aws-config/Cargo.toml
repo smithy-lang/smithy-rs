@@ -14,9 +14,8 @@ rust-version = "1.91.1"
 
 [features]
 behavior-version-latest = []
-credentials-process = []
-default-process = ["credentials-process", "tokio/process"]
-default = ["default-https-client", "rt-tokio", "default-process", "sso"]
+credentials-process = ["tokio/process"]
+default = ["default-https-client", "rt-tokio", "credentials-process", "sso"]
 rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/rt"]
 # NOTE: `client-hyper` and `rustls` were proxies for enabling the default HTTP client plugin of `aws-smithy-runtime`
 # there is no direct usage otherwise on hyper or rustls in this crate. These are superceded by the more appropriately

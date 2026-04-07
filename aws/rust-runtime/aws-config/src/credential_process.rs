@@ -20,7 +20,6 @@ use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
 
-#[cfg(feature = "default-process")]
 fn default_process() -> Process {
     use aws_types::os_shim_internal::{CommandOutput, ExitStatus, ProvideProcess};
     use std::future::Future;
@@ -59,11 +58,6 @@ fn default_process() -> Process {
     }
 
     Process::from_custom(TokioProcessProvider)
-}
-
-#[cfg(not(feature = "default-process"))]
-fn default_process() -> Process {
-    Process::real()
 }
 
 /// External process credentials provider
@@ -379,7 +373,6 @@ mod test {
         );
     }
 
-    #[cfg(feature = "default-process")]
     #[tokio::test]
     async fn credentials_process_timeouts() {
         use std::time::Duration;
