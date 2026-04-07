@@ -355,12 +355,7 @@ mod test {
     #[tokio::test]
     async fn credentials_process_io_error() {
         use aws_types::os_shim_internal::Process;
-        let process = Process::from_fn(|_cmd| {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::NotFound,
-                "process not found",
-            ))
-        });
+        let process = Process::from_slice(&[]);
         let provider = CredentialProcessProvider::builder()
             .command(CommandWithSensitiveArgs::new(String::from("missing")))
             .process(process)
@@ -368,7 +363,7 @@ mod test {
         let err = provider.provide_credentials().await.expect_err("should fail");
         let msg = format!("{err:?}");
         assert!(
-            msg.contains("process not found"),
+            msg.contains("not found"),
             "error should contain cause: {msg}"
         );
     }

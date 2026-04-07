@@ -416,13 +416,13 @@ mod env {
 /// Construct a fake process executor for testing:
 /// ```rust
 /// use aws_types::os_shim_internal::{Process, CommandOutput, ExitStatus};
-/// let process = Process::from_fn(|_cmd| {
-///     Ok(CommandOutput {
+/// let process = Process::from_slice(&[
+///     ("echo hello", CommandOutput {
 ///         status: ExitStatus::new(Some(0)),
 ///         stdout: b"hello".to_vec(),
 ///         stderr: Vec::new(),
-///     })
-/// });
+///     }),
+/// ]);
 /// ```
 #[derive(Clone, Debug)]
 pub struct Process(process::Inner);
@@ -451,23 +451,28 @@ impl Process {
         Self(process::Inner::Custom(Arc::new(provider)))
     }
 
-    /// Create a `Process` from a function that maps command strings to outputs.
+    /// Create a fake `Process` from a slice of `(command, result)` pairs.
+    ///
+    /// When `execute` is called, the command string is looked up in the map.
+    /// If not found, an `io::ErrorKind::NotFound` error is returned.
     ///
     /// # Examples
     /// ```rust
     /// use aws_types::os_shim_internal::{Process, CommandOutput, ExitStatus};
-    /// let process = Process::from_fn(|cmd| {
-    ///     Ok(CommandOutput {
+    /// let process = Process::from_slice(&[
+    ///     ("echo hello", CommandOutput {
     ///         status: ExitStatus::new(Some(0)),
-    ///         stdout: format!("ran: {cmd}").into_bytes(),
+    ///         stdout: b"hello\n".to_vec(),
     ///         stderr: Vec::new(),
-    ///     })
-    /// });
+    ///     }),
+    /// ]);
     /// ```
-    pub fn from_fn(
-        f: impl Fn(&str) -> std::io::Result<CommandOutput> + Send + Sync + 'static,
-    ) -> Self {
-        Self(process::Inner::Fake(Arc::new(f)))
+    pub fn from_slice(commands: &[(&str, CommandOutput)]) -> Self {
+        let map: HashMap<String, CommandOutput> = commands
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.clone()))
+            .collect();
+        Self(process::Inner::Fake(Arc::new(map)))
     }
 
     /// Execute a command string and return its output.
@@ -497,34 +502,28 @@ impl Process {
                     stderr: output.stderr,
                 })
             }
-            Inner::Fake(f) => f(command),
+            Inner::Fake(map) => map.get(command).cloned().ok_or_else(|| {
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    format!("command not found in fake process: {command}"),
+                )
+            }),
             Inner::Custom(provider) => provider.execute(command).await,
         }
     }
 }
 
 mod process {
+    use std::collections::HashMap;
     use std::sync::Arc;
 
     use super::ProvideProcess;
 
-    type FakeFn = dyn Fn(&str) -> std::io::Result<super::CommandOutput> + Send + Sync;
-
-    #[derive(Clone)]
+    #[derive(Clone, Debug)]
     pub(super) enum Inner {
         Real,
-        Fake(Arc<FakeFn>),
+        Fake(Arc<HashMap<String, super::CommandOutput>>),
         Custom(Arc<dyn ProvideProcess>),
-    }
-
-    impl std::fmt::Debug for Inner {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            match self {
-                Inner::Real => f.write_str("Real"),
-                Inner::Fake(_) => f.write_str("Fake(fn)"),
-                Inner::Custom(c) => write!(f, "Custom({c:?})"),
-            }
-        }
     }
 }
 
@@ -703,14 +702,15 @@ mod test {
     }
 
     #[tokio::test]
-    async fn process_from_fn_success() {
-        let process = Process::from_fn(|cmd| {
-            Ok(CommandOutput {
+    async fn process_from_slice_success() {
+        let process = Process::from_slice(&[(
+            "my-command",
+            CommandOutput {
                 status: ExitStatus::new(Some(0)),
-                stdout: format!("output of: {cmd}").into_bytes(),
+                stdout: b"output of: my-command".to_vec(),
                 stderr: Vec::new(),
-            })
-        });
+            },
+        )]);
         let output = process.execute("my-command").await.expect("success");
         assert!(output.status.success());
         assert_eq!(output.stdout, b"output of: my-command");
@@ -718,17 +718,25 @@ mod test {
     }
 
     #[tokio::test]
-    async fn process_from_fn_failure() {
-        let process = Process::from_fn(|_cmd| {
-            Ok(CommandOutput {
+    async fn process_from_slice_failure() {
+        let process = Process::from_slice(&[(
+            "bad-command",
+            CommandOutput {
                 status: ExitStatus::new(Some(1)),
                 stdout: Vec::new(),
                 stderr: b"something went wrong".to_vec(),
-            })
-        });
+            },
+        )]);
         let output = process.execute("bad-command").await.expect("io succeeds");
         assert!(!output.status.success());
         assert_eq!(output.stderr, b"something went wrong");
+    }
+
+    #[tokio::test]
+    async fn process_from_slice_not_found() {
+        let process = Process::from_slice(&[]);
+        let err = process.execute("missing").await.expect_err("should fail");
+        assert_eq!(err.kind(), std::io::ErrorKind::NotFound);
     }
 
     #[tokio::test]
