@@ -351,7 +351,7 @@ class EndpointBddGenerator(
                 "let $memberName = params.$memberName;"
 
             isStringRef(memberName) ->
-                "let $memberName = params.$memberName.as_ref().map(|s| s.clone()).unwrap_or_default();"
+                "let $memberName = params.$memberName.as_deref().unwrap_or_default();"
 
             else ->
                 "let $memberName = params.$memberName.expect(\"Guaranteed to have a value by earlier checks.\");"
@@ -554,7 +554,7 @@ class EndpointBddGenerator(
                             """.trimIndent(),
                         )
                     } else {
-                        rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).expect(\"Guaranteed to have a value by earlier checks.\");\n")
+                        rust("let $rustName = context.$rustName.as_ref().expect(\"Guaranteed to have a value by earlier checks.\");\n")
                     }
                 }
             }
