@@ -60,3 +60,9 @@ target/
 
 # python
 __pycache__
+
+
+# AI ccontext
+.kiro/
+# Convenient naming convention I have been using to manage context between different workflows
+.kiro-*/

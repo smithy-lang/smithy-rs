@@ -117,6 +117,7 @@ class Types(runtimeConfig: RuntimeConfig) {
         RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint")
     val smithyHttpEndpointModule = RuntimeType.smithyHttp(runtimeConfig).resolve("endpoint")
     val smithyEndpoint = smithyTypesEndpointModule.resolve("Endpoint")
+    val smithyEndpointAuthScheme = smithyTypesEndpointModule.resolve("EndpointAuthScheme")
     val endpointFuture =
         RuntimeType.smithyRuntimeApiClient(runtimeConfig)
             .resolve("client::endpoint::EndpointFuture")

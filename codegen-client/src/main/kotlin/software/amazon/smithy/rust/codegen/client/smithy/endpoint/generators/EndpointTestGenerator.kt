@@ -190,11 +190,37 @@ internal class EndpointTestGenerator(
                     rust(".header(${headerName.dq()}, ${headerValue.dq()})")
                 }
             }
-            value.properties.forEach { (name, value) ->
-                rust(
-                    ".property(${name.dq()}, #W)",
-                    generateValue(Value.fromNode(value)),
-                )
+            value.properties.forEach { (name, propValue) ->
+                if (name == "authSchemes") {
+                    // Generate typed auth schemes
+                    val node = propValue
+                    if (node.isArrayNode) {
+                        node.expectArrayNode().forEach { schemeNode ->
+                            if (schemeNode.isObjectNode) {
+                                val obj = schemeNode.expectObjectNode()
+                                val schemeName = obj.getStringMember("name").map { it.value }.orElse("unknown")
+                                val otherMembers = obj.members.filter { it.key.value != "name" }
+                                rustTemplate(
+                                    ".auth_scheme(#{EndpointAuthScheme}::with_capacity(${schemeName.dq()}, ${otherMembers.size})",
+                                    "EndpointAuthScheme" to
+                                        RuntimeType.smithyTypes(runtimeConfig).resolve("endpoint::EndpointAuthScheme"),
+                                )
+                                otherMembers.toSortedMap(compareBy { it.value }).forEach { (key, memberValue) ->
+                                    rust(
+                                        ".put(${key.value.dq()}, #W)",
+                                        generateValue(Value.fromNode(memberValue)),
+                                    )
+                                }
+                                rust(")")
+                            }
+                        }
+                    }
+                } else {
+                    rust(
+                        ".property(${name.dq()}, #W)",
+                        generateValue(Value.fromNode(propValue)),
+                    )
+                }
             }
             rust(".build()")
         }

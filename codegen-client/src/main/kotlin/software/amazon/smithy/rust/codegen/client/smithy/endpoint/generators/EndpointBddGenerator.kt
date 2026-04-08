@@ -660,7 +660,14 @@ class EndpointBddGenerator(
         val generator = ExpressionGenerator(Ownership.Owned, context)
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
-        val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
+        val properties =
+            endpoint.properties
+                .filter { it.key.toString() != "authSchemes" }
+                .mapValues { entry -> generator.generate(entry.value) }
+        val authSchemes =
+            endpoint.properties
+                .filter { it.key.toString() == "authSchemes" }
+                .values.firstOrNull()
         return writable {
             rustTemplate(
                 "#{SmithyEndpoint}::builder().url(#{url:W})",
@@ -669,7 +676,92 @@ class EndpointBddGenerator(
             )
             headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
             properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
+            if (authSchemes != null) {
+                rustTemplate("#{authSchemes:W}", "authSchemes" to generateTypedAuthSchemes(authSchemes, generator))
+            }
             rust(".build()")
+        }
+    }
+
+    /**
+     * Generate `.auth_scheme(EndpointAuthScheme::with_capacity(...).put(...))` calls
+     * from the authSchemes property literal (a tuple of records).
+     */
+    private fun generateTypedAuthSchemes(
+        authSchemesExpr: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+        generator: ExpressionGenerator,
+    ): Writable {
+        val literal =
+            authSchemesExpr as? software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+                ?: return writable {
+                    // Fallback: if it's not a literal, use the old Document-based path
+                    rust(".property(\"authSchemes\", #W)", generator.generate(authSchemesExpr))
+                }
+
+        return writable {
+            literal.accept(
+                object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Unit> {
+                    override fun visitBoolean(b: Boolean) {}
+
+                    override fun visitString(
+                        value: software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
+                    ) {}
+
+                    override fun visitInteger(value: Int) {}
+
+                    override fun visitRecord(
+                        members:
+                            MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                    ) {}
+
+                    override fun visitTuple(
+                        members:
+                            MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                    ) {
+                        members.forEach { member ->
+                            member.accept(
+                                object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Unit> {
+                                    override fun visitBoolean(b: Boolean) {}
+
+                                    override fun visitString(
+                                        value: software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
+                                    ) {}
+
+                                    override fun visitInteger(value: Int) {}
+
+                                    override fun visitTuple(
+                                        members:
+                                            MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                                    ) {}
+
+                                    override fun visitRecord(
+                                        members:
+                                            MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                                    ) {
+                                        val nameExpr = members.entries.find { it.key.toString() == "name" }
+                                        val otherEntries = members.entries.filter { it.key.toString() != "name" }
+                                        val nameWritable =
+                                            if (nameExpr != null) {
+                                                generator.generate(nameExpr.value)
+                                            } else {
+                                                writable { rust("\"unknown\"") }
+                                            }
+                                        rustTemplate(
+                                            ".auth_scheme(#{EndpointAuthScheme}::with_capacity(#{name:W}, ${otherEntries.size})",
+                                            "EndpointAuthScheme" to Types(runtimeConfig).smithyEndpointAuthScheme,
+                                            "name" to nameWritable,
+                                        )
+                                        otherEntries.sortedBy { it.key.toString() }.forEach { (key, value) ->
+                                            rust(".put(${key.toString().dq()}, #W)", generator.generate(value))
+                                        }
+                                        rust(")")
+                                    }
+                                },
+                            )
+                        }
+                    }
+                },
+            )
         }
     }
 
