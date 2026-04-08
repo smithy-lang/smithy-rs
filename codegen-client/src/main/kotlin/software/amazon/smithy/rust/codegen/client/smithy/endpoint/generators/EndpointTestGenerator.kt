@@ -37,6 +37,7 @@ internal class EndpointTestGenerator(
     private val resolverType: RuntimeType,
     private val params: Parameters,
     codegenContext: ClientCodegenContext,
+    private val useBddAuthSchemes: Boolean = false,
 ) {
     private val runtimeConfig = codegenContext.runtimeConfig
     private val types = Types(runtimeConfig)
@@ -191,7 +192,7 @@ internal class EndpointTestGenerator(
                 }
             }
             value.properties.forEach { (name, propValue) ->
-                if (name == "authSchemes") {
+                if (name == "authSchemes" && useBddAuthSchemes) {
                     // Generate typed auth schemes
                     val node = propValue
                     if (node.isArrayNode) {

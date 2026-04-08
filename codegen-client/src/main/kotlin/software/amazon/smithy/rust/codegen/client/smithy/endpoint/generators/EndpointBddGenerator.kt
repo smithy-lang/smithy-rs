@@ -152,6 +152,7 @@ class EndpointBddGenerator(
                 /// The default endpoint resolver.
                 pub struct DefaultResolver {
                     #{CustomFields}
+                    endpoint_cache: ::std::sync::Mutex<::std::option::Option<(Params, ::aws_smithy_types::endpoint::Endpoint)>>,
                 }
 
                  impl Default for DefaultResolver {
@@ -165,6 +166,7 @@ class EndpointBddGenerator(
                     pub fn new() -> Self {
                         Self {
                             #{CustomFieldsInit}
+                            endpoint_cache: ::std::sync::Mutex::new(None),
                         }
                     }
 
@@ -204,8 +206,16 @@ class EndpointBddGenerator(
 
                 impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                        // Check single-entry cache
+                        if let Some((cached_params, cached_endpoint)) = &*self.endpoint_cache.lock().expect("endpoint cache lock poisoned") {
+                            if cached_params == params {
+                                return #{EndpointFuture}::ready(#{Ok}(cached_endpoint.clone()));
+                            }
+                        }
                         let result = self.resolve_endpoint(params);
-
+                        if let #{Ok}(ref endpoint) = result {
+                            *self.endpoint_cache.lock().expect("endpoint cache lock poisoned") = Some((params.clone(), endpoint.clone()));
+                        }
                         #{EndpointFuture}::ready(result)
                     }
                 }
