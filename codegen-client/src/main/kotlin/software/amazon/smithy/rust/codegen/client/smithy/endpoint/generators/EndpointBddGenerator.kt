@@ -103,14 +103,10 @@ class EndpointBddGenerator(
         writer.rustTemplate(
             """
             #{ResolverStruct:W}
-            #{ConditionFn:W}
-            #{ResultEndpoint:W}
             #{Nodes:W}
             #{ConditionContext:W}
             """,
             "ResolverStruct" to generateResolverStruct(genContext),
-            "ConditionFn" to generateConditionFn(genContext),
-            "ResultEndpoint" to generateResultEndpoint(genContext),
             "Nodes" to generateNodeArray(),
             "ConditionContext" to generateContextStruct(),
         )
@@ -172,46 +168,36 @@ class EndpointBddGenerator(
                         }
                     }
 
-                    ##[allow(clippy::needless_borrow)]
-                    pub(crate) fn evaluate_fn(
-                        &self,
-                    ) -> impl for<'a> FnMut(
-                        &ConditionFn,
-                        &'a Params,
-                        &mut ConditionContext<'a>,
-                        &mut #{DiagnosticCollector},
-                    ) -> bool
-                           + '_ {
-                        move |cond, params, context, _diagnostic_collector| {
-                            cond.evaluate(
-                                params,
-                                context,
-                                #{CustomFieldsArgs}
-                                _diagnostic_collector,
-                            )
-                        }
-                    }
-
+                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
+                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
+                        clippy::needless_borrow, clippy::useless_asref)]
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
-                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                        let mut condition_context = ConditionContext::default();
-                        let result = #{EvaluateBdd}(
-                            &NODES,
-                            &CONDITIONS,
-                            &RESULTS,
-                            ${bddTrait.bdd.rootRef},
-                            params,
-                            &mut condition_context,
-                            &mut diagnostic_collector,
-                            self.evaluate_fn(),
-                        );
+                        let mut _diagnostic_collector = #{DiagnosticCollector}::new();
+                        let mut context = ConditionContext::default();
 
-                        match result {
-                            #{Some}(endpoint) => match endpoint.to_endpoint(params, &condition_context) {
-                                Ok(ep) => Ok(ep),
-                                Err(err) => Err(Box::new(err)),
-                            },
-                            #{None} => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched"))),
+                        // Param bindings
+                        #{ParamBindings:W}
+
+                        let mut current_ref: i32 = ${bddTrait.bdd.rootRef};
+                        loop {
+                            match current_ref {
+                                ref_val if ref_val >= 100_000_000 => {
+                                    return match (ref_val - 100_000_000) as usize {
+                                        #{ResultArms:W}
+                                        _ => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched")) as #{BoxError}),
+                                    };
+                                }
+                                1 | -1 => return #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched")) as #{BoxError}),
+                                ref_val => {
+                                    let is_complement = ref_val < 0;
+                                    let node = &NODES[(ref_val.unsigned_abs() as usize) - 1];
+                                    let condition_result = match node.condition_index {
+                                        #{ConditionArms:W}
+                                        _ => unreachable!("Invalid condition index"),
+                                    };
+                                    current_ref = if is_complement ^ condition_result { node.high_ref } else { node.low_ref };
+                                }
+                            }
                         }
                     }
                 }
@@ -230,23 +216,44 @@ class EndpointBddGenerator(
                     writable {
                         genContext.fnsUsed.mapNotNull { it.structFieldBdd() }.forEach { rust("#W,", it) }
                     },
-                "CustomFieldsArgs" to
-                    writable {
-                        genContext.fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
-                            .forEach { rust("#W,", it) }
-                    },
                 "CustomFieldsInit" to
                     writable {
                         genContext.fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
                     },
+                "ConditionArms" to generateInlineConditionArms(genContext),
                 "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                "EvaluateBdd" to EndpointsLib.evaluateBdd,
                 "Params" to genContext.typeGenerator.paramsStruct(),
+                "ParamBindings" to generateParamBindings(),
+                "NonParamRefBindings" to generateNonParamReferences(),
                 "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                "ResultArms" to generateInlineResultArms(genContext.context),
                 "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
                 "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
                 *Types(runtimeConfig).toArray(),
             )
+        }
+
+    /**
+     * Generate match arms for inline condition evaluation.
+     * Each arm binds its own mutable context refs to avoid borrow conflicts with result arms.
+     */
+    private fun generateInlineConditionArms(genContext: GenerationContext) =
+        writable {
+            bddTrait.conditions.forEachIndexed { idx, _ ->
+                val condBody = genContext.conditionScope["$CONDITION_FN_PREFIX$idx"]!!
+                rustTemplate(
+                    """
+                    $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
+                        #{NonParamRefBindings:W}
+                        let partition_resolver = &self.partition_resolver;
+                        #{body:W}
+                    })(&mut _diagnostic_collector),
+                    """,
+                    "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+                    "NonParamRefBindings" to generateNonParamReferences(),
+                    "body" to condBody,
+                )
+            }
         }
 
     private fun generateConditionFn(genContext: GenerationContext) =
@@ -399,6 +406,39 @@ class EndpointBddGenerator(
                     rustTemplate(
                         """
                         Self::Result$idx => {
+                            #{bindings:W}
+                            #{output:W}
+                        },
+                        """,
+                        "bindings" to bindings,
+                        "output" to ruleOutput,
+                    )
+                }
+            }
+        }
+
+    /**
+     * Generate match arms for the inline result builder closure.
+     * Arms match on usize index and return Result<Endpoint, BoxError>.
+     */
+    private fun generateInlineResultArms(context: Context) =
+        writable {
+            val visitor = InlineRuleVisitor(context)
+            bddTrait.results.forEachIndexed { idx, rule ->
+                if (rule is NoMatchRule) {
+                    rustTemplate(
+                        "$idx => #{Err}(Box::new(#{ResolveEndpointError}::message(\"No endpoint rule matched\")) as #{BoxError}),\n",
+                        *preludeScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    )
+                } else {
+                    val usedVars = collectUsedVariables(rule)
+                    val bindings = generateBindingsForVariables(usedVars)
+                    val ruleOutput = rule.accept(visitor)
+                    rustTemplate(
+                        """
+                        $idx => {
                             #{bindings:W}
                             #{output:W}
                         },
@@ -573,6 +613,32 @@ class EndpointBddGenerator(
                 rustTemplate(
                     "#{Err}(#{ResolveEndpointError}::message(#{message:W}))",
                     *preludeScope,
+                    "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
+                )
+            }
+
+        override fun visitEndpointRule(endpoint: Endpoint): Writable =
+            writable {
+                rustTemplate("#{Ok}(#{endpoint:W})", *preludeScope, "endpoint" to generateEndpoint(endpoint))
+            }
+    }
+
+    /**
+     * Rule visitor for inline result builder closure.
+     * Returns Result<Endpoint, BoxError> instead of Result<Endpoint, ResolveEndpointError>.
+     */
+    inner class InlineRuleVisitor(private val context: Context) : RuleValueVisitor<Writable> {
+        override fun visitTreeRule(rules: List<Rule>): Writable {
+            throw UnsupportedOperationException("Tree rules not supported in BDD endpoint resolver")
+        }
+
+        override fun visitErrorRule(error: Expression): Writable =
+            writable {
+                rustTemplate(
+                    "#{Err}(Box::new(#{ResolveEndpointError}::message(#{message:W})) as #{BoxError})",
+                    *preludeScope,
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
                     "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
                     "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
                 )
