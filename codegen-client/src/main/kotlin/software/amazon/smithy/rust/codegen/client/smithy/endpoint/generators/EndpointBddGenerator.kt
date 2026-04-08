@@ -235,26 +235,165 @@ class EndpointBddGenerator(
 
     /**
      * Generate match arms for inline condition evaluation.
-     * Each arm binds its own mutable context refs to avoid borrow conflicts with result arms.
+     * Trivial conditions (isSet, booleanEquals on params) are emitted directly.
+     * Complex conditions use a closure to support `return false` early exits.
      */
     private fun generateInlineConditionArms(genContext: GenerationContext) =
         writable {
-            bddTrait.conditions.forEachIndexed { idx, _ ->
-                val condBody = genContext.conditionScope["$CONDITION_FN_PREFIX$idx"]!!
-                rustTemplate(
-                    """
-                    $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
-                        #{NonParamRefBindings:W}
-                        let partition_resolver = &self.partition_resolver;
-                        #{body:W}
-                    })(&mut _diagnostic_collector),
-                    """,
-                    "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                    "NonParamRefBindings" to generateNonParamReferences(),
-                    "body" to condBody,
-                )
+            bddTrait.conditions.forEachIndexed { idx, cond ->
+                val trivialExpr = tryGenerateTrivialCondition(cond)
+                if (trivialExpr != null) {
+                    rustTemplate("$idx => #{expr:W},\n", "expr" to trivialExpr)
+                } else {
+                    val condBody = genContext.conditionScope["$CONDITION_FN_PREFIX$idx"]!!
+                    rustTemplate(
+                        """
+                        $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
+                            #{NonParamRefBindings:W}
+                            let partition_resolver = &self.partition_resolver;
+                            #{body:W}
+                        })(&mut _diagnostic_collector),
+                        """,
+                        "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+                        "NonParamRefBindings" to generateNonParamReferences(),
+                        "body" to condBody,
+                    )
+                }
             }
         }
+
+    /**
+     * Try to generate a trivial inline expression for a condition.
+     * Returns null if the condition is too complex for inlining.
+     *
+     * Trivial conditions:
+     * - isSet(paramRef) with no assignment → `param.is_some()`
+     * - booleanEquals(paramRef, true/false) with no assignment → `(param) == (&true)`
+     */
+    private fun tryGenerateTrivialCondition(
+        cond: software.amazon.smithy.rulesengine.language.syntax.rule.Condition,
+    ): Writable? {
+        // Conditions with assignments need the full closure for context mutation
+        if (cond.result.isPresent) return null
+
+        val fn = cond.function
+        return fn.accept(
+            object : software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor<Writable?> {
+                override fun visitIsSet(
+                    target: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                ): Writable? {
+                    if (target !is Reference) return null
+                    val paramName = target.name.rustName()
+                    // Only inline for params (not context refs which need mutable borrows)
+                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
+                    return writable { rust("$paramName.is_some()") }
+                }
+
+                override fun visitBoolEquals(
+                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                ): Writable? {
+                    // Match pattern: booleanEquals(paramRef, literal_bool)
+                    val (refExpr, litExpr) =
+                        when {
+                            left is Reference -> left to right
+                            right is Reference -> right to left
+                            else -> return null
+                        }
+                    val paramName = refExpr.name.rustName()
+                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
+                    val litVal =
+                        litExpr.accept(
+                            object : software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor<Boolean?> {
+                                override fun visitLiteral(
+                                    literal:
+                                        software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal,
+                                ): Boolean? {
+                                    return literal.accept(
+                                        object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Boolean?> {
+                                            override fun visitBoolean(b: Boolean) = b
+
+                                            override fun visitString(
+                                                value:
+                                                    software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
+                                            ) = null
+
+                                            override fun visitRecord(
+                                                members:
+                                                    MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                                            ) = null
+
+                                            override fun visitTuple(
+                                                members:
+                                                    MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
+                                            ) = null
+
+                                            override fun visitInteger(value: Int) = null
+                                        },
+                                    )
+                                }
+
+                                override fun visitRef(reference: Reference) = null
+
+                                override fun visitGetAttr(
+                                    getAttr:
+                                        software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr,
+                                ) = null
+
+                                override fun visitIsSet(
+                                    fn: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                ) = null
+
+                                override fun visitNot(
+                                    not: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                ) = null
+
+                                override fun visitBoolEquals(
+                                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                ) = null
+
+                                override fun visitStringEquals(
+                                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                ) = null
+
+                                override fun visitLibraryFunction(
+                                    fn:
+                                        software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition,
+                                    args:
+                                        MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.Expression>,
+                                ) = null
+                            },
+                        ) ?: return null
+                    return writable { rust("($paramName) == (&$litVal)") }
+                }
+
+                override fun visitLiteral(
+                    literal: software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal,
+                ) = null
+
+                override fun visitRef(reference: Reference) = null
+
+                override fun visitGetAttr(
+                    getAttr: software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr,
+                ) = null
+
+                override fun visitNot(not: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression) =
+                    null
+
+                override fun visitStringEquals(
+                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                ) = null
+
+                override fun visitLibraryFunction(
+                    fn: software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition,
+                    args: MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.Expression>,
+                ) = null
+            },
+        )
+    }
 
     private fun generateConditionFn(genContext: GenerationContext) =
         writable {
@@ -698,6 +837,12 @@ class EndpointBddGenerator(
                     rust(".property(\"authSchemes\", #W)", generator.generate(authSchemesExpr))
                 }
 
+        // Use borrowed generator for auth scheme values — with_capacity and put accept
+        // Into<Cow<'static, str>> and Into<Document>, both of which work with &str directly.
+        val registry = FunctionRegistry(stdlib)
+        val borrowedContext = Context(registry, runtimeConfig, isBddMode = true)
+        val borrowedGenerator = ExpressionGenerator(Ownership.Borrowed, borrowedContext)
+
         return writable {
             literal.accept(
                 object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Unit> {
@@ -752,7 +897,7 @@ class EndpointBddGenerator(
                                             "name" to nameWritable,
                                         )
                                         otherEntries.sortedBy { it.key.toString() }.forEach { (key, value) ->
-                                            rust(".put(${key.toString().dq()}, #W)", generator.generate(value))
+                                            rust(".put(${key.toString().dq()}, #W)", borrowedGenerator.generate(value))
                                         }
                                         rust(")")
                                     }
