@@ -5,7 +5,7 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::{DateTime, Format};
@@ -20,6 +20,7 @@ pub(crate) struct S3ExpiresInterceptor;
 const EXPIRES: &str = "Expires";
 const EXPIRES_STRING: &str = "ExpiresString";
 
+#[dispatch_overridden]
 impl Intercept for S3ExpiresInterceptor {
     fn name(&self) -> &'static str {
         "S3ExpiresInterceptor"

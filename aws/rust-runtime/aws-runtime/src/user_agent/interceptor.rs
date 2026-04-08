@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::http::HttpClient;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeTransmitInterceptorContextMut, BeforeTransmitInterceptorContextRef,
 };
-use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::app_name::AppName;
@@ -119,6 +119,7 @@ fn header_values(
     ))
 }
 
+#[dispatch_overridden]
 impl Intercept for UserAgentInterceptor {
     fn name(&self) -> &'static str {
         "UserAgentInterceptor"
@@ -195,7 +196,7 @@ impl Intercept for UserAgentInterceptor {
 mod tests {
     use super::*;
     use aws_smithy_runtime_api::client::interceptors::context::{Input, InterceptorContext};
-    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};

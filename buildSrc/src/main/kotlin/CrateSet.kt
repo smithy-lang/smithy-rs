@@ -28,6 +28,7 @@ object CrateSet {
             // smithy crates
             "aws-smithy-async",
             "aws-smithy-runtime-api",
+            "aws-smithy-runtime-api-macros",
             "aws-smithy-runtime",
             "aws-smithy-types",
             "aws-smithy-http-client",
@@ -72,6 +73,7 @@ object CrateSet {
             "aws-smithy-query",
             "aws-smithy-runtime",
             "aws-smithy-runtime-api",
+            "aws-smithy-runtime-api-macros",
             "aws-smithy-types",
             "aws-smithy-types-convert",
             "aws-smithy-wasm",

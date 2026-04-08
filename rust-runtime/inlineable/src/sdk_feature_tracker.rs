@@ -8,7 +8,7 @@ pub(crate) mod rpc_v2_cbor {
     use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
-    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
     use aws_smithy_types::config_bag::ConfigBag;
 
@@ -21,6 +21,7 @@ pub(crate) mod rpc_v2_cbor {
         }
     }
 
+    #[dispatch_overridden]
     impl Intercept for RpcV2CborFeatureTrackerInterceptor {
         fn name(&self) -> &'static str {
             "RpcV2CborFeatureTrackerInterceptor"
@@ -44,7 +45,9 @@ pub(crate) mod paginator {
     use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
-    use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+    use aws_smithy_runtime_api::client::interceptors::{
+        dispatch_overridden, Intercept, SharedInterceptor,
+    };
     use aws_smithy_runtime_api::client::runtime_components::{
         RuntimeComponents, RuntimeComponentsBuilder,
     };
@@ -61,6 +64,7 @@ pub(crate) mod paginator {
         }
     }
 
+    #[dispatch_overridden]
     impl Intercept for PaginatorFeatureTrackerInterceptor {
         fn name(&self) -> &'static str {
             "PaginatorFeatureTrackerInterceptor"
@@ -111,7 +115,9 @@ pub(crate) mod waiter {
     use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextMut;
-    use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+    use aws_smithy_runtime_api::client::interceptors::{
+        dispatch_overridden, Intercept, SharedInterceptor,
+    };
     use aws_smithy_runtime_api::client::runtime_components::{
         RuntimeComponents, RuntimeComponentsBuilder,
     };
@@ -128,6 +134,7 @@ pub(crate) mod waiter {
         }
     }
 
+    #[dispatch_overridden]
     impl Intercept for WaiterFeatureTrackerInterceptor {
         fn name(&self) -> &'static str {
             "WaiterFeatureTrackerInterceptor"
@@ -178,7 +185,7 @@ pub(crate) mod retry_mode {
     use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
     use aws_smithy_runtime_api::box_error::BoxError;
     use aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef;
-    use aws_smithy_runtime_api::client::interceptors::Intercept;
+    use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
     use aws_smithy_types::config_bag::ConfigBag;
     use aws_smithy_types::retry::{RetryConfig, RetryMode};
@@ -192,6 +199,7 @@ pub(crate) mod retry_mode {
         }
     }
 
+    #[dispatch_overridden]
     impl Intercept for RetryModeFeatureTrackerInterceptor {
         fn name(&self) -> &'static str {
             "RetryModeFeatureTrackerInterceptor"

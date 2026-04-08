@@ -6,7 +6,7 @@
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
 use aws_smithy_runtime_api::client::interceptors::{
-    Interceptor, InterceptorRegistrar, SharedInterceptor,
+    dispatch_overridden, Intercept, Interceptor, InterceptorRegistrar, SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_types::base64;
@@ -27,6 +27,7 @@ impl RuntimePlugin for HttpChecksumRequiredRuntimePlugin {
 #[derive(Debug)]
 struct HttpChecksumRequiredInterceptor;
 
+#[dispatch_overridden]
 impl Intercept for HttpChecksumRequiredInterceptor {
     fn modify_before_signing(
         &self,

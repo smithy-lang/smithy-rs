@@ -66,6 +66,7 @@ class EndpointParamsInterceptorGenerator(
                 "HttpRequest" to orchestrator.resolve("HttpRequest"),
                 "HttpResponse" to orchestrator.resolve("HttpResponse"),
                 "Intercept" to RuntimeType.intercept(rc),
+                "dispatch_overridden" to RuntimeType.dispatchOverridden(rc),
                 "InterceptorContext" to RuntimeType.interceptorContext(rc),
                 "BeforeSerializationInterceptorContextRef" to RuntimeType.beforeSerializationInterceptorContextRef(rc),
                 "Input" to interceptors.resolve("context::Input"),
@@ -88,6 +89,7 @@ class EndpointParamsInterceptorGenerator(
             ##[derive(Debug)]
             struct $interceptorName;
 
+            ##[#{dispatch_overridden}]
             impl #{Intercept} for $interceptorName {
                 fn name(&self) -> &'static str {
                     ${interceptorName.dq()}

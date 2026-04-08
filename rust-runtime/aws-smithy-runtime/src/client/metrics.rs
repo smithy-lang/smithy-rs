@@ -9,7 +9,7 @@ use aws_smithy_observability::{
     ObservabilityError,
 };
 use aws_smithy_runtime_api::client::{
-    interceptors::{Intercept, SharedInterceptor},
+    interceptors::{dispatch_overridden, Intercept, SharedInterceptor},
     orchestrator::Metadata,
     runtime_components::RuntimeComponentsBuilder,
     runtime_plugin::RuntimePlugin,
@@ -107,6 +107,7 @@ impl MetricsInterceptor {
     }
 }
 
+#[dispatch_overridden]
 impl Intercept for MetricsInterceptor {
     fn name(&self) -> &'static str {
         "MetricsInterceptor"

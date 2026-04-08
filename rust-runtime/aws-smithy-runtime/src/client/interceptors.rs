@@ -12,7 +12,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output,
 };
 use aws_smithy_runtime_api::client::interceptors::{
-    Intercept, InterceptorError, SharedInterceptor,
+    dispatch_overridden, Intercept, InterceptorError, OverriddenHooks, SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
@@ -24,7 +24,7 @@ use std::fmt;
 use std::marker::PhantomData;
 
 macro_rules! interceptor_impl_fn {
-    (mut $interceptor:ident) => {
+    (mut $interceptor:ident, $hint:ident) => {
         pub(crate) fn $interceptor(
             self,
             ctx: &mut InterceptorContext,
@@ -38,27 +38,40 @@ macro_rules! interceptor_impl_fn {
             ));
             let mut result: Result<(), (&str, BoxError)> = Ok(());
             let mut ctx = ctx.into();
+            let mut total = 0u32;
+            let mut skipped = 0u32;
             for interceptor in self.into_iter() {
-                if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                    if let Err(new_error) =
-                        interceptor.$interceptor(&mut ctx, runtime_components, cfg)
-                    {
-                        if let Err(last_error) = result {
-                            tracing::debug!(
-                                "{}::{}: {}",
-                                last_error.0,
-                                stringify!($interceptor),
-                                DisplayErrorContext(&*last_error.1)
-                            );
+                total += 1;
+                if interceptor.hook_overridden(OverriddenHooks::$hint) {
+                    if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                        if let Err(new_error) =
+                            interceptor.$interceptor(&mut ctx, runtime_components, cfg)
+                        {
+                            if let Err(last_error) = result {
+                                tracing::debug!(
+                                    "{}::{}: {}",
+                                    last_error.0,
+                                    stringify!($interceptor),
+                                    DisplayErrorContext(&*last_error.1)
+                                );
+                            }
+                            result = Err((interceptor.name(), new_error));
                         }
-                        result = Err((interceptor.name(), new_error));
                     }
+                } else {
+                    skipped += 1;
                 }
             }
+            tracing::warn!(
+                ">>> DISPATCH {}: {}/{} interceptors SKIPPED <<<",
+                stringify!($interceptor),
+                skipped,
+                total
+            );
             result.map_err(|(name, err)| InterceptorError::$interceptor(name, err))
         }
     };
-    (ref $interceptor:ident) => {
+    (ref $interceptor:ident, $hint:ident) => {
         pub(crate) fn $interceptor(
             self,
             ctx: &InterceptorContext,
@@ -72,22 +85,36 @@ macro_rules! interceptor_impl_fn {
             ));
             let mut result: Result<(), (&str, BoxError)> = Ok(());
             let ctx = ctx.into();
+            let mut total = 0u32;
+            let mut skipped = 0u32;
             for interceptor in self.into_iter() {
-                if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                    if let Err(new_error) = interceptor.$interceptor(&ctx, runtime_components, cfg)
-                    {
-                        if let Err(last_error) = result {
-                            tracing::debug!(
-                                "{}::{}: {}",
-                                last_error.0,
-                                stringify!($interceptor),
-                                DisplayErrorContext(&*last_error.1)
-                            );
+                total += 1;
+                if interceptor.hook_overridden(OverriddenHooks::$hint) {
+                    if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                        if let Err(new_error) =
+                            interceptor.$interceptor(&ctx, runtime_components, cfg)
+                        {
+                            if let Err(last_error) = result {
+                                tracing::debug!(
+                                    "{}::{}: {}",
+                                    last_error.0,
+                                    stringify!($interceptor),
+                                    DisplayErrorContext(&*last_error.1)
+                                );
+                            }
+                            result = Err((interceptor.name(), new_error));
                         }
-                        result = Err((interceptor.name(), new_error));
                     }
+                } else {
+                    skipped += 1;
                 }
             }
+            tracing::warn!(
+                ">>> DISPATCH {}: {}/{} interceptors SKIPPED <<<",
+                stringify!($interceptor),
+                skipped,
+                total
+            );
             result.map_err(|(name, err)| InterceptorError::$interceptor(name, err))
         }
     };
@@ -122,38 +149,53 @@ where
         );
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let ctx: BeforeSerializationInterceptorContextRef<'_> = ctx.into();
+        let mut total = 0u32;
+        let mut skipped = 0u32;
         for interceptor in self.into_iter() {
-            if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                if let Err(new_error) = interceptor.read_before_execution(&ctx, cfg) {
-                    if let Err(last_error) = result {
-                        tracing::debug!(
-                            "{}::{}: {}",
-                            last_error.0,
-                            "read_before_execution",
-                            DisplayErrorContext(&*last_error.1)
-                        );
+            total += 1;
+            if interceptor.hook_overridden(OverriddenHooks::READ_BEFORE_EXECUTION) {
+                if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                    if let Err(new_error) = interceptor.read_before_execution(&ctx, cfg) {
+                        if let Err(last_error) = result {
+                            tracing::debug!(
+                                "{}::{}: {}",
+                                last_error.0,
+                                "read_before_execution",
+                                DisplayErrorContext(&*last_error.1)
+                            );
+                        }
+                        result = Err((interceptor.name(), new_error));
                     }
-                    result = Err((interceptor.name(), new_error));
                 }
+            } else {
+                skipped += 1;
             }
         }
+        tracing::warn!(
+            ">>> DISPATCH read_before_execution: {}/{} interceptors SKIPPED <<<",
+            skipped,
+            total
+        );
         result.map_err(|(name, err)| InterceptorError::read_before_execution(name, err))
     }
 
-    interceptor_impl_fn!(mut modify_before_serialization);
-    interceptor_impl_fn!(ref read_before_serialization);
-    interceptor_impl_fn!(ref read_after_serialization);
-    interceptor_impl_fn!(mut modify_before_retry_loop);
-    interceptor_impl_fn!(ref read_before_attempt);
-    interceptor_impl_fn!(mut modify_before_signing);
-    interceptor_impl_fn!(ref read_before_signing);
-    interceptor_impl_fn!(ref read_after_signing);
-    interceptor_impl_fn!(mut modify_before_transmit);
-    interceptor_impl_fn!(ref read_before_transmit);
-    interceptor_impl_fn!(ref read_after_transmit);
-    interceptor_impl_fn!(mut modify_before_deserialization);
-    interceptor_impl_fn!(ref read_before_deserialization);
-    interceptor_impl_fn!(ref read_after_deserialization);
+    interceptor_impl_fn!(mut modify_before_serialization, MODIFY_BEFORE_SERIALIZATION);
+    interceptor_impl_fn!(ref read_before_serialization, READ_BEFORE_SERIALIZATION);
+    interceptor_impl_fn!(ref read_after_serialization, READ_AFTER_SERIALIZATION);
+    interceptor_impl_fn!(mut modify_before_retry_loop, MODIFY_BEFORE_RETRY_LOOP);
+    interceptor_impl_fn!(ref read_before_attempt, READ_BEFORE_ATTEMPT);
+    interceptor_impl_fn!(mut modify_before_signing, MODIFY_BEFORE_SIGNING);
+    interceptor_impl_fn!(ref read_before_signing, READ_BEFORE_SIGNING);
+    interceptor_impl_fn!(ref read_after_signing, READ_AFTER_SIGNING);
+    interceptor_impl_fn!(mut modify_before_transmit, MODIFY_BEFORE_TRANSMIT);
+    interceptor_impl_fn!(ref read_before_transmit, READ_BEFORE_TRANSMIT);
+    interceptor_impl_fn!(ref read_after_transmit, READ_AFTER_TRANSMIT);
+    interceptor_impl_fn!(
+        mut modify_before_deserialization,
+        MODIFY_BEFORE_DESERIALIZATION
+    );
+    interceptor_impl_fn!(ref read_before_deserialization, READ_BEFORE_DESERIALIZATION);
+    interceptor_impl_fn!(ref read_after_deserialization, READ_AFTER_DESERIALIZATION);
 
     pub(crate) fn modify_before_attempt_completion(
         self,
@@ -164,23 +206,37 @@ where
         tracing::trace!("running `modify_before_attempt_completion` interceptors");
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let mut ctx: FinalizerInterceptorContextMut<'_> = ctx.into();
+        let mut total = 0u32;
+        let mut skipped = 0u32;
         for interceptor in self.into_iter() {
-            if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                if let Err(new_error) =
-                    interceptor.modify_before_attempt_completion(&mut ctx, runtime_components, cfg)
-                {
-                    if let Err(last_error) = result {
-                        tracing::debug!(
-                            "{}::{}: {}",
-                            last_error.0,
-                            "modify_before_attempt_completion",
-                            DisplayErrorContext(&*last_error.1)
-                        );
+            total += 1;
+            if interceptor.hook_overridden(OverriddenHooks::MODIFY_BEFORE_ATTEMPT_COMPLETION) {
+                if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                    if let Err(new_error) = interceptor.modify_before_attempt_completion(
+                        &mut ctx,
+                        runtime_components,
+                        cfg,
+                    ) {
+                        if let Err(last_error) = result {
+                            tracing::debug!(
+                                "{}::{}: {}",
+                                last_error.0,
+                                "modify_before_attempt_completion",
+                                DisplayErrorContext(&*last_error.1)
+                            );
+                        }
+                        result = Err((interceptor.name(), new_error));
                     }
-                    result = Err((interceptor.name(), new_error));
                 }
+            } else {
+                skipped += 1;
             }
         }
+        tracing::warn!(
+            ">>> DISPATCH modify_before_attempt_completion: {}/{} interceptors SKIPPED <<<",
+            skipped,
+            total
+        );
         result.map_err(|(name, err)| InterceptorError::modify_before_attempt_completion(name, err))
     }
 
@@ -193,23 +249,35 @@ where
         tracing::trace!("running `read_after_attempt` interceptors");
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let ctx: FinalizerInterceptorContextRef<'_> = ctx.into();
+        let mut total = 0u32;
+        let mut skipped = 0u32;
         for interceptor in self.into_iter() {
-            if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                if let Err(new_error) =
-                    interceptor.read_after_attempt(&ctx, runtime_components, cfg)
-                {
-                    if let Err(last_error) = result {
-                        tracing::debug!(
-                            "{}::{}: {}",
-                            last_error.0,
-                            "read_after_attempt",
-                            DisplayErrorContext(&*last_error.1)
-                        );
+            total += 1;
+            if interceptor.hook_overridden(OverriddenHooks::READ_AFTER_ATTEMPT) {
+                if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                    if let Err(new_error) =
+                        interceptor.read_after_attempt(&ctx, runtime_components, cfg)
+                    {
+                        if let Err(last_error) = result {
+                            tracing::debug!(
+                                "{}::{}: {}",
+                                last_error.0,
+                                "read_after_attempt",
+                                DisplayErrorContext(&*last_error.1)
+                            );
+                        }
+                        result = Err((interceptor.name(), new_error));
                     }
-                    result = Err((interceptor.name(), new_error));
                 }
+            } else {
+                skipped += 1;
             }
         }
+        tracing::warn!(
+            ">>> DISPATCH read_after_attempt: {}/{} interceptors SKIPPED <<<",
+            skipped,
+            total
+        );
         result.map_err(|(name, err)| InterceptorError::read_after_attempt(name, err))
     }
 
@@ -222,23 +290,35 @@ where
         tracing::trace!("running `modify_before_completion` interceptors");
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let mut ctx: FinalizerInterceptorContextMut<'_> = ctx.into();
+        let mut total = 0u32;
+        let mut skipped = 0u32;
         for interceptor in self.into_iter() {
-            if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                if let Err(new_error) =
-                    interceptor.modify_before_completion(&mut ctx, runtime_components, cfg)
-                {
-                    if let Err(last_error) = result {
-                        tracing::debug!(
-                            "{}::{}: {}",
-                            last_error.0,
-                            "modify_before_completion",
-                            DisplayErrorContext(&*last_error.1)
-                        );
+            total += 1;
+            if interceptor.hook_overridden(OverriddenHooks::MODIFY_BEFORE_COMPLETION) {
+                if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                    if let Err(new_error) =
+                        interceptor.modify_before_completion(&mut ctx, runtime_components, cfg)
+                    {
+                        if let Err(last_error) = result {
+                            tracing::debug!(
+                                "{}::{}: {}",
+                                last_error.0,
+                                "modify_before_completion",
+                                DisplayErrorContext(&*last_error.1)
+                            );
+                        }
+                        result = Err((interceptor.name(), new_error));
                     }
-                    result = Err((interceptor.name(), new_error));
                 }
+            } else {
+                skipped += 1;
             }
         }
+        tracing::warn!(
+            ">>> DISPATCH modify_before_completion: {}/{} interceptors SKIPPED <<<",
+            skipped,
+            total
+        );
         result.map_err(|(name, err)| InterceptorError::modify_before_completion(name, err))
     }
 
@@ -251,23 +331,35 @@ where
         tracing::trace!("running `read_after_execution` interceptors");
         let mut result: Result<(), (&str, BoxError)> = Ok(());
         let ctx: FinalizerInterceptorContextRef<'_> = ctx.into();
+        let mut total = 0u32;
+        let mut skipped = 0u32;
         for interceptor in self.into_iter() {
-            if let Some(interceptor) = interceptor.if_enabled(cfg) {
-                if let Err(new_error) =
-                    interceptor.read_after_execution(&ctx, runtime_components, cfg)
-                {
-                    if let Err(last_error) = result {
-                        tracing::debug!(
-                            "{}::{}: {}",
-                            last_error.0,
-                            "read_after_execution",
-                            DisplayErrorContext(&*last_error.1)
-                        );
+            total += 1;
+            if interceptor.hook_overridden(OverriddenHooks::READ_AFTER_EXECUTION) {
+                if let Some(interceptor) = interceptor.if_enabled(cfg) {
+                    if let Err(new_error) =
+                        interceptor.read_after_execution(&ctx, runtime_components, cfg)
+                    {
+                        if let Err(last_error) = result {
+                            tracing::debug!(
+                                "{}::{}: {}",
+                                last_error.0,
+                                "read_after_execution",
+                                DisplayErrorContext(&*last_error.1)
+                            );
+                        }
+                        result = Err((interceptor.name(), new_error));
                     }
-                    result = Err((interceptor.name(), new_error));
                 }
+            } else {
+                skipped += 1;
             }
         }
+        tracing::warn!(
+            ">>> DISPATCH read_after_execution: {}/{} interceptors SKIPPED <<<",
+            skipped,
+            total
+        );
         result.map_err(|(name, err)| InterceptorError::read_after_execution(name, err))
     }
 }
@@ -282,6 +374,10 @@ impl ConditionallyEnabledInterceptor {
         } else {
             None
         }
+    }
+
+    fn hook_overridden(&self, hint: OverriddenHooks) -> bool {
+        self.0.overridden_hooks().contains(hint)
     }
 }
 
@@ -307,6 +403,7 @@ impl<F, E> MapRequestInterceptor<F, E> {
     }
 }
 
+#[dispatch_overridden]
 impl<F, E> Intercept for MapRequestInterceptor<F, E>
 where
     F: Fn(HttpRequest) -> Result<HttpRequest, E> + Send + Sync + 'static,
@@ -349,6 +446,7 @@ impl<F> MutateRequestInterceptor<F> {
     }
 }
 
+#[dispatch_overridden]
 impl<F> Intercept for MutateRequestInterceptor<F>
 where
     F: Fn(&mut HttpRequest) + Send + Sync + 'static,

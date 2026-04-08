@@ -17,7 +17,9 @@ use aws_runtime::{
 use aws_smithy_runtime_api::{
     box_error::BoxError,
     client::{
-        interceptors::{context::BeforeTransmitInterceptorContextMut, Intercept},
+        interceptors::{
+            context::BeforeTransmitInterceptorContextMut, dispatch_overridden, Intercept,
+        },
         runtime_components::RuntimeComponents,
         runtime_plugin::RuntimePlugin,
     },
@@ -96,6 +98,7 @@ impl std::error::Error for Error {}
 #[derive(Debug)]
 pub(crate) struct AwsChunkedContentEncodingInterceptor;
 
+#[dispatch_overridden]
 impl Intercept for AwsChunkedContentEncodingInterceptor {
     fn name(&self) -> &'static str {
         "AwsChunkedContentEncodingInterceptor"

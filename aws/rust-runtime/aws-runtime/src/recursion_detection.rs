@@ -5,7 +5,7 @@
 
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
-use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::interceptors::{dispatch_overridden, Intercept};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_types::os_shim_internal::Env;
@@ -39,6 +39,7 @@ impl RecursionDetectionInterceptor {
     }
 }
 
+#[dispatch_overridden]
 impl Intercept for RecursionDetectionInterceptor {
     fn name(&self) -> &'static str {
         "RecursionDetectionInterceptor"

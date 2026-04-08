@@ -476,6 +476,9 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         fun intercept(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::Intercept")
 
+        fun dispatchOverridden(runtimeConfig: RuntimeConfig): RuntimeType =
+            smithyRuntimeApiClient(runtimeConfig).resolve("client::interceptors::dispatch_overridden")
+
         fun interceptorContext(runtimeConfig: RuntimeConfig): RuntimeType =
             smithyRuntimeApiClient(runtimeConfig)
                 .resolve("client::interceptors::context::InterceptorContext")

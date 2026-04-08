@@ -6,7 +6,9 @@
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::{
     box_error::BoxError,
-    client::interceptors::{context::BeforeSerializationInterceptorContextRef, Intercept},
+    client::interceptors::{
+        context::BeforeSerializationInterceptorContextRef, dispatch_overridden, Intercept,
+    },
 };
 use aws_smithy_types::config_bag::ConfigBag;
 
@@ -14,6 +16,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 #[derive(Debug, Default)]
 pub(crate) struct ObservabilityFeatureTrackerInterceptor;
 
+#[dispatch_overridden]
 impl Intercept for ObservabilityFeatureTrackerInterceptor {
     fn name(&self) -> &'static str {
         "ObservabilityFeatureTrackerInterceptor"
