@@ -291,7 +291,6 @@ mod download_test_tools {
             fn deserialize_nonstreaming(
                 &self,
                 _: &HttpResponse,
-                _cfg: &ConfigBag,
             ) -> Result<Output, OrchestratorError<Error>> {
                 unreachable!()
             }

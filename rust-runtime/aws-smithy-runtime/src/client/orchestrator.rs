@@ -436,7 +436,7 @@ async fn try_attempt(
             .expect("a request deserializer must be in the config bag");
         let maybe_deserialized = {
             let _span = debug_span!("deserialize_streaming").entered();
-            response_deserializer.deserialize_streaming(response)
+            response_deserializer.deserialize_streaming_with_config(response, cfg)
         };
         match maybe_deserialized {
             Some(output_or_error) => output_or_error,
@@ -447,7 +447,7 @@ async fn try_attempt(
                 .and_then(|_| {
                     let _span = debug_span!("deserialize_nonstreaming").entered();
                     log_response_body(response, cfg);
-                    response_deserializer.deserialize_nonstreaming(response, cfg)
+                    response_deserializer.deserialize_nonstreaming_with_config(response, cfg)
                 }),
         }
     }

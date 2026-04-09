@@ -99,7 +99,6 @@ private class TestOperationCustomization(
                         fn deserialize_nonstreaming(
                             &self,
                             _response: &#{HttpResponse},
-                            _cfg: &#{ConfigBag},
                         ) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>> {
                             let fake_out: #{Result}<
                                 crate::operation::say_hello::SayHelloOutput,

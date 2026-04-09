@@ -286,7 +286,7 @@ class ClientProtocolTestGenerator(
                 ##[allow(unused_mut)]
                 let mut test_cfg = #{ConfigBag}::base();
                 #{inject_protocol}
-                de.deserialize_nonstreaming(&http_response, &test_cfg)
+                de.deserialize_nonstreaming_with_config(&http_response, &test_cfg)
             });
             """,
             "ConfigBag" to RT.configBag(rc),

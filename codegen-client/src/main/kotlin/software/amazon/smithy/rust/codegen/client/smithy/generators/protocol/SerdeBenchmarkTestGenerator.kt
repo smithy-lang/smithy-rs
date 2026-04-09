@@ -175,7 +175,7 @@ class SerdeBenchmarkTestGenerator(
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: defaultBodyMediaType).dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response, &cfg)
+                de.deserialize_nonstreaming_with_config(&http_response, &cfg)
             });
             let _ = std::hint::black_box(parsed);;
             timings.push(start.elapsed().as_nanos() as u64);

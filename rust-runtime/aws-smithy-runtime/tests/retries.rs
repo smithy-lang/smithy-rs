@@ -100,7 +100,6 @@ fn operation(
         fn deserialize_nonstreaming(
             &self,
             resp: &HttpResponse,
-            _cfg: &ConfigBag,
         ) -> Result<Output, OrchestratorError<Error>> {
             if resp.status().is_success() {
                 Ok(Output::erase("output".to_owned()))

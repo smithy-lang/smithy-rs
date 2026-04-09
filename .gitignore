@@ -63,3 +63,4 @@ __pycache__
 
 # AI context dirs
 .kiro/
+.kiro-*/

@@ -78,7 +78,7 @@ class ResponseDeserializerGenerator(
             impl #{DeserializeResponse} for ${operationName}ResponseDeserializer {
                 #{deserialize_streaming}
 
-                fn deserialize_nonstreaming(&self, response: &#{HttpResponse}, _cfg: &#{ConfigBag}) -> #{OutputOrError} {
+                fn deserialize_nonstreaming_with_config(&self, response: &#{HttpResponse}, _cfg: &#{ConfigBag}) -> #{OutputOrError} {
                     #{deserialize_nonstreaming}
                 }
             }

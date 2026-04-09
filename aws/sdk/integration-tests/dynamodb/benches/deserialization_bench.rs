@@ -44,7 +44,7 @@ fn do_bench() {
     config_bag.push_shared_layer(layer.freeze());
 
     let output = deserializer
-        .deserialize_nonstreaming(&response, &config_bag)
+        .deserialize_nonstreaming_with_config(&response, &config_bag)
         .expect("success");
     let output = output.downcast::<QueryOutput>().expect("correct type");
     assert_eq!(2, output.count);

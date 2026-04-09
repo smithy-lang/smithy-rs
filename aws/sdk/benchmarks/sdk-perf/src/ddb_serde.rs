@@ -44,7 +44,7 @@ pub(crate) fn deserialize() {
             ),
         ));
     let output = deserializer
-        .deserialize_nonstreaming(&response, &cfg)
+        .deserialize_nonstreaming_with_config(&response, &cfg)
         .expect("success");
     let output = output.downcast::<QueryOutput>().expect("correct type");
     assert_eq!(2, output.count);
