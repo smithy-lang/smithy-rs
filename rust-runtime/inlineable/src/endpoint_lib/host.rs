@@ -38,8 +38,7 @@ fn is_valid_segment(bytes: &[u8], start: usize, end: usize, e: &mut DiagnosticCo
         e.report_error("cannot start with `-`");
         return false;
     }
-    for i in start..end {
-        let b = bytes[i];
+    for &b in &bytes[start..end] {
         if !b.is_ascii_alphanumeric() && b != b'-' {
             return false;
         }

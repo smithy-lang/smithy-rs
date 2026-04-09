@@ -172,7 +172,7 @@ class EndpointBddGenerator(
 
                     ##[allow(unused_variables, unused_parens, clippy::double_parens,
                         clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
-                        clippy::needless_borrow, clippy::useless_asref)]
+                        clippy::needless_borrow, clippy::useless_asref, clippy::redundant_closure_call)]
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                         let mut _diagnostic_collector = #{DiagnosticCollector}::new();
                         let mut context = ConditionContext::default();

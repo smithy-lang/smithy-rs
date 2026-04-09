@@ -12,8 +12,11 @@ pub(crate) struct BddNode {
     pub low_ref: i32,
 }
 
+#[allow(dead_code)]
 const RESULT_LIMIT: i32 = 100_000_000;
+#[allow(dead_code)]
 const TERMINAL_TRUE: i32 = 1;
+#[allow(dead_code)]
 const TERMINAL_FALSE: i32 = -1;
 
 /// Evaluates a BDD to resolve an endpoint result
@@ -31,7 +34,7 @@ const TERMINAL_FALSE: i32 = -1;
 /// Returns
 /// * `Some(R)` - Result if evaluation succeeds
 /// * `None` - No match found
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, dead_code)]
 pub(crate) fn evaluate_bdd<'a, Cond, Params, R, Context>(
     nodes: &[BddNode],
     conditions: &[Cond],
