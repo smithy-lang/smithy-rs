@@ -175,6 +175,7 @@ class EndpointBddGenerator(
                         clippy::needless_borrow, clippy::useless_asref, clippy::redundant_closure_call)]
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                         let mut _diagnostic_collector = #{DiagnosticCollector}::new();
+                        ##[allow(unused_mut)]
                         let mut context = ConditionContext::default();
 
                         // Param bindings
@@ -280,18 +281,14 @@ class EndpointBddGenerator(
      * - isSet(paramRef) with no assignment → `param.is_some()`
      * - booleanEquals(paramRef, true/false) with no assignment → `(param) == (&true)`
      */
-    private fun tryGenerateTrivialCondition(
-        cond: software.amazon.smithy.rulesengine.language.syntax.rule.Condition,
-    ): Writable? {
+    private fun tryGenerateTrivialCondition(cond: Condition): Writable? {
         // Conditions with assignments need the full closure for context mutation
         if (cond.result.isPresent) return null
 
         val fn = cond.function
         return fn.accept(
-            object : software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor<Writable?> {
-                override fun visitIsSet(
-                    target: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                ): Writable? {
+            object : ExpressionVisitor<Writable?> {
+                override fun visitIsSet(target: Expression): Writable? {
                     if (target !is Reference) return null
                     val paramName = target.name.rustName()
                     // Only inline for params (not context refs which need mutable borrows)
@@ -300,8 +297,8 @@ class EndpointBddGenerator(
                 }
 
                 override fun visitBoolEquals(
-                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                    left: Expression,
+                    right: Expression,
                 ): Writable? {
                     // Match pattern: booleanEquals(paramRef, literal_bool)
                     val (refExpr, litExpr) =
@@ -314,29 +311,17 @@ class EndpointBddGenerator(
                     if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
                     val litVal =
                         litExpr.accept(
-                            object : software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor<Boolean?> {
-                                override fun visitLiteral(
-                                    literal:
-                                        software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal,
-                                ): Boolean? {
+                            object : ExpressionVisitor<Boolean?> {
+                                override fun visitLiteral(literal: Literal): Boolean? {
                                     return literal.accept(
-                                        object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Boolean?> {
+                                        object : LiteralVisitor<Boolean?> {
                                             override fun visitBoolean(b: Boolean) = b
 
-                                            override fun visitString(
-                                                value:
-                                                    software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
-                                            ) = null
+                                            override fun visitString(value: Template) = null
 
-                                            override fun visitRecord(
-                                                members:
-                                                    MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                                            ) = null
+                                            override fun visitRecord(members: MutableMap<Identifier, Literal>) = null
 
-                                            override fun visitTuple(
-                                                members:
-                                                    MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                                            ) = null
+                                            override fun visitTuple(members: MutableList<Literal>) = null
 
                                             override fun visitInteger(value: Int) = null
                                         },
@@ -345,61 +330,47 @@ class EndpointBddGenerator(
 
                                 override fun visitRef(reference: Reference) = null
 
-                                override fun visitGetAttr(
-                                    getAttr:
-                                        software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr,
-                                ) = null
+                                override fun visitGetAttr(getAttr: GetAttr) = null
 
-                                override fun visitIsSet(
-                                    fn: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                                ) = null
+                                override fun visitIsSet(fn: Expression) = null
 
-                                override fun visitNot(
-                                    not: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                                ) = null
+                                override fun visitNot(not: Expression) = null
 
                                 override fun visitBoolEquals(
-                                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                    left: Expression,
+                                    right: Expression,
                                 ) = null
 
                                 override fun visitStringEquals(
-                                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                                    left: Expression,
+                                    right: Expression,
                                 ) = null
 
                                 override fun visitLibraryFunction(
-                                    fn:
-                                        software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition,
-                                    args:
-                                        MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.Expression>,
+                                    fn: FunctionDefinition,
+                                    args: MutableList<Expression>,
                                 ) = null
                             },
                         ) ?: return null
                     return writable { rust("($paramName) == (&$litVal)") }
                 }
 
-                override fun visitLiteral(
-                    literal: software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal,
-                ) = null
+                override fun visitLiteral(literal: Literal) = null
 
                 override fun visitRef(reference: Reference) = null
 
-                override fun visitGetAttr(
-                    getAttr: software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr,
-                ) = null
+                override fun visitGetAttr(getAttr: GetAttr) = null
 
-                override fun visitNot(not: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression) =
-                    null
+                override fun visitNot(not: Expression) = null
 
                 override fun visitStringEquals(
-                    left: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
-                    right: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+                    left: Expression,
+                    right: Expression,
                 ) = null
 
                 override fun visitLibraryFunction(
-                    fn: software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition,
-                    args: MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.Expression>,
+                    fn: FunctionDefinition,
+                    args: MutableList<Expression>,
                 ) = null
             },
         )
@@ -574,6 +545,7 @@ class EndpointBddGenerator(
         writable {
             val visitor = InlineRuleVisitor(context)
             bddTrait.results.forEachIndexed { idx, rule ->
+
                 if (rule is NoMatchRule) {
                     rustTemplate(
                         "$idx => #{Err}(Box::new(#{ResolveEndpointError}::message(\"No endpoint rule matched\")) as #{BoxError}),\n",
@@ -837,11 +809,11 @@ class EndpointBddGenerator(
      * from the authSchemes property literal (a tuple of records).
      */
     private fun generateTypedAuthSchemes(
-        authSchemesExpr: software.amazon.smithy.rulesengine.language.syntax.expressions.Expression,
+        authSchemesExpr: Expression,
         generator: ExpressionGenerator,
     ): Writable {
         val literal =
-            authSchemesExpr as? software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
+            authSchemesExpr as? Literal
                 ?: return writable {
                     // Fallback: if it's not a literal, use the old Document-based path
                     rust(".property(\"authSchemes\", #W)", generator.generate(authSchemesExpr))
@@ -855,44 +827,28 @@ class EndpointBddGenerator(
 
         return writable {
             literal.accept(
-                object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Unit> {
+                object : LiteralVisitor<Unit> {
                     override fun visitBoolean(b: Boolean) {}
 
-                    override fun visitString(
-                        value: software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
-                    ) {}
+                    override fun visitString(value: Template) {}
 
                     override fun visitInteger(value: Int) {}
 
-                    override fun visitRecord(
-                        members:
-                            MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                    ) {}
+                    override fun visitRecord(members: MutableMap<Identifier, Literal>) {}
 
-                    override fun visitTuple(
-                        members:
-                            MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                    ) {
+                    override fun visitTuple(members: MutableList<Literal>) {
                         members.forEach { member ->
                             member.accept(
-                                object : software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor<Unit> {
+                                object : LiteralVisitor<Unit> {
                                     override fun visitBoolean(b: Boolean) {}
 
-                                    override fun visitString(
-                                        value: software.amazon.smithy.rulesengine.language.syntax.expressions.Template,
-                                    ) {}
+                                    override fun visitString(value: Template) {}
 
                                     override fun visitInteger(value: Int) {}
 
-                                    override fun visitTuple(
-                                        members:
-                                            MutableList<software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                                    ) {}
+                                    override fun visitTuple(members: MutableList<Literal>) {}
 
-                                    override fun visitRecord(
-                                        members:
-                                            MutableMap<software.amazon.smithy.rulesengine.language.syntax.Identifier, software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal>,
-                                    ) {
+                                    override fun visitRecord(members: MutableMap<Identifier, Literal>) {
                                         val nameExpr = members.entries.find { it.key.toString() == "name" }
                                         val otherEntries = members.entries.filter { it.key.toString() != "name" }
                                         val nameWritable =
