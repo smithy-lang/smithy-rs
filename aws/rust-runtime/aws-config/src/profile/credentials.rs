@@ -863,7 +863,6 @@ mod login_tests {
                     "secretAccessKey": "TESTSECRETKEY",
                     "sessionToken": "TESTSESSIONTOKEN"
                 },
-                "tokenType": "Bearer",
                 "expiresIn": 3600,
                 "refreshToken": "new-refresh-token"
             }"#;

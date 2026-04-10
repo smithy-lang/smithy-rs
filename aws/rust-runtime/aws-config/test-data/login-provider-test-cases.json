@@ -159,7 +159,6 @@
               "secretAccessKey": "newRefreshedSecretKey",
               "sessionToken": "newRefreshedSessionToken"
             },
-            "tokenType": "Bearer",
             "refreshToken": "new_refresh_token",
             "expiresIn": 900
           }

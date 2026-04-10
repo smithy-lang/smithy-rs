@@ -49,6 +49,20 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// )?;
 /// let my_struct = builder.build();
 /// ```
+/// Maximum pre-allocation size for containers, used to prevent denial-of-service
+/// from untrusted payloads claiming excessively large sizes.
+#[allow(dead_code)]
+pub const MAX_CONTAINER_PREALLOC: usize = 10_000;
+
+/// Caps a raw container size at [`MAX_CONTAINER_PREALLOC`].
+///
+/// Implementations of [`ShapeDeserializer::container_size`] SHOULD use this
+/// when returning a size derived from untrusted input (e.g., a CBOR length header).
+#[allow(dead_code)]
+pub fn capped_container_size(raw: usize) -> usize {
+    raw.min(MAX_CONTAINER_PREALLOC)
+}
+
 pub trait ShapeDeserializer {
     /// Reads a structure from the deserializer.
     ///
@@ -138,10 +152,11 @@ pub trait ShapeDeserializer {
     /// with the correct capacity. Returns `None` if the size is unknown or
     /// not applicable.
     ///
-    /// Implementations MUST cap the returned value at a reasonable maximum
-    /// (e.g. 10,000) to prevent denial-of-service from untrusted payloads
-    /// that claim excessively large container sizes (e.g. a CBOR header
-    /// declaring billions of elements).
+    /// Implementations SHOULD cap the returned value at a reasonable maximum
+    /// (e.g., 10,000) to prevent denial-of-service from untrusted payloads
+    /// that claim excessively large container sizes (e.g., a CBOR header
+    /// declaring billions of elements). Use [`capped_container_size`] to apply
+    /// a standard cap.
     fn container_size(&self) -> Option<usize>;
 
     // --- Collection helper methods ---

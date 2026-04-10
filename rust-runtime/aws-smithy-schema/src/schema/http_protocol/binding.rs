@@ -136,11 +136,6 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     }
 }
 
-/// Helper: format a value as a string for HTTP binding serialization.
-fn value_to_string<T: std::fmt::Display>(value: T) -> String {
-    value.to_string()
-}
-
 impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_struct(
         &mut self,
@@ -251,7 +246,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_boolean(schema, value)
@@ -260,7 +255,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_byte(schema, value)
@@ -269,7 +264,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_short(schema, value)
@@ -278,7 +273,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_integer(schema, value)
@@ -287,7 +282,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_long(schema, value)
@@ -296,7 +291,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_float(schema, value)
@@ -305,7 +300,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value_to_string(value));
+            return self.add_binding(binding, schema, &value.to_string());
         }
         self.has_body_content = true;
         self.body.write_double(schema, value)
@@ -400,8 +395,8 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             // Headers default to http-date, query/label default to date-time
-            let format = if schema.timestamp_format().is_some() {
-                match schema.timestamp_format().unwrap().format() {
+            let format = if let Some(ts_trait) = schema.timestamp_format() {
+                match ts_trait.format() {
                     crate::traits::TimestampFormat::EpochSeconds => {
                         aws_smithy_types::date_time::Format::EpochSeconds
                     }

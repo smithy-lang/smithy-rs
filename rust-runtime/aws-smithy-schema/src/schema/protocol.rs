@@ -52,12 +52,10 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 
-// Implementation note. We hardcode aws_smithy_runtime_api::http::{Request | Response} for the types here.
-// Some other SDKs (mostly very new ones like smithy-java and smithy-python) have separated their transport
-// layer into another abstraction, so you could plug in something like MQTT instead of HTTP. It is likely
-// too late for us to do that given how deeply the assumptions about using HTTP are baked into the SDK. But
-// if we want to keep that option open we could make Request/Response associated types and maintain the object
-// safety of this trait.
+// Implementation note: We use concrete aws_smithy_runtime_api::http::{Request, Response} types here
+// rather than associated types. While the SEP allows for transport-agnostic protocols (e.g., MQTT),
+// the current SDK uses HTTP throughout. If transport abstraction is needed in the future,
+// Request/Response could become associated types while maintaining object safety of this trait.
 
 /// An object-safe client protocol for serializing requests and deserializing responses.
 ///
@@ -158,13 +156,14 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
 
     /// Updates a previously serialized request with a new endpoint.
     ///
-    /// This is required by the Smithy Reference Architecture (SRA) to support
-    /// interceptors that modify the endpoint after initial serialization.
+    /// Required by SEP requirement 7: "ClientProtocol MUST be able to update a
+    /// previously serialized request with a new endpoint." The orchestrator calls
+    /// this after endpoint resolution, which happens after `serialize_request`.
     ///
     /// The default implementation applies the endpoint URL (with prefix if present),
     /// sets the request URI, and copies any endpoint headers onto the request.
-    ///
-    /// Note: the default implementation here should be sufficient for most protocols.
+    /// This replicates the existing `apply_endpoint` logic from the orchestrator.
+    /// Custom implementations should rarely need to override this.
     fn update_endpoint(
         &self,
         request: &mut aws_smithy_runtime_api::http::Request,
