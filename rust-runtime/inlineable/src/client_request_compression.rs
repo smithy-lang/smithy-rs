@@ -32,7 +32,9 @@ impl RequestCompressionRuntimePlugin {
     pub(crate) fn new() -> Self {
         Self {
             runtime_components: RuntimeComponentsBuilder::new("RequestCompressionRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(RequestCompressionInterceptor::new())),
+                .with_interceptor(SharedInterceptor::permanent(
+                    RequestCompressionInterceptor::new(),
+                )),
         }
     }
 }

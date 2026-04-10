@@ -34,7 +34,7 @@ private class ObservabilityFeatureTrackerInterceptor(private val codegenContext:
     override fun section(section: ServiceRuntimePluginSection) =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     val runtimeConfig = codegenContext.runtimeConfig
                     rustTemplate(
                         "#{Interceptor}",

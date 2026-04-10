@@ -24,7 +24,9 @@ impl HttpChecksumRequiredRuntimePlugin {
     pub(crate) fn new() -> Self {
         Self {
             runtime_components: RuntimeComponentsBuilder::new("HttpChecksumRequiredRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(HttpChecksumRequiredInterceptor)),
+                .with_interceptor(SharedInterceptor::permanent(
+                    HttpChecksumRequiredInterceptor,
+                )),
         }
     }
 }

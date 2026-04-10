@@ -131,7 +131,7 @@ class HttpResponseChecksumCustomization(
 
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                         // CRC32, CRC32C, SHA256, SHA1 -> "crc32", "crc32c", "sha256", "sha1"
                         val responseAlgorithms =
                             checksumTrait.responseAlgorithms

@@ -591,7 +591,12 @@ pub trait Intercept: fmt::Debug + Send + Sync {
 #[derive(Clone)]
 pub struct SharedInterceptor {
     interceptor: Arc<dyn Intercept>,
-    check_enabled: Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>,
+    /// When `None`, the interceptor is always enabled (permanent mode).
+    #[allow(clippy::type_complexity)]
+    check_enabled: Option<Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>>,
+    /// In debug builds, asserts that nobody tried to disable a permanent interceptor.
+    #[cfg(debug_assertions)]
+    debug_assert_not_disabled: Option<fn(&ConfigBag) -> bool>,
 }
 
 impl fmt::Debug for SharedInterceptor {
@@ -607,7 +612,25 @@ impl SharedInterceptor {
     pub fn new<T: Intercept + 'static>(interceptor: T) -> Self {
         Self {
             interceptor: Arc::new(interceptor),
-            check_enabled: Arc::new(|conf: &ConfigBag| {
+            check_enabled: Some(Arc::new(|conf: &ConfigBag| {
+                conf.load::<DisableInterceptor<T>>().is_none()
+            })),
+            #[cfg(debug_assertions)]
+            debug_assert_not_disabled: None,
+        }
+    }
+
+    /// Creates a `SharedInterceptor` that is always enabled.
+    ///
+    /// Unlike [`SharedInterceptor::new`], this skips the per-invocation
+    /// [`DisableInterceptor`] lookup in the config bag, reducing dispatch
+    /// overhead for SDK-internal interceptors that should never be disabled.
+    pub fn permanent<T: Intercept + 'static>(interceptor: T) -> Self {
+        Self {
+            interceptor: Arc::new(interceptor),
+            check_enabled: None,
+            #[cfg(debug_assertions)]
+            debug_assert_not_disabled: Some(|conf: &ConfigBag| {
                 conf.load::<DisableInterceptor<T>>().is_none()
             }),
         }
@@ -615,7 +638,22 @@ impl SharedInterceptor {
 
     /// Checks if this interceptor is enabled in the given config.
     pub fn enabled(&self, conf: &ConfigBag) -> bool {
-        (self.check_enabled)(conf)
+        match &self.check_enabled {
+            Some(check) => check(conf),
+            None => {
+                #[cfg(debug_assertions)]
+                if let Some(check) = &self.debug_assert_not_disabled {
+                    debug_assert!(
+                        check(conf),
+                        "attempted to disable permanent interceptor `{}`; \
+                         use SharedInterceptor::new() instead of ::permanent() \
+                         if this interceptor needs to be disabled",
+                        self.interceptor.name()
+                    );
+                }
+                true
+            }
+        }
     }
 }
 

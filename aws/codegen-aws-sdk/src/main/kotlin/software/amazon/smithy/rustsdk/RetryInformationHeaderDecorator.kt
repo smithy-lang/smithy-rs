@@ -33,7 +33,7 @@ private class AddRetryInformationHeaderInterceptors(codegenContext: ClientCodege
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
                 // Track the latency between client and server.
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(runtimeConfig, this) {
                     rust(
                         "#T::new()",
                         awsRuntime.resolve("service_clock_skew::ServiceClockSkewInterceptor"),
