@@ -984,8 +984,12 @@ mod tests {
 
         assert!(bucket.is_full());
 
-        let _p1 = bucket.acquire(&ErrorKind::ServerError, &*TIME_SOURCE).unwrap();
-        let _p2 = bucket.acquire(&ErrorKind::ServerError, &*TIME_SOURCE).unwrap();
+        let _p1 = bucket
+            .acquire(&ErrorKind::ServerError, &*TIME_SOURCE)
+            .unwrap();
+        let _p2 = bucket
+            .acquire(&ErrorKind::ServerError, &*TIME_SOURCE)
+            .unwrap();
 
         assert!(bucket.is_empty());
 
@@ -1009,7 +1013,9 @@ mod tests {
             .success_reward(0.5)
             .build();
 
-        let _p = bucket.acquire(&ErrorKind::ServerError, &*TIME_SOURCE).unwrap();
+        let _p = bucket
+            .acquire(&ErrorKind::ServerError, &*TIME_SOURCE)
+            .unwrap();
         assert_eq!(bucket.semaphore.available_permits(), 0);
 
         // 0.5 fractional tokens can't convert to a whole permit
