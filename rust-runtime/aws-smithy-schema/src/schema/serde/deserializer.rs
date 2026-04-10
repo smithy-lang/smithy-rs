@@ -51,14 +51,12 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 /// ```
 /// Maximum pre-allocation size for containers, used to prevent denial-of-service
 /// from untrusted payloads claiming excessively large sizes.
-#[allow(dead_code)]
 pub const MAX_CONTAINER_PREALLOC: usize = 10_000;
 
 /// Caps a raw container size at [`MAX_CONTAINER_PREALLOC`].
 ///
 /// Implementations of [`ShapeDeserializer::container_size`] SHOULD use this
 /// when returning a size derived from untrusted input (e.g., a CBOR length header).
-#[allow(dead_code)]
 pub fn capped_container_size(raw: usize) -> usize {
     raw.min(MAX_CONTAINER_PREALLOC)
 }

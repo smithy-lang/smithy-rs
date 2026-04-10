@@ -9,7 +9,7 @@ mod deserializer;
 pub mod error;
 mod serializer;
 
-pub use deserializer::ShapeDeserializer;
+pub use deserializer::{capped_container_size, ShapeDeserializer, MAX_CONTAINER_PREALLOC};
 pub use error::SerdeError;
 pub use serializer::{SerializableStruct, ShapeSerializer};
 
