@@ -238,3 +238,114 @@ impl std::ops::Deref for SharedClientProtocol {
 impl aws_smithy_types::config_bag::Storable for SharedClientProtocol {
     type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
+    use crate::{Schema, ShapeId};
+    use aws_smithy_runtime_api::http::{Request, Response};
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_smithy_types::endpoint::Endpoint;
+
+    /// Minimal protocol impl that uses only the default `update_endpoint`.
+    #[derive(Debug)]
+    struct StubProtocol;
+
+    static STUB_ID: ShapeId = ShapeId::from_static("test#StubProtocol", "test", "StubProtocol");
+
+    impl ClientProtocol for StubProtocol {
+        fn protocol_id(&self) -> &ShapeId {
+            &STUB_ID
+        }
+        fn serialize_request(
+            &self,
+            _input: &dyn SerializableStruct,
+            _input_schema: &Schema,
+            _endpoint: &str,
+            _cfg: &ConfigBag,
+        ) -> Result<Request, SerdeError> {
+            unimplemented!()
+        }
+        fn deserialize_response<'a>(
+            &self,
+            _response: &'a Response,
+            _output_schema: &Schema,
+            _cfg: &ConfigBag,
+        ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+            unimplemented!()
+        }
+    }
+
+    fn request_with_uri(uri: &str) -> Request {
+        let mut req = Request::new(SdkBody::empty());
+        req.set_uri(uri).unwrap();
+        req
+    }
+
+    #[test]
+    fn basic_endpoint() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/original/path");
+        let endpoint = Endpoint::builder()
+            .url("https://service.us-east-1.amazonaws.com")
+            .build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(
+            req.uri(),
+            "https://service.us-east-1.amazonaws.com/original/path"
+        );
+    }
+
+    #[test]
+    fn endpoint_with_prefix() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder()
+            .url("https://service.us-east-1.amazonaws.com")
+            .build();
+        let mut cfg = ConfigBag::base();
+        let mut layer = Layer::new("test");
+        layer.store_put(
+            aws_smithy_runtime_api::client::endpoint::EndpointPrefix::new("myprefix.").unwrap(),
+        );
+        cfg.push_shared_layer(layer.freeze());
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(
+            req.uri(),
+            "https://myprefix.service.us-east-1.amazonaws.com/path"
+        );
+    }
+
+    #[test]
+    fn endpoint_with_headers() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder()
+            .url("https://example.com")
+            .header("x-custom", "value1")
+            .header("x-custom", "value2")
+            .build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(req.uri(), "https://example.com/path");
+        let values: Vec<&str> = req.headers().get_all("x-custom").collect();
+        assert_eq!(values, vec!["value1", "value2"]);
+    }
+
+    #[test]
+    fn endpoint_with_path() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/operation");
+        let endpoint = Endpoint::builder().url("https://example.com/base").build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(req.uri(), "https://example.com/base/operation");
+    }
+}
