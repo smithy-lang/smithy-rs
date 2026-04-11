@@ -41,6 +41,7 @@ class EndpointOverrideMetricDecorator : ClientCodegenDecorator {
                 ##[derive(Debug, Default)]
                 pub(crate) struct EndpointOverrideFeatureTrackerInterceptor;
 
+                ##[#{dyn_dispatch_hint}]
                 impl #{Intercept} for EndpointOverrideFeatureTrackerInterceptor {
                     fn name(&self) -> &'static str {
                         "EndpointOverrideFeatureTrackerInterceptor"
@@ -60,6 +61,7 @@ class EndpointOverrideMetricDecorator : ClientCodegenDecorator {
                 }
                 """,
                 "Intercept" to smithyRuntimeApi.resolve("client::interceptors::Intercept"),
+                "dyn_dispatch_hint" to smithyRuntimeApi.resolve("client::interceptors::dyn_dispatch_hint"),
                 "BeforeSerializationInterceptorContextRef" to
                     smithyRuntimeApi.resolve("client::interceptors::context::BeforeSerializationInterceptorContextRef"),
                 "ConfigBag" to smithyTypes.resolve("config_bag::ConfigBag"),

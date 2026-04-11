@@ -585,7 +585,92 @@ pub trait Intercept: fmt::Debug + Send + Sync {
         let (_ctx, _rc, _cfg) = (context, runtime_components, cfg);
         Ok(())
     }
+
+    /// Returns a bitmask of which hooks this interceptor overrides.
+    ///
+    /// The default returns [`OverriddenHooks::all()`], meaning all hooks are
+    /// called (safe, same behavior as before overridden hooks existed). Use
+    /// [`#[dyn_dispatch_hint]`](dyn_dispatch_hint) on your `impl Intercept` block to
+    /// auto-generate this method from the overridden hooks.
+    #[doc(hidden)]
+    fn overridden_hooks(&self) -> OverriddenHooks {
+        OverriddenHooks::all()
+    }
 }
+
+/// Bitmask indicating which interceptor hooks a [`SharedInterceptor`] actually overrides.
+///
+/// When returned from [`Intercept::overridden_hooks`], the interceptor loop can skip
+/// dyn dispatch for hooks that are not in the mask.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct OverriddenHooks(u32);
+
+impl OverriddenHooks {
+    /// All hooks — the safe default.
+    pub const fn all() -> Self {
+        Self(u32::MAX)
+    }
+    /// No hooks.
+    pub const fn none() -> Self {
+        Self(0)
+    }
+
+    /// Hint for [`Intercept::read_before_execution`].
+    pub const READ_BEFORE_EXECUTION: Self = Self(1 << 0);
+    /// Hint for [`Intercept::modify_before_serialization`].
+    pub const MODIFY_BEFORE_SERIALIZATION: Self = Self(1 << 1);
+    /// Hint for [`Intercept::read_before_serialization`].
+    pub const READ_BEFORE_SERIALIZATION: Self = Self(1 << 2);
+    /// Hint for [`Intercept::read_after_serialization`].
+    pub const READ_AFTER_SERIALIZATION: Self = Self(1 << 3);
+    /// Hint for [`Intercept::modify_before_retry_loop`].
+    pub const MODIFY_BEFORE_RETRY_LOOP: Self = Self(1 << 4);
+    /// Hint for [`Intercept::read_before_attempt`].
+    pub const READ_BEFORE_ATTEMPT: Self = Self(1 << 5);
+    /// Hint for [`Intercept::modify_before_signing`].
+    pub const MODIFY_BEFORE_SIGNING: Self = Self(1 << 6);
+    /// Hint for [`Intercept::read_before_signing`].
+    pub const READ_BEFORE_SIGNING: Self = Self(1 << 7);
+    /// Hint for [`Intercept::read_after_signing`].
+    pub const READ_AFTER_SIGNING: Self = Self(1 << 8);
+    /// Hint for [`Intercept::modify_before_transmit`].
+    pub const MODIFY_BEFORE_TRANSMIT: Self = Self(1 << 9);
+    /// Hint for [`Intercept::read_before_transmit`].
+    pub const READ_BEFORE_TRANSMIT: Self = Self(1 << 10);
+    /// Hint for [`Intercept::read_after_transmit`].
+    pub const READ_AFTER_TRANSMIT: Self = Self(1 << 11);
+    /// Hint for [`Intercept::modify_before_deserialization`].
+    pub const MODIFY_BEFORE_DESERIALIZATION: Self = Self(1 << 12);
+    /// Hint for [`Intercept::read_before_deserialization`].
+    pub const READ_BEFORE_DESERIALIZATION: Self = Self(1 << 13);
+    /// Hint for [`Intercept::read_after_deserialization`].
+    pub const READ_AFTER_DESERIALIZATION: Self = Self(1 << 14);
+    /// Hint for [`Intercept::modify_before_attempt_completion`].
+    pub const MODIFY_BEFORE_ATTEMPT_COMPLETION: Self = Self(1 << 15);
+    /// Hint for [`Intercept::read_after_attempt`].
+    pub const READ_AFTER_ATTEMPT: Self = Self(1 << 16);
+    /// Hint for [`Intercept::modify_before_completion`].
+    pub const MODIFY_BEFORE_COMPLETION: Self = Self(1 << 17);
+    /// Hint for [`Intercept::read_after_execution`].
+    pub const READ_AFTER_EXECUTION: Self = Self(1 << 18);
+
+    /// Returns `true` if `self` contains any of the hooks in `other`.
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+impl std::ops::BitOr for OverriddenHooks {
+    type Output = Self;
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+/// Re-export the proc macro for deriving [`Intercept::overridden_hooks`] automatically.
+#[doc(hidden)]
+pub use aws_smithy_runtime_api_macros::dyn_dispatch_hint;
 
 /// Interceptor wrapper that may be shared
 #[derive(Clone)]
@@ -594,6 +679,8 @@ pub struct SharedInterceptor {
     /// When `None`, the interceptor is always enabled (permanent mode).
     #[allow(clippy::type_complexity)]
     check_enabled: Option<Arc<dyn Fn(&ConfigBag) -> bool + Send + Sync>>,
+    /// Cached bitmask of which [`Intercept`] hooks this interceptor overrides.
+    overridden_hooks: OverriddenHooks,
     /// In debug builds, asserts that nobody tried to disable a permanent interceptor.
     #[cfg(debug_assertions)]
     debug_assert_not_disabled: Option<fn(&ConfigBag) -> bool>,
@@ -603,6 +690,7 @@ impl fmt::Debug for SharedInterceptor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("SharedInterceptor")
             .field("interceptor", &self.interceptor)
+            .field("permanent", &self.check_enabled.is_none())
             .finish()
     }
 }
@@ -611,6 +699,7 @@ impl SharedInterceptor {
     /// Create a new `SharedInterceptor` from `Interceptor`.
     pub fn new<T: Intercept + 'static>(interceptor: T) -> Self {
         Self {
+            overridden_hooks: interceptor.overridden_hooks(),
             interceptor: Arc::new(interceptor),
             check_enabled: Some(Arc::new(|conf: &ConfigBag| {
                 conf.load::<DisableInterceptor<T>>().is_none()
@@ -623,10 +712,15 @@ impl SharedInterceptor {
     /// Creates a `SharedInterceptor` that is always enabled.
     ///
     /// Unlike [`SharedInterceptor::new`], this skips the per-invocation
-    /// [`DisableInterceptor`] lookup in the config bag, reducing dispatch
-    /// overhead for SDK-internal interceptors that should never be disabled.
+    /// [`DisableInterceptor`] lookup in the config bag.
+    ///
+    /// Note: In debug builds, if [`disable_interceptor`] is called for an
+    /// interceptor wrapped with `permanent`, a panic will occur to flag the
+    /// misconfiguration. Use [`SharedInterceptor::new`] instead if the
+    /// interceptor needs to be disabled.
     pub fn permanent<T: Intercept + 'static>(interceptor: T) -> Self {
         Self {
+            overridden_hooks: interceptor.overridden_hooks(),
             interceptor: Arc::new(interceptor),
             check_enabled: None,
             #[cfg(debug_assertions)]
@@ -654,6 +748,11 @@ impl SharedInterceptor {
                 true
             }
         }
+    }
+
+    /// Returns the overridden hooks.
+    pub fn overridden_hooks(&self) -> OverriddenHooks {
+        self.overridden_hooks
     }
 }
 
