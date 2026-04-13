@@ -107,6 +107,14 @@ pub(crate) fn default_https_client(options: DefaultClientOptions) -> Option<Shar
             conn_builder.set_proxy_config(Some(ProxyConfig::disabled()));
         }
 
+        // TODO(introduce new `BehaviorVersion` for this branch)
+        if options
+            .behavior_version
+            .is_at_least(BehaviorVersion::v2026_01_12())
+        {
+            conn_builder.set_max_connections(Some(128));
+        }
+
         conn_builder.build()
     });
 

@@ -114,6 +114,7 @@ pub struct ConnectorBuilder<Tls = TlsUnset> {
     sleep_impl: Option<SharedAsyncSleep>,
     client_builder: Option<hyper_util::client::legacy::Builder>,
     pool_idle_timeout: Option<Option<Duration>>,
+    max_connections: Option<usize>,
     enable_tcp_nodelay: bool,
     interface: Option<String>,
     proxy_config: Option<proxy::ProxyConfig>,
@@ -146,6 +147,7 @@ impl ConnectorBuilder<TlsUnset> {
             interface: self.interface,
             proxy_config: self.proxy_config,
             pool_idle_timeout: self.pool_idle_timeout,
+            max_connections: self.max_connections,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -230,10 +232,19 @@ impl<Any> ConnectorBuilder<Any> {
             .map(|config| config.clone().into_hyper_util_matcher());
 
         Connector {
-            adapter: Box::new(Adapter {
-                client: read_timeout,
-                proxy_matcher,
-            }),
+            adapter: match self.max_connections {
+                Some(limit) => Box::new(ConcurrencyLimitedConnector {
+                    inner: SharedHttpConnector::new(Adapter {
+                        client: read_timeout,
+                        proxy_matcher,
+                    }),
+                    semaphore: std::sync::Arc::new(tokio::sync::Semaphore::new(limit)),
+                }),
+                None => Box::new(Adapter {
+                    client: read_timeout,
+                    proxy_matcher,
+                }),
+            },
         }
     }
 
@@ -411,6 +422,27 @@ impl<Any> ConnectorBuilder<Any> {
         self
     }
 
+    /// Set the maximum number of concurrent requests allowed through this connector.
+    ///
+    /// When the limit is reached, new requests wait until an in-flight request completes.
+    /// This prevents overwhelming downstream services with too many concurrent connections.
+    ///
+    /// Default is no limit.
+    pub fn max_connections(mut self, limit: usize) -> Self {
+        self.max_connections = Some(limit);
+        self
+    }
+
+    /// Set the maximum number of concurrent requests allowed through this connector.
+    ///
+    /// Pass `None` for no limit.
+    ///
+    /// This is the mutable version of [`max_connections`](Self::max_connections).
+    pub fn set_max_connections(&mut self, limit: Option<usize>) -> &mut Self {
+        self.max_connections = limit;
+        self
+    }
+
     /// Override the Hyper client [`Builder`](hyper_util::client::legacy::Builder) used to construct this client.
     ///
     /// This enables changing settings like forcing HTTP2 and modifying other default client behavior.
@@ -431,6 +463,37 @@ impl<Any> ConnectorBuilder<Any> {
     ) -> &mut Self {
         self.client_builder = hyper_builder;
         self
+    }
+}
+
+/// Wraps an [`HttpConnector`] with a concurrency limit on in-flight requests.
+///
+/// When the limit is reached, new requests wait until an in-flight request completes.
+struct ConcurrencyLimitedConnector {
+    inner: SharedHttpConnector,
+    semaphore: std::sync::Arc<tokio::sync::Semaphore>,
+}
+
+impl fmt::Debug for ConcurrencyLimitedConnector {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ConcurrencyLimitedConnector")
+            .field("inner", &self.inner)
+            .field("permits", &self.semaphore.available_permits())
+            .finish()
+    }
+}
+
+impl HttpConnector for ConcurrencyLimitedConnector {
+    fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
+        let inner = self.inner.clone();
+        let semaphore = self.semaphore.clone();
+        HttpConnectorFuture::new(async move {
+            let _permit = semaphore
+                .acquire()
+                .await
+                .map_err(|e| ConnectorError::other(e.into(), None))?;
+            inner.call(request).await
+        })
     }
 }
 
@@ -745,6 +808,7 @@ where
 pub struct Builder<Tls = TlsUnset> {
     client_builder: Option<hyper_util::client::legacy::Builder>,
     pool_idle_timeout: Option<Option<Duration>>,
+    max_connections: Option<usize>,
     #[allow(unused)]
     tls_provider: Tls,
 }
@@ -827,11 +891,12 @@ cfg_tls! {
         /// The trusted certificates will be loaded later when this becomes the selected
         /// HTTP client for a Smithy client.
         pub fn build_https(self) -> SharedHttpClient {
+            let max_connections = self.max_connections;
             build_with_conn_fn(
                 self.client_builder,
                 self.pool_idle_timeout,
                 move |client_builder, settings, runtime_components| {
-                    let builder = new_conn_builder(client_builder, settings, runtime_components)
+                    let builder = new_conn_builder(client_builder, settings, runtime_components, max_connections)
                         .tls_provider(self.tls_provider.provider.clone())
                         .tls_context(self.tls_provider.context.clone());
                     builder.build()
@@ -844,11 +909,12 @@ cfg_tls! {
             self,
             resolver: impl ResolveDns + Clone + 'static,
         ) -> SharedHttpClient {
+            let max_connections = self.max_connections;
             build_with_conn_fn(
                 self.client_builder,
                 self.pool_idle_timeout,
                 move |client_builder, settings, runtime_components| {
-                    let builder = new_conn_builder(client_builder, settings, runtime_components)
+                    let builder = new_conn_builder(client_builder, settings, runtime_components, max_connections)
                         .tls_provider(self.tls_provider.provider.clone())
                         .tls_context(self.tls_provider.context.clone());
                     builder.build_with_resolver(resolver.clone())
@@ -922,6 +988,26 @@ impl<Any> Builder<Any> {
         self.pool_idle_timeout = val;
         self
     }
+
+    /// Set the maximum number of concurrent requests allowed.
+    ///
+    /// When the limit is reached, new requests wait until an in-flight request completes.
+    ///
+    /// Default is no limit.
+    pub fn max_connections(mut self, limit: usize) -> Self {
+        self.max_connections = Some(limit);
+        self
+    }
+
+    /// Set the maximum number of concurrent requests allowed.
+    ///
+    /// Pass `None` for no limit.
+    ///
+    /// This is the mutable version of [`max_connections`](Self::max_connections).
+    pub fn set_max_connections(&mut self, limit: Option<usize>) -> &mut Self {
+        self.max_connections = limit;
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -951,11 +1037,17 @@ impl Builder<TlsUnset> {
     /// Build a new HTTP client without TLS enabled
     #[doc(hidden)]
     pub fn build_http(self) -> SharedHttpClient {
+        let max_connections = self.max_connections;
         build_with_conn_fn(
             self.client_builder,
             self.pool_idle_timeout,
             move |client_builder, settings, runtime_components| {
-                let builder = new_conn_builder(client_builder, settings, runtime_components);
+                let builder = new_conn_builder(
+                    client_builder,
+                    settings,
+                    runtime_components,
+                    max_connections,
+                );
                 builder.build_http()
             },
         )
@@ -966,6 +1058,7 @@ impl Builder<TlsUnset> {
         Builder {
             client_builder: self.client_builder,
             pool_idle_timeout: self.pool_idle_timeout,
+            max_connections: self.max_connections,
             tls_provider: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -1017,7 +1110,7 @@ where
         client_builder,
         pool_idle_timeout,
         move |client_builder, settings, runtime_components| {
-            let builder = new_conn_builder(client_builder, settings, runtime_components);
+            let builder = new_conn_builder(client_builder, settings, runtime_components, None);
             builder.wrap_connector(tcp_connector_fn())
         },
     )
@@ -1027,9 +1120,11 @@ fn new_conn_builder(
     client_builder: hyper_util::client::legacy::Builder,
     settings: Option<&HttpConnectorSettings>,
     runtime_components: Option<&RuntimeComponents>,
+    max_connections: Option<usize>,
 ) -> ConnectorBuilder {
     let mut builder = Connector::builder().hyper_builder(client_builder);
     builder.set_connector_settings(settings.cloned());
+    builder.set_max_connections(max_connections);
     if let Some(components) = runtime_components {
         builder.set_sleep_impl(components.sleep_impl());
     }
