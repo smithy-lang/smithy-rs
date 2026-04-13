@@ -65,6 +65,9 @@ macro_rules! interceptor_trait_fn {
 ///   of the SDK ’s request execution pipeline. Hooks are either "read" hooks, which make it possible
 ///   to read in-flight request or response messages, or "read/write" hooks, which make it possible
 ///   to modify in-flight request or output messages.
+// If you add hook methods, also update:
+//   - `KNOWN_HOOKS` in `aws-smithy-runtime-api-macros/src/lib.rs`
+//   - `OverriddenHooks` constants (below in this file)
 pub trait Intercept: fmt::Debug + Send + Sync {
     /// The name of this interceptor, used in error messages for debugging.
     fn name(&self) -> &'static str;
@@ -616,6 +619,9 @@ impl OverriddenHooks {
         Self(0)
     }
 
+    // If you update these constants, also update:
+    //   - `KNOWN_HOOKS` in `aws-smithy-runtime-api-macros/src/lib.rs`
+    //   - Hook methods on the `Intercept` trait (above in this file)
     /// Hint for [`Intercept::read_before_execution`].
     pub const READ_BEFORE_EXECUTION: Self = Self(1 << 0);
     /// Hint for [`Intercept::modify_before_serialization`].

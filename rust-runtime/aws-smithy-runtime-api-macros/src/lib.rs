@@ -13,6 +13,9 @@ use proc_macro::TokenStream;
 use quote::quote;
 use syn::{parse_macro_input, ImplItem, ItemImpl};
 
+// If you update this list, also update:
+//   - `OverriddenHooks` constants in `aws-smithy-runtime-api/src/client/interceptors.rs`
+//   - Hook methods on the `Intercept` trait in the same file
 const KNOWN_HOOKS: &[&str] = &[
     "read_before_execution",
     "modify_before_serialization",
