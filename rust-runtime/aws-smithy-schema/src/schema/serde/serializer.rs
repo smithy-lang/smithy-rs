@@ -110,18 +110,19 @@ pub trait ShapeSerializer {
 
     // --- Collection helper methods ---
     //
-    // These methods are not part of the Serialization and Schema Decoupling SEP.
-    // They exist as a performance optimization for common collection patterns
-    // (e.g. `List<String>`, `Map<String, String>`) that appear frequently in
-    // AWS service models. Without these, generated code must emit an inline
-    // closure calling `write_list`/`write_map` with per-element `write_string`
-    // calls — roughly 6-8 lines of boilerplate per collection field. These
-    // helpers replace that with a single method call, reducing generated code
-    // size.
+    // This is a **closed set** of helpers for the most common AWS collection
+    // patterns. No additional helpers will be added. New collection patterns
+    // should use the generic `write_list`/`write_map` with closures.
     //
-    // Additionally, the default implementations call through the trait
-    // interface per element. Codec implementations can override these to write
-    // elements directly, avoiding per-element dynamic dispatch.
+    // These exist for two reasons:
+    // 1. Code size: each helper replaces ~6-8 lines of closure boilerplate in
+    //    generated code, yielding ~43% reduction for collection-heavy models.
+    // 2. Performance: the corresponding `ShapeDeserializer` helpers are
+    //    overridden by codec implementations (e.g., `JsonDeserializer`) to
+    //    avoid per-element vtable dispatch. Keeping them on the core trait
+    //    (rather than an extension trait) is required because they are called
+    //    through `&mut dyn ShapeSerializer`/`&mut dyn ShapeDeserializer` in
+    //    generated `serialize_members`/`deserialize` methods.
 
     /// Writes a list of strings.
     fn write_string_list(&mut self, schema: &Schema, values: &[String]) -> Result<(), SerdeError> {
