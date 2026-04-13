@@ -192,6 +192,54 @@ annotation_trait!(
     "smithy.api", "httpResponseCode"
 );
 
+/// The `@http` trait — defines the HTTP method, URI pattern, and status code for an operation.
+///
+/// This is an operation-level trait that is included on the input schema for
+/// convenience, so that the protocol serializer can construct the correct
+/// request without needing a separate operation schema.
+///
+/// The URI pattern may contain `{label}` placeholders that are substituted
+/// at serialization time with percent-encoded values from `@httpLabel` members.
+#[derive(Debug, Clone)]
+pub struct HttpTrait {
+    method: &'static str,
+    uri: &'static str,
+    code: u16,
+}
+
+impl HttpTrait {
+    /// Creates a new `HttpTrait`. If `code` is `None`, defaults to `200`.
+    pub const fn new(method: &'static str, uri: &'static str, code: Option<u16>) -> Self {
+        Self {
+            method,
+            uri,
+            code: match code {
+                Some(c) => c,
+                None => 200,
+            },
+        }
+    }
+
+    /// The HTTP method (e.g., `"GET"`, `"POST"`, `"PUT"`).
+    pub fn method(&self) -> &str {
+        self.method
+    }
+
+    /// The URI pattern (e.g., `"/resource/{id}"`).
+    ///
+    /// May contain `{label}` placeholders that correspond to `@httpLabel` members.
+    /// The protocol serializer substitutes these with percent-encoded values
+    /// collected during member serialization.
+    pub fn uri(&self) -> &str {
+        self.uri
+    }
+
+    /// The HTTP status code for a successful response. Defaults to `200`.
+    pub fn code(&self) -> u16 {
+        self.code
+    }
+}
+
 // --- Streaming traits ---
 
 annotation_trait!(

@@ -120,6 +120,7 @@ private class TestOperationCustomization(
                     "OrchestratorError" to RT.smithyRuntimeApi(rc).resolve("client::orchestrator::OrchestratorError"),
                     "Output" to RT.smithyRuntimeApi(rc).resolve("client::interceptors::context::Output"),
                     "DeserializeResponse" to RT.smithyRuntimeApi(rc).resolve("client::ser_de::DeserializeResponse"),
+                    "ConfigBag" to RT.configBag(rc),
                 )
             }
         }

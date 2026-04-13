@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
@@ -110,6 +111,19 @@ class GenericSmithySdkConfigSettings : ClientCodegenDecorator {
                     ${section.serviceConfigBuilder}.set_time_source(${section.sdkConfig}.time_source());
                     ${section.serviceConfigBuilder}.set_behavior_version(${section.sdkConfig}.behavior_version());
                     ${section.serviceConfigBuilder}.set_auth_scheme_preference(${section.sdkConfig}.auth_scheme_preference().cloned());
+                    """,
+                )
+                if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                    rust(
+                        """
+                        if let Some(protocol) = ${section.sdkConfig}.protocol() {
+                            ${section.serviceConfigBuilder}.set_protocol(Some(protocol.clone()));
+                        }
+                        """,
+                    )
+                }
+                rust(
+                    """
                     // setting `None` here removes the default
                     if let Some(config) = ${section.sdkConfig}.stalled_stream_protection() {
                         ${section.serviceConfigBuilder}.set_stalled_stream_protection(Some(config));

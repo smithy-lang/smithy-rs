@@ -9,12 +9,14 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.91.1"
 
 [dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-02x"] }
 aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 
 [dev-dependencies]
 proptest = "1"
-serde_json = "1.0"
+# Pinned due to https://github.com/serde-rs/json/issues/1309
+serde_json = "=1.0.146"
 
 [package.metadata.docs.rs]
 all-features = true
