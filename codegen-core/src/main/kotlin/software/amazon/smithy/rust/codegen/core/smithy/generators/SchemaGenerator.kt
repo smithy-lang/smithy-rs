@@ -1839,6 +1839,16 @@ class SchemaGenerator(
                         } else {
                             ""
                         }
+                    // Include @mediaType from the target shape if not already on the member
+                    val targetMediaType =
+                        if (
+                            !member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) &&
+                            target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+                        ) {
+                            knownTraitSetter(target.expectTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)) ?: ""
+                        } else {
+                            ""
+                        }
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
@@ -1850,7 +1860,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$memberTraitChain$targetTimestampFormat;
+                        )$memberTraitChain$targetTimestampFormat$targetMediaType;
                         """,
                         *codegenScope,
                     )

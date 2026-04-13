@@ -106,17 +106,6 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }
-
-    fn serialize_body(
-        &self,
-        input: &dyn aws_smithy_schema::serde::SerializableStruct,
-        input_schema: &Schema,
-        endpoint: &str,
-        cfg: &ConfigBag,
-    ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
-        self.inner
-            .serialize_body(input, input_schema, endpoint, cfg)
-    }
 }
 
 #[cfg(test)]

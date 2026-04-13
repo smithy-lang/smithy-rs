@@ -285,6 +285,11 @@ impl Schema {
         self.http_prefix_headers.as_ref()
     }
 
+    /// Returns the `@mediaType` trait if present.
+    pub fn media_type(&self) -> Option<&trait_types::MediaTypeTrait> {
+        self.media_type.as_ref()
+    }
+
     /// Returns the `@httpQueryParams` trait if present.
     pub fn http_query_params(&self) -> Option<&trait_types::HttpQueryParamsTrait> {
         self.http_query_params.as_ref()

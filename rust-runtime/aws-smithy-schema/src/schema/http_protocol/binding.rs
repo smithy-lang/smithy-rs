@@ -108,19 +108,6 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
     }
 
-    /// Finish serialization and return only the body bytes, discarding
-    /// any collected headers/query/labels.
-    fn finish_body(self) -> Vec<u8>
-    where
-        S: FinishSerializer,
-    {
-        if let Some(payload) = self.raw_payload {
-            payload.to_vec()
-        } else {
-            self.body.finish()
-        }
-    }
-
     /// Resolve the effective member schema: if an input_schema override is set,
     /// look up the member by name there (to get the correct HTTP bindings).
     /// Otherwise use the schema as-is.
@@ -128,7 +115,10 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     where
         'a: 's,
     {
-        if let (Some(input_schema), Some(name)) = (self.input_schema, schema.member_name()) {
+        if let (Some(input_schema), Some(idx)) = (self.input_schema, schema.member_index()) {
+            input_schema.member_schema_by_index(idx).unwrap_or(schema)
+        } else if let (Some(input_schema), Some(name)) = (self.input_schema, schema.member_name()) {
+            // Fallback to name lookup for schemas without a member index
             input_schema.member_schema(name).unwrap_or(schema)
         } else {
             schema
@@ -212,6 +202,38 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        let schema = self.resolve_member(schema);
+        // @httpHeader on a list: collect elements as comma-separated header value
+        if let Some(header) = schema.http_header() {
+            let mut collector = ListElementCollector::new(true);
+            write_elements(&mut collector)?;
+            // RFC 7230: string values containing commas or quotes need quoting.
+            // Timestamps are NOT quoted even though http-date contains commas.
+            let header_val = collector
+                .values
+                .iter()
+                .zip(collector.quotable.iter())
+                .map(|(s, &quotable)| {
+                    if quotable && (s.contains(',') || s.contains('"')) {
+                        format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+                    } else {
+                        s.clone()
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+            self.headers.push((header.value().to_string(), header_val));
+            return Ok(());
+        }
+        // @httpQuery on a list: add each element as a separate query param
+        if let Some(query) = schema.http_query() {
+            let mut collector = ListElementCollector::new(false);
+            write_elements(&mut collector)?;
+            for val in collector.values {
+                self.query_params.push((query.value().to_string(), val));
+            }
+            return Ok(());
+        }
         self.has_body_content = true;
         self.body.write_list(schema, write_elements)
     }
@@ -234,8 +256,21 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if schema.http_query_params().is_some() {
             let mut collector = MapEntryCollector::new(String::new());
             write_entries(&mut collector)?;
+            // Filter out keys that overlap with explicit @httpQuery params
+            // (query params take precedence over query params map entries)
+            let explicit_query_keys: Vec<&str> = self
+                .input_schema
+                .map(|s| {
+                    s.members()
+                        .iter()
+                        .filter_map(|m| m.http_query().map(|q| q.value()))
+                        .collect()
+                })
+                .unwrap_or_default();
             for (k, v) in collector.entries {
-                self.query_params.push((k, v));
+                if !explicit_query_keys.contains(&k.as_str()) {
+                    self.query_params.push((k, v));
+                }
             }
             return Ok(());
         }
@@ -291,7 +326,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.add_binding(binding, schema, &format_float_f32(value));
         }
         self.has_body_content = true;
         self.body.write_float(schema, value)
@@ -300,7 +335,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
-            return self.add_binding(binding, schema, &value.to_string());
+            return self.add_binding(binding, schema, &format_float_f64(value));
         }
         self.has_body_content = true;
         self.body.write_double(schema, value)
@@ -335,6 +370,11 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
+            // @mediaType on a header: base64-encode the value
+            if schema.media_type().is_some() {
+                let encoded = aws_smithy_types::base64::encode(value.as_bytes());
+                return self.add_binding(binding, schema, &encoded);
+            }
             return self.add_binding(binding, schema, value);
         }
         if schema.http_payload().is_some() {
@@ -484,6 +524,184 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     }
 }
 
+/// Collects list element values as strings for @httpHeader and @httpQuery on lists.
+struct ListElementCollector {
+    values: Vec<String>,
+    /// Whether each value should be quoted if it contains commas (strings yes, timestamps no)
+    quotable: Vec<bool>,
+    /// Whether this collector is for a header (true) or query param (false).
+    /// Affects default timestamp format: http-date for headers, date-time for query.
+    is_header: bool,
+}
+
+impl ListElementCollector {
+    fn new(is_header: bool) -> Self {
+        Self {
+            values: Vec::new(),
+            quotable: Vec::new(),
+            is_header,
+        }
+    }
+
+    fn push(&mut self, value: String) {
+        self.quotable.push(true);
+        self.values.push(value);
+    }
+
+    fn push_unquotable(&mut self, value: String) {
+        self.quotable.push(false);
+        self.values.push(value);
+    }
+}
+
+impl ShapeSerializer for ListElementCollector {
+    fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_boolean(&mut self, _: &Schema, value: bool) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_byte(&mut self, _: &Schema, value: i8) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_short(&mut self, _: &Schema, value: i16) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_integer(&mut self, _: &Schema, value: i32) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_long(&mut self, _: &Schema, value: i64) -> Result<(), SerdeError> {
+        self.push(value.to_string());
+        Ok(())
+    }
+    fn write_float(&mut self, _: &Schema, value: f32) -> Result<(), SerdeError> {
+        self.push(format_float_f32(value));
+        Ok(())
+    }
+    fn write_double(&mut self, _: &Schema, value: f64) -> Result<(), SerdeError> {
+        self.push(format_float_f64(value));
+        Ok(())
+    }
+    fn write_timestamp(
+        &mut self,
+        schema: &Schema,
+        value: &aws_smithy_types::DateTime,
+    ) -> Result<(), SerdeError> {
+        let format = match schema.timestamp_format() {
+            Some(ts) => match ts.format() {
+                crate::traits::TimestampFormat::EpochSeconds => {
+                    aws_smithy_types::date_time::Format::EpochSeconds
+                }
+                crate::traits::TimestampFormat::HttpDate => {
+                    aws_smithy_types::date_time::Format::HttpDate
+                }
+                crate::traits::TimestampFormat::DateTime => {
+                    aws_smithy_types::date_time::Format::DateTime
+                }
+            },
+            // Default: headers use http-date, query params use date-time
+            None => {
+                if self.is_header {
+                    aws_smithy_types::date_time::Format::HttpDate
+                } else {
+                    aws_smithy_types::date_time::Format::DateTime
+                }
+            }
+        };
+        self.push_unquotable(
+            value
+                .fmt(format)
+                .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?,
+        );
+        Ok(())
+    }
+    fn write_blob(
+        &mut self,
+        _schema: &Schema,
+        value: &aws_smithy_types::Blob,
+    ) -> Result<(), SerdeError> {
+        self.push(aws_smithy_types::base64::encode(value.as_ref()));
+        Ok(())
+    }
+    // Remaining methods are no-ops for list element collection
+    fn write_struct(&mut self, _: &Schema, _: &dyn SerializableStruct) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_list(
+        &mut self,
+        _: &Schema,
+        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_map(
+        &mut self,
+        _: &Schema,
+        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_big_integer(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::BigInteger,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_big_decimal(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::BigDecimal,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_document(
+        &mut self,
+        _: &Schema,
+        _: &aws_smithy_types::Document,
+    ) -> Result<(), SerdeError> {
+        Ok(())
+    }
+    fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+        Ok(())
+    }
+}
+
+/// Format a float for HTTP headers/query/labels.
+/// Rust's Display writes "inf"/"-inf" but HTTP requires "Infinity"/"-Infinity".
+fn format_float_f32(value: f32) -> String {
+    if value.is_infinite() {
+        if value.is_sign_positive() {
+            "Infinity".to_string()
+        } else {
+            "-Infinity".to_string()
+        }
+    } else if value.is_nan() {
+        "NaN".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
+fn format_float_f64(value: f64) -> String {
+    if value.is_infinite() {
+        if value.is_sign_positive() {
+            "Infinity".to_string()
+        } else {
+            "-Infinity".to_string()
+        }
+    } else if value.is_nan() {
+        "NaN".to_string()
+    } else {
+        value.to_string()
+    }
+}
+
 /// Collects map key-value pairs written via ShapeSerializer for
 /// @httpPrefixHeaders and @httpQueryParams.
 struct MapEntryCollector {
@@ -514,14 +732,24 @@ impl ShapeSerializer for MapEntryCollector {
     }
 
     // All other methods are no-ops — maps in HTTP bindings only have string keys/values.
+    // Exception: write_list handles Map<String, List<String>> for @httpQueryParams.
     fn write_struct(&mut self, _: &Schema, _: &dyn SerializableStruct) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_list(
         &mut self,
         _: &Schema,
-        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+        write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // Map<String, List<String>>: each list element becomes a separate entry
+        // with the same key (for @httpQueryParams).
+        if let Some(key) = self.pending_key.take() {
+            let mut collector = ListElementCollector::new(false); // query params context
+            write_elements(&mut collector)?;
+            for val in collector.values {
+                self.entries.push((format!("{}{}", self.prefix, key), val));
+            }
+        }
         Ok(())
     }
     fn write_map(
@@ -597,10 +825,6 @@ where
         &self.protocol_id
     }
 
-    fn supports_http_bindings(&self) -> bool {
-        true
-    }
-
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
@@ -640,17 +864,21 @@ where
         // - If body members exist (even if all optional and unset): send `{}` with Content-Type
         // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
         let has_blob_or_string_payload = raw_payload.is_some();
-        let has_body_members = input_schema.members().iter().any(|m| {
-            m.http_header().is_none()
-                && m.http_query().is_none()
-                && m.http_label().is_none()
-                && m.http_prefix_headers().is_none()
-                && m.http_query_params().is_none()
-        });
+        let has_body_members = has_struct_payload
+            || input_schema.members().iter().any(|m| {
+                m.http_header().is_none()
+                    && m.http_query().is_none()
+                    && m.http_label().is_none()
+                    && m.http_prefix_headers().is_none()
+                    && m.http_query_params().is_none()
+                    && m.http_payload().is_none()
+            });
 
         let set_content_type = if has_blob_or_string_payload {
-            // Blob/string payload: only set Content-Type if there's actual content
-            raw_payload.is_some_and(|p| !p.is_empty())
+            // Blob/string payload: Content-Type comes from the @httpHeader("Content-Type")
+            // member if present, or defaults to application/octet-stream for blobs.
+            // Don't set the protocol's codec content type (e.g., application/json).
+            false
         } else if has_body_members {
             // Operation has body members — body includes framing (e.g., `{}`).
             // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
@@ -667,8 +895,20 @@ where
             Some(h) => {
                 let mut path = h.uri().to_string();
                 for (name, value) in &binder.labels {
-                    let placeholder = format!("{{{name}}}");
-                    path = path.replace(&placeholder, &percent_encode(value));
+                    // Try greedy label first ({name+}), then regular ({name})
+                    let greedy = format!("{{{name}+}}");
+                    if path.contains(&greedy) {
+                        // Greedy labels: encode each path segment separately, preserve /
+                        let encoded = value
+                            .split('/')
+                            .map(|seg| percent_encode(seg))
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        path = path.replace(&greedy, &encoded);
+                    } else {
+                        let placeholder = format!("{{{name}}}");
+                        path = path.replace(&placeholder, &percent_encode(value));
+                    }
                 }
                 if endpoint.is_empty() {
                     path
@@ -683,8 +923,18 @@ where
                     endpoint.to_string()
                 };
                 for (name, value) in &binder.labels {
-                    let placeholder = format!("{{{name}}}");
-                    u = u.replace(&placeholder, &percent_encode(value));
+                    let greedy = format!("{{{name}+}}");
+                    if u.contains(&greedy) {
+                        let encoded = value
+                            .split('/')
+                            .map(|seg| percent_encode(seg))
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        u = u.replace(&greedy, &encoded);
+                    } else {
+                        let placeholder = format!("{{{name}}}");
+                        u = u.replace(&placeholder, &percent_encode(value));
+                    }
                 }
                 u
             }
@@ -742,49 +992,6 @@ where
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
         Ok(Box::new(self.codec.create_deserializer(body)))
-    }
-
-    fn serialize_body(
-        &self,
-        input: &dyn SerializableStruct,
-        input_schema: &Schema,
-        _endpoint: &str,
-        _cfg: &ConfigBag,
-    ) -> Result<Request, SerdeError> {
-        // Check if there are body members (non-HTTP-bound) to determine Content-Type and body behavior.
-        let has_body_members = input_schema.members().iter().any(|m| {
-            m.http_header().is_none()
-                && m.http_query().is_none()
-                && m.http_label().is_none()
-                && m.http_prefix_headers().is_none()
-                && m.http_query_params().is_none()
-                && m.http_payload().is_none()
-        });
-
-        // Use HttpBindingSerializer to filter out HTTP-bound members, keeping only body members.
-        // The collected headers/query/labels are discarded — the caller writes those directly.
-        let mut request = if has_body_members {
-            let serializer = self.codec.create_serializer();
-            let mut binding_ser = HttpBindingSerializer::new(serializer, None);
-            binding_ser.write_struct(input_schema, input)?;
-            let body = binding_ser.finish_body();
-            let mut r = Request::new(SdkBody::from(body));
-            r.headers_mut().insert("Content-Type", self.content_type);
-            if let Some(len) = r.body().content_length() {
-                r.headers_mut().insert("Content-Length", len.to_string());
-            }
-            r
-        } else {
-            Request::new(SdkBody::empty())
-        };
-
-        // Set HTTP method from @http trait.
-        if let Some(http) = input_schema.http() {
-            request
-                .set_method(http.method())
-                .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
-        }
-        Ok(request)
     }
 }
 
