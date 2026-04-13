@@ -197,6 +197,31 @@ data class GeneratedExpression(
             this
         }
 
+    /**
+     * Coerces this expression to a boolean using JMESPath truthiness rules.
+     * - Booleans: used as-is
+     * - Arrays/Strings: truthy if non-empty (`!is_empty()`)
+     * - Numbers/Objects/Enums: always truthy (non-null values; null is handled by `?` short-circuiting)
+     */
+    internal fun coerceToBool(namer: SafeNamer): GeneratedExpression {
+        if (isBool()) return dereference(namer)
+        return namer.safeName("_truthy").let { tmp ->
+            GeneratedExpression(
+                identifier = tmp,
+                outputType = RustType.Bool,
+                outputShape = TraversedShape.Bool(null),
+                output =
+                    output +
+                        writable {
+                            when {
+                                isArray() || isString() -> rust("let $tmp = !$identifier.is_empty();")
+                                else -> rust("let $tmp = true;")
+                            }
+                        },
+            )
+        }
+    }
+
     /** Converts a number expression into a specific number type */
     internal fun convertToNumberPrimitive(
         namer: SafeNamer,
@@ -670,9 +695,6 @@ class RustJmespathShapeTraversalGenerator(
     ): GeneratedExpression {
         val left = generate(expr.left, bindings, context)
         val right = generate(expr.right, bindings, context)
-        if (!left.isBool() || !right.isBool()) {
-            throw UnsupportedJmesPathException("Applying the `$op` operation doesn't support non-boolean types in smithy-rs")
-        }
 
         return safeNamer.safeName("_bo").let { ident ->
             GeneratedExpression(
@@ -681,8 +703,8 @@ class RustJmespathShapeTraversalGenerator(
                 outputShape = TraversedShape.Bool(null),
                 output =
                     writable {
-                        val leftBool = left.dereference(safeNamer).also { it.output(this) }
-                        val rightBool = right.dereference(safeNamer).also { it.output(this) }
+                        val leftBool = left.coerceToBool(safeNamer).also { it.output(this) }
+                        val rightBool = right.coerceToBool(safeNamer).also { it.output(this) }
                         rust("let $ident = ${leftBool.identifier} $op ${rightBool.identifier};")
                     },
             )
