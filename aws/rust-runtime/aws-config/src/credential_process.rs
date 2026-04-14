@@ -14,11 +14,51 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_smithy_json::deserialize::Token;
+use aws_types::os_shim_internal::Process;
 use std::borrow::Cow;
-use std::process::Command;
 use std::time::SystemTime;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
+
+fn default_process() -> Process {
+    use aws_types::os_shim_internal::{CommandOutput, ExitStatus, ProvideProcess};
+    use std::future::Future;
+    use std::pin::Pin;
+
+    /// Process provider that uses `tokio::process::Command` for async execution.
+    #[derive(Debug)]
+    struct TokioProcessProvider;
+
+    impl ProvideProcess for TokioProcessProvider {
+        fn execute(
+            &self,
+            command: &str,
+        ) -> Pin<Box<dyn Future<Output = std::io::Result<CommandOutput>> + Send + '_>> {
+            let command = command.to_string();
+            Box::pin(async move {
+                let std_command = if cfg!(windows) {
+                    let mut cmd = std::process::Command::new("cmd.exe");
+                    cmd.args(["/C", &command]);
+                    cmd
+                } else {
+                    let mut cmd = std::process::Command::new("sh");
+                    cmd.args(["-c", &command]);
+                    cmd
+                };
+                let output = tokio::process::Command::from(std_command)
+                    .output()
+                    .await?;
+                Ok(CommandOutput {
+                    status: ExitStatus::from(output.status),
+                    stdout: output.stdout,
+                    stderr: output.stderr,
+                })
+            })
+        }
+    }
+
+    Process::from_custom(TokioProcessProvider)
+}
 
 /// External process credentials provider
 ///
@@ -57,6 +97,7 @@ use time::OffsetDateTime;
 pub struct CredentialProcessProvider {
     command: CommandWithSensitiveArgs<String>,
     profile_account_id: Option<AccountId>,
+    process: Process,
 }
 
 impl ProvideCredentials for CredentialProcessProvider {
@@ -74,6 +115,7 @@ impl CredentialProcessProvider {
         Self {
             command: CommandWithSensitiveArgs::new(command),
             profile_account_id: None,
+            process: default_process(),
         }
     }
 
@@ -85,17 +127,9 @@ impl CredentialProcessProvider {
         // Security: command arguments must be redacted at debug level
         tracing::debug!(command = %self.command, "loading credentials from external process");
 
-        let command = if cfg!(windows) {
-            let mut command = Command::new("cmd.exe");
-            command.args(["/C", self.command.unredacted()]);
-            command
-        } else {
-            let mut command = Command::new("sh");
-            command.args(["-c", self.command.unredacted()]);
-            command
-        };
-        let output = tokio::process::Command::from(command)
-            .output()
+        let output = self
+            .process
+            .execute(self.command.unredacted())
             .await
             .map_err(|e| {
                 CredentialsError::provider_error(format!(
@@ -140,6 +174,7 @@ impl CredentialProcessProvider {
 pub(crate) struct Builder {
     command: Option<CommandWithSensitiveArgs<String>>,
     profile_account_id: Option<AccountId>,
+    process: Option<Process>,
 }
 
 impl Builder {
@@ -158,10 +193,16 @@ impl Builder {
         self.profile_account_id = account_id;
     }
 
+    pub(crate) fn process(mut self, process: Process) -> Self {
+        self.process = Some(process);
+        self
+    }
+
     pub(crate) fn build(self) -> CredentialProcessProvider {
         CredentialProcessProvider {
             command: self.command.expect("should be set"),
             profile_account_id: self.profile_account_id,
+            process: self.process.unwrap_or_else(default_process),
         }
     }
 }
@@ -269,10 +310,9 @@ mod test {
     use crate::sensitive_command::CommandWithSensitiveArgs;
     use aws_credential_types::credential_feature::AwsCredentialFeature;
     use aws_credential_types::provider::ProvideCredentials;
-    use std::time::{Duration, SystemTime};
+    use std::time::SystemTime;
     use time::format_description::well_known::Rfc3339;
     use time::OffsetDateTime;
-    use tokio::time::timeout;
 
     // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
@@ -313,7 +353,25 @@ mod test {
     }
 
     #[tokio::test]
+    async fn credentials_process_io_error() {
+        use aws_types::os_shim_internal::Process;
+        let process = Process::from_slice(&[]);
+        let provider = CredentialProcessProvider::builder()
+            .command(CommandWithSensitiveArgs::new(String::from("missing")))
+            .process(process)
+            .build();
+        let err = provider.provide_credentials().await.expect_err("should fail");
+        let msg = format!("{err:?}");
+        assert!(
+            msg.contains("not found"),
+            "error should contain cause: {msg}"
+        );
+    }
+
+    #[tokio::test]
     async fn credentials_process_timeouts() {
+        use std::time::Duration;
+        use tokio::time::timeout;
         let provider = CredentialProcessProvider::new(String::from("sleep 1000"));
         let _creds = timeout(Duration::from_millis(1), provider.provide_credentials())
             .await
