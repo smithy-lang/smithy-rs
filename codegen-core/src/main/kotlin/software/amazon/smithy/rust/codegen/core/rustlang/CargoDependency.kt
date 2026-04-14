@@ -280,6 +280,7 @@ data class CargoDependency(
     fun toType() = RuntimeType("::$rustName", this)
 
     companion object {
+        val ArcSwap: CargoDependency = CargoDependency("arc-swap", CratesIo("1"), rustName = "arc_swap")
         val Bytes: CargoDependency = CargoDependency("bytes", CratesIo("1.4.0"))
         val BytesUtils: CargoDependency = CargoDependency("bytes-utils", CratesIo("0.1.0"))
         val FastRand: CargoDependency = CargoDependency("fastrand", CratesIo("2.0.0"))

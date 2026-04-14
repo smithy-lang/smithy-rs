@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddEx
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -152,7 +153,7 @@ class EndpointBddGenerator(
                 /// The default endpoint resolver.
                 pub struct DefaultResolver {
                     #{CustomFields}
-                    endpoint_cache: ::std::sync::RwLock<::std::option::Option<(Params, ::aws_smithy_types::endpoint::Endpoint)>>,
+                    endpoint_cache: #{ArcSwap}<::std::option::Option<(Params, ::aws_smithy_types::endpoint::Endpoint)>>,
                 }
 
                  impl Default for DefaultResolver {
@@ -166,7 +167,7 @@ class EndpointBddGenerator(
                     pub fn new() -> Self {
                         Self {
                             #{CustomFieldsInit}
-                            endpoint_cache: ::std::sync::RwLock::new(None),
+                            endpoint_cache: #{ArcSwap}::from_pointee(None),
                         }
                     }
 
@@ -207,21 +208,24 @@ class EndpointBddGenerator(
 
                 impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
-                        // Check single-entry cache
-                        if let Some((cached_params, cached_endpoint)) = &*self.endpoint_cache.read().expect("endpoint cache lock poisoned") {
+                        // Check single-entry cache (lock-free read via ArcSwap)
+                        let cached = self.endpoint_cache.load();
+                        if let Some((cached_params, cached_endpoint)) = cached.as_ref() {
                             if cached_params == params {
                                 return #{EndpointFuture}::ready(#{Ok}(cached_endpoint.clone()));
                             }
                         }
+                        drop(cached);
                         let result = self.resolve_endpoint(params);
                         if let #{Ok}(ref endpoint) = result {
-                            *self.endpoint_cache.write().expect("endpoint cache lock poisoned") = Some((params.clone(), endpoint.clone()));
+                            self.endpoint_cache.store(::std::sync::Arc::new(Some((params.clone(), endpoint.clone()))));
                         }
                         #{EndpointFuture}::ready(result)
                     }
                 }
                 """,
                 *preludeScope,
+                "ArcSwap" to CargoDependency.ArcSwap.toType().resolve("ArcSwap"),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "CustomFields" to
                     writable {
