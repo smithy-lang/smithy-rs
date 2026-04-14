@@ -131,7 +131,7 @@ class StalledStreamProtectionOperationCustomization(
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
                     val stalledStreamProtectionModule = RuntimeType.smithyRuntime(rc).resolve("client::stalled_stream_protection")
-                    section.registerInterceptor(rc, this) {
+                    section.registerPermanentInterceptor(rc, this) {
                         rustTemplate(
                             """
                             #{StalledStreamProtectionInterceptor}::default()

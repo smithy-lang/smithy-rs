@@ -127,15 +127,27 @@ impl Check for CrateAuthor {
     }
 }
 
+fn manifest<T>(path: impl AsRef<Path>) -> Result<Manifest<T>>
+where
+    T: DeserializeOwned,
+{
+    Manifest::from_path_with_metadata(path).context("failed to parse Cargo.toml")
+}
+
+fn package_from_manifest<T>(
+    manifest: Manifest<T>,
+) -> std::result::Result<Package<T>, Vec<LintError>> {
+    match manifest.package {
+        Some(package) => Ok(package),
+        None => Err(vec![LintError::new("missing `[package]` section")]),
+    }
+}
+
 fn package<T>(path: impl AsRef<Path>) -> Result<std::result::Result<Package<T>, Vec<LintError>>>
 where
     T: DeserializeOwned,
 {
-    let parsed = Manifest::from_path_with_metadata(path).context("failed to parse Cargo.toml")?;
-    match parsed.package {
-        Some(package) => Ok(Ok(package)),
-        None => Ok(Err(vec![LintError::new("missing `[package]` section")])),
-    }
+    Ok(package_from_manifest(manifest(path)?))
 }
 
 fn check_crate_author(package: Package) -> Result<Vec<LintError>> {
@@ -324,12 +336,19 @@ impl Check for SdkExternalLintsExposesStableCrates {
 
 impl Check for StableCratesExposeStableCrates {
     fn check(&self, path: impl AsRef<Path>) -> Result<Vec<LintError>> {
-        let parsed = match package(path.as_ref()) {
-            // if the package doesn't parse, someone else figured that out
+        let manifest: Manifest<SmithyRsMetadata> = match manifest(path.as_ref()) {
+            // if the manifest doesn't parse, someone else figured that out
             Err(_) => return Ok(vec![]),
+            Ok(m) => m,
+        };
+        // Proc-macro crates don't expose types in their public API
+        if manifest.lib.as_ref().is_some_and(|lib| lib.proc_macro) {
+            return Ok(vec![]);
+        }
+        let parsed = match package_from_manifest(manifest) {
+            Ok(pkg) => pkg,
             // if there is something wrong, someone figured that out too
-            Ok(Err(_errs)) => return Ok(vec![]),
-            Ok(Ok(pkg)) => pkg,
+            Err(_errs) => return Ok(vec![]),
         };
         self.check_stable_crates_only_expose_stable_crates(parsed, path)
     }

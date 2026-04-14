@@ -174,7 +174,7 @@ class HttpRequestChecksumCustomization(
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
                     if (requestAlgorithmMemberName != null) {
-                        section.registerInterceptor(runtimeConfig, this) {
+                        section.registerPermanentInterceptor(runtimeConfig, this) {
                             val runtimeApi = RuntimeType.smithyRuntimeApiClient(runtimeConfig)
                             rustTemplate(
                                 """
