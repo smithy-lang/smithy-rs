@@ -42,7 +42,7 @@ private class RpcV2CborFeatureTrackerRuntimePluginCustomization(private val code
             when (section) {
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     if (codegenContext.protocol == rpcV2CborProtocolShapeId) {
-                        section.registerInterceptor(this) {
+                        section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                             rustTemplate(
                                 "#{RpcV2CborFeatureTrackerInterceptor}::new()",
                                 "RpcV2CborFeatureTrackerInterceptor" to

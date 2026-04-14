@@ -2,7 +2,7 @@
 applies_to:
   - client
 authors:
-  - lnj
+  - landonxjames
 references:
 breaking: true
 new_feature: false

@@ -253,10 +253,12 @@ class AccountIdEndpointModeBuiltInParamDecorator : ConditionalDecorator(
 
 private class AccountIdEndpointFeatureTrackerInterceptor(codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {
+    private val runtimeConfig = codegenContext.runtimeConfig
+
     override fun section(section: ServiceRuntimePluginSection) =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(runtimeConfig, this) {
                     rustTemplate(
                         "#{Interceptor}",
                         "Interceptor" to
