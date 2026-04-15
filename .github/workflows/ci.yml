@@ -411,6 +411,7 @@ jobs:
     - name: Run canary
       run: |
         export RUST_STABLE_VERSION="$(rustc --version | cut -d' ' -f2)"
+        rustup target add aarch64-unknown-linux-musl
         ./smithy-rs/tools/ci-scripts/run-canary \
           ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} \
           ${{ steps.creds.outputs.aws-access-key-id }} \
