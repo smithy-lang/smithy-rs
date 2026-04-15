@@ -42,7 +42,7 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     fn advance_by(&mut self, n: usize) {
-        self.position += n;
+        self.position = (self.position + n).min(self.input.len());
     }
 
     /// Parse a JSON quoted string key directly from bytes, advancing past it.
@@ -56,15 +56,24 @@ impl<'a> JsonDeserializer<'a> {
         let remaining = &input[start..];
         let mut i = 0;
         let mut has_escapes = false;
+        let mut found_end = false;
         while i < remaining.len() {
             match remaining[i] {
-                b'"' => break,
+                b'"' => {
+                    found_end = true;
+                    break;
+                }
                 b'\\' => {
                     has_escapes = true;
                     i += 2;
                 }
                 _ => i += 1,
             }
+        }
+        if !found_end {
+            return Err(SerdeError::InvalidInput {
+                message: "unterminated string key".into(),
+            });
         }
         self.position = start + i + 1; // advance past key bytes + closing quote
         let key_bytes = &input[start..start + i];
@@ -166,11 +175,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    });
+                }
+                _ => consumer(self)?,
             }
-            consumer(self)?;
         }
 
         Ok(())
@@ -382,11 +398,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_string(_schema)?),
             }
-            out.push(self.read_string(_schema)?);
         }
         Ok(out)
     }
@@ -402,11 +425,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_blob(_schema)?),
             }
-            out.push(self.read_blob(_schema)?);
         }
         Ok(out)
     }
@@ -422,11 +452,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_integer(_schema)?),
             }
-            out.push(self.read_integer(_schema)?);
         }
         Ok(out)
     }
@@ -442,11 +479,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_long(_schema)?),
             }
-            out.push(self.read_long(_schema)?);
         }
         Ok(out)
     }
@@ -601,11 +645,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 let mut arr = Vec::new();
                 loop {
                     self.skip_whitespace();
-                    if self.remaining().first() == Some(&b']') {
-                        self.advance_by(1);
-                        break;
+                    match self.remaining().first() {
+                        Some(&b']') => {
+                            self.advance_by(1);
+                            break;
+                        }
+                        None => {
+                            return Err(SerdeError::InvalidInput {
+                                message: "unexpected end of input in document array".into(),
+                            })
+                        }
+                        _ => arr.push(self.read_document(_schema)?),
                     }
-                    arr.push(self.read_document(_schema)?);
                 }
                 Ok(Document::Array(arr))
             }
@@ -801,18 +852,33 @@ impl<'a> JsonDeserializer<'a> {
                     }
                 }
                 Some(b't') => {
+                    if self.remaining().len() < 4 {
+                        return Err(SerdeError::InvalidInput {
+                            message: "unexpected end of input".into(),
+                        });
+                    }
                     self.advance_by(4); // true
                     if depth == 0 {
                         return Ok(());
                     }
                 }
                 Some(b'f') => {
+                    if self.remaining().len() < 5 {
+                        return Err(SerdeError::InvalidInput {
+                            message: "unexpected end of input".into(),
+                        });
+                    }
                     self.advance_by(5); // false
                     if depth == 0 {
                         return Ok(());
                     }
                 }
                 Some(b'n') => {
+                    if self.remaining().len() < 4 {
+                        return Err(SerdeError::InvalidInput {
+                            message: "unexpected end of input".into(),
+                        });
+                    }
                     self.advance_by(4); // null
                     if depth == 0 {
                         return Ok(());

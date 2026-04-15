@@ -10,9 +10,11 @@ cargo-fuzz = true
 
 [dependencies]
 aws-smithy-json = { path = ".." }
+aws-smithy-schema = { path = "../../aws-smithy-schema" }
 aws-smithy-types = { path = "../../aws-smithy-types" }
 # Version pinned due to https://github.com/rust-fuzz/libfuzzer/issues/126
 libfuzzer-sys = "=0.4.7"
+arbitrary = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["float_roundtrip"] }
 
 # Prevent this from interfering with workspaces
@@ -28,5 +30,23 @@ doc = false
 [[bin]]
 name = "json_deserialize_corpus_cov"
 path = "fuzz_targets/json_deserialize_corpus_cov.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_json_deserialize"
+path = "fuzz_targets/schema_json_deserialize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_json_roundtrip"
+path = "fuzz_targets/schema_json_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_json_serialize"
+path = "fuzz_targets/schema_json_serialize.rs"
 test = false
 doc = false
