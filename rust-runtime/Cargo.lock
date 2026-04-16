@@ -808,7 +808,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.11.0"
+version = "1.11.1"
 dependencies = [
  "approx",
  "aws-smithy-async 1.2.14",
