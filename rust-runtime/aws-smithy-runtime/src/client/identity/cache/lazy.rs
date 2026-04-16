@@ -260,7 +260,7 @@ impl CachePartitions {
         partitions.insert(key, partition.clone());
         tracing::debug!(
             partition_count = partitions.len(),
-            "identity cache partition created or accessed"
+            "identity cache partition created"
         );
         partition
     }
