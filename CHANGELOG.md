@@ -1,4 +1,28 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+April 16th, 2026
+================
+**Breaking Changes:**
+- :bug::warning: (client) Now files written by the SDK (like credential caches) are created with file
+    permissions `0o600` on unix systems. This could break customers who were relying
+    on the visibility of those files to other users on the system.
+
+**New this release:**
+- :tada: (client, [smithy-rs#4521](https://github.com/smithy-lang/smithy-rs/issues/4521)) Add `sigv4a_signing_region_set` client configuration. Supports programmatic, environment variable (`AWS_SIGV4A_SIGNING_REGION_SET`), and shared config file (`sigv4a_signing_region_set`) configuration. User-provided values now take priority over endpoint-resolved values.
+- :bug: (client, [smithy-rs#4340](https://github.com/smithy-lang/smithy-rs/issues/4340), @ysaito) Prevent memory leak in identity cache when overriding credentials via `config_override`. Each `config_override` that sets a credentials provider now uses an operation-scoped identity cache instead of the shared client-level cache, preventing unbounded partition growth. Additionally, the client-level identity cache now enforces a configurable `max_partitions` cap (default: 64) as a safety net.
+- :bug: (client, [smithy-rs#4596](https://github.com/smithy-lang/smithy-rs/issues/4596), [aws-sdk-rust#1423](https://github.com/awslabs/aws-sdk-rust/issues/1423), @annahay4) Fix `TokenBucket::is_full()` and `TokenBucket::is_empty()` to convert fractional tokens into whole permits before checking availability. Previously, accumulated fractional tokens from success rewards were not accounted for, causing these methods to return incorrect results.
+- :bug: (client, [smithy-rs#4587](https://github.com/smithy-lang/smithy-rs/issues/4587)) Upgrade `sha2` from 0.10.x to 0.11.x. The previous version defaulted to software-based compression instead of hardware-accelerated compression, resulting in lower throughput. The new version automatically detects and uses hardware-accelerated instructions when available.
+- (client, [smithy-rs#4591](https://github.com/smithy-lang/smithy-rs/issues/4591)) Optimize `Encoder::str()` and `Encoder::blob()` by collapsing multiple `write_all` calls into a single buffer operation. This bypasses minicbor's generic writer to write the CBOR type+length header and payload directly into the underlying `Vec<u8>`, improving performance on serialization-heavy hot paths.
+- :bug: (all, [smithy-rs#4572](https://github.com/smithy-lang/smithy-rs/issues/4572), @jlizen) Re-export `EventStreamSender` from generated SDK crates when the service uses event streams, so users do not need a direct dependency on `aws-smithy-http` to construct event stream responses.
+- :bug: (client, [smithy-rs#4599](https://github.com/smithy-lang/smithy-rs/issues/4599)) Fix waiter codegen failure when JMESPath `&&` or `||` expressions have non-boolean operands (e.g., a list field used as a truthiness check). Non-boolean types are now coerced to booleans using JMESPath truthiness rules: arrays and strings check `!is_empty()`, all other non-null types are truthy.
+- :bug: (client, [smithy-rs#4431](https://github.com/smithy-lang/smithy-rs/issues/4431), @jlizen) Add missing `EventOrInitial`, `EventOrInitialMarshaller`, and `EventStreamSender::into_inner` to `aws-smithy-legacy-http` event_stream module, fixing compilation failures in generated SDKs that reference these types.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @annahay4 ([aws-sdk-rust#1423](https://github.com/awslabs/aws-sdk-rust/issues/1423), [smithy-rs#4596](https://github.com/smithy-lang/smithy-rs/issues/4596))
+- @jlizen ([smithy-rs#4431](https://github.com/smithy-lang/smithy-rs/issues/4431), [smithy-rs#4572](https://github.com/smithy-lang/smithy-rs/issues/4572))
+- @ysaito ([smithy-rs#4340](https://github.com/smithy-lang/smithy-rs/issues/4340))
+
+
 March 16th, 2026
 ================
 **New this release:**
