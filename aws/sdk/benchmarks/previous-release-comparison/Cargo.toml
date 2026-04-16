@@ -9,11 +9,11 @@ edition = "2021"
 aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-s3 = { path = "../../build/aws-sdk/sdk/s3" }
-aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
 criterion = { version = "0.5", features = ["async_tokio"] }
-http = "0.2.3"
+http = "1"
+previous-http-client = { version = "1", package = "aws-smithy-http-client", features = ["test-util"] }
 previous-s3 = { version = "1", package = "aws-sdk-s3", features = ["test-util"] }
-previous-runtime = { version = "1", package = "aws-smithy-runtime", features = ["test-util"] }
 tokio = { version = "1.23.1", features = ["macros", "test-util", "rt-multi-thread"] }
 
 [profile.release]

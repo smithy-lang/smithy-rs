@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-runtime-api"
-version = "1.11.7"
+version = "1.12.0"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "Zelda Hessler <zhessler@amazon.com>"]
 description = "Smithy runtime types."
 edition = "2021"
@@ -20,6 +20,7 @@ http-1x = []
 
 [dependencies]
 aws-smithy-async = { path = "../aws-smithy-async" }
+aws-smithy-runtime-api-macros = { path = "../aws-smithy-runtime-api-macros" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 bytes = "1.11.1"
 http-02x = { package = "http", version = "0.2.12" }

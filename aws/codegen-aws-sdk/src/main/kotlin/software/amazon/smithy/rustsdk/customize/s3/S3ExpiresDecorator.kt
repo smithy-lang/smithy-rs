@@ -129,7 +129,7 @@ class ParseExpiresFieldsCustomization(
         writable {
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                         val interceptor =
                             RuntimeType.forInlineDependency(
                                 InlineAwsDependency.forRustFile("s3_expires_interceptor"),

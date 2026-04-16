@@ -549,24 +549,6 @@ mod loader {
             self
         }
 
-        /// Override the environment variable abstraction used during config resolution.
-        ///
-        /// This can be used with [`Env::from_custom`] to provide a custom environment
-        /// variable backend (e.g., remote config stores, vaults).
-        pub fn env(mut self, env: Env) -> Self {
-            self.env = Some(env);
-            self
-        }
-
-        /// Override the filesystem abstraction used during config resolution.
-        ///
-        /// This can be used with [`Fs::from_custom`] to provide a custom filesystem
-        /// backend (e.g., in-memory stores, encrypted filesystems).
-        pub fn fs(mut self, fs: Fs) -> Self {
-            self.fs = Some(fs);
-            self
-        }
-
         /// Override the access token provider used to build [`SdkConfig`].
         ///
         /// # Examples
@@ -1056,6 +1038,19 @@ mod loader {
             builder.set_auth_scheme_preference(auth_scheme_preference);
             builder.set_sigv4a_signing_region_set(sigv4a_signing_region_set);
             builder.build()
+        }
+    }
+
+    #[cfg(test)]
+    impl ConfigLoader {
+        pub(crate) fn env(mut self, env: Env) -> Self {
+            self.env = Some(env);
+            self
+        }
+
+        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+            self.fs = Some(fs);
+            self
         }
     }
 

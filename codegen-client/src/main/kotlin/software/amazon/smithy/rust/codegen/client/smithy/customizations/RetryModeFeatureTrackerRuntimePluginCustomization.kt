@@ -22,7 +22,7 @@ class RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext: ClientCo
         writable {
             when (section) {
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
-                    section.registerInterceptor(this) {
+                    section.registerPermanentInterceptor(runtimeConfig, this) {
                         rust(
                             "#T::new()",
                             RuntimeType.forInlineDependency(
