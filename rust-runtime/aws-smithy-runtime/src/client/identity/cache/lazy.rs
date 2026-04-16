@@ -899,7 +899,9 @@ mod tests {
             .unwrap();
         assert_eq!(1, resolver_c_calls.load(Ordering::Relaxed));
 
-        // Resolve all three again — exactly one of A or B should need re-resolution
+        // Resolve all three again — at least one of A or B must be re-resolved because
+        // the cache only holds 2 partitions. Depending on HashMap iteration order, re-inserting
+        // the evicted entry may cascade-evict the other, leading to 4 or 5 total calls.
         cache
             .resolve_cached_identity(resolver_a.clone(), &components, &config_bag)
             .await
@@ -911,10 +913,11 @@ mod tests {
         let total_calls = resolver_a_calls.load(Ordering::Relaxed)
             + resolver_b_calls.load(Ordering::Relaxed)
             + resolver_c_calls.load(Ordering::Relaxed);
-        // Initial: 3 calls (A, B, C). One of A or B was evicted and re-resolved: +1 = 4.
-        assert_eq!(
-            4, total_calls,
-            "one entry should have been evicted and re-resolved"
+        // Initial: 3 calls (A, B, C). At least one of A or B was evicted and re-resolved (+1).
+        // If re-inserting the evicted entry cascade-evicts the other, both need re-resolution (+2).
+        assert!(
+            (4..=5).contains(&total_calls),
+            "expected 4 or 5 total calls (3 initial + 1 or 2 re-resolutions), got {total_calls}"
         );
     }
 
