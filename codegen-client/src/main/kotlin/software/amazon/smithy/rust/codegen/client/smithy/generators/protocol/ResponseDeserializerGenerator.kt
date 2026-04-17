@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -20,9 +21,11 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
@@ -110,12 +113,16 @@ class ResponseDeserializerGenerator(
     ) {
         val outputShape = operationShape.outputShape(model)
         val streamingMember = outputShape.findStreamingMember(model)!!
-        val isBlobStreaming = model.expectShape(streamingMember.target) is BlobShape
+        val streamingTarget = model.expectShape(streamingMember.target)
+        val isBlobStreaming = streamingTarget is BlobShape
+        val isEventStream = streamingTarget is UnionShape
 
         if (schemaExclusive && isBlobStreaming) {
             deserializeStreamingBlobSchema(operationShape, customizations)
+        } else if (schemaExclusive && isEventStream) {
+            deserializeStreamingEventStreamSchema(operationShape, customizations)
         } else {
-            // Event streams and non-schema-exclusive: use legacy parser
+            // Non-schema-exclusive: use legacy parser
             deserializeStreamingLegacy(operationShape, customizations)
         }
     }
@@ -179,6 +186,87 @@ class ResponseDeserializerGenerator(
             "ConcreteOutput" to outputSymbol,
             "E" to errorSymbol,
             "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+        )
+    }
+
+    /** Schema-serde path for event stream responses (hybrid).
+     *
+     * Mirrors the legacy builder-based pattern: create the output builder, set
+     * the event stream member via `set_<memberName>(Some(receiver))`, then
+     * build. The legacy `EventStreamUnmarshallerGenerator` handles frame-level
+     * unmarshalling, including initial-response data for RPC protocols (which
+     * arrives via the first event frame, not the HTTP body).
+     *
+     * Unlike the non-streaming schema path, `deserialize_with_response` is not
+     * used because it would call `builder.build()` internally — and for
+     * @required streaming members the build fails before the event stream
+     * member can be populated.
+     */
+    private fun RustWriter.deserializeStreamingEventStreamSchema(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
+        val successCode = httpBindingResolver.httpTrait(operationShape).code
+        val outputShape = operationShape.outputShape(model)
+        val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+        val streamingMember = outputShape.findStreamingMember(model)!!
+        val unionTarget = model.expectShape(streamingMember.target, UnionShape::class.java)
+
+        val unmarshallerCtor =
+            EventStreamUnmarshallerGenerator(
+                protocol,
+                codegenContext,
+                operationShape,
+                unionTarget,
+            ).render()
+
+        rustTemplate(
+            """
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
+                ##[allow(unused_mut)]
+                let mut force_error = false;
+                #{BeforeParseResponse}
+
+                // If this is an error, defer to the non-streaming parser
+                if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
+                    return #{None};
+                }
+
+                let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
+                    // Swap body out — becomes the event stream receiver.
+                    let body = std::mem::replace(response.body_mut(), #{SdkBody}::taken());
+                    let unmarshaller = #{unmarshaller}();
+                    let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
+                    let output = #{BuilderSymbol}::default();
+                    let output = output.${streamingMember.setterName()}(#{Some}(receiver));
+                    // Build via finalizeBuilder — applies error correction so @required
+                    // non-event-stream members are populated with defaults. For RPC
+                    // protocols with initial-response, the fluent builder re-populates
+                    // those members from the first event frame via into_builder.
+                    #{Ok}(#{finalizeBuilder})
+                })();
+
+                #{Some}(#{type_erase_result}(result))
+            }
+            """,
+            *codegenScope,
+            "ConcreteOutput" to outputSymbol,
+            "E" to errorSymbol,
+            "BuilderSymbol" to symbolProvider.symbolForBuilder(outputShape),
+            "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
+            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+            "unmarshaller" to unmarshallerCtor,
+            "finalizeBuilder" to
+                codegenContext.builderInstantiator().finalizeBuilder(
+                    "output",
+                    outputShape,
+                    mapErr = writable { rustTemplate("#{E}::unhandled", "E" to errorSymbol) },
+                ),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
