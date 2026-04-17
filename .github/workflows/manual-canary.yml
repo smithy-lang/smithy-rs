@@ -117,4 +117,53 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: run-canary
-        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }}
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }} x86_64
+
+  canary-arm:
+    name: Canary (aarch64)
+    needs:
+    - generate
+    - get-pr-info
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.commit_sha }}
+    - name: Download artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-generate-aws-sdk-for-canary
+        path: artifacts-generate-aws-sdk-for-canary
+    - name: Extract artifacts
+      run: tar xfz artifacts-generate-aws-sdk-for-canary/artifacts-generate-aws-sdk-for-canary.tar.gz
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: aarch64-unknown-linux-musl
+    - name: Install build dependencies
+      run: sudo apt-get update && sudo apt-get install -y musl-tools cmake perl clang pkg-config
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+        output-credentials: true
+    - name: Run canary
+      run: |
+        export RUST_STABLE_VERSION="$(rustc --version | cut -d' ' -f2)"
+        # Install the pinned toolchain from rust-toolchain.toml and add musl target
+        rustup toolchain install 1.91.1
+        rustup target add aarch64-unknown-linux-musl wasm32-wasip2 --toolchain 1.91.1
+        ./smithy-rs/tools/ci-scripts/run-canary \
+          ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} \
+          ${{ steps.creds.outputs.aws-access-key-id }} \
+          ${{ steps.creds.outputs.aws-secret-access-key }} \
+          ${{ steps.creds.outputs.aws-session-token }} \
+          aarch64
