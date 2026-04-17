@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -268,6 +269,9 @@ class ClientProtocolTestGenerator(
             RT.sdkBody(runtimeConfig = rc),
         )
         val mediaType = testCase.bodyMediaType.orNull()
+        val outputShape = operationShape.outputShape(codegenContext.model)
+        val schemaExclusive = software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+        val streamingBlobOutput = schemaExclusive && outputShape.hasStreamingMember(codegenContext.model)
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -277,15 +281,16 @@ class ClientProtocolTestGenerator(
             let config = op.config().expect("the operation has config");
             let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
 
-            let parsed = de.deserialize_streaming(&mut http_response);
+            // Build a config bag with the protocol for schema-based deserialization
+            ##[allow(unused_mut)]
+            let mut test_cfg = #{ConfigBag}::base();
+            #{inject_protocol}
+
+            let parsed = #{call_streaming};
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
-                // Build a config bag with the protocol for schema-based deserialization
-                ##[allow(unused_mut)]
-                let mut test_cfg = #{ConfigBag}::base();
-                #{inject_protocol}
                 de.deserialize_nonstreaming_with_config(&http_response, &test_cfg)
             });
             """,
@@ -301,6 +306,15 @@ class ClientProtocolTestGenerator(
                 RT.smithyRuntimeApiClient(rc)
                     .resolve("client::ser_de::SharedResponseDeserializer"),
             "inject_protocol" to protocolTestConfigBagSetup(),
+            "call_streaming" to
+                writable {
+                    if (streamingBlobOutput) {
+                        // Schema-serde streaming blob: use _with_config so the protocol is available
+                        rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
+                    } else {
+                        rust("de.deserialize_streaming(&mut http_response);")
+                    }
+                },
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)

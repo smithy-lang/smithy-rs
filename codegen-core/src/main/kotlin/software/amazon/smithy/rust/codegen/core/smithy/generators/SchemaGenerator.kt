@@ -44,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
 import software.amazon.smithy.model.traits.Trait as SmithyTrait
 
@@ -961,12 +962,13 @@ class SchemaGenerator(
 
         val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
         val bodyParam = if (hasPayloadHandling) "body" else "_body"
-        // Check if there are any body members (non-HTTP-bound, non-synthetic)
+        // Check if there are any body members (non-HTTP-bound, non-synthetic, non-streaming)
         val hasBodyMembers =
             structShape.allMembers.values.any { member ->
                 !member.hasTrait(software.amazon.smithy.model.traits.HttpHeaderTrait::class.java) &&
                     !member.hasTrait(software.amazon.smithy.model.traits.HttpResponseCodeTrait::class.java) &&
                     !member.hasTrait(software.amazon.smithy.model.traits.HttpPrefixHeadersTrait::class.java) &&
+                    !member.isStreaming(model) &&
                     member.memberName != "_request_id"
             }
         val deserializerParam = if (isRawPayload || !hasBodyMembers) "_deserializer" else "deserializer"
