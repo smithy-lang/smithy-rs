@@ -45,6 +45,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddEx
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -103,14 +104,10 @@ class EndpointBddGenerator(
         writer.rustTemplate(
             """
             #{ResolverStruct:W}
-            #{ConditionFn:W}
-            #{ResultEndpoint:W}
             #{Nodes:W}
             #{ConditionContext:W}
             """,
             "ResolverStruct" to generateResolverStruct(genContext),
-            "ConditionFn" to generateConditionFn(genContext),
-            "ResultEndpoint" to generateResultEndpoint(genContext),
             "Nodes" to generateNodeArray(),
             "ConditionContext" to generateContextStruct(),
         )
@@ -156,6 +153,7 @@ class EndpointBddGenerator(
                 /// The default endpoint resolver.
                 pub struct DefaultResolver {
                     #{CustomFields}
+                    endpoint_cache: #{ArcSwap}<::std::option::Option<(Params, ::aws_smithy_types::endpoint::Endpoint)>>,
                 }
 
                  impl Default for DefaultResolver {
@@ -169,85 +167,218 @@ class EndpointBddGenerator(
                     pub fn new() -> Self {
                         Self {
                             #{CustomFieldsInit}
+                            endpoint_cache: #{ArcSwap}::from_pointee(None),
                         }
                     }
 
-                    ##[allow(clippy::needless_borrow)]
-                    pub(crate) fn evaluate_fn(
-                        &self,
-                    ) -> impl for<'a> FnMut(
-                        &ConditionFn,
-                        &'a Params,
-                        &mut ConditionContext<'a>,
-                        &mut #{DiagnosticCollector},
-                    ) -> bool
-                           + '_ {
-                        move |cond, params, context, _diagnostic_collector| {
-                            cond.evaluate(
-                                params,
-                                context,
-                                #{CustomFieldsArgs}
-                                _diagnostic_collector,
-                            )
-                        }
-                    }
-
+                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
+                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
+                        clippy::needless_borrow, clippy::useless_asref, clippy::redundant_closure_call)]
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
-                        let mut diagnostic_collector = #{DiagnosticCollector}::new();
-                        let mut condition_context = ConditionContext::default();
-                        let result = #{EvaluateBdd}(
-                            &NODES,
-                            &CONDITIONS,
-                            &RESULTS,
-                            ${bddTrait.bdd.rootRef},
-                            params,
-                            &mut condition_context,
-                            &mut diagnostic_collector,
-                            self.evaluate_fn(),
-                        );
+                        let mut _diagnostic_collector = #{DiagnosticCollector}::new();
+                        ##[allow(unused_mut)]
+                        let mut context = ConditionContext::default();
 
-                        match result {
-                            #{Some}(endpoint) => match endpoint.to_endpoint(params, &condition_context) {
-                                Ok(ep) => Ok(ep),
-                                Err(err) => Err(Box::new(err)),
-                            },
-                            #{None} => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched"))),
+                        // Param bindings
+                        #{ParamBindings:W}
+
+                        let mut current_ref: i32 = ${bddTrait.bdd.rootRef};
+                        loop {
+                            match current_ref {
+                                ref_val if ref_val >= 100_000_000 => {
+                                    return match (ref_val - 100_000_000) as usize {
+                                        #{ResultArms:W}
+                                        _ => #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched")) as #{BoxError}),
+                                    };
+                                }
+                                1 | -1 => return #{Err}(Box::new(#{ResolveEndpointError}::message("No endpoint rule matched")) as #{BoxError}),
+                                ref_val => {
+                                    let is_complement = ref_val < 0;
+                                    let node = &NODES[(ref_val.unsigned_abs() as usize) - 1];
+                                    let condition_result = match node.condition_index {
+                                        #{ConditionArms:W}
+                                        _ => unreachable!("Invalid condition index"),
+                                    };
+                                    current_ref = if is_complement ^ condition_result { node.high_ref } else { node.low_ref };
+                                }
+                            }
                         }
                     }
                 }
 
                 impl #{ServiceSpecificEndpointResolver} for DefaultResolver {
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{EndpointFuture}<'a> {
+                        // Check single-entry cache (lock-free read via ArcSwap)
+                        let cached = self.endpoint_cache.load();
+                        if let Some((cached_params, cached_endpoint)) = cached.as_ref() {
+                            if cached_params == params {
+                                return #{EndpointFuture}::ready(#{Ok}(cached_endpoint.clone()));
+                            }
+                        }
+                        drop(cached);
                         let result = self.resolve_endpoint(params);
-
+                        if let #{Ok}(ref endpoint) = result {
+                            self.endpoint_cache.store(::std::sync::Arc::new(Some((params.clone(), endpoint.clone()))));
+                        }
                         #{EndpointFuture}::ready(result)
                     }
                 }
                 """,
                 *preludeScope,
+                "ArcSwap" to CargoDependency.ArcSwap.toType().resolve("ArcSwap"),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "CustomFields" to
                     writable {
                         genContext.fnsUsed.mapNotNull { it.structFieldBdd() }.forEach { rust("#W,", it) }
                     },
-                "CustomFieldsArgs" to
-                    writable {
-                        genContext.fnsUsed.mapNotNull { it.additionalArgsInvocation("self") }
-                            .forEach { rust("#W,", it) }
-                    },
                 "CustomFieldsInit" to
                     writable {
                         genContext.fnsUsed.mapNotNull { it.structFieldInitBdd() }.forEach { rust("#W,", it) }
                     },
+                "ConditionArms" to generateInlineConditionArms(genContext),
                 "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                "EvaluateBdd" to EndpointsLib.evaluateBdd,
                 "Params" to genContext.typeGenerator.paramsStruct(),
+                "ParamBindings" to generateParamBindings(),
+                "NonParamRefBindings" to generateNonParamReferences(),
                 "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                "ResultArms" to generateInlineResultArms(genContext.context),
                 "ServiceSpecificEndpointResolver" to codegenContext.serviceSpecificEndpointResolver(),
                 "SmithyEndpoint" to Types(runtimeConfig).smithyEndpoint,
                 *Types(runtimeConfig).toArray(),
             )
         }
+
+    /**
+     * Generate match arms for inline condition evaluation.
+     * Trivial conditions (isSet, booleanEquals on params) are emitted directly.
+     * Complex conditions use a closure to support `return false` early exits.
+     */
+    private fun generateInlineConditionArms(genContext: GenerationContext) =
+        writable {
+            bddTrait.conditions.forEachIndexed { idx, cond ->
+                val trivialExpr = tryGenerateTrivialCondition(cond)
+                if (trivialExpr != null) {
+                    rustTemplate("$idx => #{expr:W},\n", "expr" to trivialExpr)
+                } else {
+                    val condBody = genContext.conditionScope["$CONDITION_FN_PREFIX$idx"]!!
+                    rustTemplate(
+                        """
+                        $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
+                            #{NonParamRefBindings:W}
+                            let partition_resolver = &self.partition_resolver;
+                            #{body:W}
+                        })(&mut _diagnostic_collector),
+                        """,
+                        "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
+                        "NonParamRefBindings" to generateNonParamReferences(),
+                        "body" to condBody,
+                    )
+                }
+            }
+        }
+
+    /**
+     * Try to generate a trivial inline expression for a condition.
+     * Returns null if the condition is too complex for inlining.
+     *
+     * Trivial conditions:
+     * - isSet(paramRef) with no assignment → `param.is_some()`
+     * - booleanEquals(paramRef, true/false) with no assignment → `(param) == (&true)`
+     */
+    private fun tryGenerateTrivialCondition(cond: Condition): Writable? {
+        // Conditions with assignments need the full closure for context mutation
+        if (cond.result.isPresent) return null
+
+        val fn = cond.function
+        return fn.accept(
+            object : ExpressionVisitor<Writable?> {
+                override fun visitIsSet(target: Expression): Writable? {
+                    if (target !is Reference) return null
+                    val paramName = target.name.rustName()
+                    // Only inline for params (not context refs which need mutable borrows)
+                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
+                    return writable { rust("$paramName.is_some()") }
+                }
+
+                override fun visitBoolEquals(
+                    left: Expression,
+                    right: Expression,
+                ): Writable? {
+                    // Match pattern: booleanEquals(paramRef, literal_bool)
+                    val (refExpr, litExpr) =
+                        when {
+                            left is Reference -> left to right
+                            right is Reference -> right to left
+                            else -> return null
+                        }
+                    val paramName = refExpr.name.rustName()
+                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
+                    val litVal =
+                        litExpr.accept(
+                            object : ExpressionVisitor<Boolean?> {
+                                override fun visitLiteral(literal: Literal): Boolean? {
+                                    return literal.accept(
+                                        object : LiteralVisitor<Boolean?> {
+                                            override fun visitBoolean(b: Boolean) = b
+
+                                            override fun visitString(value: Template) = null
+
+                                            override fun visitRecord(members: MutableMap<Identifier, Literal>) = null
+
+                                            override fun visitTuple(members: MutableList<Literal>) = null
+
+                                            override fun visitInteger(value: Int) = null
+                                        },
+                                    )
+                                }
+
+                                override fun visitRef(reference: Reference) = null
+
+                                override fun visitGetAttr(getAttr: GetAttr) = null
+
+                                override fun visitIsSet(fn: Expression) = null
+
+                                override fun visitNot(not: Expression) = null
+
+                                override fun visitBoolEquals(
+                                    left: Expression,
+                                    right: Expression,
+                                ) = null
+
+                                override fun visitStringEquals(
+                                    left: Expression,
+                                    right: Expression,
+                                ) = null
+
+                                override fun visitLibraryFunction(
+                                    fn: FunctionDefinition,
+                                    args: MutableList<Expression>,
+                                ) = null
+                            },
+                        ) ?: return null
+                    return writable { rust("($paramName) == (&$litVal)") }
+                }
+
+                override fun visitLiteral(literal: Literal) = null
+
+                override fun visitRef(reference: Reference) = null
+
+                override fun visitGetAttr(getAttr: GetAttr) = null
+
+                override fun visitNot(not: Expression) = null
+
+                override fun visitStringEquals(
+                    left: Expression,
+                    right: Expression,
+                ) = null
+
+                override fun visitLibraryFunction(
+                    fn: FunctionDefinition,
+                    args: MutableList<Expression>,
+                ) = null
+            },
+        )
+    }
 
     private fun generateConditionFn(genContext: GenerationContext) =
         writable {
@@ -351,7 +482,7 @@ class EndpointBddGenerator(
                 "let $memberName = params.$memberName;"
 
             isStringRef(memberName) ->
-                "let $memberName = params.$memberName.as_ref().map(|s| s.clone()).unwrap_or_default();"
+                "let $memberName = params.$memberName.as_deref().unwrap_or_default();"
 
             else ->
                 "let $memberName = params.$memberName.expect(\"Guaranteed to have a value by earlier checks.\");"
@@ -399,6 +530,40 @@ class EndpointBddGenerator(
                     rustTemplate(
                         """
                         Self::Result$idx => {
+                            #{bindings:W}
+                            #{output:W}
+                        },
+                        """,
+                        "bindings" to bindings,
+                        "output" to ruleOutput,
+                    )
+                }
+            }
+        }
+
+    /**
+     * Generate match arms for the inline result builder closure.
+     * Arms match on usize index and return Result<Endpoint, BoxError>.
+     */
+    private fun generateInlineResultArms(context: Context) =
+        writable {
+            val visitor = InlineRuleVisitor(context)
+            bddTrait.results.forEachIndexed { idx, rule ->
+
+                if (rule is NoMatchRule) {
+                    rustTemplate(
+                        "$idx => #{Err}(Box::new(#{ResolveEndpointError}::message(\"No endpoint rule matched\")) as #{BoxError}),\n",
+                        *preludeScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    )
+                } else {
+                    val usedVars = collectUsedVariables(rule)
+                    val bindings = generateBindingsForVariables(usedVars)
+                    val ruleOutput = rule.accept(visitor)
+                    rustTemplate(
+                        """
+                        $idx => {
                             #{bindings:W}
                             #{output:W}
                         },
@@ -554,7 +719,7 @@ class EndpointBddGenerator(
                             """.trimIndent(),
                         )
                     } else {
-                        rust("let $rustName = context.$rustName.as_ref().map(|s| s.clone()).expect(\"Guaranteed to have a value by earlier checks.\");\n")
+                        rust("let $rustName = context.$rustName.as_ref().expect(\"Guaranteed to have a value by earlier checks.\");\n")
                     }
                 }
             }
@@ -585,6 +750,32 @@ class EndpointBddGenerator(
     }
 
     /**
+     * Rule visitor for inline result builder closure.
+     * Returns Result<Endpoint, BoxError> instead of Result<Endpoint, ResolveEndpointError>.
+     */
+    inner class InlineRuleVisitor(private val context: Context) : RuleValueVisitor<Writable> {
+        override fun visitTreeRule(rules: List<Rule>): Writable {
+            throw UnsupportedOperationException("Tree rules not supported in BDD endpoint resolver")
+        }
+
+        override fun visitErrorRule(error: Expression): Writable =
+            writable {
+                rustTemplate(
+                    "#{Err}(Box::new(#{ResolveEndpointError}::message(#{message:W})) as #{BoxError})",
+                    *preludeScope,
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
+                    "ResolveEndpointError" to Types(runtimeConfig).resolveEndpointError,
+                    "message" to ExpressionGenerator(Ownership.Owned, context).generate(error),
+                )
+            }
+
+        override fun visitEndpointRule(endpoint: Endpoint): Writable =
+            writable {
+                rustTemplate("#{Ok}(#{endpoint:W})", *preludeScope, "endpoint" to generateEndpoint(endpoint))
+            }
+    }
+
+    /**
      * Generates an `Endpoint` using an `Endpoint::builder()` and the same `Params`/`ConditionContext`
      * used in Condition evaluation.
      */
@@ -594,7 +785,14 @@ class EndpointBddGenerator(
         val generator = ExpressionGenerator(Ownership.Owned, context)
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
-        val properties = endpoint.properties.mapValues { entry -> generator.generate(entry.value) }
+        val properties =
+            endpoint.properties
+                .filter { it.key.toString() != "authSchemes" }
+                .mapValues { entry -> generator.generate(entry.value) }
+        val authSchemes =
+            endpoint.properties
+                .filter { it.key.toString() == "authSchemes" }
+                .values.firstOrNull()
         return writable {
             rustTemplate(
                 "#{SmithyEndpoint}::builder().url(#{url:W})",
@@ -603,7 +801,82 @@ class EndpointBddGenerator(
             )
             headers.forEach { (name, values) -> values.forEach { rust(".header(${name.dq()}, #W)", it) } }
             properties.forEach { (name, value) -> rust(".property(${name.toString().dq()}, #W)", value) }
+            if (authSchemes != null) {
+                rustTemplate("#{authSchemes:W}", "authSchemes" to generateTypedAuthSchemes(authSchemes, generator))
+            }
             rust(".build()")
+        }
+    }
+
+    /**
+     * Generate `.auth_scheme(EndpointAuthScheme::with_capacity(...).put(...))` calls
+     * from the authSchemes property literal (a tuple of records).
+     */
+    private fun generateTypedAuthSchemes(
+        authSchemesExpr: Expression,
+        generator: ExpressionGenerator,
+    ): Writable {
+        val literal =
+            authSchemesExpr as? Literal
+                ?: return writable {
+                    // Fallback: if it's not a literal, use the old Document-based path
+                    rust(".property(\"authSchemes\", #W)", generator.generate(authSchemesExpr))
+                }
+
+        // Use borrowed generator for auth scheme values — with_capacity and put accept
+        // Into<Cow<'static, str>> and Into<Document>, both of which work with &str directly.
+        val registry = FunctionRegistry(stdlib)
+        val borrowedContext = Context(registry, runtimeConfig, isBddMode = true)
+        val borrowedGenerator = ExpressionGenerator(Ownership.Borrowed, borrowedContext)
+
+        return writable {
+            literal.accept(
+                object : LiteralVisitor<Unit> {
+                    override fun visitBoolean(b: Boolean) {}
+
+                    override fun visitString(value: Template) {}
+
+                    override fun visitInteger(value: Int) {}
+
+                    override fun visitRecord(members: MutableMap<Identifier, Literal>) {}
+
+                    override fun visitTuple(members: MutableList<Literal>) {
+                        members.forEach { member ->
+                            member.accept(
+                                object : LiteralVisitor<Unit> {
+                                    override fun visitBoolean(b: Boolean) {}
+
+                                    override fun visitString(value: Template) {}
+
+                                    override fun visitInteger(value: Int) {}
+
+                                    override fun visitTuple(members: MutableList<Literal>) {}
+
+                                    override fun visitRecord(members: MutableMap<Identifier, Literal>) {
+                                        val nameExpr = members.entries.find { it.key.toString() == "name" }
+                                        val otherEntries = members.entries.filter { it.key.toString() != "name" }
+                                        val nameWritable =
+                                            if (nameExpr != null) {
+                                                generator.generate(nameExpr.value)
+                                            } else {
+                                                writable { rust("\"unknown\"") }
+                                            }
+                                        rustTemplate(
+                                            ".auth_scheme(#{EndpointAuthScheme}::with_capacity(#{name:W}, ${otherEntries.size})",
+                                            "EndpointAuthScheme" to Types(runtimeConfig).smithyEndpointAuthScheme,
+                                            "name" to nameWritable,
+                                        )
+                                        otherEntries.sortedBy { it.key.toString() }.forEach { (key, value) ->
+                                            rust(".put(${key.toString().dq()}, #W)", borrowedGenerator.generate(value))
+                                        }
+                                        rust(")")
+                                    }
+                                },
+                            )
+                        }
+                    }
+                },
+            )
         }
     }
 

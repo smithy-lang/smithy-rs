@@ -53,7 +53,7 @@ class LiteralGenerator(private val ownership: Ownership, private val context: Co
         writable {
             rustBlock("") {
                 rustTemplate(
-                    "let mut out = #{HashMap}::<String, #{Document}>::new();",
+                    "let mut out = #{HashMap}::<String, #{Document}>::with_capacity(${members.size});",
                     *codegenScope,
                 )
                 members.keys.sortedBy { it.toString() }.map { k -> k to members[k]!! }.forEach { (identifier, literal) ->
