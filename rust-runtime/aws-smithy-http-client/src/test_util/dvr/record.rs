@@ -15,11 +15,12 @@ use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
+use bytes::Bytes;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::{fs, io};
 use tokio::task::JoinHandle;
+use {std::fs, std::io};
 
 /// Recording client
 ///
@@ -28,17 +29,13 @@ use tokio::task::JoinHandle;
 /// # Example
 ///
 /// ```rust,ignore
-/// use aws_smithy_async::rt::sleep::default_async_sleep;
-/// use aws_smithy_runtime::client::http::hyper_014::default_connector;
 /// use aws_smithy_http_client::test_util::dvr::RecordingClient;
-/// use aws_smithy_runtime_api::client::http::HttpConnectorSettingsBuilder;
 /// use aws_sdk_s3::{Client, Config};
 ///
 /// #[tokio::test]
 /// async fn test_content_length_enforcement_is_not_applied_to_head_request() {
-///     let settings = HttpConnectorSettingsBuilder::default().build();
-///     let http_client = default_connector(&settings, default_async_sleep()).unwrap();
-///     let http_client = RecordingClient::new(http_client);
+///     // Create a recording client that wraps a default HTTPS connector
+///     let http_client = RecordingClient::https();
 ///
 ///     // Since we need to send a real request for this,
 ///     // you'll need to use your real credentials.
@@ -125,14 +122,56 @@ impl RecordingClient {
     }
 }
 
+/// Record a request body, preferring a buffered approach for non-streaming bodies.
+///
+/// For request bodies that have their content available as bytes, this buffers
+/// the body in memory to avoid timing issues with channel-based streaming.
+/// Streaming request bodies fall back to the channel-based recorder.
+fn record_request_body(
+    body: &mut SdkBody,
+    event_id: ConnectionId,
+    direction: Direction,
+    event_bus: Arc<Mutex<Vec<Event>>>,
+) {
+    if let Some(bytes) = body.bytes() {
+        let data = Bytes::copy_from_slice(bytes);
+        let mut events = event_bus.lock().unwrap();
+        events.push(Event {
+            connection_id: event_id,
+            action: Action::Data {
+                data: BodyData::from(data.clone()),
+                direction,
+            },
+        });
+        events.push(Event {
+            connection_id: event_id,
+            action: Action::Eof {
+                ok: true,
+                direction,
+            },
+        });
+        *body = SdkBody::from(data);
+    } else {
+        record_body(body, event_id, direction, event_bus);
+    }
+}
+
+/// Record body data using a channel-based streaming approach.
+///
+/// This spawns a task that reads from the original body and forwards data
+/// through a channel to a replacement body. This is used for response bodies
+/// and streaming request bodies.
 fn record_body(
     body: &mut SdkBody,
     event_id: ConnectionId,
     direction: Direction,
     event_bus: Arc<Mutex<Vec<Event>>>,
 ) -> JoinHandle<()> {
-    let (sender, output_body) = crate::test_util::body::channel_body();
+    // Capture the content length so the replacement body reports the correct size_hint()
+    let content_length = body.content_length();
+    let (sender, output_body) = crate::test_util::body::channel_body_with_size_hint(content_length);
     let real_body = std::mem::replace(body, output_body);
+
     tokio::spawn(async move {
         let mut real_body = real_body;
         let mut sender = sender;
@@ -147,9 +186,7 @@ fn record_body(
                             direction,
                         },
                     });
-                    // This happens if the real connection is closed during recording.
-                    // Need to think more carefully if this is the correct thing to log in this
-                    // case.
+                    // Forward the data to the replacement body
                     if sender.send_data(data).await.is_err() {
                         event_bus.lock().unwrap().push(Event {
                             connection_id: event_id,
@@ -157,8 +194,9 @@ fn record_body(
                                 direction: direction.opposite(),
                                 ok: false,
                             },
-                        })
-                    };
+                        });
+                        break;
+                    }
                 }
                 None => {
                     event_bus.lock().unwrap().push(Event {
@@ -190,13 +228,13 @@ fn record_body(
 impl HttpConnector for RecordingClient {
     fn call(&self, mut request: HttpRequest) -> HttpConnectorFuture {
         let event_id = self.next_id();
-        // A request has three phases:
-        // 1. A "Request" phase. This is initial HTTP request, headers, & URI
-        // 2. A body phase. This may contain multiple data segments.
-        // 3. A finalization phase. An EOF of some sort is sent on the body to indicate that
-        // the channel should be closed.
 
-        // Phase 1: the initial http request
+        // A request has three phases:
+        // 1. A "Request" phase: initial HTTP request (headers, method, URI)
+        // 2. A body phase: may contain multiple data segments
+        // 3. A finalization phase: EOF is sent to indicate the body is complete
+
+        // Phase 1: Record the initial request
         self.data.lock().unwrap().push(Event {
             connection_id: event_id,
             action: Action::Request {
@@ -204,23 +242,24 @@ impl HttpConnector for RecordingClient {
             },
         });
 
-        // Phase 2: Swap out the real request body for one that will log all traffic that passes
-        // through it
-        // This will also handle phase three when the request body runs out of data.
-        record_body(
+        // Phase 2 & 3: Record the request body
+        // Use buffered recording for request bodies to avoid race conditions
+        // with channel-based streaming that can cause HTTP/2 framing issues.
+        record_request_body(
             request.body_mut(),
             event_id,
             Direction::Request,
             self.data.clone(),
         );
+
         let events = self.data.clone();
-        // create a channel we'll use to stream the data while reading it
         let resp_fut = self.inner.call(request);
+
         let fut = async move {
             let resp = resp_fut.await;
             match resp {
                 Ok(mut resp) => {
-                    // push the initial response event
+                    // Record the initial response
                     events.lock().unwrap().push(Event {
                         connection_id: event_id,
                         action: Action::Response {
@@ -228,7 +267,8 @@ impl HttpConnector for RecordingClient {
                         },
                     });
 
-                    // instrument the body and record traffic
+                    // Record the response body using channel-based streaming
+                    // (this works fine for responses since we're consuming, not producing)
                     record_body(resp.body_mut(), event_id, Direction::Response, events);
                     Ok(resp)
                 }
