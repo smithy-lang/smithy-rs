@@ -448,15 +448,8 @@ async fn create_lambda_fn(
             ),
     };
 
-    let lambda_arch = match options.architecture {
-        crate::arch::Arch::X86_64 => Architecture::X8664,
-        crate::arch::Arch::Aarch64 => Architecture::Arm64,
-    };
-
-    let lambda_runtime = match options.architecture {
-        crate::arch::Arch::X86_64 => Runtime::Providedal2,
-        crate::arch::Arch::Aarch64 => Runtime::Providedal2023,
-    };
+    let lambda_arch: Architecture = options.architecture.into();
+    let lambda_runtime: Runtime = options.architecture.into();
 
     lambda_client
         .create_function()
