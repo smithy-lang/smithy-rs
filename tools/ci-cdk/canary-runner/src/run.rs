@@ -119,6 +119,10 @@ pub struct RunArgs {
     /// The ARN of the role that the Lambda will execute as
     #[clap(long, required_unless_present = "cdk-output")]
     lambda_execution_role_arn: Option<String>,
+
+    /// Lambda architecture
+    #[clap(long, default_value = "x86_64")]
+    pub(crate) architecture: crate::arch::Arch,
 }
 
 #[derive(Debug, Eq, PartialEq)]
@@ -134,6 +138,7 @@ struct Options {
     lambda_test_s3_mrap_bucket_arn: String,
     lambda_test_s3_express_bucket_name: String,
     lambda_execution_role_arn: String,
+    architecture: crate::arch::Arch,
 }
 
 impl Options {
@@ -203,6 +208,7 @@ impl Options {
                 lambda_test_s3_mrap_bucket_arn,
                 lambda_test_s3_express_bucket_name,
                 lambda_execution_role_arn,
+                architecture: run_opt.architecture,
             })
         } else {
             Ok(Options {
@@ -223,6 +229,7 @@ impl Options {
                     .lambda_test_s3_express_bucket_name
                     .expect("required"),
                 lambda_execution_role_arn: run_opt.lambda_execution_role_arn.expect("required"),
+                architecture: run_opt.architecture,
             })
         }
     }
@@ -319,9 +326,17 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
         "Creating the canary Lambda function named {}...",
         bundle_name
     );
+    let function_name = format!(
+        "{}-{}",
+        bundle_name,
+        match options.architecture {
+            crate::arch::Arch::X86_64 => "x86_64",
+            crate::arch::Arch::Aarch64 => "aarch64",
+        }
+    );
     create_lambda_fn(
         lambda_client.clone(),
-        bundle_name,
+        &function_name,
         bundle_file_name,
         options,
     )
@@ -330,11 +345,11 @@ async fn run_canary(options: &Options, config: &aws_config::SdkConfig) -> Result
 
     info!("Invoking the canary Lambda...");
     let invoke_start_time = SystemTime::now();
-    let invoke_result = invoke_lambda(lambda_client.clone(), bundle_name).await;
+    let invoke_result = invoke_lambda(lambda_client.clone(), &function_name).await;
     let invoke_time = invoke_start_time.elapsed().expect("time in range");
 
     info!("Deleting the canary Lambda...");
-    delete_lambda_fn(lambda_client, bundle_name)
+    delete_lambda_fn(lambda_client, &function_name)
         .await
         .context(here!())?;
 
@@ -362,7 +377,7 @@ async fn build_bundle(options: &Options) -> Result<PathBuf> {
         sdk_release_tag: options.sdk_release_tag.clone(),
         sdk_path: options.sdk_path.clone(),
         musl: options.musl,
-        architecture: crate::arch::Arch::X86_64,
+        architecture: options.architecture,
         manifest_only: false,
         disable_jitter_entropy: true,
         feature_override: None,
@@ -433,10 +448,13 @@ async fn create_lambda_fn(
             ),
     };
 
+    let lambda_arch: Architecture = options.architecture.into();
+    let lambda_runtime: Runtime = options.architecture.into();
+
     lambda_client
         .create_function()
         .function_name(bundle_name)
-        .runtime(Runtime::Providedal2)
+        .runtime(lambda_runtime)
         .role(&options.lambda_execution_role_arn)
         .handler("aws-sdk-rust-lambda-canary")
         .code(
@@ -449,6 +467,7 @@ async fn create_lambda_fn(
         .environment(env_builder.build())
         .timeout(180)
         .memory_size(options.lambda_function_memory_size_in_mb)
+        .architectures(lambda_arch)
         .send()
         .await
         .context(here!("failed to create canary Lambda function"))?;
@@ -565,7 +584,8 @@ mod tests {
                 lambda_test_s3_bucket_name: None,
                 lambda_execution_role_arn: None,
                 lambda_test_s3_mrap_bucket_arn: None,
-                lambda_test_s3_express_bucket_name: None
+                lambda_test_s3_express_bucket_name: None,
+                architecture: crate::arch::Arch::X86_64,
             },
             RunArgs::try_parse_from([
                 "run",
@@ -616,6 +636,7 @@ mod tests {
                 lambda_test_s3_mrap_bucket_arn: "arn:aws:s3::000000000000:accesspoint/example.mrap"
                     .to_owned(),
                 lambda_test_s3_express_bucket_name: "test--usw2-az1--x-s3".to_owned(),
+                architecture: crate::arch::Arch::X86_64,
             },
             Options::load_from(run_args).unwrap(),
         );
