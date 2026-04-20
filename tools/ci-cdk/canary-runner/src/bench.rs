@@ -257,15 +257,6 @@ async fn create_lambda_fn(
     Ok(())
 }
 
-impl From<Arch> for lambda::types::Architecture {
-    fn from(arch: Arch) -> Self {
-        match arch {
-            Arch::X86_64 => lambda::types::Architecture::X8664,
-            Arch::Aarch64 => lambda::types::Architecture::Arm64,
-        }
-    }
-}
-
 async fn run_benchmark(
     lambda_client: &lambda::Client,
     bundle_name: &str,

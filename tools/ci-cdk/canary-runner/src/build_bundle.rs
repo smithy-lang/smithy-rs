@@ -333,8 +333,9 @@ fn name_hashed_bundle(
     rust_version: Option<&str>,
     sdk_release_tag: Option<&ReleaseTag>,
 ) -> Result<String> {
-    // The Lambda name must be less than 64 characters, so truncate the hash a bit
-    let bin_hash = &bin_hash[..24];
+    // The Lambda name must be less than 64 characters, so truncate the hash a bit.
+    // Using 16 chars leaves headroom for the architecture suffix added in run.rs.
+    let bin_hash = &bin_hash[..16];
     // Lambda function names can't have periods in them
     let rust_version = rust_version.map(|s| s.replace('.', ""));
     let rust_version = rust_version.as_deref().unwrap_or("unknown");
@@ -390,8 +391,8 @@ pub async fn build_bundle(opt: BuildBundleArgs) -> Result<Option<PathBuf>> {
     };
 
     if !opt.manifest_only {
-        // Check if cross is needed and available
-        let use_cross = opt.architecture == Arch::Aarch64;
+        // Only use cross when cross-compiling (host arch != target arch)
+        let use_cross = opt.architecture == Arch::Aarch64 && std::env::consts::ARCH != "aarch64";
         if use_cross {
             let cross_check = Command::new("cross").arg("--version").output();
             if cross_check.is_err() || !cross_check.unwrap().status.success() {
@@ -883,7 +884,7 @@ aws-smithy-wasm = { version = "0.1.0" }
             assert_eq!(expected, actual);
         }
         check(
-            "canary-release20221216-1621-7ae6085d2105d5d1e13b10f8.zip",
+            "canary-release20221216-1621-7ae6085d2105d5d1.zip",
             &name_hashed_bundle(
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 Some("1.62.1"),
@@ -892,7 +893,7 @@ aws-smithy-wasm = { version = "0.1.0" }
             .unwrap(),
         );
         check(
-            "canary-release202212162-1621-7ae6085d2105d5d1e13b10f8.zip",
+            "canary-release202212162-1621-7ae6085d2105d5d1.zip",
             &name_hashed_bundle(
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 Some("1.62.1"),
@@ -901,7 +902,7 @@ aws-smithy-wasm = { version = "0.1.0" }
             .unwrap(),
         );
         check(
-            "canary-untagged-1621-7ae6085d2105d5d1e13b10f8.zip",
+            "canary-untagged-1621-7ae6085d2105d5d1.zip",
             &name_hashed_bundle(
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 Some("1.62.1"),
@@ -910,7 +911,7 @@ aws-smithy-wasm = { version = "0.1.0" }
             .unwrap(),
         );
         check(
-            "canary-release20221216-unknown-7ae6085d2105d5d1e13b10f8.zip",
+            "canary-release20221216-unknown-7ae6085d2105d5d1.zip",
             &name_hashed_bundle(
                 "7ae6085d2105d5d1e13b10f882c6cb072ff5bbf8",
                 None,
