@@ -55,9 +55,11 @@ open class EventStreamMarshallerGenerator(
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
+    private val useSchemaSerde: Boolean = false,
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
+    private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
     private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope =
         arrayOf(
@@ -69,6 +71,9 @@ open class EventStreamMarshallerGenerator(
             "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
             "Error" to smithyEventStream.resolve("error::Error"),
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
+            "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+            "PayloadSerializer" to smithySchema.resolve("codec::PayloadSerializer"),
+            "SerializableStruct" to smithySchema.resolve("serde::SerializableStruct"),
         )
 
     open fun render(): RuntimeType {
@@ -132,19 +137,38 @@ open class EventStreamMarshallerGenerator(
         marshallerType: RuntimeType,
         unionSymbol: Symbol,
     ) {
-        rust(
-            """
-            ##[non_exhaustive]
-            ##[derive(Debug)]
-            pub struct ${marshallerType.name};
-
-            impl ${marshallerType.name} {
-                pub fn new() -> Self {
-                    ${marshallerType.name}
+        if (useSchemaSerde) {
+            rustTemplate(
+                """
+                ##[non_exhaustive]
+                ##[derive(Debug)]
+                pub struct ${marshallerType.name} {
+                    protocol: #{SharedClientProtocol},
                 }
-            }
-            """,
-        )
+
+                impl ${marshallerType.name} {
+                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
+                        Self { protocol }
+                    }
+                }
+                """,
+                *codegenScope,
+            )
+        } else {
+            rust(
+                """
+                ##[non_exhaustive]
+                ##[derive(Debug)]
+                pub struct ${marshallerType.name};
+
+                impl ${marshallerType.name} {
+                    pub fn new() -> Self {
+                        ${marshallerType.name}
+                    }
+                }
+                """,
+            )
+        }
 
         rustBlockTemplate(
             "impl #{MarshallMessage} for ${marshallerType.name}",
@@ -295,6 +319,34 @@ open class EventStreamMarshallerGenerator(
             )
         } else {
             addStringHeader(":content-type", "${payloadContentType.dq()}.into()")
+
+            if (useSchemaSerde) {
+                val targetSymbol = symbolProvider.toSymbol(target)
+                handleOptional(
+                    optional,
+                    inputExpr,
+                    "inner_payload",
+                    { input ->
+                        rustTemplate(
+                            """
+                            {
+                                let codec = self.protocol.payload_codec()
+                                    .ok_or_else(|| #{Error}::marshalling("protocol has no payload codec".to_owned()))?;
+                                let mut ser = codec.create_serializer();
+                                #{ShapeSerializer}::write_struct(&mut *ser, #{Target}::SCHEMA, &$input)
+                                    .map_err(|err| #{Error}::marshalling(format!("{err}")))?;
+                                #{PayloadSerializer}::finish_boxed(ser)
+                            }
+                            """,
+                            "Target" to targetSymbol,
+                            "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                            *codegenScope,
+                        )
+                    },
+                    { rust("unimplemented!(\"TODO(EventStream): Figure out what to do when there's no payload\")") },
+                )
+                return
+            }
 
             handleOptional(
                 optional,

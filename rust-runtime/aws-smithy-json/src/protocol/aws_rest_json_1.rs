@@ -84,4 +84,8 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }
+
+    fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
+        self.inner.payload_codec()
+    }
 }

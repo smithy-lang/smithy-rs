@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.protocols
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
@@ -24,12 +25,28 @@ class ClientHttpBoundProtocolPayloadGenerator(
     protocol: Protocol,
 ) : ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
         codegenContext, protocol, HttpMessageType.REQUEST,
+        eventStreamUseSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext),
         renderEventStreamBody = { writer, params ->
+            val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+            val marshallerNew =
+                if (useSchemaSerde) {
+                    """
+                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                        .expect("a SharedClientProtocol is required")
+                        .clone();
+                    let error_marshaller = #{errorMarshallerConstructorFn}(protocol.clone());
+                    let marshaller = #{marshallerConstructorFn}(protocol);
+                    """
+                } else {
+                    """
+                    let error_marshaller = #{errorMarshallerConstructorFn}();
+                    let marshaller = #{marshallerConstructorFn}();
+                    """
+                }
             writer.rustTemplate(
                 """
                 {
-                    let error_marshaller = #{errorMarshallerConstructorFn}();
-                    let marshaller = #{marshallerConstructorFn}();
+                    $marshallerNew
                     let (signer, signer_sender) = #{DeferredSigner}::new();
                     _cfg.interceptor_state().store_put(signer_sender);
                     #{SdkBody}::from_body_1_x(#{http_body_util}::StreamBody::new(#{event_stream:W}))
@@ -43,6 +60,9 @@ class ClientHttpBoundProtocolPayloadGenerator(
                 "DeferredSigner" to
                     RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
                         .resolve("frame::DeferredSigner"),
+                "SharedClientProtocol" to
+                    RuntimeType.smithySchema(codegenContext.runtimeConfig)
+                        .resolve("protocol::SharedClientProtocol"),
                 "marshallerConstructorFn" to params.eventStreamMarshallerGenerator.render(),
                 "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
                 "event_stream" to (

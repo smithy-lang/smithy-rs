@@ -993,6 +993,10 @@ where
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
+
+    fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
+        Some(&self.codec)
+    }
 }
 
 #[cfg(test)]

@@ -165,6 +165,23 @@ pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
 
         Ok(())
     }
+
+    /// Returns the codec used for payload (de)serialization, if any.
+    ///
+    /// Per the SEP, `ClientProtocol` exposes the codec used for the protocol
+    /// message's main payload (e.g., an HTTP body). Returns `None` for
+    /// asymmetric protocols that have no single payload codec (e.g., AWS
+    /// Query, which uses different formats for serialization and
+    /// deserialization).
+    ///
+    /// The returned codec is accessed through the object-safe [`DynCodec`]
+    /// sibling trait. See the `DynCodec` documentation for an explanation of
+    /// why the object-safe view is needed when the `ClientProtocol` itself is
+    /// accessed through `dyn` (e.g., via
+    /// [`SharedClientProtocol`](crate::protocol::SharedClientProtocol)).
+    fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
+        None
+    }
 }
 
 /// A shared, type-erased client protocol stored in a [`ConfigBag`].

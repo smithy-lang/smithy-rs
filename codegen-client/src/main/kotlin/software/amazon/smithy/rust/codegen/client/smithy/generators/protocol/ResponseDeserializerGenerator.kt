@@ -223,6 +223,7 @@ class ResponseDeserializerGenerator(
                 codegenContext,
                 operationShape,
                 unionTarget,
+                useSchemaSerde = true,
             ).render()
 
         rustTemplate(
@@ -240,7 +241,10 @@ class ResponseDeserializerGenerator(
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     // Swap body out — becomes the event stream receiver.
                     let body = std::mem::replace(response.body_mut(), #{SdkBody}::taken());
-                    let unmarshaller = #{unmarshaller}();
+                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                        .expect("a SharedClientProtocol is required")
+                        .clone();
+                    let unmarshaller = #{unmarshaller}(protocol);
                     let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
                     let output = #{BuilderSymbol}::default();
                     let output = output.${streamingMember.setterName()}(#{Some}(receiver));
