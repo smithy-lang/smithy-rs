@@ -35,7 +35,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
                         .expect("a SharedClientProtocol is required")
                         .clone();
                     let error_marshaller = #{errorMarshallerConstructorFn}(protocol.clone());
-                    let marshaller = #{marshallerConstructorFn}(protocol);
+                    let marshaller = #{marshallerConstructorFn}(protocol.clone());
                     """
                 } else {
                     """
@@ -78,22 +78,59 @@ private fun eventStreamWithInitialRequest(
     protocol: Protocol,
     params: EventStreamBodyParams,
 ): Writable? {
-    val parser = protocol.structuredDataSerializer().operationInputSerializer(params.operationShape) ?: return null
-
     if (codegenContext.protocolImpl?.httpBindingResolver?.handlesEventStreamInitialRequest(params.operationShape) != true) {
         return null
     }
 
+    val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+    val parser = protocol.structuredDataSerializer().operationInputSerializer(params.operationShape)
+    // Legacy path requires the structured serializer to be available.
+    if (!useSchemaSerde && parser == null) return null
+
     val smithyHttp = RuntimeType.smithyHttp(codegenContext.runtimeConfig)
     val eventOrInitial = smithyHttp.resolve("event_stream::EventOrInitial")
     val eventOrInitialMarshaller = smithyHttp.resolve("event_stream::EventOrInitialMarshaller")
+
+    val operationSymbol = codegenContext.symbolProvider.toSymbol(params.operationShape)
+    val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
+
+    val bodyExpr: Writable =
+        if (useSchemaSerde) {
+            writable {
+                rustTemplate(
+                    """
+                    {
+                        let codec = protocol.payload_codec()
+                            .ok_or_else(|| "protocol has no payload codec")?;
+                        let mut ser = codec.create_serializer();
+                        #{ShapeSerializer}::write_struct(
+                            &mut *ser,
+                            #{Operation}::INPUT_SCHEMA,
+                            &input,
+                        )?;
+                        #{SdkBody}::from(#{PayloadSerializer}::finish_boxed(ser))
+                    }
+                    """,
+                    "Operation" to operationSymbol,
+                    "ShapeSerializer" to smithySchema.resolve("serde::ShapeSerializer"),
+                    "PayloadSerializer" to smithySchema.resolve("codec::PayloadSerializer"),
+                    "SdkBody" to
+                        CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x")
+                            .toType().resolve("body::SdkBody"),
+                )
+            }
+        } else {
+            writable {
+                rustTemplate("#{parser}(&input)?", "parser" to parser!!)
+            }
+        }
 
     return writable {
         rustTemplate(
             """
             {
                 use #{futures_util}::StreamExt;
-                let body = #{parser}(&input)?;
+                let body = #{body:W};
                 let initial_message = #{initial_message}(body);
 
                 // Wrap the marshaller to handle both initial and regular messages
@@ -117,7 +154,7 @@ private fun eventStreamWithInitialRequest(
             *preludeScope,
             "futures_util" to CargoDependency.FuturesUtil.toType(),
             "initial_message" to params.eventStreamMarshallerGenerator.renderInitialRequestGenerator(params.payloadContentType),
-            "parser" to parser,
+            "body" to bodyExpr,
             "EventOrInitial" to eventOrInitial,
             "EventOrInitialMarshaller" to eventOrInitialMarshaller,
             "EventStreamSender" to smithyHttp.resolve("event_stream::EventStreamSender"),
