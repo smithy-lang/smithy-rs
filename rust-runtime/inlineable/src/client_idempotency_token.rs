@@ -10,7 +10,9 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, Input,
 };
-use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+use aws_smithy_runtime_api::client::interceptors::{
+    dyn_dispatch_hint, Intercept, SharedInterceptor,
+};
 use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
@@ -31,7 +33,7 @@ impl IdempotencyTokenRuntimePlugin {
     {
         Self {
             runtime_components: RuntimeComponentsBuilder::new("IdempotencyTokenRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(IdempotencyTokenInterceptor {
+                .with_interceptor(SharedInterceptor::permanent(IdempotencyTokenInterceptor {
                     set_token,
                 })),
         }
@@ -57,6 +59,7 @@ impl<S> fmt::Debug for IdempotencyTokenInterceptor<S> {
     }
 }
 
+#[dyn_dispatch_hint]
 impl<S> Intercept for IdempotencyTokenInterceptor<S>
 where
     S: Fn(IdempotencyTokenProvider, &mut Input) + Send + Sync,

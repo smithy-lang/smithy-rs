@@ -32,7 +32,7 @@ private class ApiGatewayAcceptHeaderInterceptorCustomization(private val codegen
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     rustTemplate(
                         "#{Interceptor}::default()",
                         "Interceptor" to

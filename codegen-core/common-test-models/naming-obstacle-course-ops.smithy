@@ -67,7 +67,9 @@ structure ReservedWords {
     super: Boolean,
     build: String,
     default: String,
-    send: String
+    send: String,
+    specialCharEnum: SpecialCharacterEnum,
+    unnamedEnum: UnnamedEnum
 }
 
 structure Type {
@@ -155,3 +157,24 @@ structure CollidingException {
     { name: "SelfValue", value: "SelfValue" }
 ])
 string UnknownVariantCollidingEnum
+
+// Enum values containing special characters that conflict with Rust/codegen syntax
+// The "#" character is the formatting character in rustTemplate, so it must be escaped
+// See https://github.com/smithy-lang/smithy-rs/pull/4476
+@enum([
+    { name: "HashTag", value: "#hashtag" },
+    { name: "DoubleHash", value: "##double" },
+    { name: "HashInMiddle", value: "foo#bar" },
+    { name: "Plain", value: "plain" }
+])
+string SpecialCharacterEnum
+
+// Unnamed enum (no names, only values) - tests AsRef<str> implementation
+// See https://github.com/smithy-lang/smithy-rs/issues/3886
+// See https://github.com/smithy-lang/smithy-rs/pull/4478
+@enum([
+    { value: "Foo" },
+    { value: "Bar" },
+    { value: "Baz" }
+])
+string UnnamedEnum

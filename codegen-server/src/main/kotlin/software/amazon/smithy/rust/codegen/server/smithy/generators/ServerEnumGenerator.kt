@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.server.smithy.generators
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
+import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -108,7 +109,7 @@ open class ConstrainedEnum(
                 "MatchArms" to
                     writable {
                         context.sortedMembers.forEach { member ->
-                            rust("${member.value.dq()} => Ok(${context.enumName}::${member.derivedName()}),")
+                            rawRust("${member.value.dq()} => Ok(${context.enumName}::${member.derivedName()}),")
                         }
                     },
             )
@@ -138,7 +139,7 @@ open class ConstrainedEnum(
                 "ConstraintViolation" to constraintViolationSymbol,
                 "Values" to
                     writable {
-                        rust(context.sortedMembers.joinToString(" | ") { it.value.dq() })
+                        rawRust(context.sortedMembers.joinToString(" | ") { it.value.dq() })
                     },
             )
         }

@@ -19,7 +19,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextMut, BeforeTransmitInterceptorContextMut,
 };
 use aws_smithy_runtime_api::client::interceptors::{
-    disable_interceptor, Intercept, SharedInterceptor,
+    disable_interceptor, dyn_dispatch_hint, Intercept, SharedInterceptor,
 };
 use aws_smithy_runtime_api::client::retries::SharedRetryStrategy;
 use aws_smithy_runtime_api::client::runtime_components::{
@@ -46,6 +46,7 @@ impl SigV4PresigningInterceptor {
     }
 }
 
+#[dyn_dispatch_hint]
 impl Intercept for SigV4PresigningInterceptor {
     fn name(&self) -> &'static str {
         "SigV4PresigningInterceptor"
@@ -101,10 +102,9 @@ impl SigV4PresigningRuntimePlugin {
         let time_source = SharedTimeSource::new(StaticTimeSource::new(config.start_time()));
         Self {
             runtime_components: RuntimeComponentsBuilder::new("SigV4PresigningRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(SigV4PresigningInterceptor::new(
-                    config,
-                    payload_override,
-                )))
+                .with_interceptor(SharedInterceptor::permanent(
+                    SigV4PresigningInterceptor::new(config, payload_override),
+                ))
                 .with_retry_strategy(Some(SharedRetryStrategy::new(NeverRetryStrategy::new())))
                 .with_time_source(Some(time_source)),
         }

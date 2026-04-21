@@ -277,9 +277,6 @@ class UserAgentDecoratorTest {
                             AwsRuntimeType.awsRuntimeTestUtil(rc)
                                 .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
                         "capture_request" to RuntimeType.captureRequest(rc),
-                        "disable_interceptor" to
-                            RuntimeType.smithyRuntimeApiClient(rc)
-                                .resolve("client::interceptors::disable_interceptor"),
                         "UserAgentInterceptor" to
                             AwsRuntimeType.awsRuntime(rc)
                                 .resolve("user_agent::UserAgentInterceptor"),
@@ -361,9 +358,6 @@ class UserAgentDecoratorTest {
                             AwsRuntimeType.awsRuntimeTestUtil(rc)
                                 .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
                         "capture_request" to RuntimeType.captureRequest(rc),
-                        "disable_interceptor" to
-                            RuntimeType.smithyRuntimeApiClient(rc)
-                                .resolve("client::interceptors::disable_interceptor"),
                         "UserAgentInterceptor" to
                             AwsRuntimeType.awsRuntime(rc)
                                 .resolve("user_agent::UserAgentInterceptor"),
@@ -394,9 +388,6 @@ class UserAgentDecoratorTest {
                             AwsRuntimeType.awsRuntimeTestUtil(rc)
                                 .resolve("user_agent::test_util::assert_ua_contains_metric_values"),
                         "capture_request" to RuntimeType.captureRequest(rc),
-                        "disable_interceptor" to
-                            RuntimeType.smithyRuntimeApiClient(rc)
-                                .resolve("client::interceptors::disable_interceptor"),
                         "UserAgentInterceptor" to
                             AwsRuntimeType.awsRuntime(rc)
                                 .resolve("user_agent::UserAgentInterceptor"),
