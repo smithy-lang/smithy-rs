@@ -375,6 +375,7 @@ dependencies = [
  "aws-smithy-types 1.4.7",
  "criterion",
  "minicbor",
+ "num-bigint",
 ]
 
 [[package]]
