@@ -499,30 +499,36 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     }
 }
 
+/// Whether a `ListElementCollector` is gathering values for a header or query param.
+/// Affects default timestamp format: `http-date` for headers, `date-time` for query.
+#[derive(Copy, Clone)]
+enum HttpListTarget {
+    Header,
+    Query,
+}
+
 /// Collects list element values as strings for @httpHeader and @httpQuery on lists.
 struct ListElementCollector {
     values: Vec<String>,
     /// Whether each value should be quoted if it contains commas (strings yes, timestamps no)
     quotable: Vec<bool>,
-    /// Whether this collector is for a header (true) or query param (false).
-    /// Affects default timestamp format: http-date for headers, date-time for query.
-    is_header: bool,
+    target: HttpListTarget,
 }
 
 impl ListElementCollector {
     fn for_header() -> Self {
-        Self::new(true)
+        Self::new(HttpListTarget::Header)
     }
 
     fn for_query() -> Self {
-        Self::new(false)
+        Self::new(HttpListTarget::Query)
     }
 
-    fn new(is_header: bool) -> Self {
+    fn new(target: HttpListTarget) -> Self {
         Self {
             values: Vec::new(),
             quotable: Vec::new(),
-            is_header,
+            target,
         }
     }
 
@@ -588,13 +594,10 @@ impl ShapeSerializer for ListElementCollector {
                 }
             },
             // Default: headers use http-date, query params use date-time
-            None => {
-                if self.is_header {
-                    aws_smithy_types::date_time::Format::HttpDate
-                } else {
-                    aws_smithy_types::date_time::Format::DateTime
-                }
-            }
+            None => match self.target {
+                HttpListTarget::Header => aws_smithy_types::date_time::Format::HttpDate,
+                HttpListTarget::Query => aws_smithy_types::date_time::Format::DateTime,
+            },
         };
         self.push_unquotable(
             value
