@@ -80,12 +80,6 @@ struct HttpBindingSerializer<'a, S> {
     /// True for the top-level input struct in serialize_request.
     /// Cleared after the first write_struct so nested structs delegate directly.
     is_top_level: bool,
-    /// Tracks whether any member was written to the body serializer (i.e., a member
-    /// without an HTTP binding trait). Used by `HttpBindingProtocol` to determine
-    /// whether to wrap the body in `{}` and set `Content-Type: application/json`.
-    /// Per the REST-JSON spec, operations with no body members must send an empty
-    /// body with no Content-Type header.
-    has_body_content: bool,
     /// Raw payload bytes for `@httpPayload` blob/string members. When a member
     /// has `@httpPayload` and targets a blob or string, the raw bytes bypass
     /// the codec serializer entirely and are used as the HTTP body directly.
@@ -103,7 +97,6 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             labels: Vec::new(),
             input_schema,
             is_top_level: true,
-            has_body_content: false,
             raw_payload: None,
         }
     }
@@ -188,11 +181,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 // @httpPayload struct/union: write as the body's top-level object
                 // without a member name prefix. Use a non-member schema for the
                 // write_struct call so prefix() doesn't emit a field name.
-                self.has_body_content = true;
                 self.body.write_struct(&crate::prelude::DOCUMENT, value)?;
                 return Ok(());
             }
-            self.has_body_content = true;
             self.body.write_struct(schema, value)
         }
     }
@@ -205,7 +196,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         let schema = self.resolve_member(schema);
         // @httpHeader on a list: collect elements as comma-separated header value
         if let Some(header) = schema.http_header() {
-            let mut collector = ListElementCollector::new(true);
+            let mut collector = ListElementCollector::for_header();
             write_elements(&mut collector)?;
             // RFC 7230: string values containing commas or quotes need quoting.
             // Timestamps are NOT quoted even though http-date contains commas.
@@ -227,14 +218,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         }
         // @httpQuery on a list: add each element as a separate query param
         if let Some(query) = schema.http_query() {
-            let mut collector = ListElementCollector::new(false);
+            let mut collector = ListElementCollector::for_query();
             write_elements(&mut collector)?;
             for val in collector.values {
                 self.query_params.push((query.value().to_string(), val));
             }
             return Ok(());
         }
-        self.has_body_content = true;
         self.body.write_list(schema, write_elements)
     }
 
@@ -274,7 +264,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             }
             return Ok(());
         }
-        self.has_body_content = true;
         self.body.write_map(schema, write_entries)
     }
 
@@ -283,7 +272,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
         }
-        self.has_body_content = true;
         self.body.write_boolean(schema, value)
     }
 
@@ -292,7 +280,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
         }
-        self.has_body_content = true;
         self.body.write_byte(schema, value)
     }
 
@@ -301,7 +288,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
         }
-        self.has_body_content = true;
         self.body.write_short(schema, value)
     }
 
@@ -310,7 +296,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
         }
-        self.has_body_content = true;
         self.body.write_integer(schema, value)
     }
 
@@ -319,7 +304,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
         }
-        self.has_body_content = true;
         self.body.write_long(schema, value)
     }
 
@@ -328,7 +312,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &format_float_f32(value));
         }
-        self.has_body_content = true;
         self.body.write_float(schema, value)
     }
 
@@ -337,7 +320,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &format_float_f64(value));
         }
-        self.has_body_content = true;
         self.body.write_double(schema, value)
     }
 
@@ -350,7 +332,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value.as_ref());
         }
-        self.has_body_content = true;
         self.body.write_big_integer(schema, value)
     }
 
@@ -363,7 +344,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, value.as_ref());
         }
-        self.has_body_content = true;
         self.body.write_big_decimal(schema, value)
     }
 
@@ -392,7 +372,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_bytes()) });
             return Ok(());
         }
-        self.has_body_content = true;
         self.body.write_string(schema, value)
     }
 
@@ -423,7 +402,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_ref()) });
             return Ok(());
         }
-        self.has_body_content = true;
         self.body.write_blob(schema, value)
     }
 
@@ -458,7 +436,6 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 .map_err(|e| SerdeError::custom(format!("failed to format timestamp: {e}")))?;
             return self.add_binding(binding, schema, &formatted);
         }
-        self.has_body_content = true;
         self.body.write_timestamp(schema, value)
     }
 
@@ -467,12 +444,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         schema: &Schema,
         value: &aws_smithy_types::Document,
     ) -> Result<(), SerdeError> {
-        self.has_body_content = true;
         self.body.write_document(schema, value)
     }
 
     fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
-        self.has_body_content = true;
         self.body.write_null(schema)
     }
 }
@@ -524,22 +499,36 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     }
 }
 
+/// Whether a `ListElementCollector` is gathering values for a header or query param.
+/// Affects default timestamp format: `http-date` for headers, `date-time` for query.
+#[derive(Copy, Clone)]
+enum HttpListTarget {
+    Header,
+    Query,
+}
+
 /// Collects list element values as strings for @httpHeader and @httpQuery on lists.
 struct ListElementCollector {
     values: Vec<String>,
     /// Whether each value should be quoted if it contains commas (strings yes, timestamps no)
     quotable: Vec<bool>,
-    /// Whether this collector is for a header (true) or query param (false).
-    /// Affects default timestamp format: http-date for headers, date-time for query.
-    is_header: bool,
+    target: HttpListTarget,
 }
 
 impl ListElementCollector {
-    fn new(is_header: bool) -> Self {
+    fn for_header() -> Self {
+        Self::new(HttpListTarget::Header)
+    }
+
+    fn for_query() -> Self {
+        Self::new(HttpListTarget::Query)
+    }
+
+    fn new(target: HttpListTarget) -> Self {
         Self {
             values: Vec::new(),
             quotable: Vec::new(),
-            is_header,
+            target,
         }
     }
 
@@ -605,13 +594,10 @@ impl ShapeSerializer for ListElementCollector {
                 }
             },
             // Default: headers use http-date, query params use date-time
-            None => {
-                if self.is_header {
-                    aws_smithy_types::date_time::Format::HttpDate
-                } else {
-                    aws_smithy_types::date_time::Format::DateTime
-                }
-            }
+            None => match self.target {
+                HttpListTarget::Header => aws_smithy_types::date_time::Format::HttpDate,
+                HttpListTarget::Query => aws_smithy_types::date_time::Format::DateTime,
+            },
         };
         self.push_unquotable(
             value
@@ -744,7 +730,7 @@ impl ShapeSerializer for MapEntryCollector {
         // Map<String, List<String>>: each list element becomes a separate entry
         // with the same key (for @httpQueryParams).
         if let Some(key) = self.pending_key.take() {
-            let mut collector = ListElementCollector::new(false); // query params context
+            let mut collector = ListElementCollector::for_query(); // query params context
             write_elements(&mut collector)?;
             for val in collector.values {
                 self.entries.push((format!("{}{}", self.prefix, key), val));

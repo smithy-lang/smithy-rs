@@ -71,6 +71,9 @@ pub trait DeserializeResponse: Send + Sync + fmt::Debug {
     ///
     /// Override this or [`deserialize_streaming_with_config`](Self::deserialize_streaming_with_config),
     /// but not both.
+    #[deprecated(
+        note = "Implement `deserialize_streaming_with_config` instead. This method will be removed in a future release."
+    )]
     fn deserialize_streaming(
         &self,
         response: &mut HttpResponse,
@@ -88,6 +91,7 @@ pub trait DeserializeResponse: Send + Sync + fmt::Debug {
         response: &mut HttpResponse,
         _cfg: &ConfigBag,
     ) -> Option<Result<Output, OrchestratorError<Error>>> {
+        #[allow(deprecated)]
         self.deserialize_streaming(response)
     }
 
@@ -95,6 +99,9 @@ pub trait DeserializeResponse: Send + Sync + fmt::Debug {
     ///
     /// Override this or [`deserialize_nonstreaming_with_config`](Self::deserialize_nonstreaming_with_config),
     /// but not both.
+    #[deprecated(
+        note = "Implement `deserialize_nonstreaming_with_config` instead. This method will be removed in a future release."
+    )]
     fn deserialize_nonstreaming(
         &self,
         response: &HttpResponse,
@@ -113,6 +120,7 @@ pub trait DeserializeResponse: Send + Sync + fmt::Debug {
         response: &HttpResponse,
         _cfg: &ConfigBag,
     ) -> Result<Output, OrchestratorError<Error>> {
+        #[allow(deprecated)]
         self.deserialize_nonstreaming(response)
     }
 }
@@ -130,6 +138,7 @@ impl SharedResponseDeserializer {
     }
 }
 
+#[allow(deprecated)]
 impl DeserializeResponse for SharedResponseDeserializer {
     fn deserialize_nonstreaming(
         &self,
