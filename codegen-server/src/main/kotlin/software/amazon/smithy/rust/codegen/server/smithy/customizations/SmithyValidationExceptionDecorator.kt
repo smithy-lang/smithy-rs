@@ -163,7 +163,8 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun enumShapeConstraintViolationImplBlock(enumTrait: EnumTrait) =
         writable {
-            val message = enumTrait.validationErrorMessage()
+            // Escape `#` as `##` because `#` is the formatting character in rustTemplate
+            val message = enumTrait.validationErrorMessage().replace("#", "##")
             rustTemplate(
                 """
                 pub(crate) fn as_validation_exception_field(self, path: #{String}) -> crate::model::ValidationExceptionField {

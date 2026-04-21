@@ -68,7 +68,8 @@ def main(skip_generation=False):
 
     failures = []
     deny_list = [
-        # add crate names here to exclude them from the semver checks
+        # Proc-macro crates have no library target
+        "aws-smithy-runtime-api-macros",
     ]
     for path in os.listdir():
         eprint(f'checking {path}...', end='')

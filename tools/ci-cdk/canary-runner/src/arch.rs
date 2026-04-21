@@ -22,3 +22,21 @@ impl std::str::FromStr for Arch {
         }
     }
 }
+
+impl From<Arch> for aws_sdk_lambda::types::Architecture {
+    fn from(arch: Arch) -> Self {
+        match arch {
+            Arch::X86_64 => aws_sdk_lambda::types::Architecture::X8664,
+            Arch::Aarch64 => aws_sdk_lambda::types::Architecture::Arm64,
+        }
+    }
+}
+
+impl From<Arch> for aws_sdk_lambda::types::Runtime {
+    fn from(arch: Arch) -> Self {
+        match arch {
+            Arch::X86_64 => aws_sdk_lambda::types::Runtime::Providedal2,
+            Arch::Aarch64 => aws_sdk_lambda::types::Runtime::Providedal2023,
+        }
+    }
+}

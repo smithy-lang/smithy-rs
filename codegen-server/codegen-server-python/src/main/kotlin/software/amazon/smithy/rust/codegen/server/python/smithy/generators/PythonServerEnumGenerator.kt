@@ -37,6 +37,10 @@ class PythonConstrainedEnum(
 
     override fun additionalEnumImpls(context: EnumGeneratorContext): Writable =
         writable {
+            // Unnamed enums are generated as constrained newtype structs, not Rust enums,
+            // so PyO3 enum-specific impls (name getter, match arms) don't apply.
+            if (!context.enumTrait.hasNames()) return@writable
+
             Attribute(pyO3.resolve("pymethods")).render(this)
             rustTemplate(
                 """

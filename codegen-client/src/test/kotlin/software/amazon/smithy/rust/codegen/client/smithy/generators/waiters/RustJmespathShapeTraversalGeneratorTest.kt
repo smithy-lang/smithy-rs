@@ -612,8 +612,15 @@ class RustJmespathShapeTraversalGeneratorTest {
         test("bool_or_bool", "primitives.boolean || primitives.boolean", expectTrue)
         test("paren_expressions", "(`true` || `false`) && `true`", expectTrue)
 
-        unsupported("`5` || `true`", "Applying the `||` operation doesn't support non-bool")
-        unsupported("`5` && `true`", "Applying the `&&` operation doesn't support non-bool")
+        // Truthiness coercion: non-boolean types in && and ||
+        test("list_and_bool", "lists.integers && `true`", expectTrue)
+        test("string_and_bool", "primitives.string && `true`", expectTrue)
+        test("number_and_bool", "primitives.integer && `true`", expectTrue)
+        test("number_or_bool", "`5` || `true`", expectTrue)
+        test("number_and_bool_lit", "`5` && `true`", expectTrue)
+        // ECS-like pattern: list && length(list) == N
+        test("list_and_length_eq", "lists.integers && length(lists.integers) == `2`", expectTrue)
+
         unsupported("!`5`", "Negation of a non-boolean type")
     }
 

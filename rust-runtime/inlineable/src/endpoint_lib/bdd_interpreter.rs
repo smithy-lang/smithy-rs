@@ -12,8 +12,11 @@ pub(crate) struct BddNode {
     pub low_ref: i32,
 }
 
+#[allow(dead_code)]
 const RESULT_LIMIT: i32 = 100_000_000;
+#[allow(dead_code)]
 const TERMINAL_TRUE: i32 = 1;
+#[allow(dead_code)]
 const TERMINAL_FALSE: i32 = -1;
 
 /// Evaluates a BDD to resolve an endpoint result
@@ -21,21 +24,20 @@ const TERMINAL_FALSE: i32 = -1;
 /// Arguments
 /// * `nodes` - Array of BddNodes
 /// * `conditions` - Array of conditions referenced by nodes
-/// * `results` - Array of possible results
 /// * `root_ref` - Root reference to start evaluation
 /// * `params` - Parameters for condition evaluation
 /// * `context` - Values that can be set/mutated by the conditions
 /// * `diagnostic_collector` - a struct for collecting information about the execution of conditions
 /// * `condition_evaluator` - Function to evaluate individual conditions with params and context
+/// * `result_builder` - Function to construct the endpoint result from a result index
 ///
 /// Returns
 /// * `Some(R)` - Result if evaluation succeeds
 /// * `None` - No match found
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
+#[allow(clippy::too_many_arguments, dead_code)]
+pub(crate) fn evaluate_bdd<'a, Cond, Params, R, Context>(
     nodes: &[BddNode],
     conditions: &[Cond],
-    results: &[Res],
     root_ref: i32,
     params: &'a Params,
     context: &mut Context,
@@ -46,7 +48,8 @@ pub(crate) fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
         &mut Context,
         &mut crate::endpoint_lib::diagnostic::DiagnosticCollector,
     ) -> bool,
-) -> Option<Res> {
+    result_builder: impl FnOnce(usize, &'a Params, &Context) -> R,
+) -> Option<R> {
     let mut current_ref = root_ref;
 
     loop {
@@ -54,10 +57,12 @@ pub(crate) fn evaluate_bdd<'a, Cond, Params, Res: Clone, Context>(
             // Result references (>= 100_000_000)
             ref_val if ref_val >= RESULT_LIMIT => {
                 let result_index = (ref_val - RESULT_LIMIT) as usize;
-                return results.get(result_index).cloned();
+                return Some(result_builder(result_index, params, context));
             }
             // Terminals (1 = TRUE, -1 = FALSE) NoMatchRule
-            TERMINAL_TRUE | TERMINAL_FALSE => return results.first().cloned(),
+            TERMINAL_TRUE | TERMINAL_FALSE => {
+                return Some(result_builder(0, params, context));
+            }
             // Node references
             ref_val => {
                 let is_complement = ref_val < 0;

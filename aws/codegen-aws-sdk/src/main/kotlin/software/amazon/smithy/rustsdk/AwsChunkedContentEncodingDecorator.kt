@@ -159,7 +159,7 @@ private class AwsChunkedOperationCustomization(
                 is OperationSection.AdditionalInterceptors -> {
                     if (!operationRequiresAwsChunked(codegenContext, operation)) return@writable
 
-                    section.registerInterceptor(runtimeConfig, this) {
+                    section.registerPermanentInterceptor(runtimeConfig, this) {
                         rustTemplate(
                             """
                             #{AwsChunkedContentEncodingInterceptor}
