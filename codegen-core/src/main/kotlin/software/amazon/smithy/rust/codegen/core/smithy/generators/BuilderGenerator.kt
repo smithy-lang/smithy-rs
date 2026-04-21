@@ -134,14 +134,32 @@ class OperationBuildError(private val runtimeConfig: RuntimeConfig) {
     }
 }
 
+// Builder setters/getters keep the raw member name in almost all cases: setter names don't
+// collide with Rust reserved words, and renaming would be a breaking change for consumers of
+// the generated SDK. The one exception is members named `meta` on error-struct builders, where
+// `ErrorGenerator` injects a `set_meta` method for `ErrorMetadata` — we fall back to the
+// symbol-provider-renamed name (`meta_value`) there to avoid a duplicate definition.
+// See https://github.com/smithy-lang/smithy-rs/issues/4338.
 fun MemberShape.setterName(symbolProvider: SymbolProvider): String {
-    val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
-    return "set_$unescaped"
+    val raw = this.memberName.toSnakeCase()
+    val name =
+        if (raw == "meta") {
+            symbolProvider.toMemberName(this).removePrefix("r##")
+        } else {
+            raw
+        }
+    return "set_$name"
 }
 
 fun MemberShape.getterName(symbolProvider: SymbolProvider): String {
-    val unescaped = symbolProvider.toMemberName(this).removePrefix("r##")
-    return "get_$unescaped"
+    val raw = this.memberName.toSnakeCase()
+    val name =
+        if (raw == "meta") {
+            symbolProvider.toMemberName(this).removePrefix("r##")
+        } else {
+            raw
+        }
+    return "get_$name"
 }
 
 class BuilderGenerator(
