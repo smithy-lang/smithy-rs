@@ -28,6 +28,12 @@ impl HttpStringSerializer {
     }
 }
 
+impl super::FinishSerializer for HttpStringSerializer {
+    fn finish(self) -> Vec<u8> {
+        self.output.into_bytes()
+    }
+}
+
 impl Default for HttpStringSerializer {
     fn default() -> Self {
         Self::new()
@@ -247,33 +253,31 @@ impl<'a> HttpStringDeserializer<'a> {
 }
 
 impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
-    fn read_struct<T, F>(
+    fn read_struct(
         &mut self,
         _schema: &Schema,
-        _state: T,
-        _consumer: F,
-    ) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &Schema, &mut Self) -> Result<T, SerdeError>,
-    {
+        _consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "structures cannot be deserialized from strings".into(),
         })
     }
 
-    fn read_list<T, F>(&mut self, _schema: &Schema, state: T, _consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, &mut Self) -> Result<T, SerdeError>,
-    {
+    fn read_list(
+        &mut self,
+        _schema: &Schema,
+        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         // Lists are comma-separated values
         // The consumer will call read methods for each element
-        Ok(state)
+        Ok(())
     }
 
-    fn read_map<T, F>(&mut self, _schema: &Schema, _state: T, _consumer: F) -> Result<T, SerdeError>
-    where
-        F: FnMut(T, String, &mut Self) -> Result<T, SerdeError>,
-    {
+    fn read_map(
+        &mut self,
+        _schema: &Schema,
+        _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+    ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "maps cannot be deserialized from strings".into(),
         })

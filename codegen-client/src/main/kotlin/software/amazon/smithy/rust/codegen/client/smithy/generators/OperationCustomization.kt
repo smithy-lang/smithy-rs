@@ -21,6 +21,10 @@ sealed class OperationSection(name: String) : Section(name) {
     data class OperationImplBlock(override val customizations: List<OperationCustomization>) :
         OperationSection("OperationImplBlock")
 
+    /** Write custom items (statics, types) at module level alongside the operation */
+    data class AdditionalItems(override val customizations: List<OperationCustomization>) :
+        OperationSection("AdditionalItems")
+
     data class MutateOutput(
         override val customizations: List<OperationCustomization>,
         val operationShape: OperationShape,

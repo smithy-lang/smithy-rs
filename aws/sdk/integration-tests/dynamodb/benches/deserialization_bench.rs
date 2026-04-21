@@ -8,6 +8,7 @@ use aws_smithy_runtime_api::client::orchestrator::HttpResponse;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
 use aws_smithy_runtime_api::client::ser_de::{DeserializeResponse, SharedResponseDeserializer};
 use aws_smithy_types::body::SdkBody;
+use aws_smithy_types::config_bag::ConfigBag;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 fn do_bench() {
@@ -32,8 +33,18 @@ fn do_bench() {
         .load::<SharedResponseDeserializer>()
         .expect("operation should set a deserializer");
 
+    // Create a config bag with the required SharedClientProtocol
+    let mut config_bag = ConfigBag::base();
+    let protocol = aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(
+        "DynamoDB_20120810",
+    );
+    let shared_protocol = aws_smithy_schema::protocol::SharedClientProtocol::new(protocol);
+    let mut layer = aws_smithy_types::config_bag::Layer::new("bench");
+    layer.store_put(shared_protocol);
+    config_bag.push_shared_layer(layer.freeze());
+
     let output = deserializer
-        .deserialize_nonstreaming(&response)
+        .deserialize_nonstreaming_with_config(&response, &config_bag)
         .expect("success");
     let output = output.downcast::<QueryOutput>().expect("correct type");
     assert_eq!(2, output.count);

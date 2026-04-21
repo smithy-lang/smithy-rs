@@ -20,7 +20,9 @@ mod schema {
     pub mod traits;
 
     pub mod codec;
+    pub mod http_protocol;
     pub mod prelude;
+    pub mod protocol;
     pub mod serde;
 }
 
@@ -44,6 +46,14 @@ pub mod traits {
 
 pub mod codec {
     pub use crate::schema::codec::*;
+}
+
+pub mod protocol {
+    pub use crate::schema::protocol::*;
+}
+
+pub mod http_protocol {
+    pub use crate::schema::http_protocol::*;
 }
 
 /// A Smithy schema — a lightweight runtime representation of a Smithy shape.
@@ -85,6 +95,9 @@ pub struct Schema {
     http_query: Option<trait_types::HttpQueryTrait>,
     http_query_params: Option<trait_types::HttpQueryParamsTrait>,
     http_response_code: Option<trait_types::HttpResponseCodeTrait>,
+    /// The `@http` trait — an operation-level trait included on the input schema
+    /// for convenience so the protocol serializer can construct the request URI.
+    http: Option<trait_types::HttpTrait>,
     streaming: Option<trait_types::StreamingTrait>,
     event_header: Option<trait_types::EventHeaderTrait>,
     event_payload: Option<trait_types::EventPayloadTrait>,
@@ -133,6 +146,7 @@ impl Schema {
         http_query: None,
         http_query_params: None,
         http_response_code: None,
+        http: None,
         streaming: None,
         event_header: None,
         event_payload: None,
@@ -238,6 +252,15 @@ impl Schema {
     }
 
     /// Returns the `@httpHeader` value if present.
+    /// Returns `true` if this member schema has any HTTP response binding trait
+    /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
+    pub fn has_http_response_binding(&self) -> bool {
+        self.http_header.is_some()
+            || self.http_response_code.is_some()
+            || self.http_prefix_headers.is_some()
+            || self.http_payload.is_some()
+    }
+
     pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait> {
         self.http_header.as_ref()
     }
@@ -245,6 +268,44 @@ impl Schema {
     /// Returns the `@httpQuery` value if present.
     pub fn http_query(&self) -> Option<&trait_types::HttpQueryTrait> {
         self.http_query.as_ref()
+    }
+
+    /// Returns the `@httpLabel` trait if present.
+    pub fn http_label(&self) -> Option<&trait_types::HttpLabelTrait> {
+        self.http_label.as_ref()
+    }
+
+    /// Returns the `@httpPayload` trait if present.
+    pub fn http_payload(&self) -> Option<&trait_types::HttpPayloadTrait> {
+        self.http_payload.as_ref()
+    }
+
+    /// Returns the `@httpPrefixHeaders` value if present.
+    pub fn http_prefix_headers(&self) -> Option<&trait_types::HttpPrefixHeadersTrait> {
+        self.http_prefix_headers.as_ref()
+    }
+
+    /// Returns the `@mediaType` trait if present.
+    pub fn media_type(&self) -> Option<&trait_types::MediaTypeTrait> {
+        self.media_type.as_ref()
+    }
+
+    /// Returns the `@httpQueryParams` trait if present.
+    pub fn http_query_params(&self) -> Option<&trait_types::HttpQueryParamsTrait> {
+        self.http_query_params.as_ref()
+    }
+
+    /// Returns the `@httpResponseCode` trait if present.
+    pub fn http_response_code(&self) -> Option<&trait_types::HttpResponseCodeTrait> {
+        self.http_response_code.as_ref()
+    }
+
+    /// Returns the `@http` trait if present.
+    ///
+    /// This is an operation-level trait included on the input schema for
+    /// convenience so the protocol serializer can construct the request URI.
+    pub fn http(&self) -> Option<&trait_types::HttpTrait> {
+        self.http.as_ref()
     }
 
     // -- Const setters for builder-style construction in generated code --
@@ -324,6 +385,12 @@ impl Schema {
     /// Sets the `@httpResponseCode` trait.
     pub const fn with_http_response_code(mut self) -> Self {
         self.http_response_code = Some(trait_types::HttpResponseCodeTrait);
+        self
+    }
+
+    /// Sets the `@http` trait (operation-level, included on input schema for convenience).
+    pub const fn with_http(mut self, http: trait_types::HttpTrait) -> Self {
+        self.http = Some(http);
         self
     }
 

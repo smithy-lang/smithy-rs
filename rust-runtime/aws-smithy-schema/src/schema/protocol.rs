@@ -1,0 +1,309 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Client protocol trait for protocol-agnostic request serialization and response deserialization.
+//!
+//! A [`ClientProtocol`] uses a combination of codecs, serializers, and deserializers to
+//! serialize requests and deserialize responses for a specific Smithy protocol
+//! (e.g., AWS JSON 1.0, REST JSON, REST XML, RPCv2 CBOR).
+//!
+//! # Implementing a custom protocol
+//!
+//! Third parties can create custom protocols and use them with any client without
+//! modifying a code generator.
+//!
+//! ```ignore
+//! use aws_smithy_schema::protocol::ClientProtocol;
+//! use aws_smithy_schema::{Schema, ShapeId};
+//! use aws_smithy_schema::serde::SerializableStruct;
+//!
+//! #[derive(Debug)]
+//! struct MyProtocol {
+//!     codec: MyJsonCodec,
+//! }
+//!
+//! impl ClientProtocol for MyProtocol {
+//!     fn protocol_id(&self) -> &ShapeId { &MY_PROTOCOL_ID }
+//!
+//!     fn serialize_request(
+//!         &self,
+//!         input: &dyn SerializableStruct,
+//!         input_schema: &Schema,
+//!         endpoint: &str,
+//!         cfg: &ConfigBag,
+//!     ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError> {
+//!         todo!()
+//!     }
+//!
+//!     fn deserialize_response<'a>(
+//!         &self,
+//!         response: &'a aws_smithy_runtime_api::http::Response,
+//!         output_schema: &Schema,
+//!         cfg: &ConfigBag,
+//!     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+//!         todo!()
+//!     }
+//! }
+//! ```
+
+use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
+use crate::{Schema, ShapeId};
+use aws_smithy_types::config_bag::ConfigBag;
+
+// Implementation note: We use concrete aws_smithy_runtime_api::http::{Request, Response} types here
+// rather than associated types. While the SEP allows for transport-agnostic protocols (e.g., MQTT),
+// the current SDK uses HTTP throughout. If transport abstraction is needed in the future,
+// Request/Response could become associated types while maintaining object safety of this trait.
+
+/// An object-safe client protocol for serializing requests and deserializing responses.
+///
+/// Each Smithy protocol (e.g., `aws.protocols#restJson1`, `smithy.protocols#rpcv2Cbor`)
+/// is represented by an implementation of this trait. Protocols combine one or more
+/// codecs and serializers to produce protocol-specific request messages and parse
+/// response messages.
+///
+/// # Lifecycle
+///
+/// `ClientProtocol` instances are immutable and thread-safe. They are typically created
+/// once and shared across all requests for a client. Serializers and deserializers are
+/// created per-request internally.
+pub trait ClientProtocol: Send + Sync + std::fmt::Debug {
+    /// Returns the Smithy shape ID of this protocol.
+    ///
+    /// This enables runtime protocol selection and differentiation. For example,
+    /// `aws.protocols#restJson1` or `smithy.protocols#rpcv2Cbor`.
+    fn protocol_id(&self) -> &ShapeId;
+
+    /// Serializes an operation input into an HTTP request.
+    ///
+    /// # Arguments
+    ///
+    /// * `input` - The operation input to serialize.
+    /// * `input_schema` - Schema describing the operation's input shape.
+    /// * `endpoint` - The target endpoint URI as a string.
+    /// * `cfg` - The config bag containing request-scoped configuration
+    ///   (e.g., service name, operation name for RPC protocols).
+    fn serialize_request(
+        &self,
+        input: &dyn SerializableStruct,
+        input_schema: &Schema,
+        endpoint: &str,
+        cfg: &ConfigBag,
+    ) -> Result<aws_smithy_runtime_api::http::Request, SerdeError>;
+
+    /// Deserializes an HTTP response, returning a boxed [`ShapeDeserializer`]
+    /// for the response body.
+    ///
+    /// The returned deserializer reads only body members. For outputs with
+    /// HTTP-bound members (headers, status code), generated code reads those
+    /// directly from the response before using this deserializer for body members.
+    ///
+    /// # Arguments
+    ///
+    /// * `response` - The HTTP response to deserialize.
+    /// * `output_schema` - Schema describing the operation's output shape.
+    /// * `cfg` - The config bag containing request-scoped configuration.
+    fn deserialize_response<'a>(
+        &self,
+        response: &'a aws_smithy_runtime_api::http::Response,
+        output_schema: &Schema,
+        cfg: &ConfigBag,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
+
+    /// Updates a previously serialized request with a new endpoint.
+    ///
+    /// Required by SEP requirement 7: "ClientProtocol MUST be able to update a
+    /// previously serialized request with a new endpoint." The orchestrator calls
+    /// this after endpoint resolution, which happens after `serialize_request`.
+    ///
+    /// The default implementation applies the endpoint URL (with prefix if present),
+    /// sets the request URI, and copies any endpoint headers onto the request.
+    /// This replicates the existing `apply_endpoint` logic from the orchestrator.
+    /// Custom implementations should rarely need to override this.
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), SerdeError> {
+        use std::borrow::Cow;
+
+        let endpoint_prefix =
+            cfg.load::<aws_smithy_runtime_api::client::endpoint::EndpointPrefix>();
+        let endpoint_url = match endpoint_prefix {
+            None => Cow::Borrowed(endpoint.url()),
+            Some(prefix) => {
+                let parsed: http::Uri = endpoint
+                    .url()
+                    .parse()
+                    .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
+                let scheme = parsed.scheme_str().unwrap_or_default();
+                let prefix = prefix.as_str();
+                let authority = parsed.authority().map(|a| a.as_str()).unwrap_or_default();
+                let path_and_query = parsed
+                    .path_and_query()
+                    .map(|pq| pq.as_str())
+                    .unwrap_or_default();
+                Cow::Owned(format!("{scheme}://{prefix}{authority}{path_and_query}"))
+            }
+        };
+
+        request.uri_mut().set_endpoint(&endpoint_url).map_err(|e| {
+            SerdeError::custom(format!("failed to apply endpoint `{endpoint_url}`: {e}"))
+        })?;
+
+        for (header_name, header_values) in endpoint.headers() {
+            request.headers_mut().remove(header_name);
+            for value in header_values {
+                request
+                    .headers_mut()
+                    .append(header_name.to_owned(), value.to_owned());
+            }
+        }
+
+        Ok(())
+    }
+}
+
+/// A shared, type-erased client protocol stored in a [`ConfigBag`].
+///
+/// This wraps an `Arc<dyn ClientProtocol>` so it can be stored
+/// and retrieved from the config bag for runtime protocol selection.
+#[derive(Clone, Debug)]
+pub struct SharedClientProtocol {
+    inner: std::sync::Arc<dyn ClientProtocol>,
+}
+
+impl SharedClientProtocol {
+    /// Creates a new shared protocol from any `ClientProtocol` implementation.
+    pub fn new(protocol: impl ClientProtocol + 'static) -> Self {
+        Self {
+            inner: std::sync::Arc::new(protocol),
+        }
+    }
+}
+
+impl std::ops::Deref for SharedClientProtocol {
+    type Target = dyn ClientProtocol;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+
+impl aws_smithy_types::config_bag::Storable for SharedClientProtocol {
+    type Storer = aws_smithy_types::config_bag::StoreReplace<Self>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
+    use crate::{Schema, ShapeId};
+    use aws_smithy_runtime_api::http::{Request, Response};
+    use aws_smithy_types::body::SdkBody;
+    use aws_smithy_types::config_bag::{ConfigBag, Layer};
+    use aws_smithy_types::endpoint::Endpoint;
+
+    /// Minimal protocol impl that uses only the default `update_endpoint`.
+    #[derive(Debug)]
+    struct StubProtocol;
+
+    static STUB_ID: ShapeId = ShapeId::from_static("test#StubProtocol", "test", "StubProtocol");
+
+    impl ClientProtocol for StubProtocol {
+        fn protocol_id(&self) -> &ShapeId {
+            &STUB_ID
+        }
+        fn serialize_request(
+            &self,
+            _input: &dyn SerializableStruct,
+            _input_schema: &Schema,
+            _endpoint: &str,
+            _cfg: &ConfigBag,
+        ) -> Result<Request, SerdeError> {
+            unimplemented!()
+        }
+        fn deserialize_response<'a>(
+            &self,
+            _response: &'a Response,
+            _output_schema: &Schema,
+            _cfg: &ConfigBag,
+        ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+            unimplemented!()
+        }
+    }
+
+    fn request_with_uri(uri: &str) -> Request {
+        let mut req = Request::new(SdkBody::empty());
+        req.set_uri(uri).unwrap();
+        req
+    }
+
+    #[test]
+    fn basic_endpoint() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/original/path");
+        let endpoint = Endpoint::builder()
+            .url("https://service.us-east-1.amazonaws.com")
+            .build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(
+            req.uri(),
+            "https://service.us-east-1.amazonaws.com/original/path"
+        );
+    }
+
+    #[test]
+    fn endpoint_with_prefix() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder()
+            .url("https://service.us-east-1.amazonaws.com")
+            .build();
+        let mut cfg = ConfigBag::base();
+        let mut layer = Layer::new("test");
+        layer.store_put(
+            aws_smithy_runtime_api::client::endpoint::EndpointPrefix::new("myprefix.").unwrap(),
+        );
+        cfg.push_shared_layer(layer.freeze());
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(
+            req.uri(),
+            "https://myprefix.service.us-east-1.amazonaws.com/path"
+        );
+    }
+
+    #[test]
+    fn endpoint_with_headers() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/path");
+        let endpoint = Endpoint::builder()
+            .url("https://example.com")
+            .header("x-custom", "value1")
+            .header("x-custom", "value2")
+            .build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(req.uri(), "https://example.com/path");
+        let values: Vec<&str> = req.headers().get_all("x-custom").collect();
+        assert_eq!(values, vec!["value1", "value2"]);
+    }
+
+    #[test]
+    fn endpoint_with_path() {
+        let proto = StubProtocol;
+        let mut req = request_with_uri("/operation");
+        let endpoint = Endpoint::builder().url("https://example.com/base").build();
+        let cfg = ConfigBag::base();
+
+        proto.update_endpoint(&mut req, &endpoint, &cfg).unwrap();
+        assert_eq!(req.uri(), "https://example.com/base/operation");
+    }
+}

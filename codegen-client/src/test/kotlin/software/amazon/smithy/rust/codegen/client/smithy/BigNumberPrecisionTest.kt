@@ -47,6 +47,9 @@ class BigNumberPrecisionTest {
                 rawRust(
                     """
                     use aws_smithy_types::{BigInteger, BigDecimal};
+                    use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                    use aws_smithy_schema::serde::ShapeSerializer;
+                    use aws_smithy_schema::codec::Codec;
                     use std::str::FromStr;
 
                     // Test values that exceed native type limits
@@ -54,32 +57,31 @@ class BigNumberPrecisionTest {
                     let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision (15-17 digits)
                     let big_dec_magnitude_str = "1.8e308";  // > f64::MAX - tokenizer uses NaN for validation
 
-                    // Test 1: High precision BigDecimal
+                    // Test 1: High precision BigDecimal - serialize via codec
                     let input = crate::operation::test_op::TestOpInput::builder()
                         .big_int(BigInteger::from_str(big_int_str).unwrap())
                         .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
                         .build()
                         .unwrap();
 
-                    let json_body = crate::protocol_serde::shape_test_op::ser_test_op_input(&input).unwrap();
-                    let serialized = String::from_utf8(json_body.bytes().unwrap().to_vec()).unwrap();
+                    let codec = JsonCodec::new(JsonCodecSettings::builder().use_json_name(true).build());
+                    let mut ser = codec.create_serializer();
+                    ser.write_struct(&crate::operation::test_op::TestOpInput::SCHEMA, &input).unwrap();
+                    let json_body = ser.finish();
+                    let serialized = String::from_utf8(json_body).unwrap();
 
                     assert!(serialized.contains(big_int_str));
                     assert!(serialized.contains(big_dec_precision_str));
 
-                    // Test 2: Large magnitude BigDecimal (> f64::MAX)
+                    // Test 2: Large magnitude BigDecimal - deserialize via codec
                     let mut json_response = String::from(r#"{"bigInt":"#);
                     json_response.push_str(big_int_str);
                     json_response.push_str(r#","bigDec":"#);
                     json_response.push_str(big_dec_magnitude_str);
                     json_response.push('}');
 
-                    let headers = ::aws_smithy_runtime_api::http::Headers::new();
-                    let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
-                        200,
-                        &headers,
-                        json_response.as_bytes()
-                    ).unwrap();
+                    let mut deser = codec.create_deserializer(json_response.as_bytes());
+                    let output = crate::operation::test_op::TestOpOutput::deserialize(&mut deser).unwrap();
 
                     assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
                     assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
@@ -200,6 +202,9 @@ class BigNumberPrecisionTest {
                 rawRust(
                     """
                     use aws_smithy_types::{BigInteger, BigDecimal};
+                    use aws_smithy_json::codec::JsonCodec;
+                    use aws_smithy_schema::serde::ShapeSerializer;
+                    use aws_smithy_schema::codec::Codec;
                     use std::str::FromStr;
 
                     // Test values that exceed native type limits
@@ -207,32 +212,31 @@ class BigNumberPrecisionTest {
                     let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision
                     let big_dec_magnitude_str = "1.8e308";  // > f64::MAX
 
-                    // Test 1: High precision BigDecimal
+                    // Test 1: High precision BigDecimal - serialize via codec
                     let input = crate::operation::test_op::TestOpInput::builder()
                         .big_int(BigInteger::from_str(big_int_str).unwrap())
                         .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
                         .build()
                         .unwrap();
 
-                    let json_body = crate::protocol_serde::shape_test_op::ser_test_op_input(&input).unwrap();
-                    let serialized = String::from_utf8(json_body.bytes().unwrap().to_vec()).unwrap();
+                    let codec = JsonCodec::default();
+                    let mut ser = codec.create_serializer();
+                    ser.write_struct(&crate::operation::test_op::TestOpInput::SCHEMA, &input).unwrap();
+                    let json_body = ser.finish();
+                    let serialized = String::from_utf8(json_body).unwrap();
 
                     assert!(serialized.contains(big_int_str));
                     assert!(serialized.contains(big_dec_precision_str));
 
-                    // Test 2: Large magnitude BigDecimal
+                    // Test 2: Large magnitude BigDecimal - deserialize via codec
                     let mut json_response = String::from(r#"{"bigInt":"#);
                     json_response.push_str(big_int_str);
                     json_response.push_str(r#","bigDec":"#);
                     json_response.push_str(big_dec_magnitude_str);
                     json_response.push('}');
 
-                    let headers = ::aws_smithy_runtime_api::http::Headers::new();
-                    let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
-                        200,
-                        &headers,
-                        json_response.as_bytes()
-                    ).unwrap();
+                    let mut deser = codec.create_deserializer(json_response.as_bytes());
+                    let output = crate::operation::test_op::TestOpOutput::deserialize(&mut deser).unwrap();
 
                     assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
                     assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
