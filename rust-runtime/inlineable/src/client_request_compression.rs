@@ -11,7 +11,9 @@ use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::interceptors::context::{
     BeforeSerializationInterceptorContextRef, BeforeTransmitInterceptorContextMut,
 };
-use aws_smithy_runtime_api::client::interceptors::{Intercept, SharedInterceptor};
+use aws_smithy_runtime_api::client::interceptors::{
+    dyn_dispatch_hint, Intercept, SharedInterceptor,
+};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
@@ -32,7 +34,9 @@ impl RequestCompressionRuntimePlugin {
     pub(crate) fn new() -> Self {
         Self {
             runtime_components: RuntimeComponentsBuilder::new("RequestCompressionRuntimePlugin")
-                .with_interceptor(SharedInterceptor::new(RequestCompressionInterceptor::new())),
+                .with_interceptor(SharedInterceptor::permanent(
+                    RequestCompressionInterceptor::new(),
+                )),
         }
     }
 }
@@ -72,6 +76,7 @@ impl RequestCompressionInterceptor {
     }
 }
 
+#[dyn_dispatch_hint]
 impl Intercept for RequestCompressionInterceptor {
     fn name(&self) -> &'static str {
         "RequestCompressionInterceptor"

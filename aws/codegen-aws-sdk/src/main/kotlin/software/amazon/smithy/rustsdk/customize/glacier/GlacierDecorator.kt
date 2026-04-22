@@ -89,7 +89,7 @@ private class GlacierApiVersionCustomization(private val codegenContext: ClientC
         writable {
             if (section is ServiceRuntimePluginSection.RegisterRuntimeComponents) {
                 val apiVersion = codegenContext.serviceShape.version
-                section.registerInterceptor(this) {
+                section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                     rustTemplate(
                         "#{Interceptor}::new(${apiVersion.dq()})",
                         "Interceptor" to inlineModule(codegenContext.runtimeConfig).resolve("GlacierApiVersionInterceptor"),
@@ -113,7 +113,7 @@ private class GlacierOperationInterceptorsCustomization(private val codegenConte
                 val inputShape = codegenContext.model.expectShape(section.operationShape.inputShape) as StructureShape
                 val inlineModule = inlineModule(codegenContext.runtimeConfig)
                 if (inputShape.inputWithAccountId()) {
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                         rustTemplate(
                             "#{Interceptor}::<#{Input}>::new()",
                             "Interceptor" to inlineModule.resolve("GlacierAccountIdAutofillInterceptor"),
@@ -122,7 +122,7 @@ private class GlacierOperationInterceptorsCustomization(private val codegenConte
                     }
                 }
                 if (section.operationShape.requiresTreeHashHeader()) {
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                         rustTemplate(
                             "#{Interceptor}::default()",
                             "Interceptor" to inlineModule.resolve("GlacierTreeHashHeaderInterceptor"),

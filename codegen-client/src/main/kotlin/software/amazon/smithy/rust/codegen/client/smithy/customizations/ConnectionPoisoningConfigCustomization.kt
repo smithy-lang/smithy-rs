@@ -24,7 +24,7 @@ class ConnectionPoisoningRuntimePluginCustomization(
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     // This interceptor assumes that a compatible Connector is set. Otherwise, connection poisoning
                     // won't work and an error message will be logged.
-                    section.registerInterceptor(this) {
+                    section.registerPermanentInterceptor(runtimeConfig, this) {
                         rust(
                             "#T::new()",
                             smithyRuntime(runtimeConfig).resolve("client::http::connection_poisoning::ConnectionPoisoningInterceptor"),

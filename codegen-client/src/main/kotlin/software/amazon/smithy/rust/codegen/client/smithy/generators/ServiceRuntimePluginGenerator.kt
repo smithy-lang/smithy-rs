@@ -12,6 +12,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.isNotEmpty
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
+import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.NamedCustomization
@@ -49,6 +50,19 @@ sealed class ServiceRuntimePluginSection(name: String) : Section(name) {
             interceptor: Writable,
         ) {
             writer.rust("runtime_components.push_interceptor(#T);", interceptor)
+        }
+
+        /** Generates the code to register a permanent interceptor that cannot be disabled */
+        fun registerPermanentInterceptor(
+            runtimeConfig: RuntimeConfig,
+            writer: RustWriter,
+            interceptor: Writable,
+        ) {
+            writer.rustTemplate(
+                "runtime_components.push_interceptor(#{SharedInterceptor}::permanent(#{interceptor}));",
+                "SharedInterceptor" to RuntimeType.sharedInterceptor(runtimeConfig),
+                "interceptor" to interceptor,
+            )
         }
 
         fun registerAuthScheme(

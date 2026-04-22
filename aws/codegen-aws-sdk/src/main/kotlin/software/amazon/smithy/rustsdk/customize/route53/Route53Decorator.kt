@@ -80,7 +80,7 @@ class TrimResourceIdCustomization(
         writable {
             when (section) {
                 is OperationSection.AdditionalInterceptors -> {
-                    section.registerInterceptor(codegenContext.runtimeConfig, this) {
+                    section.registerPermanentInterceptor(codegenContext.runtimeConfig, this) {
                         val smithyRuntimeApi = RuntimeType.smithyRuntimeApiClient(codegenContext.runtimeConfig)
                         val interceptor =
                             RuntimeType.forInlineDependency(

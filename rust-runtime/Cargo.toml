@@ -26,6 +26,7 @@ members = [
     "aws-smithy-runtime",
     "aws-smithy-runtime-api",
     "aws-smithy-schema",
+    "aws-smithy-runtime-api-macros",
     "aws-smithy-types",
     "aws-smithy-types-convert",
     "aws-smithy-wasm",

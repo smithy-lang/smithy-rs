@@ -30,6 +30,7 @@ class ConfigOverrideRuntimePluginGenerator(
                 "InterceptorRegistrar" to runtimeApi.resolve("client::interceptors::InterceptorRegistrar"),
                 "Layer" to smithyTypes.resolve("config_bag::Layer"),
                 "Resolver" to RuntimeType.smithyRuntime(rc).resolve("client::config_override::Resolver"),
+                "IdentityCache" to RuntimeType.smithyRuntime(rc).resolve("client::identity::IdentityCache"),
                 "RuntimeComponentsBuilder" to RuntimeType.runtimeComponentsBuilder(rc),
                 "RuntimePlugin" to RuntimeType.runtimePlugin(rc),
             )
@@ -66,6 +67,18 @@ class ConfigOverrideRuntimePluginGenerator(
                     #{config}
 
                     let _ = resolver;
+
+                    // When the config override supplies an identity resolver for any auth scheme
+                    // known to the client or the override itself, we give this operation its own
+                    // short-lived identity cache so that new partitions don't accumulate in the
+                    // shared client cache. A lazy cache (not `no_cache`) is used so that resolved
+                    // identities are served from the short-lived identity cache on retries.
+                    //
+                    // This is skipped if the override already sets its own identity cache.
+                    if components.has_identity_resolvers() && components.identity_cache().is_none() {
+                        components.set_identity_cache(#{Some}(#{IdentityCache}::lazy().max_partitions(1).build()));
+                    }
+
                     Self {
                         config: #{Layer}::from(layer)
                             .with_name("$moduleUseName::config::ConfigOverrideRuntimePlugin").freeze(),

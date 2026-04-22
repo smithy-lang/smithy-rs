@@ -364,6 +364,19 @@ mod tests {
     }
 
     #[test]
+    fn serialize_empty_endpoint_defaults_to_root() {
+        let protocol = HttpRpcProtocol::new(
+            crate::shape_id!("test", "rpc"),
+            TestCodec,
+            "application/x-amz-json-1.0",
+        );
+        let request = protocol
+            .serialize_request(&EmptyStruct, &TEST_SCHEMA, "", &ConfigBag::base())
+            .unwrap();
+        assert_eq!(request.uri(), "/");
+    }
+
+    #[test]
     fn deserialize_response() {
         let protocol = HttpRpcProtocol::new(
             crate::shape_id!("test", "rpc"),

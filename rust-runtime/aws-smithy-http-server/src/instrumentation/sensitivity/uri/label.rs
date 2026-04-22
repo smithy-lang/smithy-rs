@@ -91,7 +91,7 @@ where
                 // Iterate up to the segment index given in the `GreedyLabel`.
                 .take(greedy_label.segment_index + 1)
                 .enumerate()
-                .fold(Ok((0, false)), |acc, (index, segment)| {
+                .fold(Ok((0, false)), |acc: Result<_, std::fmt::Error>, (index, segment)| {
                     acc.and_then(|(greedy_start, _)| {
                         if index == greedy_label.segment_index {
                             // We've hit the greedy label, set `hit_greedy` to `true`.

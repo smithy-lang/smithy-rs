@@ -53,6 +53,7 @@ pub(crate) mod identity_cache {
     use aws_smithy_runtime_api::client::identity::Identity;
     use aws_smithy_types::DateTime;
     use fastrand::Rng;
+    use hmac::KeyInit;
     use hmac::{digest::FixedOutput, Hmac, Mac};
     use lru::LruCache;
     use sha2::Sha256;
@@ -1091,6 +1092,13 @@ pub(crate) mod utils {
         let endpoint = cfg
             .load::<crate::config::endpoint::Endpoint>()
             .expect("endpoint added to config bag by endpoint orchestrator");
+
+        let typed_schemes = endpoint.auth_schemes();
+        if !typed_schemes.is_empty() {
+            return typed_schemes
+                .iter()
+                .any(|scheme| scheme.name() == crate::s3_express::auth::SCHEME_ID.as_str());
+        }
 
         let auth_schemes = match endpoint.properties().get("authSchemes") {
             Some(Document::Array(schemes)) => schemes,
