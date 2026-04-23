@@ -195,11 +195,12 @@ class ResponseDeserializerGenerator(
 
     /** Schema-serde path for event stream responses (hybrid).
      *
-     * Mirrors the legacy builder-based pattern: create the output builder, set
-     * the event stream member via `set_<memberName>(Some(receiver))`, then
-     * build. The legacy `EventStreamUnmarshallerGenerator` handles frame-level
-     * unmarshalling, including initial-response data for RPC protocols (which
-     * arrives via the first event frame, not the HTTP body).
+     * Creates the output builder, sets the event stream member via
+     * `set_<memberName>(Some(receiver))`, then builds. `EventStreamUnmarshallerGenerator`
+     * (invoked here with `useSchemaSerde = true`) emits a schema-serde unmarshaller
+     * that uses `self.protocol.payload_codec()` to decode each event frame, and also
+     * handles initial-response data for RPC protocols (which arrives via the first
+     * event frame, not the HTTP body).
      *
      * Unlike the non-streaming schema path, `deserialize_with_response` is not
      * used because it would call `builder.build()` internally — and for

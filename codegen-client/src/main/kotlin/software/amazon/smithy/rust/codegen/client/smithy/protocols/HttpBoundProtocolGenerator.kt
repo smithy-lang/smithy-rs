@@ -27,49 +27,7 @@ class ClientHttpBoundProtocolPayloadGenerator(
         codegenContext, protocol, HttpMessageType.REQUEST,
         eventStreamUseSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext),
         renderEventStreamBody = { writer, params ->
-            val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
-            val marshallerNew =
-                if (useSchemaSerde) {
-                    """
-                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                        .expect("a SharedClientProtocol is required")
-                        .clone();
-                    let error_marshaller = #{errorMarshallerConstructorFn}(protocol.clone());
-                    let marshaller = #{marshallerConstructorFn}(protocol.clone());
-                    """
-                } else {
-                    """
-                    let error_marshaller = #{errorMarshallerConstructorFn}();
-                    let marshaller = #{marshallerConstructorFn}();
-                    """
-                }
-            writer.rustTemplate(
-                """
-                {
-                    $marshallerNew
-                    let (signer, signer_sender) = #{DeferredSigner}::new();
-                    _cfg.interceptor_state().store_put(signer_sender);
-                    #{SdkBody}::from_body_1_x(#{http_body_util}::StreamBody::new(#{event_stream:W}))
-                }
-                """,
-                "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
-                "SdkBody" to
-                    CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x")
-                        .toType().resolve("body::SdkBody"),
-                "aws_smithy_http" to RuntimeType.smithyHttp(codegenContext.runtimeConfig),
-                "DeferredSigner" to
-                    RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
-                        .resolve("frame::DeferredSigner"),
-                "SharedClientProtocol" to
-                    RuntimeType.smithySchema(codegenContext.runtimeConfig)
-                        .resolve("protocol::SharedClientProtocol"),
-                "marshallerConstructorFn" to params.eventStreamMarshallerGenerator.render(),
-                "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
-                "event_stream" to (
-                    eventStreamWithInitialRequest(codegenContext, protocol, params)
-                        ?: messageStreamAdaptor(params.outerName, params.memberName)
-                ),
-            )
+            renderEventStreamBodyInline(writer, codegenContext, protocol, params)
         },
     )
 
@@ -167,4 +125,118 @@ private fun messageStreamAdaptor(
     memberName: String,
 ) = writable {
     rust("$outerName.$memberName.into_body_stream(marshaller, error_marshaller, signer)")
+}
+
+/**
+ * Renders an event stream request body directly, without going through the legacy
+ * [HttpBoundProtocolPayloadGenerator]/[ProtocolPayloadGenerator] plumbing. Used by
+ * the schema-serde [RequestSerializerGenerator] path so the event stream branch
+ * does not depend on the legacy `bodyGenerator` parameter.
+ */
+fun renderClientEventStreamBody(
+    writer: software.amazon.smithy.rust.codegen.core.rustlang.RustWriter,
+    codegenContext: ClientCodegenContext,
+    protocol: Protocol,
+    operationShape: software.amazon.smithy.model.shapes.OperationShape,
+    memberShape: software.amazon.smithy.model.shapes.MemberShape,
+    outerName: String,
+) {
+    val model = codegenContext.model
+    val symbolProvider = codegenContext.symbolProvider
+    val httpBindingResolver = protocol.httpBindingResolver
+    val memberName = symbolProvider.toMemberName(memberShape)
+    val unionShape =
+        model.expectShape(
+            memberShape.target,
+            software.amazon.smithy.model.shapes.UnionShape::class.java,
+        )
+    val payloadContentType =
+        httpBindingResolver.eventStreamMessageContentType(memberShape)
+            ?: throw software.amazon.smithy.codegen.core.CodegenException("event streams must set a content type")
+    val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+    val serializerGenerator = protocol.structuredDataSerializer()
+    val errorMarshallerConstructorFn =
+        software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamErrorMarshallerGenerator(
+            model,
+            software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget.CLIENT,
+            codegenContext.runtimeConfig,
+            symbolProvider,
+            unionShape,
+            serializerGenerator,
+            payloadContentType,
+            useSchemaSerde = useSchemaSerde,
+        ).render()
+    val eventStreamMarshallerGenerator =
+        software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator(
+            model,
+            software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget.CLIENT,
+            codegenContext.runtimeConfig,
+            symbolProvider,
+            unionShape,
+            serializerGenerator,
+            payloadContentType,
+            useSchemaSerde = useSchemaSerde,
+        )
+    val params =
+        EventStreamBodyParams(
+            outerName,
+            memberName,
+            operationShape,
+            eventStreamMarshallerGenerator,
+            errorMarshallerConstructorFn,
+            payloadContentType,
+            object : software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.AdditionalPayloadContext {},
+        )
+    renderEventStreamBodyInline(writer, codegenContext, protocol, params)
+}
+
+/** Shared event-stream-body emission used by both the legacy lambda and the schema-serde helper. */
+private fun renderEventStreamBodyInline(
+    writer: software.amazon.smithy.rust.codegen.core.rustlang.RustWriter,
+    codegenContext: ClientCodegenContext,
+    protocol: Protocol,
+    params: EventStreamBodyParams,
+) {
+    val useSchemaSerde = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+    val marshallerNew =
+        if (useSchemaSerde) {
+            """
+            let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                .expect("a SharedClientProtocol is required")
+                .clone();
+            let error_marshaller = #{errorMarshallerConstructorFn}(protocol.clone());
+            let marshaller = #{marshallerConstructorFn}(protocol.clone());
+            """
+        } else {
+            """
+            let error_marshaller = #{errorMarshallerConstructorFn}();
+            let marshaller = #{marshallerConstructorFn}();
+            """
+        }
+    writer.rustTemplate(
+        """
+        {
+            $marshallerNew
+            let (signer, signer_sender) = #{DeferredSigner}::new();
+            _cfg.interceptor_state().store_put(signer_sender);
+            #{SdkBody}::from_body_1_x(#{http_body_util}::StreamBody::new(#{event_stream:W}))
+        }
+        """,
+        "http_body_util" to CargoDependency.HttpBodyUtil01x.toType(),
+        "SdkBody" to
+            CargoDependency.smithyTypes(codegenContext.runtimeConfig).withFeature("http-body-1-x")
+                .toType().resolve("body::SdkBody"),
+        "DeferredSigner" to
+            RuntimeType.smithyEventStream(codegenContext.runtimeConfig)
+                .resolve("frame::DeferredSigner"),
+        "SharedClientProtocol" to
+            RuntimeType.smithySchema(codegenContext.runtimeConfig)
+                .resolve("protocol::SharedClientProtocol"),
+        "marshallerConstructorFn" to params.eventStreamMarshallerGenerator.render(),
+        "errorMarshallerConstructorFn" to params.errorMarshallerConstructorFn,
+        "event_stream" to (
+            eventStreamWithInitialRequest(codegenContext, protocol, params)
+                ?: messageStreamAdaptor(params.outerName, params.memberName)
+        ),
+    )
 }

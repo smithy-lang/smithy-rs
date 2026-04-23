@@ -15,7 +15,22 @@ use crate::serde::{ShapeDeserializer, ShapeSerializer};
 /// Trait for serializers that can produce a final byte output.
 ///
 /// This is separate from [`ShapeSerializer`] to preserve object safety on
-/// `ShapeSerializer` (which is used as `&mut dyn ShapeSerializer` in generated code).
+/// [`ShapeSerializer`] (which is used as `&mut dyn ShapeSerializer` in generated code).
+///
+/// # Why isn't `FinishSerializer` itself object-safe?
+///
+/// [`FinishSerializer::finish`] takes `self` by value so it can consume and tear down the
+/// serializer (e.g., return an owned `Vec<u8>` without a leftover borrow on the serializer's
+/// internal buffer). Methods that receive `self` by value are not dispatchable through a
+/// trait object: `dyn FinishSerializer` doesn't know the concrete size of `Self`, so it
+/// cannot move it. This is the standard Rust object-safety restriction.
+///
+/// The consequence is that `FinishSerializer` can only be used with a statically-known
+/// serializer type, which is fine for generated code that knows the concrete [`Codec`].
+/// For call sites that need dynamic dispatch (e.g., event stream marshallers that receive
+/// a `Box<dyn PayloadSerializer>` from `ClientProtocol::payload_codec`), use
+/// [`PayloadSerializer::finish_boxed`] instead — it takes `self: Box<Self>`, which *is*
+/// object-safe because the `Box` owns the value and knows how to drop it.
 pub trait FinishSerializer {
     /// Consumes the serializer and returns the serialized bytes.
     fn finish(self) -> Vec<u8>;
