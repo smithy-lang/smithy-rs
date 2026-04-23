@@ -85,6 +85,10 @@ class EventStreamErrorMarshallerGenerator(
                 ##[non_exhaustive]
                 ##[derive(Debug)]
                 pub struct ${marshallerType.name} {
+                    // `protocol` is used by error variants whose payloads go through the codec.
+                    // When no such variant exists (e.g., all errors are header-only or empty),
+                    // the field is unused but still kept for API uniformity across operations.
+                    ##[allow(dead_code)]
                     protocol: #{SharedClientProtocol},
                 }
 

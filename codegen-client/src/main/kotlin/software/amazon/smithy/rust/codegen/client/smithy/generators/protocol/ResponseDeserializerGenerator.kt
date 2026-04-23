@@ -253,7 +253,8 @@ class ResponseDeserializerGenerator(
                     // non-event-stream members are populated with defaults. For RPC
                     // protocols with initial-response, the fluent builder re-populates
                     // those members from the first event frame via into_builder.
-                    #{Ok}(#{finalizeBuilder})
+                    let output = #{finalizeBuilder};
+                    #{Ok}(output)
                 })();
 
                 #{Some}(#{type_erase_result}(result))
