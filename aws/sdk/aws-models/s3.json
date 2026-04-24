@@ -375,10 +375,7 @@
                     }
                 },
                 "docId": {
-                    "target": "smithy.api#String",
-                    "traits": {
-                        "smithy.api#documentation": "The `docId` property is a string value that defines the identifier\nused to implement linking between service and SDK documentation for\nAWS services. If not specified, this value defaults to the `sdkId` in\nlower case plus the service `version` property, separated by dashes."
-                    }
+                    "target": "smithy.api#String"
                 },
                 "endpointPrefix": {
                     "target": "smithy.api#String",
