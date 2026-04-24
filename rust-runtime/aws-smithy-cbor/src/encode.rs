@@ -134,7 +134,10 @@ impl Encoder {
     pub fn big_integer(&mut self, value: &BigInteger) -> &mut Self {
         use num_bigint::{BigInt, Sign};
 
-        let n: BigInt = value.as_ref().parse().expect("BigInteger contains invalid value");
+        let n: BigInt = value
+            .as_ref()
+            .parse()
+            .expect("BigInteger contains invalid value");
         let (sign, magnitude) = n.to_bytes_be();
 
         match sign {
@@ -395,7 +398,10 @@ mod tests {
         encoder.big_integer(&"18446744073709551615".parse().unwrap());
         let bytes = encoder.into_writer();
         assert_eq!(bytes[0], 0x1b); // major type 0, 8-byte argument
-        assert_eq!(&bytes[1..], &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(
+            &bytes[1..],
+            &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
     }
 
     #[test]
@@ -432,7 +438,10 @@ mod tests {
         encoder.big_integer(&"-18446744073709551616".parse().unwrap());
         let bytes = encoder.into_writer();
         assert_eq!(bytes[0], 0x3b); // major type 1, 8-byte argument
-        assert_eq!(&bytes[1..], &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
+        assert_eq!(
+            &bytes[1..],
+            &[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
     }
 
     #[test]
@@ -443,8 +452,8 @@ mod tests {
         encoder.big_integer(&large.parse().unwrap());
         let bytes = encoder.into_writer();
         assert_eq!(bytes[0], 0xc2); // tag 2
-        // Verify the byte string has no leading zero bytes.
-        // bytes[1] is the CBOR byte string length header.
+                                    // Verify the byte string has no leading zero bytes.
+                                    // bytes[1] is the CBOR byte string length header.
         let payload_start = if bytes[1] < 0x58 { 2 } else { 3 };
         assert_ne!(bytes[payload_start], 0x00);
     }

@@ -487,7 +487,9 @@ mod tests {
     #[test]
     fn big_integer_rfc8949_appendix_a_positive() {
         // RFC 8949 Appendix A: 18446744073709551616 (2^64) = 0xc249010000000000000000
-        let bytes = [0xc2, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let bytes = [
+            0xc2, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
         let mut decoder = Decoder::new(&bytes);
         let result = decoder.big_integer().expect("should decode");
         assert_eq!(result.as_ref(), "18446744073709551616");
@@ -496,7 +498,9 @@ mod tests {
     #[test]
     fn big_integer_rfc8949_appendix_a_negative() {
         // RFC 8949 Appendix A: -18446744073709551617 = 0xc349010000000000000000
-        let bytes = [0xc3, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
+        let bytes = [
+            0xc3, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
         let mut decoder = Decoder::new(&bytes);
         let result = decoder.big_integer().expect("should decode");
         assert_eq!(result.as_ref(), "-18446744073709551617");
@@ -518,7 +522,9 @@ mod tests {
         enc.i64(-500).unwrap();
         let bytes = enc.into_writer();
         let mut decoder = Decoder::new(&bytes);
-        let result = decoder.big_integer().expect("should decode negative plain integer");
+        let result = decoder
+            .big_integer()
+            .expect("should decode negative plain integer");
         assert_eq!(result.as_ref(), "-500");
     }
 
@@ -555,7 +561,9 @@ mod tests {
         // This exercises the minicbor Type::Int path in the decoder.
         let bytes = [0x3b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
         let mut decoder = Decoder::new(&bytes);
-        let result = decoder.big_integer().expect("should decode major type 1 > i64::MAX");
+        let result = decoder
+            .big_integer()
+            .expect("should decode major type 1 > i64::MAX");
         assert_eq!(result.as_ref(), "-18446744073709551616");
     }
 }
