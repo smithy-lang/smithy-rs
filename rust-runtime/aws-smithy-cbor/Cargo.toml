@@ -22,7 +22,7 @@ features = [
 
 [dependencies]
 aws-smithy-types = { path = "../aws-smithy-types" }
-num-bigint = "0.4"
+num-bigint = "0.4.6"
 
 [dev-dependencies]
 criterion = "0.5.1"
