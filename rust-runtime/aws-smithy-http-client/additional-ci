@@ -1,0 +1,12 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+
+# Additional CI checks for aws-smithy-http-client
+
+set -e
+
+echo "### Running connection pool integration tests"
+cargo test --features wire-mock,default-client --test connection_harness_test

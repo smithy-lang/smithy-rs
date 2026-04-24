@@ -528,6 +528,7 @@ dependencies = [
  "serde",
  "serde_json",
  "serial_test",
+ "socket2 0.6.3",
  "tokio",
  "tokio-rustls 0.26.4",
  "tower 0.5.3",

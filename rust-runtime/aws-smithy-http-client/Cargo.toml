@@ -40,6 +40,7 @@ wire-mock = [
     "hyper-util?/server-graceful",
     "tokio/macros",
     "dep:http-body-util",
+    "dep:socket2",
 ]
 
 test-util = [
@@ -84,7 +85,7 @@ tracing = "0.1.44"
 
 # hyper 1.x stack
 hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1.16", features = ["http1", "http2"], optional = true }
+hyper-util = { version = "0.1.16", features = ["http1", "http2", "client-pool"], optional = true }
 http-1x = { package = "http", version = "1.3.1" , optional = true }
 http-body-1x = { package = "http-body", version = "1.0.1", optional = true}
 hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
@@ -114,6 +115,7 @@ serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.146", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.10.0", features = ["serde"], optional = true }
 http-body-util = { version = "0.1.3", optional = true }
+socket2 = { version = "0.6", optional = true }
 # end test util stack
 
 [dev-dependencies]

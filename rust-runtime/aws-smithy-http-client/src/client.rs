@@ -11,6 +11,7 @@ mod timeout;
 pub mod tls;
 
 pub(crate) mod connect;
+pub(crate) mod pool;
 
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
