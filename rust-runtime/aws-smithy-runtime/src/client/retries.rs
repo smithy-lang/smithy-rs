@@ -10,7 +10,7 @@ pub mod classifiers;
 pub mod strategy;
 
 mod client_rate_limiter;
-mod token_bucket;
+pub(crate) mod token_bucket;
 
 use aws_smithy_types::config_bag::{Storable, StoreReplace};
 use std::fmt;

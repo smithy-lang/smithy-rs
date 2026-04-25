@@ -374,8 +374,11 @@ impl TokenBucketProvider {
     ///
     /// NOTE: This partition should be the one used for every operation on a client
     /// unless config is overridden.
-    pub(crate) fn new(default_partition: RetryPartition) -> Self {
-        let token_bucket = TOKEN_BUCKET.get_or_init_default(default_partition.clone());
+    pub(crate) fn new(
+        default_partition: RetryPartition,
+        init: impl FnOnce() -> TokenBucket,
+    ) -> Self {
+        let token_bucket = TOKEN_BUCKET.get_or_init(default_partition.clone(), init);
         Self {
             default_partition,
             token_bucket,
