@@ -18,7 +18,7 @@ use aws_smithy_runtime_api::client::retries::classifiers::{RetryAction, RetryRea
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
-use aws_smithy_types::retry::{ErrorKind, RetryConfig, RetryMode};
+use aws_smithy_types::retry::{ErrorKind, RetryConfig, RetryMode, RetrySpec};
 
 use crate::client::retries::classifiers::run_classifiers_on_ctx;
 use crate::client::retries::client_rate_limiter::{ClientRateLimiter, RequestReason};
@@ -132,13 +132,17 @@ impl StandardRetryStrategy {
 
         match retry_reason {
             RetryAction::RetryIndicated(RetryReason::RetryableError { kind, retry_after }) => {
-                if let Some(delay) = *retry_after {
-                    let delay = delay.min(retry_cfg.max_backoff());
-                    debug!("explicit request from server to delay {delay:?} before retrying");
-                    Ok(delay)
-                } else if let Some(delay) =
-                    check_rate_limiter_for_delay(runtime_components, cfg, *kind)
-                {
+                let initial_backoff = if *kind != ErrorKind::ThrottlingError {
+                    retry_cfg
+                        .retry_spec()
+                        .map(|s| s.non_throttling_initial_backoff())
+                        .unwrap_or(retry_cfg.initial_backoff())
+                        .as_secs_f64()
+                } else {
+                    retry_cfg.initial_backoff().as_secs_f64()
+                };
+
+                if let Some(delay) = check_rate_limiter_for_delay(runtime_components, cfg, *kind) {
                     let delay = delay.min(retry_cfg.max_backoff());
                     debug!("rate limiter has requested a {delay:?} delay before retrying");
                     Ok(delay)
@@ -148,17 +152,31 @@ impl StandardRetryStrategy {
                     } else {
                         fastrand::f64()
                     };
-                    Ok(calculate_exponential_backoff(
-                        // Generate a random base multiplier to create jitter
+                    let t_i = calculate_exponential_backoff(
                         base,
-                        // Get the backoff time multiplier in seconds (with fractional seconds)
-                        retry_cfg.initial_backoff().as_secs_f64(),
-                        // `self.local.attempts` tracks number of requests made including the initial request
-                        // The initial attempt shouldn't count towards backoff calculations, so we subtract it
+                        initial_backoff,
                         request_attempts - 1,
-                        // Maximum backoff duration as a fallback to prevent overflow when calculating a power
                         retry_cfg.max_backoff(),
-                    ))
+                    );
+
+                    if let Some(retry_after) = *retry_after {
+                        if retry_cfg
+                            .retry_spec()
+                            .is_some_and(|s| *s != RetrySpec::v2_0())
+                        {
+                            let delay = retry_after.clamp(t_i, t_i + Duration::from_secs(5));
+                            debug!("x-amz-retry-after bounded to {delay:?} (t_i={t_i:?})");
+                            Ok(delay)
+                        } else {
+                            let delay = retry_after.min(retry_cfg.max_backoff());
+                            debug!(
+                                "explicit request from server to delay {delay:?} before retrying"
+                            );
+                            Ok(delay)
+                        }
+                    } else {
+                        Ok(t_i)
+                    }
                 }
             }
             RetryAction::RetryForbidden | RetryAction::NoActionIndicated => {
@@ -445,7 +463,7 @@ mod tests {
         RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+    use aws_smithy_types::retry::{ErrorKind, RetryConfig, RetrySpec};
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
     use crate::client::retries::{ClientRateLimiter, RetryPartition, TokenBucket};
@@ -1057,6 +1075,167 @@ mod tests {
         assert_eq!(
             MAX_BACKOFF,
             calculate_exponential_backoff(1_f64, 10_f64, 100000, MAX_BACKOFF),
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_1_non_throttling_uses_50ms_backoff() {
+        let (ctx, rc, cfg) = set_up_cfg_and_context(
+            ErrorKind::ServerError,
+            1,
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // 50ms * 2^0 = 50ms
+        assert_eq!(
+            ShouldAttempt::YesAfterDelay(Duration::from_millis(50)),
+            actual
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_1_throttling_uses_1s_backoff() {
+        let (ctx, rc, cfg) = set_up_cfg_and_context(
+            ErrorKind::ThrottlingError,
+            1,
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // 1s * 2^0 = 1s (throttling keeps legacy backoff)
+        assert_eq!(ShouldAttempt::YesAfterDelay(Duration::from_secs(1)), actual);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_0_non_throttling_uses_1s_backoff() {
+        let (ctx, rc, cfg) = set_up_cfg_and_context(
+            ErrorKind::ServerError,
+            1,
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_0()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // 1s * 2^0 = 1s (v2.0 keeps legacy backoff)
+        assert_eq!(ShouldAttempt::YesAfterDelay(Duration::from_secs(1)), actual);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_1_retry_after_bounded_between_t_i_and_t_i_plus_5s() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::ServerError,
+                Duration::from_secs(3),
+            )],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::default());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // t_i = 50ms, retry_after = 3s, clamp(3s, 50ms, 5.05s) = 3s
+        assert_eq!(ShouldAttempt::YesAfterDelay(Duration::from_secs(3)), actual);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_1_retry_after_below_t_i_uses_t_i() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::ServerError,
+                Duration::from_millis(10),
+            )],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::default());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // t_i = 50ms, retry_after = 10ms < t_i, so use t_i = 50ms
+        assert_eq!(
+            ShouldAttempt::YesAfterDelay(Duration::from_millis(50)),
+            actual
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_1_retry_after_above_t_i_plus_5s_capped() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::ServerError,
+                Duration::from_secs(10),
+            )],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::default());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // t_i = 50ms, retry_after = 10s > t_i + 5s = 5.05s, so cap at 5.05s
+        assert_eq!(
+            ShouldAttempt::YesAfterDelay(Duration::from_millis(5050)),
+            actual
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn v2_0_retry_after_capped_at_max_backoff() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::retryable_error_with_explicit_delay(
+                ErrorKind::ServerError,
+                Duration::from_secs(30),
+            )],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(3)
+                .with_retry_spec(RetrySpec::v2_0()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::default());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let actual = strategy
+            .should_attempt_retry(&ctx, &rc, &cfg)
+            .expect("method is infallible for this use");
+        // v2.0: retry_after = 30s, capped at max_backoff = 20s
+        assert_eq!(
+            ShouldAttempt::YesAfterDelay(Duration::from_secs(20)),
+            actual
         );
     }
 }
