@@ -30,6 +30,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::retry::MergeRetryConfig;
 use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use endpoints::apply_endpoint;
 use std::mem;
@@ -205,6 +206,13 @@ fn apply_configuration(
         resolved_timeout_config
     );
     cfg.interceptor_state().store_put(resolved_timeout_config);
+
+    let resolved_retry_config = cfg.load::<MergeRetryConfig>();
+    debug!(
+        "retry settings for this operation: {:?}",
+        resolved_retry_config
+    );
+    cfg.interceptor_state().store_put(resolved_retry_config);
 
     components.validate_final_config(cfg)?;
     Ok(components)

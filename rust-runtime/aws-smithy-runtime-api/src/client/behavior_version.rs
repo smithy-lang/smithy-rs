@@ -147,6 +147,17 @@ impl std::fmt::Debug for BehaviorVersion {
     }
 }
 
+impl From<BehaviorVersion> for aws_smithy_types::retry::RetrySpec {
+    #[allow(deprecated)]
+    fn from(bv: BehaviorVersion) -> Self {
+        if bv.is_at_least(BehaviorVersion::v2026_06_01()) {
+            Self::v2_1()
+        } else {
+            Self::v2_0()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
