@@ -791,6 +791,7 @@ async fn test_explicit_proxy_disable_overrides_environment() {
 
 /// Helper function to make HTTPS requests through proxy using TLS providers
 /// This is similar to make_http_request_through_proxy but uses TLS-enabled connectors
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 async fn make_https_request_through_proxy(
     proxy_config: ProxyConfig,
     target_url: &str,
@@ -828,6 +829,7 @@ async fn make_https_request_through_proxy(
 
 /// Generic test function for HTTPS CONNECT with authentication
 /// Tests that HTTPS requests through HTTP proxy use CONNECT method with proper auth headers
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 async fn run_https_connect_with_auth_test(tls_provider: tls::Provider, provider_name: &str) {
     let mock_proxy = MockProxyServer::new(|req| {
         // For HTTPS through HTTP proxy, we should see a CONNECT request
@@ -879,6 +881,7 @@ async fn run_https_connect_with_auth_test(tls_provider: tls::Provider, provider_
 
 /// Generic test function for CONNECT without authentication (should get 407)
 /// Tests that HTTPS requests without auth get proper 407 response
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 async fn run_https_connect_auth_required_test(tls_provider: tls::Provider, provider_name: &str) {
     let mock_proxy = MockProxyServer::new(|req| {
         // For HTTPS through HTTP proxy, we should see a CONNECT request
@@ -1123,6 +1126,7 @@ async fn test_uri_form_proxy_vs_direct() {
 
 /// Generic test function for CONNECT URI form validation
 /// Tests that CONNECT requests use the correct host:port format
+#[cfg(any(feature = "rustls-ring", feature = "s2n-tls"))]
 async fn run_connect_uri_form_test(tls_provider: tls::Provider, provider_name: &str) {
     let target_host = "secure.example.com";
     let target_port = 443;

@@ -962,6 +962,27 @@ impl Builder<TlsUnset> {
         )
     }
 
+    /// Build an HTTP client (no TLS) with a custom DNS resolver.
+    #[doc(hidden)]
+    #[cfg(feature = "test-util")]
+    pub fn build_with_resolver(
+        self,
+        resolver: impl aws_smithy_runtime_api::client::dns::ResolveDns + Clone + 'static,
+    ) -> SharedHttpClient {
+        build_with_conn_fn(
+            self.client_builder,
+            self.pool_idle_timeout,
+            move |client_builder, settings, runtime_components| {
+                let builder = new_conn_builder(client_builder, settings, runtime_components);
+                use crate::client::dns::HyperUtilResolver;
+                let http_connector = builder.base_connector_with_resolver(HyperUtilResolver {
+                    resolver: resolver.clone(),
+                });
+                builder.wrap_connector(http_connector)
+            },
+        )
+    }
+
     /// Set the TLS implementation to use
     pub fn tls_provider(self, provider: tls::Provider) -> Builder<TlsProviderSelected> {
         Builder {
