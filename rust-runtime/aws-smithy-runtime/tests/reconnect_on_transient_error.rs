@@ -16,13 +16,14 @@ use aws_smithy_runtime::client::http::test_util::wire::{
 use aws_smithy_runtime::client::orchestrator::operation::Operation;
 use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
 use aws_smithy_runtime::{ev, match_events};
+use aws_smithy_runtime_api::client::http::SharedHttpClient;
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
 use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::retries::classifiers::{ClassifyRetry, RetryAction};
+use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::{ErrorKind, ProvideErrorKind, ReconnectMode, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
-use hyper_0_14::client::Builder as HyperBuilder;
 use std::fmt;
 use std::time::Duration;
 
@@ -55,9 +56,7 @@ struct TestRetryClassifier;
 impl ClassifyRetry for TestRetryClassifier {
     fn classify_retry(&self, ctx: &InterceptorContext) -> RetryAction {
         tracing::info!("classifying retry for {ctx:?}");
-        // Check for a result
         let output_or_error = ctx.output_or_error();
-        // Check for an error
         let error = match output_or_error {
             Some(Ok(_)) | None => return RetryAction::NoActionIndicated,
             Some(Err(err)) => err,
@@ -86,44 +85,58 @@ impl ClassifyRetry for TestRetryClassifier {
     }
 }
 
-async fn h1_and_h2(events: Vec<ReplayedEvent>, match_clause: impl Fn(&[RecordedEvent])) {
-    wire_level_test(
-        events.clone(),
-        |_b| {},
-        ReconnectMode::ReconnectOnTransientError,
-        &match_clause,
-    )
-    .await;
-    wire_level_test(
-        events,
-        |b| {
-            b.http2_only(true);
-        },
-        ReconnectMode::ReconnectOnTransientError,
-        match_clause,
-    )
-    .await;
-    tracing::info!("h2 ok!");
+/// MakeClient — parameterizes tests over HTTP stacks
+trait MakeClient: Send + Sync {
+    fn make(&self, mock: &WireMockServer) -> SharedHttpClient;
 }
 
-/// Repeatedly send test operation until `end_of_test` is received
-///
-/// When the test is over, match_clause is evaluated
-async fn wire_level_test(
+/// hyper 0.14 legacy stack
+struct Hyper014Client;
+
+impl MakeClient for Hyper014Client {
+    fn make(&self, mock: &WireMockServer) -> SharedHttpClient {
+        HyperClientBuilder::new()
+            .build(hyper_0_14::client::HttpConnector::new_with_resolver(
+                mock.dns_resolver(),
+            ))
+            .into_shared()
+    }
+}
+
+/// hyper 0.14 with HTTP/2 only
+struct Hyper014H2Client;
+
+impl MakeClient for Hyper014H2Client {
+    fn make(&self, mock: &WireMockServer) -> SharedHttpClient {
+        let mut hyper_builder = hyper_0_14::Client::builder();
+        hyper_builder.http2_only(true);
+        HyperClientBuilder::new()
+            .hyper_builder(hyper_builder)
+            .build(hyper_0_14::client::HttpConnector::new_with_resolver(
+                mock.dns_resolver(),
+            ))
+            .into_shared()
+    }
+}
+
+/// hyper 1.x stack via public Builder API
+struct Hyper1xClient;
+
+impl MakeClient for Hyper1xClient {
+    fn make(&self, mock: &WireMockServer) -> SharedHttpClient {
+        aws_smithy_http_client::Builder::new().build_with_resolver(mock.dns_resolver())
+    }
+}
+
+/// Repeatedly send test operation until `end_of_test` is received, then run match_clause.
+async fn run_test(
+    make_client: &dyn MakeClient,
     events: Vec<ReplayedEvent>,
-    hyper_builder_settings: impl Fn(&mut HyperBuilder),
     reconnect_mode: ReconnectMode,
     match_clause: impl Fn(&[RecordedEvent]),
 ) {
-    let mut hyper_builder = hyper_0_14::Client::builder();
-    hyper_builder_settings(&mut hyper_builder);
-
     let mock = WireMockServer::start(events).await;
-    let http_client = HyperClientBuilder::new()
-        .hyper_builder(hyper_builder)
-        .build(hyper_0_14::client::HttpConnector::new_with_resolver(
-            mock.dns_resolver(),
-        ));
+    let http_client = make_client.make(&mock);
 
     let operation = Operation::builder()
         .service_name("test")
@@ -143,10 +156,9 @@ async fn wire_level_test(
         .serializer({
             let endpoint_url = mock.endpoint_url();
             move |_| {
-                let request = http_02x::Request::builder()
+                let request = http_1x::Request::builder()
                     .uri(endpoint_url.clone())
-                    // Make the body non-replayable since we don't actually want to retry
-                    .body(SdkBody::from_body_0_4(SdkBody::from("body")))
+                    .body(SdkBody::from("body"))
                     .unwrap()
                     .try_into()
                     .unwrap();
@@ -193,29 +205,54 @@ async fn wire_level_test(
     mock.shutdown();
 }
 
+/// Run a test against all HTTP stacks
+async fn all_stacks(
+    events: Vec<ReplayedEvent>,
+    reconnect_mode: ReconnectMode,
+    match_clause: impl Fn(&[RecordedEvent]),
+) {
+    run_test(
+        &Hyper014Client,
+        events.clone(),
+        reconnect_mode,
+        &match_clause,
+    )
+    .await;
+    run_test(
+        &Hyper014H2Client,
+        events.clone(),
+        reconnect_mode,
+        &match_clause,
+    )
+    .await;
+    run_test(&Hyper1xClient, events, reconnect_mode, &match_clause).await;
+}
+
 #[tokio::test]
 async fn non_transient_errors_no_reconnect() {
     let _logs = capture_test_logs();
-    h1_and_h2(
+    all_stacks(
         vec![
             ReplayedEvent::status(400),
             ReplayedEvent::with_body(END_OF_TEST),
         ],
+        ReconnectMode::ReconnectOnTransientError,
         match_events!(ev!(dns), ev!(connect), ev!(http(400)), ev!(http(200))),
     )
-    .await
+    .await;
 }
 
 #[tokio::test]
 async fn reestablish_dns_on_503() {
     let _logs = capture_test_logs();
-    h1_and_h2(
+    all_stacks(
         vec![
             ReplayedEvent::status(503),
             ReplayedEvent::status(503),
             ReplayedEvent::status(503),
             ReplayedEvent::with_body(END_OF_TEST),
         ],
+        ReconnectMode::ReconnectOnTransientError,
         match_events!(
             // first request
             ev!(dns),
@@ -241,13 +278,14 @@ async fn reestablish_dns_on_503() {
 #[tokio::test]
 async fn connection_shared_on_success() {
     let _logs = capture_test_logs();
-    h1_and_h2(
+    all_stacks(
         vec![
             ReplayedEvent::ok(),
             ReplayedEvent::ok(),
             ReplayedEvent::status(503),
             ReplayedEvent::with_body(END_OF_TEST),
         ],
+        ReconnectMode::ReconnectOnTransientError,
         match_events!(
             ev!(dns),
             ev!(connect),
@@ -265,12 +303,11 @@ async fn connection_shared_on_success() {
 #[tokio::test]
 async fn no_reconnect_when_disabled() {
     let _logs = capture_test_logs();
-    wire_level_test(
+    all_stacks(
         vec![
             ReplayedEvent::status(503),
             ReplayedEvent::with_body(END_OF_TEST),
         ],
-        |_b| {},
         ReconnectMode::ReuseAllConnections,
         match_events!(ev!(dns), ev!(connect), ev!(http(503)), ev!(http(200))),
     )
@@ -280,7 +317,7 @@ async fn no_reconnect_when_disabled() {
 #[tokio::test]
 async fn connection_reestablished_after_timeout() {
     let _logs = capture_test_logs();
-    h1_and_h2(
+    all_stacks(
         vec![
             ReplayedEvent::ok(),
             ReplayedEvent::Timeout,
@@ -288,6 +325,7 @@ async fn connection_reestablished_after_timeout() {
             ReplayedEvent::Timeout,
             ReplayedEvent::with_body(END_OF_TEST),
         ],
+        ReconnectMode::ReconnectOnTransientError,
         match_events!(
             // first connection
             ev!(dns),

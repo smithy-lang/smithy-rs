@@ -411,6 +411,22 @@ impl tower::Service<Name> for InnerDnsResolver {
     }
 }
 
+impl aws_smithy_runtime_api::client::dns::ResolveDns for LoggingDnsResolver {
+    fn resolve_dns<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> aws_smithy_runtime_api::client::dns::DnsFuture<'a> {
+        let socket_addr = self.0.socket_addr;
+        let log = self.0.log.clone();
+        aws_smithy_runtime_api::client::dns::DnsFuture::new(async move {
+            log.lock()
+                .unwrap()
+                .push(RecordedEvent::DnsLookup(name.to_string()));
+            Ok(vec![socket_addr.ip()])
+        })
+    }
+}
+
 #[cfg(all(feature = "legacy-test-util", feature = "hyper-014"))]
 impl hyper_0_14::service::Service<hyper_0_14::client::connect::dns::Name> for LoggingDnsResolver {
     type Response = Once<SocketAddr>;
