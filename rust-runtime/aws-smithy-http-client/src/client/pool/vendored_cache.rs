@@ -36,19 +36,16 @@
  * Commit:   e1c5a6c89bfaed11fb34bd483fe9ba616f403791
  *
  * Modifications from upstream:
- *   1. Replaced `tower_service::Service` imports with `tower::Service` (the
- *      `tower` crate re-exports `Service` at the crate root, avoiding an
- *      extra direct dependency on `tower-service`).
- *   2. Changed `pub use self::internal::builder;` to `pub(crate) use ...`
+ *   1. Changed `pub use self::internal::builder;` to `pub(crate) use ...`
  *      and dropped the three `#[cfg(docsrs)] pub use` lines. The composable
  *      pool internals are `pub(crate)` in this crate — no types from this
  *      file are exposed in the smithy-rs public API.
- *   3. Added `#![allow(dead_code, unreachable_pub)]` so the file can be
+ *   2. Added `#![allow(dead_code, unreachable_pub)]` so the file can be
  *      kept close to upstream even when individual items aren't used yet.
- *   4. Dropped the module- and struct-level rustdoc sections that reference
+ *   3. Dropped the module- and struct-level rustdoc sections that reference
  *      "Unnameable" (that rustdoc pattern is specific to hyper-util's public
  *      API; these types aren't public here).
- *   5. Added `Cached::discard(self)` — consumes self and prevents
+ *   4. Added `Cached::discard(self)` — consumes self and prevents
  *      reinsertion into the pool on drop. See `// SDK MODIFICATION` marker
  *      below. Used to drop connections that a caller has learned are bad
  *      (poisoned, GOAWAY, etc.) between checkout and `poll_ready`. The
@@ -76,7 +73,7 @@ mod internal {
 
     use futures_util::future;
     use tokio::sync::oneshot;
-    use tower::Service;
+    use tower_service::Service;
 
     use super::events;
 
@@ -464,7 +461,7 @@ mod events {
 #[cfg(test)]
 mod tests {
     use futures_util::future;
-    use tower::Service;
+    use tower_service::Service;
     use tower_test::assert_request_eq;
 
     #[tokio::test]
