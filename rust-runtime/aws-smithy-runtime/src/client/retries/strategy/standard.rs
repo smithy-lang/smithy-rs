@@ -302,6 +302,21 @@ fn update_rate_limiter_if_exists(
     }
 }
 
+/// Returns the adaptive retry rate limiter if configured.
+/// Used by the orchestrator to access the capacity change notifier.
+pub(crate) fn get_adaptive_retry_rate_limiter(
+    runtime_components: &RuntimeComponents,
+    cfg: &ConfigBag,
+) -> Option<ClientRateLimiter> {
+    // Return None if retry config isn't set (e.g., in tests or non-retry scenarios)
+    let retry_config = cfg.load::<RetryConfig>()?;
+    if retry_config.mode() == RetryMode::Adaptive {
+        StandardRetryStrategy::adaptive_retry_rate_limiter(runtime_components, cfg)
+    } else {
+        None
+    }
+}
+
 fn check_rate_limiter_for_delay(
     runtime_components: &RuntimeComponents,
     cfg: &ConfigBag,

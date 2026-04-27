@@ -260,25 +260,47 @@ async fn try_op(
 
     // If we got a retry strategy from the bag, ask it what to do.
     // Otherwise, assume we should attempt the initial request.
-    let should_attempt = runtime_components
-        .retry_strategy()
-        .should_attempt_initial_request(runtime_components, cfg);
-    match should_attempt {
-        // Yes, let's make a request
-        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),
-        // No, this request shouldn't be sent
-        Ok(ShouldAttempt::No) => {
-            let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
-            halt!([ctx] => OrchestratorError::other(err));
-        }
-        // No, we shouldn't make a request because...
-        Err(err) => halt!([ctx] => OrchestratorError::other(err)),
-        Ok(ShouldAttempt::YesAfterDelay(delay)) => {
-            let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
-                "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
-            )));
-            debug!("retry strategy has OKed initial request after a {delay:?} delay");
-            sleep_impl.sleep(delay).await;
+    let retry_strategy = runtime_components.retry_strategy();
+    let rate_limiter = crate::client::retries::strategy::standard::get_adaptive_retry_rate_limiter(
+        runtime_components,
+        cfg,
+    );
+    loop {
+        let should_attempt = retry_strategy.should_attempt_initial_request(runtime_components, cfg);
+        match should_attempt {
+            // Yes, let's make a request
+            Ok(ShouldAttempt::Yes) => {
+                debug!("retry strategy has OKed initial request");
+                break;
+            }
+            // No, this request shouldn't be sent
+            Ok(ShouldAttempt::No) => {
+                let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
+                halt!([ctx] => OrchestratorError::other(err));
+            }
+            // No, we shouldn't make a request because...
+            Err(err) => halt!([ctx] => OrchestratorError::other(err)),
+            Ok(ShouldAttempt::YesAfterDelay(delay)) => {
+                let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
+                    "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
+                )));
+                debug!("retry strategy has OKed initial request after a {delay:?} delay");
+                // If adaptive rate limiting is active, use select! to wake up
+                // early when token bucket state changes (e.g., successful responses
+                // from other tasks increase the fill rate).
+                if let Some(ref crl) = rate_limiter {
+                    let notified = crl.capacity_changed().notified();
+                    tokio::select! {
+                        _ = sleep_impl.sleep(delay) => {},
+                        _ = notified => {
+                            debug!("rate limiter state changed, re-checking capacity");
+                        },
+                    }
+                } else {
+                    sleep_impl.sleep(delay).await;
+                }
+                continue;
+            }
         }
     }
 
