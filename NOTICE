@@ -1,1 +1,9 @@
 Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+This product includes software developed by Sean McArthur and contributors
+to the hyper-util project (https://github.com/hyperium/hyper-util), licensed
+under the MIT License. The applicable copyright notice and MIT license text
+are preserved at the top of each file that incorporates hyper-util sources.
+See:
+
+  rust-runtime/aws-smithy-http-client/src/client/pool/vendored_cache.rs
