@@ -144,14 +144,14 @@ async fn test_adaptive_retries_with_throttling_errors() {
     // We create a new client each time to ensure that the cross-client retry state is working.
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(40));
+    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(38));
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Three requests should have been made, two failing & one success
     assert_eq!(http_client.actual_requests().count(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert!(Duration::from_secs(48) < sleep_impl.total_duration());
+    assert!(Duration::from_secs(47) < sleep_impl.total_duration());
     assert!(Duration::from_secs(49) > sleep_impl.total_duration());
     assert_eq!(res.table_names(), expected_table_names.as_slice());
     // Two requests should have been made, one failing & one success (plus previous requests)

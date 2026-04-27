@@ -745,10 +745,8 @@ mod tests {
 
         // fill_rate = 0.5, 0.1s elapsed => refill adds 0.05 tokens.
         // Cost of InitialRequest is 1.0, so capacity (0.05) is insufficient.
-        let result = rate_limiter.acquire_permission_to_send_a_request(
-            0.1,
-            RequestReason::InitialRequest,
-        );
+        let result =
+            rate_limiter.acquire_permission_to_send_a_request(0.1, RequestReason::InitialRequest);
 
         assert!(result.is_err(), "should require waiting for capacity");
 
@@ -768,10 +766,8 @@ mod tests {
 
         let mut delays = Vec::new();
         for _ in 0..10 {
-            let result = rate_limiter.acquire_permission_to_send_a_request(
-                0.1,
-                RequestReason::InitialRequest,
-            );
+            let result = rate_limiter
+                .acquire_permission_to_send_a_request(0.1, RequestReason::InitialRequest);
             assert!(result.is_err());
             delays.push(result.unwrap_err());
         }
@@ -783,7 +779,10 @@ mod tests {
         }
 
         let inner = rate_limiter.inner.lock().unwrap();
-        assert!(inner.current_capacity >= 0.0, "capacity must never be negative");
+        assert!(
+            inner.current_capacity >= 0.0,
+            "capacity must never be negative"
+        );
     }
 
     #[tokio::test]
@@ -795,17 +794,13 @@ mod tests {
 
         rate_limiter.update_rate_limiter(0.0, true);
 
-        let result = rate_limiter.acquire_permission_to_send_a_request(
-            0.1,
-            RequestReason::InitialRequest,
-        );
+        let result =
+            rate_limiter.acquire_permission_to_send_a_request(0.1, RequestReason::InitialRequest);
         assert!(result.is_err());
 
         // At 2.1s: refill adds 1.0 token, capped at max_capacity (1.0).
-        let result = rate_limiter.acquire_permission_to_send_a_request(
-            2.1,
-            RequestReason::InitialRequest,
-        );
+        let result =
+            rate_limiter.acquire_permission_to_send_a_request(2.1, RequestReason::InitialRequest);
         assert!(result.is_ok(), "should succeed after sufficient refill");
 
         let inner = rate_limiter.inner.lock().unwrap();
@@ -850,6 +845,67 @@ mod tests {
             inner.last_timestamp.unwrap(),
             sleep_impl.total_duration().as_secs_f64(),
             max_relative = 0.0001
+        );
+    }
+
+    #[tokio::test]
+    async fn test_multi_task_recovery_after_throttle_blip() {
+        // Simulates the transient throttle blip scenario: 50 tasks share a
+        // rate limiter, all get throttled, then throttle lifts. Verifies
+        // that tasks recover and can acquire tokens again.
+        let crl = ClientRateLimiter::builder()
+            .time_of_last_throttle(0.0)
+            .previous_time_bucket(0.0)
+            .build();
+
+        let num_tasks = 50;
+        let mut time = 0.0;
+
+        // All tasks get throttled
+        for _ in 0..num_tasks {
+            time += 0.001;
+            crl.update_rate_limiter(time, true);
+        }
+
+        assert_relative_eq!(crl.inner.lock().unwrap().fill_rate, 0.5, epsilon = 0.01);
+
+        // Simulate recovery over 20 seconds (200 rounds * 100ms).
+        // Tasks that acquire successfully get a success response,
+        // which increases the fill rate.
+        let mut total_acquired = 0;
+        let rounds = 200;
+        for _ in 0..rounds {
+            time += 0.1;
+            let mut acquired_this_round = 0;
+
+            for task in 0..num_tasks {
+                let task_time = time + (task as f64) * 0.0001;
+                if crl
+                    .acquire_permission_to_send_a_request(task_time, RequestReason::InitialRequest)
+                    .is_ok()
+                {
+                    acquired_this_round += 1;
+                }
+            }
+
+            for _ in 0..acquired_this_round {
+                time += 0.001;
+                crl.update_rate_limiter(time, false);
+            }
+
+            total_acquired += acquired_this_round;
+        }
+
+        assert!(
+            total_acquired > 100,
+            "expected recovery after throttle blip, but only acquired {total_acquired} tokens in {rounds} rounds"
+        );
+
+        let inner = crl.inner.lock().unwrap();
+        assert!(
+            inner.current_capacity >= 0.0,
+            "capacity must never be negative, got: {}",
+            inner.current_capacity
         );
     }
 }

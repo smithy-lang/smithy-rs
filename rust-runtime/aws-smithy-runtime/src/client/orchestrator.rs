@@ -264,8 +264,7 @@ async fn try_op(
     // tokens during our sleep.
     let retry_strategy = runtime_components.retry_strategy();
     loop {
-        let should_attempt =
-            retry_strategy.should_attempt_initial_request(runtime_components, cfg);
+        let should_attempt = retry_strategy.should_attempt_initial_request(runtime_components, cfg);
         match should_attempt {
             Ok(ShouldAttempt::Yes) => {
                 debug!("retry strategy has OKed initial request");
