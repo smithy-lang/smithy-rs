@@ -495,7 +495,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.1.12"
+version = "1.2.0"
 dependencies = [
  "aws-smithy-async 1.2.14",
  "aws-smithy-protocol-test",
@@ -503,6 +503,7 @@ dependencies = [
  "aws-smithy-types 1.4.8",
  "base64 0.22.1",
  "bytes",
+ "futures-util",
  "h2 0.3.27",
  "h2 0.4.14",
  "http 0.2.12",
@@ -532,6 +533,7 @@ dependencies = [
  "tokio",
  "tokio-rustls 0.26.4",
  "tower 0.5.3",
+ "tower-test",
  "tracing",
 ]
 
