@@ -5,7 +5,7 @@ applies_to:
 authors:
 - vcjana
 references:
-- smithy-rs#XXXX
+- smithy-rs#4632
 breaking: false
 new_feature: false
 bug_fix: true
