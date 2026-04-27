@@ -12,6 +12,7 @@ use std::task::{Context, Poll};
 use std::time::Instant;
 
 use aws_smithy_types::body::SdkBody;
+use pin_project_lite::pin_project;
 use tower::Service;
 
 use super::cache;
@@ -243,34 +244,37 @@ where
     }
 }
 
-/// A response body that keeps the originating pool checkout alive until
-/// the body is fully consumed.
-///
-/// # Why this exists
-///
-/// When a checked-out pool connection's `Service::call` returns, the
-/// response head is available but the body may still be streaming over
-/// the same underlying HTTP connection. For H1 this is critical — if the
-/// `CachedConnection` drops at that point, the connection returns to the
-/// pool mid-body-stream and the next checkout would be handed a still-busy
-/// connection.
-///
-/// `ResponseBody` holds the checkout (`CachedConnection` for H1,
-/// `SingletonConnection` for H2) in its guard field until the body is
-/// fully dropped. Body streaming continues through the held inner
-/// `Incoming`; when the `ResponseBody` is dropped the guard drops, which
-/// for H1 triggers `CachedConnection::Drop` (return-to-pool or `discard`
-/// if poisoned), and for H2 simply drops the singleton clone (no-op on
-/// singleton state).
-///
-/// The H2 variant carries a generic type parameter because
-/// `SingletonConnection<T>`'s inner `T` is `hyper_util::client::pool::
-/// singleton::Singled<...>`, which is unnameable outside hyper-util. The
-/// H1 variant is fully concrete since our vendored cache makes
-/// `cache::Cached<...>` nameable.
-pub(crate) struct ResponseBody<H2Inner> {
-    inner: hyper::body::Incoming,
-    _guard: ConnectionGuard<H2Inner>,
+pin_project! {
+    /// A response body that keeps the originating pool checkout alive until
+    /// the body is fully consumed.
+    ///
+    /// # Why this exists
+    ///
+    /// When a checked-out pool connection's `Service::call` returns, the
+    /// response head is available but the body may still be streaming over
+    /// the same underlying HTTP connection. For H1 this is critical — if the
+    /// `CachedConnection` drops at that point, the connection returns to the
+    /// pool mid-body-stream and the next checkout would be handed a still-busy
+    /// connection.
+    ///
+    /// `ResponseBody` holds the checkout (`CachedConnection` for H1,
+    /// `SingletonConnection` for H2) in its guard field until the body is
+    /// fully dropped. Body streaming continues through the held inner
+    /// `Incoming`; when the `ResponseBody` is dropped the guard drops, which
+    /// for H1 triggers `CachedConnection::Drop` (return-to-pool or `discard`
+    /// if poisoned), and for H2 simply drops the singleton clone (no-op on
+    /// singleton state).
+    ///
+    /// The H2 variant carries a generic type parameter because
+    /// `SingletonConnection<T>`'s inner `T` is `hyper_util::client::pool::
+    /// singleton::Singled<...>`, which is unnameable outside hyper-util. The
+    /// H1 variant is fully concrete since our vendored cache makes
+    /// `cache::Cached<...>` nameable.
+    pub(crate) struct ResponseBody<H2Inner> {
+        #[pin]
+        inner: hyper::body::Incoming,
+        _guard: ConnectionGuard<H2Inner>,
+    }
 }
 
 /// What a `ResponseBody` holds alive while the body streams.
@@ -291,10 +295,7 @@ impl<H2Inner> ResponseBody<H2Inner> {
     }
 }
 
-impl<H2Inner> hyper::body::Body for ResponseBody<H2Inner>
-where
-    H2Inner: Unpin,
-{
+impl<H2Inner> hyper::body::Body for ResponseBody<H2Inner> {
     type Data = <hyper::body::Incoming as hyper::body::Body>::Data;
     type Error = <hyper::body::Incoming as hyper::body::Body>::Error;
 
@@ -302,9 +303,7 @@ where
         self: std::pin::Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<hyper::body::Frame<Self::Data>, Self::Error>>> {
-        // Safe: we only project to `inner`, guard is never moved.
-        let this = unsafe { self.get_unchecked_mut() };
-        std::pin::Pin::new(&mut this.inner).poll_frame(cx)
+        self.project().inner.poll_frame(cx)
     }
 
     fn is_end_stream(&self) -> bool {
