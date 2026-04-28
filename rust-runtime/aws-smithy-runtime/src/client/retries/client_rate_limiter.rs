@@ -764,7 +764,7 @@ mod tests {
 
         rate_limiter.update_rate_limiter(0.0, true);
 
-        let mut delays = Vec::new();
+        let mut delays = Vec::with_capacity(10);
         for _ in 0..10 {
             let result = rate_limiter
                 .acquire_permission_to_send_a_request(0.1, RequestReason::InitialRequest);
