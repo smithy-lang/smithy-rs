@@ -16,6 +16,7 @@ members = [
     "polly",
     "s3",
     "s3control",
+    "sqs",
     "sts",
     "telemetry",
     "timestreamquery",

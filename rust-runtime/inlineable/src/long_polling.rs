@@ -1,0 +1,43 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextMut;
+use aws_smithy_runtime_api::client::interceptors::Intercept;
+use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::retry::{RetryConfig, RetrySpec};
+
+/// Interceptor that marks an operation as long-polling by setting
+/// `long_polling(true)` on the resolved `RetrySpec`. This ensures the
+/// retry strategy backs off before checking the token bucket, preventing
+/// request amplification in polling loops.
+///
+/// Only activates for Retry Behavior 2.1+ (skips v2.0).
+#[derive(Debug, Default)]
+pub(crate) struct LongPollingInterceptor;
+
+impl Intercept for LongPollingInterceptor {
+    fn name(&self) -> &'static str {
+        "LongPollingInterceptor"
+    }
+
+    fn modify_before_retry_loop(
+        &self,
+        _context: &mut BeforeTransmitInterceptorContextMut<'_>,
+        _runtime_components: &RuntimeComponents,
+        cfg: &mut ConfigBag,
+    ) -> Result<(), BoxError> {
+        if let Some(rc) = cfg.load::<RetryConfig>().cloned() {
+            if let Some(spec) = rc.retry_spec().cloned() {
+                if spec != RetrySpec::v2_0() {
+                    cfg.interceptor_state()
+                        .store_put(rc.with_retry_spec(spec.with_long_polling(true)));
+                }
+            }
+        }
+        Ok(())
+    }
+}

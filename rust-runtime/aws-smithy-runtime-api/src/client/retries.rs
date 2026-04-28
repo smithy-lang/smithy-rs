@@ -33,6 +33,10 @@ pub enum ShouldAttempt {
     No,
     /// Yes, an attempt should be made, but only after the given amount of time has passed
     YesAfterDelay(Duration),
+    /// No, no attempt should be made, but sleep for the given duration before returning.
+    /// Used for long-polling services to prevent request amplification when the retry
+    /// token bucket is empty.
+    NoAfterDelay(Duration),
 }
 
 #[cfg(feature = "test-util")]

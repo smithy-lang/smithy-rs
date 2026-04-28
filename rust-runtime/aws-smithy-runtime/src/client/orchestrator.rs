@@ -275,7 +275,7 @@ async fn try_op(
         // Yes, let's make a request
         Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),
         // No, this request shouldn't be sent
-        Ok(ShouldAttempt::No) => {
+        Ok(ShouldAttempt::No) | Ok(ShouldAttempt::NoAfterDelay(_)) => {
             let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
             halt!([ctx] => OrchestratorError::other(err));
         }
@@ -350,6 +350,13 @@ async fn try_op(
                 )));
                 retry_delay = Some((delay, sleep_impl.sleep(delay)));
                 continue;
+            }
+            ShouldAttempt::NoAfterDelay(delay) => {
+                if let Some(sleep_impl) = runtime_components.sleep_impl() {
+                    debug!("backing off {delay:?} before returning (no retry quota available)");
+                    sleep_impl.sleep(delay).await;
+                }
+                break;
             }
         }
     }

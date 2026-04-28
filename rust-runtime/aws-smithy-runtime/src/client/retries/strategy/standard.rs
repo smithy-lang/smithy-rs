@@ -274,24 +274,31 @@ impl RetryStrategy for StandardRetryStrategy {
 
         //  acquire permit for retry
         let error_kind = error_kind.expect("result was classified retryable");
+        let is_long_polling = retry_cfg.retry_spec().map_or(false, |s| s.long_polling());
+
+        // Calculate backoff before token check. For long-polling services, this ensures
+        // the caller's loop is slowed down even when the token bucket is empty.
+        let backoff =
+            match self.calculate_backoff(runtime_components, cfg, retry_cfg, &classifier_result) {
+                Ok(value) => value,
+                Err(value) => return Ok(value),
+            };
+
+        //  acquire permit for retry
         match token_bucket.acquire(
             &error_kind,
             &runtime_components.time_source().unwrap_or_default(),
         ) {
             Some(permit) => self.set_retry_permit(permit),
             None => {
-                debug!("attempt #{request_attempts} failed with {error_kind:?}; However, not enough retry quota is available for another attempt so no retry will be attempted.");
-                return Ok(ShouldAttempt::No);
+                debug!("attempt #{request_attempts} failed with {error_kind:?}; not enough retry quota.");
+                return Ok(if is_long_polling {
+                    ShouldAttempt::NoAfterDelay(backoff)
+                } else {
+                    ShouldAttempt::No
+                });
             }
         }
-
-        // calculate delay until next attempt
-        let backoff =
-            match self.calculate_backoff(runtime_components, cfg, retry_cfg, &classifier_result) {
-                Ok(value) => value,
-                // In some cases, backoff calculation will decide that we shouldn't retry at all.
-                Err(value) => return Ok(value),
-            };
 
         debug!(
             "attempt #{request_attempts} failed with {:?}; retrying after {:?}",
@@ -466,6 +473,9 @@ mod tests {
     use aws_smithy_types::retry::{ErrorKind, RetryConfig, RetrySpec};
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
+    use crate::client::retries::token_bucket::{
+        DEFAULT_CAPACITY, DEFAULT_RETRY_COST, DEFAULT_RETRY_TIMEOUT_COST, THROTTLING_RETRY_COST,
+    };
     use crate::client::retries::{ClientRateLimiter, RetryPartition, TokenBucket};
 
     #[test]
@@ -1236,6 +1246,425 @@ mod tests {
         assert_eq!(
             ShouldAttempt::YesAfterDelay(Duration::from_secs(20)),
             actual
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn long_polling_backs_off_when_token_bucket_empty() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_1().with_long_polling(true)),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::new(0));
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+
+        let result = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        match result {
+            ShouldAttempt::NoAfterDelay(delay) => {
+                assert_eq!(delay, Duration::from_millis(50));
+            }
+            other => panic!("expected NoAfterDelay, got {other:?}"),
+        }
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn non_long_polling_no_backoff_when_token_bucket_empty() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_0()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        cfg.interceptor_state().store_put(TokenBucket::new(0));
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+
+        let result = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(result, ShouldAttempt::No);
+    }
+
+    fn v2_1_token_bucket_with_capacity(capacity: usize) -> TokenBucket {
+        TokenBucket::builder()
+            .capacity(capacity)
+            .retry_cost(DEFAULT_RETRY_COST)
+            .throttling_retry_cost(THROTTLING_RETRY_COST)
+            .timeout_retry_cost(DEFAULT_RETRY_TIMEOUT_COST)
+            .build()
+    }
+
+    fn v2_1_token_bucket() -> TokenBucket {
+        v2_1_token_bucket_with_capacity(DEFAULT_CAPACITY)
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn retry_eventually_succeeds() {
+        let (mut cfg, rc, mut ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(100));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 2 * DEFAULT_RETRY_COST as usize
+        );
+
+        ctx.set_output_or_error(Ok(Output::doesnt_matter()));
+        cfg.interceptor_state().store_put(RequestAttempts::new(3));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - DEFAULT_RETRY_COST as usize
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn fail_due_to_max_attempts_reached() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(100));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 2 * DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(3));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 2 * DEFAULT_RETRY_COST as usize
+        );
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn retry_quota_reached_after_single_retry() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket_with_capacity(DEFAULT_RETRY_COST as usize);
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(tb.available_permits(), 0);
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), 0);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn no_retries_if_retry_quota_is_zero() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket_with_capacity(0);
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), 0);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn retry_stops_after_retry_quota_exhaustion() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket_with_capacity(20);
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(tb.available_permits(), 20 - DEFAULT_RETRY_COST as usize);
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), 20 - DEFAULT_RETRY_COST as usize);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn retry_quota_recovery_after_successful_responses() {
+        let (mut cfg, rc, mut ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket_with_capacity(30);
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(tb.available_permits(), 30 - DEFAULT_RETRY_COST as usize);
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(100));
+        assert_eq!(tb.available_permits(), 30 - 2 * DEFAULT_RETRY_COST as usize);
+
+        ctx.set_output_or_error(Ok(Output::doesnt_matter()));
+        cfg.interceptor_state().store_put(RequestAttempts::new(3));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), 30 - DEFAULT_RETRY_COST as usize);
+
+        ctx.set_output_or_error(Err(OrchestratorError::other("doesn't matter")));
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(tb.available_permits(), 30 - 2 * DEFAULT_RETRY_COST as usize);
+
+        ctx.set_output_or_error(Ok(Output::doesnt_matter()));
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), 30 - DEFAULT_RETRY_COST as usize);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn throttling_error_token_bucket_drain_and_backoff() {
+        let (mut cfg, rc, mut ctx) = setup_test(
+            vec![RetryAction::retryable_error(ErrorKind::ThrottlingError)],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_secs(1));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - THROTTLING_RETRY_COST as usize
+        );
+
+        ctx.set_output_or_error(Ok(Output::doesnt_matter()));
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(tb.available_permits(), DEFAULT_CAPACITY);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn long_polling_backoff_after_throttling_error_when_token_bucket_empty() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::retryable_error(ErrorKind::ThrottlingError)],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_retry_spec(RetrySpec::v2_1().with_long_polling(true)),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket_with_capacity(0);
+        cfg.interceptor_state().store_put(tb.clone());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+
+        let result = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        match result {
+            ShouldAttempt::NoAfterDelay(delay) => {
+                assert_eq!(delay, Duration::from_secs(1));
+            }
+            other => panic!("expected NoAfterDelay, got {other:?}"),
+        }
+        assert_eq!(tb.available_permits(), 0);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn long_polling_max_attempts_exceeded_must_not_delay() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(2)
+                .with_retry_spec(RetrySpec::v2_1().with_long_polling(true)),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn long_polling_success_must_not_delay() {
+        let (mut cfg, rc, mut ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(2)
+                .with_retry_spec(RetrySpec::v2_1().with_long_polling(true)),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+
+        ctx.set_output_or_error(Ok(Output::doesnt_matter()));
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn long_polling_non_retryable_errors_must_not_delay() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::NoActionIndicated],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(2)
+                .with_retry_spec(RetrySpec::v2_1().with_long_polling(true)),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+    }
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    #[test]
+    fn verify_max_backoff_time() {
+        let (mut cfg, rc, ctx) = setup_test(
+            vec![RetryAction::server_error()],
+            RetryConfig::standard()
+                .with_use_static_exponential_base(true)
+                .with_max_attempts(5)
+                .with_max_backoff(Duration::from_millis(200))
+                .with_retry_spec(RetrySpec::v2_1()),
+        );
+        let strategy = StandardRetryStrategy::new();
+        let tb = v2_1_token_bucket();
+        cfg.interceptor_state().store_put(tb.clone());
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(50));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(2));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(100));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 2 * DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(3));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(200));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 3 * DEFAULT_RETRY_COST as usize
+        );
+
+        // 50ms * 2^3 = 400ms, capped at max_backoff 200ms
+        cfg.interceptor_state().store_put(RequestAttempts::new(4));
+        let should_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(should_retry.expect_delay(), Duration::from_millis(200));
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 4 * DEFAULT_RETRY_COST as usize
+        );
+
+        cfg.interceptor_state().store_put(RequestAttempts::new(5));
+        let no_retry = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
+        assert_eq!(no_retry, ShouldAttempt::No);
+        assert_eq!(
+            tb.available_permits(),
+            DEFAULT_CAPACITY - 4 * DEFAULT_RETRY_COST as usize
         );
     }
 }

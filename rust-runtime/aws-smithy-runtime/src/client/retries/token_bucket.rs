@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
-const DEFAULT_CAPACITY: usize = 500;
+pub(crate) const DEFAULT_CAPACITY: usize = 500;
 // On a 32 bit architecture, the value of Semaphore::MAX_PERMITS is 536,870,911.
 // Therefore, we will enforce a value lower than that to ensure behavior is
 // identical across platforms.
@@ -21,9 +21,9 @@ const DEFAULT_CAPACITY: usize = 500;
 // is at maximum capacity and another thread drops a permit it was holding.
 /// The maximum number of permits a token bucket can have.
 pub const MAXIMUM_CAPACITY: usize = 500_000_000;
-const DEFAULT_RETRY_COST: u32 = 14;
-const DEFAULT_RETRY_TIMEOUT_COST: u32 = 14;
-const THROTTLING_RETRY_COST: u32 = 5;
+pub(crate) const DEFAULT_RETRY_COST: u32 = 14;
+pub(crate) const DEFAULT_RETRY_TIMEOUT_COST: u32 = 14;
+pub(crate) const THROTTLING_RETRY_COST: u32 = 5;
 
 // Legacy (Retry 2.0) costs
 const LEGACY_RETRY_COST: u32 = 5;
