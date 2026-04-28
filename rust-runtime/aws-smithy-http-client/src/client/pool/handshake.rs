@@ -167,8 +167,10 @@ where
 /// Wraps a connector service, performing the H2 protocol handshake after
 /// connection and returning a `ManagedConnection<H2SendRequest>`.
 ///
-/// Generic over the request type because the Negotiate upgrade path
-/// receives `()` (connection already established), not a URI.
+/// Pinned to `Service<()>` because this service sits in the Negotiate
+/// upgrade path — by the time it runs, the connection is already
+/// established; no target (URI) is needed. Keeping the request type
+/// `()` prevents misassembly at compile time.
 pub(crate) struct H2ConnectAndHandshake<C> {
     connector: C,
 }
@@ -187,9 +189,9 @@ impl<C: Clone> Clone for H2ConnectAndHandshake<C> {
     }
 }
 
-impl<C, IO, Req> Service<Req> for H2ConnectAndHandshake<C>
+impl<C, IO> Service<()> for H2ConnectAndHandshake<C>
 where
-    C: Service<Req, Response = IO>,
+    C: Service<(), Response = IO>,
     C::Error: Into<BoxError> + 'static,
     C::Future: Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + Connection + Unpin + Send + 'static,
@@ -202,8 +204,8 @@ where
         self.connector.poll_ready(cx).map_err(Into::into)
     }
 
-    fn call(&mut self, req: Req) -> Self::Future {
-        let fut = self.connector.call(req);
+    fn call(&mut self, _req: ()) -> Self::Future {
+        let fut = self.connector.call(());
         Box::pin(async move {
             let io = fut.await.map_err(Into::into)?;
             let info = capture_info(&io);
