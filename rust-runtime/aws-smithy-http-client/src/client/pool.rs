@@ -47,6 +47,28 @@ use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake, H2S
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
+/// Pool-level configuration.
+///
+/// Plumbed from the eventual `Builder::new_v2()` public API through
+/// `build_pool` to `ConnectionPool`. Internal type — the public surface
+/// is the builder's per-knob setters, not this struct.
+///
+/// All fields are `None` by default (defaults applied by the pool where
+/// they take effect, not here). Fields are `pub(crate)` because
+/// consumers of this struct are all within the pool module; accessor
+/// methods would add noise without benefit.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PoolConfig {
+    /// Upper bound on concurrent connections (total, across all hosts).
+    /// Enforced via `tower::ConcurrencyLimit` at the connection
+    /// establishment layer. `None` = unlimited.
+    pub(crate) max_connections: Option<usize>,
+
+    /// How long an idle connection may stay in the pool before being
+    /// evicted. `None` = no eviction (hyper-util's default behavior).
+    pub(crate) pool_idle_timeout: Option<std::time::Duration>,
+}
+
 /// Key for per-host connection pool routing.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct PoolKey {
@@ -63,8 +85,8 @@ impl PoolKey {
     }
 }
 
-/// Build a connection pool for the given connector.
-pub(crate) fn build_pool<C, IO>(connector: C) -> ConnectionPool
+/// Build a connection pool for the given connector and configuration.
+pub(crate) fn build_pool<C, IO>(connector: C, config: PoolConfig) -> ConnectionPool
 where
     C: Service<http_1x::Uri, Response = IO> + Clone + Send + Sync + 'static,
     C::Error: Into<BoxError> + 'static,
@@ -72,6 +94,10 @@ where
     IO: hyper::rt::Read + hyper::rt::Write + HyperConnection + Unpin + Send + 'static,
 {
     let make_entry = move |_uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
+        // TODO #8: consult `config.max_connections` here (ConcurrencyLimit
+        //   layer between cache and handshake) and `config.pool_idle_timeout`
+        //   (retain() scheduler in Phase 4). For now the config is stored
+        //   on the pool but not yet applied.
         let stack = hpool::negotiate::builder()
             .connect(connector.clone())
             .inspect(|conn: &IO| conn.connected().is_negotiated_h2())
@@ -90,6 +116,7 @@ where
     };
 
     ConnectionPool {
+        config,
         hosts: Mutex::new(HashMap::new()),
         make_entry: Box::new(make_entry),
     }
@@ -101,6 +128,10 @@ where
 /// Each host gets a Negotiate stack that selects between HTTP/1.1 (Cache)
 /// and HTTP/2 (Singleton) based on ALPN negotiation.
 pub(crate) struct ConnectionPool {
+    /// Pool-wide configuration. Stored for consultation at request time
+    /// and for re-use if `make_entry` needs config (not yet wired).
+    #[allow(dead_code)]
+    config: PoolConfig,
     hosts: Mutex<HashMap<PoolKey, Box<dyn PoolEntry>>>,
     make_entry: Box<dyn Fn(&http_1x::Uri) -> Box<dyn PoolEntry> + Send + Sync>,
 }
