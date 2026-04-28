@@ -94,10 +94,11 @@ where
     IO: hyper::rt::Read + hyper::rt::Write + HyperConnection + Unpin + Send + 'static,
 {
     let make_entry = move |_uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
-        // TODO #8: consult `config.max_connections` here (ConcurrencyLimit
-        //   layer between cache and handshake) and `config.pool_idle_timeout`
-        //   (retain() scheduler in Phase 4). For now the config is stored
-        //   on the pool but not yet applied.
+        // TODO: consult `config.max_connections` here by wrapping the
+        //   per-host connector with `tower::ConcurrencyLimit`, and consult
+        //   `config.pool_idle_timeout` by driving `retain()` on a background
+        //   task. Currently the config is stored on the pool but not yet
+        //   applied.
         let stack = hpool::negotiate::builder()
             .connect(connector.clone())
             .inspect(|conn: &IO| conn.connected().is_negotiated_h2())
