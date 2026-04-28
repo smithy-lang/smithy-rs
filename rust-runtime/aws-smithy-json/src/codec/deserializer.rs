@@ -120,17 +120,24 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         loop {
             self.skip_whitespace();
 
-            // Check for end of object
-            if self.remaining().first() == Some(&b'}') {
-                self.advance_by(1);
-                break;
-            }
-
-            // Expect a key (quoted string)
-            if self.remaining().first() != Some(&b'"') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected object key".into(),
-                });
+            // Check for end of object, error on end of input, otherwise
+            // fall through to parse the next key/value pair.
+            match self.remaining().first() {
+                Some(&b'}') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in object".into(),
+                    });
+                }
+                Some(&b'"') => {}
+                Some(_) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected object key".into(),
+                    });
+                }
             }
 
             // Parse the key directly from bytes
@@ -207,15 +214,22 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b'}') {
-                self.advance_by(1);
-                break;
-            }
-
-            if self.remaining().first() != Some(&b'"') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected key".into(),
-                });
+            match self.remaining().first() {
+                Some(&b'}') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in object".into(),
+                    });
+                }
+                Some(&b'"') => {}
+                Some(_) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected key".into(),
+                    });
+                }
             }
 
             let key = self.parse_key()?;
@@ -1860,5 +1874,48 @@ mod tests {
                 result
             );
         }
+    }
+
+    #[test]
+    fn regression_truncated_struct_does_not_infinite_loop() {
+        // Reviewer follow-up: `read_struct` now uses an explicit `None`
+        // arm inside the loop, so a truncated `{` input is rejected as
+        // InvalidInput instead of relying on a downstream check to
+        // catch it. This mirrors the fix for `read_list`.
+        use aws_smithy_schema::Schema;
+
+        static MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::String,
+            "m",
+            0,
+        );
+        static SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER],
+        );
+
+        let mut deser = JsonDeserializer::new(b"{", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_struct(&SCHEMA, &mut |_, _| Ok(()))
+            .expect_err("truncated struct input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_truncated_map_does_not_infinite_loop() {
+        // Same as above but for `read_map`.
+        let mut deser = JsonDeserializer::new(b"{", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_map(dummy_schema(), &mut |_, _| Ok(()))
+            .expect_err("truncated map input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
     }
 }
