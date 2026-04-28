@@ -151,9 +151,19 @@ where
                 .map_err(|e| Box::new(e) as BoxError)?;
 
             // Drive the connection I/O in the background
-            tokio::spawn(async move {
-                if let Err(e) = conn.with_upgrades().await {
-                    tracing::debug!(error = %e, "h1 connection driver error");
+            tokio::spawn({
+                let remote_addr = info.remote_addr;
+                let local_addr = info.local_addr;
+                async move {
+                    if let Err(e) = conn.with_upgrades().await {
+                        tracing::debug!(
+                            protocol = "h1",
+                            ?remote_addr,
+                            ?local_addr,
+                            error = %e,
+                            "connection driver error"
+                        );
+                    }
                 }
             });
 
@@ -215,9 +225,19 @@ where
                 .await
                 .map_err(|e| Box::new(e) as BoxError)?;
 
-            tokio::spawn(async move {
-                if let Err(e) = conn.await {
-                    tracing::debug!(error = %e, "h2 connection driver error");
+            tokio::spawn({
+                let remote_addr = info.remote_addr;
+                let local_addr = info.local_addr;
+                async move {
+                    if let Err(e) = conn.await {
+                        tracing::debug!(
+                            protocol = "h2",
+                            ?remote_addr,
+                            ?local_addr,
+                            error = %e,
+                            "connection driver error"
+                        );
+                    }
                 }
             });
 

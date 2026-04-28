@@ -53,23 +53,30 @@ pub(crate) struct ConnectionInfo {
 ///
 /// Clone is supported when the inner service is Clone (e.g., HTTP/2 multiplexed
 /// connections). Clones share the same poison flag and connection metadata.
+///
+/// # Missing: idle-start tracking
+///
+/// A `last_used: Instant` updated on **return** to the pool is required
+/// to drive `pool_idle_timeout`-based eviction. That requires a
+/// re-insertion hook we do not have yet (hyper-util's `Cached::Drop`
+/// gives us no callback). The hook shape will be designed alongside the
+/// eviction mechanism. Until then this struct does not track idle
+/// duration. `created_at` is retained because it is well-defined at
+/// establishment time and needed for a future max-lifetime eviction.
 pub(crate) struct ManagedConnection<S> {
     inner: S,
     info: ConnectionInfo,
     created_at: Instant,
-    last_used: Instant,
     poisoned: Arc<AtomicBool>,
 }
 
 impl<S> ManagedConnection<S> {
     /// Create a new managed connection wrapping the given service.
     pub(crate) fn new(inner: S, info: ConnectionInfo) -> Self {
-        let now = Instant::now();
         Self {
             inner,
             info,
-            created_at: now,
-            last_used: now,
+            created_at: Instant::now(),
             poisoned: Arc::new(AtomicBool::new(false)),
         }
     }
@@ -95,11 +102,6 @@ impl<S> ManagedConnection<S> {
         self.poisoned.load(Ordering::Acquire)
     }
 
-    /// How long this connection has been idle (since last request completed).
-    pub(crate) fn idle_duration(&self) -> std::time::Duration {
-        self.last_used.elapsed()
-    }
-
     /// Connection metadata.
     pub(crate) fn info(&self) -> &ConnectionInfo {
         &self.info
@@ -108,11 +110,6 @@ impl<S> ManagedConnection<S> {
     /// When this connection was established.
     pub(crate) fn created_at(&self) -> Instant {
         self.created_at
-    }
-
-    /// Mark this connection as recently used.
-    pub(crate) fn touch(&mut self) {
-        self.last_used = Instant::now();
     }
 
     /// Mutable access to the inner service.
@@ -127,7 +124,6 @@ impl<S: Clone> Clone for ManagedConnection<S> {
             inner: self.inner.clone(),
             info: self.info.clone(),
             created_at: self.created_at,
-            last_used: self.last_used,
             poisoned: self.poisoned.clone(),
         }
     }
@@ -154,7 +150,6 @@ where
     }
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
-        self.touch();
         let fut = self.inner_mut().call(req);
         Box::pin(async move { fut.await.map_err(Into::into) })
     }
