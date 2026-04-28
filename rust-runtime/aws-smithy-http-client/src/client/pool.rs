@@ -108,8 +108,7 @@ pub(crate) struct ConnectionPool {
 impl ConnectionPool {
     /// Send a request through the pool.
     ///
-    /// Routes to the appropriate per-host pool stack, acquires a connection,
-    /// and sends the request.
+    /// Routes to the appropriate per-host pool stack and sends the request.
     pub(crate) async fn send_request(
         &self,
         uri: http_1x::Uri,
@@ -117,18 +116,19 @@ impl ConnectionPool {
     ) -> Result<http_1x::Response<SdkBody>, BoxError> {
         let key = PoolKey::from_uri(&uri).ok_or("request URI must have scheme and authority")?;
 
-        // Clone the per-host stack out of the lock. The stack is Clone
-        // (cheap Arc clones internally). All I/O happens outside the lock.
+        // Dispatch the request through the per-host entry. The lock is
+        // held only long enough to look up / create the entry and call
+        // `send` — all I/O happens in the returned future, outside the
+        // lock.
         let fut = {
             let mut hosts = self.hosts.lock().unwrap();
             if !hosts.contains_key(&key) {
                 hosts.insert(key.clone(), (self.make_entry)(&uri));
             }
-            hosts.get_mut(&key).unwrap().acquire(uri)
+            hosts.get_mut(&key).unwrap().send(uri, req)
         };
 
-        let conn = fut.await?;
-        conn.send(req).await
+        fut.await
     }
 }
 
@@ -243,20 +243,30 @@ where
 /// Type-erased per-host pool entry.
 ///
 /// Each host has one of these, wrapping the unnameable Negotiate stack.
+/// Dyn erasure is structural: hosts have different Negotiate compositions
+/// with different unnameable inner types, so `ConnectionPool::hosts` can't
+/// hold a concrete type.
+///
+/// The entry is request-granular — `send` performs checkout + health
+/// filter + dispatch + body-guard setup atomically for one request. This
+/// folds what was previously a separate `acquire(uri) -> Connection`
+/// followed by `connection.send(req)` into one call.
+///
+/// # Future: splitting acquire and send
+///
+/// If we later need to expose a checked-out connection handle to callers
+/// (e.g. connection warming, request pipelining on a single checkout,
+/// or pool-external reuse), reintroduce a separate `Connection` trait
+/// and split this into `acquire(uri) -> Box<dyn Connection>` plus
+/// `Connection::send(self: Box<Self>, req) -> Response`. The current
+/// shape collapses that split because no caller needs it today.
 trait PoolEntry: Send + Sync {
-    /// Acquire a connection from this host's pool.
-    fn acquire(&mut self, uri: http_1x::Uri) -> BoxFuture<Result<BoxedConnection, BoxError>>;
-}
-
-/// A type-erased connection that can send one request.
-trait Connection: Send {
     fn send(
-        self: Box<Self>,
+        &mut self,
+        uri: http_1x::Uri,
         req: http_1x::Request<SdkBody>,
     ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>>;
 }
-
-type BoxedConnection = Box<dyn Connection>;
 
 /// Concrete PoolEntry wrapping a Negotiate stack.
 ///
@@ -277,58 +287,49 @@ where
     Conn::Future: Send + 'static,
     PoolUnnameable: Send + Sync + 'static,
 {
-    fn acquire(&mut self, uri: http_1x::Uri) -> BoxFuture<Result<BoxedConnection, BoxError>> {
+    fn send(
+        &mut self,
+        uri: http_1x::Uri,
+        req: http_1x::Request<SdkBody>,
+    ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
         let mut svc = self.0.clone();
         Box::pin(async move {
-            // Loop past stale idle entries (poisoned or dead). Converges because:
-            //   - Cache idle set is bounded; each post-checkout `poll_ready` Err
-            //     flips `is_closed` so `Cached::Drop` skips reinsertion, shrinking
-            //     the set by one.
-            //   - Singleton clears to `Empty` on `poll_ready` Err, forcing the
-            //     next `call` to run a fresh handshake — a handshake failure
-            //     surfaces as an error from `svc.call` (not the inner
-            //     `poll_ready`), which we propagate.
-            loop {
+            // Checkout loop. Pops past stale idle entries (poisoned or dead).
+            // Converges because:
+            //   - Cache idle set is bounded; each post-checkout `poll_ready`
+            //     Err flips `is_closed` so `Cached::Drop` skips reinsertion,
+            //     shrinking the set by one.
+            //   - Singleton clears to `Empty` on `poll_ready` Err, forcing
+            //     the next `call` to run a fresh handshake — a handshake
+            //     failure surfaces as an error from `svc.call` (not the
+            //     inner `poll_ready`), which we propagate.
+            let mut conn = loop {
                 std::future::poll_fn(|cx| svc.poll_ready(cx))
                     .await
                     .map_err(Into::into)?;
-                let mut conn = svc.call(uri.clone()).await.map_err(Into::into)?;
-                if std::future::poll_fn(|cx| conn.poll_ready(cx)).await.is_ok() {
-                    return Ok(Box::new(TypedConnection(conn)) as BoxedConnection);
+                let mut checkout = svc.call(uri.clone()).await.map_err(Into::into)?;
+                if std::future::poll_fn(|cx| checkout.poll_ready(cx))
+                    .await
+                    .is_ok()
+                {
+                    break checkout;
                 }
-                // drop `conn` → triggers pool cleanup (H1: discard via
-                // CachedConnection::Drop; H2: Singleton already cleared state).
-            }
-        })
-    }
-}
+                // drop `checkout` → triggers pool cleanup (H1: discard via
+                // CachedConnection::Drop; H2: Singleton already cleared
+                // state).
+            };
 
-/// Concrete Connection wrapping a Negotiated service.
-///
-/// Erases the `CheckoutResponse<PoolUnnameable>` into `SdkBody` at the
-/// trait-object boundary, so `dyn Connection` can name a single concrete
-/// response type.
-struct TypedConnection<S>(S);
-
-impl<S, PoolUnnameable> Connection for TypedConnection<S>
-where
-    S: Service<http_1x::Request<SdkBody>, Response = CheckoutResponse<PoolUnnameable>>
-        + Send
-        + 'static,
-    S::Error: Into<BoxError>,
-    S::Future: Send + 'static,
-    PoolUnnameable: Send + Sync + 'static,
-{
-    fn send(
-        self: Box<Self>,
-        req: http_1x::Request<SdkBody>,
-    ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
-        let mut svc = self.0;
-        Box::pin(async move {
-            let resp = svc.call(req).await.map_err(Into::into)?;
+            // Dispatch the request; convert the body into `SdkBody` at the
+            // boundary so consumers (and `dyn PoolEntry`) don't see our
+            // internal `GuardedBody<...>` type. The guard inside
+            // `GuardedBody` lives on inside `SdkBody` until the body is
+            // fully drained.
+            let resp = conn.call(req).await.map_err(Into::into)?;
             let (parts, body) = resp.into_parts();
-            let body = SdkBody::from_body_1_x(body);
-            Ok(http_1x::Response::from_parts(parts, body))
+            Ok(http_1x::Response::from_parts(
+                parts,
+                SdkBody::from_body_1_x(body),
+            ))
         })
     }
 }
