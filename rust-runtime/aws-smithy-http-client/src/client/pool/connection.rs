@@ -257,10 +257,10 @@ pin_project! {
     /// pool mid-body-stream and the next checkout would be handed a still-busy
     /// connection.
     ///
-    /// `ResponseBody` holds the checkout (`CachedConnection` for H1,
+    /// `GuardedBody` holds the checkout (`CachedConnection` for H1,
     /// `SingletonConnection` for H2) in its guard field until the body is
     /// fully dropped. Body streaming continues through the held inner
-    /// `Incoming`; when the `ResponseBody` is dropped the guard drops, which
+    /// `Incoming`; when the `GuardedBody` is dropped the guard drops, which
     /// for H1 triggers `CachedConnection::Drop` (return-to-pool or `discard`
     /// if poisoned), and for H2 simply drops the singleton clone (no-op on
     /// singleton state).
@@ -270,24 +270,24 @@ pin_project! {
     /// singleton::Singled<...>`, which is unnameable outside hyper-util. The
     /// H1 variant is fully concrete since our vendored cache makes
     /// `cache::Cached<...>` nameable.
-    pub(crate) struct ResponseBody<H2Inner> {
+    pub(crate) struct GuardedBody<H2Unnameable> {
         #[pin]
         inner: hyper::body::Incoming,
-        _guard: ConnectionGuard<H2Inner>,
+        _guard: ConnectionGuard<H2Unnameable>,
     }
 }
 
-/// What a `ResponseBody` holds alive while the body streams.
+/// What a `GuardedBody` holds alive while the body streams.
 ///
 /// Explicit per-leg variants so H1 vs H2 bifurcation is visible at the
 /// type level and in debugger output.
-pub(crate) enum ConnectionGuard<H2Inner> {
-    H1(CachedConnection<ManagedConnection<H1SendRequest>>),
-    H2(SingletonConnection<H2Inner>),
+pub(crate) enum ConnectionGuard<H2Unnameable> {
+    H1(CachedConnection<H1SendRequest>),
+    H2(SingletonConnection<H2Unnameable>),
 }
 
-impl<H2Inner> ResponseBody<H2Inner> {
-    pub(crate) fn new(inner: hyper::body::Incoming, guard: ConnectionGuard<H2Inner>) -> Self {
+impl<H2Unnameable> GuardedBody<H2Unnameable> {
+    pub(crate) fn new(inner: hyper::body::Incoming, guard: ConnectionGuard<H2Unnameable>) -> Self {
         Self {
             inner,
             _guard: guard,
@@ -295,7 +295,7 @@ impl<H2Inner> ResponseBody<H2Inner> {
     }
 }
 
-impl<H2Inner> hyper::body::Body for ResponseBody<H2Inner> {
+impl<H2Unnameable> hyper::body::Body for GuardedBody<H2Unnameable> {
     type Data = <hyper::body::Incoming as hyper::body::Body>::Data;
     type Error = <hyper::body::Incoming as hyper::body::Body>::Error;
 
@@ -314,3 +314,12 @@ impl<H2Inner> hyper::body::Body for ResponseBody<H2Inner> {
         self.inner.size_hint()
     }
 }
+
+/// The response type both H1 and H2 pool checkouts produce.
+///
+/// Carries `GuardedBody<PoolUnnameable>` because some pool-internal leg
+/// holds a checkout guard whose type is unnameable outside hyper-util
+/// (today: the H2 leg's `Singled<...>`). `Negotiate` requires uniform
+/// response types across legs; this alias is the uniform type that
+/// consumers above the Negotiate composition point work with.
+pub(crate) type CheckoutResponse<PoolUnnameable> = http_1x::Response<GuardedBody<PoolUnnameable>>;
