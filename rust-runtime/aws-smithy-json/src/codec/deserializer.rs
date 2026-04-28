@@ -42,7 +42,7 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     fn advance_by(&mut self, n: usize) {
-        self.position += n;
+        self.position = (self.position + n).min(self.input.len());
     }
 
     /// Parse a JSON quoted string key directly from bytes, advancing past it.
@@ -56,15 +56,24 @@ impl<'a> JsonDeserializer<'a> {
         let remaining = &input[start..];
         let mut i = 0;
         let mut has_escapes = false;
+        let mut found_end = false;
         while i < remaining.len() {
             match remaining[i] {
-                b'"' => break,
+                b'"' => {
+                    found_end = true;
+                    break;
+                }
                 b'\\' => {
                     has_escapes = true;
                     i += 2;
                 }
                 _ => i += 1,
             }
+        }
+        if !found_end {
+            return Err(SerdeError::InvalidInput {
+                message: "unterminated string key".into(),
+            });
         }
         self.position = start + i + 1; // advance past key bytes + closing quote
         let key_bytes = &input[start..start + i];
@@ -111,17 +120,24 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         loop {
             self.skip_whitespace();
 
-            // Check for end of object
-            if self.remaining().first() == Some(&b'}') {
-                self.advance_by(1);
-                break;
-            }
-
-            // Expect a key (quoted string)
-            if self.remaining().first() != Some(&b'"') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected object key".into(),
-                });
+            // Check for end of object, error on end of input, otherwise
+            // fall through to parse the next key/value pair.
+            match self.remaining().first() {
+                Some(&b'}') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in object".into(),
+                    });
+                }
+                Some(&b'"') => {}
+                Some(_) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected object key".into(),
+                    });
+                }
             }
 
             // Parse the key directly from bytes
@@ -166,11 +182,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    });
+                }
+                _ => consumer(self)?,
             }
-            consumer(self)?;
         }
 
         Ok(())
@@ -191,15 +214,22 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b'}') {
-                self.advance_by(1);
-                break;
-            }
-
-            if self.remaining().first() != Some(&b'"') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected key".into(),
-                });
+            match self.remaining().first() {
+                Some(&b'}') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in object".into(),
+                    });
+                }
+                Some(&b'"') => {}
+                Some(_) => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "expected key".into(),
+                    });
+                }
             }
 
             let key = self.parse_key()?;
@@ -382,11 +412,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_string(_schema)?),
             }
-            out.push(self.read_string(_schema)?);
         }
         Ok(out)
     }
@@ -402,11 +439,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_blob(_schema)?),
             }
-            out.push(self.read_blob(_schema)?);
         }
         Ok(out)
     }
@@ -422,11 +466,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_integer(_schema)?),
             }
-            out.push(self.read_integer(_schema)?);
         }
         Ok(out)
     }
@@ -442,11 +493,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let mut out = Vec::new();
         loop {
             self.skip_whitespace();
-            if self.remaining().first() == Some(&b']') {
-                self.advance_by(1);
-                break;
+            match self.remaining().first() {
+                Some(&b']') => {
+                    self.advance_by(1);
+                    break;
+                }
+                None => {
+                    return Err(SerdeError::InvalidInput {
+                        message: "unexpected end of input in array".into(),
+                    })
+                }
+                _ => out.push(self.read_long(_schema)?),
             }
-            out.push(self.read_long(_schema)?);
         }
         Ok(out)
     }
@@ -601,11 +659,18 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 let mut arr = Vec::new();
                 loop {
                     self.skip_whitespace();
-                    if self.remaining().first() == Some(&b']') {
-                        self.advance_by(1);
-                        break;
+                    match self.remaining().first() {
+                        Some(&b']') => {
+                            self.advance_by(1);
+                            break;
+                        }
+                        None => {
+                            return Err(SerdeError::InvalidInput {
+                                message: "unexpected end of input in document array".into(),
+                            })
+                        }
+                        _ => arr.push(self.read_document(_schema)?),
                     }
-                    arr.push(self.read_document(_schema)?);
                 }
                 Ok(Document::Array(arr))
             }
@@ -801,19 +866,34 @@ impl<'a> JsonDeserializer<'a> {
                     }
                 }
                 Some(b't') => {
-                    self.advance_by(4); // true
+                    if !self.remaining().starts_with(b"true") {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected `true`".into(),
+                        });
+                    }
+                    self.advance_by(4);
                     if depth == 0 {
                         return Ok(());
                     }
                 }
                 Some(b'f') => {
-                    self.advance_by(5); // false
+                    if !self.remaining().starts_with(b"false") {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected `false`".into(),
+                        });
+                    }
+                    self.advance_by(5);
                     if depth == 0 {
                         return Ok(());
                     }
                 }
                 Some(b'n') => {
-                    self.advance_by(4); // null
+                    if !self.remaining().starts_with(b"null") {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected `null`".into(),
+                        });
+                    }
+                    self.advance_by(4);
                     if depth == 0 {
                         return Ok(());
                     }
@@ -1647,5 +1727,195 @@ mod tests {
             })
             .unwrap();
         assert_eq!(d_val, "ok");
+    }
+
+    // Regression tests for bugs discovered by fuzzing (see PR #4608).
+    // These exercise the same pathological inputs outside of the fuzz
+    // harness so the fixes stay protected even if the fuzz targets are
+    // removed or regress.
+
+    #[test]
+    fn regression_truncated_list_does_not_infinite_loop() {
+        // Bug 1: `read_list` used to call the consumer on empty input
+        // (because `first()` returned `None`, not `Some(&b']')`) and
+        // loop forever because the position never advanced.
+        let mut deser = JsonDeserializer::new(b"[", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_list(dummy_schema(), &mut |d| {
+                d.read_integer(dummy_schema()).map(|_| ())
+            })
+            .expect_err("truncated list input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_truncated_string_list_does_not_infinite_loop() {
+        // Same bug class as above, but for the specialized
+        // `read_string_list` helper.
+        let mut deser = JsonDeserializer::new(b"[", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_string_list(dummy_schema())
+            .expect_err("truncated string list input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_truncated_document_array_does_not_infinite_loop() {
+        // Array branch of `read_document` had the same loop bug.
+        let mut deser = JsonDeserializer::new(b"[", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_document(dummy_schema())
+            .expect_err("truncated document array must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_unterminated_object_key_does_not_panic() {
+        // Bug 2: `parse_key` used to advance past the end of the input
+        // when the closing quote was missing, which made the next call
+        // to `remaining()` panic with an out-of-range slice index.
+        use aws_smithy_schema::Schema;
+
+        static MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::String,
+            "m",
+            0,
+        );
+        static SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER],
+        );
+
+        let mut deser = JsonDeserializer::new(br#"{""#, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_struct(&SCHEMA, &mut |_, _| Ok(()))
+            .expect_err("unterminated object key must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_skip_value_truncated_true_does_not_panic() {
+        // Bug 3: `skip_value` used to blindly `advance_by(4)` on
+        // `Some(b't')`, running off the end of the buffer when the
+        // input was shorter than `true`.
+        use aws_smithy_schema::Schema;
+
+        static MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::String,
+            "known",
+            0,
+        );
+        static SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER],
+        );
+
+        // `"":t"` — unknown key `""` whose value starts with `t` but
+        // isn't the literal `true`. This drives `skip_value` into the
+        // `Some(b't')` arm with fewer than 4 bytes remaining.
+        let input = br#"{"":t"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_struct(&SCHEMA, &mut |_, _| Ok(()))
+            .expect_err("truncated `true` literal must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_skip_value_rejects_malformed_true_literal() {
+        // Reviewer follow-up on Bug 3: a length check alone is not
+        // enough — input like `t!!!` has four bytes but isn't `true`.
+        // `skip_value` must validate the literal content, not just
+        // that there are enough bytes to advance past.
+        use aws_smithy_schema::Schema;
+
+        static MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::String,
+            "known",
+            0,
+        );
+        static SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER],
+        );
+
+        for bad in [
+            &br#"{"":t!!!}"#[..],
+            &br#"{"":f!!!!}"#[..],
+            &br#"{"":n!!!}"#[..],
+        ] {
+            let mut deser = JsonDeserializer::new(bad, Arc::new(JsonCodecSettings::default()));
+            let result = deser.read_struct(&SCHEMA, &mut |_, _| Ok(()));
+            assert!(
+                matches!(result, Err(SerdeError::InvalidInput { .. })),
+                "expected InvalidInput for malformed input {:?}, got {:?}",
+                std::str::from_utf8(bad).unwrap_or("<non-utf8>"),
+                result
+            );
+        }
+    }
+
+    #[test]
+    fn regression_truncated_struct_does_not_infinite_loop() {
+        // Reviewer follow-up: `read_struct` now uses an explicit `None`
+        // arm inside the loop, so a truncated `{` input is rejected as
+        // InvalidInput instead of relying on a downstream check to
+        // catch it. This mirrors the fix for `read_list`.
+        use aws_smithy_schema::Schema;
+
+        static MEMBER: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::String,
+            "m",
+            0,
+        );
+        static SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "S"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER],
+        );
+
+        let mut deser = JsonDeserializer::new(b"{", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_struct(&SCHEMA, &mut |_, _| Ok(()))
+            .expect_err("truncated struct input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn regression_truncated_map_does_not_infinite_loop() {
+        // Same as above but for `read_map`.
+        let mut deser = JsonDeserializer::new(b"{", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_map(dummy_schema(), &mut |_, _| Ok(()))
+            .expect_err("truncated map input must be rejected");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
     }
 }
