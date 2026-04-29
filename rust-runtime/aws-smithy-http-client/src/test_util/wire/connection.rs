@@ -40,6 +40,13 @@ pub enum ConnectionEvent {
         /// The address of the endpoint that accepted the connection.
         endpoint_addr: SocketAddr,
     },
+    /// HTTP request received by an endpoint.
+    HttpRequestReceived {
+        /// The request-target from the request line (e.g. "/path?query").
+        uri: String,
+        /// The Host header value, if present.
+        host: Option<String>,
+    },
     /// DNS lookup performed.
     DnsLookup {
         /// The hostname that was looked up.
@@ -83,7 +90,12 @@ impl TestEndpoint {
                     .lock()
                     .expect("behavior lock poisoned")
                     .pop_front();
-                tokio::spawn(handle_connection(stream, behavior, behaviors.clone()));
+                tokio::spawn(handle_connection(
+                    stream,
+                    behavior,
+                    behaviors.clone(),
+                    events.clone(),
+                ));
             }
         });
 
@@ -110,6 +122,7 @@ async fn handle_connection(
     mut stream: tokio::net::TcpStream,
     first_behavior: Option<ConnectionBehavior>,
     remaining: Arc<Mutex<VecDeque<ConnectionBehavior>>>,
+    events: Arc<Mutex<Vec<ConnectionEvent>>>,
 ) {
     let Some(behavior) = first_behavior else {
         drop(stream);
@@ -129,13 +142,23 @@ async fn handle_connection(
             drop(stream);
         }
         ConnectionBehavior::Respond { status, body } => {
+            // Read the first request before responding.
+            match read_request(&mut stream).await {
+                Ok(req_info) => {
+                    events.lock().expect("event lock poisoned").push(req_info);
+                }
+                Err(_) => return,
+            }
             if write_response(&mut stream, status, body).await.is_err() {
                 return;
             }
             // Keep-alive loop: read next request, send next behavior's response
             loop {
-                if read_request(&mut stream).await.is_err() {
-                    return;
+                match read_request(&mut stream).await {
+                    Ok(req_info) => {
+                        events.lock().expect("event lock poisoned").push(req_info);
+                    }
+                    Err(_) => return,
                 }
                 let next = remaining
                     .lock()
@@ -159,16 +182,19 @@ async fn write_response(
     status: u16,
     body: &[u8],
 ) -> Result<(), std::io::Error> {
-    let header = format!(
+    let mut response = format!(
         "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
         body.len()
-    );
-    stream.write_all(header.as_bytes()).await?;
-    stream.write_all(body).await?;
+    )
+    .into_bytes();
+    response.extend_from_slice(body);
+    stream.write_all(&response).await?;
     stream.flush().await
 }
 
-async fn read_request(stream: &mut tokio::net::TcpStream) -> Result<(), std::io::Error> {
+async fn read_request(
+    stream: &mut tokio::net::TcpStream,
+) -> Result<ConnectionEvent, std::io::Error> {
     // Read until we see \r\n\r\n (end of HTTP headers)
     let mut buf = vec![0u8; 4096];
     let mut total = 0;
@@ -182,9 +208,27 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> Result<(), std::io:
         }
         total += n;
         if total >= 4 && buf[..total].windows(4).any(|w| w == b"\r\n\r\n") {
-            return Ok(());
+            break;
         }
     }
+    let raw = String::from_utf8_lossy(&buf[..total]);
+    let mut lines = raw.lines();
+    // Parse request-target from "GET /path HTTP/1.1"
+    let uri = lines
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .unwrap_or("/")
+        .to_string();
+    // Find Host header
+    let host = lines.find_map(|line| {
+        let lower = line.to_ascii_lowercase();
+        if lower.starts_with("host:") {
+            Some(line[5..].trim().to_string())
+        } else {
+            None
+        }
+    });
+    Ok(ConnectionEvent::HttpRequestReceived { uri, host })
 }
 
 /// Mock DNS resolver that returns configured IPs and logs lookups.
@@ -266,6 +310,19 @@ impl ConnectionTestHarness {
             .iter()
             .filter(|e| matches!(e, ConnectionEvent::DnsLookup { .. }))
             .count()
+    }
+
+    /// Collected HTTP request events (uri + host header).
+    pub fn http_requests(&self) -> Vec<(String, Option<String>)> {
+        self.events()
+            .iter()
+            .filter_map(|e| match e {
+                ConnectionEvent::HttpRequestReceived { uri, host } => {
+                    Some((uri.clone(), host.clone()))
+                }
+                _ => None,
+            })
+            .collect()
     }
 
     /// Get a clone of the mock DNS resolver.
