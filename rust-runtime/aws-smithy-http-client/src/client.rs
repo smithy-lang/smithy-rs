@@ -12,6 +12,8 @@ pub mod tls;
 
 pub(crate) mod connect;
 pub(crate) mod pool;
+/// V2 HTTP client backed by composable connection pools.
+pub mod v2;
 
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
@@ -130,10 +132,8 @@ pub struct TlsUnset {}
 /// TLS implementation selected
 #[derive(Debug, Clone)]
 pub struct TlsProviderSelected {
-    #[allow(unused)]
-    provider: tls::Provider,
-    #[allow(unused)]
-    context: TlsContext,
+    pub(crate) provider: tls::Provider,
+    pub(crate) context: TlsContext,
 }
 
 impl ConnectorBuilder<TlsUnset> {
@@ -567,7 +567,7 @@ where
 }
 
 /// Downcast errors coming out of hyper into an appropriate `ConnectorError`
-fn downcast_error(err: BoxError) -> ConnectorError {
+pub(crate) fn downcast_error(err: BoxError) -> ConnectorError {
     // is a `TimedOutError` (from aws_smithy_async::timeout) in the chain? if it is, this is a timeout
     if find_source::<TimedOutError>(err.as_ref()).is_some() {
         return ConnectorError::timeout(err);
@@ -929,6 +929,16 @@ impl Builder<TlsUnset> {
     /// Creates a new builder.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Creates a new builder backed by the v2 composable connection pool.
+    ///
+    /// The v2 client uses hyper-util's composable pool APIs for connection
+    /// management, supporting per-host connection reuse with HTTP/1.1 and
+    /// HTTP/2 protocol negotiation.
+    #[doc(hidden)]
+    pub fn new_v2() -> v2::BuilderV2 {
+        v2::BuilderV2::new()
     }
 
     /// Returns a [`SharedHttpClient`] that calls the given `connector` function to select an HTTP(S) connector.
