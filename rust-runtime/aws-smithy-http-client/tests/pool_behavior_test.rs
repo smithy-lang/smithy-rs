@@ -16,6 +16,7 @@ use aws_smithy_http_client::test_util::wire::connection::{
     ConnectionBehavior, ConnectionTestHarness,
 };
 use aws_smithy_http_client::test_util::wire::{ReplayedEvent, WireMockServer};
+use aws_smithy_http_client::v2::BuilderV2;
 use aws_smithy_http_client::{ev, match_events, Builder, Connector};
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
@@ -71,20 +72,19 @@ impl MakeClient for V1Client {
     }
 }
 
-// When Builder::new_v2() exists:
-// struct V2Client;
-// impl MakeClient for V2Client {
-//     fn make(&self, config: ClientConfig) -> SharedHttpClient {
-//         let mut builder = Builder::new_v2();
-//         if let Some(timeout) = config.idle_timeout {
-//             builder = builder.pool_idle_timeout(timeout);
-//         }
-//         if let Some(n) = config.max_connections {
-//             builder = builder.max_connections(n);
-//         }
-//         builder.build_http()
-//     }
-// }
+// V2 client backed by the composable connection pool
+struct V2Client;
+
+impl MakeClient for V2Client {
+    fn make(&self, config: ClientConfig) -> SharedHttpClient {
+        let mut builder = BuilderV2::new();
+        if let Some(timeout) = config.idle_timeout {
+            builder = builder.pool_idle_timeout(timeout);
+        }
+        // max_connections deferred
+        builder.build_http()
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -226,12 +226,78 @@ async fn v1_connector_metadata() {
     connector_metadata(&V1Client).await;
 }
 
-// When Builder::new_v2() exists, add:
-// #[tokio::test]
-// async fn v2_connection_reuse() { connection_reuse(&V2Client).await; }
-// #[tokio::test]
-// async fn v2_idle_timeout_eviction() { idle_timeout_eviction(&V2Client).await; }
-// #[tokio::test]
-// async fn v2_connection_reset_returns_error() { connection_reset_returns_error(&V2Client).await; }
-// #[tokio::test]
-// async fn v2_connector_metadata() { connector_metadata(&V2Client).await; }
+// ---------------------------------------------------------------------------
+// v2 test runners
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn v2_connection_reuse() {
+    connection_reuse(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_idle_timeout_eviction() {
+    idle_timeout_eviction(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_connection_reset_returns_error() {
+    connection_reset_returns_error(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_connector_metadata() {
+    connector_metadata(&V2Client).await;
+}
+
+// ---------------------------------------------------------------------------
+// Test implementations: origin-form URI + Host header
+// ---------------------------------------------------------------------------
+
+/// Requests should be sent with origin-form URI (just the path) and a correct Host header.
+async fn origin_form_and_host_header(make: &dyn MakeClient) {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![ConnectionBehavior::Respond {
+                status: 200,
+                body: b"ok",
+            }],
+        )
+        .build()
+        .await;
+
+    let client = make.make(ClientConfig::default());
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/some/path?key=val");
+
+    let resp = send_to(&client, &url)
+        .await
+        .expect("request should succeed");
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let requests = harness.http_requests();
+    assert_eq!(requests.len(), 1, "expected exactly one HTTP request");
+    let (uri, host) = &requests[0];
+
+    // URI must be origin-form (path + query only, no scheme/authority)
+    assert_eq!(uri, "/some/path?key=val", "URI should be origin-form");
+
+    // Host header must be present with the correct authority
+    let host = host.as_deref().expect("Host header should be present");
+    assert_eq!(
+        host,
+        format!("127.0.0.1:{port}"),
+        "Host header should match authority"
+    );
+}
+
+#[tokio::test]
+async fn v1_origin_form_and_host_header() {
+    origin_form_and_host_header(&V1Client).await;
+}
+
+#[tokio::test]
+async fn v2_origin_form_and_host_header() {
+    origin_form_and_host_header(&V2Client).await;
+}
