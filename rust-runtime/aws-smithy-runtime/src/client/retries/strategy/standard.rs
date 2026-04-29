@@ -274,7 +274,7 @@ impl RetryStrategy for StandardRetryStrategy {
 
         //  acquire permit for retry
         let error_kind = error_kind.expect("result was classified retryable");
-        let is_long_polling = retry_cfg.retry_spec().map_or(false, |s| s.long_polling());
+        let is_long_polling = retry_cfg.retry_spec().is_some_and(|s| s.long_polling());
 
         // Calculate backoff before token check. For long-polling services, this ensures
         // the caller's loop is slowed down even when the token bucket is empty.
@@ -470,7 +470,10 @@ mod tests {
         RuntimeComponents, RuntimeComponentsBuilder,
     };
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
-    use aws_smithy_types::retry::{ErrorKind, RetryConfig, RetrySpec};
+    use aws_smithy_types::retry::{ErrorKind, RetryConfig};
+
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    use aws_smithy_types::retry::RetrySpec;
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
     use crate::client::retries::token_bucket::{
@@ -1290,6 +1293,7 @@ mod tests {
         assert_eq!(result, ShouldAttempt::No);
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     fn v2_1_token_bucket_with_capacity(capacity: usize) -> TokenBucket {
         TokenBucket::builder()
             .capacity(capacity)
@@ -1299,6 +1303,7 @@ mod tests {
             .build()
     }
 
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     fn v2_1_token_bucket() -> TokenBucket {
         v2_1_token_bucket_with_capacity(DEFAULT_CAPACITY)
     }

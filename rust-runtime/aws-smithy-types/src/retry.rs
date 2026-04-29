@@ -545,7 +545,7 @@ impl RetryConfig {
 ///
 /// This follows the same pattern as [`MergeTimeoutConfig`](crate::timeout::MergeTimeoutConfig):
 /// the highest-priority `RetryConfig` wins, but unset fields (like `retry_spec`) are
-/// filled in from lower-priority layers via [`RetryConfig::take_defaults_from`].
+/// filled in from lower-priority layers via `RetryConfig::take_defaults_from`.
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct MergeRetryConfig;

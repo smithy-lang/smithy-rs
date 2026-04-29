@@ -72,6 +72,7 @@ pub fn default_http_client_plugin_v2(
 ) -> Option<SharedRuntimePlugin> {
     let mut _default: Option<SharedHttpClient> = None;
 
+    #[allow(deprecated)]
     if behavior_version.is_at_least(BehaviorVersion::v2026_01_12()) {
         // the latest https stack takes precedence if the config flag
         // is enabled otherwise try to fall back to the legacy connector
@@ -271,6 +272,7 @@ pub fn default_timeout_config_plugin_v2(
             ))
         })
         .with_config(layer("default_timeout_config", |layer| {
+            #[allow(deprecated)]
             let timeout_config = if behavior_version.is_at_least(BehaviorVersion::v2026_01_12()) {
                 // All clients with BMV >= v2026_01_12: Set connect_timeout only
                 TimeoutConfig::builder()
@@ -531,6 +533,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(deprecated)]
     fn test_retry_enabled_at_cutoff_version() {
         // v2026_01_12 is the cutoff - retries should be enabled from this version onwards
         let params = DefaultPluginParams::new()

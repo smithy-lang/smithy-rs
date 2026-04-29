@@ -21,8 +21,11 @@ pub(crate) const DEFAULT_CAPACITY: usize = 500;
 // is at maximum capacity and another thread drops a permit it was holding.
 /// The maximum number of permits a token bucket can have.
 pub const MAXIMUM_CAPACITY: usize = 500_000_000;
+#[allow(dead_code)]
 pub(crate) const DEFAULT_RETRY_COST: u32 = 14;
+#[allow(dead_code)]
 pub(crate) const DEFAULT_RETRY_TIMEOUT_COST: u32 = 14;
+#[allow(dead_code)]
 pub(crate) const THROTTLING_RETRY_COST: u32 = 5;
 
 // Legacy (Retry 2.0) costs
