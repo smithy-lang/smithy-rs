@@ -476,6 +476,7 @@ mod tests {
     use aws_smithy_types::retry::RetrySpec;
 
     use super::{calculate_exponential_backoff, StandardRetryStrategy};
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
     use crate::client::retries::token_bucket::{
         DEFAULT_CAPACITY, DEFAULT_RETRY_COST, DEFAULT_RETRY_TIMEOUT_COST, THROTTLING_RETRY_COST,
     };
