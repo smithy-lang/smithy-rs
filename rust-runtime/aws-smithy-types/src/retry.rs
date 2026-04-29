@@ -329,17 +329,34 @@ impl Storable for ReconnectMode {
 ///
 /// [`BehaviorVersion`]: crate::config_bag::Storable
 #[doc(hidden)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+pub struct RetrySpecVersion(u8);
+
+/// [`BehaviorVersion`]: crate::config_bag::Storable
+#[doc(hidden)]
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct RetrySpec {
+    version: RetrySpecVersion,
     non_throttling_initial_backoff: Duration,
     long_polling: Option<bool>,
 }
 
 impl RetrySpec {
+    /// The version corresponding to Retry Behavior 2.0 (legacy).
+    pub const V2_0: RetrySpecVersion = RetrySpecVersion(0);
+    /// The version corresponding to Retry Behavior 2.1.
+    pub const V2_1: RetrySpecVersion = RetrySpecVersion(1);
+
+    /// Returns true if this spec's version is at least the given version.
+    pub fn is_at_least(&self, version: RetrySpecVersion) -> bool {
+        self.version >= version
+    }
+
     /// Create a `RetrySpec` corresponding to Retry Behavior 2.0 (legacy).
     pub fn v2_0() -> Self {
         Self {
+            version: Self::V2_0,
             non_throttling_initial_backoff: Duration::from_secs(1),
             long_polling: None,
         }
@@ -348,6 +365,7 @@ impl RetrySpec {
     /// Create a `RetrySpec` corresponding to Retry Behavior 2.1.
     pub fn v2_1() -> Self {
         Self {
+            version: Self::V2_1,
             non_throttling_initial_backoff: Duration::from_millis(50),
             long_polling: None,
         }

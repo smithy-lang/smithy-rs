@@ -162,7 +162,7 @@ impl StandardRetryStrategy {
                     if let Some(retry_after) = *retry_after {
                         if retry_cfg
                             .retry_spec()
-                            .is_some_and(|s| *s != RetrySpec::v2_0())
+                            .is_some_and(|s| s.is_at_least(RetrySpec::V2_1))
                         {
                             let delay = retry_after.clamp(t_i, t_i + Duration::from_secs(5));
                             debug!("x-amz-retry-after bounded to {delay:?} (t_i={t_i:?})");
