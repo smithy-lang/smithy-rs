@@ -30,7 +30,7 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
 use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-use aws_smithy_types::retry::{ReconnectMode, RetryConfig, RetrySpec};
+use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::time::Duration;
@@ -171,7 +171,6 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
     let behavior_version = params
         .behavior_version
         .unwrap_or_else(BehaviorVersion::latest);
-    let retry_spec = RetrySpec::from(behavior_version);
     Some(
         default_plugin("default_retry_config_plugin", |components| {
             components
@@ -206,8 +205,7 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                     RetryConfig::standard()
                 } else {
                     RetryConfig::disabled()
-                }
-                .with_retry_spec(retry_spec);
+                };
             #[allow(deprecated)]
             let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_06_01()) {
                 retry_config.with_reconnect_mode(ReconnectMode::ReuseAllConnections)
