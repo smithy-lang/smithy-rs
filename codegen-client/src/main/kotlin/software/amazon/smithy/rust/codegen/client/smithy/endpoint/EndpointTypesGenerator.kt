@@ -92,6 +92,7 @@ class EndpointTypesGenerator(
                 it,
                 params,
                 codegenContext = codegenContext,
+                useBddAuthSchemes = true,
             ).generate()
         } ?: defaultResolver()?.let {
             EndpointTestGenerator(
