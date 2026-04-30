@@ -6,7 +6,7 @@
 //! HTTP RPC protocol for body-only APIs.
 
 use crate::codec::{Codec, FinishSerializer};
-use crate::protocol::ClientProtocol;
+use crate::protocol::{apply_http_endpoint, ClientProtocolInner};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::{Schema, ShapeId};
 use aws_smithy_runtime_api::http::{Request, Response};
@@ -40,11 +40,14 @@ impl<C: Codec> HttpRpcProtocol<C> {
     }
 }
 
-impl<C> ClientProtocol for HttpRpcProtocol<C>
+impl<C> ClientProtocolInner for HttpRpcProtocol<C>
 where
     C: Codec + Send + Sync + std::fmt::Debug + 'static,
     for<'a> C::Deserializer<'a>: ShapeDeserializer,
 {
+    type Request = Request;
+    type Response = Response;
+
     fn protocol_id(&self) -> &ShapeId {
         &self.protocol_id
     }
@@ -94,6 +97,15 @@ where
 
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         Some(&self.codec)
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), SerdeError> {
+        apply_http_endpoint(request, endpoint, cfg)
     }
 }
 

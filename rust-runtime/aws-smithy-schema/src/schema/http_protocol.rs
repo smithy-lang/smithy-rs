@@ -5,8 +5,8 @@
 
 //! HTTP-based client protocol implementations.
 //!
-//! This module provides two concrete protocol types that implement [`crate::schema::protocol::ClientProtocol`]
-//! for HTTP transports:
+//! This module provides two concrete protocol types that implement
+//! [`crate::schema::protocol::ClientProtocolInner`] for HTTP transports:
 //!
 //! - [`HttpBindingProtocol`] — for REST-style protocols (e.g., `restJson1`, `restXml`)
 //!   that split members across HTTP headers, query strings, URI labels, and the payload.
@@ -16,7 +16,7 @@
 //! # Protocol hierarchy
 //!
 //! ```text
-//! ClientProtocol
+//! ClientProtocolInner (impl side)  →  ClientProtocol<Req, Res> (dyn side)
 //!   ├─ HttpBindingProtocol<C>   (REST: restJson, restXml)
 //!   └─ HttpRpcProtocol<C>       (RPC: awsJson, rpcv2Cbor)
 //! ```

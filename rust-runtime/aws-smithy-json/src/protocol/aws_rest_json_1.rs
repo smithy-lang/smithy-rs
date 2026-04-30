@@ -56,7 +56,10 @@ impl Default for AwsRestJsonProtocol {
     }
 }
 
-impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
+impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestJsonProtocol {
+    type Request = aws_smithy_runtime_api::http::Request;
+    type Response = aws_smithy_runtime_api::http::Response;
+
     fn protocol_id(&self) -> &ShapeId {
         self.inner.protocol_id()
     }
@@ -87,5 +90,14 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsRestJsonProtocol {
 
     fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
         self.inner.payload_codec()
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        self.inner.update_endpoint(request, endpoint, cfg)
     }
 }

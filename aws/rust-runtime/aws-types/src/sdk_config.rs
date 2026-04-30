@@ -702,6 +702,25 @@ impl Builder {
     ///
     /// This overrides the default protocol determined by the service model,
     /// enabling runtime protocol selection.
+    ///
+    /// # Transport
+    ///
+    /// This setter is HTTP-specific. The whole pipeline — the `self.protocol`
+    /// field (typed `Option<SharedClientProtocol>`, which elides to the HTTP
+    /// specialization via [`SharedClientProtocol`](aws_smithy_schema::protocol::SharedClientProtocol)'s
+    /// default type parameters) and its `Storable` impl (keyed only to
+    /// `SharedClientProtocol<http::Request, http::Response>`) — commits to
+    /// HTTP. The `impl ClientProtocol + 'static` bound you see here is
+    /// consistent with that: it elides to
+    /// `impl ClientProtocol<http::Request, http::Response>`.
+    ///
+    /// `ClientProtocolInner` / `ClientProtocol<Req, Res>` /
+    /// `SharedClientProtocol<Req, Res>` are themselves transport-generic — a
+    /// user can write `impl ClientProtocol<MqttMessage, MqttMessage>` — but
+    /// such an impl cannot be passed here because it won't round-trip through
+    /// the HTTP-typed config-bag storage. A future non-HTTP transport would
+    /// ship its own dedicated setter (e.g., `mqtt_protocol(…)`) paired with
+    /// its own `Storable` newtype rather than generalizing this one.
     pub fn protocol(
         mut self,
         protocol: impl aws_smithy_schema::protocol::ClientProtocol + 'static,
