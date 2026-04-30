@@ -19,8 +19,9 @@ use tokio::task::JoinHandle;
 /// Programmable behavior for a test endpoint per accepted connection.
 #[derive(Debug, Clone)]
 pub enum ConnectionBehavior {
-    /// Accept TCP, send HTTP/1.1 response, keep connection open (reusable).
-    Respond {
+    /// Accept TCP, send HTTP/1.1 response with `Connection: keep-alive`, keep
+    /// connection open for subsequent requests on the same TCP stream.
+    RespondKeepAlive {
         /// HTTP status code to return.
         status: u16,
         /// Response body bytes.
@@ -28,8 +29,28 @@ pub enum ConnectionBehavior {
     },
     /// Accept TCP, immediately reset the connection (RST).
     ResetOnConnect,
+    /// Accept TCP, send HTTP/1.1 response, then close the connection.
+    /// Simulates a server that does not support keep-alive.
+    RespondThenClose {
+        /// HTTP status code to return.
+        status: u16,
+        /// Response body bytes.
+        body: &'static [u8],
+    },
     /// Accept TCP, hold open for duration, then close.
     HoldThenClose(std::time::Duration),
+    /// Accept TCP, send HTTP/1.1 response with `Connection: keep-alive`,
+    /// wait for the specified duration, then close the connection.
+    /// Simulates a server-side idle timeout (e.g. S3 closing after ~20s).
+    /// The connection appears reusable to the client until the server closes it.
+    RespondThenIdleClose {
+        /// HTTP status code to return.
+        status: u16,
+        /// Response body bytes.
+        body: &'static [u8],
+        /// How long to wait after responding before closing.
+        idle: std::time::Duration,
+    },
 }
 
 /// Recorded event from the test harness.
@@ -137,11 +158,39 @@ async fn handle_connection(
                 .expect("failed to set SO_LINGER");
             drop(stream);
         }
+        ConnectionBehavior::RespondThenClose { status, body } => {
+            match read_request(&mut stream).await {
+                Ok(req_info) => {
+                    events.lock().expect("event lock poisoned").push(req_info);
+                }
+                Err(_) => return,
+            }
+            let _ = write_response(&mut stream, status, body, false).await;
+            // Close immediately after responding — no keep-alive.
+            drop(stream);
+        }
         ConnectionBehavior::HoldThenClose(duration) => {
             tokio::time::sleep(duration).await;
             drop(stream);
         }
-        ConnectionBehavior::Respond { status, body } => {
+        ConnectionBehavior::RespondThenIdleClose { status, body, idle } => {
+            match read_request(&mut stream).await {
+                Ok(req_info) => {
+                    events.lock().expect("event lock poisoned").push(req_info);
+                }
+                Err(_) => return,
+            }
+            if write_response(&mut stream, status, body, true)
+                .await
+                .is_err()
+            {
+                return;
+            }
+            // Wait, then close — simulates server-side idle timeout.
+            tokio::time::sleep(idle).await;
+            drop(stream);
+        }
+        ConnectionBehavior::RespondKeepAlive { status, body } => {
             // Read the first request before responding.
             match read_request(&mut stream).await {
                 Ok(req_info) => {
@@ -149,7 +198,10 @@ async fn handle_connection(
                 }
                 Err(_) => return,
             }
-            if write_response(&mut stream, status, body).await.is_err() {
+            if write_response(&mut stream, status, body, true)
+                .await
+                .is_err()
+            {
                 return;
             }
             // Keep-alive loop: read next request, send next behavior's response
@@ -165,10 +217,17 @@ async fn handle_connection(
                     .expect("behavior lock poisoned")
                     .pop_front();
                 match next {
-                    Some(ConnectionBehavior::Respond { status, body }) => {
-                        if write_response(&mut stream, status, body).await.is_err() {
+                    Some(ConnectionBehavior::RespondKeepAlive { status, body }) => {
+                        if write_response(&mut stream, status, body, true)
+                            .await
+                            .is_err()
+                        {
                             return;
                         }
+                    }
+                    Some(ConnectionBehavior::RespondThenClose { status, body }) => {
+                        let _ = write_response(&mut stream, status, body, false).await;
+                        return; // close after responding
                     }
                     _ => return, // No more behaviors or non-Respond behavior: close
                 }
@@ -181,9 +240,11 @@ async fn write_response(
     stream: &mut tokio::net::TcpStream,
     status: u16,
     body: &[u8],
+    keep_alive: bool,
 ) -> Result<(), std::io::Error> {
+    let conn_header = if keep_alive { "keep-alive" } else { "close" };
     let mut response = format!(
-        "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\nConnection: keep-alive\r\n\r\n",
+        "HTTP/1.1 {status} OK\r\nContent-Length: {}\r\nConnection: {conn_header}\r\n\r\n",
         body.len()
     )
     .into_bytes();

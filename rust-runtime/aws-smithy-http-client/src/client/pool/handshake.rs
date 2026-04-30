@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use aws_smithy_types::body::SdkBody;
+use hyper::rt::Executor;
 use hyper_util::client::legacy::connect::{Connection, HttpInfo};
 use hyper_util::rt::TokioExecutor;
 use tokio::sync::Semaphore;
@@ -175,6 +176,13 @@ fn capture_info<IO: Connection>(io: &IO) -> ConnectionInfo {
     }
 }
 
+/// Spawn a connection driver future onto the runtime.
+///
+// TODO - revisit tokio default without flags
+fn spawn_driver(future: impl Future<Output = ()> + Send + 'static) {
+    TokioExecutor::new().execute(future);
+}
+
 /// Connects and performs an HTTP/1.1 handshake.
 ///
 /// The connector is expected to return `(IO, Arc<ConnectionPermit>)` — typically
@@ -223,7 +231,7 @@ where
                 .await
                 .map_err(|e| Box::new(e) as BoxError)?;
 
-            tokio::spawn({
+            spawn_driver({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
                 async move {
@@ -247,7 +255,8 @@ where
 /// Connects and performs an HTTP/2 handshake.
 ///
 /// Pinned to `Service<()>` because this service sits in the Negotiate
-/// upgrade path — the connection is already established.
+/// upgrade path — the connection is already established via the shared
+/// `Inspected` slot.
 pub(crate) struct H2ConnectAndHandshake<C> {
     connector: C,
 }
@@ -292,7 +301,7 @@ where
                 .await
                 .map_err(|e| Box::new(e) as BoxError)?;
 
-            tokio::spawn({
+            spawn_driver({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
                 async move {
