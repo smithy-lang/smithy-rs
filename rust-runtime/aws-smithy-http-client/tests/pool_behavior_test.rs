@@ -37,6 +37,7 @@ const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 struct ClientConfig {
     idle_timeout: Option<Duration>,
     max_connections: Option<usize>,
+    max_connections_per_host: Option<usize>,
 }
 
 impl ClientConfig {
@@ -45,9 +46,13 @@ impl ClientConfig {
         self
     }
 
-    #[allow(dead_code)]
     fn with_max_connections(mut self, n: usize) -> Self {
         self.max_connections = Some(n);
+        self
+    }
+
+    fn with_max_connections_per_host(mut self, n: usize) -> Self {
+        self.max_connections_per_host = Some(n);
         self
     }
 }
@@ -81,7 +86,12 @@ impl MakeClient for V2Client {
         if let Some(timeout) = config.idle_timeout {
             builder = builder.pool_idle_timeout(timeout);
         }
-        // max_connections deferred
+        if let Some(n) = config.max_connections {
+            builder = builder.max_connections(n);
+        }
+        if let Some(n) = config.max_connections_per_host {
+            builder = builder.max_connections_per_host(n);
+        }
         builder.build_http()
     }
 }
@@ -181,11 +191,10 @@ async fn connection_reset_returns_error(make: &dyn MakeClient) {
     let client = make.make(ClientConfig::default());
     let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
 
-    let result = send_to(&client, &url).await;
-    assert!(
-        result.is_err(),
-        "request to a reset-on-connect endpoint should return an error"
-    );
+    let err = send_to(&client, &url)
+        .await
+        .expect_err("request to a reset-on-connect endpoint should fail");
+    assert!(err.is_io(), "expected ConnectorError::io, got: {err:?}");
 }
 
 /// The client should report correct connector metadata.
@@ -300,4 +309,236 @@ async fn v1_origin_form_and_host_header() {
 #[tokio::test]
 async fn v2_origin_form_and_host_header() {
     origin_form_and_host_header(&V2Client).await;
+}
+
+// ---------------------------------------------------------------------------
+// Test implementations: max_connections
+// ---------------------------------------------------------------------------
+
+/// With max_connections(2), concurrent requests should not open more than 2 connections,
+/// and all requests should succeed (waiting requests served via connection reuse).
+async fn max_connections_limits_concurrency(make: &dyn MakeClient) {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..10)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    let client = make.make(ClientConfig::default().with_max_connections(2));
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+
+    // Send 5 concurrent requests — all should succeed
+    let mut tasks = tokio::task::JoinSet::new();
+    for _ in 0..5 {
+        let client = client.clone();
+        let url = url.clone();
+        tasks.spawn(async move { send_to(&client, &url).await });
+    }
+    let mut success_count = 0;
+    while let Some(result) = tasks.join_next().await {
+        let resp = result
+            .expect("task should not panic")
+            .expect("request should succeed");
+        assert_eq!(resp.status().as_u16(), 200);
+        success_count += 1;
+    }
+    assert_eq!(success_count, 5, "all 5 requests should complete");
+
+    let accepted = harness.tcp_accepted_count();
+    assert!(
+        accepted <= 2,
+        "expected at most 2 connections with max_connections(2), got {accepted}"
+    );
+}
+
+/// Cached (reused) connections don't consume permits — sequential requests
+/// with max_connections(1) all succeed on one connection.
+async fn max_connections_reuse_does_not_consume_permits(make: &dyn MakeClient) {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..5)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    let client = make.make(ClientConfig::default().with_max_connections(1));
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+
+    // 5 sequential requests — all reuse the same connection
+    for i in 0..5 {
+        let resp = send_to(&client, &url)
+            .await
+            .unwrap_or_else(|e| panic!("request {i} should succeed: {e}"));
+        assert_eq!(resp.status().as_u16(), 200);
+    }
+
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "all requests should reuse one connection"
+    );
+}
+
+#[tokio::test]
+async fn v2_max_connections_limits_concurrency() {
+    max_connections_limits_concurrency(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_max_connections_reuse_does_not_consume_permits() {
+    max_connections_reuse_does_not_consume_permits(&V2Client).await;
+}
+
+// ---------------------------------------------------------------------------
+// Test implementations: max_connections_per_host
+// ---------------------------------------------------------------------------
+
+async fn is_bindable(ip: IpAddr) -> bool {
+    tokio::net::TcpListener::bind((ip, 0u16)).await.is_ok()
+}
+
+const IP2: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
+
+/// Per-host limit: each host gets its own budget.
+async fn max_connections_per_host_limits_per_host(make: &dyn MakeClient) {
+    if !is_bindable(IP2).await {
+        eprintln!("skipping test: 127.0.0.2 not bindable");
+        return;
+    }
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..10)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .endpoint(
+            IP2,
+            (0..10)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    let client = make.make(ClientConfig::default().with_max_connections_per_host(2));
+    let port = harness.endpoints[0].port();
+
+    // Send 4 concurrent requests to each host
+    let mut tasks = tokio::task::JoinSet::new();
+    for ip in ["127.0.0.1", "127.0.0.2"] {
+        for _ in 0..4 {
+            let client = client.clone();
+            let url = format!("http://{ip}:{port}/");
+            tasks.spawn(async move { send_to(&client, &url).await });
+        }
+    }
+    while let Some(result) = tasks.join_next().await {
+        result
+            .expect("task should not panic")
+            .expect("request should succeed");
+    }
+
+    let host1 = harness.tcp_accepted_by(IP1);
+    let host2 = harness.tcp_accepted_by(IP2);
+    assert!(host1 <= 2, "host 1: expected ≤2 connections, got {host1}");
+    assert!(host2 <= 2, "host 2: expected ≤2 connections, got {host2}");
+    // Total exceeds per-host limit (no global limit set)
+    assert!(host1 + host2 > 2, "total should exceed per-host limit");
+}
+
+/// Global and per-host limits compose: global(3) + per_host(2) with 2 hosts.
+async fn max_connections_global_and_per_host_compose(make: &dyn MakeClient) {
+    if !is_bindable(IP2).await {
+        eprintln!("skipping test: 127.0.0.2 not bindable");
+        return;
+    }
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..10)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .endpoint(
+            IP2,
+            (0..10)
+                .map(|_| ConnectionBehavior::Respond {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    let client = make.make(
+        ClientConfig::default()
+            .with_max_connections(3)
+            .with_max_connections_per_host(2),
+    );
+    let port = harness.endpoints[0].port();
+
+    // Send 4 concurrent requests to each host (8 total)
+    let mut tasks = tokio::task::JoinSet::new();
+    for ip in ["127.0.0.1", "127.0.0.2"] {
+        for _ in 0..4 {
+            let client = client.clone();
+            let url = format!("http://{ip}:{port}/");
+            tasks.spawn(async move { send_to(&client, &url).await });
+        }
+    }
+    while let Some(result) = tasks.join_next().await {
+        result
+            .expect("task should not panic")
+            .expect("request should succeed");
+    }
+
+    let host1 = harness.tcp_accepted_by(IP1);
+    let host2 = harness.tcp_accepted_by(IP2);
+    // Per-host: each ≤2
+    assert!(host1 <= 2, "host 1: expected ≤2, got {host1}");
+    assert!(host2 <= 2, "host 2: expected ≤2, got {host2}");
+    // Global: total ≤3
+    assert!(
+        host1 + host2 <= 3,
+        "total: expected ≤3 (global limit), got {}",
+        host1 + host2
+    );
+}
+
+#[tokio::test]
+async fn v2_max_connections_per_host_limits_per_host() {
+    max_connections_per_host_limits_per_host(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_max_connections_global_and_per_host_compose() {
+    max_connections_global_and_per_host_compose(&V2Client).await;
 }
