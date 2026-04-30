@@ -190,8 +190,8 @@ async fn test_adaptive_retries_with_throttling_errors() {
     adaptive_retries_with_throttling(
         BehaviorVersion::v2024_03_28(),
         "throttle_legacy",
-        Duration::from_secs(40),
-        Duration::from_secs(48),
+        Duration::from_secs(38),
+        Duration::from_secs(47),
         Duration::from_secs(49),
     )
     .await;
@@ -200,8 +200,8 @@ async fn test_adaptive_retries_with_throttling_errors() {
     adaptive_retries_with_throttling(
         BehaviorVersion::latest(),
         "throttle_latest",
-        Duration::from_secs(40),
-        Duration::from_secs(48),
+        Duration::from_secs(38),
+        Duration::from_secs(47),
         Duration::from_secs(49),
     )
     .await;

@@ -266,27 +266,44 @@ async fn try_op(
         modify_before_retry_loop(ctx, runtime_components, cfg);
     });
 
-    // If we got a retry strategy from the bag, ask it what to do.
-    // Otherwise, assume we should attempt the initial request.
-    let should_attempt = runtime_components
-        .retry_strategy()
-        .should_attempt_initial_request(runtime_components, cfg);
-    match should_attempt {
-        // Yes, let's make a request
-        Ok(ShouldAttempt::Yes) => debug!("retry strategy has OKed initial request"),
-        // No, this request shouldn't be sent
-        Ok(ShouldAttempt::No) | Ok(ShouldAttempt::NoAfterDelay(_)) => {
-            let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
-            halt!([ctx] => OrchestratorError::other(err));
-        }
-        // No, we shouldn't make a request because...
-        Err(err) => halt!([ctx] => OrchestratorError::other(err)),
-        Ok(ShouldAttempt::YesAfterDelay(delay)) => {
-            let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
-                "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
-            )));
-            debug!("retry strategy has OKed initial request after a {delay:?} delay");
-            sleep_impl.sleep(delay).await;
+    // Loop to acquire a send token from the adaptive rate limiter.
+    // When capacity is insufficient, the strategy returns YesAfterDelay.
+    // After sleeping, we re-check because other tasks may have consumed
+    // tokens during our sleep.
+    let retry_strategy = runtime_components.retry_strategy();
+    loop {
+        let should_attempt = retry_strategy.should_attempt_initial_request(runtime_components, cfg);
+        match should_attempt {
+            Ok(ShouldAttempt::Yes) => {
+                debug!("retry strategy has OKed initial request");
+                break;
+            }
+            Ok(ShouldAttempt::No) => {
+                let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
+                halt!([ctx] => OrchestratorError::other(err));
+            }
+            // Defensive: no built-in retry strategy returns `NoAfterDelay` from
+            // `should_attempt_initial_request` today, so this is effectively dead code.
+            // We handle it correctly in case a custom strategy does.
+            Ok(ShouldAttempt::NoAfterDelay(delay)) => {
+                if let Some(sleep_impl) = runtime_components.sleep_impl() {
+                    debug!(
+                        "backing off {delay:?} before returning (no initial request will be made)"
+                    );
+                    sleep_impl.sleep(delay).await;
+                }
+                let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
+                halt!([ctx] => OrchestratorError::other(err));
+            }
+            Err(err) => halt!([ctx] => OrchestratorError::other(err)),
+            Ok(ShouldAttempt::YesAfterDelay(delay)) => {
+                let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
+                    "the retry strategy requested a delay before sending the initial request, but no 'async sleep' implementation was set"
+                )));
+                debug!("retry strategy has OKed initial request after a {delay:?} delay");
+                sleep_impl.sleep(delay).await;
+                continue;
+            }
         }
     }
 
