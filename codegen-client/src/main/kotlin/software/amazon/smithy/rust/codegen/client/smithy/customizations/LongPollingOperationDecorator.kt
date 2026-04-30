@@ -67,7 +67,7 @@ private class LongPollingOperationCustomization(
                         ),
                     ).resolve("LongPollingInterceptor")
 
-                section.registerInterceptor(rc, this) {
+                section.registerPermanentInterceptor(rc, this) {
                     rustTemplate(
                         "#{LongPollingInterceptor}",
                         "LongPollingInterceptor" to longPollingInterceptor,
