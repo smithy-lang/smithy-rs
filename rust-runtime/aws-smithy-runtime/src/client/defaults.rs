@@ -183,7 +183,7 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                     {
                         #[allow(deprecated)]
                         let is_new_bv =
-                            behavior_version.is_at_least(BehaviorVersion::v2026_06_01());
+                            behavior_version.is_at_least(BehaviorVersion::v2026_05_15());
                         move || {
                             if is_new_bv {
                                 TokenBucket::builder()
@@ -207,7 +207,7 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                     RetryConfig::disabled()
                 };
             #[allow(deprecated)]
-            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_06_01()) {
+            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_05_15()) {
                 retry_config.with_reconnect_mode(ReconnectMode::ReuseAllConnections)
             } else {
                 retry_config

@@ -38,7 +38,7 @@ private class DynamoDbServiceRuntimePluginCustomization(private val codegenConte
                     ##[allow(deprecated)]
                     if ${section.serviceConfigName}.behavior_version
                         .as_ref()
-                        .is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_06_01()))
+                        .is_some_and(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_05_15()))
                     {
                         ${section.newLayerName}.store_put(
                             #{RetryConfig}::standard()
