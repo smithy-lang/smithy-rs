@@ -323,15 +323,29 @@ impl Storable for ReconnectMode {
 /// configuration, and operation traits.
 ///
 /// This is not customer-facing configuration — customers use [`RetryConfig`] instead.
-/// `RetrySpec` captures version-gated behavior (e.g. backoff timing, token costs)
-/// and operation-level traits (e.g. long-polling) that the retry strategy reads at
-/// runtime.
+/// Version tag for [`RetrySpec`], enabling zero-cost comparisons without
+/// exposing the internal representation.
 ///
 /// [`BehaviorVersion`]: crate::config_bag::Storable
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 pub struct RetrySpecVersion(u8);
 
+/// Version-gated retry parameters derived from `BehaviorVersion`.
+///
+/// `RetrySpec` exists because `BehaviorVersion` lives in
+/// `aws-smithy-runtime-api` while `RetryConfig` lives in `aws-smithy-types`.
+/// `RetryConfig` cannot depend on `BehaviorVersion` directly without
+/// creating a circular crate dependency. Inferring the spec version from
+/// the presence or absence of individual fields would be fragile and
+/// error-prone.
+///
+/// Instead, `BehaviorVersion` is converted into a `RetrySpec` and stored
+/// alongside `RetryConfig` in the config bag. The retry strategy reads
+/// `RetrySpec` to determine version-gated behavior (backoff timing, token
+/// costs, `x-amz-retry-after` bounds) without ever depending on
+/// `BehaviorVersion`.
+///
 /// [`BehaviorVersion`]: crate::config_bag::Storable
 #[doc(hidden)]
 #[derive(Clone, Debug, PartialEq)]
