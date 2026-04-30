@@ -13,11 +13,31 @@ use std::time::Instant;
 
 use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
+use tokio::sync::OwnedSemaphorePermit;
 use tower::Service;
 
 use super::cache;
 use super::handshake::H1SendRequest;
 use super::BoxError;
+
+/// Permits acquired from connection limit semaphores.
+/// Held for the lifetime of the connection — dropped when the connection is dropped.
+pub(crate) struct ConnectionPermit {
+    _global: Option<OwnedSemaphorePermit>,
+    _per_host: Option<OwnedSemaphorePermit>,
+}
+
+impl ConnectionPermit {
+    pub(crate) fn new(
+        global: Option<OwnedSemaphorePermit>,
+        per_host: Option<OwnedSemaphorePermit>,
+    ) -> Self {
+        Self {
+            _global: global,
+            _per_host: per_host,
+        }
+    }
+}
 
 /// Error returned by `ManagedConnection::poll_ready` when the connection
 /// has been marked poisoned and should not be reused.
@@ -68,16 +88,18 @@ pub(crate) struct ManagedConnection<S> {
     info: ConnectionInfo,
     created_at: Instant,
     poisoned: Arc<AtomicBool>,
+    _permit: Arc<ConnectionPermit>,
 }
 
 impl<S> ManagedConnection<S> {
     /// Create a new managed connection wrapping the given service.
-    pub(crate) fn new(inner: S, info: ConnectionInfo) -> Self {
+    pub(crate) fn new(inner: S, info: ConnectionInfo, permit: Arc<ConnectionPermit>) -> Self {
         Self {
             inner,
             info,
             created_at: Instant::now(),
             poisoned: Arc::new(AtomicBool::new(false)),
+            _permit: permit,
         }
     }
 
@@ -125,6 +147,7 @@ impl<S: Clone> Clone for ManagedConnection<S> {
             info: self.info.clone(),
             created_at: self.created_at,
             poisoned: self.poisoned.clone(),
+            _permit: self._permit.clone(),
         }
     }
 }
