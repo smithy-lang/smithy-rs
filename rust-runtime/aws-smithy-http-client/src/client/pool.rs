@@ -29,6 +29,7 @@ mod cache {
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::task::Poll;
 
@@ -36,13 +37,13 @@ use aws_smithy_types::body::SdkBody;
 use hyper_util::client::legacy::connect::Connection as HyperConnection;
 use hyper_util::client::pool as hpool;
 use hyper_util::rt::TokioExecutor;
+use tokio::sync::Semaphore;
 use tower::{Service, ServiceExt};
 
 use connection::{
-    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, ManagedConnection,
-    SingletonConnection,
+    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, SingletonConnection,
 };
-use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake, H2SendRequest};
+use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
@@ -60,9 +61,14 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PoolConfig {
     /// Upper bound on concurrent connections (total, across all hosts).
-    /// Enforced via `tower::ConcurrencyLimit` at the connection
-    /// establishment layer. `None` = unlimited.
+    /// Enforced via semaphore at the connection establishment layer.
+    /// `None` = unlimited.
     pub(crate) max_connections: Option<usize>,
+
+    /// Upper bound on concurrent connections per host.
+    /// Each unique (scheme, authority) pair gets an independent semaphore.
+    /// `None` = unlimited.
+    pub(crate) max_connections_per_host: Option<usize>,
 
     /// How long an idle connection may stay in the pool before being
     /// evicted. `None` = no eviction (hyper-util's default behavior).
@@ -93,15 +99,20 @@ where
     C::Future: Unpin + Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + HyperConnection + Unpin + Send + 'static,
 {
+    let global_sem = config.max_connections.map(|n| Arc::new(Semaphore::new(n)));
+    let max_per_host = config.max_connections_per_host;
+
     let make_entry = move |_uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
-        // TODO: consult `config.max_connections` here by wrapping the
-        //   per-host connector with `tower::ConcurrencyLimit`, and consult
-        //   `config.pool_idle_timeout` by driving `retain()` on a background
-        //   task. Currently the config is stored on the pool but not yet
-        //   applied.
+        let per_host_sem = max_per_host.map(|n| Arc::new(Semaphore::new(n)));
+        let limited =
+            handshake::ConnectionLimit::new(connector.clone(), global_sem.clone(), per_host_sem);
         let stack = hpool::negotiate::builder()
-            .connect(connector.clone())
-            .inspect(|conn: &IO| conn.connected().is_negotiated_h2())
+            .connect(limited)
+            .inspect(
+                |(conn, _permit): &(IO, Arc<connection::ConnectionPermit>)| {
+                    conn.connected().is_negotiated_h2()
+                },
+            )
             .fallback(tower::layer::layer_fn(|inspector| {
                 cache::builder()
                     .executor(TokioExecutor::new())

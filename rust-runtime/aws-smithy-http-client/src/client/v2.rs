@@ -49,6 +49,8 @@ use crate::tls::TlsContext;
 pub struct BuilderV2<Tls = TlsUnset> {
     pool_idle_timeout: Option<Duration>,
     tcp_nodelay: bool,
+    max_connections: Option<usize>,
+    max_connections_per_host: Option<usize>,
     tls: Tls,
 }
 
@@ -57,6 +59,8 @@ impl Default for BuilderV2<TlsUnset> {
         Self {
             pool_idle_timeout: None,
             tcp_nodelay: true,
+            max_connections: None,
+            max_connections_per_host: None,
             tls: TlsUnset {},
         }
     }
@@ -79,6 +83,27 @@ impl<Tls> BuilderV2<Tls> {
         self.tcp_nodelay = nodelay;
         self
     }
+
+    /// Set the maximum number of concurrent connections.
+    ///
+    /// Limits concurrent connection handshakes across all hosts. Cached
+    /// (reused) connections do not count against this limit. When the limit
+    /// is reached, new connection attempts wait until an existing handshake
+    /// completes.
+    pub fn max_connections(mut self, n: usize) -> Self {
+        self.max_connections = Some(n);
+        self
+    }
+
+    /// Set the maximum number of concurrent connections per host.
+    ///
+    /// Each unique (scheme, authority) pair has an independent connection
+    /// budget. This limit is independent of `max_connections` — both can
+    /// be set and are enforced simultaneously.
+    pub fn max_connections_per_host(mut self, n: usize) -> Self {
+        self.max_connections_per_host = Some(n);
+        self
+    }
 }
 
 impl BuilderV2<TlsUnset> {
@@ -92,6 +117,8 @@ impl BuilderV2<TlsUnset> {
         BuilderV2 {
             pool_idle_timeout: self.pool_idle_timeout,
             tcp_nodelay: self.tcp_nodelay,
+            max_connections: self.max_connections,
+            max_connections_per_host: self.max_connections_per_host,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -105,7 +132,8 @@ impl BuilderV2<TlsUnset> {
         let mut tcp = HyperHttpConnector::new();
         tcp.set_nodelay(self.tcp_nodelay);
         let config = PoolConfig {
-            max_connections: None,
+            max_connections: self.max_connections,
+            max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: self.pool_idle_timeout,
         };
         let pool = pool::build_pool(tcp, config);
