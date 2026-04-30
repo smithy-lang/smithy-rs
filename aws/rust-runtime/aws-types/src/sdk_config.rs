@@ -707,7 +707,7 @@ impl Builder {
     ///
     /// This setter is HTTP-specific. The whole pipeline — the `self.protocol`
     /// field (typed `Option<SharedClientProtocol>`, which elides to the HTTP
-    /// specialization via [`SharedClientProtocol`](aws_smithy_schema::protocol::SharedClientProtocol)'s
+    /// specialization via [`SharedClientProtocol`]'s
     /// default type parameters) and its `Storable` impl (keyed only to
     /// `SharedClientProtocol<http::Request, http::Response>`) — commits to
     /// HTTP. The `impl ClientProtocol + 'static` bound you see here is
