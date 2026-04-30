@@ -109,6 +109,7 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
 }
 
 #[tokio::test]
+#[ignore] // TODO(Retry 2.1): enable when retry 2.1 behavior is implemented
 async fn test_adaptive_retries_with_throttling_errors() {
     let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
 

@@ -35,6 +35,7 @@ trap remove_tmp_dir EXIT
 mkdir -p "${tmp_dir}/aws/sdk/build"
 cp -r smithy-rs/aws/sdk/integration-tests "${tmp_dir}/aws/sdk/"
 cp -r aws-sdk-smoketest "${tmp_dir}/aws/sdk/build/aws-sdk"
+cp smithy-rs/aws/sdk/Cargo.lock "${tmp_dir}/aws/sdk/integration-tests/"
 find "${tmp_dir}"
 
 pushd "${tmp_dir}/aws/sdk/integration-tests"
