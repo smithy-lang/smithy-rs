@@ -29,14 +29,14 @@ async fn test_harness_multi_ip_endpoints() {
     let harness = ConnectionTestHarness::builder()
         .endpoint(
             IP1,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"hello",
             }],
         )
         .endpoint(
             IP2,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"world",
             }],
@@ -109,14 +109,14 @@ async fn test_mock_dns_resolver() {
     let harness = ConnectionTestHarness::builder()
         .endpoint(
             IP1,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"ok",
             }],
         )
         .endpoint(
             IP2,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"ok",
             }],
@@ -141,15 +141,15 @@ async fn test_harness_keep_alive_reuse() {
         .endpoint(
             IP1,
             vec![
-                ConnectionBehavior::Respond {
+                ConnectionBehavior::RespondKeepAlive {
                     status: 200,
                     body: b"first",
                 },
-                ConnectionBehavior::Respond {
+                ConnectionBehavior::RespondKeepAlive {
                     status: 201,
                     body: b"second",
                 },
-                ConnectionBehavior::Respond {
+                ConnectionBehavior::RespondKeepAlive {
                     status: 202,
                     body: b"third",
                 },
@@ -223,14 +223,14 @@ async fn test_harness_dns_all_includes_all_endpoints() {
     let harness = ConnectionTestHarness::builder()
         .endpoint(
             IP1,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"a",
             }],
         )
         .endpoint(
             IP2,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"b",
             }],
@@ -255,7 +255,7 @@ async fn test_mock_dns_unknown_host_returns_empty() {
     let harness = ConnectionTestHarness::builder()
         .endpoint(
             IP1,
-            vec![ConnectionBehavior::Respond {
+            vec![ConnectionBehavior::RespondKeepAlive {
                 status: 200,
                 body: b"ok",
             }],
