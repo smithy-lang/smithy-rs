@@ -141,7 +141,82 @@ impl BuilderV2<TlsUnset> {
     }
 }
 
-// TODO(3f): impl BuilderV2<TlsProviderSelected> { fn build_https() }
+impl BuilderV2<TlsProviderSelected> {
+    /// Set the TLS context (custom trust store, etc.).
+    pub fn tls_context(mut self, context: TlsContext) -> Self {
+        self.tls.context = context;
+        self
+    }
+
+    /// Build an HTTPS client with the selected TLS provider.
+    pub fn build_https(self) -> SharedHttpClient {
+        let mut tcp = HyperHttpConnector::new();
+        tcp.set_nodelay(self.tcp_nodelay);
+        tcp.enforce_http(false);
+        self.build_from_tcp(tcp)
+    }
+
+    /// Build an HTTPS client using a custom DNS resolver.
+    pub fn build_with_resolver(
+        self,
+        resolver: impl aws_smithy_runtime_api::client::dns::ResolveDns + Clone + 'static,
+    ) -> SharedHttpClient {
+        use crate::client::dns::HyperUtilResolver;
+        let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
+        tcp.set_nodelay(self.tcp_nodelay);
+        tcp.enforce_http(false);
+        self.build_from_tcp(tcp)
+    }
+
+    fn build_from_tcp<R>(self, tcp: HyperHttpConnector<R>) -> SharedHttpClient
+    where
+        R: Clone + Send + Sync + 'static,
+        R: tower::Service<hyper_util::client::legacy::connect::dns::Name>,
+        R::Response: Iterator<Item = std::net::SocketAddr>,
+        R::Future: Send,
+        R::Error: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        use super::proxy;
+
+        let config = PoolConfig {
+            max_connections: self.max_connections,
+            max_connections_per_host: self.max_connections_per_host,
+            pool_idle_timeout: self.pool_idle_timeout,
+        };
+
+        match &self.tls.provider {
+            #[cfg(any(
+                feature = "rustls-aws-lc",
+                feature = "rustls-aws-lc-fips",
+                feature = "rustls-ring"
+            ))]
+            tls::Provider::Rustls(crypto_mode) => {
+                let connector = tls::rustls_provider::build_connector::wrap_connector(
+                    tcp,
+                    crypto_mode.clone(),
+                    &self.tls.context,
+                    proxy::ProxyConfig::disabled(),
+                );
+                let pool = pool::build_pool(connector, config);
+                V2HttpClient::new(pool).into_shared()
+            }
+            #[cfg(feature = "s2n-tls")]
+            tls::Provider::S2nTls => {
+                let connector = tls::s2n_tls_provider::build_connector::wrap_connector(
+                    tcp,
+                    &self.tls.context,
+                    proxy::ProxyConfig::disabled(),
+                );
+                let pool = pool::build_pool(connector, config);
+                V2HttpClient::new(pool).into_shared()
+            }
+            // Provider is #[non_exhaustive]; this arm is unreachable when any
+            // TLS feature is enabled (which is required to construct a Provider).
+            #[allow(unreachable_patterns)]
+            _ => unreachable!("a TLS feature must be enabled to use build_https()"),
+        }
+    }
+}
 
 // ---------------------------------------------------------------------------
 // HttpConnector adapter

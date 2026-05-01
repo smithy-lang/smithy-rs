@@ -118,3 +118,51 @@ async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>
         .await?;
     Ok(())
 }
+
+// ---------------------------------------------------------------------------
+// v2 smoke tests
+// ---------------------------------------------------------------------------
+
+use aws_smithy_http_client::v2::BuilderV2;
+
+#[cfg(feature = "rustls-aws-lc")]
+#[tokio::test]
+async fn v2_aws_lc_client() {
+    let client = BuilderV2::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
+
+#[cfg(feature = "rustls-aws-lc-fips")]
+#[tokio::test]
+async fn v2_aws_lc_fips_client() {
+    let client = BuilderV2::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLcFips,
+        ))
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
+
+#[cfg(feature = "rustls-ring")]
+#[tokio::test]
+async fn v2_ring_client() {
+    let client = BuilderV2::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::Ring,
+        ))
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
+
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn v2_s2n_tls_client() {
+    let client = BuilderV2::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .build_https();
+    smoke_test_client(&client).await.unwrap();
+}
