@@ -68,9 +68,12 @@ class SchemaDecorator : ClientCodegenDecorator {
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> {
-        return baseCustomizations + SchemaStructureCustomization(codegenContext)
-    }
+    ): List<StructureCustomization> =
+        if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            baseCustomizations + SchemaStructureCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
