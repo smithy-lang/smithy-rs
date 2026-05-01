@@ -259,8 +259,6 @@ class RustWriterTest {
             output.lines().filter { line ->
                 line != line.trimEnd()
             }
-        // BUG: trailing whitespace is currently produced (inverted assertion).
-        // This will be flipped once the fix is applied.
-        trailingWhitespaceLines.size shouldBe 2
+        trailingWhitespaceLines shouldBe emptyList()
     }
 }
