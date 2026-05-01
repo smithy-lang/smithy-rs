@@ -5,6 +5,7 @@
 
 use crate::client::interceptors::Interceptors;
 use crate::client::orchestrator::http::{log_response_body, read_body};
+use crate::client::retries::LongPollingBackoff;
 use crate::client::timeout::{MaybeTimeout, MaybeTimeoutConfig, TimeoutKind};
 use crate::client::{
     http::body::minimum_throughput::MaybeUploadThroughputCheckFuture,
@@ -30,7 +31,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::retry::MergeRetryConfig;
+use aws_smithy_types::retry::{MergeRetryConfig, RetryConfig};
 use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use endpoints::apply_endpoint;
 use std::mem;
@@ -282,19 +283,6 @@ async fn try_op(
                 let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
                 halt!([ctx] => OrchestratorError::other(err));
             }
-            // Defensive: no built-in retry strategy returns `NoAfterDelay` from
-            // `should_attempt_initial_request` today, so this is effectively dead code.
-            // We handle it correctly in case a custom strategy does.
-            Ok(ShouldAttempt::NoAfterDelay(delay)) => {
-                if let Some(sleep_impl) = runtime_components.sleep_impl() {
-                    debug!(
-                        "backing off {delay:?} before returning (no initial request will be made)"
-                    );
-                    sleep_impl.sleep(delay).await;
-                }
-                let err: BoxError = "the retry strategy indicates that an initial request shouldn't be made, but it didn't specify why".into();
-                halt!([ctx] => OrchestratorError::other(err));
-            }
             Err(err) => halt!([ctx] => OrchestratorError::other(err)),
             Ok(ShouldAttempt::YesAfterDelay(delay)) => {
                 let sleep_impl = halt_on_err!([ctx] => runtime_components.sleep_impl().ok_or_else(|| OrchestratorError::other(
@@ -310,6 +298,16 @@ async fn try_op(
     // Save a request checkpoint before we make the request. This will allow us to "rewind"
     // the request in the case of retry attempts.
     ctx.save_checkpoint();
+    // For long-polling operations, seed a shared slot so the retry strategy can
+    // communicate a backoff delay when the token bucket is empty.
+    if cfg
+        .load::<RetryConfig>()
+        .and_then(|rc| rc.retry_spec())
+        .is_some_and(|s| s.long_polling())
+    {
+        cfg.interceptor_state()
+            .store_put(LongPollingBackoff::default());
+    }
     let mut retry_delay = None;
     for i in 1u32.. {
         // Break from the loop if we can't rewind the request's state. This will always succeed the
@@ -359,6 +357,12 @@ async fn try_op(
             // No, this request shouldn't be retried
             ShouldAttempt::No => {
                 debug!("a retry is either unnecessary or not possible, exiting attempt loop");
+                if let Some(delay) = cfg.load::<LongPollingBackoff>().and_then(|h| h.take()) {
+                    if let Some(sleep_impl) = runtime_components.sleep_impl() {
+                        debug!("backing off {delay:?} before returning (no retry quota available)");
+                        sleep_impl.sleep(delay).await;
+                    }
+                }
                 break;
             }
             ShouldAttempt::YesAfterDelay(delay) => {
@@ -367,13 +371,6 @@ async fn try_op(
                 )));
                 retry_delay = Some((delay, sleep_impl.sleep(delay)));
                 continue;
-            }
-            ShouldAttempt::NoAfterDelay(delay) => {
-                if let Some(sleep_impl) = runtime_components.sleep_impl() {
-                    debug!("backing off {delay:?} before returning (no retry quota available)");
-                    sleep_impl.sleep(delay).await;
-                }
-                break;
             }
         }
     }

@@ -26,7 +26,9 @@ use crate::client::retries::strategy::standard::ReleaseResult::{
     APermitWasReleased, NoPermitWasReleased,
 };
 use crate::client::retries::token_bucket::TokenBucket;
-use crate::client::retries::{ClientRateLimiterPartition, RetryPartition, RetryPartitionInner};
+use crate::client::retries::{
+    ClientRateLimiterPartition, LongPollingBackoff, RetryPartition, RetryPartitionInner,
+};
 use crate::static_partition_map::StaticPartitionMap;
 
 static CLIENT_RATE_LIMITER: StaticPartitionMap<ClientRateLimiterPartition, ClientRateLimiter> =
@@ -292,11 +294,12 @@ impl RetryStrategy for StandardRetryStrategy {
             Some(permit) => self.set_retry_permit(permit),
             None => {
                 debug!("attempt #{request_attempts} failed with {error_kind:?}; not enough retry quota.");
-                return Ok(if is_long_polling {
-                    ShouldAttempt::NoAfterDelay(backoff)
-                } else {
-                    ShouldAttempt::No
-                });
+                if is_long_polling {
+                    if let Some(hint) = cfg.load::<LongPollingBackoff>() {
+                        hint.set(backoff);
+                    }
+                }
+                return Ok(ShouldAttempt::No);
             }
         }
 
@@ -480,6 +483,8 @@ mod tests {
     use crate::client::retries::token_bucket::{
         DEFAULT_CAPACITY, DEFAULT_RETRY_COST, DEFAULT_RETRY_TIMEOUT_COST, THROTTLING_RETRY_COST,
     };
+    #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
+    use crate::client::retries::LongPollingBackoff;
     use crate::client::retries::{ClientRateLimiter, RetryPartition, TokenBucket};
 
     #[test]
@@ -1266,14 +1271,12 @@ mod tests {
         let strategy = StandardRetryStrategy::new();
         cfg.interceptor_state().store_put(TokenBucket::new(0));
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let hint = LongPollingBackoff::default();
+        cfg.interceptor_state().store_put(hint.clone());
 
         let result = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
-        match result {
-            ShouldAttempt::NoAfterDelay(delay) => {
-                assert_eq!(delay, Duration::from_millis(50));
-            }
-            other => panic!("expected NoAfterDelay, got {other:?}"),
-        }
+        assert_eq!(result, ShouldAttempt::No);
+        assert_eq!(hint.take(), Some(Duration::from_millis(50)));
     }
 
     #[cfg(any(feature = "test-util", feature = "legacy-test-util"))]
@@ -1540,14 +1543,12 @@ mod tests {
         let tb = v2_1_token_bucket_with_capacity(0);
         cfg.interceptor_state().store_put(tb.clone());
         cfg.interceptor_state().store_put(RequestAttempts::new(1));
+        let hint = LongPollingBackoff::default();
+        cfg.interceptor_state().store_put(hint.clone());
 
         let result = strategy.should_attempt_retry(&ctx, &rc, &cfg).unwrap();
-        match result {
-            ShouldAttempt::NoAfterDelay(delay) => {
-                assert_eq!(delay, Duration::from_secs(1));
-            }
-            other => panic!("expected NoAfterDelay, got {other:?}"),
-        }
+        assert_eq!(result, ShouldAttempt::No);
+        assert_eq!(hint.take(), Some(Duration::from_secs(1)));
         assert_eq!(tb.available_permits(), 0);
     }
 
