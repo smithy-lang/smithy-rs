@@ -196,8 +196,13 @@ where
     // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
     // don't require `B::Error: Send + Sync + 'static`. The generated server
     // deserializer only carries a `Send` bound on body errors.
+    let lower = body.size_hint().lower() as usize;
+    if lower > limit {
+        return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
+    }
+
     let mut body = std::pin::pin!(body);
-    let mut collected = bytes::BytesMut::new();
+    let mut collected = bytes::BytesMut::with_capacity(lower);
     while let Some(frame) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx))
         .await
         .transpose()

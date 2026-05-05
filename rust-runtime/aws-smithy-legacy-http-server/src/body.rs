@@ -133,8 +133,13 @@ where
 {
     // `http-body` 0.4's core method `poll_data` requires a `Pin<&mut Self>`. Heap-pin
     // so this works for any `B: HttpBody` without requiring `Unpin`.
+    let lower = body.size_hint().lower() as usize;
+    if lower > limit && limit > 0 {
+        return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
+    }
+
     let mut body: Pin<Box<B>> = Box::pin(body);
-    let mut buf: Vec<u8> = Vec::new();
+    let mut buf: Vec<u8> = Vec::with_capacity(lower);
 
     loop {
         let chunk_opt = poll_fn(|cx| body.as_mut().poll_data(cx)).await;
