@@ -11,6 +11,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
+use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
 use tokio::sync::OwnedSemaphorePermit;
@@ -66,28 +67,49 @@ pub(crate) struct ConnectionInfo {
     // Future: tls_info, timing (tcp_connect_duration, tls_handshake_duration)
 }
 
+/// A one-shot "this connection is dead, don't reuse it" flag.
+///
+/// Shared via `Arc` — all clones observe and control the same flag.
+/// `ManagedConnection` holds one and hands out clones (via `metadata()`)
+/// that let the adapter layer mark the connection poisoned through
+/// smithy's `ConnectionMetadata::poison_fn`. On next checkout / return,
+/// the pool sees the flag set and drops the connection instead of reusing
+/// it. Modeled after hyper-util's legacy `PoisonPill`, but owned by us.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct PoisonPill {
+    flag: Arc<AtomicBool>,
+}
+
+impl PoisonPill {
+    /// Create a fresh, non-poisoned pill.
+    pub(crate) fn healthy() -> Self {
+        Self::default()
+    }
+
+    /// Mark the connection as poisoned.
+    pub(crate) fn poison(&self) {
+        self.flag.store(true, Ordering::Release);
+    }
+
+    /// Whether the connection has been poisoned.
+    pub(crate) fn is_poisoned(&self) -> bool {
+        self.flag.load(Ordering::Acquire)
+    }
+}
+
 /// A connection with SDK-owned lifecycle metadata.
 ///
 /// Wraps the inner service (typically `SendRequest<SdkBody>`) with state needed
-/// for pool management: idle tracking, poisoning, and connection identity.
+/// for pool management: poisoning, connection identity, and permit lifetime.
 ///
 /// Clone is supported when the inner service is Clone (e.g., HTTP/2 multiplexed
-/// connections). Clones share the same poison flag and connection metadata.
-///
-/// # Missing: idle-start tracking
-///
-/// A `last_used: Instant` updated on **return** to the pool is required
-/// to drive `pool_idle_timeout`-based eviction. That requires a
-/// re-insertion hook we do not have yet (hyper-util's `Cached::Drop`
-/// gives us no callback). The hook shape will be designed alongside the
-/// eviction mechanism. Until then this struct does not track idle
-/// duration. `created_at` is retained because it is well-defined at
-/// establishment time and needed for a future max-lifetime eviction.
+/// connections). Clones share the same poison pill and connection info, so
+/// poisoning one clone poisons all of them.
 pub(crate) struct ManagedConnection<S> {
     inner: S,
     info: ConnectionInfo,
     created_at: Instant,
-    poisoned: Arc<AtomicBool>,
+    poison: PoisonPill,
     _permit: Arc<ConnectionPermit>,
 }
 
@@ -98,38 +120,24 @@ impl<S> ManagedConnection<S> {
             inner,
             info,
             created_at: Instant::now(),
-            poisoned: Arc::new(AtomicBool::new(false)),
+            poison: PoisonPill::healthy(),
             _permit: permit,
         }
     }
 
-    /// Mark this connection as poisoned so it will not be reused.
-    ///
-    /// Poisoned connections are skipped on checkout and dropped on return to the pool.
-    pub(crate) fn poison(&self) {
-        self.poisoned.store(true, Ordering::Release);
-    }
-
-    /// Returns a closure that poisons this connection when called.
-    ///
-    /// The returned closure can be passed to components that need to signal
-    /// connection failure without holding a direct reference to the connection.
-    pub(crate) fn poison_fn(&self) -> impl Fn() + Send + Sync + 'static {
-        let flag = self.poisoned.clone();
-        move || flag.store(true, Ordering::Release)
-    }
-
     /// Whether this connection has been poisoned.
     pub(crate) fn is_poisoned(&self) -> bool {
-        self.poisoned.load(Ordering::Acquire)
+        self.poison.is_poisoned()
     }
 
-    /// Connection metadata.
+    /// Connection info (remote/local addresses).
+    #[allow(dead_code)] // future telemetry / debugging
     pub(crate) fn info(&self) -> &ConnectionInfo {
         &self.info
     }
 
     /// When this connection was established.
+    #[allow(dead_code)] // future max-lifetime eviction
     pub(crate) fn created_at(&self) -> Instant {
         self.created_at
     }
@@ -137,6 +145,27 @@ impl<S> ManagedConnection<S> {
     /// Mutable access to the inner service.
     pub(crate) fn inner_mut(&mut self) -> &mut S {
         &mut self.inner
+    }
+
+    /// Build a smithy `ConnectionMetadata` for this connection.
+    ///
+    /// The returned metadata captures a clone of the `PoisonPill`, so
+    /// calling `ConnectionMetadata::poison()` flips this connection's
+    /// poison flag — the same flag the pool checks on checkout/return.
+    /// Address fields are copied.
+    pub(crate) fn metadata(&self) -> ConnectionMetadata {
+        let poison = self.poison.clone();
+        let mut builder = ConnectionMetadata::builder()
+            // Hardcoded `false`: v2 does not yet plumb proxy configuration
+            // through the pool stack. When proxy support lands,
+            // `ConnectionInfo` should carry an `is_proxied` flag populated
+            // at connection establishment and passed through here.
+            .proxied(false)
+            .poison_fn(move || poison.poison());
+        builder
+            .set_remote_addr(self.info.remote_addr)
+            .set_local_addr(self.info.local_addr);
+        builder.build()
     }
 }
 
@@ -146,7 +175,7 @@ impl<S: Clone> Clone for ManagedConnection<S> {
             inner: self.inner.clone(),
             info: self.info.clone(),
             created_at: self.created_at,
-            poisoned: self.poisoned.clone(),
+            poison: self.poison.clone(),
             _permit: self._permit.clone(),
         }
     }
@@ -194,6 +223,19 @@ impl<S> CachedConnection<S> {
             inner: Some(cached),
         }
     }
+
+    /// Build a smithy `ConnectionMetadata` for the underlying H1 connection.
+    ///
+    /// See [`ManagedConnection::metadata`].
+    ///
+    /// Panics if called after the inner cached handle has been consumed.
+    pub(crate) fn metadata(&self) -> ConnectionMetadata {
+        self.inner
+            .as_ref()
+            .expect("CachedConnection metadata after drop")
+            .inner()
+            .metadata()
+    }
 }
 
 impl<S, Req> Service<Req> for CachedConnection<S>
@@ -224,6 +266,48 @@ impl<S> Drop for CachedConnection<S> {
     }
 }
 
+/// Per-host shared slot that bridges H2 handshake completion to H2 checkout.
+///
+/// `H2ConnectAndHandshake` calls [`Self::publish`] with a fresh
+/// `ConnectionMetadata` every time a new H2 connection is established.
+/// `SingletonConnection::metadata` reads the current value through
+/// [`Self::current`].
+///
+/// Necessary because `hyper_util::client::pool::singleton::Singled<…>` is
+/// opaque to us — we can't reach through it to the underlying
+/// `ManagedConnection` to build its metadata at checkout time. The
+/// handshake side has direct access, so it publishes and the checkout
+/// side reads.
+///
+/// Last-writer-wins is correct. Singleton holds at most one live H2
+/// connection per host at a time: on `Singled::poll_ready` error (or a
+/// `Singleton::retain` predicate returning false), its state transitions
+/// from `Made(svc)` back to `Empty`, dropping the old service. The next
+/// request's `call` runs a fresh handshake through `H2ConnectAndHandshake`,
+/// which publishes new metadata — overwriting whatever was there before.
+/// Clients that grabbed metadata for the previous connection retain a
+/// `ConnectionMetadata` pointing at the dropped connection's `PoisonPill`;
+/// poisoning it is a no-op because the connection it described is already
+/// gone.
+#[derive(Clone, Default)]
+pub(crate) struct H2ConnectionRef {
+    inner: Arc<std::sync::Mutex<Option<ConnectionMetadata>>>,
+}
+
+impl H2ConnectionRef {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn publish(&self, metadata: ConnectionMetadata) {
+        *self.inner.lock().unwrap() = Some(metadata);
+    }
+
+    pub(crate) fn current(&self) -> Option<ConnectionMetadata> {
+        self.inner.lock().unwrap().clone()
+    }
+}
+
 /// A connection checked out from the H2 singleton.
 ///
 /// Symmetric wrapper to `CachedConnection` for the H2 leg. The inner type
@@ -235,13 +319,26 @@ impl<S> Drop for CachedConnection<S> {
 /// No Drop hook: dropping a Singled clone does not affect singleton state;
 /// dead/poisoned H2 connections are handled reactively via
 /// `Singled::poll_ready` clearing the state to `Empty`.
+///
+/// `h2_ref` is a clone of the same [`H2ConnectionRef`] that the handshake
+/// service writes to — it lets `SingletonConnection::metadata` expose the
+/// current H2 connection's metadata to the adapter even though `Singled<…>`
+/// itself is opaque.
 pub(crate) struct SingletonConnection<T> {
     inner: T,
+    h2_ref: H2ConnectionRef,
 }
 
 impl<T> SingletonConnection<T> {
-    pub(crate) fn new(inner: T) -> Self {
-        Self { inner }
+    pub(crate) fn new(inner: T, h2_ref: H2ConnectionRef) -> Self {
+        Self { inner, h2_ref }
+    }
+
+    /// Metadata for the current H2 connection, if a handshake has completed.
+    ///
+    /// Returns `None` before the first successful H2 handshake for this host.
+    pub(crate) fn metadata(&self) -> Option<ConnectionMetadata> {
+        self.h2_ref.current()
     }
 }
 
