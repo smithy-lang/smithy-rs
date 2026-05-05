@@ -12,7 +12,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
-use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpClient,
@@ -244,17 +243,17 @@ impl HttpConnector for PooledConnector {
             // Save the full URI for pool routing before rewriting to origin-form.
             let full_uri = request.uri().clone();
 
-            // Wire CaptureSmithyConnection with a no-op poison_fn so the interceptor
-            // pipeline doesn't panic. TODO: wire real poison from ManagedConnection.
-            if let Some(capture) = request.extensions().get::<CaptureSmithyConnection>() {
-                capture.set_connection_retriever(|| {
-                    Some(
-                        ConnectionMetadata::builder()
-                            .proxied(false)
-                            .poison_fn(|| {})
-                            .build(),
-                    )
-                });
+            // Create a request-scoped capture the pool will fill in with
+            // the `ConnectionMetadata` for the selected connection, and
+            // wire `CaptureSmithyConnection` to read from it. When the
+            // runtime's connection-poisoning interceptor later calls
+            // `ConnectionMetadata::poison()`, it flips the `PoisonPill` on
+            // the actual `ManagedConnection` selected for this request.
+            if let Some(capture_smithy) = request.extensions().get::<CaptureSmithyConnection>() {
+                let capture = pool::ConnectionMetadataCapture::new();
+                let for_retriever = capture.clone();
+                capture_smithy.set_connection_retriever(move || for_retriever.get());
+                request.extensions_mut().insert(capture);
             }
 
             // Set Host header from the URI authority if not already present.
@@ -338,7 +337,7 @@ impl HttpClient for V2HttpClient {
 
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
         // TODO: consider distinguishing v1 vs v2 clients and including TLS
-        // provider info (e.g. "rustls"/"0.23"). Revisit alongside 3f (TLS support).
+        // provider info (e.g. "rustls"/"0.23") in the connector metadata.
         Some(ConnectorMetadata::new("hyper", Some(Cow::Borrowed("1.x"))))
     }
 }

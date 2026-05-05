@@ -882,3 +882,155 @@ async fn v2_unconsumed_body_holds_connection() {
 async fn v2_connection_close_header_prevents_reuse() {
     connection_close_header_prevents_reuse(&V2Client).await;
 }
+
+// ---------------------------------------------------------------------------
+// Test implementations: connection poisoning
+// ---------------------------------------------------------------------------
+
+/// Send a request and return both the response body and the `ConnectionMetadata`
+/// captured by a `CaptureSmithyConnection` attached to the request. This is the
+/// integration surface the `ConnectionPoisoningInterceptor` uses in real SDK flows
+/// — the adapter must populate a retriever that returns live metadata pointing
+/// at the connection selected for this request.
+async fn send_with_capture(
+    client: &SharedHttpClient,
+    url: &str,
+) -> (
+    u16,
+    Vec<u8>,
+    Option<aws_smithy_runtime_api::client::connection::ConnectionMetadata>,
+) {
+    use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
+    use http_body_util::BodyExt;
+
+    let settings = HttpConnectorSettings::builder().build();
+    let components = runtime_components();
+    let connector = client.http_connector(&settings, &components);
+
+    let capture = CaptureSmithyConnection::new();
+    let mut request = HttpRequest::get(url).expect("valid HTTP request");
+    request.add_extension(capture.clone());
+
+    let resp = connector
+        .call(request)
+        .await
+        .expect("request should succeed");
+    let status = resp.status().as_u16();
+    let body = resp
+        .into_body()
+        .collect()
+        .await
+        .expect("body should be readable")
+        .to_bytes()
+        .to_vec();
+    (status, body, capture.get())
+}
+
+/// Poisoning a connection prevents it from being reused.
+///
+/// Mirrors the production flow: `ConnectionPoisoningInterceptor` attaches a
+/// `CaptureSmithyConnection` to the request, the adapter populates it with
+/// metadata pointing at the selected connection, and on a transient error
+/// the interceptor calls `ConnectionMetadata::poison()`. The next request
+/// for the same host must establish a new TCP connection instead of reusing
+/// the poisoned one.
+async fn poisoned_connection_not_reused(make: &dyn MakeClient) {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"first",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"second",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let client = make.make(ClientConfig::default());
+
+    // First request: establish connection, capture metadata.
+    let (status, body, metadata) = send_with_capture(&client, &url).await;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"first");
+    let metadata = metadata.expect("adapter should populate CaptureSmithyConnection");
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "first request opens one connection"
+    );
+
+    // Poison the connection — what the orchestrator does on a transient error.
+    metadata.poison();
+
+    // Next request to the same host must open a NEW connection; the poisoned
+    // one is skipped on checkout and dropped on return.
+    let (status, body, _) = send_with_capture(&client, &url).await;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"second");
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        2,
+        "poisoned connection must not be reused"
+    );
+}
+
+/// When no transient error occurs, the captured metadata is handed out but
+/// never poisoned — the connection returns to the pool and is reused.
+/// This is the non-poison control for `poisoned_connection_not_reused`.
+async fn capture_without_poison_allows_reuse(make: &dyn MakeClient) {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"first",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"second",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let client = make.make(ClientConfig::default());
+
+    let (status, body, metadata) = send_with_capture(&client, &url).await;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"first");
+    assert!(
+        metadata.is_some(),
+        "adapter should populate CaptureSmithyConnection"
+    );
+    // Deliberately not calling poison().
+    drop(metadata);
+
+    let (status, body, _) = send_with_capture(&client, &url).await;
+    assert_eq!(status, 200);
+    assert_eq!(body, b"second");
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "without poison the connection should be reused"
+    );
+}
+
+#[tokio::test]
+async fn v2_poisoned_connection_not_reused() {
+    poisoned_connection_not_reused(&V2Client).await;
+}
+
+#[tokio::test]
+async fn v2_capture_without_poison_allows_reuse() {
+    capture_without_poison_allows_reuse(&V2Client).await;
+}

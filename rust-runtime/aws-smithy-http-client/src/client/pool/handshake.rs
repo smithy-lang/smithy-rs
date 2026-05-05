@@ -259,11 +259,18 @@ where
 /// `Inspected` slot.
 pub(crate) struct H2ConnectAndHandshake<C> {
     connector: C,
+    h2_ref: super::connection::H2ConnectionRef,
 }
 
 impl<C> H2ConnectAndHandshake<C> {
-    pub(crate) fn new(connector: C) -> Self {
-        Self { connector }
+    /// Create an H2 handshake service that publishes every newly established
+    /// connection's `ConnectionMetadata` into `h2_ref`. The same ref is held
+    /// on the read side by `SingletonConnection` (clones of the ref share
+    /// the underlying slot), so the H2 checkout path can expose connection
+    /// metadata and poison support to the adapter layer even though
+    /// `Singled<…>` itself is opaque.
+    pub(crate) fn new(connector: C, h2_ref: super::connection::H2ConnectionRef) -> Self {
+        Self { connector, h2_ref }
     }
 }
 
@@ -271,6 +278,7 @@ impl<C: Clone> Clone for H2ConnectAndHandshake<C> {
     fn clone(&self) -> Self {
         Self {
             connector: self.connector.clone(),
+            h2_ref: self.h2_ref.clone(),
         }
     }
 }
@@ -292,6 +300,7 @@ where
 
     fn call(&mut self, _req: ()) -> Self::Future {
         let fut = self.connector.call(());
+        let h2_ref = self.h2_ref.clone();
         Box::pin(async move {
             let (io, permit) = fut.await.map_err(Into::into)?;
             let info = capture_info(&io);
@@ -317,7 +326,12 @@ where
                 }
             });
 
-            Ok(ManagedConnection::new(H2SendRequest::new(tx), info, permit))
+            let managed = ManagedConnection::new(H2SendRequest::new(tx), info, permit);
+            // Publish this connection's metadata for the checkout side.
+            // Singleton replaces its stored connection wholesale on each new
+            // handshake, so last-writer-wins on the ref is correct.
+            h2_ref.publish(managed.metadata());
+            Ok(managed)
         })
     }
 }
