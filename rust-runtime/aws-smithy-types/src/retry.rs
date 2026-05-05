@@ -319,17 +319,23 @@ impl Storable for ReconnectMode {
     type Storer = StoreReplace<ReconnectMode>;
 }
 
-/// SDK-internal retry behavior parameters derived from [`BehaviorVersion`], service
-/// configuration, and operation traits.
-///
-/// This is not customer-facing configuration — customers use [`RetryConfig`] instead.
 /// Version tag for [`RetrySpec`], enabling zero-cost comparisons without
 /// exposing the internal representation.
 ///
-/// [`BehaviorVersion`]: crate::config_bag::Storable
+/// New versions must be appended at the end — `PartialOrd` is derived from
+/// declaration order. If a version needs to be interleaved between
+/// existing variants (e.g., adding `V2_1_1` after `V2_2` already exists),
+/// replace the derived `Ord`/`PartialOrd` with a manual implementation
+/// that maps each variant to an explicit rank.
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
-pub struct RetrySpecVersion(u8);
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[non_exhaustive]
+pub enum RetrySpecVersion {
+    /// Retry Behavior 2.0 (legacy).
+    V2_0,
+    /// Retry Behavior 2.1.
+    V2_1,
+}
 
 /// Version-gated retry parameters derived from `BehaviorVersion`.
 ///
@@ -358,9 +364,9 @@ pub struct RetrySpec {
 
 impl RetrySpec {
     /// The version corresponding to Retry Behavior 2.0 (legacy).
-    pub const V2_0: RetrySpecVersion = RetrySpecVersion(0);
+    pub const V2_0: RetrySpecVersion = RetrySpecVersion::V2_0;
     /// The version corresponding to Retry Behavior 2.1.
-    pub const V2_1: RetrySpecVersion = RetrySpecVersion(1);
+    pub const V2_1: RetrySpecVersion = RetrySpecVersion::V2_1;
 
     /// Returns true if this spec's version is at least the given version.
     pub fn is_at_least(&self, version: RetrySpecVersion) -> bool {
