@@ -5,11 +5,12 @@
 
 //! Connection pool for the v2 HTTP client.
 //!
-//! Manages the lifecycle of HTTP connections including:
-//! - Connection state tracking (idle duration, remote address, poisoned flag)
-//! - Health checks on checkout
-//! - Connection poisoning
-//! - Idle connection eviction
+//! Routes requests by `(scheme, authority)` to per-host pool stacks,
+//! negotiates HTTP/1.1 vs HTTP/2 via ALPN, caches H1 connections for
+//! reuse, multiplexes over a singleton H2 connection per host, enforces
+//! total and per-host connection limits, and surfaces connection
+//! metadata (remote/local address, poison handle) to the adapter layer
+//! for the runtime's connection-poisoning interceptor.
 
 mod connection;
 mod handshake;
@@ -17,11 +18,10 @@ mod vendored_cache;
 
 /// Connection-caching pool layer.
 ///
-/// Currently re-exports [`vendored_cache`], a copy of hyper-util's
-/// `pool::cache` module with SDK-specific modifications. The re-export
-/// insulates the rest of the pool from the vendoring detail: call sites
-/// use `cache::...` regardless of whether the implementation is vendored
-/// or, later, fully owned.
+/// Re-exports [`vendored_cache`], our vendored copy of hyper-util's
+/// `pool::cache` with SDK-specific modifications. The re-export insulates
+/// callers from the vendoring detail — all pool code uses `cache::…`
+/// regardless of where the implementation lives.
 mod cache {
     pub(crate) use super::vendored_cache::*;
 }
@@ -41,12 +41,53 @@ use tokio::sync::Semaphore;
 use tower::{Service, ServiceExt};
 
 use connection::{
-    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, SingletonConnection,
+    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, H2ConnectionRef,
+    SingletonConnection,
 };
 use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
+
+/// Request-extension slot the pool checkout fills in with the
+/// `ConnectionMetadata` for the selected connection.
+///
+/// Read later by the adapter's `CaptureSmithyConnection` retriever, which
+/// is what `ConnectionPoisoningInterceptor` uses to decide whether to call
+/// `ConnectionMetadata::poison()` on a transient error. Poisoning flips the
+/// shared `PoisonPill` on the actual `ManagedConnection`, so the pool
+/// skips it on checkout and drops it on return.
+///
+/// Write-once per request: `H{1,2}Checkout::call` sets it exactly once
+/// during checkout. Subsequent sets are no-ops (the `OnceLock` guarantees
+/// single-init). Retries produce fresh `HttpConnector::call` invocations
+/// which create fresh capture slots — each attempt's metadata points at
+/// the connection used for that attempt.
+#[derive(Clone, Default)]
+pub(crate) struct ConnectionMetadataCapture {
+    slot: Arc<std::sync::OnceLock<aws_smithy_runtime_api::client::connection::ConnectionMetadata>>,
+}
+
+impl ConnectionMetadataCapture {
+    pub(crate) fn new() -> Self {
+        Self::default()
+    }
+
+    pub(crate) fn set(
+        &self,
+        metadata: aws_smithy_runtime_api::client::connection::ConnectionMetadata,
+    ) {
+        // Silently ignore duplicate sets: single-set is the contract, extra
+        // sets would only happen via pool-internal bugs.
+        let _ = self.slot.set(metadata);
+    }
+
+    pub(crate) fn get(
+        &self,
+    ) -> Option<aws_smithy_runtime_api::client::connection::ConnectionMetadata> {
+        self.slot.get().cloned()
+    }
+}
 
 /// Pool-level configuration.
 ///
@@ -106,6 +147,12 @@ where
         let per_host_sem = max_per_host.map(|n| Arc::new(Semaphore::new(n)));
         let limited =
             handshake::ConnectionLimit::new(connector.clone(), global_sem.clone(), per_host_sem);
+
+        // Per-host bridge: `H2ConnectAndHandshake` publishes on each new
+        // handshake; `SingletonConnection` reads the current entry at
+        // checkout. Clones share the underlying slot.
+        let h2_ref = H2ConnectionRef::new();
+
         let stack = hpool::negotiate::builder()
             .connect(limited)
             .inspect(
@@ -119,10 +166,21 @@ where
                     .build(H1ConnectAndHandshake::new(inspector))
                     .map_response(|cached| H1Checkout::new(CachedConnection::new(cached)))
             }))
-            .upgrade(tower::layer::layer_fn(|inspected| {
-                hpool::singleton::Singleton::new(H2ConnectAndHandshake::new(inspected))
-                    .map_response(|singled| H2Checkout::new(SingletonConnection::new(singled)))
-            }))
+            .upgrade({
+                let h2_ref = h2_ref.clone();
+                tower::layer::layer_fn(move |inspected| {
+                    hpool::singleton::Singleton::new(H2ConnectAndHandshake::new(
+                        inspected,
+                        h2_ref.clone(),
+                    ))
+                    .map_response({
+                        let h2_ref = h2_ref.clone();
+                        move |singled| {
+                            H2Checkout::new(SingletonConnection::new(singled, h2_ref.clone()))
+                        }
+                    })
+                })
+            })
             .build();
         Box::new(TypedPoolEntry(stack))
     };
@@ -140,8 +198,7 @@ where
 /// Each host gets a Negotiate stack that selects between HTTP/1.1 (Cache)
 /// and HTTP/2 (Singleton) based on ALPN negotiation.
 pub(crate) struct ConnectionPool {
-    /// Pool-wide configuration. Stored for consultation at request time
-    /// and for re-use if `make_entry` needs config (not yet wired).
+    /// Pool-wide configuration.
     #[allow(dead_code)]
     config: PoolConfig,
     hosts: Mutex<HashMap<PoolKey, Box<dyn PoolEntry>>>,
@@ -222,6 +279,12 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
         let mut conn = self.conn.take().expect("H1Checkout::call called twice");
+        // Populate the adapter-provided capture so the
+        // `CaptureSmithyConnection` retriever can return a live
+        // `ConnectionMetadata` pointing at THIS connection's poison pill.
+        if let Some(capture) = req.extensions().get::<ConnectionMetadataCapture>() {
+            capture.set(conn.metadata());
+        }
         Box::pin(async move {
             let resp = conn.call(req).await?;
             let (parts, body) = resp.into_parts();
@@ -274,6 +337,16 @@ where
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
         let mut conn = self.conn.take().expect("H2Checkout::call called twice");
+        // Populate the adapter-provided capture. The metadata is published
+        // by `H2ConnectAndHandshake` when a fresh H2 connection is
+        // established; if a request somehow reaches us before any metadata
+        // is available we leave the capture empty (poison becomes a no-op
+        // for that request, matching the capture-absent default).
+        if let Some(capture) = req.extensions().get::<ConnectionMetadataCapture>() {
+            if let Some(metadata) = conn.metadata() {
+                capture.set(metadata);
+            }
+        }
         Box::pin(async move {
             let resp = conn.call(req).await.map_err(Into::into)?;
             let (parts, body) = resp.into_parts();
@@ -290,19 +363,8 @@ where
 /// with different unnameable inner types, so `ConnectionPool::hosts` can't
 /// hold a concrete type.
 ///
-/// The entry is request-granular — `send` performs checkout + health
-/// filter + dispatch + body-guard setup atomically for one request. This
-/// folds what was previously a separate `acquire(uri) -> Connection`
-/// followed by `connection.send(req)` into one call.
-///
-/// # Future: splitting acquire and send
-///
-/// If we later need to expose a checked-out connection handle to callers
-/// (e.g. connection warming, request pipelining on a single checkout,
-/// or pool-external reuse), reintroduce a separate `Connection` trait
-/// and split this into `acquire(uri) -> Box<dyn Connection>` plus
-/// `Connection::send(self: Box<Self>, req) -> Response`. The current
-/// shape collapses that split because no caller needs it today.
+/// `send` performs checkout, health filtering, request dispatch, and
+/// body-guard setup atomically for a single request.
 trait PoolEntry: Send + Sync {
     fn send(
         &mut self,
