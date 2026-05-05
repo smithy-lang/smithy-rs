@@ -33,10 +33,10 @@ pub(crate) struct LongPollingBackoff(Arc<Mutex<Option<Duration>>>);
 
 impl LongPollingBackoff {
     pub(crate) fn set(&self, delay: Duration) {
-        *self.0.lock().unwrap() = Some(delay);
+        *self.0.lock().expect("lock is acquired") = Some(delay);
     }
     pub(crate) fn take(&self) -> Option<Duration> {
-        self.0.lock().unwrap().take()
+        self.0.lock().expect("lock is acquired").take()
     }
 }
 
