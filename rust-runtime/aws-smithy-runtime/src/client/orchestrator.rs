@@ -359,6 +359,9 @@ async fn try_op(
                 debug!("a retry is either unnecessary or not possible, exiting attempt loop");
                 if let Some(delay) = cfg.load::<LongPollingBackoff>().and_then(|h| h.take()) {
                     if let Some(sleep_impl) = runtime_components.sleep_impl() {
+                        // This sleep is inside the operation timeout, so it gets cancelled
+                        // if one is set. Without an operation timeout, the delay is bounded
+                        // by `max_backoff` (enforced upstream in `calculate_backoff`).
                         debug!("backing off {delay:?} before returning (no retry quota available)");
                         sleep_impl.sleep(delay).await;
                     }
