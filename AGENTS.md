@@ -137,6 +137,19 @@ val mimeType = RuntimeType.forInlineFun("APPLICATION_JSON", module) {
 
 ⚠️ **Footgun**: Name collisions mean only one implementation gets generated.
 
+## Git Workflow
+
+**Committing with pre-commit hooks:**
+
+This repo uses pre-commit hooks (formatting, linting, `runtime-versioner`). Some hooks modify files (e.g., reformatting). When a hook modifies files, the commit will fail. To fix:
+
+```bash
+git add -u
+git commit -m "your message"
+```
+
+The `git add -u` stages the hook's modifications, and the second commit attempt will pass. Do **not** use `--no-verify` to skip hooks.
+
 ## GitHub CLI Integration
 
 **View issues and PRs:**
