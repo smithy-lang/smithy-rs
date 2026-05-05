@@ -45,8 +45,12 @@ val TestUtilFeature = Feature("test-util", false, listOf())
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  */
 class RequiredCustomizations : ClientCodegenDecorator {
+    companion object {
+        const val ORDER: Byte = 0
+    }
+
     override val name: String = "Required"
-    override val order: Byte = -1
+    override val order: Byte = ORDER
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,

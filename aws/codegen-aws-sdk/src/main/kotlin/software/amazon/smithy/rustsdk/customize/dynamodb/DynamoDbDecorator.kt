@@ -7,6 +7,7 @@ package software.amazon.smithy.rustsdk.customize.dynamodb
 
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customize.RequiredCustomizations
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
@@ -18,7 +19,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 
 class DynamoDbDecorator : ClientCodegenDecorator {
     override val name: String = "DynamoDb"
-    override val order: Byte = 0
+
+    // Must run after RequiredCustomizations so that DynamoDB's 25ms backoff
+    // overwrites the generic RetrySpec set by RetrySpecCustomization.
+    override val order: Byte = (RequiredCustomizations.ORDER - 1).toByte()
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
