@@ -242,13 +242,30 @@ class ResponseDeserializerGenerator(
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     // Swap body out — becomes the event stream receiver.
                     let body = std::mem::replace(response.body_mut(), #{SdkBody}::taken());
+                    // Bind headers by reference after the body swap so `MutateOutput`
+                    // customizations (e.g., the AWS SDK request-id decorator) can read
+                    // `x-amzn-requestid` without cloning. `response.headers()` is still
+                    // valid — swapping the body does not invalidate headers.
+                    let _response_headers = response.headers();
                     let protocol = _cfg.load::<#{SharedClientProtocol}>()
                         .expect("a SharedClientProtocol is required")
                         .clone();
                     let unmarshaller = #{unmarshaller}(protocol);
                     let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
                     let output = #{BuilderSymbol}::default();
-                    let output = output.${streamingMember.setterName()}(#{Some}(receiver));
+                    // `mut` is required because `MutateOutput` customizations (e.g.,
+                    // the AWS SDK request-id decorator) call builder setters that take
+                    // `&mut self` (like `_set_request_id`). Marked `allow(unused_mut)`
+                    // because the customization block is empty for non-AWS services.
+                    ##[allow(unused_mut)]
+                    let mut output = output.${streamingMember.setterName()}(#{Some}(receiver));
+                    // Emit MutateOutput customizations (populates synthetic members like
+                    // `_request_id` from `_response_headers`). `deserialize_with_response`
+                    // is not usable here because it calls `builder.build()` internally,
+                    // which would fail for `@required` streaming members. The legacy
+                    // streaming path emits the same customizations via
+                    // `ProtocolParserGenerator.renderShapeParser`.
+                    #{MutateOutput}
                     // Build via finalizeBuilder — applies error correction so @required
                     // non-event-stream members are populated with defaults. For RPC
                     // protocols with initial-response, the fluent builder re-populates
@@ -267,6 +284,13 @@ class ResponseDeserializerGenerator(
             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
             "unmarshaller" to unmarshallerCtor,
+            "MutateOutput" to
+                writable {
+                    writeCustomizations(
+                        customizations,
+                        OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
+                    )
+                },
             "finalizeBuilder" to
                 codegenContext.builderInstantiator().finalizeBuilder(
                     "output",

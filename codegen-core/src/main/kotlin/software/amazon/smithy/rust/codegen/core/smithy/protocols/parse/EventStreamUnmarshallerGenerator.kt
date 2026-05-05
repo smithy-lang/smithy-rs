@@ -104,6 +104,11 @@ class EventStreamUnmarshallerGenerator(
                 """
                 ##[derive(Debug)]
                 pub struct $unmarshallerTypeName {
+                    // `protocol` is used by event variants whose payloads go through the codec.
+                    // When no such variant exists (e.g., all events are header-only or use primitive
+                    // `@eventPayload`), the field is unused but still kept for API uniformity across
+                    // operations.
+                    ##[allow(dead_code)]
                     protocol: #{SharedClientProtocol},
                 }
 
