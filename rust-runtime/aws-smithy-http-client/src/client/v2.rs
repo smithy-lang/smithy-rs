@@ -222,8 +222,18 @@ impl BuilderV2<TlsProviderSelected> {
 // ---------------------------------------------------------------------------
 
 /// Smithy `HttpConnector` backed by the v2 connection pool.
+///
+/// Constructed fresh per `HttpClient::http_connector` call so it can capture
+/// the per-operation `HttpConnectorSettings` (connect/read timeouts). The pool
+/// itself is shared across all operations via `Arc`.
 struct PooledConnector {
     pool: Arc<ConnectionPool>,
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+    /// Present when any timeout is configured. Required to construct
+    /// `Timeout` futures. `V2HttpClient::http_connector` panics if
+    /// a timeout is set but `sleep_impl` is absent — matches v1.
+    sleep_impl: Option<aws_smithy_async::rt::sleep::SharedAsyncSleep>,
 }
 
 impl std::fmt::Debug for PooledConnector {
@@ -235,6 +245,9 @@ impl std::fmt::Debug for PooledConnector {
 impl HttpConnector for PooledConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let pool = self.pool.clone();
+        let connect_timeout = self.connect_timeout;
+        let read_timeout = self.read_timeout;
+        let sleep_impl = self.sleep_impl.clone();
         HttpConnectorFuture::new(async move {
             let mut request = request
                 .try_into_http1x()
@@ -254,6 +267,18 @@ impl HttpConnector for PooledConnector {
                 let for_retriever = capture.clone();
                 capture_smithy.set_connection_retriever(move || for_retriever.get());
                 request.extensions_mut().insert(capture);
+            }
+
+            // Attach the per-op read timeout hint (if any) as a request
+            // extension. `H{1,2}Checkout::call` reads it and wraps the
+            // request dispatch — bounds request-write + response-headers,
+            // nothing else.
+            if let Some((duration, sleep)) = read_timeout.zip(sleep_impl.clone()) {
+                request
+                    .extensions_mut()
+                    .insert(pool::ReadTimeoutHint(pool::TimeoutContext::new(
+                        duration, sleep,
+                    )));
             }
 
             // Set Host header from the URI authority if not already present.
@@ -282,8 +307,18 @@ impl HttpConnector for PooledConnector {
             };
             *request.uri_mut() = origin;
 
+            // Build the connect context: routing URI + connect timeout.
+            // Cache hits skip the connector entirely so connect_timeout is
+            // automatically new-connection-only.
+            let connect_ctx = pool::ConnectCtx::new(
+                full_uri,
+                connect_timeout
+                    .zip(sleep_impl)
+                    .map(|(d, s)| pool::TimeoutContext::new(d, s)),
+            );
+
             let response = pool
-                .send_request(full_uri, request)
+                .send_request(connect_ctx, request)
                 .await
                 .map_err(downcast_error)?;
 
@@ -327,11 +362,25 @@ impl V2HttpClient {
 impl HttpClient for V2HttpClient {
     fn http_connector(
         &self,
-        _settings: &HttpConnectorSettings,
-        _components: &RuntimeComponents,
+        settings: &HttpConnectorSettings,
+        components: &RuntimeComponents,
     ) -> SharedHttpConnector {
+        let connect_timeout = settings.connect_timeout();
+        let read_timeout = settings.read_timeout();
+        let sleep_impl = components.sleep_impl();
+
+        if (connect_timeout.is_some() || read_timeout.is_some()) && sleep_impl.is_none() {
+            panic!(
+                "an async sleep impl is required to use connect/read timeouts with \
+                 the v2 HTTP client; provide one via `RuntimeComponents::sleep_impl`"
+            );
+        }
+
         SharedHttpConnector::new(PooledConnector {
             pool: self.pool.clone(),
+            connect_timeout,
+            read_timeout,
+            sleep_impl,
         })
     }
 

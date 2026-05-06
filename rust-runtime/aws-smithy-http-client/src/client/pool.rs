@@ -44,6 +44,7 @@ use connection::{
     CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, H2ConnectionRef,
     SingletonConnection,
 };
+pub(crate) use connection::{ConnectCtx, ReadTimeoutHint, TimeoutContext};
 use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};
 
 pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
@@ -209,12 +210,17 @@ impl ConnectionPool {
     /// Send a request through the pool.
     ///
     /// Routes to the appropriate per-host pool stack and sends the request.
+    /// `ctx` carries the routing URI plus per-operation connect-time data
+    /// (connect_timeout). Per-operation read_timeout, if any, must be
+    /// attached to `req.extensions_mut()` as [`ReadTimeoutHint`] before
+    /// calling — the checkout services read it from there.
     pub(crate) async fn send_request(
         &self,
-        uri: http_1x::Uri,
+        ctx: ConnectCtx,
         req: http_1x::Request<SdkBody>,
     ) -> Result<http_1x::Response<SdkBody>, BoxError> {
-        let key = PoolKey::from_uri(&uri).ok_or("request URI must have scheme and authority")?;
+        let key =
+            PoolKey::from_uri(&ctx.uri).ok_or("request URI must have scheme and authority")?;
 
         // Dispatch the request through the per-host entry. The lock is
         // held only long enough to look up / create the entry and call
@@ -223,9 +229,9 @@ impl ConnectionPool {
         let fut = {
             let mut hosts = self.hosts.lock().unwrap();
             if !hosts.contains_key(&key) {
-                hosts.insert(key.clone(), (self.make_entry)(&uri));
+                hosts.insert(key.clone(), (self.make_entry)(&ctx.uri));
             }
-            hosts.get_mut(&key).unwrap().send(uri, req)
+            hosts.get_mut(&key).unwrap().send(ctx, req)
         };
 
         fut.await
@@ -285,8 +291,17 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
         if let Some(capture) = req.extensions().get::<ConnectionMetadataCapture>() {
             capture.set(conn.metadata());
         }
+        // Read-timeout hint: bounds request-write + response-headers only.
+        let read_timeout = req.extensions().get::<ReadTimeoutHint>().cloned();
         Box::pin(async move {
-            let resp = conn.call(req).await?;
+            let send_fut = conn.call(req);
+            let resp = super::timeout::maybe_timeout_future(
+                send_fut,
+                read_timeout.as_ref().map(|h| h.0.duration),
+                read_timeout.as_ref().map(|h| &h.0.sleep_impl),
+                super::timeout::TimeoutKind::Read,
+            )
+            .await?;
             let (parts, body) = resp.into_parts();
             let body = GuardedBody::new(body, ConnectionGuard::H1(conn));
             Ok(http_1x::Response::from_parts(parts, body))
@@ -347,8 +362,17 @@ where
                 capture.set(metadata);
             }
         }
+        // Read-timeout hint: bounds request-write + response-headers only.
+        let read_timeout = req.extensions().get::<ReadTimeoutHint>().cloned();
         Box::pin(async move {
-            let resp = conn.call(req).await.map_err(Into::into)?;
+            let send_fut = conn.call(req);
+            let resp = super::timeout::maybe_timeout_future(
+                send_fut,
+                read_timeout.as_ref().map(|h| h.0.duration),
+                read_timeout.as_ref().map(|h| &h.0.sleep_impl),
+                super::timeout::TimeoutKind::Read,
+            )
+            .await?;
             let (parts, body) = resp.into_parts();
             let body = GuardedBody::new(body, ConnectionGuard::H2(conn));
             Ok(http_1x::Response::from_parts(parts, body))
@@ -368,7 +392,7 @@ where
 trait PoolEntry: Send + Sync {
     fn send(
         &mut self,
-        uri: http_1x::Uri,
+        ctx: ConnectCtx,
         req: http_1x::Request<SdkBody>,
     ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>>;
 }
@@ -382,7 +406,7 @@ struct TypedPoolEntry<S>(S);
 
 impl<S, Conn, PoolUnnameable> PoolEntry for TypedPoolEntry<S>
 where
-    S: Service<http_1x::Uri, Response = Conn> + Clone + Send + Sync + 'static,
+    S: Service<ConnectCtx, Response = Conn> + Clone + Send + Sync + 'static,
     S::Error: Into<BoxError> + 'static,
     S::Future: Send + 'static,
     Conn: Service<http_1x::Request<SdkBody>, Response = CheckoutResponse<PoolUnnameable>>
@@ -394,7 +418,7 @@ where
 {
     fn send(
         &mut self,
-        uri: http_1x::Uri,
+        ctx: ConnectCtx,
         req: http_1x::Request<SdkBody>,
     ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
         let mut svc = self.0.clone();
@@ -412,7 +436,7 @@ where
                 std::future::poll_fn(|cx| svc.poll_ready(cx))
                     .await
                     .map_err(Into::into)?;
-                let mut checkout = svc.call(uri.clone()).await.map_err(Into::into)?;
+                let mut checkout = svc.call(ctx.clone()).await.map_err(Into::into)?;
                 if std::future::poll_fn(|cx| checkout.poll_ready(cx))
                     .await
                     .is_ok()
