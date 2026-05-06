@@ -1308,6 +1308,7 @@ mod loader {
             // check in Operation::build() without additional TLS dependencies.
             let config = defaults(BehaviorVersion::v2023_11_09())
                 .http_client(NeverClient::new())
+                .sleep_impl(InstantSleep)
                 .load()
                 .await;
 
