@@ -1154,6 +1154,7 @@ pub(crate) mod test {
         );
     }
 
+    #[cfg(feature = "default-https-client")]
     async fn retry_connect_timeouts_for_bv(
         behavior_version: BehaviorVersion,
         min_elapsed: Duration,
@@ -1193,6 +1194,9 @@ pub(crate) mod test {
 
     /// Retry classifier properly retries timeouts when configured to
     #[tokio::test]
+    // This test uses real wall-clock timeouts (~2s). Gate it behind a feature to avoid
+    // running it for every combination in `cargo hack --feature-powerset`.
+    #[cfg(feature = "default-https-client")]
     async fn retry_connect_timeouts() {
         // Legacy: 1s backoff, total > 1s
         #[allow(deprecated)]
