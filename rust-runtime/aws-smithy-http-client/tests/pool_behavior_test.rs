@@ -1034,3 +1034,60 @@ async fn v2_poisoned_connection_not_reused() {
 async fn v2_capture_without_poison_allows_reuse() {
     capture_without_poison_allows_reuse(&V2Client).await;
 }
+
+// ---------------------------------------------------------------------------
+// Test implementations: per-operation timeouts
+// ---------------------------------------------------------------------------
+
+/// Read timeout fires when the server accepts TCP but never sends a response.
+///
+/// Exercises the v2 adapter's per-op timeout wrapping end-to-end: the
+/// `HttpConnectorSettings::read_timeout` flows through
+/// `HttpClient::http_connector` into `PooledConnector`, wraps
+/// `pool.send_request`, fires because `HoldThenClose` never replies, and
+/// produces a `ConnectorError::timeout` classified by `downcast_error`.
+async fn v2_read_timeout_fires_on_silent_server() {
+    use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![ConnectionBehavior::HoldThenClose(Duration::from_secs(30))],
+        )
+        .build()
+        .await;
+
+    let client = V2Client.make(ClientConfig::default());
+    let components =
+        aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .with_sleep_impl(Some(SharedAsyncSleep::new(TokioSleep::new())))
+            .build()
+            .expect("valid runtime components");
+    let settings = HttpConnectorSettings::builder()
+        .read_timeout(Duration::from_millis(200))
+        .build();
+    let connector = client.http_connector(&settings, &components);
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let start = std::time::Instant::now();
+    let err = connector
+        .call(HttpRequest::get(&url).expect("valid HTTP request"))
+        .await
+        .expect_err("read timeout should fire against a non-responsive server");
+    let elapsed = start.elapsed();
+
+    assert!(
+        err.is_timeout(),
+        "expected timeout classification, got {err:?}"
+    );
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "read timeout did not fire in time (took {elapsed:?})"
+    );
+}
+
+#[tokio::test]
+async fn v2_read_timeout() {
+    v2_read_timeout_fires_on_silent_server().await;
+}
