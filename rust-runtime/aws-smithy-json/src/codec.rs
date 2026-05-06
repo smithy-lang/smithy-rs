@@ -81,6 +81,7 @@ impl JsonFieldMapper {
 pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
+    max_depth: u32,
 }
 
 impl JsonCodecSettings {
@@ -92,6 +93,13 @@ impl JsonCodecSettings {
     /// Default timestamp format when not specified by `@timestampFormat` trait.
     pub fn default_timestamp_format(&self) -> TimestampFormat {
         self.default_timestamp_format
+    }
+
+    /// Maximum aggregate nesting depth the deserializer will accept before
+    /// returning an error. Defends against stack overflow on recursive shapes
+    /// and deeply-nested document payloads.
+    pub fn max_depth(&self) -> u32 {
+        self.max_depth
     }
 
     /// Returns the JSON wire name for a member schema.
@@ -114,6 +122,7 @@ impl Default for JsonCodecSettings {
         Self {
             field_mapper: JsonFieldMapper::UseJsonName,
             default_timestamp_format: TimestampFormat::EpochSeconds,
+            max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
         }
     }
 }
@@ -123,6 +132,7 @@ impl Default for JsonCodecSettings {
 pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
+    max_depth: u32,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -130,6 +140,7 @@ impl Default for JsonCodecSettingsBuilder {
         Self {
             use_json_name: true,
             default_timestamp_format: TimestampFormat::EpochSeconds,
+            max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
         }
     }
 }
@@ -147,6 +158,13 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Sets the maximum aggregate nesting depth the deserializer will accept
+    /// before returning an error. Defaults to 128.
+    pub fn max_depth(mut self, value: u32) -> Self {
+        self.max_depth = value;
+        self
+    }
+
     /// Builds the settings.
     pub fn build(self) -> JsonCodecSettings {
         let field_mapper = if self.use_json_name {
@@ -157,6 +175,7 @@ impl JsonCodecSettingsBuilder {
         JsonCodecSettings {
             field_mapper,
             default_timestamp_format: self.default_timestamp_format,
+            max_depth: self.max_depth,
         }
     }
 }
