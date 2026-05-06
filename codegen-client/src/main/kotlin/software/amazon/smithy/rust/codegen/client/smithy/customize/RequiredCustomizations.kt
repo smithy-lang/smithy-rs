@@ -21,6 +21,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryCla
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryModeFeatureTrackerRuntimePluginCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetrySpecCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -44,8 +45,12 @@ val TestUtilFeature = Feature("test-util", false, listOf())
  * This exists as a convenient place to gather these modifications, these are not true customizations.
  */
 class RequiredCustomizations : ClientCodegenDecorator {
+    companion object {
+        const val ORDER: Byte = 0
+    }
+
     override val name: String = "Required"
-    override val order: Byte = -1
+    override val order: Byte = ORDER
 
     override fun operationCustomizations(
         codegenContext: ClientCodegenContext,
@@ -138,5 +143,6 @@ class RequiredCustomizations : ClientCodegenDecorator {
             ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
             RetryClassifierServiceRuntimePluginCustomization(codegenContext) +
             RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext) +
+            RetrySpecCustomization(codegenContext) +
             AuthEndpointOrchestrationV2MarkerCustomization(codegenContext)
 }

@@ -21,6 +21,7 @@ import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
 import software.amazon.smithy.rustsdk.customize.applyExceptFor
 import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
+import software.amazon.smithy.rustsdk.customize.dynamodb.DynamoDbDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
 import software.amazon.smithy.rustsdk.customize.glacier.GlacierDecorator
 import software.amazon.smithy.rustsdk.customize.onlyApplyTo
@@ -88,6 +89,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
         DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#DSQL"),
+        DynamoDbDecorator().onlyApplyTo("com.amazonaws.dynamodb#DynamoDB_20120810"),
         Ec2Decorator().onlyApplyTo("com.amazonaws.ec2#AmazonEC2"),
         GlacierDecorator().onlyApplyTo("com.amazonaws.glacier#Glacier"),
         RdsDecorator().onlyApplyTo("com.amazonaws.rds#AmazonRDSv19"),
