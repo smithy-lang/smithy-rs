@@ -653,7 +653,6 @@ pub(crate) mod test {
     use aws_smithy_async::test_util::{instant_time_and_sleep, InstantSleep};
     use aws_smithy_http_client::test_util::{capture_request, ReplayEvent, StaticReplayClient};
     use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
-    use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::interceptors::context::{
         Input, InterceptorContext, Output,
     };
@@ -672,7 +671,6 @@ pub(crate) mod test {
     use std::collections::HashMap;
     use std::error::Error;
     use std::io;
-    use std::time::SystemTime;
     use std::time::{Duration, UNIX_EPOCH};
     use tracing_test::traced_test;
 
@@ -1123,6 +1121,7 @@ pub(crate) mod test {
     #[cfg(feature = "default-https-client")]
     async fn one_second_connect_timeout() {
         use crate::imds::client::ImdsError;
+        use std::time::SystemTime;
         let client = Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
@@ -1156,10 +1155,11 @@ pub(crate) mod test {
 
     #[cfg(feature = "default-https-client")]
     async fn retry_connect_timeouts_for_bv(
-        behavior_version: BehaviorVersion,
+        behavior_version: aws_smithy_runtime_api::client::behavior_version::BehaviorVersion,
         min_elapsed: Duration,
         max_elapsed: Duration,
     ) {
+        use std::time::SystemTime;
         let http_client = StaticReplayClient::new(vec![]);
         let imds_client = super::Client::builder()
             .retry_classifier(SharedRetryClassifier::new(
@@ -1198,6 +1198,7 @@ pub(crate) mod test {
     // running it for every combination in `cargo hack --feature-powerset`.
     #[cfg(feature = "default-https-client")]
     async fn retry_connect_timeouts() {
+        use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
         // Legacy: 1s backoff, total > 1s
         #[allow(deprecated)]
         retry_connect_timeouts_for_bv(
