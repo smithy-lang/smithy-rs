@@ -9,8 +9,9 @@ use std::net::SocketAddr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
+use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
@@ -20,6 +21,60 @@ use tower::Service;
 use super::cache;
 use super::handshake::H1SendRequest;
 use super::BoxError;
+
+/// A duration paired with the sleep implementation used to realize it.
+///
+/// This type makes "timeout without sleep impl" unrepresentable — you cannot
+/// construct one without committing to a way to actually wait. Created at the
+/// adapter layer from `HttpConnectorSettings` + `RuntimeComponents::sleep_impl()`
+/// and passed down the pool stack where timeouts are applied.
+#[derive(Clone, Debug)]
+pub(crate) struct TimeoutContext {
+    pub(crate) duration: Duration,
+    pub(crate) sleep_impl: SharedAsyncSleep,
+}
+
+impl TimeoutContext {
+    pub(crate) fn new(duration: Duration, sleep_impl: SharedAsyncSleep) -> Self {
+        Self {
+            duration,
+            sleep_impl,
+        }
+    }
+}
+
+/// Target type for the connect portion of the pool stack.
+///
+/// Replaces bare `Uri` so per-operation connect metadata flows through the
+/// composable pool types (Map → Negotiate → Cache → handshake → ConnectionLimit
+/// → TCP connector) to the layers that need them.
+#[derive(Clone, Debug)]
+pub(crate) struct ConnectCtx {
+    pub(crate) uri: http_1x::Uri,
+    /// Bounds new-connection establishment (TCP + TLS handshake). `None`
+    /// means no connect timeout — cached connections skip the connector
+    /// entirely so this is automatically a no-op on cache hit.
+    pub(crate) connect_timeout: Option<TimeoutContext>,
+}
+
+impl ConnectCtx {
+    pub(crate) fn new(uri: http_1x::Uri, connect_timeout: Option<TimeoutContext>) -> Self {
+        Self {
+            uri,
+            connect_timeout,
+        }
+    }
+}
+
+/// Request extension set by the adapter to hint a read timeout to the
+/// checkout services (`H{1,2}Checkout`).
+///
+/// `Some(...)` means: once the connection is selected (cache hit or fresh
+/// handshake), wrap `conn.call(req)` with this timeout. Bounds request-write
+/// + response-headers-wait only — does NOT include pool acquire or connect
+/// establishment (those have their own timeouts).
+#[derive(Clone, Debug)]
+pub(crate) struct ReadTimeoutHint(pub(crate) TimeoutContext);
 
 /// Permits acquired from connection limit semaphores.
 /// Held for the lifetime of the connection — dropped when the connection is dropped.
