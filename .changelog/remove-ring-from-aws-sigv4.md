@@ -1,7 +1,6 @@
 ---
 applies_to:
 - aws-sdk-rust
-- client
 authors:
 - suzak
 references:
