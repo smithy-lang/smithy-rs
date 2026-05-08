@@ -4,7 +4,8 @@ applies_to:
 - client
 authors:
 - suzak
-references: []
+references:
+- smithy-rs#4650
 breaking: false
 new_feature: false
 bug_fix: false
