@@ -37,7 +37,7 @@ use endpoints::apply_endpoint;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
-use crate::client::metrics::{EndpointResolutionDuration, IdentityResolutionDuration};
+use crate::client::metrics::{EndpointResolutionDuration, IdentityResolutionDuration, OperationTelemetry};
 
 mod auth;
 pub use auth::AuthSchemeAndEndpointOrchestrationV2;
@@ -389,7 +389,12 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    let identity_start = runtime_components.time_source().map(|ts| ts.now());
+    let should_measure = cfg.load::<OperationTelemetry>().is_some();
+    let identity_start = if should_measure {
+        runtime_components.time_source().map(|ts| ts.now())
+    } else {
+        None
+    };
     let (scheme_id, identity, endpoint) = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(OrchestratorError::other));
     if let Some(start) = identity_start {
         if let Some(ts) = runtime_components.time_source() {
@@ -400,7 +405,11 @@ async fn try_attempt(
         }
     }
 
-    let endpoint_start = runtime_components.time_source().map(|ts| ts.now());
+    let endpoint_start = if should_measure {
+        runtime_components.time_source().map(|ts| ts.now())
+    } else {
+        None
+    };
     match endpoint {
         Some(endpoint) => {
             // This branch is for backward compatibility when `AuthSchemeAndEndpointOrchestrationV2` is not present in the config bag.
