@@ -5,8 +5,9 @@
 
 use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_observability::{
-    global::get_telemetry_provider, instruments::Histogram, AttributeValue, Attributes,
-    ObservabilityError,
+    global::get_telemetry_provider,
+    instruments::{Histogram, MonotonicCounter},
+    AttributeValue, Attributes, ObservabilityError,
 };
 use aws_smithy_runtime_api::client::{
     interceptors::{dyn_dispatch_hint, Intercept, SharedInterceptor},
@@ -15,7 +16,7 @@ use aws_smithy_runtime_api::client::{
     runtime_plugin::RuntimePlugin,
 };
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
-use std::{borrow::Cow, sync::Arc, time::SystemTime};
+use std::{borrow::Cow, sync::Arc, time::Duration, time::SystemTime};
 
 /// Struct to hold metric data in the ConfigBag
 #[derive(Debug, Clone)]
@@ -23,9 +24,28 @@ pub(crate) struct MeasurementsContainer {
     call_start: SystemTime,
     attempts: u32,
     attempt_start: SystemTime,
+    serialization_start: Option<SystemTime>,
+    deserialization_start: Option<SystemTime>,
+    signing_start: Option<SystemTime>,
 }
 
 impl Storable for MeasurementsContainer {
+    type Storer = StoreReplace<Self>;
+}
+
+/// Duration of identity resolution, stored in ConfigBag by the orchestrator.
+#[derive(Debug, Clone)]
+pub(crate) struct IdentityResolutionDuration(pub(crate) Duration);
+
+impl Storable for IdentityResolutionDuration {
+    type Storer = StoreReplace<Self>;
+}
+
+/// Duration of endpoint resolution, stored in ConfigBag by the orchestrator.
+#[derive(Debug, Clone)]
+pub(crate) struct EndpointResolutionDuration(pub(crate) Duration);
+
+impl Storable for EndpointResolutionDuration {
     type Storer = StoreReplace<Self>;
 }
 
@@ -34,6 +54,13 @@ impl Storable for MeasurementsContainer {
 pub(crate) struct OperationTelemetry {
     pub(crate) operation_duration: Arc<dyn Histogram>,
     pub(crate) attempt_duration: Arc<dyn Histogram>,
+    pub(crate) call_attempts: Arc<dyn MonotonicCounter>,
+    pub(crate) call_errors: Arc<dyn MonotonicCounter>,
+    pub(crate) serialization_duration: Arc<dyn Histogram>,
+    pub(crate) deserialization_duration: Arc<dyn Histogram>,
+    pub(crate) signing_duration: Arc<dyn Histogram>,
+    pub(crate) resolve_identity_duration: Arc<dyn Histogram>,
+    pub(crate) resolve_endpoint_duration: Arc<dyn Histogram>,
 }
 
 impl OperationTelemetry {
@@ -53,6 +80,41 @@ impl OperationTelemetry {
                 .set_units("s")
                 .set_description("The time it takes to connect to the service, send the request, and get back HTTP status code and headers (including time queued waiting to be sent)")
                 .build(),
+            call_attempts: meter
+                .create_monotonic_counter("smithy.client.call.attempts")
+                .set_units("{attempt}")
+                .set_description("The number of attempts for an operation call")
+                .build(),
+            call_errors: meter
+                .create_monotonic_counter("smithy.client.call.errors")
+                .set_units("{error}")
+                .set_description("The number of calls that result in an error")
+                .build(),
+            serialization_duration: meter
+                .create_histogram("smithy.client.call.serialization_duration")
+                .set_units("s")
+                .set_description("The time it takes to serialize a request body")
+                .build(),
+            deserialization_duration: meter
+                .create_histogram("smithy.client.call.deserialization_duration")
+                .set_units("s")
+                .set_description("The time it takes to deserialize a response body")
+                .build(),
+            signing_duration: meter
+                .create_histogram("smithy.client.call.auth.signing_duration")
+                .set_units("s")
+                .set_description("The time it takes to sign a request")
+                .build(),
+            resolve_identity_duration: meter
+                .create_histogram("smithy.client.call.auth.resolve_identity_duration")
+                .set_units("s")
+                .set_description("The time it takes to acquire an identity (credentials, bearer token, etc.) from an identity provider")
+                .build(),
+            resolve_endpoint_duration: meter
+                .create_histogram("smithy.client.call.resolve_endpoint_duration")
+                .set_units("s")
+                .set_description("The time it takes to resolve an endpoint for the request")
+                .build(),
         })
     }
 }
@@ -63,9 +125,6 @@ impl Storable for OperationTelemetry {
 
 #[derive(Debug)]
 pub(crate) struct MetricsInterceptor {
-    // Holding a TimeSource here isn't ideal, but RuntimeComponents aren't available in
-    // the read_before_execution hook and that is when we need to start the timer for
-    // the operation.
     time_source: SharedTimeSource,
 }
 
@@ -122,14 +181,100 @@ impl Intercept for MetricsInterceptor {
             call_start: self.time_source.now(),
             attempts: 0,
             attempt_start: SystemTime::UNIX_EPOCH,
+            serialization_start: None,
+            deserialization_start: None,
+            signing_start: None,
         });
+
+        Ok(())
+    }
+
+    fn read_before_serialization(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeSerializationInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let measurements = cfg
+            .get_mut::<MeasurementsContainer>()
+            .expect("set in `read_before_execution`");
+        measurements.serialization_start = Some(self.time_source.now());
+        Ok(())
+    }
+
+    fn read_after_serialization(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
+        let attributes = self.get_attrs_from_cfg(cfg);
+
+        if let (Some(start), Some(attrs)) = (measurements.serialization_start, attributes) {
+            let now = self.time_source.now();
+            if let Ok(elapsed) = now.duration_since(start) {
+                instruments.serialization_duration.record(
+                    elapsed.as_secs_f64(),
+                    Some(&attrs),
+                    None,
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn read_before_signing(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let measurements = cfg
+            .get_mut::<MeasurementsContainer>()
+            .expect("set in `read_before_execution`");
+        measurements.signing_start = Some(self.time_source.now());
+        Ok(())
+    }
+
+    fn read_after_signing(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeTransmitInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
+        let attributes = self.get_attrs_from_cfg(cfg);
+
+        if let (Some(start), Some(ref attrs)) = (measurements.signing_start, &attributes) {
+            let now = self.time_source.now();
+            if let Ok(elapsed) = now.duration_since(start) {
+                instruments
+                    .signing_duration
+                    .record(elapsed.as_secs_f64(), Some(attrs), None);
+            }
+        }
+
+        // Record identity and endpoint resolution durations stored by the orchestrator
+        if let Some(attrs) = attributes {
+            if let Some(IdentityResolutionDuration(d)) = cfg.load::<IdentityResolutionDuration>() {
+                instruments
+                    .resolve_identity_duration
+                    .record(d.as_secs_f64(), Some(&attrs), None);
+            }
+            if let Some(EndpointResolutionDuration(d)) = cfg.load::<EndpointResolutionDuration>() {
+                instruments
+                    .resolve_endpoint_duration
+                    .record(d.as_secs_f64(), Some(&attrs), None);
+            }
+        }
 
         Ok(())
     }
 
     fn read_after_execution(
         &self,
-        _context: &aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef<'_>,
+        context: &aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef<'_>,
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
@@ -144,6 +289,11 @@ impl Intercept for MetricsInterceptor {
                 instruments
                     .operation_duration
                     .record(elapsed.as_secs_f64(), Some(&attrs), None);
+            }
+
+            // Increment error counter if the call failed
+            if let Some(Err(_)) = context.output_or_error() {
+                instruments.call_errors.add(1, Some(&attrs), None);
             }
         }
 
@@ -184,6 +334,44 @@ impl Intercept for MetricsInterceptor {
             instruments
                 .attempt_duration
                 .record(elapsed.as_secs_f64(), Some(&attrs), None);
+
+            // Increment attempts counter
+            instruments.call_attempts.add(1, Some(&attrs), None);
+        }
+        Ok(())
+    }
+
+    fn read_before_deserialization(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::BeforeDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let measurements = cfg
+            .get_mut::<MeasurementsContainer>()
+            .expect("set in `read_before_execution`");
+        measurements.deserialization_start = Some(self.time_source.now());
+        Ok(())
+    }
+
+    fn read_after_deserialization(
+        &self,
+        _context: &aws_smithy_runtime_api::client::interceptors::context::AfterDeserializationInterceptorContextRef<'_>,
+        _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
+        cfg: &mut aws_smithy_types::config_bag::ConfigBag,
+    ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
+        let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
+        let attributes = self.get_attrs_from_cfg(cfg);
+
+        if let (Some(start), Some(attrs)) = (measurements.deserialization_start, attributes) {
+            let now = self.time_source.now();
+            if let Ok(elapsed) = now.duration_since(start) {
+                instruments.deserialization_duration.record(
+                    elapsed.as_secs_f64(),
+                    Some(&attrs),
+                    None,
+                );
+            }
         }
         Ok(())
     }
