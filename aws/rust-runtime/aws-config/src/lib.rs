@@ -846,6 +846,7 @@ mod loader {
                     }
                     config
                 })
+                .with_behavior_version(self.behavior_version)
                 .with_profile_config(self.profile_files_override, self.profile_name_override);
 
             let use_fips = if let Some(use_fips) = self.use_fips {
@@ -1318,7 +1319,21 @@ mod loader {
         #[allow(deprecated)]
         #[tokio::test]
         async fn identity_cache_old_behavior_version() {
-            let config = defaults(BehaviorVersion::v2023_11_09()).load().await;
+            // Previously, `load()` did not need an explicit HTTP client because
+            // internal providers (e.g. IMDS) built their Operation without a
+            // BehaviorVersion, so default_plugins defaulted to latest() and the
+            // `default-https-client` code path provided one automatically.
+            //
+            // Now that BehaviorVersion is threaded through to Operation::builder(),
+            // the old BV here (v2023_11_09) causes default_plugins to use the
+            // legacy hyper 0.14 code path, which returns None without
+            // `legacy-rustls-ring`. NeverClient satisfies the debug_assertions
+            // check in Operation::build() without additional TLS dependencies.
+            let config = defaults(BehaviorVersion::v2023_11_09())
+                .http_client(NeverClient::new())
+                .sleep_impl(InstantSleep)
+                .load()
+                .await;
 
             assert!(config.identity_cache().is_none());
         }
