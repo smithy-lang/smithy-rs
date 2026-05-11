@@ -186,7 +186,6 @@ dependencies = [
  "percent-encoding",
  "pretty_assertions",
  "proptest",
- "ring",
  "serde",
  "serde_derive",
  "serde_json",
