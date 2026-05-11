@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointParamsInterceptorGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.protocol.RequestSerializerGenerator
@@ -87,17 +88,23 @@ open class OperationGenerator(
             val inputType = symbolProvider.toSymbol(operationShape.inputShape(model))
             val outputType = symbolProvider.toSymbol(operationShape.outputShape(model))
 
-            rustTemplate(
-                """
-                /// The schema for this operation's input shape.
-                pub const INPUT_SCHEMA: &'static #{Schema} = #{InputType}::SCHEMA;
-                /// The schema for this operation's output shape.
-                pub const OUTPUT_SCHEMA: &'static #{Schema} = #{OutputType}::SCHEMA;
-                """,
-                "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
-                "InputType" to inputType,
-                "OutputType" to outputType,
-            )
+            // These constants reference `InputType::SCHEMA` / `OutputType::SCHEMA`, which are
+            // only emitted when `SchemaStructureCustomization` is active — i.e. when the
+            // service is on the schema-serde allowlist. Emitting them unconditionally would
+            // dangle on non-allowlisted services.
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                rustTemplate(
+                    """
+                    /// The schema for this operation's input shape.
+                    pub const INPUT_SCHEMA: &'static #{Schema} = #{InputType}::SCHEMA;
+                    /// The schema for this operation's output shape.
+                    pub const OUTPUT_SCHEMA: &'static #{Schema} = #{OutputType}::SCHEMA;
+                    """,
+                    "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
+                    "InputType" to inputType,
+                    "OutputType" to outputType,
+                )
+            }
             val errorType = symbolProvider.symbolForOperationError(operationShape)
             val codegenScope =
                 arrayOf(

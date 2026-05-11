@@ -70,7 +70,10 @@ impl AwsJsonRpcProtocol {
     }
 }
 
-impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
+impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
+    type Request = aws_smithy_runtime_api::http::Request;
+    type Response = aws_smithy_runtime_api::http::Response;
+
     fn protocol_id(&self) -> &ShapeId {
         self.inner.protocol_id()
     }
@@ -106,12 +109,25 @@ impl aws_smithy_schema::protocol::ClientProtocol for AwsJsonRpcProtocol {
         self.inner
             .deserialize_response(response, output_schema, cfg)
     }
+
+    fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
+        self.inner.payload_codec()
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        self.inner.update_endpoint(request, endpoint, cfg)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aws_smithy_schema::protocol::ClientProtocol;
+    use aws_smithy_schema::protocol::ClientProtocolInner;
     use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
     use aws_smithy_schema::ShapeType;
     use aws_smithy_types::config_bag::Layer;

@@ -5,8 +5,10 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
+import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
@@ -19,12 +21,15 @@ import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
 import software.amazon.smithy.rust.codegen.core.smithy.customize.writeCustomizations
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
+import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.EventStreamUnmarshallerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.errorMessageMember
+import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 
@@ -103,6 +108,204 @@ class ResponseDeserializerGenerator(
     }
 
     private fun RustWriter.deserializeStreaming(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
+        val outputShape = operationShape.outputShape(model)
+        val streamingMember = outputShape.findStreamingMember(model)!!
+        val streamingTarget = model.expectShape(streamingMember.target)
+        val isBlobStreaming = streamingTarget is BlobShape
+        val isEventStream = streamingTarget is UnionShape
+
+        if (schemaExclusive && isBlobStreaming) {
+            deserializeStreamingBlobSchema(operationShape, customizations)
+        } else if (schemaExclusive && isEventStream) {
+            deserializeStreamingEventStreamSchema(operationShape, customizations)
+        } else {
+            // Non-schema-exclusive: use legacy parser
+            deserializeStreamingLegacy(operationShape, customizations)
+        }
+    }
+
+    /** Schema-serde path for streaming blob responses.
+     *
+     * Strategy (mirrors the legacy path):
+     * 1. Create a deserializer from the response body (while it's still available).
+     * 2. Call deserialize_with_response to read header-bound members. The streaming
+     *    blob member gets set to an empty ByteStream placeholder.
+     * 3. Swap the body out of the response (take ownership).
+     * 4. Replace the placeholder with the real ByteStream wrapping the swapped body.
+     */
+    private fun RustWriter.deserializeStreamingBlobSchema(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
+        val successCode = httpBindingResolver.httpTrait(operationShape).code
+        val outputShape = operationShape.outputShape(model)
+        val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+        val streamingMember = outputShape.findStreamingMember(model)!!
+        val memberName = symbolProvider.toMemberName(streamingMember)
+        val operationName = symbolProvider.toSymbol(operationShape).name
+
+        rustTemplate(
+            """
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
+                ##[allow(unused_mut)]
+                let mut force_error = false;
+                #{BeforeParseResponse}
+
+                // If this is an error, defer to the non-streaming parser
+                if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
+                    return #{None};
+                }
+
+                let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
+                    // Read header-bound members while the body is still in the response.
+                    // deserialize_with_response sets the streaming blob member to a placeholder.
+                    let mut output = {
+                        let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                            .expect("a SharedClientProtocol is required");
+                        let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
+                            .map_err(#{E}::unhandled)?;
+                        #{ConcreteOutput}::deserialize_with_response(
+                            &mut *deser, response.headers(), response.status().as_u16(), &[],
+                        ).map_err(#{E}::unhandled)?
+                    };
+                    // Now take ownership of the body and replace the placeholder
+                    let mut body = #{SdkBody}::taken();
+                    std::mem::swap(&mut body, response.body_mut());
+                    output.$memberName = #{ByteStream}::new(body);
+                    #{Ok}(output)
+                })();
+
+                #{Some}(#{type_erase_result}(result))
+            }
+            """,
+            *codegenScope,
+            "ConcreteOutput" to outputSymbol,
+            "E" to errorSymbol,
+            "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+        )
+    }
+
+    /** Schema-serde path for event stream responses (hybrid).
+     *
+     * Creates the output builder, sets the event stream member via
+     * `set_<memberName>(Some(receiver))`, then builds. `EventStreamUnmarshallerGenerator`
+     * (invoked here with `useSchemaSerde = true`) emits a schema-serde unmarshaller
+     * that uses `self.protocol.payload_codec()` to decode each event frame, and also
+     * handles initial-response data for RPC protocols (which arrives via the first
+     * event frame, not the HTTP body).
+     *
+     * Unlike the non-streaming schema path, `deserialize_with_response` is not
+     * used because it would call `builder.build()` internally — and for
+     * @required streaming members the build fails before the event stream
+     * member can be populated.
+     */
+    private fun RustWriter.deserializeStreamingEventStreamSchema(
+        operationShape: OperationShape,
+        customizations: List<OperationCustomization>,
+    ) {
+        val successCode = httpBindingResolver.httpTrait(operationShape).code
+        val outputShape = operationShape.outputShape(model)
+        val outputSymbol = symbolProvider.toSymbol(outputShape)
+        val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
+        val streamingMember = outputShape.findStreamingMember(model)!!
+        val unionTarget = model.expectShape(streamingMember.target, UnionShape::class.java)
+
+        val unmarshallerCtor =
+            EventStreamUnmarshallerGenerator(
+                protocol,
+                codegenContext,
+                operationShape,
+                unionTarget,
+                useSchemaSerde = true,
+            ).render()
+
+        rustTemplate(
+            """
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
+                ##[allow(unused_mut)]
+                let mut force_error = false;
+                #{BeforeParseResponse}
+
+                // If this is an error, defer to the non-streaming parser
+                if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
+                    return #{None};
+                }
+
+                let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
+                    // Swap body out — becomes the event stream receiver.
+                    let body = std::mem::replace(response.body_mut(), #{SdkBody}::taken());
+                    // Bind headers by reference after the body swap so `MutateOutput`
+                    // customizations (e.g., the AWS SDK request-id decorator) can read
+                    // `x-amzn-requestid` without cloning. `response.headers()` is still
+                    // valid — swapping the body does not invalidate headers.
+                    let _response_headers = response.headers();
+                    let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                        .expect("a SharedClientProtocol is required")
+                        .clone();
+                    let unmarshaller = #{unmarshaller}(protocol);
+                    let receiver = #{EventReceiver}::new(#{Receiver}::new(unmarshaller, body));
+                    let output = #{BuilderSymbol}::default();
+                    // `mut` is required because `MutateOutput` customizations (e.g.,
+                    // the AWS SDK request-id decorator) call builder setters that take
+                    // `&mut self` (like `_set_request_id`). Marked `allow(unused_mut)`
+                    // because the customization block is empty for non-AWS services.
+                    ##[allow(unused_mut)]
+                    let mut output = output.${streamingMember.setterName()}(#{Some}(receiver));
+                    // Emit MutateOutput customizations (populates synthetic members like
+                    // `_request_id` from `_response_headers`). `deserialize_with_response`
+                    // is not usable here because it calls `builder.build()` internally,
+                    // which would fail for `@required` streaming members. The legacy
+                    // streaming path emits the same customizations via
+                    // `ProtocolParserGenerator.renderShapeParser`.
+                    #{MutateOutput}
+                    // Build via finalizeBuilder — applies error correction so @required
+                    // non-event-stream members are populated with defaults. For RPC
+                    // protocols with initial-response, the fluent builder re-populates
+                    // those members from the first event frame via into_builder.
+                    let output = #{finalizeBuilder};
+                    #{Ok}(output)
+                })();
+
+                #{Some}(#{type_erase_result}(result))
+            }
+            """,
+            *codegenScope,
+            "ConcreteOutput" to outputSymbol,
+            "E" to errorSymbol,
+            "BuilderSymbol" to symbolProvider.symbolForBuilder(outputShape),
+            "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
+            "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
+            "unmarshaller" to unmarshallerCtor,
+            "MutateOutput" to
+                writable {
+                    writeCustomizations(
+                        customizations,
+                        OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
+                    )
+                },
+            "finalizeBuilder" to
+                codegenContext.builderInstantiator().finalizeBuilder(
+                    "output",
+                    outputShape,
+                    mapErr = writable { rustTemplate("#{E}::unhandled", "E" to errorSymbol) },
+                ),
+            "BeforeParseResponse" to
+                writable {
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+        )
+    }
+
+    /** Legacy path for streaming responses (event streams and non-schema-exclusive). */
+    private fun RustWriter.deserializeStreamingLegacy(
         operationShape: OperationShape,
         customizations: List<OperationCustomization>,
     ) {

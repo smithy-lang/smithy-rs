@@ -268,7 +268,14 @@ class RequestSerializerGenerator(
                 // then replace the body with the event stream and set the correct Content-Type.
                 val eventStreamBody =
                     writable {
-                        bodyGenerator?.generatePayload(this, "input", operationShape)
+                        software.amazon.smithy.rust.codegen.client.smithy.protocols.renderClientEventStreamBody(
+                            this,
+                            codegenContext,
+                            protocol,
+                            operationShape,
+                            streamingMember!!,
+                            outerName = "input",
+                        )
                     }
                 // requestContentType returns the event stream content type for input streams
                 // (e.g., application/vnd.amazon.eventstream) or the normal protocol content type
@@ -279,7 +286,7 @@ class RequestSerializerGenerator(
                     let mut request = protocol.serialize_request(
                         &input, $schemaRef, "", _cfg,
                     ).map_err(#{BoxError}::from)?;
-                    *request.body_mut() = #{SdkBody}::from(#{event_stream_body});
+                    *request.body_mut() = #{event_stream_body};
                     // The protocol may have set Content-Length based on the initial empty body.
                     // Remove it since the event stream body has unknown length.
                     request.headers_mut().remove("Content-Length");

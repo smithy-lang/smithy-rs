@@ -6,7 +6,7 @@
 //! HTTP binding protocol for REST-style APIs.
 
 use crate::codec::{Codec, FinishSerializer};
-use crate::protocol::ClientProtocol;
+use crate::protocol::{apply_http_endpoint, ClientProtocolInner};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::{Schema, ShapeId};
 use aws_smithy_runtime_api::http::{Request, Response};
@@ -802,11 +802,14 @@ impl ShapeSerializer for MapEntryCollector {
     }
 }
 
-impl<C> ClientProtocol for HttpBindingProtocol<C>
+impl<C> ClientProtocolInner for HttpBindingProtocol<C>
 where
     C: Codec + Send + Sync + std::fmt::Debug + 'static,
     for<'a> C::Deserializer<'a>: ShapeDeserializer,
 {
+    type Request = Request;
+    type Response = Response;
+
     fn protocol_id(&self) -> &ShapeId {
         &self.protocol_id
     }
@@ -978,6 +981,19 @@ where
             .bytes()
             .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
         Ok(Box::new(self.codec.create_deserializer(body)))
+    }
+
+    fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
+        Some(&self.codec)
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), SerdeError> {
+        apply_http_endpoint(request, endpoint, cfg)
     }
 }
 

@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
@@ -320,7 +321,9 @@ class ClientCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
-            SchemaGenerator(codegenContext, this, shape).render()
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                SchemaGenerator(codegenContext, this, shape).render()
+            }
         }
         if (shape.isEventStream()) {
             rustCrate.withModule(symbolProvider.moduleForEventStreamError(shape)) {

@@ -15,11 +15,17 @@ use crate::deserialize::{json_token_iter, Token};
 
 use std::sync::Arc;
 
+/// Maximum recursion depth for deserialization. Payloads nested deeper than
+/// this will produce a [`SerdeError`] instead of risking a stack overflow.
+/// Matches the default used by `serde_json`.
+pub(crate) const MAX_DESERIALIZE_DEPTH: u32 = 128;
+
 /// JSON deserializer that implements the ShapeDeserializer trait.
 pub struct JsonDeserializer<'a> {
     input: &'a [u8],
     position: usize,
     settings: Arc<JsonCodecSettings>,
+    depth: u32,
 }
 
 impl<'a> JsonDeserializer<'a> {
@@ -29,6 +35,7 @@ impl<'a> JsonDeserializer<'a> {
             input,
             position: 0,
             settings,
+            depth: 0,
         }
     }
 
@@ -104,10 +111,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         // Expect opening brace
         self.skip_whitespace();
         if self.remaining().is_empty() {
             // Treat empty input as an empty object (e.g., empty HTTP response body)
+            self.depth -= 1;
             return Ok(());
         }
         if self.remaining().first() != Some(&b'{') {
@@ -164,6 +176,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
         }
 
+        self.depth -= 1;
         Ok(())
     }
 
@@ -172,6 +185,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         _schema: &Schema,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -196,6 +213,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
         }
 
+        self.depth -= 1;
         Ok(())
     }
 
@@ -204,6 +222,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         _schema: &Schema,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
             return Err(SerdeError::TypeMismatch {
@@ -246,6 +268,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             consumer(key.into_owned(), self)?;
         }
 
+        self.depth -= 1;
         Ok(())
     }
 
@@ -402,6 +425,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -425,10 +452,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 _ => out.push(self.read_string(_schema)?),
             }
         }
+        self.depth -= 1;
         Ok(out)
     }
 
     fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -452,10 +484,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 _ => out.push(self.read_blob(_schema)?),
             }
         }
+        self.depth -= 1;
         Ok(out)
     }
 
     fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -479,10 +516,15 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 _ => out.push(self.read_integer(_schema)?),
             }
         }
+        self.depth -= 1;
         Ok(out)
     }
 
     fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
             return Err(SerdeError::TypeMismatch {
@@ -506,6 +548,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 _ => out.push(self.read_long(_schema)?),
             }
         }
+        self.depth -= 1;
         Ok(out)
     }
 
@@ -513,6 +556,10 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         &mut self,
         _schema: &Schema,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
             return Err(SerdeError::TypeMismatch {
@@ -544,6 +591,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             let val = self.read_string(_schema)?;
             out.insert(key.into_owned(), val);
         }
+        self.depth -= 1;
         Ok(out)
     }
 
@@ -613,8 +661,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     }
 
     fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
         self.skip_whitespace();
-        match self.remaining().first() {
+        let result = match self.remaining().first() {
             Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
             Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
             Some(b'n') => {
@@ -720,7 +772,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             _ => Err(SerdeError::InvalidInput {
                 message: "unexpected token in document".into(),
             }),
+        };
+        if result.is_ok() {
+            self.depth -= 1;
         }
+        result
     }
 
     fn is_null(&self) -> bool {
@@ -1917,5 +1973,202 @@ mod tests {
             matches!(err, SerdeError::InvalidInput { .. }),
             "expected InvalidInput, got {err:?}"
         );
+    }
+
+    // ---- Recursion-depth guard tests ----
+    //
+    // These verify that deeply-nested payloads produce a clean `SerdeError`
+    // instead of a stack overflow. They exercise the same recursion pattern
+    // an attacker would: a JSON object/list/map/document nested far past the
+    // `MAX_DESERIALIZE_DEPTH` limit.
+
+    /// Builds `open.repeat(n) + close.repeat(n)`. For lists this is valid JSON
+    /// (nested empty arrays). For objects this is malformed, but the depth
+    /// guard fires before the malformed region is reached so reject-tests work
+    /// either way.
+    fn build_nested(open: &str, close: &str, n: usize) -> Vec<u8> {
+        build_nested_with_inner(open, "", close, n)
+    }
+
+    /// Builds `open.repeat(n) + inner + close.repeat(n)` — always valid JSON
+    /// given a valid `inner`. Used for accept-under-limit tests.
+    fn build_nested_with_inner(open: &str, inner: &str, close: &str, n: usize) -> Vec<u8> {
+        let mut out = String::with_capacity(open.len() * n + inner.len() + close.len() * n);
+        for _ in 0..n {
+            out.push_str(open);
+        }
+        out.push_str(inner);
+        for _ in 0..n {
+            out.push_str(close);
+        }
+        out.into_bytes()
+    }
+
+    /// A self-referential struct schema: member `"a"` points back to the parent
+    /// schema. This is the minimum schema needed to exercise the depth guard
+    /// through `read_struct`'s consumer-callback path (without it, unknown
+    /// members go through `skip_value` which is iterative).
+    fn recursive_struct_schema() -> &'static Schema {
+        static MEMBER_A: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Rec"),
+            aws_smithy_schema::ShapeType::Structure,
+            "a",
+            0,
+        );
+        static RECURSIVE: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Rec"),
+            aws_smithy_schema::ShapeType::Structure,
+            &[&MEMBER_A],
+        );
+        &RECURSIVE
+    }
+
+    /// Consumer that re-enters `read_struct` to exercise the depth guard.
+    fn recursive_struct_consumer(
+        _member: &Schema,
+        deser: &mut dyn ShapeDeserializer,
+    ) -> Result<(), SerdeError> {
+        deser.read_struct(recursive_struct_schema(), &mut recursive_struct_consumer)
+    }
+
+    /// Consumer that re-enters `read_list` to exercise the depth guard.
+    fn recursive_list_consumer(deser: &mut dyn ShapeDeserializer) -> Result<(), SerdeError> {
+        deser.read_list(dummy_schema(), &mut recursive_list_consumer)
+    }
+
+    /// Consumer that re-enters `read_map` to exercise the depth guard.
+    fn recursive_map_consumer(
+        _key: String,
+        deser: &mut dyn ShapeDeserializer,
+    ) -> Result<(), SerdeError> {
+        deser.read_map(dummy_schema(), &mut recursive_map_consumer)
+    }
+
+    fn assert_depth_error(err: SerdeError) {
+        match err {
+            SerdeError::Custom { ref message } => {
+                assert!(
+                    message.contains("maximum nesting depth exceeded"),
+                    "wrong error message: {message}"
+                );
+            }
+            other => panic!("expected Custom depth error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn depth_limit_read_struct_rejects_deeply_nested() {
+        // 200 levels — well past the 128 limit. The depth guard fires at
+        // level 129 before we reach the ending, so the payload doesn't need
+        // to be valid JSON all the way through.
+        let payload = build_nested(r#"{"a":"#, "}", 200);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_struct(recursive_struct_schema(), &mut recursive_struct_consumer)
+            .expect_err("deeply nested struct must be rejected");
+        assert_depth_error(err);
+    }
+
+    #[test]
+    fn depth_limit_read_struct_accepts_under_limit() {
+        // 100 levels of `{"a":` wrapped around an empty `{}` → 101 actual
+        // `read_struct` calls, which is under the 128 limit.
+        let payload = build_nested_with_inner(r#"{"a":"#, "{}", "}", 100);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        deser
+            .read_struct(recursive_struct_schema(), &mut recursive_struct_consumer)
+            .expect("100-level nesting should succeed");
+    }
+
+    #[test]
+    fn depth_limit_read_list_rejects_deeply_nested() {
+        let payload = build_nested("[", "]", 200);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_list(dummy_schema(), &mut recursive_list_consumer)
+            .expect_err("deeply nested list must be rejected");
+        assert_depth_error(err);
+    }
+
+    #[test]
+    fn depth_limit_read_list_accepts_under_limit() {
+        // `[[[...[]]]]` — 100 nested empty lists is valid JSON on its own.
+        let payload = build_nested("[", "]", 100);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        deser
+            .read_list(dummy_schema(), &mut recursive_list_consumer)
+            .expect("100-level nesting should succeed");
+    }
+
+    #[test]
+    fn depth_limit_read_map_rejects_deeply_nested() {
+        let payload = build_nested(r#"{"k":"#, "}", 200);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_map(dummy_schema(), &mut recursive_map_consumer)
+            .expect_err("deeply nested map must be rejected");
+        assert_depth_error(err);
+    }
+
+    #[test]
+    fn depth_limit_read_map_accepts_under_limit() {
+        let payload = build_nested_with_inner(r#"{"k":"#, "{}", "}", 100);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        deser
+            .read_map(dummy_schema(), &mut recursive_map_consumer)
+            .expect("100-level nesting should succeed");
+    }
+
+    #[test]
+    fn depth_limit_read_document_rejects_deeply_nested_object() {
+        // `read_document` is directly self-recursive on `{` and `[` branches;
+        // no external consumer is needed.
+        let payload = build_nested(r#"{"k":"#, "}", 200);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_document(dummy_schema())
+            .expect_err("deeply nested document must be rejected");
+        assert_depth_error(err);
+    }
+
+    #[test]
+    fn depth_limit_read_document_rejects_deeply_nested_array() {
+        let payload = build_nested("[", "]", 200);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_document(dummy_schema())
+            .expect_err("deeply nested document array must be rejected");
+        assert_depth_error(err);
+    }
+
+    #[test]
+    fn depth_limit_read_document_accepts_under_limit() {
+        let payload = build_nested_with_inner(r#"{"k":"#, "{}", "}", 100);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(JsonCodecSettings::default()));
+        deser
+            .read_document(dummy_schema())
+            .expect("100-level nesting should succeed");
+    }
+
+    #[test]
+    fn depth_limit_respects_custom_max_depth_setting() {
+        // A custom, tighter limit trips before the default 128 would.
+        let settings = JsonCodecSettings::builder().max_depth(16).build();
+
+        // 20 levels exceeds the custom limit of 16.
+        let payload = build_nested("[", "]", 20);
+        let mut deser = JsonDeserializer::new(&payload, Arc::new(settings));
+        let err = deser
+            .read_list(dummy_schema(), &mut recursive_list_consumer)
+            .expect_err("20-level nesting must exceed custom limit of 16");
+        assert_depth_error(err);
+
+        // 10 levels fits inside the custom limit.
+        let settings_ok = JsonCodecSettings::builder().max_depth(16).build();
+        let payload_ok = build_nested("[", "]", 10);
+        let mut deser_ok = JsonDeserializer::new(&payload_ok, Arc::new(settings_ok));
+        deser_ok
+            .read_list(dummy_schema(), &mut recursive_list_consumer)
+            .expect("10-level nesting should succeed under custom limit");
     }
 }

@@ -68,9 +68,12 @@ class SchemaDecorator : ClientCodegenDecorator {
     override fun structureCustomizations(
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<StructureCustomization>,
-    ): List<StructureCustomization> {
-        return baseCustomizations + SchemaStructureCustomization(codegenContext)
-    }
+    ): List<StructureCustomization> =
+        if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            baseCustomizations + SchemaStructureCustomization(codegenContext)
+        } else {
+            baseCustomizations
+        }
 
     override fun serviceRuntimePluginCustomizations(
         codegenContext: ClientCodegenContext,
@@ -175,6 +178,16 @@ private class SchemaProtocolConfigCustomization(
                         ///
                         /// This overrides the default protocol determined by the service model,
                         /// enabling runtime protocol selection.
+                        ///
+                        /// ## Transport
+                        ///
+                        /// This setter is HTTP-specific. The config bag stores
+                        /// `SharedClientProtocol` (which elides to its HTTP specialization) and
+                        /// only `SharedClientProtocol<http::Request, http::Response>` has a
+                        /// `Storable` impl. The `impl ClientProtocol + 'static` bound here elides
+                        /// to `impl ClientProtocol<http::Request, http::Response>` to match —
+                        /// a `ClientProtocol<Other, Other>` impl wouldn't round-trip through
+                        /// config-bag storage even though the trait itself is transport-generic.
                         pub fn protocol(mut self, protocol: impl #{ClientProtocol} + 'static) -> Self {
                             self.set_protocol(#{Some}(#{SharedClientProtocol}::new(protocol)));
                             self

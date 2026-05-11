@@ -415,6 +415,18 @@ mod loader {
         /// Sets the client protocol to use for serialization and deserialization.
         ///
         /// This overrides the default protocol determined by the service model.
+        ///
+        /// # Transport
+        ///
+        /// This setter is HTTP-specific. `self.protocol` is typed
+        /// `Option<SharedClientProtocol>` which elides to the HTTP specialization,
+        /// and only `SharedClientProtocol<http::Request, http::Response>` has a
+        /// `Storable` impl. The `impl ClientProtocol + 'static` bound here
+        /// elides to `impl ClientProtocol<http::Request, http::Response>` to
+        /// match. A non-HTTP transport would add its own setter paired with its
+        /// own `Storable` newtype rather than generalizing this one — the
+        /// underlying `ClientProtocol<Req, Res>` trait is already
+        /// transport-generic.
         pub fn protocol(mut self, protocol: impl ClientProtocol + 'static) -> Self {
             self.protocol = Some(SharedClientProtocol::new(protocol));
             self
