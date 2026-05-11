@@ -1,0 +1,18 @@
+[package]
+name = "sqs-tests"
+version = "0.1.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+edition = "2021"
+license = "Apache-2.0"
+repository = "https://github.com/smithy-lang/smithy-rs"
+publish = false
+
+[dependencies]
+aws-sdk-sqs = { path = "../../build/aws-sdk/sdk/sqs", features = ["behavior-version-latest", "test-util"] }
+aws-smithy-async = { path = "../../build/aws-sdk/sdk/aws-smithy-async", features = ["test-util"] }
+aws-smithy-runtime = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime", features = ["client", "test-util"] }
+aws-smithy-runtime-api = { path = "../../build/aws-sdk/sdk/aws-smithy-runtime-api", features = ["test-util"] }
+aws-smithy-types = { path = "../../build/aws-sdk/sdk/aws-smithy-types", features = ["test-util"] }
+aws-smithy-http-client = { path = "../../build/aws-sdk/sdk/aws-smithy-http-client", features = ["test-util"] }
+http-1x = { package = "http", version = "1" }
+tokio = { version = "1.23.1", features = ["full", "test-util"] }

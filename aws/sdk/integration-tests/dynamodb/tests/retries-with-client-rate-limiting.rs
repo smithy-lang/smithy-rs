@@ -4,7 +4,7 @@
  */
 
 use aws_sdk_dynamodb::config::{
-    Credentials, Region, SharedAsyncSleep, StalledStreamProtectionConfig,
+    BehaviorVersion, Credentials, Region, SharedAsyncSleep, StalledStreamProtectionConfig,
 };
 use aws_sdk_dynamodb::{config::retry::RetryConfig, error::ProvideErrorMetadata};
 use aws_smithy_async::test_util::instant_time_and_sleep;
@@ -47,8 +47,13 @@ fn throttling_err() -> http_1x::Response<SdkBody> {
         .unwrap()
 }
 
-#[tokio::test]
-async fn test_adaptive_retries_with_no_throttling_errors() {
+async fn adaptive_retries_no_throttling(
+    behavior_version: BehaviorVersion,
+    partition_name: &str,
+    expected_op1_sleep: Duration,
+    expected_op2_sleep: Duration,
+    expected_op3_sleep: Duration,
+) {
     let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
 
     let events = vec![
@@ -68,6 +73,7 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
 
     let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
+        .behavior_version(behavior_version)
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
@@ -78,39 +84,37 @@ async fn test_adaptive_retries_with_no_throttling_errors() {
         )
         .time_source(SharedTimeSource::new(time_source))
         .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
-        .retry_partition(RetryPartition::new(
-            "test_adaptive_retries_with_no_throttling_errors",
-        ))
+        .retry_partition(RetryPartition::new(partition_name.to_owned()))
         .http_client(http_client.clone())
         .build();
     let expected_table_names = vec!["Test".to_owned()];
 
-    // We create a new client each time to ensure that the cross-client retry state is working.
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3));
+    assert_eq!(sleep_impl.total_duration(), expected_op1_sleep);
     assert_eq!(res.table_names(), expected_table_names.as_slice());
-    // Three requests should have been made, two failing & one success
     assert_eq!(http_client.actual_requests().count(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3 + 1));
+    assert_eq!(sleep_impl.total_duration(), expected_op2_sleep);
     assert_eq!(res.table_names(), expected_table_names.as_slice());
-    // Two requests should have been made, one failing & one success (plus previous requests)
     assert_eq!(http_client.actual_requests().count(), 5);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config);
     let err = client.list_tables().send().await.unwrap_err();
-    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3 + 1 + 7),);
+    assert_eq!(sleep_impl.total_duration(), expected_op3_sleep);
     assert_eq!(err.code(), Some("InternalServerError"));
-    // four requests should have been made, all failing (plus previous requests)
     assert_eq!(http_client.actual_requests().count(), 9);
 }
 
-#[tokio::test]
-#[ignore] // TODO(Retry 2.1): enable when retry 2.1 behavior is implemented
-async fn test_adaptive_retries_with_throttling_errors() {
+async fn adaptive_retries_with_throttling(
+    behavior_version: BehaviorVersion,
+    partition_name: &str,
+    expected_op1_sleep: Duration,
+    expected_op2_sleep_min: Duration,
+    expected_op2_sleep_max: Duration,
+) {
     let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
 
     let events = vec![
@@ -125,6 +129,7 @@ async fn test_adaptive_retries_with_throttling_errors() {
 
     let http_client = StaticReplayClient::new(events);
     let config = aws_sdk_dynamodb::Config::builder()
+        .behavior_version(behavior_version)
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .credentials_provider(Credentials::for_tests())
         .region(Region::new("us-east-1"))
@@ -135,26 +140,69 @@ async fn test_adaptive_retries_with_throttling_errors() {
         )
         .time_source(SharedTimeSource::new(time_source))
         .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
-        .retry_partition(RetryPartition::new(
-            "test_adaptive_retries_with_throttling_errors",
-        ))
+        .retry_partition(RetryPartition::new(partition_name.to_owned()))
         .http_client(http_client.clone())
         .build();
     let expected_table_names = vec!["Test".to_owned()];
 
-    // We create a new client each time to ensure that the cross-client retry state is working.
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert_eq!(sleep_impl.total_duration(), Duration::from_secs(40));
+    assert_eq!(sleep_impl.total_duration(), expected_op1_sleep);
     assert_eq!(res.table_names(), expected_table_names.as_slice());
-    // Three requests should have been made, two failing & one success
     assert_eq!(http_client.actual_requests().count(), 3);
 
     let client = aws_sdk_dynamodb::Client::from_conf(config.clone());
     let res = client.list_tables().send().await.unwrap();
-    assert!(Duration::from_secs(48) < sleep_impl.total_duration());
-    assert!(Duration::from_secs(49) > sleep_impl.total_duration());
+    assert!(sleep_impl.total_duration() > expected_op2_sleep_min);
+    assert!(sleep_impl.total_duration() < expected_op2_sleep_max);
     assert_eq!(res.table_names(), expected_table_names.as_slice());
-    // Two requests should have been made, one failing & one success (plus previous requests)
     assert_eq!(http_client.actual_requests().count(), 5);
+}
+
+#[tokio::test]
+async fn test_adaptive_retries_with_no_throttling_errors() {
+    // Legacy: 1s base backoff → 1+2=3s, 3+1=4s, 4+1+2+4=11s
+    #[allow(deprecated)]
+    adaptive_retries_no_throttling(
+        BehaviorVersion::v2024_03_28(),
+        "no_throttle_legacy",
+        Duration::from_secs(3),
+        Duration::from_secs(3 + 1),
+        Duration::from_secs(3 + 1 + 7),
+    )
+    .await;
+
+    // Latest: DynamoDB 25ms base backoff → 25+50=75ms, 75+25=100ms, 100+25+50+100=275ms
+    adaptive_retries_no_throttling(
+        BehaviorVersion::latest(),
+        "no_throttle_latest",
+        Duration::from_millis(75),
+        Duration::from_millis(100),
+        Duration::from_millis(275),
+    )
+    .await;
+}
+
+#[tokio::test]
+async fn test_adaptive_retries_with_throttling_errors() {
+    // Legacy: throttling uses 1s base, rate limiter dominates
+    #[allow(deprecated)]
+    adaptive_retries_with_throttling(
+        BehaviorVersion::v2024_03_28(),
+        "throttle_legacy",
+        Duration::from_secs(38),
+        Duration::from_secs(47),
+        Duration::from_secs(49),
+    )
+    .await;
+
+    // Latest: throttling still uses 1s base, rate limiter behavior unchanged
+    adaptive_retries_with_throttling(
+        BehaviorVersion::latest(),
+        "throttle_latest",
+        Duration::from_secs(38),
+        Duration::from_secs(47),
+        Duration::from_secs(49),
+    )
+    .await;
 }

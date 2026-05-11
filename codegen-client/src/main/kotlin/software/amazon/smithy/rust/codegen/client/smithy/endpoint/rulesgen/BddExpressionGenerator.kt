@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
@@ -269,7 +270,17 @@ class BddExpressionGenerator(
         ): Writable =
             writable {
                 when {
-                    !isOptionalArgument(arg) -> rust("#W", expressionGenerator.generateExpression(arg))
+                    !isOptionalArgument(arg) -> {
+                        rust("#W", expressionGenerator.generateExpression(arg))
+                        // Coalesce macro's autoderef specialization requires owned values to
+                        // match the (Option<T>, T) impl. Params are bound as references,
+                        // and string literals are &str — need conversion to owned types.
+                        if (arg is Reference) {
+                            rust(".clone()")
+                        } else if (arg is Literal && arg.type() is StringType) {
+                            rust(".to_string()")
+                        }
+                    }
                     arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType ->
                         rust(
                             """
@@ -282,7 +293,7 @@ class BddExpressionGenerator(
                             expressionGenerator.generateExpression(arg),
                         )
 
-                    else -> rust("*#W", expressionGenerator.generateExpression(arg))
+                    else -> rust("#W.clone()", expressionGenerator.generateExpression(arg))
                 }
             }
 
@@ -450,7 +461,9 @@ class BddExpressionGenerator(
             writable {
                 val innerGen = createChildGenerator()
                 val fnExpr = innerGen.generateExpression(condition.function)
-                val fnReturnType = condition.function.functionDefinition.returnType
+                // Use .type() for the actual resolved return type (not functionDefinition.returnType
+                // which is the generic declared type and doesn't account for coalesce's type-dependent returns)
+                val fnReturnType = condition.function.type()
 
                 if (condition.result.isPresent) {
                     rust("#W", generateLibraryFunctionAssignment(fnExpr, fnReturnType))
@@ -467,6 +480,11 @@ class BddExpressionGenerator(
                 val resultName = condition.result.get().rustName()
                 val isOptional = returnType is OptionalType
                 val isBoolean = returnType is BooleanType
+                val innerType = if (isOptional) (returnType as OptionalType).inner() else returnType
+                val isArray = innerType is ArrayType
+
+                // Conversion expression: .into() for scalars, .into_iter().map(...).collect() for arrays
+                val intoExpr = if (isArray) ".into_iter().map(|s| s.to_owned()).collect()" else ".into()"
 
                 when {
                     // Non-optional boolean: assign and return the value
@@ -486,7 +504,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                *$resultName = Some(#{FN:W}.into());
+                                *$resultName = Some(#{FN:W}$intoExpr);
                                 true
                             }
                             """.trimIndent(),
@@ -497,7 +515,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                *$resultName = #{FN:W}.map(|inner| inner.into());
+                                *$resultName = #{FN:W}.map(|inner| inner$intoExpr);
                                 $resultName.is_some()
                             }
                             """.trimIndent(),
