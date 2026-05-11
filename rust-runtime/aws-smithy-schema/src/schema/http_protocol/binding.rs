@@ -890,7 +890,7 @@ where
                         // Greedy labels: encode each path segment separately, preserve /
                         let encoded = value
                             .split('/')
-                            .map(|seg| percent_encode(seg))
+                            .map(percent_encode)
                             .collect::<Vec<_>>()
                             .join("/");
                         path = path.replace(&greedy, &encoded);
@@ -916,7 +916,7 @@ where
                     if u.contains(&greedy) {
                         let encoded = value
                             .split('/')
-                            .map(|seg| percent_encode(seg))
+                            .map(percent_encode)
                             .collect::<Vec<_>>()
                             .join("/");
                         u = u.replace(&greedy, &encoded);

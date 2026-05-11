@@ -39,13 +39,16 @@ import software.amazon.smithy.rust.codegen.core.util.dq
  * Once all protocols are listed, the allowlist can be removed entirely.
  */
 object SchemaSerdeAllowlist {
-    /** Protocols for which schema-based serde is the sole path (no fallback). */
-    private val allowedProtocols: Set<ShapeId> =
-        setOf(
-            RestJson1Trait.ID,
-            AwsJson1_0Trait.ID,
-            AwsJson1_1Trait.ID,
-        )
+    /**
+     * Protocols for which schema-based serde is the sole path (no fallback).
+     *
+     * Intentionally empty while preparing the branch for merge to main — keeps
+     * the schema-serde runtime and codegen infrastructure in place but opts
+     * every service back onto the legacy per-shape codegen path. Re-enable
+     * protocols incrementally in follow-up PRs by adding entries such as
+     * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
+     */
+    private val allowedProtocols: Set<ShapeId> = emptySet()
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()

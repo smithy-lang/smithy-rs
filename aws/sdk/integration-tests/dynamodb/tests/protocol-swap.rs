@@ -4,7 +4,19 @@
  */
 
 //! Tests that protocols can be swapped at runtime via the `protocol()` config setter.
+//!
+//! TODO(schema-serde): Re-enable these tests when schema-serde codegen is
+//! active for DynamoDB (awsJson1_0). The runtime protocol swap feature
+//! requires the generated `config::Builder::protocol(...)` setter, which is
+//! only emitted by `SchemaProtocolConfigCustomization` when the service is on
+//! `SchemaSerdeAllowlist`. With the allowlist empty on main, DynamoDB's
+//! config builder does not expose `protocol(...)` and these tests cannot
+//! compile. Once awsJson1_0 (or DynamoDB specifically) is re-added to the
+//! allowlist, uncomment the block below.
+//! See: codegen-client/.../customizations/SchemaDecorator.kt
 
+// --- BEGIN schema-serde protocol-swap tests (disabled) ---
+/*
 use aws_sdk_dynamodb::config::{Credentials, Region, StalledStreamProtectionConfig};
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_smithy_http_client::test_util::capture_request;
@@ -137,3 +149,5 @@ async fn swap_to_rest_json_protocol() {
     assert_eq!(parsed["TableName"], "TestTable");
     assert!(parsed["Item"]["pk"]["S"].as_str().is_some());
 }
+*/
+// --- END schema-serde protocol-swap tests (disabled) ---
