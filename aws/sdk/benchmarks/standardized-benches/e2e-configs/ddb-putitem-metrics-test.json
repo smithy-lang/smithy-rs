@@ -1,6 +1,7 @@
 {
   "version": 1,
   "name": "ddb-putitem-metrics-test",
+  "description": "Test SDK metrics capture with DynamoDB PutItem",
   "service": "dynamodb",
   "action": "putitem",
   "actionConfig": {
@@ -9,8 +10,12 @@
     "keyPrefix": "test-",
     "deleteTableAfterBenchmark": true
   },
-  "batch": { "numberOfActions": 10 },
+  "batch": {
+    "description": "PutItem 1KB items",
+    "numberOfActions": 10,
+    "sequentialExecution": true
+  },
   "warmup": { "batches": 1 },
-  "measurement": { "batches": 2, "metricsInterval": 1 },
+  "measurement": { "batches": 2, "collectMetrics": true, "metricsInterval": 1 },
   "waiterTimeoutSecs": 120
 }

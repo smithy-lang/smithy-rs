@@ -293,7 +293,11 @@ fn extract_sdk_metrics(
             for metric in &scope_metrics.metrics {
                 match metric.name.as_ref() {
                     "smithy.client.call.duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 call_duration_sum += dp.sum;
                                 call_duration_count += dp.count;
@@ -301,7 +305,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.attempt.duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 attempt_duration_sum += dp.sum;
                                 attempt_duration_count += dp.count;
@@ -309,7 +317,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.serialization_duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 serialization_sum += dp.sum;
                                 serialization_count += dp.count;
@@ -317,7 +329,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.deserialization_duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 deserialization_sum += dp.sum;
                                 deserialization_count += dp.count;
@@ -325,7 +341,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.auth.signing_duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 signing_sum += dp.sum;
                                 signing_count += dp.count;
@@ -333,7 +353,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.auth.resolve_identity_duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 identity_sum += dp.sum;
                                 identity_count += dp.count;
@@ -341,7 +365,11 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.resolve_endpoint_duration" => {
-                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                        if let Some(hist) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>(
+                        ) {
                             for dp in &hist.data_points {
                                 endpoint_sum += dp.sum;
                                 endpoint_count += dp.count;
@@ -349,14 +377,22 @@ fn extract_sdk_metrics(
                         }
                     }
                     "smithy.client.call.attempts" => {
-                        if let Some(sum) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>() {
+                        if let Some(sum) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>()
+                        {
                             for dp in &sum.data_points {
                                 total_attempts += dp.value;
                             }
                         }
                     }
                     "smithy.client.call.errors" => {
-                        if let Some(sum) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>() {
+                        if let Some(sum) = metric
+                            .data
+                            .as_any()
+                            .downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>()
+                        {
                             for dp in &sum.data_points {
                                 total_errors += dp.value;
                             }
@@ -369,7 +405,11 @@ fn extract_sdk_metrics(
     }
 
     let mean_ms = |sum: f64, count: u64| -> f64 {
-        if count > 0 { (sum / count as f64) * 1000.0 } else { 0.0 }
+        if count > 0 {
+            (sum / count as f64) * 1000.0
+        } else {
+            0.0
+        }
     };
 
     Some(SdkMetrics {
