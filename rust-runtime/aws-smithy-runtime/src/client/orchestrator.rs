@@ -37,7 +37,9 @@ use endpoints::apply_endpoint;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
-use crate::client::metrics::{EndpointResolutionDuration, IdentityResolutionDuration, OperationTelemetry};
+use crate::client::metrics::{
+    EndpointResolutionDuration, IdentityResolutionDuration, OperationTelemetry,
+};
 
 mod auth;
 pub use auth::AuthSchemeAndEndpointOrchestrationV2;
