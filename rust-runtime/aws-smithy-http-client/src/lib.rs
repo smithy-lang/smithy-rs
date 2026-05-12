@@ -61,12 +61,14 @@ pub(crate) mod cfg {
                     feature = "rustls-aws-lc",
                     feature = "rustls-aws-lc-fips",
                     feature = "rustls-ring",
+                    feature = "rustls-custom-provider",
                     feature = "s2n-tls",
                 ))]
                 #[cfg_attr(docsrs, doc(cfg(any(
                     feature = "rustls-aws-lc",
                     feature = "rustls-aws-lc-fips",
                     feature = "rustls-ring",
+                    feature = "rustls-custom-provider",
                     feature = "s2n-tls",
                 ))))]
                 $item
@@ -81,9 +83,15 @@ pub(crate) mod cfg {
                 #[cfg(any(
                     feature = "rustls-aws-lc",
                     feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring"
+                    feature = "rustls-ring",
+                    feature = "rustls-custom-provider",
                 ))]
-                #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls-aws-lc", feature = "rustls-aws-lc-fips", feature = "rustls-ring"))))]
+                #[cfg_attr(docsrs, doc(cfg(any(
+                    feature = "rustls-aws-lc",
+                    feature = "rustls-aws-lc-fips",
+                    feature = "rustls-ring",
+                    feature = "rustls-custom-provider",
+))))]
                 $item
             )*
         }

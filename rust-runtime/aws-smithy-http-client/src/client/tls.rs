@@ -6,13 +6,14 @@ use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 use crate::HttpClientError;
 
 /// Choice of underlying cryptography library
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone)]
 #[non_exhaustive]
 pub enum Provider {
     #[cfg(any(
         feature = "rustls-aws-lc",
         feature = "rustls-aws-lc-fips",
-        feature = "rustls-ring"
+        feature = "rustls-ring",
+        feature = "rustls-custom-provider"
     ))]
     /// TLS provider based on [rustls](https://github.com/rustls/rustls)
     Rustls(rustls_provider::CryptoMode),
@@ -20,6 +21,9 @@ pub enum Provider {
     #[cfg(feature = "s2n-tls")]
     S2nTls,
 }
+
+#[cfg(not(feature = "rustls-custom-provider"))]
+impl Eq for Provider {}
 
 /// TLS related configuration object
 #[derive(Debug, Clone)]

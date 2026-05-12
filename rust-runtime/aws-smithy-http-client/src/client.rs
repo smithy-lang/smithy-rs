@@ -791,7 +791,8 @@ cfg_tls! {
                 #[cfg(any(
                     feature = "rustls-aws-lc",
                     feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring"
+                    feature = "rustls-ring",
+                    feature = "rustls-custom-provider"
                 ))]
                 tls::Provider::Rustls(crypto_mode) => {
                     let proxy_config = self.proxy_config.clone()

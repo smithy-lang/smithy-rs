@@ -7,6 +7,7 @@
     feature = "rustls-ring",
     feature = "rustls-aws-lc",
     feature = "rustls-aws-lc-fips",
+    feature = "rustls-custom-provider",
     feature = "s2n-tls",
 ))]
 
@@ -261,6 +262,33 @@ async fn test_rustls_ring_custom_ca() {
         .tls_context(tls_context_from_pem("tests/server.pem"))
         .build_https();
 
+    run_tls_test(&client).await.unwrap()
+}
+
+#[cfg(all(feature = "rustls-custom-provider", feature = "rustls-ring"))]
+#[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
+#[tokio::test]
+async fn test_rustls_custom_provider_native_ca() {
+    let provider = rustls::crypto::ring::default_provider();
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::Custom(provider),
+        ))
+        .build_https();
+
+    run_tls_test(&client).await.unwrap()
+}
+
+#[cfg(all(feature = "rustls-custom-provider", feature = "rustls-ring"))]
+#[tokio::test]
+async fn test_rustls_custom_provider_custom_ca() {
+    let ring_provider = rustls::crypto::ring::default_provider();
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::Custom(ring_provider),
+        ))
+        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .build_https();
     run_tls_test(&client).await.unwrap()
 }
 

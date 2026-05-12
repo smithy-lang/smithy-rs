@@ -70,6 +70,7 @@ legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "dep:rustl
 rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
 rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
 rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls","default-client"]
+rustls-custom-provider = ["dep:rustls", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
 s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "dep:s2n-tls-tokio", "default-client"]
 
 [dependencies]
