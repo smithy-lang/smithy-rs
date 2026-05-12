@@ -195,6 +195,7 @@ pub struct MetricsRuntimePlugin {
     scope: &'static str,
     time_source: SharedTimeSource,
     metadata: Option<Metadata>,
+    creation_time: Option<SystemTime>,
 }
 
 impl MetricsRuntimePlugin {
@@ -224,6 +225,23 @@ impl RuntimePlugin for MetricsRuntimePlugin {
         let instruments = OperationTelemetry::new(self.scope);
 
         if let Ok(instruments) = instruments {
+            // Create the uptime gauge (callback-based, reports independently)
+            if let Some(creation_time) = self.creation_time {
+                let time_source = self.time_source.clone();
+                if let Ok(tp) = get_telemetry_provider() {
+                    let meter = tp.meter_provider().get_meter(self.scope, None);
+                    let _uptime_gauge = meter
+                        .create_gauge("smithy.client.uptime", move |gauge| {
+                            if let Ok(elapsed) = time_source.now().duration_since(creation_time) {
+                                gauge.record(elapsed.as_secs_f64(), None, None);
+                            }
+                        })
+                        .set_units("s")
+                        .set_description("The time since the client was created")
+                        .build();
+                }
+            }
+
             let mut cfg = Layer::new("Metrics");
             cfg.store_put(instruments);
 
@@ -273,10 +291,13 @@ impl MetricsRuntimePluginBuilder {
         self,
     ) -> Result<MetricsRuntimePlugin, aws_smithy_runtime_api::box_error::BoxError> {
         if let Some(scope) = self.scope {
+            let time_source = self.time_source.unwrap_or_default();
+            let creation_time = Some(time_source.now());
             Ok(MetricsRuntimePlugin {
                 scope,
-                time_source: self.time_source.unwrap_or_default(),
+                time_source,
                 metadata: self.metadata,
+                creation_time,
             })
         } else {
             Err("Scope is required for MetricsRuntimePlugin.".into())
