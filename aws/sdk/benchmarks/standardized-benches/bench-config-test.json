@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "name": "ddb-putitem-metrics-test",
+  "service": "dynamodb",
+  "action": "putitem",
+  "actionConfig": {
+    "tableName": "smithy-rs-metrics-bench-test",
+    "region": "us-west-2",
+    "keyPrefix": "test-",
+    "deleteTableAfterBenchmark": true
+  },
+  "batch": { "numberOfActions": 10 },
+  "warmup": { "batches": 1 },
+  "measurement": { "batches": 2, "metricsInterval": 1 },
+  "waiterTimeoutSecs": 120
+}

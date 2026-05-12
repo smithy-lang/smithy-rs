@@ -9,8 +9,15 @@ use crate::bench_utils::{basic_stats, percentile};
 use aws_sdk_dynamodb::client::Waiters;
 use aws_sdk_dynamodb::types::AttributeValue;
 use aws_sdk_dynamodb::Client;
+use aws_smithy_observability::global::set_telemetry_provider;
+use aws_smithy_observability::TelemetryProvider;
+use aws_smithy_observability_otel::meter::OtelMeterProvider;
+use opentelemetry_sdk::metrics::{PeriodicReader, SdkMeterProvider};
+use opentelemetry_sdk::runtime::Tokio;
+use opentelemetry_sdk::testing::metrics::InMemoryMetricsExporter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 #[derive(Debug, Deserialize)]
@@ -30,6 +37,22 @@ pub struct BenchmarkResults {
     pub latency_stats: LatencyStats,
     pub cpu_stats: ResourceStats,
     pub memory_stats: ResourceStats,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sdk_metrics: Option<SdkMetrics>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SdkMetrics {
+    pub call_duration_mean_ms: f64,
+    pub attempt_duration_mean_ms: f64,
+    pub serialization_duration_mean_ms: f64,
+    pub deserialization_duration_mean_ms: f64,
+    pub signing_duration_mean_ms: f64,
+    pub resolve_identity_duration_mean_ms: f64,
+    pub resolve_endpoint_duration_mean_ms: f64,
+    pub total_attempts: u64,
+    pub total_errors: u64,
 }
 
 #[derive(Debug, Serialize)]
@@ -43,6 +66,14 @@ pub struct LatencyStats {
 }
 
 pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkResults {
+    // Set up in-memory metrics collection
+    let exporter = InMemoryMetricsExporter::default();
+    let reader = PeriodicReader::builder(exporter.clone(), Tokio).build();
+    let otel_mp = SdkMeterProvider::builder().with_reader(reader).build();
+    let sdk_mp = Arc::new(OtelMeterProvider::new(otel_mp.clone()));
+    let sdk_tp = TelemetryProvider::builder().meter_provider(sdk_mp).build();
+    let _ = set_telemetry_provider(sdk_tp);
+
     let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region(aws_config::Region::new(config.action_config.region.clone()))
         .load()
@@ -88,6 +119,7 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
         latency_stats: calculate_latency_stats(&all_latencies),
         cpu_stats: basic_stats(&cpu).into(),
         memory_stats: basic_stats(&mem).into(),
+        sdk_metrics: extract_sdk_metrics(&otel_mp, &exporter),
     }
 }
 
@@ -230,4 +262,125 @@ fn calculate_latency_stats(latencies: &[f64]) -> LatencyStats {
         p99_ms: percentile(&sorted, 0.99),
         std_dev_ms: stats.std_dev,
     }
+}
+
+fn extract_sdk_metrics(
+    otel_mp: &SdkMeterProvider,
+    exporter: &InMemoryMetricsExporter,
+) -> Option<SdkMetrics> {
+    otel_mp.force_flush().ok()?;
+    let metrics = exporter.get_finished_metrics().ok()?;
+
+    let mut call_duration_sum = 0.0;
+    let mut call_duration_count = 0u64;
+    let mut attempt_duration_sum = 0.0;
+    let mut attempt_duration_count = 0u64;
+    let mut serialization_sum = 0.0;
+    let mut serialization_count = 0u64;
+    let mut deserialization_sum = 0.0;
+    let mut deserialization_count = 0u64;
+    let mut signing_sum = 0.0;
+    let mut signing_count = 0u64;
+    let mut identity_sum = 0.0;
+    let mut identity_count = 0u64;
+    let mut endpoint_sum = 0.0;
+    let mut endpoint_count = 0u64;
+    let mut total_attempts = 0u64;
+    let mut total_errors = 0u64;
+
+    for resource_metrics in &metrics {
+        for scope_metrics in &resource_metrics.scope_metrics {
+            for metric in &scope_metrics.metrics {
+                match metric.name.as_ref() {
+                    "smithy.client.call.duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                call_duration_sum += dp.sum;
+                                call_duration_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.attempt.duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                attempt_duration_sum += dp.sum;
+                                attempt_duration_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.serialization_duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                serialization_sum += dp.sum;
+                                serialization_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.deserialization_duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                deserialization_sum += dp.sum;
+                                deserialization_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.auth.signing_duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                signing_sum += dp.sum;
+                                signing_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.auth.resolve_identity_duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                identity_sum += dp.sum;
+                                identity_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.resolve_endpoint_duration" => {
+                        if let Some(hist) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Histogram<f64>>() {
+                            for dp in &hist.data_points {
+                                endpoint_sum += dp.sum;
+                                endpoint_count += dp.count;
+                            }
+                        }
+                    }
+                    "smithy.client.call.attempts" => {
+                        if let Some(sum) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>() {
+                            for dp in &sum.data_points {
+                                total_attempts += dp.value;
+                            }
+                        }
+                    }
+                    "smithy.client.call.errors" => {
+                        if let Some(sum) = metric.data.as_any().downcast_ref::<opentelemetry_sdk::metrics::data::Sum<u64>>() {
+                            for dp in &sum.data_points {
+                                total_errors += dp.value;
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let mean_ms = |sum: f64, count: u64| -> f64 {
+        if count > 0 { (sum / count as f64) * 1000.0 } else { 0.0 }
+    };
+
+    Some(SdkMetrics {
+        call_duration_mean_ms: mean_ms(call_duration_sum, call_duration_count),
+        attempt_duration_mean_ms: mean_ms(attempt_duration_sum, attempt_duration_count),
+        serialization_duration_mean_ms: mean_ms(serialization_sum, serialization_count),
+        deserialization_duration_mean_ms: mean_ms(deserialization_sum, deserialization_count),
+        signing_duration_mean_ms: mean_ms(signing_sum, signing_count),
+        resolve_identity_duration_mean_ms: mean_ms(identity_sum, identity_count),
+        resolve_endpoint_duration_mean_ms: mean_ms(endpoint_sum, endpoint_count),
+        total_attempts,
+        total_errors,
+    })
 }
