@@ -6,8 +6,10 @@
 use aws_smithy_runtime_api::client::identity::Identity;
 use bytes::{BufMut, BytesMut};
 use crypto_bigint::{CheckedAdd, CheckedSub, Encoding, U256};
+use hmac::{digest::FixedOutput, Hmac, KeyInit, Mac};
 use p256::ecdsa::signature::Signer;
 use p256::ecdsa::{DerSignature, SigningKey};
+use sha2::Sha256;
 use std::io::Write;
 use std::sync::LazyLock;
 use std::time::SystemTime;
@@ -48,15 +50,14 @@ pub fn generate_signing_key(access_key: &str, secret_access_key: &str) -> impl A
         fis.append(&mut kdf_context);
         fis.put_i32(256);
 
-        let key = ring::hmac::Key::new(ring::hmac::HMAC_SHA256, &input_key);
+        let mut mac =
+            Hmac::<Sha256>::new_from_slice(&input_key).expect("HMAC can take key of any size");
 
         let mut buf = BytesMut::new();
         buf.put_i32(1);
         buf.put_slice(&fis);
-        let tag = ring::hmac::sign(&key, &buf);
-        let tag = &tag.as_ref()[0..32];
-
-        let k0 = U256::from_be_bytes(tag.try_into().expect("convert to [u8; 32]"));
+        mac.update(&buf);
+        let k0 = U256::from_be_bytes(mac.finalize_fixed().into());
 
         // It would be more secure for this to be a constant time comparison, but because this
         // is for client usage, that's not as big a deal.
