@@ -1,3 +1,4 @@
+---
 applies_to: ["client"]
 authors: ["jcdyer"]
 references: ["smithy-rs#4662"]
