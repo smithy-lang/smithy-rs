@@ -721,7 +721,7 @@ name = "aws-smithy-legacy-http-server"
 version = "0.65.14"
 dependencies = [
  "aws-smithy-cbor 0.61.8",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.12.1",
  "aws-smithy-types 1.4.8",
