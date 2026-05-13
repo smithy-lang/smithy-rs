@@ -37,9 +37,7 @@ use endpoints::apply_endpoint;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
-use crate::client::metrics::{
-    EndpointResolutionDuration, IdentityResolutionDuration, OperationTelemetry,
-};
+use crate::client::metrics::OperationTelemetry;
 
 mod auth;
 pub use auth::AuthSchemeAndEndpointOrchestrationV2;
@@ -401,8 +399,11 @@ async fn try_attempt(
     if let Some(start) = identity_start {
         if let Some(ts) = runtime_components.time_source() {
             if let Ok(d) = ts.now().duration_since(start) {
-                cfg.interceptor_state()
-                    .store_put(IdentityResolutionDuration(d));
+                if let Some(telemetry) = cfg.load::<OperationTelemetry>() {
+                    telemetry
+                        .resolve_identity_duration
+                        .record(d.as_secs_f64(), None, None);
+                }
             }
         }
     }
@@ -430,8 +431,11 @@ async fn try_attempt(
     if let Some(start) = endpoint_start {
         if let Some(ts) = runtime_components.time_source() {
             if let Ok(d) = ts.now().duration_since(start) {
-                cfg.interceptor_state()
-                    .store_put(EndpointResolutionDuration(d));
+                if let Some(telemetry) = cfg.load::<OperationTelemetry>() {
+                    telemetry
+                        .resolve_endpoint_duration
+                        .record(d.as_secs_f64(), None, None);
+                }
             }
         }
     }

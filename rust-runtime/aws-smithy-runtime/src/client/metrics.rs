@@ -16,7 +16,7 @@ use aws_smithy_runtime_api::client::{
     runtime_plugin::RuntimePlugin,
 };
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
-use std::{borrow::Cow, sync::Arc, time::Duration, time::SystemTime};
+use std::{borrow::Cow, sync::Arc, time::SystemTime};
 
 /// Struct to hold metric data in the ConfigBag
 #[derive(Debug, Clone)]
@@ -33,23 +33,10 @@ impl Storable for MeasurementsContainer {
     type Storer = StoreReplace<Self>;
 }
 
-/// Duration of identity resolution, stored in ConfigBag by the orchestrator.
-#[derive(Debug, Clone)]
-pub(crate) struct IdentityResolutionDuration(pub(crate) Duration);
-
-impl Storable for IdentityResolutionDuration {
-    type Storer = StoreReplace<Self>;
-}
-
-/// Duration of endpoint resolution, stored in ConfigBag by the orchestrator.
-#[derive(Debug, Clone)]
-pub(crate) struct EndpointResolutionDuration(pub(crate) Duration);
-
-impl Storable for EndpointResolutionDuration {
-    type Storer = StoreReplace<Self>;
-}
-
-/// Instruments for recording a single operation
+/// Instruments for recording a single operation.
+///
+/// On retries: `operation_duration`, `serialization_duration`, and `call_errors` are
+/// recorded once per call. All other metrics are recorded per-attempt.
 #[derive(Debug, Clone)]
 pub(crate) struct OperationTelemetry {
     pub(crate) operation_duration: Arc<dyn Histogram>,
@@ -246,26 +233,12 @@ impl Intercept for MetricsInterceptor {
         let (measurements, instruments) = self.get_measurements_and_instruments(cfg);
         let attributes = self.get_attrs_from_cfg(cfg);
 
-        if let (Some(start), Some(ref attrs)) = (measurements.signing_start, &attributes) {
+        if let (Some(start), Some(attrs)) = (measurements.signing_start, attributes) {
             let now = self.time_source.now();
             if let Ok(elapsed) = now.duration_since(start) {
                 instruments
                     .signing_duration
-                    .record(elapsed.as_secs_f64(), Some(attrs), None);
-            }
-        }
-
-        // Record identity and endpoint resolution durations stored by the orchestrator
-        if let Some(attrs) = attributes {
-            if let Some(IdentityResolutionDuration(d)) = cfg.load::<IdentityResolutionDuration>() {
-                instruments
-                    .resolve_identity_duration
-                    .record(d.as_secs_f64(), Some(&attrs), None);
-            }
-            if let Some(EndpointResolutionDuration(d)) = cfg.load::<EndpointResolutionDuration>() {
-                instruments
-                    .resolve_endpoint_duration
-                    .record(d.as_secs_f64(), Some(&attrs), None);
+                    .record(elapsed.as_secs_f64(), Some(&attrs), None);
             }
         }
 
