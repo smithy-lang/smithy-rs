@@ -61,10 +61,7 @@ class BddExpressionGenerator(
      */
     private val borrowedStrTarget: Boolean = false,
 ) {
-    private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
-    private val documentRefNames =
-        refs.filter { it.runtimeType == RuntimeType.document(codegenContext.runtimeConfig) }.map { it.name }
 
     fun generateCondition(condition: Condition): Writable {
         return condition.function.accept(OuterExprGeneratorVisitor(ownership))
@@ -81,12 +78,13 @@ class BddExpressionGenerator(
     // ============================================================================
 
     private fun isOptionalRef(expr: Expression): Boolean =
-        expr is Reference && optionalRefNames.contains(expr.name.rustName())
+        expr is Reference && refs.resolve(expr.name)?.isOptional == true
 
     private fun isDocumentRef(expr: Expression): Boolean =
-        expr is Reference && documentRefNames.contains(expr.name.rustName())
+        expr is Reference &&
+            refs.resolve(expr.name)?.runtimeType == RuntimeType.document(codegenContext.runtimeConfig)
 
-    private fun isKnownSomeRef(ref: Reference): Boolean = knownSomeRefsNames.contains(ref.name.rustName())
+    private fun isKnownSomeRef(ref: Reference): Boolean = knownSomeRefsNames.contains(refs.resolveName(ref.name))
 
     /**
      * True when the reference's underlying type is a String (possibly wrapped in Optional).
@@ -143,7 +141,7 @@ class BddExpressionGenerator(
                             isOptionalRef(expr) &&
                             isStringTypedRef(expr) ->
                             writable {
-                                rust("${expr.name.rustName()}.as_deref().unwrap_or_default()")
+                                rust("${refs.resolveName(expr.name)}.as_deref().unwrap_or_default()")
                             }
                         else ->
                             createChildGenerator(templateOwnership).generateExpression(expr)
@@ -154,10 +152,11 @@ class BddExpressionGenerator(
 
         override fun visitRef(ref: Reference) =
             writable {
+                val name = refs.resolveName(ref.name)
                 if (isKnownSomeRef(ref)) {
-                    rust("""${ref.name.rustName()}.expect("${ref.name.rustName()} was set my a previous condition.")""")
+                    rust("""$name.expect("$name was set my a previous condition.")""")
                 } else {
-                    rust(ref.name.rustName())
+                    rust(name)
                 }
             }
 
@@ -228,7 +227,7 @@ class BddExpressionGenerator(
                 val expressionGenerator = createChildGenerator()
                 if (fn is Reference) {
                     // All references are in refs so safe to assert non-null
-                    knownSomeRefs.add(refs.get(fn.name.rustName())!!)
+                    knownSomeRefs.add(refs.resolve(fn.name)!!)
                 }
                 rust("#W.is_some()", expressionGenerator.generateExpression(fn))
             }
@@ -319,7 +318,7 @@ class BddExpressionGenerator(
 
         private fun isOptionalArgument(arg: Expression): Boolean {
             return isOptionalRef(arg) ||
-                (arg is StringLiteral && optionalRefNames.contains(Identifier.of(arg.value().toString()).rustName())) ||
+                (arg is StringLiteral && refs.resolve(Identifier.of(arg.value().toString()))?.isOptional == true) ||
                 (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
         }
 
@@ -473,7 +472,7 @@ class BddExpressionGenerator(
          */
         override fun visitGetAttr(getAttr: GetAttr): Writable =
             writable {
-                val targetRef = condition.result.orElse(null)?.rustName()?.let { refs[it] }
+                val targetRef = condition.result.orElse(null)?.let { refs.resolve(it) }
                 val isBorrowedTarget = targetRef?.isBorrowedStr == true
                 val innerGen = createChildGenerator(childBorrowedStrTarget = isBorrowedTarget)
                 val fnExpr = innerGen.generateExpression(condition.function)
@@ -492,7 +491,7 @@ class BddExpressionGenerator(
             isBorrowedTarget: Boolean,
         ): Writable =
             writable {
-                val resultName = condition.result.get().rustName()
+                val resultName = refs.resolveName(condition.result.get())
                 if (pathContainsIdx) {
                     // Path contains index, resulting type is Option<T>
                     if (isBorrowedTarget) {
@@ -583,7 +582,7 @@ class BddExpressionGenerator(
             returnType: Type,
         ): Writable =
             writable {
-                val resultName = condition.result.get().rustName()
+                val resultName = refs.resolveName(condition.result.get())
                 val isOptional = returnType is OptionalType
                 val isBoolean = returnType is BooleanType
                 val innerType = if (isOptional) (returnType as OptionalType).inner() else returnType
