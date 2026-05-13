@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
 import software.amazon.smithy.rulesengine.language.syntax.Identifier
+import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Template
 import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.LiteralVisitor
@@ -23,8 +24,19 @@ import java.util.stream.Stream
  * Generator for literals (strings, numbers, bools, lists and objects)
  *
  * The `Document` type is used to support generating JSON-like documents
+ *
+ * [exprGenerator] is an optional callback used to render the dynamic parts of string templates
+ * (the `{Var}` / `{Var#attr}` placeholders inside a `Template`). BDD-mode callers pass a
+ * callback that delegates back to [BddExpressionGenerator] so that `getAttr` on optional
+ * assigned variables correctly generates an `if let Some(inner) = ... { inner.attr() }` unwrap.
+ * When omitted, the tree-based [ExpressionGenerator] is used, preserving existing behavior for
+ * callers that do not need BDD-specific optional-ref tracking.
  */
-class LiteralGenerator(private val ownership: Ownership, private val context: Context) :
+class LiteralGenerator(
+    private val ownership: Ownership,
+    private val context: Context,
+    private val exprGenerator: ((Expression, Ownership) -> Writable)? = null,
+) :
     LiteralVisitor<Writable> {
     private val runtimeConfig = context.runtimeConfig
     private val codegenScope =
@@ -32,6 +44,13 @@ class LiteralGenerator(private val ownership: Ownership, private val context: Co
             "Document" to RuntimeType.document(runtimeConfig),
             "HashMap" to RuntimeType.HashMap,
         )
+
+    private fun renderTemplateExpression(
+        expr: Expression,
+        exprOwnership: Ownership,
+    ): Writable =
+        exprGenerator?.invoke(expr, exprOwnership)
+            ?: ExpressionGenerator(exprOwnership, context).generate(expr)
 
     override fun visitBoolean(b: Boolean) =
         writable {
@@ -42,8 +61,8 @@ class LiteralGenerator(private val ownership: Ownership, private val context: Co
         writable {
             val parts: Stream<Writable> =
                 value.accept(
-                    TemplateGenerator(ownership) { expr, ownership ->
-                        ExpressionGenerator(ownership, context).generate(expr)
+                    TemplateGenerator(ownership) { expr, templateOwnership ->
+                        renderTemplateExpression(expr, templateOwnership)
                     },
                 )
             parts.forEach { part -> part(this) }

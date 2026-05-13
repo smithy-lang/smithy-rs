@@ -285,7 +285,7 @@ class EndpointBddGenerator(
                         })(&mut _diagnostic_collector),
                         """,
                         "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                        "NonParamRefBindings" to generateNonParamReferences(),
+                        "NonParamRefBindings" to generateNonParamReferences(cond),
                         "CustomFieldBindings" to generateCustomFieldBindings(genContext),
                         "body" to condBody,
                     )
@@ -515,12 +515,35 @@ class EndpointBddGenerator(
      * Generates references that do not come from the trait params. These can be set
      * as part of the evaluation of a Condition. They all start as `None` since they may
      * never be set.
+     *
+     * When [cond] is provided:
+     * - Only emit bindings for context vars actually referenced in the condition body
+     *   (plus the assigned var, if any). Unused `let X = &context.X` bindings are fine
+     *   for correctness but poison Rust's disjoint-capture analysis: a closure that
+     *   *uses* `context.X` (e.g. `if let Some(p) = first_arn { ... }`) captures
+     *   `&context.X`, and that conflicts with another match arm's closure that
+     *   mutably captures `&mut context.X` — even though only one arm runs per
+     *   iteration. Pruning unused bindings breaks that false conflict.
+     * - Bind the assigned var as `&mut`, and every other used var as `&`. Uniform
+     *   `&mut` forces read borrows to inherit the closure's short lifetime, breaking
+     *   library functions whose return types carry that lifetime (e.g.
+     *   `parse_arn(&str) -> Option<Arn<'_>>` assigned into an outer `Option<Arn<'a>>`).
+     *
+     * When [cond] is null (outer-scope callers with no specific condition), every
+     * variable is bound as `&mut`, matching the original behavior.
      */
-    private fun generateNonParamReferences() =
+    private fun generateNonParamReferences(cond: Condition? = null) =
         writable {
+            val assignedName = cond?.result?.orElse(null)?.rustName()
+            val usedVars = cond?.let { collectUsedVariables(it) }
             val varRefs = allRefs.variableRefs()
             varRefs.forEach {
-                rust("let ${it.value.name} = &mut context.${it.value.name};")
+                val name = it.value.name
+                if (usedVars != null && !usedVars.contains(name)) {
+                    return@forEach
+                }
+                val binding = if (cond == null || name == assignedName) "&mut" else "&"
+                rust("let $name = $binding context.$name;")
             }
         }
 
@@ -604,12 +627,13 @@ class EndpointBddGenerator(
         }
 
     /**
-     * Collect all variables (params and context refs) used in a rule.
+     * Walks an [Expression] and returns the set of variable names it references (by rust name).
+     * Used both to drive per-condition binding filtering and as the building block for
+     * [collectUsedVariables] on a rule.
      */
-    private fun collectUsedVariables(rule: Rule): Set<String> {
+    private fun collectUsedVariablesFromExpression(root: Expression): Set<String> {
         val usedVars = mutableSetOf<String>()
 
-        // Forward declaration via late init
         lateinit var collectFromExpression: (Expression) -> Unit
         lateinit var collectFromLiteral: (Literal) -> Unit
 
@@ -619,11 +643,9 @@ class EndpointBddGenerator(
                     override fun visitBoolean(b: Boolean) {}
 
                     override fun visitString(value: Template) {
-                        // For templates, we need to extract the dynamic parts
                         val parts =
                             value.accept(
-                                object :
-                                    TemplateVisitor<Expression?> {
+                                object : TemplateVisitor<Expression?> {
                                     override fun visitStaticTemplate(value: String) = null
 
                                     override fun visitSingleDynamicTemplate(expr: Expression) = expr
@@ -656,25 +678,17 @@ class EndpointBddGenerator(
         collectFromExpression = { expr ->
             expr.accept(
                 object : ExpressionVisitor<Unit> {
-                    override fun visitLiteral(literal: Literal) {
-                        collectFromLiteral(literal)
-                    }
+                    override fun visitLiteral(literal: Literal) = collectFromLiteral(literal)
 
                     override fun visitRef(reference: Reference) {
                         usedVars.add(reference.name.rustName())
                     }
 
-                    override fun visitGetAttr(getAttr: GetAttr) {
-                        collectFromExpression(getAttr.target)
-                    }
+                    override fun visitGetAttr(getAttr: GetAttr) = collectFromExpression(getAttr.target)
 
-                    override fun visitIsSet(target: Expression) {
-                        collectFromExpression(target)
-                    }
+                    override fun visitIsSet(target: Expression) = collectFromExpression(target)
 
-                    override fun visitNot(not: Expression) {
-                        collectFromExpression(not)
-                    }
+                    override fun visitNot(not: Expression) = collectFromExpression(not)
 
                     override fun visitBoolEquals(
                         left: Expression,
@@ -702,20 +716,38 @@ class EndpointBddGenerator(
             )
         }
 
+        collectFromExpression(root)
+        return usedVars
+    }
+
+    /**
+     * Collect all variables (params and context refs) used in a condition's body expression.
+     * The assigned variable (if any) is also included so that its binding is emitted for
+     * the subsequent `*assigned = ...` write.
+     */
+    private fun collectUsedVariables(cond: Condition): Set<String> {
+        val used = collectUsedVariablesFromExpression(cond.function).toMutableSet()
+        cond.result.orElse(null)?.rustName()?.let { used.add(it) }
+        return used
+    }
+
+    /**
+     * Collect all variables (params and context refs) used in a rule.
+     */
+    private fun collectUsedVariables(rule: Rule): Set<String> {
+        val exprs = mutableListOf<Expression>()
         when (rule) {
             is EndpointRule -> {
-                val endpoint = rule.endpoint
-                collectFromExpression(endpoint.url)
-                endpoint.headers.values.forEach { values -> values.forEach { collectFromExpression(it) } }
-                endpoint.properties.values.forEach { collectFromExpression(it) }
+                exprs.add(rule.endpoint.url)
+                rule.endpoint.headers.values.forEach { values -> values.forEach { exprs.add(it) } }
+                rule.endpoint.properties.values.forEach { exprs.add(it) }
             }
 
-            is ErrorRule -> {
-                collectFromExpression(rule.error)
-            }
+            is ErrorRule -> exprs.add(rule.error)
         }
-
-        return usedVars
+        val out = mutableSetOf<String>()
+        exprs.forEach { out.addAll(collectUsedVariablesFromExpression(it)) }
+        return out
     }
 
     /**
@@ -920,8 +952,15 @@ class EndpointBddGenerator(
             var memberDefs =
                 varRefs.map { entry ->
                     val ref = entry.value
-                    val rustType = inferContextMemberType(ref, registry)
-                    formatContextMember(ref.name, rustType)
+                    if (ref.isBorrowedStr) {
+                        // Bypass the RuntimeType-based inferContextMemberType path:
+                        // there is no RuntimeType representation for `&'a str` since
+                        // RuntimeType cannot carry a lifetime. Emit the field directly.
+                        "pub(crate) ${ref.name}: Option<&'a str>"
+                    } else {
+                        val rustType = inferContextMemberType(ref, registry)
+                        formatContextMember(ref.name, rustType)
+                    }
                 }.joinToString(",\n")
 
             if (memberDefs.isNotEmpty()) {
@@ -1051,6 +1090,16 @@ class AnnotatedRefs(
         // These two are only present when RefType == Variable
         val condition: Condition?,
         val type: Type?,
+        /**
+         * True when this ref is a String-typed SSA variable whose assignment chain
+         * traces back to a parameter (via only borrow-preserving operations: direct
+         * references to params and GetAttr chains). Such refs are stored in the
+         * context as `Option<&'a str>` instead of `Option<String>` so that downstream
+         * consumers (notably [aws.parseArn]) can produce values carrying the outer
+         * `'a` lifetime and fit back into the lifetime-parameterized context fields
+         * without forming a self-referential struct.
+         */
+        val isBorrowedStr: Boolean = false,
     )
 
     operator fun get(name: String): AnnotatedRef? = refs[name]
@@ -1110,12 +1159,60 @@ class AnnotatedRefs(
                             else -> matchRuleTypeToRustType(returnType, runtimeConfig)
                         }
 
+                    // Detect borrow-preserving String assignments so we can store the
+                    // variable as `Option<&'a str>` and skip the clone on assignment.
+                    // See the doc on AnnotatedRef.isBorrowedStr for the motivation.
+                    //
+                    // Use `cond.function.type()` (the typechecked return type for this
+                    // specific call) rather than `functionDefinition.returnType` (which
+                    // is generic for polymorphic functions like `getAttr`). For
+                    // `getAttr(List<String>, "[0]")` the former reports `Optional<String>`
+                    // while the latter reports a type variable.
+                    val resolvedType =
+                        try {
+                            cond.function.type().let { if (it is OptionalType) it.inner() else it }
+                        } catch (_: RuntimeException) {
+                            null
+                        }
+                    val isBorrowedStr =
+                        resolvedType is StringType && isBorrowPreservingExpr(cond.function, refs)
+
                     refs[result.rustName()] =
-                        AnnotatedRef(result.rustName(), RefType.Variable, true, runtimeType, cond, returnType)
+                        AnnotatedRef(
+                            result.rustName(),
+                            RefType.Variable,
+                            true,
+                            runtimeType,
+                            cond,
+                            returnType,
+                            isBorrowedStr,
+                        )
                 }
             }
 
             return AnnotatedRefs(refs)
         }
+
+        /**
+         * Returns true if [expr] is a chain of references / GetAttr operations rooted
+         * at a parameter (or another already-marked borrow-preserving variable).
+         *
+         * Such an expression, when generated without an intermediate `.cloned()`,
+         * produces a value whose lifetime flows from the parameters (outer `'a`).
+         * Functions (coalesce, substring, parseArn, ...) are excluded because they
+         * return owned data or types with their own lifetime parameter.
+         */
+        private fun isBorrowPreservingExpr(
+            expr: Expression,
+            refs: Map<String, AnnotatedRef>,
+        ): Boolean =
+            when (expr) {
+                is Reference -> {
+                    val ref = refs[expr.name.rustName()]
+                    ref?.refType == RefType.Parameter || ref?.isBorrowedStr == true
+                }
+                is GetAttr -> isBorrowPreservingExpr(expr.target, refs)
+                else -> false
+            }
     }
 }
