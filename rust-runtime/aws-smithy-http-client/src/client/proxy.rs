@@ -519,6 +519,34 @@ impl ProxyConfig {
     }
 }
 
+/// Inject `Proxy-Authorization` for an HTTP-through-proxy request when
+/// `matcher` carries credentials for the request URI. HTTPS-through-proxy
+/// uses CONNECT tunneling and authenticates during tunnel setup, so this
+/// is a no-op for HTTPS URIs. Existing `Proxy-Authorization` headers are
+/// preserved.
+pub(crate) fn add_proxy_auth_header(
+    request: &mut http_1x::Request<aws_smithy_types::body::SdkBody>,
+    matcher: &Matcher,
+) {
+    if request.uri().scheme() != Some(&http_1x::uri::Scheme::HTTP) {
+        return;
+    }
+    if request
+        .headers()
+        .contains_key(http_1x::header::PROXY_AUTHORIZATION)
+    {
+        return;
+    }
+    if let Some(intercept) = matcher.intercept(request.uri()) {
+        if let Some(auth_header) = intercept.basic_auth() {
+            request
+                .headers_mut()
+                .insert(http_1x::header::PROXY_AUTHORIZATION, auth_header.clone());
+            tracing::debug!(uri = %request.uri(), "added proxy authentication header");
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
