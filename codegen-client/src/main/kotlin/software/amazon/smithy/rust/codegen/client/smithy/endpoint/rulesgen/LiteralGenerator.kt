@@ -31,11 +31,18 @@ import java.util.stream.Stream
  * assigned variables correctly generates an `if let Some(inner) = ... { inner.attr() }` unwrap.
  * When omitted, the tree-based [ExpressionGenerator] is used, preserving existing behavior for
  * callers that do not need BDD-specific optional-ref tracking.
+ *
+ * [multipartExprGenerator] is an optional callback used **only** for dynamic elements inside
+ * a multipart template (the `out.push_str(&...)` parts). When omitted, [exprGenerator] is used.
+ * BDD-mode callers can use this to apply optional-unwrapping (e.g. `.as_deref().unwrap_or_default()`)
+ * for `&str`-typed `push_str` arguments while keeping the single-dynamic-template case
+ * (`"{ref}"`) Option-typed for the outer caller's `if let Some(param) = ...` wrappers.
  */
 class LiteralGenerator(
     private val ownership: Ownership,
     private val context: Context,
     private val exprGenerator: ((Expression, Ownership) -> Writable)? = null,
+    private val multipartExprGenerator: ((Expression, Ownership) -> Writable)? = null,
 ) :
     LiteralVisitor<Writable> {
     private val runtimeConfig = context.runtimeConfig
@@ -52,6 +59,13 @@ class LiteralGenerator(
         exprGenerator?.invoke(expr, exprOwnership)
             ?: ExpressionGenerator(exprOwnership, context).generate(expr)
 
+    private fun renderMultipartExpression(
+        expr: Expression,
+        exprOwnership: Ownership,
+    ): Writable =
+        multipartExprGenerator?.invoke(expr, exprOwnership)
+            ?: renderTemplateExpression(expr, exprOwnership)
+
     override fun visitBoolean(b: Boolean) =
         writable {
             rust(b.toString())
@@ -61,9 +75,15 @@ class LiteralGenerator(
         writable {
             val parts: Stream<Writable> =
                 value.accept(
-                    TemplateGenerator(ownership) { expr, templateOwnership ->
-                        renderTemplateExpression(expr, templateOwnership)
-                    },
+                    TemplateGenerator(
+                        ownership,
+                        { expr, templateOwnership ->
+                            renderTemplateExpression(expr, templateOwnership)
+                        },
+                        { expr, templateOwnership ->
+                            renderMultipartExpression(expr, templateOwnership)
+                        },
+                    ),
                 )
             parts.forEach { part -> part(this) }
         }

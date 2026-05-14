@@ -125,28 +125,45 @@ class BddExpressionGenerator(
             // optional assigned variables inside a template string (e.g. "{PartitionResult#attr}")
             // receives the same `if let Some(inner) = ...` unwrap as GetAttr outside a template.
             //
-            // Inside templates, dynamic parts feed into `out.push_str(&...)` under forced-Borrowed
-            // ownership (see TemplateGenerator.visitDynamicElement). That means any expression
-            // rendered here must produce a `&str`-compatible borrow. BDD mode flattens
-            // condition evaluation into match arms without the tree-based resolver's outer
-            // `if let Some(x) = x` wrappers, so an optional String reference like `region`
+            // For **multipart** templates the dynamic parts feed into `out.push_str(&...)` under
+            // forced-Borrowed ownership (see TemplateGenerator.visitDynamicElement). That means
+            // any expression rendered there must produce a `&str`-compatible borrow. BDD mode
+            // flattens condition evaluation into match arms without the tree-based resolver's
+            // outer `if let Some(x) = x` wrappers, so an optional String reference like `region`
             // (typed `&Option<String>`) needs an explicit `as_deref().unwrap_or_default()` to
             // reach `&str`. The BDD's control flow guarantees the ref is Some on any path
             // reaching this condition (prior `isSet(...)` condition edges filter None cases).
+            //
+            // For **single-dynamic** templates (`"{ref}"`) the whole template result IS the
+            // inner expression's value. Outer callers (e.g. `wrapDefaultArg`) wrap it in
+            // `if let Some(param) = ... { param } else { return false }`, expecting an
+            // Option-typed value. We must NOT eagerly unwrap there — fall through to the
+            // default tree-mode generator which preserves the Option layer.
             return literal.accept(
-                LiteralGenerator(ownership, context) { expr, templateOwnership ->
-                    when {
-                        expr is Reference &&
-                            templateOwnership == Ownership.Borrowed &&
-                            isOptionalRef(expr) &&
-                            isStringTypedRef(expr) ->
-                            writable {
-                                rust("${refs.resolveName(expr.name)}.as_deref().unwrap_or_default()")
-                            }
-                        else ->
-                            createChildGenerator(templateOwnership).generateExpression(expr)
-                    }
-                },
+                LiteralGenerator(
+                    ownership,
+                    context,
+                    // single-dynamic and outer-template path: delegate to the BDD child generator
+                    // (which preserves Option for bare references and unwraps Option-typed GetAttr).
+                    { expr, templateOwnership ->
+                        createChildGenerator(templateOwnership).generateExpression(expr)
+                    },
+                    // multipart `out.push_str(&...)` path: optional String references get an explicit
+                    // `as_deref().unwrap_or_default()` because they're going through `&str` push_str.
+                    { expr, templateOwnership ->
+                        when {
+                            expr is Reference &&
+                                templateOwnership == Ownership.Borrowed &&
+                                isOptionalRef(expr) &&
+                                isStringTypedRef(expr) ->
+                                writable {
+                                    rust("${refs.resolveName(expr.name)}.as_deref().unwrap_or_default()")
+                                }
+                            else ->
+                                createChildGenerator(templateOwnership).generateExpression(expr)
+                        }
+                    },
+                ),
             )
         }
 
