@@ -30,7 +30,7 @@ use super::BoxError;
 /// cloned into individual layers (the H1/H2 handshake services) at
 /// construction.
 ///
-/// Cheap to clone — one `Arc` per primitive.
+/// Cheap to clone (one `Arc` per primitive).
 #[derive(Clone)]
 pub(crate) struct PoolHooks {
     conn_id_counter: Arc<std::sync::atomic::AtomicU64>,
@@ -58,7 +58,7 @@ impl PoolHooks {
 ///
 /// Target type is `ConnectCtx`: the inner TCP connector is `Service<Uri>`,
 /// so this layer extracts `ctx.uri` to pass through. Per-operation timeouts
-/// on the context are applied here — `connect_timeout` wraps the inner
+/// on the context are applied here: `connect_timeout` wraps the inner
 /// connector call (which includes TCP + TLS since the inner is the
 /// TLS-wrapped connector). Cache hits skip this layer entirely, so
 /// `connect_timeout` is automatically new-connection-only.
@@ -178,7 +178,7 @@ impl Service<http_1x::Request<SdkBody>> for H1SendRequest {
 
 /// Tower `Service` adapter for `hyper::client::conn::http2::SendRequest`.
 ///
-/// Clone is supported — HTTP/2 multiplexes requests over a single connection.
+/// Clone is supported because HTTP/2 multiplexes requests over a single connection.
 #[derive(Clone)]
 pub(crate) struct H2SendRequest {
     inner: hyper::client::conn::http2::SendRequest<SdkBody>,
@@ -211,12 +211,14 @@ impl Service<http_1x::Request<SdkBody>> for H2SendRequest {
 /// Extract `ConnectionInfo` from a just-connected IO stream.
 fn capture_info<IO: Connection>(io: &IO) -> ConnectionInfo {
     let connected = io.connected();
+    let is_proxied = connected.is_proxied();
     let mut extras = http_1x::Extensions::new();
     connected.get_extras(&mut extras);
     let http_info = extras.get::<HttpInfo>();
     ConnectionInfo {
         remote_addr: http_info.map(|i| i.remote_addr()),
         local_addr: http_info.map(|i| i.local_addr()),
+        is_proxied,
     }
 }
 
@@ -229,7 +231,7 @@ fn spawn_driver(future: impl Future<Output = ()> + Send + 'static) {
 
 /// Connects and performs an HTTP/1.1 handshake.
 ///
-/// The connector is expected to return `(IO, Arc<ConnectionPermit>)` — typically
+/// The connector is expected to return `(IO, Arc<ConnectionPermit>)`, typically
 /// produced by [`ConnectionLimit`] wrapping a TCP/TLS connector.
 pub(crate) struct H1ConnectAndHandshake<C> {
     connector: C,
@@ -317,7 +319,7 @@ where
 /// Connects and performs an HTTP/2 handshake.
 ///
 /// Pinned to `Service<()>` because this service sits in the Negotiate
-/// upgrade path — the connection is already established via the shared
+/// upgrade path: the connection is already established via the shared
 /// `Inspected` slot.
 pub(crate) struct H2ConnectAndHandshake<C> {
     connector: C,
@@ -463,7 +465,7 @@ mod tests {
     }
 
     /// Without a connect_timeout set, `ConnectionLimit` passes through the
-    /// connector call with no wrapping — verify the absence of a timeout
+    /// connector call with no wrapping. Verify the absence of a timeout
     /// means the slow connector stays pending (we just check we can start
     /// the call; with `start_paused`, nothing advances so the future is
     /// still pending after a short yield).

@@ -20,7 +20,7 @@ mod vendored_cache;
 ///
 /// Re-exports [`vendored_cache`], our vendored copy of hyper-util's
 /// `pool::cache` with SDK-specific modifications. The re-export insulates
-/// callers from the vendoring detail — all pool code uses `cache::…`
+/// callers from the vendoring detail; all pool code uses `cache::…`
 /// regardless of where the implementation lives.
 mod cache {
     pub(crate) use super::vendored_cache::*;
@@ -66,7 +66,7 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 /// Write-once per request: `H{1,2}Checkout::call` sets it exactly once
 /// during checkout. Subsequent sets are no-ops (the `OnceLock` guarantees
 /// single-init). Retries produce fresh `HttpConnector::call` invocations
-/// which create fresh capture slots — each attempt's metadata points at
+/// which create fresh capture slots; each attempt's metadata points at
 /// the connection used for that attempt.
 #[derive(Clone, Default)]
 pub(crate) struct ConnectionMetadataCapture {
@@ -97,7 +97,7 @@ impl ConnectionMetadataCapture {
 /// Pool-level configuration.
 ///
 /// Plumbed from the eventual `Builder::new_v2()` public API through
-/// `build_pool` to `ConnectionPool`. Internal type — the public surface
+/// `build_pool` to `ConnectionPool`. Internal type: the public surface
 /// is the builder's per-knob setters, not this struct.
 ///
 /// All fields are `None` by default (defaults applied by the pool where
@@ -139,13 +139,13 @@ impl PoolKey {
 
 /// Type-erased handle to one Negotiate leg's eviction interface.
 ///
-/// Each `TypedPoolEntry` holds at most two of these — one for its H1 cache,
-/// one for its H2 singleton. The two underlying types (`Cache<…>` and
+/// Each `TypedPoolEntry` holds at most two of these (one for its H1 cache,
+/// one for its H2 singleton). The two underlying types (`Cache<…>` and
 /// `Singleton<…>`) carry upstream-unnameable parameters from `Negotiate`,
 /// so they're captured inside `Box<dyn Fn>` closures. The closures are
 /// `Fn` (so multiple callers can invoke through `Arc<dyn Fn>`); interior
 /// mutability lives in a `std::sync::Mutex` over a clone of the leg, which
-/// is uncontended in practice — retain runs at most once per
+/// is uncontended in practice; retain runs at most once per
 /// `max(pool_idle_timeout, MIN_EVICTION_TICK)`, and the leg's own state
 /// already serializes through its internal `Arc<Mutex<Shared>>`.
 pub(crate) struct BoxedRetainer {
@@ -201,7 +201,7 @@ where
             // checkout. Clones share the underlying slot.
             let h2_ref = H2ConnectionRef::new();
 
-            // Bounded at two — the H1 fallback and H2 upgrade `layer_fn`s
+            // Bounded at two: the H1 fallback and H2 upgrade `layer_fn`s
             // each push one entry on first construction.
             let retainers: RetainerSlot = Arc::new(Mutex::new(Vec::with_capacity(2)));
 
@@ -375,7 +375,7 @@ pub(crate) struct ConnectionPool {
     /// with `Canceled`, and the task exits its `select!` loop.
     ///
     /// `OnceLock` because the task spawns lazily on first `send_request`
-    /// — at most one task per pool. The task additionally holds a
+    /// (at most one task per pool). The task additionally holds a
     /// `Weak<ConnectionPool>` as a fallback exit signal.
     drop_notifier: OnceLock<oneshot::Sender<Infallible>>,
 }
@@ -392,7 +392,7 @@ impl ConnectionPool {
     /// `ctx` carries the routing URI plus per-operation connect-time data
     /// (connect_timeout). Per-operation read_timeout, if any, must be
     /// attached to `req.extensions_mut()` as [`ReadTimeoutHint`] before
-    /// calling — the checkout services read it from there.
+    /// calling; the checkout services read it from there.
     ///
     /// Takes `self: &Arc<Self>` so the lazy eviction task can hold a
     /// `Weak<Self>` as a fallback exit signal (primary exit is the drop
@@ -413,7 +413,7 @@ impl ConnectionPool {
 
         // Dispatch the request through the per-host entry. The lock is
         // held only long enough to look up / create the entry and call
-        // `send` — all I/O happens in the returned future, outside the
+        // `send`; all I/O happens in the returned future, outside the
         // lock.
         let fut = {
             let mut hosts = self.hosts.lock().unwrap();
@@ -451,7 +451,7 @@ impl ConnectionPool {
             return;
         }
         let (tx, rx) = oneshot::channel::<Infallible>();
-        // Invariant: this code path runs exactly once per pool — the
+        // Invariant: this code path runs exactly once per pool; the
         // `compare_exchange` on `eviction_spawned` above is the unique
         // claim. If `drop_notifier` is already populated, that invariant
         // is broken.
@@ -507,7 +507,7 @@ impl ConnectionPool {
 ///    older than `timeout`, and remove host entries whose retainers
 ///    report empty.
 ///
-/// Tick interval is `max(timeout, MIN_EVICTION_TICK)` — the floor exists
+/// Tick interval is `max(timeout, MIN_EVICTION_TICK)`. The floor exists
 /// so a very short `pool_idle_timeout` doesn't spin the task hot.
 /// Connections live on average between 1× and 2× the tick interval past
 /// last use (sawtooth eviction).
@@ -517,7 +517,7 @@ impl ConnectionPool {
 ///   `ConnectionPool` drops, the receiver errors with `Canceled`, the
 ///   `select!` left branch fires, the task exits immediately.
 /// - Secondary: `Weak::upgrade` returns `None`. Belt-and-suspenders for
-///   the unlikely case that the notifier didn't fire — the task will
+///   the unlikely case that the notifier didn't fire; the task will
 ///   exit on the next tick.
 async fn eviction_task(
     pool: std::sync::Weak<ConnectionPool>,
@@ -544,6 +544,49 @@ async fn eviction_task(
     tracing::trace!("v2 pool eviction task exiting");
 }
 
+/// Rewrite an HTTP/1.1 request's URI to the appropriate request-target
+/// form for dispatch:
+///
+/// - `CONNECT` → authority-form (`host:port`)
+/// - proxied non-CONNECT → absolute-form (full URL with scheme + authority)
+/// - direct non-CONNECT → origin-form (path + query only)
+///
+/// Mirrors `hyper-util`'s legacy `client::Client::send_request` request
+/// preparation. Required because `hyper::client::conn::http1` sends the
+/// URI as-is; the form selection lives in the layer above the
+/// connection.
+fn rewrite_h1_request_target(req: &mut http_1x::Request<SdkBody>, is_proxied: bool) {
+    use http_1x::{uri::Parts, Method, Uri};
+    if req.method() == Method::CONNECT {
+        // Authority-form: keep just the authority component.
+        if let Some(auth) = req.uri().authority().cloned() {
+            let mut parts = Parts::default();
+            parts.authority = Some(auth);
+            *req.uri_mut() = Uri::from_parts(parts).expect("authority is valid uri");
+        }
+        return;
+    }
+    if is_proxied {
+        // Absolute-form: leave the URI as-is (scheme + authority + path).
+        return;
+    }
+    // Origin-form: strip scheme + authority, keep path + query (defaulting
+    // to "/" if the URI had nothing after the authority).
+    let path_and_query = req
+        .uri()
+        .path_and_query()
+        .filter(|p| p.as_str() != "/")
+        .cloned();
+    *req.uri_mut() = match path_and_query {
+        Some(pq) => {
+            let mut parts = Parts::default();
+            parts.path_and_query = Some(pq);
+            Uri::from_parts(parts).expect("path-and-query is valid uri")
+        }
+        None => Uri::default(),
+    };
+}
+
 /// Tower `Service` wrapper for an H1 pool checkout.
 ///
 /// Produced by the H1 fallback leg (one per checkout from the cache).
@@ -562,7 +605,7 @@ async fn eviction_task(
 /// H2 checkout, but both legs must produce the same `CheckoutResponse<…>`
 /// so `Negotiate` can compose them uniformly. The phantom slot here is
 /// whatever type the H2 leg's `SingletonConnection` holds, resolved by
-/// type inference at the pool composition site — this wrapper ignores it.
+/// type inference at the pool composition site; this wrapper ignores it.
 pub(crate) struct H1Checkout<UnusedH2Phantom> {
     conn: Option<CachedConnection<H1SendRequest>>,
     _marker: std::marker::PhantomData<fn() -> UnusedH2Phantom>,
@@ -599,6 +642,12 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
         }
         // Read-timeout hint: bounds request-write + response-headers only.
         let read_timeout = req.extensions().get::<ReadTimeoutHint>().cloned();
+        let mut req = req;
+        // HTTP/1.1 request-target form depends on whether we're talking to
+        // a proxy or directly to the origin. CONNECT always uses
+        // authority-form; otherwise proxied = absolute-form, direct =
+        // origin-form. Matches `hyper-util`'s legacy client behavior.
+        rewrite_h1_request_target(&mut req, conn.is_proxied());
         Box::pin(async move {
             let send_fut = conn.call(req);
             let resp = super::timeout::maybe_timeout_future(
@@ -755,7 +804,7 @@ where
             //     Err flips `is_closed` so `Cached::Drop` skips reinsertion,
             //     shrinking the set by one.
             //   - Singleton clears to `Empty` on `poll_ready` Err, forcing
-            //     the next `call` to run a fresh handshake — a handshake
+            //     the next `call` to run a fresh handshake; a handshake
             //     failure surfaces as an error from `svc.call` (not the
             //     inner `poll_ready`), which we propagate.
             let mut conn = loop {
