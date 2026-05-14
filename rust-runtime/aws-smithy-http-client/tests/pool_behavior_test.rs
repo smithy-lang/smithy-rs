@@ -1091,3 +1091,142 @@ async fn v2_read_timeout_fires_on_silent_server() {
 async fn v2_read_timeout() {
     v2_read_timeout_fires_on_silent_server().await;
 }
+
+// ---------------------------------------------------------------------------
+// Tracing-assertion tests for the background eviction task.
+//
+// These are v2-only because they assert on internal tracing events that the
+// v2 pool emits. The existing `v2_idle_timeout_eviction` test proves eviction
+// works end-to-end (new TCP on second request), but doesn't distinguish the
+// background task from checkout-time filtering. These tests assert the
+// background task specifically ran without issuing a second request.
+// ---------------------------------------------------------------------------
+
+/// Capture `aws_smithy_http_client` tracing events at TRACE level for the
+/// duration of a test. ANSI color codes are explicitly disabled so string
+/// matches on fields like `reason="idle_expired"` work — the default
+/// `tracing_subscriber::fmt` output embeds ANSI escapes between the field
+/// name and value which breaks naive `contains` assertions.
+///
+/// Returns `(guard, buffer)`. The guard resets the subscriber on drop;
+/// `buffer.lock().unwrap()` yields the captured bytes.
+fn capture_pool_logs() -> (
+    tracing::subscriber::DefaultGuard,
+    std::sync::Arc<std::sync::Mutex<Vec<u8>>>,
+) {
+    use std::io::Write;
+    use std::sync::{Arc, Mutex};
+
+    struct BufWriter(Arc<Mutex<Vec<u8>>>);
+    impl Write for BufWriter {
+        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Ok(buf.len())
+        }
+        fn flush(&mut self) -> std::io::Result<()> {
+            Ok(())
+        }
+    }
+
+    let buf = Arc::new(Mutex::new(Vec::<u8>::new()));
+    let buf_clone = buf.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_ansi(false)
+        .with_max_level(tracing::Level::TRACE)
+        .with_writer(move || BufWriter(buf_clone.clone()))
+        .finish();
+    let guard = tracing::subscriber::set_default(subscriber);
+    (guard, buf)
+}
+
+fn captured_str(buf: &std::sync::Arc<std::sync::Mutex<Vec<u8>>>) -> String {
+    String::from_utf8(buf.lock().unwrap().clone()).expect("captured logs are utf-8")
+}
+
+/// Verify the background eviction task runs and emits the "connection
+/// evicted" event with `reason=idle_expired` after the idle timeout passes,
+/// without any subsequent request being made.
+///
+/// Also verifies the host entry is removed once its cache becomes empty.
+#[tokio::test]
+async fn v2_background_eviction_emits_tracing_events() {
+    let (_guard, logs) = capture_pool_logs();
+
+    let server = WireMockServer::start(vec![ReplayedEvent::status(200)]).await;
+
+    let idle_timeout = Duration::from_millis(100);
+    let client = V2Client.make(ClientConfig::default().with_idle_timeout(idle_timeout));
+    let url = localhost_url(&server);
+
+    // One request — connection established, dispatched, returned to idle.
+    let status = send_to(&client, &url)
+        .await
+        .expect("first request should succeed")
+        .status()
+        .as_u16();
+    assert_eq!(status, 200);
+
+    // Wait past idle timeout + one tick interval. No second request here —
+    // any eviction must be driven by the background task.
+    tokio::time::sleep(idle_timeout * 3).await;
+
+    let captured = captured_str(&logs);
+    assert!(
+        captured.contains("v2 pool: initialized"),
+        "expected pool init log"
+    );
+    assert!(
+        captured.contains("v2 pool: eviction task spawned"),
+        "expected eviction task spawn log"
+    );
+    assert!(
+        captured.contains("v2 pool: connection established"),
+        "expected connection-established log"
+    );
+    assert!(
+        captured.contains("v2 pool: connection evicted"),
+        "expected 'connection evicted' log — background task should have evicted the idle connection"
+    );
+    assert!(
+        captured.contains("reason=\"idle_expired\""),
+        "expected idle_expired reason. captured:\n{captured}"
+    );
+    assert!(
+        captured.contains("v2 pool: host entry removed"),
+        "expected host-entry-removed log once cache went empty"
+    );
+}
+
+/// Verify connections carry stable `conn_id` values — first established
+/// connection gets id 0, subsequent new connection (after eviction forces
+/// a fresh TCP) gets id 1.
+#[tokio::test]
+async fn v2_conn_id_is_stable_and_monotonic() {
+    let (_guard, logs) = capture_pool_logs();
+
+    let server =
+        WireMockServer::start(vec![ReplayedEvent::status(200), ReplayedEvent::status(200)]).await;
+
+    let idle_timeout = Duration::from_millis(100);
+    let client = V2Client.make(ClientConfig::default().with_idle_timeout(idle_timeout));
+    let url = localhost_url(&server);
+
+    send_to(&client, &url).await.expect("first request");
+    tokio::time::sleep(idle_timeout * 3).await;
+    send_to(&client, &url).await.expect("second request");
+
+    let captured = captured_str(&logs);
+    assert!(
+        captured.contains("v2 pool: connection established"),
+        "no 'connection established' log captured"
+    );
+    assert!(
+        captured.contains("conn_id=0"),
+        "first connection should be conn_id=0. captured:\n{captured}"
+    );
+    assert!(
+        captured.contains("conn_id=1"),
+        "second connection (after eviction) should be conn_id=1. captured:\n{captured}"
+    );
+    assert!(captured.contains("v2 pool: connection evicted"));
+}
