@@ -128,6 +128,15 @@ impl MakeClient for Hyper1xClient {
     }
 }
 
+/// v2 HTTP client (composable pool) via `BuilderV2::new_v2()`
+struct Hyper1xV2Client;
+
+impl MakeClient for Hyper1xV2Client {
+    fn make(&self, mock: &WireMockServer) -> SharedHttpClient {
+        aws_smithy_http_client::v2::BuilderV2::new().build_http_with_resolver(mock.dns_resolver())
+    }
+}
+
 /// Repeatedly send test operation until `end_of_test` is received, then run match_clause.
 async fn run_test(
     make_client: &dyn MakeClient,
@@ -225,7 +234,14 @@ async fn all_stacks(
         &match_clause,
     )
     .await;
-    run_test(&Hyper1xClient, events, reconnect_mode, &match_clause).await;
+    run_test(
+        &Hyper1xClient,
+        events.clone(),
+        reconnect_mode,
+        &match_clause,
+    )
+    .await;
+    run_test(&Hyper1xV2Client, events, reconnect_mode, &match_clause).await;
 }
 
 #[tokio::test]

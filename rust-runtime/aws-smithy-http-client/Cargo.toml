@@ -138,6 +138,8 @@ tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "te
 tokio-rustls = "0.26.2"
 # used by tests vendored from hyper-util in src/client/pool/vendored_cache.rs
 tower-test = "0.4"
+# Test-only ANSI-free subscriber for capturing pool tracing events in assertions.
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 
 [[example]]
