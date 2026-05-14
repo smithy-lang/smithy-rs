@@ -122,10 +122,7 @@ impl<Tls> BuilderV2<Tls> {
     }
 
     /// Mutable-reference variant of [`proxy_config`](Self::proxy_config).
-    pub fn set_proxy_config(
-        &mut self,
-        config: Option<super::proxy::ProxyConfig>,
-    ) -> &mut Self {
+    pub fn set_proxy_config(&mut self, config: Option<super::proxy::ProxyConfig>) -> &mut Self {
         self.proxy_config = config;
         self
     }

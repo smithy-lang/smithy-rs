@@ -1197,7 +1197,6 @@ async fn test_connect_uri_form_s2n_tls() {
     run_connect_uri_form_test(tls::Provider::S2nTls, "s2n-tls").await;
 }
 
-
 // ================================================================================================
 // V2 client proxy parity tests
 // ================================================================================================
@@ -1324,10 +1323,9 @@ async fn test_v2_proxy_disabled_uses_direct_connection() {
     .await;
 
     let target_url = format!("http://{}/direct", direct_mock.addr());
-    let (status, body) =
-        make_v2_http_request_through_proxy(ProxyConfig::disabled(), &target_url)
-            .await
-            .expect("direct v2 request should succeed");
+    let (status, body) = make_v2_http_request_through_proxy(ProxyConfig::disabled(), &target_url)
+        .await
+        .expect("direct v2 request should succeed");
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, "direct response");
     assert_eq!(mock_proxy.requests().len(), 0);
@@ -1398,7 +1396,10 @@ async fn test_v2_proxy_connection_failure() {
     let proxy_config = ProxyConfig::http("http://127.0.0.1:1").unwrap();
     let result =
         make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/fail").await;
-    assert!(result.is_err(), "connection to non-existent proxy should fail");
+    assert!(
+        result.is_err(),
+        "connection to non-existent proxy should fail"
+    );
 }
 
 #[tokio::test]
@@ -1463,12 +1464,10 @@ async fn test_v2_http_proxy_absolute_uri_form() {
     .await;
 
     let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
-    let (status, _) = make_v2_http_request_through_proxy(
-        proxy_config,
-        "http://aws.amazon.com/path?query=1",
-    )
-    .await
-    .expect("request should succeed");
+    let (status, _) =
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/path?query=1")
+            .await
+            .expect("request should succeed");
     assert_eq!(status, StatusCode::OK);
 }
 
@@ -1570,7 +1569,10 @@ async fn test_v2_https_connect_with_auth() {
     )
     .await;
 
-    assert!(result.is_err(), "CONNECT tunnel should fail with 400 response");
+    assert!(
+        result.is_err(),
+        "CONNECT tunnel should fail with 400 response"
+    );
     let requests = mock_proxy.requests();
     assert_eq!(requests.len(), 1);
     assert_eq!(requests[0].method, "CONNECT");
