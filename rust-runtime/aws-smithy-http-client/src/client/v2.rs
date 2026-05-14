@@ -138,6 +138,29 @@ impl BuilderV2<TlsUnset> {
         let pool = pool::build_pool(tcp, config);
         V2HttpClient::new(pool).into_shared()
     }
+
+    /// Build an HTTP client without TLS, using a custom DNS resolver.
+    ///
+    /// Mirrors `build_http` but threads a custom `ResolveDns`. Intended
+    /// for tests that use `WireMockServer::dns_resolver()` to redirect
+    /// all lookups to a loopback mock. Public API for non-TLS resolver
+    /// plumbing is `#[doc(hidden)]` — TLS is the common case.
+    #[doc(hidden)]
+    pub fn build_http_with_resolver(
+        self,
+        resolver: impl aws_smithy_runtime_api::client::dns::ResolveDns + Clone + 'static,
+    ) -> SharedHttpClient {
+        use crate::client::dns::HyperUtilResolver;
+        let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
+        tcp.set_nodelay(self.tcp_nodelay);
+        let config = PoolConfig {
+            max_connections: self.max_connections,
+            max_connections_per_host: self.max_connections_per_host,
+            pool_idle_timeout: self.pool_idle_timeout,
+        };
+        let pool = pool::build_pool(tcp, config);
+        V2HttpClient::new(pool).into_shared()
+    }
 }
 
 impl BuilderV2<TlsProviderSelected> {

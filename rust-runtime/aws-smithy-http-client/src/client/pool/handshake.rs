@@ -25,6 +25,32 @@ use tower::Service;
 use super::connection::{ConnectCtx, ConnectionInfo, ConnectionPermit, ManagedConnection};
 use super::BoxError;
 
+/// Pool-scoped instrumentation primitives shared across layers in the
+/// pool stack. Held by `ConnectionPool` for the pool's lifetime and
+/// cloned into individual layers (the H1/H2 handshake services) at
+/// construction.
+///
+/// Cheap to clone — one `Arc` per primitive.
+#[derive(Clone)]
+pub(crate) struct PoolHooks {
+    conn_id_counter: Arc<std::sync::atomic::AtomicU64>,
+}
+
+impl PoolHooks {
+    pub(crate) fn new() -> Self {
+        Self {
+            conn_id_counter: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+        }
+    }
+
+    /// Mint the next connection id. Stable for the connection's lifetime;
+    /// the underlying counter wraps at `u64::MAX`.
+    pub(crate) fn next_conn_id(&self) -> u64 {
+        self.conn_id_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+}
+
 /// Wraps a connector service, acquiring semaphore permits before connecting.
 ///
 /// Returns `(IO, Arc<ConnectionPermit>)` so the permit can be stored on
@@ -207,11 +233,12 @@ fn spawn_driver(future: impl Future<Output = ()> + Send + 'static) {
 /// produced by [`ConnectionLimit`] wrapping a TCP/TLS connector.
 pub(crate) struct H1ConnectAndHandshake<C> {
     connector: C,
+    hooks: PoolHooks,
 }
 
 impl<C> H1ConnectAndHandshake<C> {
-    pub(crate) fn new(connector: C) -> Self {
-        Self { connector }
+    pub(crate) fn new(connector: C, hooks: PoolHooks) -> Self {
+        Self { connector, hooks }
     }
 }
 
@@ -219,6 +246,7 @@ impl<C: Clone> Clone for H1ConnectAndHandshake<C> {
     fn clone(&self) -> Self {
         Self {
             connector: self.connector.clone(),
+            hooks: self.hooks.clone(),
         }
     }
 }
@@ -239,15 +267,25 @@ where
     }
 
     fn call(&mut self, ctx: ConnectCtx) -> Self::Future {
+        let hooks = self.hooks.clone();
         let fut = self.connector.call(ctx);
         Box::pin(async move {
             let (io, permit) = fut.await.map_err(Into::into)?;
             let info = capture_info(&io);
+            let conn_id = hooks.next_conn_id();
 
             let (tx, conn) = hyper::client::conn::http1::Builder::new()
                 .handshake(io)
                 .await
                 .map_err(|e| Box::new(e) as BoxError)?;
+
+            tracing::debug!(
+                conn_id,
+                protocol = "h1",
+                remote = ?info.remote_addr,
+                local = ?info.local_addr,
+                "v2 pool: connection established"
+            );
 
             spawn_driver({
                 let remote_addr = info.remote_addr;
@@ -255,6 +293,7 @@ where
                 async move {
                     if let Err(e) = conn.with_upgrades().await {
                         tracing::debug!(
+                            conn_id,
                             protocol = "h1",
                             ?remote_addr,
                             ?local_addr,
@@ -265,7 +304,12 @@ where
                 }
             });
 
-            Ok(ManagedConnection::new(H1SendRequest::new(tx), info, permit))
+            Ok(ManagedConnection::new(
+                H1SendRequest::new(tx),
+                info,
+                conn_id,
+                permit,
+            ))
         })
     }
 }
@@ -278,6 +322,7 @@ where
 pub(crate) struct H2ConnectAndHandshake<C> {
     connector: C,
     h2_ref: super::connection::H2ConnectionRef,
+    hooks: PoolHooks,
 }
 
 impl<C> H2ConnectAndHandshake<C> {
@@ -287,8 +332,16 @@ impl<C> H2ConnectAndHandshake<C> {
     /// the underlying slot), so the H2 checkout path can expose connection
     /// metadata and poison support to the adapter layer even though
     /// `Singled<…>` itself is opaque.
-    pub(crate) fn new(connector: C, h2_ref: super::connection::H2ConnectionRef) -> Self {
-        Self { connector, h2_ref }
+    pub(crate) fn new(
+        connector: C,
+        h2_ref: super::connection::H2ConnectionRef,
+        hooks: PoolHooks,
+    ) -> Self {
+        Self {
+            connector,
+            h2_ref,
+            hooks,
+        }
     }
 }
 
@@ -297,6 +350,7 @@ impl<C: Clone> Clone for H2ConnectAndHandshake<C> {
         Self {
             connector: self.connector.clone(),
             h2_ref: self.h2_ref.clone(),
+            hooks: self.hooks.clone(),
         }
     }
 }
@@ -319,14 +373,24 @@ where
     fn call(&mut self, _req: ()) -> Self::Future {
         let fut = self.connector.call(());
         let h2_ref = self.h2_ref.clone();
+        let hooks = self.hooks.clone();
         Box::pin(async move {
             let (io, permit) = fut.await.map_err(Into::into)?;
             let info = capture_info(&io);
+            let conn_id = hooks.next_conn_id();
 
             let (tx, conn) = hyper::client::conn::http2::Builder::new(TokioExecutor::new())
                 .handshake(io)
                 .await
                 .map_err(|e| Box::new(e) as BoxError)?;
+
+            tracing::debug!(
+                conn_id,
+                protocol = "h2",
+                remote = ?info.remote_addr,
+                local = ?info.local_addr,
+                "v2 pool: connection established"
+            );
 
             spawn_driver({
                 let remote_addr = info.remote_addr;
@@ -334,6 +398,7 @@ where
                 async move {
                     if let Err(e) = conn.await {
                         tracing::debug!(
+                            conn_id,
                             protocol = "h2",
                             ?remote_addr,
                             ?local_addr,
@@ -344,11 +409,16 @@ where
                 }
             });
 
-            let managed = ManagedConnection::new(H2SendRequest::new(tx), info, permit);
-            // Publish this connection's metadata for the checkout side.
-            // Singleton replaces its stored connection wholesale on each new
-            // handshake, so last-writer-wins on the ref is correct.
-            h2_ref.publish(managed.metadata());
+            let managed = ManagedConnection::new(H2SendRequest::new(tx), info, conn_id, permit);
+            // Publish this connection's state (metadata + active_streams +
+            // idle_at refs) for the checkout side. Singleton replaces its
+            // stored connection wholesale on each new handshake, so
+            // last-writer-wins on the ref is correct.
+            h2_ref.publish(super::connection::H2ConnectionState {
+                metadata: managed.metadata(),
+                active_streams: managed.active_streams_ref(),
+                idle_at: managed.idle_at_ref(),
+            });
             Ok(managed)
         })
     }

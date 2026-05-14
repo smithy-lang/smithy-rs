@@ -539,6 +539,7 @@ dependencies = [
  "tower-service",
  "tower-test",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
