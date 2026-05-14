@@ -7,6 +7,7 @@ allowed_external_types = [
     "aws_smithy_async::rt::sleep::*",
     "aws_smithy_async::time::*",
     "aws_smithy_async::future::pagination_stream::PaginationStream",
+    "aws_smithy_schema::*",
     # only allowed in from impl for presigned request
     "http::request::Request",
 

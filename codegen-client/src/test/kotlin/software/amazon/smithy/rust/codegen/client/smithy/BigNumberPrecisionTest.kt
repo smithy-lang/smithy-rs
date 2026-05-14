@@ -6,12 +6,119 @@
 package software.amazon.smithy.rust.codegen.client.smithy
 
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.rawRust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 
 class BigNumberPrecisionTest {
+    /**
+     * Emits the Rust body for a JSON round-trip test, selecting between the
+     * legacy `protocol_serde::shape_*` path and the schema-serde path based on
+     * whether `SchemaSerdeAllowlist.usesSchemaSerdeExclusively` is true for
+     * the generated service. The two paths produce identically-named locals
+     * (`serialized: String`, `output: TestOpOutput`) so the surrounding
+     * assertions stay the same.
+     *
+     * @param useSchema whether the service is generated via the schema-serde
+     *   path (determined by consulting [SchemaSerdeAllowlist]).
+     * @param codecConstructor Rust expression that constructs the `JsonCodec`
+     *   for this protocol (e.g. `JsonCodec::default()` for awsJson, or
+     *   `JsonCodec::new(JsonCodecSettings::builder().use_json_name(true).build())`
+     *   for restJson1). Ignored when `useSchema` is false.
+     */
+    private fun jsonRoundTripBody(
+        useSchema: Boolean,
+        codecConstructor: String,
+    ): String {
+        val schemaImports =
+            if (useSchema) {
+                // Only the types actually used in every schema-serde path go here.
+                // `JsonCodecSettings` (restJson1-only) is referenced via a
+                // fully-qualified path in `codecConstructor` to avoid an
+                // `unused_imports` warning on the awsJson path.
+                """
+                use aws_smithy_json::codec::JsonCodec;
+                use aws_smithy_schema::serde::ShapeSerializer;
+                use aws_smithy_schema::codec::Codec;
+                """.trimIndent()
+            } else {
+                ""
+            }
+
+        val serBlock =
+            if (useSchema) {
+                """
+                let codec = $codecConstructor;
+                let mut ser = codec.create_serializer();
+                ser.write_struct(&crate::operation::test_op::TestOpInput::SCHEMA, &input).unwrap();
+                let json_body = ser.finish();
+                let serialized = String::from_utf8(json_body).unwrap();
+                """.trimIndent()
+            } else {
+                """
+                let json_body = crate::protocol_serde::shape_test_op::ser_test_op_input(&input).unwrap();
+                let serialized = String::from_utf8(json_body.bytes().unwrap().to_vec()).unwrap();
+                """.trimIndent()
+            }
+
+        val deserBlock =
+            if (useSchema) {
+                // `codec` from the ser block above is reused here.
+                """
+                let mut deser = codec.create_deserializer(json_response.as_bytes());
+                let output = crate::operation::test_op::TestOpOutput::deserialize(&mut deser).unwrap();
+                """.trimIndent()
+            } else {
+                """
+                let headers = ::aws_smithy_runtime_api::http::Headers::new();
+                let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
+                    200,
+                    &headers,
+                    json_response.as_bytes()
+                ).unwrap();
+                """.trimIndent()
+            }
+
+        return (
+            """
+            use aws_smithy_types::{BigInteger, BigDecimal};
+            use std::str::FromStr;
+            $schemaImports
+
+            // Test values that exceed native type limits
+            let big_int_str = "99999999999999999999999999";  // > u64::MAX
+            let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision (15-17 digits)
+            let big_dec_magnitude_str = "1.8e308";  // > f64::MAX - tokenizer uses NaN for validation
+
+            // Test 1: High precision BigDecimal
+            let input = crate::operation::test_op::TestOpInput::builder()
+                .big_int(BigInteger::from_str(big_int_str).unwrap())
+                .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
+                .build()
+                .unwrap();
+
+            $serBlock
+
+            assert!(serialized.contains(big_int_str));
+            assert!(serialized.contains(big_dec_precision_str));
+
+            // Test 2: Large magnitude BigDecimal (> f64::MAX)
+            let mut json_response = String::from(r#"{"bigInt":"#);
+            json_response.push_str(big_int_str);
+            json_response.push_str(r#","bigDec":"#);
+            json_response.push_str(big_dec_magnitude_str);
+            json_response.push('}');
+
+            $deserBlock
+
+            assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
+            assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
+            """.trimIndent()
+        )
+    }
+
     @Test
     fun `test BigInteger and BigDecimal round trip through serializers with restJson1`() {
         val model =
@@ -42,55 +149,27 @@ class BigNumberPrecisionTest {
             }
             """.asSmithyModel()
 
-        clientIntegrationTest(model) { _, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.unitTest("big_number_round_trip") {
-                rawRust(
-                    """
-                    use aws_smithy_types::{BigInteger, BigDecimal};
-                    use std::str::FromStr;
-
-                    // Test values that exceed native type limits
-                    let big_int_str = "99999999999999999999999999";  // > u64::MAX
-                    let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision (15-17 digits)
-                    let big_dec_magnitude_str = "1.8e308";  // > f64::MAX - tokenizer uses NaN for validation
-
-                    // Test 1: High precision BigDecimal
-                    let input = crate::operation::test_op::TestOpInput::builder()
-                        .big_int(BigInteger::from_str(big_int_str).unwrap())
-                        .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
-                        .build()
-                        .unwrap();
-
-                    let json_body = crate::protocol_serde::shape_test_op::ser_test_op_input(&input).unwrap();
-                    let serialized = String::from_utf8(json_body.bytes().unwrap().to_vec()).unwrap();
-
-                    assert!(serialized.contains(big_int_str));
-                    assert!(serialized.contains(big_dec_precision_str));
-
-                    // Test 2: Large magnitude BigDecimal (> f64::MAX)
-                    let mut json_response = String::from(r#"{"bigInt":"#);
-                    json_response.push_str(big_int_str);
-                    json_response.push_str(r#","bigDec":"#);
-                    json_response.push_str(big_dec_magnitude_str);
-                    json_response.push('}');
-
-                    let headers = ::aws_smithy_runtime_api::http::Headers::new();
-                    let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
-                        200,
-                        &headers,
-                        json_response.as_bytes()
-                    ).unwrap();
-
-                    assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
-                    assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
-                    """,
-                )
+                val useSchema = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+                // restJson1 honors @jsonName; enable it in the codec settings.
+                // `JsonCodecSettings` is fully qualified here so the shared
+                // schema imports can stay common across JSON tests.
+                val codecConstructor =
+                    "JsonCodec::new(" +
+                        "aws_smithy_json::codec::JsonCodecSettings::builder()" +
+                        ".use_json_name(true).build())"
+                rawRust(jsonRoundTripBody(useSchema, codecConstructor))
             }
         }
     }
 
     @Test
     fun `test BigInteger and BigDecimal round trip through serializers with restXml`() {
+        // restXml does not yet have a schema-serde runtime (no XmlCodec /
+        // AwsRestXmlProtocol), so this test always uses the legacy codegen
+        // path. When schema-serde support is added for restXml, this test
+        // should gain an if/else branch analogous to the JSON tests.
         val model =
             """
             namespace test
@@ -195,49 +274,12 @@ class BigNumberPrecisionTest {
             }
             """.asSmithyModel()
 
-        clientIntegrationTest(model) { _, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.unitTest("big_number_round_trip_aws_json") {
-                rawRust(
-                    """
-                    use aws_smithy_types::{BigInteger, BigDecimal};
-                    use std::str::FromStr;
-
-                    // Test values that exceed native type limits
-                    let big_int_str = "99999999999999999999999999";  // > u64::MAX
-                    let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision
-                    let big_dec_magnitude_str = "1.8e308";  // > f64::MAX
-
-                    // Test 1: High precision BigDecimal
-                    let input = crate::operation::test_op::TestOpInput::builder()
-                        .big_int(BigInteger::from_str(big_int_str).unwrap())
-                        .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
-                        .build()
-                        .unwrap();
-
-                    let json_body = crate::protocol_serde::shape_test_op::ser_test_op_input(&input).unwrap();
-                    let serialized = String::from_utf8(json_body.bytes().unwrap().to_vec()).unwrap();
-
-                    assert!(serialized.contains(big_int_str));
-                    assert!(serialized.contains(big_dec_precision_str));
-
-                    // Test 2: Large magnitude BigDecimal
-                    let mut json_response = String::from(r#"{"bigInt":"#);
-                    json_response.push_str(big_int_str);
-                    json_response.push_str(r#","bigDec":"#);
-                    json_response.push_str(big_dec_magnitude_str);
-                    json_response.push('}');
-
-                    let headers = ::aws_smithy_runtime_api::http::Headers::new();
-                    let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
-                        200,
-                        &headers,
-                        json_response.as_bytes()
-                    ).unwrap();
-
-                    assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
-                    assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
-                    """,
-                )
+                val useSchema = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+                // awsJson ignores @jsonName, so the default codec settings apply.
+                val codecConstructor = "JsonCodec::default()"
+                rawRust(jsonRoundTripBody(useSchema, codecConstructor))
             }
         }
     }
