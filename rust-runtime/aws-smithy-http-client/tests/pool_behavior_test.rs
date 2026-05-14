@@ -1230,3 +1230,47 @@ async fn v2_conn_id_is_stable_and_monotonic() {
     );
     assert!(captured.contains("v2 pool: connection evicted"));
 }
+
+// ---------------------------------------------------------------------------
+// Connect timeout
+// ---------------------------------------------------------------------------
+
+/// Proves that `connect_timeout` from `HttpConnectorSettings` fires when the
+/// TCP connection cannot be established within the deadline. Uses TEST-NET-1
+/// (192.0.2.1), a non-routable address guaranteed to black-hole SYN packets.
+#[tokio::test]
+async fn v2_connect_timeout() {
+    use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
+
+    let client = V2Client.make(ClientConfig::default());
+    let components =
+        aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(SystemTimeSource::new()))
+            .with_sleep_impl(Some(SharedAsyncSleep::new(TokioSleep::new())))
+            .build()
+            .expect("valid runtime components");
+    let settings = HttpConnectorSettings::builder()
+        .connect_timeout(Duration::from_millis(500))
+        .build();
+    let connector = client.http_connector(&settings, &components);
+
+    let start = std::time::Instant::now();
+    let err = connector
+        .call(HttpRequest::get("http://192.0.2.1:1234/unreachable").expect("valid request"))
+        .await
+        .expect_err("connect timeout should fire against non-routable address");
+    let elapsed = start.elapsed();
+
+    assert!(
+        err.is_timeout(),
+        "expected timeout classification, got {err:?}"
+    );
+    assert!(
+        elapsed >= Duration::from_millis(450),
+        "timeout fired too early ({elapsed:?})"
+    );
+    assert!(
+        elapsed < Duration::from_secs(5),
+        "timeout took too long ({elapsed:?})"
+    );
+}
