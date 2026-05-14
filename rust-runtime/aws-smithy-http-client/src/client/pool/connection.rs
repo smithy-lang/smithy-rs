@@ -24,7 +24,7 @@ use super::BoxError;
 
 /// A duration paired with the sleep implementation used to realize it.
 ///
-/// This type makes "timeout without sleep impl" unrepresentable — you cannot
+/// This type makes "timeout without sleep impl" unrepresentable: you cannot
 /// construct one without committing to a way to actually wait. Created at the
 /// adapter layer from `HttpConnectorSettings` + `RuntimeComponents::sleep_impl()`
 /// and passed down the pool stack where timeouts are applied.
@@ -52,7 +52,7 @@ impl TimeoutContext {
 pub(crate) struct ConnectCtx {
     pub(crate) uri: http_1x::Uri,
     /// Bounds new-connection establishment (TCP + TLS handshake). `None`
-    /// means no connect timeout — cached connections skip the connector
+    /// means no connect timeout; cached connections skip the connector
     /// entirely so this is automatically a no-op on cache hit.
     pub(crate) connect_timeout: Option<TimeoutContext>,
 }
@@ -71,13 +71,13 @@ impl ConnectCtx {
 ///
 /// `Some(...)` means: once the connection is selected (cache hit or fresh
 /// handshake), wrap `conn.call(req)` with this timeout. Bounds request-write
-/// + response-headers-wait only — does NOT include pool acquire or connect
+/// + response-headers-wait only. Does NOT include pool acquire or connect
 /// establishment (those have their own timeouts).
 #[derive(Clone, Debug)]
 pub(crate) struct ReadTimeoutHint(pub(crate) TimeoutContext);
 
 /// Permits acquired from connection limit semaphores.
-/// Held for the lifetime of the connection — dropped when the connection is dropped.
+/// Held for the lifetime of the connection; dropped when the connection is dropped.
 pub(crate) struct ConnectionPermit {
     _global: Option<OwnedSemaphorePermit>,
     _per_host: Option<OwnedSemaphorePermit>,
@@ -110,8 +110,8 @@ impl std::error::Error for PoisonedError {}
 
 /// Metadata about a connection captured at establishment time.
 ///
-/// Captured between TLS connector output and protocol handshake — the last point
-/// where the raw transport stream is accessible.
+/// Captured between TLS connector output and protocol handshake (the last point
+/// where the raw transport stream is accessible).
 #[derive(Debug, Clone)]
 pub(crate) struct ConnectionInfo {
     /// Remote address of the peer. `None` when the underlying connector
@@ -119,12 +119,19 @@ pub(crate) struct ConnectionInfo {
     pub(crate) remote_addr: Option<SocketAddr>,
     /// Local address of this end of the connection.
     pub(crate) local_addr: Option<SocketAddr>,
+    /// `true` when this connection is to an HTTP proxy server (rather than
+    /// directly to the origin). Drives request-target form selection: H1
+    /// requests dispatched on a proxied connection use absolute-form URIs;
+    /// direct connections use origin-form. Populated from
+    /// [`hyper_util::client::legacy::connect::Connected::is_proxied`] at
+    /// handshake.
+    pub(crate) is_proxied: bool,
     // Future: tls_info, timing (tcp_connect_duration, tls_handshake_duration)
 }
 
 /// A one-shot "this connection is dead, don't reuse it" flag.
 ///
-/// Shared via `Arc` — all clones observe and control the same flag.
+/// Shared via `Arc`; all clones observe and control the same flag.
 /// `ManagedConnection` holds one and hands out clones (via `metadata()`)
 /// that let the adapter layer mark the connection poisoned through
 /// smithy's `ConnectionMetadata::poison_fn`. On next checkout / return,
@@ -246,7 +253,7 @@ impl<S> ManagedConnection<S> {
 
     /// Timestamp of the last return-to-idle (or creation).
     ///
-    /// Guaranteed meaningful for any connection sitting in the pool — the
+    /// Guaranteed meaningful for any connection sitting in the pool: the
     /// initial value is `created_at`, and every return-to-pool overwrites
     /// it via [`Self::mark_idle`].
     pub(crate) fn idle_at(&self) -> Instant {
@@ -289,18 +296,14 @@ impl<S> ManagedConnection<S> {
     ///
     /// The returned metadata captures a clone of the `PoisonPill`, so
     /// calling `ConnectionMetadata::poison()` flips this connection's
-    /// poison flag — the same flag the pool checks on checkout/return.
+    /// poison flag (the same flag the pool checks on checkout/return).
     /// Address fields are copied.
     pub(crate) fn metadata(&self) -> ConnectionMetadata {
         let poison = self.poison.clone();
         let conn_id = self.conn_id;
         let remote = self.info.remote_addr;
         let mut builder = ConnectionMetadata::builder()
-            // Hardcoded `false`: v2 does not yet plumb proxy configuration
-            // through the pool stack. When proxy support lands,
-            // `ConnectionInfo` should carry an `is_proxied` flag populated
-            // at connection establishment and passed through here.
-            .proxied(false)
+            .proxied(self.info.is_proxied)
             .poison_fn(move || {
                 tracing::debug!(conn_id, ?remote, "v2 pool: connection poisoned");
                 poison.poison();
@@ -309,6 +312,12 @@ impl<S> ManagedConnection<S> {
             .set_remote_addr(self.info.remote_addr)
             .set_local_addr(self.info.local_addr);
         builder.build()
+    }
+
+    /// `true` when the underlying connection is to an HTTP proxy. Used by
+    /// H1 dispatch to choose absolute-form URIs over origin-form.
+    pub(crate) fn is_proxied(&self) -> bool {
+        self.info.is_proxied
     }
 }
 
@@ -382,6 +391,15 @@ impl<S> CachedConnection<S> {
             .inner()
             .metadata()
     }
+
+    /// Forwards [`ManagedConnection::is_proxied`].
+    pub(crate) fn is_proxied(&self) -> bool {
+        self.inner
+            .as_ref()
+            .expect("CachedConnection is_proxied after drop")
+            .inner()
+            .is_proxied()
+    }
 }
 
 impl<S, Req> Service<Req> for CachedConnection<S>
@@ -411,7 +429,7 @@ impl<S> Drop for CachedConnection<S> {
                 cached.discard();
             } else {
                 // Stamp the return-to-idle moment so the eviction task
-                // can measure elapsed idleness. Healthy connection — the
+                // can measure elapsed idleness. Healthy connection: the
                 // Cached drops normally after this, returning it to the
                 // cache's idle set.
                 managed.mark_idle();
@@ -429,7 +447,7 @@ impl<S> Drop for CachedConnection<S> {
 /// [`Self::current`].
 ///
 /// Necessary because `hyper_util::client::pool::singleton::Singled<…>` is
-/// opaque to us — we can't reach through it to the underlying
+/// opaque to us; we can't reach through it to the underlying
 /// `ManagedConnection` to build its metadata at checkout time. The
 /// handshake side has direct access, so it publishes and the checkout
 /// side reads.
@@ -439,7 +457,7 @@ impl<S> Drop for CachedConnection<S> {
 /// `Singleton::retain` predicate returning false), its state transitions
 /// from `Made(svc)` back to `Empty`, dropping the old service. The next
 /// request's `call` runs a fresh handshake through `H2ConnectAndHandshake`,
-/// which publishes new metadata — overwriting whatever was there before.
+/// which publishes new metadata, overwriting whatever was there before.
 /// State an H2 checkout (`SingletonConnection`) needs but cannot reach
 /// through the opaque `Singled<…>` to read from the underlying
 /// `ManagedConnection`. Published by the H2 handshake on each new
@@ -499,7 +517,7 @@ impl H2ConnectionRef {
 /// when the response body's guard releases.
 ///
 /// Drop decrements `active_streams` and, on the 1 → 0 transition, stamps
-/// `idle_at` — the moment the connection becomes truly idle.
+/// `idle_at` (the moment the connection becomes truly idle).
 struct DispatchGuard {
     active_streams: Arc<std::sync::atomic::AtomicUsize>,
     idle_at: Arc<Mutex<Instant>>,
@@ -537,7 +555,7 @@ impl Drop for DispatchGuard {
 ///
 /// H2 is multiplexed: the underlying `ManagedConnection` stays resident in
 /// `Singleton` for the duration of every concurrent request, so "presence
-/// in a cache" — the idleness signal we use for H1 — doesn't apply.
+/// in a cache" (the idleness signal we use for H1) doesn't apply.
 /// Instead, `SingletonConnection` mints a [`DispatchGuard`] on each
 /// `call`; the guard's lifetime tracks one in-flight request and its
 /// drop releases the corresponding `active_streams` slot, stamping
@@ -582,9 +600,9 @@ impl<T> SingletonConnection<T> {
     /// Metadata for the H2 connection this checkout was issued against.
     ///
     /// Returns `None` only if `SingletonConnection` was constructed before
-    /// any handshake had published — which doesn't happen in normal flow,
+    /// any handshake had published (which doesn't happen in normal flow,
     /// since `Singleton::call` always completes a handshake before
-    /// yielding the `Singled` we wrap.
+    /// yielding the `Singled` we wrap).
     pub(crate) fn metadata(&self) -> Option<ConnectionMetadata> {
         self.state.as_ref().map(|s| s.metadata.clone())
     }
@@ -618,7 +636,7 @@ pin_project! {
     ///
     /// When a checked-out pool connection's `Service::call` returns, the
     /// response head is available but the body may still be streaming over
-    /// the same underlying HTTP connection. For H1 this is critical — if the
+    /// the same underlying HTTP connection. For H1 this is critical: if the
     /// `CachedConnection` drops at that point, the connection returns to the
     /// pool mid-body-stream and the next checkout would be handed a still-busy
     /// connection.
@@ -694,7 +712,7 @@ pub(crate) type CheckoutResponse<PoolUnnameable> = http_1x::Response<GuardedBody
 mod tests {
     //! Unit tests for H2 active-stream tracking.
     //!
-    //! The test harness (`ConnectionTestHarness`) is plain HTTP only — no
+    //! The test harness (`ConnectionTestHarness`) is plain HTTP only, without
     //! ALPN, so we cannot exercise the full H2 pipeline end-to-end yet
     //! (tracked in bosun.md as the "H2 test coverage gap"). These tests
     //! verify the atomic transitions directly, which is the architectural
@@ -706,8 +724,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tower::Service as _;
 
-    /// A minimal `Service<()>` that returns `Ok(())` — stand-in for
-    /// `Singled::call`. We only care about the wrapper's stream-count
+    /// A minimal `Service<()>` that returns `Ok(())` (stand-in for
+    /// `Singled::call`). We only care about the wrapper's stream-count
     /// side effects.
     #[derive(Clone, Default)]
     struct OkService;
@@ -763,7 +781,7 @@ mod tests {
 
     /// Constructing without dispatching leaves no `DispatchGuard`, so
     /// dropping is a no-op. The post-checkout `poll_ready` retry loop
-    /// relies on this — a checkout discarded before `call` must not
+    /// relies on this: a checkout discarded before `call` must not
     /// underflow the counter.
     #[tokio::test]
     async fn singleton_drop_without_dispatch_is_noop() {
@@ -782,8 +800,8 @@ mod tests {
 
     /// Concurrent dispatches against the same H2 connection (simulating
     /// multiplexed requests) all land on the same counter. `idle_at` is
-    /// stamped only on the LAST `DispatchGuard` drop — the 1 → 0
-    /// transition.
+    /// stamped only on the LAST `DispatchGuard` drop (the 1 → 0
+    /// transition).
     #[tokio::test]
     async fn idle_at_stamped_only_on_last_dispatch_release() {
         let h2_ref = H2ConnectionRef::new();
@@ -804,7 +822,7 @@ mod tests {
         // Sleep so any stamp is distinguishable from construction time.
         tokio::time::sleep(std::time::Duration::from_millis(5)).await;
 
-        // Release two — idle_at must NOT yet be stamped (counter > 0).
+        // Release two; idle_at must NOT yet be stamped (counter > 0).
         drop(a);
         drop(b);
         assert_eq!(active.load(Ordering::Acquire), 1);

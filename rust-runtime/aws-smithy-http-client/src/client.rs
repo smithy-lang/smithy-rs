@@ -495,31 +495,13 @@ fn new_tokio_hyper_builder(
 }
 
 impl<C> Adapter<C> {
-    /// Add proxy authentication header to the request if needed
+    /// Add proxy authentication header to the request if needed.
+    ///
+    /// Delegates to the shared [`proxy::add_proxy_auth_header`] helper —
+    /// the v2 HTTP client uses the same logic.
     fn add_proxy_auth_header(&self, request: &mut http_1x::Request<SdkBody>) {
-        // Only add auth for HTTP requests (not HTTPS which uses CONNECT tunneling)
-        if request.uri().scheme() != Some(&http_1x::uri::Scheme::HTTP) {
-            return;
-        }
-
-        // Don't override existing proxy authorization header
-        if request
-            .headers()
-            .contains_key(http_1x::header::PROXY_AUTHORIZATION)
-        {
-            return;
-        }
-
-        if let Some(ref matcher) = self.proxy_matcher {
-            if let Some(intercept) = matcher.intercept(request.uri()) {
-                // Add basic auth header if available
-                if let Some(auth_header) = intercept.basic_auth() {
-                    request
-                        .headers_mut()
-                        .insert(http_1x::header::PROXY_AUTHORIZATION, auth_header.clone());
-                    tracing::debug!("added proxy authentication header for {}", request.uri());
-                }
-            }
+        if let Some(matcher) = self.proxy_matcher.as_ref() {
+            proxy::add_proxy_auth_header(request, matcher);
         }
     }
 }

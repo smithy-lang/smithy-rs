@@ -1196,3 +1196,421 @@ async fn test_connect_uri_form_rustls() {
 async fn test_connect_uri_form_s2n_tls() {
     run_connect_uri_form_test(tls::Provider::S2nTls, "s2n-tls").await;
 }
+
+
+// ================================================================================================
+// V2 client proxy parity tests
+// ================================================================================================
+
+async fn make_v2_http_request_through_proxy(
+    proxy_config: ProxyConfig,
+    target_url: &str,
+) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
+    use aws_smithy_http_client::v2::BuilderV2;
+
+    let http_client = BuilderV2::new().proxy_config(proxy_config).build_http();
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let http_connector = http_client.http_connector(&connector_settings, &runtime_components);
+
+    let request = HttpRequest::get(target_url)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+    let response = http_connector.call(request).await?;
+    let status = response.status();
+    let body_bytes = response.into_body().collect().await?.to_bytes();
+    let body_string = String::from_utf8(body_bytes.to_vec())?;
+    Ok((status.into(), body_string))
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring"
+))]
+async fn make_v2_https_request_through_proxy(
+    proxy_config: ProxyConfig,
+    target_url: &str,
+    tls_provider: tls::Provider,
+) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
+    use aws_smithy_http_client::v2::BuilderV2;
+
+    let http_client = BuilderV2::new()
+        .tls_provider(tls_provider)
+        .proxy_config(proxy_config)
+        .build_https();
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let http_connector = http_client.http_connector(&connector_settings, &runtime_components);
+
+    let request = HttpRequest::get(target_url)
+        .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)?;
+    let response = http_connector.call(request).await?;
+    let status = response.status();
+    let body_bytes = response.into_body().collect().await?.to_bytes();
+    let body_string = String::from_utf8(body_bytes.to_vec())?;
+    Ok((status.into(), body_string))
+}
+
+#[tokio::test]
+async fn test_v2_http_proxy_basic_request() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        assert_eq!(req.method, "GET");
+        assert_eq!(req.uri, "http://aws.amazon.com/v2/api");
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("v2 proxied response".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
+    let (status, body) =
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/v2/api")
+            .await
+            .expect("v2 HTTP request through proxy should succeed");
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "v2 proxied response");
+    assert_eq!(mock_proxy.requests()[0].uri, "http://aws.amazon.com/v2/api");
+}
+
+#[tokio::test]
+async fn test_v2_proxy_authentication() {
+    let mock_proxy = MockProxyServer::with_auth_validation("v2user", "v2pass").await;
+
+    let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr()))
+        .unwrap()
+        .with_basic_auth("v2user", "v2pass");
+
+    let (status, _) =
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/auth/test")
+            .await
+            .expect("authenticated v2 proxy request should succeed");
+    assert_eq!(status, StatusCode::OK);
+
+    let requests = mock_proxy.requests();
+    let auth_header = requests[0]
+        .headers
+        .get("proxy-authorization")
+        .expect("Proxy-Authorization header should be set");
+    let expected = format!(
+        "Basic {}",
+        base64::engine::general_purpose::STANDARD.encode("v2user:v2pass")
+    );
+    assert_eq!(auth_header, &expected);
+}
+
+#[tokio::test]
+async fn test_v2_proxy_disabled_uses_direct_connection() {
+    let mock_proxy = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("should never reach proxy".to_string())
+            .unwrap()
+    })
+    .await;
+    let direct_mock = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("direct response".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let target_url = format!("http://{}/direct", direct_mock.addr());
+    let (status, body) =
+        make_v2_http_request_through_proxy(ProxyConfig::disabled(), &target_url)
+            .await
+            .expect("direct v2 request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct response");
+    assert_eq!(mock_proxy.requests().len(), 0);
+    assert_eq!(direct_mock.requests().len(), 1);
+}
+
+#[tokio::test]
+async fn test_v2_proxy_from_environment_variables() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        assert_eq!(req.uri, "http://aws.amazon.com/env/api");
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("env-proxy response".to_string())
+            .unwrap()
+    })
+    .await;
+    let proxy_url = format!("http://{}", mock_proxy.addr());
+
+    let result = with_env_vars(&[("HTTP_PROXY", &proxy_url)], || async {
+        let proxy_config = ProxyConfig::from_env();
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/env/api").await
+    })
+    .await;
+
+    let (status, body) = result.expect("env-var v2 proxy request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "env-proxy response");
+    assert_eq!(mock_proxy.requests().len(), 1);
+}
+
+#[tokio::test]
+async fn test_v2_no_proxy_bypass_rules() {
+    let mock_proxy = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("proxied".to_string())
+            .unwrap()
+    })
+    .await;
+    let direct_mock = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("direct".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_url = format!("http://{}", mock_proxy.addr());
+    let result = with_env_vars(
+        &[("HTTP_PROXY", &proxy_url), ("NO_PROXY", "127.0.0.1")],
+        || async {
+            let proxy_config = ProxyConfig::from_env();
+            let target_url = format!("http://{}/bypassed", direct_mock.addr());
+            make_v2_http_request_through_proxy(proxy_config, &target_url).await
+        },
+    )
+    .await;
+
+    let (status, body) = result.expect("bypassed request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct");
+    assert_eq!(mock_proxy.requests().len(), 0, "proxy should be bypassed");
+    assert_eq!(direct_mock.requests().len(), 1);
+}
+
+#[tokio::test]
+async fn test_v2_proxy_connection_failure() {
+    let proxy_config = ProxyConfig::http("http://127.0.0.1:1").unwrap();
+    let result =
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/fail").await;
+    assert!(result.is_err(), "connection to non-existent proxy should fail");
+}
+
+#[tokio::test]
+async fn test_v2_proxy_authentication_failure() {
+    let mock_proxy = MockProxyServer::with_auth_validation("correct", "password").await;
+
+    let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr()))
+        .unwrap()
+        .with_basic_auth("wrong", "creds");
+
+    let (status, _) =
+        make_v2_http_request_through_proxy(proxy_config, "http://aws.amazon.com/auth/fail")
+            .await
+            .expect("request should complete (proxy returns 407)");
+    assert_eq!(status, StatusCode::PROXY_AUTHENTICATION_REQUIRED);
+}
+
+#[tokio::test]
+async fn test_v2_explicit_proxy_disable_overrides_environment() {
+    let mock_proxy = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("via proxy".to_string())
+            .unwrap()
+    })
+    .await;
+    let direct_mock = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("direct".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_url = format!("http://{}", mock_proxy.addr());
+    let result = with_env_vars(&[("HTTP_PROXY", &proxy_url)], || async {
+        let proxy_config = ProxyConfig::disabled();
+        let target_url = format!("http://{}/path", direct_mock.addr());
+        make_v2_http_request_through_proxy(proxy_config, &target_url).await
+    })
+    .await;
+
+    let (status, body) = result.expect("direct request should succeed");
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, "direct");
+    assert_eq!(mock_proxy.requests().len(), 0);
+    assert_eq!(direct_mock.requests().len(), 1);
+}
+
+#[tokio::test]
+async fn test_v2_http_proxy_absolute_uri_form() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        assert_eq!(
+            req.uri, "http://aws.amazon.com/path?query=1",
+            "proxy should receive absolute-form URI"
+        );
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("ok".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap();
+    let (status, _) = make_v2_http_request_through_proxy(
+        proxy_config,
+        "http://aws.amazon.com/path?query=1",
+    )
+    .await
+    .expect("request should succeed");
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_v2_direct_http_origin_uri_form() {
+    let direct_mock = MockProxyServer::new(|req| {
+        assert_eq!(
+            req.uri, "/path?query=1",
+            "direct server should receive origin-form URI"
+        );
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("ok".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let target_url = format!("http://{}/path?query=1", direct_mock.addr());
+    let (status, _) = make_v2_http_request_through_proxy(ProxyConfig::disabled(), &target_url)
+        .await
+        .expect("request should succeed");
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_v2_set_proxy_config_none_clears_proxy() {
+    use aws_smithy_http_client::v2::BuilderV2;
+
+    let mock_proxy = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("via proxy".to_string())
+            .unwrap()
+    })
+    .await;
+    let direct_mock = MockProxyServer::new(|_| {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body("direct".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let mut builder = BuilderV2::new();
+    builder.set_proxy_config(Some(
+        ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap(),
+    ));
+    builder.set_proxy_config(None);
+    let http_client = builder.build_http();
+
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let http_connector = http_client.http_connector(&connector_settings, &runtime_components);
+
+    let target_url = format!("http://{}/path", direct_mock.addr());
+    let request = HttpRequest::get(&target_url).unwrap();
+    let response = http_connector.call(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK.into());
+    assert_eq!(mock_proxy.requests().len(), 0);
+    assert_eq!(direct_mock.requests().len(), 1);
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring"
+))]
+#[tokio::test]
+async fn test_v2_https_connect_with_auth() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        assert_eq!(req.method, "CONNECT");
+        assert_eq!(req.uri, "secure.aws.amazon.com:443");
+
+        let expected_auth = format!(
+            "Basic {}",
+            base64::prelude::BASE64_STANDARD.encode("connectuser:connectpass")
+        );
+        assert_eq!(req.headers.get("proxy-authorization"), Some(&expected_auth));
+
+        Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body("CONNECT tunnel setup failed".to_string())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr()))
+        .unwrap()
+        .with_basic_auth("connectuser", "connectpass");
+
+    let tls_provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc);
+    let result = make_v2_https_request_through_proxy(
+        proxy_config,
+        "https://secure.aws.amazon.com/api/secure",
+        tls_provider,
+    )
+    .await;
+
+    assert!(result.is_err(), "CONNECT tunnel should fail with 400 response");
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method, "CONNECT");
+    assert_eq!(requests[0].uri, "secure.aws.amazon.com:443");
+}
+
+#[cfg(any(
+    feature = "rustls-aws-lc",
+    feature = "rustls-aws-lc-fips",
+    feature = "rustls-ring"
+))]
+#[tokio::test]
+async fn test_v2_https_connect_auth_required() {
+    let mock_proxy = MockProxyServer::new(|req| {
+        assert_eq!(req.method, "CONNECT");
+        if req.headers.get("proxy-authorization").is_none() {
+            return Response::builder()
+                .status(StatusCode::PROXY_AUTHENTICATION_REQUIRED)
+                .body("auth required".to_string())
+                .unwrap();
+        }
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(String::new())
+            .unwrap()
+    })
+    .await;
+
+    let proxy_config = ProxyConfig::all(format!("http://{}", mock_proxy.addr())).unwrap();
+    let tls_provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc);
+    let result = make_v2_https_request_through_proxy(
+        proxy_config,
+        "https://secure.aws.amazon.com/api",
+        tls_provider,
+    )
+    .await;
+
+    assert!(result.is_err(), "should fail without proxy auth");
+    let requests = mock_proxy.requests();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].method, "CONNECT");
+    assert!(requests[0].headers.get("proxy-authorization").is_none());
+}
