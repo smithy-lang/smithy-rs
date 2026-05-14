@@ -52,6 +52,7 @@ class EventStreamUnmarshallerGenerator(
     codegenContext: CodegenContext,
     private val operationShape: OperationShape,
     private val unionShape: UnionShape,
+    private val useSchemaSerde: Boolean = false,
 ) {
     private val model = codegenContext.model
     private val builderInstantiator = codegenContext.builderInstantiator()
@@ -82,6 +83,8 @@ class EventStreamUnmarshallerGenerator(
             "tracing" to RuntimeType.Tracing,
             "UnmarshalledMessage" to smithyEventStream.resolve("frame::UnmarshalledMessage"),
             "UnmarshallMessage" to smithyEventStream.resolve("frame::UnmarshallMessage"),
+            "SharedClientProtocol" to RuntimeType.smithySchema(runtimeConfig).resolve("protocol::SharedClientProtocol"),
+            "SerdeError" to RuntimeType.smithySchema(runtimeConfig).resolve("serde::SerdeError"),
         )
 
     fun render(): RuntimeType {
@@ -96,19 +99,42 @@ class EventStreamUnmarshallerGenerator(
         unionSymbol: Symbol,
     ) {
         val unmarshallerTypeName = unmarshallerType.name
-        rust(
-            """
-            ##[non_exhaustive]
-            ##[derive(Debug)]
-            pub struct $unmarshallerTypeName;
-
-            impl $unmarshallerTypeName {
-                pub fn new() -> Self {
-                    $unmarshallerTypeName
+        if (useSchemaSerde) {
+            rustTemplate(
+                """
+                ##[derive(Debug)]
+                pub struct $unmarshallerTypeName {
+                    // `protocol` is used by event variants whose payloads go through the codec.
+                    // When no such variant exists (e.g., all events are header-only or use primitive
+                    // `@eventPayload`), the field is unused but still kept for API uniformity across
+                    // operations.
+                    ##[allow(dead_code)]
+                    protocol: #{SharedClientProtocol},
                 }
-            }
-            """,
-        )
+
+                impl $unmarshallerTypeName {
+                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
+                        $unmarshallerTypeName { protocol }
+                    }
+                }
+                """,
+                *codegenScope,
+            )
+        } else {
+            rust(
+                """
+                ##[non_exhaustive]
+                ##[derive(Debug)]
+                pub struct $unmarshallerTypeName;
+
+                impl $unmarshallerTypeName {
+                    pub fn new() -> Self {
+                        $unmarshallerTypeName
+                    }
+                }
+                """,
+            )
+        }
 
         rustBlockTemplate(
             "impl #{UnmarshallMessage} for ${unmarshallerType.name}",
@@ -334,17 +360,35 @@ class EventStreamUnmarshallerGenerator(
 
     private fun RustWriter.renderParseProtocolPayload(member: MemberShape) {
         val memberName = symbolProvider.toMemberName(member)
-        val parser = protocol.structuredDataParser().payloadParser(member)
-        rustTemplate(
-            """
-            #{parser}(&message.payload()[..])
-                .map_err(|err| {
-                    #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
-                })?
-            """,
-            "parser" to parser,
-            *codegenScope,
-        )
+        if (useSchemaSerde) {
+            val target = model.expectShape(member.target)
+            rustTemplate(
+                """
+                {
+                    let codec = self.protocol.payload_codec()
+                        .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                    let mut deser = codec.create_deserializer(&message.payload()[..]);
+                    #{Target}::deserialize(&mut *deser).map_err(|err| {
+                        #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
+                    })?
+                }
+                """,
+                "Target" to symbolProvider.toSymbol(target),
+                *codegenScope,
+            )
+        } else {
+            val parser = protocol.structuredDataParser().payloadParser(member)
+            rustTemplate(
+                """
+                #{parser}(&message.payload()[..])
+                    .map_err(|err| {
+                        #{Error}::unmarshalling(format!("failed to unmarshall $memberName: {err}"))
+                    })?
+                """,
+                "parser" to parser,
+                *codegenScope,
+            )
+        }
     }
 
     private fun RustWriter.renderUnmarshallError() {
@@ -383,35 +427,56 @@ class EventStreamUnmarshallerGenerator(
                         // TODO(https://github.com/smithy-lang/smithy-rs/issues/1970) It should be possible to unify these branches now
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
-                            val parser = protocol.structuredDataParser().errorParser(target)
-                            if (parser != null) {
-                                rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
+                            if (useSchemaSerde) {
                                 rustTemplate(
                                     """
-                                    builder = #{parser}(&message.payload()[..], builder)
-                                        .map_err(|err| {
+                                    let mut err = {
+                                        let codec = self.protocol.payload_codec()
+                                            .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                                        let mut deser = codec.create_deserializer(&message.payload()[..]);
+                                        #{Target}::deserialize(&mut *deser).map_err(|err| {
                                             #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
-                                        })?;
-                                    builder.set_meta(Some(generic));
+                                        })?
+                                    };
+                                    err.meta = generic;
                                     return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::${member.target.name.toPascalCase()}(
-                                            #{build}
-                                        )
+                                        #{OpError}::${member.target.name.toPascalCase()}(err)
                                     ))
                                     """,
-                                    "build" to
-                                        builderInstantiator.finalizeBuilder(
-                                            "builder", target,
-                                            mapErr = {
-                                                rustTemplate(
-                                                    """|err|#{Error}::unmarshalling(format!("{err}"))""",
-                                                    *codegenScope,
-                                                )
-                                            },
-                                        ),
-                                    "parser" to parser,
+                                    "Target" to symbolProvider.toSymbol(target),
                                     *codegenScope,
                                 )
+                            } else {
+                                val parser = protocol.structuredDataParser().errorParser(target)
+                                if (parser != null) {
+                                    rust("let mut builder = #T::default();", symbolProvider.symbolForBuilder(target))
+                                    rustTemplate(
+                                        """
+                                        builder = #{parser}(&message.payload()[..], builder)
+                                            .map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?;
+                                        builder.set_meta(Some(generic));
+                                        return Ok(#{UnmarshalledMessage}::Error(
+                                            #{OpError}::${member.target.name.toPascalCase()}(
+                                                #{build}
+                                            )
+                                        ))
+                                        """,
+                                        "build" to
+                                            builderInstantiator.finalizeBuilder(
+                                                "builder", target,
+                                                mapErr = {
+                                                    rustTemplate(
+                                                        """|err|#{Error}::unmarshalling(format!("{err}"))""",
+                                                        *codegenScope,
+                                                    )
+                                                },
+                                            ),
+                                        "parser" to parser,
+                                        *codegenScope,
+                                    )
+                                }
                             }
                         }
 

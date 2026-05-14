@@ -231,6 +231,7 @@ mod loader {
     use aws_smithy_runtime_api::client::identity::{ResolveCachedIdentity, SharedIdentityCache};
     use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
     use aws_smithy_runtime_api::shared::IntoShared;
+    use aws_smithy_schema::protocol::{ClientProtocol, SharedClientProtocol};
     use aws_smithy_types::checksum_config::{
         RequestChecksumCalculation, ResponseChecksumValidation,
     };
@@ -303,6 +304,7 @@ mod loader {
         behavior_version: Option<BehaviorVersion>,
         request_checksum_calculation: Option<RequestChecksumCalculation>,
         response_checksum_validation: Option<ResponseChecksumValidation>,
+        protocol: Option<SharedClientProtocol>,
     }
 
     impl ConfigLoader {
@@ -407,6 +409,26 @@ mod loader {
         /// then override the HTTP client set with this function on the client-specific `Config`s.
         pub fn http_client(mut self, http_client: impl HttpClient + 'static) -> Self {
             self.http_client = Some(http_client.into_shared());
+            self
+        }
+
+        /// Sets the client protocol to use for serialization and deserialization.
+        ///
+        /// This overrides the default protocol determined by the service model.
+        ///
+        /// # Transport
+        ///
+        /// This setter is HTTP-specific. `self.protocol` is typed
+        /// `Option<SharedClientProtocol>` which elides to the HTTP specialization,
+        /// and only `SharedClientProtocol<http::Request, http::Response>` has a
+        /// `Storable` impl. The `impl ClientProtocol + 'static` bound here
+        /// elides to `impl ClientProtocol<http::Request, http::Response>` to
+        /// match. A non-HTTP transport would add its own setter paired with its
+        /// own `Storable` newtype rather than generalizing this one — the
+        /// underlying `ClientProtocol<Req, Res>` trait is already
+        /// transport-generic.
+        pub fn protocol(mut self, protocol: impl ClientProtocol + 'static) -> Self {
+            self.protocol = Some(SharedClientProtocol::new(protocol));
             self
         }
 
@@ -973,6 +995,7 @@ mod loader {
             builder.set_endpoint_url(endpoint_url);
             builder.set_behavior_version(self.behavior_version);
             builder.set_http_client(self.http_client);
+            builder.set_protocol(self.protocol);
             builder.set_app_name(app_name);
 
             let identity_cache = match self.identity_cache {
