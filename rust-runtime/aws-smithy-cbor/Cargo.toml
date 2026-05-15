@@ -21,6 +21,8 @@ features = [
 ]
 
 [dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 
 [dev-dependencies]

@@ -372,6 +372,8 @@ dependencies = [
 name = "aws-smithy-cbor"
 version = "0.61.8"
 dependencies = [
+ "aws-smithy-runtime-api 1.12.1",
+ "aws-smithy-schema",
  "aws-smithy-types 1.4.8",
  "criterion",
  "minicbor 2.2.1",

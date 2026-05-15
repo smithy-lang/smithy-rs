@@ -9,13 +9,13 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -48,7 +48,13 @@ object SchemaSerdeAllowlist {
      * protocols incrementally in follow-up PRs by adding entries such as
      * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
-    private val allowedProtocols: Set<ShapeId> = emptySet()
+    private val allowedProtocols: Set<ShapeId> =
+        setOf(
+            RestJson1Trait.ID,
+            AwsJson1_0Trait.ID,
+            AwsJson1_1Trait.ID,
+            Rpcv2CborTrait.ID,
+        )
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
@@ -110,7 +116,8 @@ private class SchemaProtocolCustomization(
         writable {
             when (section) {
                 is ServiceRuntimePluginSection.AdditionalConfig -> {
-                    val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                    val smithyJson = RuntimeType.smithyJson(codegenContext.runtimeConfig)
+                    val smithyCbor = RuntimeType.smithyCbor(codegenContext.runtimeConfig)
                     val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
                     val protocol = codegenContext.protocol
                     val serviceShapeName = codegenContext.serviceShape.id.name
@@ -123,6 +130,8 @@ private class SchemaProtocolCustomization(
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                            protocol == Rpcv2CborTrait.ID ->
+                                smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                             else -> return@writable // Other protocols not yet implemented
                         }
 

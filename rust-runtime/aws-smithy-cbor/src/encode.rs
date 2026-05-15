@@ -51,6 +51,8 @@ impl Encoder {
         /// Used when it's not cheap to calculate the size, i.e. when the struct has one or more
         /// `Option`al members.
         begin_map => begin_map();
+        /// Begins an indefinite-length array.
+        begin_array => begin_array();
         /// Writes a boolean value.
         boolean => bool(x: bool);
         /// Writes a byte value.
