@@ -10,10 +10,10 @@ import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
-import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.TemplateVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.LibraryFunction
@@ -89,17 +89,26 @@ class BddExpressionGenerator(
     /**
      * True when the reference's underlying type is a String (possibly wrapped in Optional).
      * Used to decide whether `.as_deref().unwrap_or_default()` is a legal lowering.
-     * Falls back to `true` when typechecking is unavailable so template rendering at least
-     * attempts the String path — most template dynamic parts are strings.
+     *
+     * Document-typed references explicitly return `false` even when their type can be
+     * resolved, because `Option<Document>` does not support `as_deref()`.
+     *
+     * Falls back to `false` when typechecking is unavailable. This is conservative:
+     * the caller falls through to the default expression generator, which preserves the
+     * Option layer — a small performance loss compared to the unwrap, but compiles
+     * correctly for all reference types (the previous default of `true` would emit
+     * `as_deref().unwrap_or_default()` for non-string types like Document, producing
+     * uncompilable Rust).
      */
     private fun isStringTypedRef(expr: Expression): Boolean {
         if (expr !is Reference) return false
+        if (isDocumentRef(expr)) return false
         return try {
             val t = expr.type()
             val underlying = if (t is OptionalType) t.inner() else t
             underlying is StringType
         } catch (_: RuntimeException) {
-            true
+            false
         }
     }
 
@@ -335,8 +344,41 @@ class BddExpressionGenerator(
 
         private fun isOptionalArgument(arg: Expression): Boolean {
             return isOptionalRef(arg) ||
-                (arg is StringLiteral && refs.resolve(Identifier.of(arg.value().toString()))?.isOptional == true) ||
+                (arg is StringLiteral && isOptionalSingleDynamicReference(arg)) ||
                 (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+        }
+
+        /**
+         * True if [literal] is a single-dynamic-element template (e.g. `"{Bucket}"`) whose
+         * inner expression is a [Reference] to an optional value.
+         *
+         * This replaces an earlier text-match heuristic that compared the literal's raw
+         * value against parameter names — that approach could fire on a static literal
+         * whose text happened to equal a parameter's Smithy name (e.g. literal `"Bucket"`
+         * in `substring("Bucket", ...)` when a parameter `Bucket` exists), causing
+         * `wrapDefaultArg` to wrap a non-Option `&str` in `if let Some(param) = ...`,
+         * which is a Rust type error. Inspecting the [Template] structure is the correct
+         * way to recognise the "single-element template wrapping a Reference" case.
+         */
+        private fun isOptionalSingleDynamicReference(literal: StringLiteral): Boolean {
+            val inner: Reference =
+                literal.value().accept(
+                    object : TemplateVisitor<Reference?> {
+                        override fun visitStaticTemplate(value: String): Reference? = null
+
+                        override fun visitSingleDynamicTemplate(expr: Expression): Reference? = expr as? Reference
+
+                        // Multipart templates emit start/elements/finish — not a single-element wrap.
+                        override fun visitStaticElement(str: String): Reference? = null
+
+                        override fun visitDynamicElement(expr: Expression): Reference? = null
+
+                        override fun startMultipartTemplate(): Reference? = null
+
+                        override fun finishMultipartTemplate(): Reference? = null
+                    },
+                ).filter { it != null }.findFirst().orElse(null) ?: return false
+            return refs.resolve(inner.name)?.isOptional == true
         }
 
         /**
