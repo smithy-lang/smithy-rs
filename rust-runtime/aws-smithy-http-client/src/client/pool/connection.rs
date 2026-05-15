@@ -12,7 +12,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
-use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
+use aws_smithy_runtime_api::client::connection::{ConnectionId, ConnectionMetadata};
 use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
 use tokio::sync::OwnedSemaphorePermit;
@@ -304,8 +304,9 @@ impl<S> ManagedConnection<S> {
         let remote = self.info.remote_addr;
         let mut builder = ConnectionMetadata::builder()
             .proxied(self.info.is_proxied)
+            .connection_id(ConnectionId::new(self.conn_id))
             .poison_fn(move || {
-                tracing::debug!(conn_id, ?remote, "v2 pool: connection poisoned");
+                tracing::debug!(conn_id, ?remote, "pool: connection poisoned");
                 poison.poison();
             });
         builder
@@ -374,6 +375,10 @@ pub(crate) struct CachedConnection<S> {
 
 impl<S> CachedConnection<S> {
     pub(crate) fn new(cached: cache::Cached<ManagedConnection<S>>) -> Self {
+        tracing::trace!(
+            conn_id = cached.inner().conn_id(),
+            "pool: connection reused"
+        );
         Self {
             inner: Some(cached),
         }
@@ -400,6 +405,15 @@ impl<S> CachedConnection<S> {
             .inner()
             .is_proxied()
     }
+
+    /// Forwards [`ManagedConnection::conn_id`].
+    pub(crate) fn conn_id(&self) -> u64 {
+        self.inner
+            .as_ref()
+            .expect("CachedConnection conn_id after drop")
+            .inner()
+            .conn_id()
+    }
 }
 
 impl<S, Req> Service<Req> for CachedConnection<S>
@@ -425,7 +439,7 @@ impl<S> Drop for CachedConnection<S> {
             let managed = cached.inner();
             let conn_id = managed.conn_id;
             if managed.is_poisoned() {
-                tracing::debug!(conn_id, "v2 pool: connection discarded (poisoned)");
+                tracing::debug!(conn_id, "pool: connection discarded (poisoned)");
                 cached.discard();
             } else {
                 // Stamp the return-to-idle moment so the eviction task
@@ -433,7 +447,7 @@ impl<S> Drop for CachedConnection<S> {
                 // Cached drops normally after this, returning it to the
                 // cache's idle set.
                 managed.mark_idle();
-                tracing::trace!(conn_id, "v2 pool: connection returned to idle");
+                tracing::trace!(conn_id, "pool: connection returned to idle");
             }
         }
     }
