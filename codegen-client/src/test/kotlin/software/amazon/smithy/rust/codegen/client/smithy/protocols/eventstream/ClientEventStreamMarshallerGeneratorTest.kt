@@ -10,7 +10,12 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.Arguments
 import org.junit.jupiter.params.provider.ArgumentsProvider
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -36,7 +41,16 @@ class ClientEventStreamMarshallerGeneratorTest {
     fun test(testCase: EventStreamTestModels.TestCase) {
         clientIntegrationTest(testCase.model) { codegenContext, rustCrate ->
             rustCrate.testModule {
-                writeMarshallTestCases(codegenContext, testCase, optionalBuilderInputs = false)
+                writeMarshallTestCases(
+                    codegenContext,
+                    testCase,
+                    optionalBuilderInputs = false,
+                    marshallerNew =
+                        eventStreamSerdeConstructExpr(
+                            codegenContext,
+                            "crate::event_stream_serde::TestStreamMarshaller",
+                        ),
+                )
             }
         }
     }
@@ -49,6 +63,11 @@ class ClientEventStreamMarshallerGeneratorTest {
             initialRequestAssertion: Writable,
             setInput: Writable,
         ) {
+            val unmarshallerExpr =
+                unmarshallerConstructExpr(
+                    codegenContext as ClientCodegenContext,
+                    "crate::event_stream_serde::TestStreamUnmarshaller",
+                )
             rustTemplate(
                 """
                 use aws_smithy_http::event_stream::EventStreamSender;
@@ -82,7 +101,7 @@ class ClientEventStreamMarshallerGeneratorTest {
                 let mut body = ::aws_smithy_types::body::SdkBody::taken();
                 std::mem::swap(&mut body, request.body_mut());
 
-                let unmarshaller = crate::event_stream_serde::TestStreamUnmarshaller::new();
+                let unmarshaller = $unmarshallerExpr;
                 let mut event_receiver = crate::event_receiver::EventReceiver::new(
                     ::aws_smithy_http::event_stream::Receiver::new(unmarshaller, body)
                 );
@@ -194,6 +213,11 @@ class ClientEventStreamMarshallerGeneratorTest {
             ) { codegenContext, rustCrate ->
                 rustCrate.testModule {
                     tokioTest("initial_message_and_event_are_signed") {
+                        val unmarshallerExpr =
+                            unmarshallerConstructExpr(
+                                codegenContext,
+                                "crate::event_stream_serde::TestStreamUnmarshaller",
+                            )
                         rustTemplate(
                             """
                             use crate::types::*;
@@ -277,7 +301,7 @@ class ClientEventStreamMarshallerGeneratorTest {
                             let mut body = ::aws_smithy_types::body::SdkBody::taken();
                             std::mem::swap(&mut body, request.body_mut());
 
-                            let unmarshaller = crate::event_stream_serde::TestStreamUnmarshaller::new();
+                            let unmarshaller = $unmarshallerExpr;
                             let mut event_receiver = crate::event_receiver::EventReceiver::new(
                                 ::aws_smithy_http::event_stream::Receiver::new(unmarshaller, body),
                             );
@@ -338,6 +362,42 @@ data class RpcEventStreamTestCase(
     val expectedInInitialRequest: String = "",
     val expectedInInitialResponse: String = "",
 )
+
+/**
+ * Returns a Rust expression that constructs the generated event-stream
+ * (un)marshaller for the given codegen context. For clients using schema-serde
+ * exclusively (see [SchemaSerdeAllowlist.usesSchemaSerdeExclusively]) the
+ * expression passes a `SharedClientProtocol` to `::new`; for all other clients
+ * it returns the legacy stateless `::new()` call.
+ *
+ * @param typePath the Rust path to the (un)marshaller type, e.g.
+ *   `"crate::event_stream_serde::TestStreamUnmarshaller"`.
+ */
+fun eventStreamSerdeConstructExpr(
+    codegenContext: ClientCodegenContext,
+    typePath: String,
+): String =
+    if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+        val constructor =
+            when (codegenContext.protocol) {
+                RestJson1Trait.ID ->
+                    "::aws_smithy_json::protocol::aws_rest_json_1::AwsRestJsonProtocol::new()"
+                AwsJson1_0Trait.ID ->
+                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_0(\"TestService\")"
+                AwsJson1_1Trait.ID ->
+                    "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1(\"TestService\")"
+                else -> error("unexpected schema-serde protocol: ${codegenContext.protocol}")
+            }
+        "$typePath::new(::aws_smithy_schema::protocol::SharedClientProtocol::new($constructor))"
+    } else {
+        "$typePath::new()"
+    }
+
+/** Back-compat alias for the unmarshaller path. */
+fun unmarshallerConstructExpr(
+    codegenContext: ClientCodegenContext,
+    unmarshallerPath: String,
+): String = eventStreamSerdeConstructExpr(codegenContext, unmarshallerPath)
 
 class RpcEventStreamTestCasesProvider : ArgumentsProvider {
     private val rpcBoundProtocols =

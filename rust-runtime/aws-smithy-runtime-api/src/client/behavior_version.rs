@@ -23,6 +23,7 @@ enum Inner {
     V2025_01_17,
     V2025_08_07,
     V2026_01_12,
+    V2026_05_15,
 }
 
 impl BehaviorVersion {
@@ -35,9 +36,22 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::v2026_01_12`]
+    /// The latest version is currently [`BehaviorVersion::v2026_05_15`]
     pub fn latest() -> Self {
-        Self::v2026_01_12()
+        Self::v2026_05_15()
+    }
+
+    /// Behavior version for June 1st, 2026.
+    ///
+    /// This version updates retry behavior per the Retry Behavior 2.1 spec:
+    /// - Non-throttling errors use 50ms base backoff (previously 1s)
+    /// - Token bucket costs: 14 for non-throttling, 5 for throttling (previously 5/10)
+    /// - HTTP 5xx status codes no longer trigger connection poisoning
+    /// - `x-amz-retry-after` header bounded between exponential backoff and 5s above it
+    pub fn v2026_05_15() -> Self {
+        Self {
+            inner: Inner::V2026_05_15,
+        }
     }
 
     /// Behavior version for January 12th, 2026.
@@ -49,6 +63,10 @@ impl BehaviorVersion {
     ///
     /// For more information about behavior versions and how they affect SDK behavior, see the
     /// [AWS SDK for Rust Developer Guide](https://docs.aws.amazon.com/sdk-for-rust/latest/dg/behavior-versions.html).
+    #[deprecated(
+        since = "1.12.1",
+        note = "Superseded by v2026_05_15, which updates retry behavior per the Retry Behavior 2.1 spec."
+    )]
     pub fn v2026_01_12() -> Self {
         Self {
             inner: Inner::V2026_01_12,
@@ -128,6 +146,17 @@ impl std::fmt::Debug for BehaviorVersion {
     }
 }
 
+impl From<BehaviorVersion> for aws_smithy_types::retry::RetrySpec {
+    #[allow(deprecated)]
+    fn from(bv: BehaviorVersion) -> Self {
+        if bv.is_at_least(BehaviorVersion::v2026_05_15()) {
+            Self::v2_1()
+        } else {
+            Self::v2_0()
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -144,11 +173,13 @@ mod tests {
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2024_03_28()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_01_17()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_08_07()));
+        assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2026_01_12()));
         assert!(!BehaviorVersion::v2023_11_09().is_at_least(BehaviorVersion::v2024_03_28()));
         assert!(Inner::V2024_03_28 > Inner::V2023_11_09);
         assert!(Inner::V2023_11_09 < Inner::V2024_03_28);
         assert!(Inner::V2024_03_28 < Inner::V2025_01_17);
         assert!(Inner::V2025_01_17 < Inner::V2025_08_07);
         assert!(Inner::V2025_08_07 < Inner::V2026_01_12);
+        assert!(Inner::V2026_01_12 < Inner::V2026_05_15);
     }
 }

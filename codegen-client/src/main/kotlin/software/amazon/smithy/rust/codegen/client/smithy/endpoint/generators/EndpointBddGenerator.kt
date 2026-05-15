@@ -45,6 +45,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddEx
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -72,6 +74,20 @@ class EndpointBddGenerator(
         private const val RESULT_PREFIX = "Result"
         private const val BINDING_PREFIX = "binding_"
         private const val CONDITION_FN_PREFIX = "cond_"
+
+        private val allowLintsForBddResolver =
+            listOf(
+                "unused_variables",
+                "unused_parens",
+                "clippy::double_parens",
+                "clippy::useless_conversion",
+                "clippy::bool_comparison",
+                "clippy::comparison_to_empty",
+                "clippy::needless_borrow",
+                "clippy::useless_asref",
+                "clippy::redundant_closure_call",
+                "clippy::clone_on_copy",
+            )
     }
 
     private data class GenerationContext(
@@ -171,9 +187,7 @@ class EndpointBddGenerator(
                         }
                     }
 
-                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
-                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
-                        clippy::needless_borrow, clippy::useless_asref, clippy::redundant_closure_call)]
+                    #{AllowLints:W}
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                         let mut _diagnostic_collector = #{DiagnosticCollector}::new();
                         ##[allow(unused_mut)]
@@ -225,6 +239,7 @@ class EndpointBddGenerator(
                 }
                 """,
                 *preludeScope,
+                "AllowLints" to writable { Attribute(allow(allowLintsForBddResolver)).render(this) },
                 "ArcSwap" to CargoDependency.ArcSwap.toType().resolve("ArcSwap"),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "CustomFields" to
@@ -265,12 +280,13 @@ class EndpointBddGenerator(
                         """
                         $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
                             #{NonParamRefBindings:W}
-                            let partition_resolver = &self.partition_resolver;
+                            #{CustomFieldBindings:W}
                             #{body:W}
                         })(&mut _diagnostic_collector),
                         """,
                         "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
                         "NonParamRefBindings" to generateNonParamReferences(),
+                        "CustomFieldBindings" to generateCustomFieldBindings(genContext),
                         "body" to condBody,
                     )
                 }
@@ -390,9 +406,7 @@ class EndpointBddGenerator(
                 }
 
                 impl ConditionFn {
-                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
-                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
-                        clippy::needless_borrow, clippy::useless_asref, )]
+                    #{AllowLints:W}
                     fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{AdditionalArgsSigPrefix}#{AdditionalArgsSig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
                         // Param bindings
                         #{ParamBindings:W}
@@ -410,6 +424,7 @@ class EndpointBddGenerator(
                 ];
                 """,
                 *preludeScope,
+                "AllowLints" to writable { Attribute(allow(allowLintsForBddResolver)).render(this) },
                 "AdditionalArgsSig" to
                     writable {
                         genContext.additionalArgsSignature.forEachIndexed { i, it ->
@@ -506,6 +521,19 @@ class EndpointBddGenerator(
             val varRefs = allRefs.variableRefs()
             varRefs.forEach {
                 rust("let ${it.value.name} = &mut context.${it.value.name};")
+            }
+        }
+
+    /**
+     * Generate bindings for custom fields (e.g. partition_resolver) from self into the condition closure.
+     * Only emits bindings for functions that are actually used by the endpoint rules.
+     */
+    private fun generateCustomFieldBindings(genContext: GenerationContext) =
+        writable {
+            genContext.fnsUsed.forEach { fn ->
+                if (fn.structFieldBdd() != null) {
+                    rust("let partition_resolver = &self.partition_resolver;")
+                }
             }
         }
 

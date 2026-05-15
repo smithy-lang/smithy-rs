@@ -34,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.Servi
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.TestCase
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasStreamingMember
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
@@ -269,6 +270,9 @@ class ClientProtocolTestGenerator(
             RT.sdkBody(runtimeConfig = rc),
         )
         val mediaType = testCase.bodyMediaType.orNull()
+        val outputShape = operationShape.outputShape(codegenContext.model)
+        val schemaExclusive = software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+        val streamingBlobOutput = schemaExclusive && outputShape.hasStreamingMember(codegenContext.model)
         rustTemplate(
             """
             use #{DeserializeResponse};
@@ -278,14 +282,20 @@ class ClientProtocolTestGenerator(
             let config = op.config().expect("the operation has config");
             let de = config.load::<#{SharedResponseDeserializer}>().expect("the config must have a deserializer");
 
-            let parsed = de.deserialize_streaming(&mut http_response);
+            // Build a config bag with the protocol for schema-based deserialization
+            ##[allow(unused_mut)]
+            let mut test_cfg = #{ConfigBag}::base();
+            #{inject_protocol}
+
+            let parsed = #{call_streaming};
             let parsed = parsed.unwrap_or_else(|| {
                 let http_response = http_response.map(|body| {
                     #{SdkBody}::from(#{copy_from_slice}(&#{decode_body_data}(body.bytes().unwrap(), #{MediaType}::from(${(mediaType ?: "unknown").dq()}))))
                 });
-                de.deserialize_nonstreaming(&http_response)
+                de.deserialize_nonstreaming_with_config(&http_response, &test_cfg)
             });
             """,
+            "ConfigBag" to RT.configBag(rc),
             "copy_from_slice" to RT.Bytes.resolve("copy_from_slice"),
             "decode_body_data" to RT.protocolTest(rc, "decode_body_data"),
             "DeserializeResponse" to RT.smithyRuntimeApiClient(rc).resolve("client::ser_de::DeserializeResponse"),
@@ -296,6 +306,16 @@ class ClientProtocolTestGenerator(
             "SharedResponseDeserializer" to
                 RT.smithyRuntimeApiClient(rc)
                     .resolve("client::ser_de::SharedResponseDeserializer"),
+            "inject_protocol" to protocolTestConfigBagSetup(),
+            "call_streaming" to
+                writable {
+                    if (streamingBlobOutput) {
+                        // Schema-serde streaming blob: use _with_config so the protocol is available
+                        rust("de.deserialize_streaming_with_config(&mut http_response, &test_cfg);")
+                    } else {
+                        rust("de.deserialize_streaming(&mut http_response);")
+                    }
+                },
         )
         if (expectedShape.hasTrait<ErrorTrait>()) {
             val errorSymbol = codegenContext.symbolProvider.symbolForOperationError(operationShape)
@@ -354,6 +374,41 @@ class ClientProtocolTestGenerator(
             }
         }
     }
+
+    /** Generates Rust code to inject the protocol into a test config bag. */
+    private fun protocolTestConfigBagSetup(): software.amazon.smithy.rust.codegen.core.rustlang.Writable =
+        writable {
+            if (software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                val smithySchema = RT.smithySchema(codegenContext.runtimeConfig)
+                val protocol = codegenContext.protocol
+                val serviceShapeName = codegenContext.serviceShape.id.name
+
+                val (protocolType, constructor) =
+                    when {
+                        protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
+                            smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        else -> return@writable
+                    }
+
+                rustTemplate(
+                    """
+                    {
+                        let mut layer = #{Layer}::new("test_protocol");
+                        layer.store_put(#{SharedClientProtocol}::new(#{ProtocolType}::$constructor));
+                        test_cfg.push_shared_layer(layer.freeze());
+                    }
+                    """,
+                    "Layer" to RT.smithyTypes(codegenContext.runtimeConfig).resolve("config_bag::Layer"),
+                    "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
+                    "ProtocolType" to protocolType,
+                )
+            }
+        }
 
     private fun checkBody(
         rustWriter: RustWriter,

@@ -13,6 +13,7 @@ import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.ServiceShape
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.ToShapeId
 import software.amazon.smithy.model.traits.HttpQueryTrait
 import software.amazon.smithy.model.traits.HttpTrait
@@ -20,6 +21,8 @@ import software.amazon.smithy.model.transform.ModelTransformer
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustSettings
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
+import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.CustomizableOperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.client.FluentClientSection
@@ -41,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.customize.AdHocCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.customize.adhocCustomization
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
@@ -140,6 +144,24 @@ class AwsPresigningDecorator internal constructor(
     private fun anyPresignedShapes(ctx: ClientCodegenContext) =
         TopDownIndex.of(ctx.model).getContainedOperations(ctx.serviceShape)
             .any { presignableOperations.containsKey(it.id) }
+
+    override fun operationCustomizations(
+        codegenContext: ClientCodegenContext,
+        operation: OperationShape,
+        baseCustomizations: List<OperationCustomization>,
+    ): List<OperationCustomization> {
+        val presignableOp = presignableOperations[operation.id]
+        return if (presignableOp != null && presignableOp.hasModelTransforms()) {
+            val transformedOp =
+                codegenContext.model.expectShape(
+                    syntheticShapeId(operation.id),
+                    OperationShape::class.java,
+                )
+            baseCustomizations + PresignedSchemaCustomization(codegenContext, transformedOp)
+        } else {
+            baseCustomizations
+        }
+    }
 
     override fun extraSections(codegenContext: ClientCodegenContext): List<AdHocCustomization> =
         anyPresignedShapes(codegenContext).thenSingletonListOf {
@@ -386,6 +408,43 @@ class AwsPresignedFluentBuilderMethod(
                         transformedOperationShape,
                     )
                 }
+            }
+        }
+}
+
+/**
+ * Generates a `PRESIGNED_INPUT_SCHEMA` constant for operations with presigning model transforms.
+ */
+private class PresignedSchemaCustomization(
+    private val codegenContext: ClientCodegenContext,
+    private val transformedOperationShape: OperationShape,
+) : OperationCustomization() {
+    override fun section(section: OperationSection): Writable =
+        writable {
+            when (section) {
+                is OperationSection.AdditionalItems -> {
+                    val transformedInputShape =
+                        codegenContext.model.expectShape(
+                            transformedOperationShape.inputShape,
+                            StructureShape::class.java,
+                        )
+                    SchemaGenerator(
+                        codegenContext,
+                        this,
+                        transformedInputShape,
+                        schemaPrefix = "PRESIGNED",
+                    ).renderSchemaOnly()
+                }
+                is OperationSection.OperationImplBlock -> {
+                    rustTemplate(
+                        """
+                        /// The schema for this operation's presigned input shape.
+                        pub const PRESIGNED_INPUT_SCHEMA: &'static #{Schema} = &PRESIGNED_SCHEMA;
+                        """,
+                        "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
+                    )
+                }
+                else -> {}
             }
         }
 }
