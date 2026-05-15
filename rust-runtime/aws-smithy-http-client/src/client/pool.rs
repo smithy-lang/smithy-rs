@@ -183,7 +183,7 @@ where
         max_connections = ?config.max_connections,
         max_connections_per_host = ?config.max_connections_per_host,
         pool_idle_timeout = ?config.pool_idle_timeout,
-        "v2 pool: initialized"
+        "pool: initialized"
     );
 
     let make_entry = {
@@ -251,7 +251,7 @@ where
                                                     conn_id = managed.conn_id(),
                                                     reason,
                                                     ?idle_duration,
-                                                    "v2 pool: connection evicted"
+                                                    "pool: connection evicted"
                                                 );
                                             }
                                             keep
@@ -318,7 +318,7 @@ where
                                                     conn_id = managed.conn_id(),
                                                     reason,
                                                     ?idle_duration,
-                                                    "v2 pool: connection evicted"
+                                                    "pool: connection evicted"
                                                 );
                                             }
                                             keep
@@ -463,7 +463,7 @@ impl ConnectionPool {
         tracing::debug!(
             interval = ?tick,
             pool_idle_timeout = ?timeout,
-            "v2 pool: eviction task spawned"
+            "pool: eviction task spawned"
         );
         tokio::spawn(eviction_task(weak, rx, timeout));
     }
@@ -482,7 +482,7 @@ impl ConnectionPool {
                 tracing::debug!(
                     authority = %key.authority,
                     scheme = %key.scheme,
-                    "v2 pool: host entry removed (empty after retain)"
+                    "pool: host entry removed (empty after retain)"
                 );
                 false
             } else {
@@ -494,7 +494,7 @@ impl ConnectionPool {
         tracing::trace!(
             hosts_before = before,
             hosts_after = after,
-            "v2 pool: eviction tick complete"
+            "pool: eviction tick complete"
         );
     }
 }
@@ -541,7 +541,7 @@ async fn eviction_task(
             }
         }
     }
-    tracing::trace!("v2 pool eviction task exiting");
+    tracing::trace!("pool eviction task exiting");
 }
 
 /// Rewrite an HTTP/1.1 request's URI to the appropriate request-target
@@ -634,6 +634,7 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
         let mut conn = self.conn.take().expect("H1Checkout::call called twice");
+        tracing::trace!(conn_id = conn.conn_id(), uri = %req.uri(), "pool: dispatching request");
         // Populate the adapter-provided capture so the
         // `CaptureSmithyConnection` retriever can return a live
         // `ConnectionMetadata` pointing at THIS connection's poison pill.
@@ -707,6 +708,9 @@ where
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
         let mut conn = self.conn.take().expect("H2Checkout::call called twice");
+        if let Some(id) = conn.metadata().and_then(|m| m.connection_id()) {
+            tracing::trace!(conn_id = %id, uri = %req.uri(), "pool: dispatching request");
+        }
         // Populate the adapter-provided capture. The metadata is published
         // by `H2ConnectAndHandshake` when a fresh H2 connection is
         // established; if a request somehow reaches us before any metadata

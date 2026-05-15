@@ -286,7 +286,7 @@ where
                 protocol = "h1",
                 remote = ?info.remote_addr,
                 local = ?info.local_addr,
-                "v2 pool: connection established"
+                "pool: connection established"
             );
 
             spawn_driver({
@@ -300,7 +300,7 @@ where
                             ?remote_addr,
                             ?local_addr,
                             error = %e,
-                            "connection driver error"
+                            "pool: connection driver error"
                         );
                     }
                 }
@@ -391,7 +391,7 @@ where
                 protocol = "h2",
                 remote = ?info.remote_addr,
                 local = ?info.local_addr,
-                "v2 pool: connection established"
+                "pool: connection established"
             );
 
             spawn_driver({
@@ -405,7 +405,7 @@ where
                             ?remote_addr,
                             ?local_addr,
                             error = %e,
-                            "connection driver error"
+                            "pool: connection driver error"
                         );
                     }
                 }
