@@ -1172,19 +1172,19 @@ async fn v2_background_eviction_emits_tracing_events() {
 
     let captured = captured_str(&logs);
     assert!(
-        captured.contains("v2 pool: initialized"),
+        captured.contains("pool: initialized"),
         "expected pool init log"
     );
     assert!(
-        captured.contains("v2 pool: eviction task spawned"),
+        captured.contains("pool: eviction task spawned"),
         "expected eviction task spawn log"
     );
     assert!(
-        captured.contains("v2 pool: connection established"),
+        captured.contains("pool: connection established"),
         "expected connection-established log"
     );
     assert!(
-        captured.contains("v2 pool: connection evicted"),
+        captured.contains("pool: connection evicted"),
         "expected 'connection evicted' log — background task should have evicted the idle connection"
     );
     assert!(
@@ -1192,7 +1192,7 @@ async fn v2_background_eviction_emits_tracing_events() {
         "expected idle_expired reason. captured:\n{captured}"
     );
     assert!(
-        captured.contains("v2 pool: host entry removed"),
+        captured.contains("pool: host entry removed"),
         "expected host-entry-removed log once cache went empty"
     );
 }
@@ -1217,7 +1217,7 @@ async fn v2_conn_id_is_stable_and_monotonic() {
 
     let captured = captured_str(&logs);
     assert!(
-        captured.contains("v2 pool: connection established"),
+        captured.contains("pool: connection established"),
         "no 'connection established' log captured"
     );
     assert!(
@@ -1228,7 +1228,7 @@ async fn v2_conn_id_is_stable_and_monotonic() {
         captured.contains("conn_id=1"),
         "second connection (after eviction) should be conn_id=1. captured:\n{captured}"
     );
-    assert!(captured.contains("v2 pool: connection evicted"));
+    assert!(captured.contains("pool: connection evicted"));
 }
 
 // ---------------------------------------------------------------------------
@@ -1273,4 +1273,68 @@ async fn v2_connect_timeout() {
         elapsed < Duration::from_secs(5),
         "timeout took too long ({elapsed:?})"
     );
+}
+
+/// `ConnectionMetadata::connection_id()` surfaces the pool-assigned id
+/// through `CaptureSmithyConnection`. Sequential requests on the same
+/// connection share the same id; a new connection after eviction gets a
+/// different id.
+#[tokio::test]
+async fn v2_connection_id_surfaced_through_metadata() {
+    use aws_smithy_runtime_api::client::connection::ConnectionId;
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"a",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"b",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"c",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let client = V2Client.make(ClientConfig {
+        idle_timeout: Some(Duration::from_millis(80)),
+        ..Default::default()
+    });
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+    // First two requests reuse the same connection.
+    let (_, _, meta1) = send_with_capture(&client, &url).await;
+    let (_, _, meta2) = send_with_capture(&client, &url).await;
+    let id1 = meta1
+        .unwrap()
+        .connection_id()
+        .expect("v2 sets connection_id");
+    let id2 = meta2
+        .unwrap()
+        .connection_id()
+        .expect("v2 sets connection_id");
+    assert_eq!(id1, id2, "same connection should have same id");
+    assert_eq!(id1, ConnectionId::new(0));
+
+    // Wait for eviction, then the next request gets a new connection.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    let (_, _, meta3) = send_with_capture(&client, &url).await;
+    let id3 = meta3
+        .unwrap()
+        .connection_id()
+        .expect("v2 sets connection_id");
+    assert_ne!(
+        id1, id3,
+        "new connection after eviction should have different id"
+    );
+    assert_eq!(id3, ConnectionId::new(1));
 }
