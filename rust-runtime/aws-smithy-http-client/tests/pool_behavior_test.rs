@@ -1338,3 +1338,200 @@ async fn v2_connection_id_surfaced_through_metadata() {
     );
     assert_eq!(id3, ConnectionId::new(1));
 }
+
+// ---- ConnectionEventListener tests ----
+
+mod listener_tests {
+    use super::*;
+    use aws_smithy_http_client::v2::{
+        CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
+        ConnectionFailedEvent, ConnectionReusedEvent,
+    };
+    use std::sync::{Arc, Mutex};
+
+    /// Records connection lifecycle events for test assertions.
+    #[derive(Debug, Clone, Default)]
+    struct RecordingListener {
+        /// (conn_id, authority) for each connection created
+        created: Arc<Mutex<Vec<(u64, String)>>>,
+        /// (conn_id, authority) for each connection reused from idle
+        reused: Arc<Mutex<Vec<(u64, String)>>>,
+        /// (conn_id, authority, reason) for each connection closed
+        closed: Arc<Mutex<Vec<(u64, String, CloseReason)>>>,
+        /// authority for each failed connection attempt
+        failed: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl ConnectionEventListener for RecordingListener {
+        fn on_created(&self, event: &ConnectionCreatedEvent) {
+            self.created.lock().unwrap().push((
+                event.conn_id().to_string().parse().unwrap(),
+                event.authority().as_str().to_string(),
+            ));
+        }
+        fn on_reused(&self, event: &ConnectionReusedEvent) {
+            self.reused.lock().unwrap().push((
+                event.conn_id().to_string().parse().unwrap(),
+                event.authority().as_str().to_string(),
+            ));
+        }
+        fn on_closed(&self, event: &ConnectionClosedEvent) {
+            self.closed.lock().unwrap().push((
+                event.conn_id().to_string().parse().unwrap(),
+                event.authority().as_str().to_string(),
+                event.reason(),
+            ));
+        }
+        fn on_connection_failed(&self, event: &ConnectionFailedEvent) {
+            self.failed
+                .lock()
+                .unwrap()
+                .push(event.authority().as_str().to_string());
+        }
+    }
+
+    fn make_v2_with_listener(
+        harness: &ConnectionTestHarness,
+        idle_timeout: Option<Duration>,
+        listener: Arc<dyn ConnectionEventListener>,
+    ) -> SharedHttpClient {
+        let mut builder =
+            aws_smithy_http_client::Builder::new_v2().connection_event_listener(listener);
+        if let Some(timeout) = idle_timeout {
+            builder = builder.pool_idle_timeout(timeout);
+        }
+        builder.build_http_with_resolver(harness.dns_resolver())
+    }
+
+    /// Listener receives created on first request, reused on second, and
+    /// closed(IdleTimeout) after eviction.
+    #[tokio::test]
+    async fn listener_lifecycle_created_reused_closed() {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                vec![
+                    ConnectionBehavior::RespondKeepAlive {
+                        status: 200,
+                        body: b"a",
+                    },
+                    ConnectionBehavior::RespondKeepAlive {
+                        status: 200,
+                        body: b"b",
+                    },
+                ],
+            )
+            .build()
+            .await;
+
+        let listener = Arc::new(RecordingListener::default());
+        let client =
+            make_v2_with_listener(&harness, Some(Duration::from_millis(80)), listener.clone());
+        let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+        // First request: on_created
+        super::send_and_read_body(&client, &url).await;
+        assert_eq!(listener.created.lock().unwrap().len(), 1);
+        assert_eq!(listener.created.lock().unwrap()[0].0, 0);
+        assert!(listener.created.lock().unwrap()[0].1.contains("127.0.0.1"));
+
+        // Second request: on_reused
+        super::send_and_read_body(&client, &url).await;
+        assert_eq!(listener.reused.lock().unwrap().len(), 1);
+        assert_eq!(listener.reused.lock().unwrap()[0].0, 0);
+
+        // Wait for eviction
+        tokio::time::sleep(Duration::from_millis(200)).await;
+
+        let closed = listener.closed.lock().unwrap();
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].0, 0);
+        assert_eq!(closed[0].2, CloseReason::IdleTimeout);
+    }
+
+    /// Poisoning a connection fires on_closed with Poisoned reason.
+    #[tokio::test]
+    async fn listener_poisoned_connection_fires_on_closed() {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                vec![
+                    ConnectionBehavior::RespondKeepAlive {
+                        status: 200,
+                        body: b"ok",
+                    },
+                    ConnectionBehavior::RespondKeepAlive {
+                        status: 200,
+                        body: b"ok",
+                    },
+                ],
+            )
+            .build()
+            .await;
+
+        let listener = Arc::new(RecordingListener::default());
+        let client = make_v2_with_listener(&harness, None, listener.clone());
+        let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+        // Make a request and poison the connection
+        let (_, _, meta) = super::send_with_capture(&client, &url).await;
+        meta.unwrap().poison();
+
+        // The poisoned connection is discarded on next checkout attempt
+        super::send_and_read_body(&client, &url).await;
+
+        let closed = listener.closed.lock().unwrap();
+        assert_eq!(closed.len(), 1);
+        assert_eq!(closed[0].2, CloseReason::Poisoned);
+    }
+
+    /// Connection failure fires on_connection_failed with the authority.
+    #[tokio::test]
+    async fn listener_connection_failed() {
+        let listener = Arc::new(RecordingListener::default());
+
+        // Use a harness with no endpoints so the connection will fail
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(IP1, vec![ConnectionBehavior::ResetOnConnect])
+            .build()
+            .await;
+
+        let client = make_v2_with_listener(&harness, None, listener.clone());
+        let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+        let settings = HttpConnectorSettings::builder().build();
+        let components = runtime_components();
+        let connector = client.http_connector(&settings, &components);
+        let request = HttpRequest::get(&url).expect("valid request");
+        let _ = connector.call(request).await;
+
+        let failed = listener.failed.lock().unwrap();
+        assert_eq!(failed.len(), 1);
+        assert!(failed[0].contains("127.0.0.1"));
+    }
+
+    /// Authority is correctly populated on events.
+    #[tokio::test]
+    async fn listener_authority_populated() {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                vec![ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"x",
+                }],
+            )
+            .build()
+            .await;
+
+        let listener = Arc::new(RecordingListener::default());
+        let client = make_v2_with_listener(&harness, None, listener.clone());
+        let port = harness.endpoints[0].port();
+        let url = format!("http://127.0.0.1:{}/path", port);
+
+        super::send_and_read_body(&client, &url).await;
+
+        let created = listener.created.lock().unwrap();
+        assert_eq!(created[0].1, format!("127.0.0.1:{}", port));
+    }
+}

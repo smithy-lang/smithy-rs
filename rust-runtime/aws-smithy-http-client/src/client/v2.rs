@@ -7,6 +7,11 @@
 //!
 //! Entry point: [`BuilderV2::new`] or [`Builder::new_v2`](super::Builder::new_v2).
 
+pub use super::pool::connection::{
+    Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
+    ConnectionFailedEvent, ConnectionReusedEvent, NegotiatedProtocol,
+};
+
 use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
@@ -44,14 +49,31 @@ use crate::tls::TlsContext;
 ///     .pool_idle_timeout(Duration::from_secs(20))
 ///     .build_http();
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BuilderV2<Tls = TlsUnset> {
     pool_idle_timeout: Option<Duration>,
     tcp_nodelay: bool,
     max_connections: Option<usize>,
     max_connections_per_host: Option<usize>,
     proxy_config: Option<super::proxy::ProxyConfig>,
+    connection_event_listener: Option<Arc<dyn super::pool::connection::ConnectionEventListener>>,
     tls: Tls,
+}
+
+impl<Tls: std::fmt::Debug> std::fmt::Debug for BuilderV2<Tls> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("BuilderV2")
+            .field("pool_idle_timeout", &self.pool_idle_timeout)
+            .field("tcp_nodelay", &self.tcp_nodelay)
+            .field("max_connections", &self.max_connections)
+            .field("max_connections_per_host", &self.max_connections_per_host)
+            .field("proxy_config", &self.proxy_config)
+            .field(
+                "connection_event_listener",
+                &self.connection_event_listener.as_ref().map(|_| ".."),
+            )
+            .finish()
+    }
 }
 
 impl Default for BuilderV2<TlsUnset> {
@@ -62,6 +84,7 @@ impl Default for BuilderV2<TlsUnset> {
             max_connections: None,
             max_connections_per_host: None,
             proxy_config: None,
+            connection_event_listener: None,
             tls: TlsUnset {},
         }
     }
@@ -126,6 +149,24 @@ impl<Tls> BuilderV2<Tls> {
         self.proxy_config = config;
         self
     }
+
+    /// Set a listener for connection lifecycle events (created, reused, closed, failed).
+    pub fn connection_event_listener(
+        mut self,
+        listener: Arc<dyn super::pool::connection::ConnectionEventListener>,
+    ) -> Self {
+        self.connection_event_listener = Some(listener);
+        self
+    }
+
+    /// Mutable-reference variant of [`connection_event_listener`](Self::connection_event_listener).
+    pub fn set_connection_event_listener(
+        &mut self,
+        listener: Option<Arc<dyn super::pool::connection::ConnectionEventListener>>,
+    ) -> &mut Self {
+        self.connection_event_listener = listener;
+        self
+    }
 }
 
 impl BuilderV2<TlsUnset> {
@@ -142,6 +183,7 @@ impl BuilderV2<TlsUnset> {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             proxy_config: self.proxy_config,
+            connection_event_listener: self.connection_event_listener,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -158,6 +200,7 @@ impl BuilderV2<TlsUnset> {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: self.pool_idle_timeout,
+            connection_event_listener: self.connection_event_listener.clone(),
         };
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
         let pool = build_http_pool_with_proxy(tcp, &self.proxy_config, config);
@@ -182,6 +225,7 @@ impl BuilderV2<TlsUnset> {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: self.pool_idle_timeout,
+            connection_event_listener: self.connection_event_listener.clone(),
         };
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
         let pool = build_http_pool_with_proxy(tcp, &self.proxy_config, config);
@@ -268,6 +312,7 @@ impl BuilderV2<TlsProviderSelected> {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: self.pool_idle_timeout,
+            connection_event_listener: self.connection_event_listener.clone(),
         };
 
         let proxy_config = self
