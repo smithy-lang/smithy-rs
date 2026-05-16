@@ -1534,4 +1534,51 @@ mod listener_tests {
         let created = listener.created.lock().unwrap();
         assert_eq!(created[0].1, format!("127.0.0.1:{}", port));
     }
+
+    /// A connection that the server closed while idle fires on_closed
+    /// with Unusable reason when detected at checkout.
+    #[tokio::test]
+    async fn listener_unusable_connection_fires_on_closed() {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                vec![
+                    // First request succeeds, then server closes the connection.
+                    ConnectionBehavior::RespondThenClose {
+                        status: 200,
+                        body: b"ok",
+                    },
+                    // Second connection for the retry.
+                    ConnectionBehavior::RespondKeepAlive {
+                        status: 200,
+                        body: b"ok",
+                    },
+                ],
+            )
+            .build()
+            .await;
+
+        let listener = Arc::new(RecordingListener::default());
+        let client = make_v2_with_listener(&harness, None, listener.clone());
+        let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+        // First request succeeds; connection returns to pool.
+        super::send_and_read_body(&client, &url).await;
+
+        // Brief pause for the server-side close to propagate.
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        // Second request: pool checks out the dead connection, detects it
+        // in poll_ready, fires on_closed(Unusable), then creates a new one.
+        super::send_and_read_body(&client, &url).await;
+
+        let closed = listener.closed.lock().unwrap();
+        let unusable = closed.iter().find(|c| c.2 == CloseReason::Unusable);
+        assert!(
+            unusable.is_some(),
+            "expected on_closed with Unusable reason, got: {:?}",
+            *closed
+        );
+        assert_eq!(unusable.unwrap().0, 0, "should be the first connection");
+    }
 }
