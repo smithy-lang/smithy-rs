@@ -12,7 +12,7 @@
 //! metadata (remote/local address, poison handle) to the adapter layer
 //! for the runtime's connection-poisoning interceptor.
 
-mod connection;
+pub(crate) mod connection;
 mod handshake;
 mod vendored_cache;
 
@@ -45,8 +45,8 @@ use tokio::sync::{oneshot, Semaphore};
 use tower::{Service, ServiceExt};
 
 use connection::{
-    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, H2ConnectionRef,
-    SingletonConnection,
+    Authority, CachedConnection, CheckoutResponse, CloseReason, ConnectionClosedEvent,
+    ConnectionGuard, GuardedBody, H2ConnectionRef, SingletonConnection,
 };
 pub(crate) use connection::{ConnectCtx, ReadTimeoutHint, TimeoutContext};
 use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};
@@ -104,7 +104,7 @@ impl ConnectionMetadataCapture {
 /// they take effect, not here). Fields are `pub(crate)` because
 /// consumers of this struct are all within the pool module; accessor
 /// methods would add noise without benefit.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct PoolConfig {
     /// Upper bound on concurrent connections (total, across all hosts).
     /// Enforced via semaphore at the connection establishment layer.
@@ -119,6 +119,9 @@ pub(crate) struct PoolConfig {
     /// How long an idle connection may stay in the pool before being
     /// evicted. `None` = no eviction (hyper-util's default behavior).
     pub(crate) pool_idle_timeout: Option<std::time::Duration>,
+
+    /// Optional listener for connection lifecycle events.
+    pub(crate) connection_event_listener: Option<Arc<dyn connection::ConnectionEventListener>>,
 }
 
 /// Key for per-host connection pool routing.
@@ -177,7 +180,7 @@ where
 {
     let global_sem = config.max_connections.map(|n| Arc::new(Semaphore::new(n)));
     let max_per_host = config.max_connections_per_host;
-    let pool_hooks = handshake::PoolHooks::new();
+    let pool_hooks = handshake::PoolHooks::new(config.connection_event_listener.clone());
 
     tracing::debug!(
         max_connections = ?config.max_connections,
@@ -188,7 +191,12 @@ where
 
     let make_entry = {
         let pool_hooks = pool_hooks.clone();
-        move |_uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
+        move |uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
+            let authority = Authority::new(
+                uri.authority()
+                    .expect("pool entry URI has authority")
+                    .as_str(),
+            );
             let per_host_sem = max_per_host.map(|n| Arc::new(Semaphore::new(n)));
             let limited = handshake::ConnectionLimit::new(
                 connector.clone(),
@@ -230,32 +238,51 @@ where
                             .lock()
                             .expect("retainer slot poisoned")
                             .push(BoxedRetainer {
-                                retain_fn: Box::new(move |timeout| {
-                                    let now = Instant::now();
-                                    cache_for_retain
-                                        .lock()
-                                        .expect("retain cache lock poisoned")
-                                        .retain(|managed| {
-                                            let keep = !managed.is_poisoned()
-                                                && now.saturating_duration_since(managed.idle_at())
-                                                    < timeout;
-                                            if !keep {
-                                                let reason = if managed.is_poisoned() {
-                                                    "poisoned"
-                                                } else {
-                                                    "idle_expired"
-                                                };
-                                                let idle_duration = now
-                                                    .saturating_duration_since(managed.idle_at());
-                                                tracing::debug!(
-                                                    conn_id = managed.conn_id(),
-                                                    reason,
-                                                    ?idle_duration,
-                                                    "pool: connection evicted"
-                                                );
-                                            }
-                                            keep
-                                        });
+                                retain_fn: Box::new({
+                                    let listener = pool_hooks.listener.clone();
+                                    move |timeout| {
+                                        let now = Instant::now();
+                                        cache_for_retain
+                                            .lock()
+                                            .expect("retain cache lock poisoned")
+                                            .retain(|managed| {
+                                                let keep = !managed.is_poisoned()
+                                                    && now.saturating_duration_since(
+                                                        managed.idle_at(),
+                                                    ) < timeout;
+                                                if !keep {
+                                                    let reason = if managed.is_poisoned() {
+                                                        "poisoned"
+                                                    } else {
+                                                        "idle_expired"
+                                                    };
+                                                    let idle_duration = now
+                                                        .saturating_duration_since(
+                                                            managed.idle_at(),
+                                                        );
+                                                    tracing::debug!(
+                                                        conn_id = %managed.conn_id(),
+                                                        reason,
+                                                        ?idle_duration,
+                                                        "pool: connection evicted"
+                                                    );
+                                                    if let Some(ref l) = listener {
+                                                        l.on_closed(&ConnectionClosedEvent::new(
+                                                            managed.conn_id(),
+                                                            managed.info.authority.clone(),
+                                                            managed.info.remote_addr,
+                                                            if managed.is_poisoned() {
+                                                                CloseReason::Poisoned
+                                                            } else {
+                                                                CloseReason::IdleTimeout
+                                                            },
+                                                            None,
+                                                        ));
+                                                    }
+                                                }
+                                                keep
+                                            });
+                                    }
                                 }),
                                 is_empty_fn: Box::new(move || {
                                     cache_for_empty
@@ -264,7 +291,12 @@ where
                                         .is_empty()
                                 }),
                             });
-                        cache.map_response(|cached| H1Checkout::new(CachedConnection::new(cached)))
+                        cache.map_response({
+                            let listener = pool_hooks.listener.clone();
+                            move |cached| {
+                                H1Checkout::new(CachedConnection::new(cached, listener.clone()))
+                            }
+                        })
                     })
                 })
                 .upgrade({
@@ -277,6 +309,7 @@ where
                                 inspected,
                                 h2_ref.clone(),
                                 pool_hooks.clone(),
+                                authority.clone(),
                             ));
                         let singleton_for_retain =
                             Arc::new(std::sync::Mutex::new(singleton.clone()));
@@ -285,44 +318,62 @@ where
                             .lock()
                             .expect("retainer slot poisoned")
                             .push(BoxedRetainer {
-                                retain_fn: Box::new(move |timeout| {
-                                    let now = Instant::now();
-                                    singleton_for_retain
-                                        .lock()
-                                        .expect("retain singleton lock poisoned")
-                                        .retain(|managed| {
-                                            // For H2 the connection stays in
-                                            // Singleton while serving streams, so
-                                            // `idle_at` alone is not a valid
-                                            // idleness signal. Keep the
-                                            // connection if any stream is in
-                                            // flight; only evict when truly idle
-                                            // AND `idle_at` has exceeded the
-                                            // timeout (stamped on the 1 → 0
-                                            // transition by
-                                            // `SingletonConnection::drop`).
-                                            let keep = !managed.is_poisoned()
-                                                && (managed.active_streams_count() > 0
-                                                    || now.saturating_duration_since(
-                                                        managed.idle_at(),
-                                                    ) < timeout);
-                                            if !keep {
-                                                let reason = if managed.is_poisoned() {
-                                                    "poisoned"
-                                                } else {
-                                                    "idle_expired"
-                                                };
-                                                let idle_duration = now
-                                                    .saturating_duration_since(managed.idle_at());
-                                                tracing::debug!(
-                                                    conn_id = managed.conn_id(),
-                                                    reason,
-                                                    ?idle_duration,
-                                                    "pool: connection evicted"
-                                                );
-                                            }
-                                            keep
-                                        });
+                                retain_fn: Box::new({
+                                    let listener = pool_hooks.listener.clone();
+                                    move |timeout| {
+                                        let now = Instant::now();
+                                        singleton_for_retain
+                                            .lock()
+                                            .expect("retain singleton lock poisoned")
+                                            .retain(|managed| {
+                                                // For H2 the connection stays in
+                                                // Singleton while serving streams, so
+                                                // `idle_at` alone is not a valid
+                                                // idleness signal. Keep the
+                                                // connection if any stream is in
+                                                // flight; only evict when truly idle
+                                                // AND `idle_at` has exceeded the
+                                                // timeout (stamped on the 1 → 0
+                                                // transition by
+                                                // `SingletonConnection::drop`).
+                                                let keep = !managed.is_poisoned()
+                                                    && (managed.active_streams_count() > 0
+                                                        || now.saturating_duration_since(
+                                                            managed.idle_at(),
+                                                        ) < timeout);
+                                                if !keep {
+                                                    let reason = if managed.is_poisoned() {
+                                                        "poisoned"
+                                                    } else {
+                                                        "idle_expired"
+                                                    };
+                                                    let idle_duration = now
+                                                        .saturating_duration_since(
+                                                            managed.idle_at(),
+                                                        );
+                                                    tracing::debug!(
+                                                        conn_id = %managed.conn_id(),
+                                                        reason,
+                                                        ?idle_duration,
+                                                        "pool: connection evicted"
+                                                    );
+                                                    if let Some(ref l) = listener {
+                                                        l.on_closed(&ConnectionClosedEvent::new(
+                                                            managed.conn_id(),
+                                                            managed.info.authority.clone(),
+                                                            managed.info.remote_addr,
+                                                            if managed.is_poisoned() {
+                                                                CloseReason::Poisoned
+                                                            } else {
+                                                                CloseReason::IdleTimeout
+                                                            },
+                                                            None,
+                                                        ));
+                                                    }
+                                                }
+                                                keep
+                                            });
+                                    }
                                 }),
                                 is_empty_fn: Box::new(move || {
                                     singleton_for_empty
@@ -634,7 +685,7 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
 
     fn call(&mut self, req: http_1x::Request<SdkBody>) -> Self::Future {
         let mut conn = self.conn.take().expect("H1Checkout::call called twice");
-        tracing::trace!(conn_id = conn.conn_id(), uri = %req.uri(), "pool: dispatching request");
+        tracing::trace!(conn_id = %conn.conn_id(), uri = %req.uri(), "pool: dispatching request");
         // Populate the adapter-provided capture so the
         // `CaptureSmithyConnection` retriever can return a live
         // `ConnectionMetadata` pointing at THIS connection's poison pill.
