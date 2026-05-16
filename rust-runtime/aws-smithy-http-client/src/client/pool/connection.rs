@@ -22,6 +22,258 @@ use super::cache;
 use super::handshake::H1SendRequest;
 use super::BoxError;
 
+/// Opaque authority (host:port) associated with a pooled connection.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Authority(Arc<str>);
+
+impl Authority {
+    pub(crate) fn new(s: impl Into<Arc<str>>) -> Self {
+        Self(s.into())
+    }
+
+    /// The authority as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl AsRef<str> for Authority {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::fmt::Display for Authority {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+/// Protocol negotiated for a connection.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NegotiatedProtocol {
+    /// HTTP/1.1
+    Http1,
+    /// HTTP/2
+    Http2,
+}
+
+/// Why a connection was removed from the pool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum CloseReason {
+    /// Idle longer than the configured pool idle timeout.
+    IdleTimeout,
+    /// Marked as poisoned (unhealthy) by the SDK or pool.
+    Poisoned,
+    /// The pool itself was dropped.
+    PoolDropped,
+}
+
+/// Emitted when a new connection is established (TCP + TLS + HTTP handshake).
+#[derive(Debug)]
+pub struct ConnectionCreatedEvent {
+    conn_id: ConnectionId,
+    authority: Authority,
+    remote_addr: Option<SocketAddr>,
+    protocol: NegotiatedProtocol,
+}
+
+impl ConnectionCreatedEvent {
+    pub(crate) fn new(
+        conn_id: ConnectionId,
+        authority: Authority,
+        remote_addr: Option<SocketAddr>,
+        protocol: NegotiatedProtocol,
+    ) -> Self {
+        Self {
+            conn_id,
+            authority,
+            remote_addr,
+            protocol,
+        }
+    }
+
+    /// The pool-assigned connection identifier.
+    pub fn conn_id(&self) -> ConnectionId {
+        self.conn_id
+    }
+
+    /// The authority (host:port) this connection is for.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
+    }
+
+    /// Remote address of the peer, if known.
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
+    }
+
+    /// Negotiated protocol.
+    pub fn protocol(&self) -> NegotiatedProtocol {
+        self.protocol
+    }
+}
+
+/// Emitted when an existing idle connection is checked out from the pool.
+#[derive(Debug)]
+pub struct ConnectionReusedEvent {
+    conn_id: ConnectionId,
+    authority: Authority,
+}
+
+impl ConnectionReusedEvent {
+    pub(crate) fn new(conn_id: ConnectionId, authority: Authority) -> Self {
+        Self { conn_id, authority }
+    }
+
+    /// The pool-assigned connection identifier.
+    pub fn conn_id(&self) -> ConnectionId {
+        self.conn_id
+    }
+
+    /// The authority (host:port) this connection is for.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
+    }
+}
+
+/// Emitted when a connection is removed from the pool.
+pub struct ConnectionClosedEvent {
+    conn_id: ConnectionId,
+    authority: Authority,
+    remote_addr: Option<SocketAddr>,
+    reason: CloseReason,
+    error: Option<BoxError>,
+}
+
+impl std::fmt::Debug for ConnectionClosedEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut s = f.debug_struct("ConnectionClosedEvent");
+        s.field("conn_id", &self.conn_id)
+            .field("authority", &self.authority)
+            .field("remote_addr", &self.remote_addr)
+            .field("reason", &self.reason);
+        if let Some(ref e) = self.error {
+            s.field("error", &format_args!("{e}"));
+        }
+        s.finish()
+    }
+}
+
+impl ConnectionClosedEvent {
+    pub(crate) fn new(
+        conn_id: ConnectionId,
+        authority: Authority,
+        remote_addr: Option<SocketAddr>,
+        reason: CloseReason,
+        error: Option<BoxError>,
+    ) -> Self {
+        Self {
+            conn_id,
+            authority,
+            remote_addr,
+            reason,
+            error,
+        }
+    }
+
+    /// The pool-assigned connection identifier.
+    pub fn conn_id(&self) -> ConnectionId {
+        self.conn_id
+    }
+
+    /// The authority (host:port) this connection was for.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
+    }
+
+    /// Remote address of the peer, if known.
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
+    }
+
+    /// Why the connection was closed.
+    pub fn reason(&self) -> CloseReason {
+        self.reason
+    }
+
+    /// The error associated with this close, if any. Present for
+    /// server-initiated closes; `None` for policy-driven closes
+    /// (idle timeout, poisoning).
+    pub fn error(&self) -> Option<&(dyn std::error::Error + Send + Sync)> {
+        self.error.as_ref().map(|e| e.as_ref())
+    }
+}
+
+/// Emitted when a connection attempt fails before completing the handshake.
+pub struct ConnectionFailedEvent {
+    authority: Authority,
+    remote_addr: Option<SocketAddr>,
+    error: BoxError,
+}
+
+impl std::fmt::Debug for ConnectionFailedEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConnectionFailedEvent")
+            .field("authority", &self.authority)
+            .field("remote_addr", &self.remote_addr)
+            .field("error", &format_args!("{}", self.error))
+            .finish()
+    }
+}
+
+impl ConnectionFailedEvent {
+    pub(crate) fn new(
+        authority: Authority,
+        remote_addr: Option<SocketAddr>,
+        error: BoxError,
+    ) -> Self {
+        Self {
+            authority,
+            remote_addr,
+            error,
+        }
+    }
+
+    /// The authority (host:port) the connection was attempting to reach.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
+    }
+
+    /// Remote address of the peer, if known. `None` when the failure occurred
+    /// before a peer address was established (e.g., DNS resolution failure or
+    /// connection refused before address binding).
+    pub fn remote_addr(&self) -> Option<SocketAddr> {
+        self.remote_addr
+    }
+
+    /// The error that caused the connection attempt to fail.
+    pub fn error(&self) -> &(dyn std::error::Error + Send + Sync) {
+        self.error.as_ref()
+    }
+}
+
+/// Callback for connection lifecycle events within the pool.
+///
+/// Implementations receive notifications when connections are created,
+/// reused from the pool, closed, or fail to establish. Useful for metrics,
+/// DNS failure feedback, or adaptive concurrency control.
+///
+/// Implementations must be cheap (nanoseconds). Expensive work should be
+/// deferred to a background task.
+pub trait ConnectionEventListener: Send + Sync + 'static {
+    /// A new connection was established.
+    fn on_created(&self, _event: &ConnectionCreatedEvent) {}
+    /// An existing idle connection was checked out from the pool.
+    fn on_reused(&self, _event: &ConnectionReusedEvent) {}
+    /// A connection was removed from the pool.
+    fn on_closed(&self, _event: &ConnectionClosedEvent) {}
+    /// A connection attempt failed before completing the handshake.
+    fn on_connection_failed(&self, _event: &ConnectionFailedEvent) {}
+}
+
 /// A duration paired with the sleep implementation used to realize it.
 ///
 /// This type makes "timeout without sleep impl" unrepresentable: you cannot
@@ -126,6 +378,9 @@ pub(crate) struct ConnectionInfo {
     /// [`hyper_util::client::legacy::connect::Connected::is_proxied`] at
     /// handshake.
     pub(crate) is_proxied: bool,
+    /// The authority (host:port) this connection is for. Populated from the
+    /// URI at handshake time.
+    pub(crate) authority: Authority,
     // Future: tls_info, timing (tcp_connect_duration, tls_handshake_duration)
 }
 
@@ -169,12 +424,12 @@ impl PoisonPill {
 /// poisoning one clone poisons all of them.
 pub(crate) struct ManagedConnection<S> {
     inner: S,
-    info: ConnectionInfo,
+    pub(crate) info: ConnectionInfo,
     /// Stable identifier for this physical connection, unique within the
     /// owning pool. Shared across `Clone`s (an H2 connection's multiplexed
     /// request handles all carry the same `conn_id`). Used in tracing and
     /// surfaced through `ConnectionMetadata` for cross-layer correlation.
-    conn_id: u64,
+    conn_id: ConnectionId,
     created_at: Instant,
     /// Timestamp the connection last became idle (or its creation time, if
     /// it has never been returned to the pool).
@@ -212,7 +467,7 @@ impl<S> ManagedConnection<S> {
     pub(crate) fn new(
         inner: S,
         info: ConnectionInfo,
-        conn_id: u64,
+        conn_id: ConnectionId,
         permit: Arc<ConnectionPermit>,
     ) -> Self {
         let now = Instant::now();
@@ -230,7 +485,7 @@ impl<S> ManagedConnection<S> {
 
     /// Stable identifier for this physical connection. Shared across
     /// clones (H2 multiplexing).
-    pub(crate) fn conn_id(&self) -> u64 {
+    pub(crate) fn conn_id(&self) -> ConnectionId {
         self.conn_id
     }
 
@@ -304,9 +559,9 @@ impl<S> ManagedConnection<S> {
         let remote = self.info.remote_addr;
         let mut builder = ConnectionMetadata::builder()
             .proxied(self.info.is_proxied)
-            .connection_id(ConnectionId::new(self.conn_id))
+            .connection_id(self.conn_id)
             .poison_fn(move || {
-                tracing::debug!(conn_id, ?remote, "pool: connection poisoned");
+                tracing::debug!(conn_id = %conn_id, ?remote, "pool: connection poisoned");
                 poison.poison();
             });
         builder
@@ -371,16 +626,26 @@ where
 /// normally through `Cached::Drop`.
 pub(crate) struct CachedConnection<S> {
     inner: Option<cache::Cached<ManagedConnection<S>>>,
+    listener: Option<Arc<dyn ConnectionEventListener>>,
 }
 
 impl<S> CachedConnection<S> {
-    pub(crate) fn new(cached: cache::Cached<ManagedConnection<S>>) -> Self {
-        tracing::trace!(
-            conn_id = cached.inner().conn_id(),
-            "pool: connection reused"
-        );
+    pub(crate) fn new(
+        cached: cache::Cached<ManagedConnection<S>>,
+        listener: Option<Arc<dyn ConnectionEventListener>>,
+    ) -> Self {
+        let is_reuse = *cached.inner().idle_at.lock().unwrap() > cached.inner().created_at;
+        if is_reuse {
+            let conn_id = cached.inner().conn_id();
+            let authority = cached.inner().info.authority.clone();
+            tracing::trace!(conn_id = %conn_id, "pool: connection reused");
+            if let Some(ref l) = listener {
+                l.on_reused(&ConnectionReusedEvent::new(conn_id, authority));
+            }
+        }
         Self {
             inner: Some(cached),
+            listener,
         }
     }
 
@@ -407,7 +672,7 @@ impl<S> CachedConnection<S> {
     }
 
     /// Forwards [`ManagedConnection::conn_id`].
-    pub(crate) fn conn_id(&self) -> u64 {
+    pub(crate) fn conn_id(&self) -> ConnectionId {
         self.inner
             .as_ref()
             .expect("CachedConnection conn_id after drop")
@@ -439,15 +704,20 @@ impl<S> Drop for CachedConnection<S> {
             let managed = cached.inner();
             let conn_id = managed.conn_id;
             if managed.is_poisoned() {
-                tracing::debug!(conn_id, "pool: connection discarded (poisoned)");
+                tracing::debug!(conn_id = %conn_id, "pool: connection discarded (poisoned)");
+                if let Some(ref listener) = self.listener {
+                    listener.on_closed(&ConnectionClosedEvent::new(
+                        managed.conn_id(),
+                        managed.info.authority.clone(),
+                        managed.info.remote_addr,
+                        CloseReason::Poisoned,
+                        None,
+                    ));
+                }
                 cached.discard();
             } else {
-                // Stamp the return-to-idle moment so the eviction task
-                // can measure elapsed idleness. Healthy connection: the
-                // Cached drops normally after this, returning it to the
-                // cache's idle set.
                 managed.mark_idle();
-                tracing::trace!(conn_id, "pool: connection returned to idle");
+                tracing::trace!(conn_id = %conn_id, "pool: connection returned to idle");
             }
         }
     }
