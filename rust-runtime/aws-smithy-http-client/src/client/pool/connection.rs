@@ -67,6 +67,10 @@ pub enum CloseReason {
     IdleTimeout,
     /// Marked as poisoned (unhealthy) by the SDK or pool.
     Poisoned,
+    /// Connection found dead at checkout (e.g., server closed the
+    /// connection while it was idle in the pool). The associated error
+    /// on the event carries specifics.
+    Unusable,
     /// The pool itself was dropped.
     PoolDropped,
 }
@@ -690,7 +694,27 @@ where
     type Future = <cache::Cached<ManagedConnection<S>> as Service<Req>>::Future;
 
     fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.as_mut().unwrap().poll_ready(cx)
+        match self.inner.as_mut().unwrap().poll_ready(cx) {
+            Poll::Ready(Err(e)) => {
+                // Connection is dead. If poisoned, Drop handles the event.
+                // If not poisoned, this is an unusable connection (server
+                // closed it while idle, driver died, etc.).
+                let managed = self.inner.as_ref().unwrap().inner();
+                if !managed.is_poisoned() {
+                    if let Some(ref l) = self.listener {
+                        l.on_closed(&ConnectionClosedEvent::new(
+                            managed.conn_id,
+                            managed.info.authority.clone(),
+                            managed.info.remote_addr,
+                            CloseReason::Unusable,
+                            None,
+                        ));
+                    }
+                }
+                Poll::Ready(Err(e))
+            }
+            other => other,
+        }
     }
 
     fn call(&mut self, req: Req) -> Self::Future {
