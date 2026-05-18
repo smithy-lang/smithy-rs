@@ -18,7 +18,6 @@ import java.util.Base64
  * `results[ref - 100_000_000]`. The first node (index 0) **must** be the
  * canonical terminal `[-1, 1, -1]`.
  *
- * See `.kiro/bdd-sep.md` for the full encoding spec.
  */
 internal object BddTestHelpers {
     /** Triple of (conditionIndex, highRef, lowRef) for one BDD node. */

@@ -10,7 +10,7 @@ import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 
 /**
- * Regression tests for BDD codegen bugs identified in `.kiro/bdd-codegen-risk-analysis.md`.
+ * Regression tests for BDD codegen bugs
  *
  * Bug #1 (`tryGenerateTrivialCondition.visitBoolEquals` does not gate on `ref.isOptional`) is
  * unreachable through valid Smithy models — Smithy's own trait validator rejects
@@ -36,8 +36,7 @@ class BddCodegenTest {
      *
      * The model below intentionally collides a literal with a parameter name and exercises a
      * library function call (`substring("Bucket", 0, 4, false)`). After the fix, codegen
-     * compiles cleanly. Before the fix, it failed to compile with E0308 — see
-     * `.kiro/bdd-codegen-test-failures.md`.
+     * compiles cleanly. Before the fix, it failed to compile with E0308
      */
     @Test
     fun `string literal whose text matches an optional parameter name is not falsely treated as optional`() {
