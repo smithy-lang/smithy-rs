@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, SystemTime};
 
 use tokio::sync::OwnedSemaphorePermit;
@@ -394,7 +394,7 @@ pub(super) fn get_seconds_since_unix_epoch(runtime_components: &RuntimeComponent
 #[derive(Debug)]
 pub(crate) struct TokenBucketProvider {
     default_partition: RetryPartition,
-    token_bucket: TokenBucket,
+    token_bucket: OnceLock<TokenBucket>,
 }
 
 impl TokenBucketProvider {
@@ -402,15 +402,28 @@ impl TokenBucketProvider {
     ///
     /// NOTE: This partition should be the one used for every operation on a client
     /// unless config is overridden.
-    pub(crate) fn new(
-        default_partition: RetryPartition,
-        init: impl FnOnce() -> TokenBucket,
-    ) -> Self {
-        let token_bucket = TOKEN_BUCKET.get_or_init(default_partition.clone(), init);
+    pub(crate) fn new(default_partition: RetryPartition) -> Self {
         Self {
             default_partition,
-            token_bucket,
+            token_bucket: OnceLock::new(),
         }
+    }
+}
+
+/// Build a token bucket with costs determined by the RetrySpec in the config bag.
+fn token_bucket_for_spec(cfg: &ConfigBag) -> TokenBucket {
+    let is_v2_1 = cfg
+        .load::<RetryConfig>()
+        .and_then(|rc| rc.retry_spec())
+        .is_some_and(|s| s.is_at_least(RetrySpec::V2_1));
+    if is_v2_1 {
+        TokenBucket::builder()
+            .retry_cost(14)
+            .throttling_retry_cost(5)
+            .timeout_retry_cost(14)
+            .build()
+    } else {
+        TokenBucket::default()
     }
 }
 
@@ -430,14 +443,16 @@ impl Intercept for TokenBucketProvider {
 
         let tb = match &retry_partition.inner {
             RetryPartitionInner::Default(name) => {
-                // we store the original retry partition configured and associated token bucket
-                // for the client when created so that we can avoid locking on _every_ request
-                // from _every_ client
                 if name == self.default_partition.name() {
-                    // avoid contention on the global lock
-                    self.token_bucket.clone()
+                    self.token_bucket
+                        .get_or_init(|| {
+                            TOKEN_BUCKET.get_or_init(self.default_partition.clone(), || {
+                                token_bucket_for_spec(cfg)
+                            })
+                        })
+                        .clone()
                 } else {
-                    TOKEN_BUCKET.get_or_init_default(retry_partition.clone())
+                    TOKEN_BUCKET.get_or_init(retry_partition.clone(), || token_bucket_for_spec(cfg))
                 }
             }
             RetryPartitionInner::Custom { token_bucket, .. } => token_bucket.clone(),
