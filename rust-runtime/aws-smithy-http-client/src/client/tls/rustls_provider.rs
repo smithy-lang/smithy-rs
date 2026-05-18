@@ -153,12 +153,13 @@ pub(crate) mod build_connector {
     ) -> super::connect::RustTlsConnector<R> {
         let client_config = create_rustls_client_config(crypto_mode, tls_context);
         conn.enforce_http(false);
+        let timed = crate::client::pool::connection::TimingConnector::new(conn);
         let https_connector = hyper_rustls::HttpsConnectorBuilder::new()
             .with_tls_config(client_config.clone())
             .https_or_http()
             .enable_http1()
             .enable_http2()
-            .wrap_connector(conn);
+            .wrap_connector(timed);
 
         super::connect::RustTlsConnector::new(https_connector, client_config, proxy_config)
     }
@@ -190,14 +191,14 @@ pub(crate) mod connect {
 
     #[derive(Debug, Clone)]
     pub(crate) struct RustTlsConnector<R> {
-        https: hyper_rustls::HttpsConnector<HttpConnector<R>>,
+        https: hyper_rustls::HttpsConnector<crate::client::pool::connection::TimingConnector<HttpConnector<R>>>,
         tls_config: Arc<rustls::ClientConfig>,
         proxy_matcher: Option<Arc<Matcher>>, // Pre-computed for performance
     }
 
     impl<R> RustTlsConnector<R> {
         pub(super) fn new(
-            https: hyper_rustls::HttpsConnector<HttpConnector<R>>,
+            https: hyper_rustls::HttpsConnector<crate::client::pool::connection::TimingConnector<HttpConnector<R>>>,
             tls_config: rustls::ClientConfig,
             proxy_config: ProxyConfig,
         ) -> Self {
@@ -370,6 +371,30 @@ pub(crate) mod connect {
     }
 
     impl Connection for RustTlsConn<TokioIo<MaybeHttpsStream<TokioIo<TcpStream>>>> {
+        fn connected(&self) -> Connected {
+            if self.inner.inner().get_ref().1.alpn_protocol() == Some(b"h2") {
+                self.inner
+                    .inner()
+                    .get_ref()
+                    .0
+                    .inner()
+                    .connected()
+                    .negotiated_h2()
+            } else {
+                self.inner.inner().get_ref().0.inner().connected()
+            }
+        }
+    }
+
+    impl Connection
+        for RustTlsConn<
+            TokioIo<
+                MaybeHttpsStream<
+                    crate::client::pool::connection::TransportIo<TokioIo<TcpStream>>,
+                >,
+            >,
+        >
+    {
         fn connected(&self) -> Connected {
             if self.inner.inner().get_ref().1.alpn_protocol() == Some(b"h2") {
                 self.inner

@@ -10,3 +10,6 @@ set -e
 
 echo "### Running connection pool integration tests"
 cargo test --features wire-mock,default-client --test connection_harness_test
+
+echo "### Running tracing-assertion tests (require single-threaded execution)"
+cargo test --features wire-mock,default-client,test-util --test pool_behavior_test -- --ignored --test-threads=1

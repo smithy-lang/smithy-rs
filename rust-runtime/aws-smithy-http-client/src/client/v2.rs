@@ -9,7 +9,7 @@
 
 pub use super::pool::connection::{
     Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
-    ConnectionFailedEvent, ConnectionReusedEvent, NegotiatedProtocol,
+    ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
 };
 
 use std::borrow::Cow;

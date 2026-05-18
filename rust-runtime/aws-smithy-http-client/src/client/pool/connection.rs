@@ -75,6 +75,25 @@ pub enum CloseReason {
     PoolDropped,
 }
 
+/// Timing breakdown for connection establishment.
+#[derive(Clone, Copy, Debug)]
+pub struct ConnectionTiming {
+    /// TCP connect + TLS handshake combined. Measured from connector call
+    /// start to connected IO stream returned.
+    connect_duration: Duration,
+}
+
+impl ConnectionTiming {
+    pub(crate) fn new(connect_duration: Duration) -> Self {
+        Self { connect_duration }
+    }
+
+    /// Total time to establish the transport (TCP + TLS).
+    pub fn connect_duration(&self) -> Duration {
+        self.connect_duration
+    }
+}
+
 /// Emitted when a new connection is established (TCP + TLS + HTTP handshake).
 #[derive(Debug)]
 pub struct ConnectionCreatedEvent {
@@ -82,6 +101,7 @@ pub struct ConnectionCreatedEvent {
     authority: Authority,
     remote_addr: Option<SocketAddr>,
     protocol: NegotiatedProtocol,
+    timing: ConnectionTiming,
 }
 
 impl ConnectionCreatedEvent {
@@ -90,12 +110,14 @@ impl ConnectionCreatedEvent {
         authority: Authority,
         remote_addr: Option<SocketAddr>,
         protocol: NegotiatedProtocol,
+        timing: ConnectionTiming,
     ) -> Self {
         Self {
             conn_id,
             authority,
             remote_addr,
             protocol,
+            timing,
         }
     }
 
@@ -117,6 +139,11 @@ impl ConnectionCreatedEvent {
     /// Negotiated protocol.
     pub fn protocol(&self) -> NegotiatedProtocol {
         self.protocol
+    }
+
+    /// Timing breakdown for connection establishment.
+    pub fn timing(&self) -> &ConnectionTiming {
+        &self.timing
     }
 }
 
@@ -1015,6 +1042,124 @@ impl<H2Unnameable> hyper::body::Body for GuardedBody<H2Unnameable> {
 /// response types across its legs; this alias is the uniform type that
 /// consumers above the Negotiate composition point work with.
 pub(crate) type CheckoutResponse<PoolUnnameable> = http_1x::Response<GuardedBody<PoolUnnameable>>;
+
+/// Wire-level IO wrapper that carries TCP connect timing.
+///
+/// Sits below TLS in the connector stack. Pure passthrough; never
+/// modifies data or buffers. Establishes the seam for future
+/// wire-level byte counting and IO error observation.
+pub(crate) struct TransportIo<IO> {
+    inner: IO,
+    tcp_connect_duration: Duration,
+}
+
+impl<IO> TransportIo<IO> {
+    fn new(inner: IO, tcp_connect_duration: Duration) -> Self {
+        Self {
+            inner,
+            tcp_connect_duration,
+        }
+    }
+
+    /// Duration of the TCP connect (3-way handshake).
+    pub(crate) fn tcp_connect_duration(&self) -> Duration {
+        self.tcp_connect_duration
+    }
+}
+
+impl<IO: Unpin> Unpin for TransportIo<IO> {}
+
+impl<IO: hyper::rt::Read + Unpin> hyper::rt::Read for TransportIo<IO> {
+    fn poll_read(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: hyper::rt::ReadBufCursor<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_read(cx, buf)
+    }
+}
+
+impl<IO: hyper::rt::Write + Unpin> hyper::rt::Write for TransportIo<IO> {
+    fn poll_write(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+        buf: &[u8],
+    ) -> Poll<std::io::Result<usize>> {
+        std::pin::Pin::new(&mut self.inner).poll_write(cx, buf)
+    }
+
+    fn poll_flush(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_flush(cx)
+    }
+
+    fn poll_shutdown(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<std::io::Result<()>> {
+        std::pin::Pin::new(&mut self.inner).poll_shutdown(cx)
+    }
+}
+
+impl<IO: hyper_util::client::legacy::connect::Connection>
+    hyper_util::client::legacy::connect::Connection for TransportIo<IO>
+{
+    fn connected(&self) -> hyper_util::client::legacy::connect::Connected {
+        self.inner.connected()
+    }
+}
+
+/// Wraps a TCP connector to stamp the connect duration on the resulting IO.
+///
+/// The output `TransportIo<C::Response>` carries the TCP connect timing.
+/// Passed to the TLS connector which layers encryption on top without
+/// losing access to the transport-level timing.
+pub(crate) struct TimingConnector<C> {
+    inner: C,
+}
+
+impl<C> TimingConnector<C> {
+    pub(crate) fn new(inner: C) -> Self {
+        Self { inner }
+    }
+}
+
+impl<C: Clone> Clone for TimingConnector<C> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+impl<C, IO> tower::Service<http_1x::Uri> for TimingConnector<C>
+where
+    C: tower::Service<http_1x::Uri, Response = IO>,
+    C::Error: Into<BoxError>,
+    C::Future: Send + 'static,
+    IO: Send + 'static,
+{
+    type Response = TransportIo<IO>;
+    type Error = BoxError;
+    type Future = std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<Self::Response, Self::Error>> + Send>,
+    >;
+
+    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx).map_err(Into::into)
+    }
+
+    fn call(&mut self, uri: http_1x::Uri) -> Self::Future {
+        let start = Instant::now();
+        let fut = self.inner.call(uri);
+        Box::pin(async move {
+            let io = fut.await.map_err(Into::into)?;
+            Ok(TransportIo::new(io, start.elapsed()))
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
