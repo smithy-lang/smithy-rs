@@ -14,6 +14,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Instant;
 
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_types::body::SdkBody;
@@ -25,7 +26,7 @@ use tower::Service;
 
 use super::connection::{
     Authority, ConnectCtx, ConnectionCreatedEvent, ConnectionFailedEvent, ConnectionInfo,
-    ConnectionPermit, ManagedConnection, NegotiatedProtocol,
+    ConnectionPermit, ConnectionTiming, ManagedConnection, NegotiatedProtocol,
 };
 use super::BoxError;
 
@@ -313,6 +314,7 @@ where
         );
         let fut = self.connector.call(ctx);
         Box::pin(async move {
+            let connect_start = Instant::now();
             let (io, permit) = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
@@ -324,6 +326,7 @@ where
                     return Err(e);
                 }
             };
+            let connect_duration = connect_start.elapsed();
             let info = capture_info(&io, authority.clone());
             let conn_id = hooks.next_conn_id();
 
@@ -356,6 +359,7 @@ where
                 authority,
                 info.remote_addr,
                 NegotiatedProtocol::Http1,
+                ConnectionTiming::new(connect_duration),
             ));
 
             spawn_driver({
@@ -451,6 +455,7 @@ where
         let hooks = self.hooks.clone();
         let authority = self.authority.clone();
         Box::pin(async move {
+            let connect_start = Instant::now();
             let (io, permit) = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
@@ -462,6 +467,7 @@ where
                     return Err(e);
                 }
             };
+            let connect_duration = connect_start.elapsed();
             let info = capture_info(&io, authority.clone());
             let conn_id = hooks.next_conn_id();
 
@@ -494,6 +500,7 @@ where
                 authority,
                 info.remote_addr,
                 NegotiatedProtocol::Http2,
+                ConnectionTiming::new(connect_duration),
             ));
 
             spawn_driver({
