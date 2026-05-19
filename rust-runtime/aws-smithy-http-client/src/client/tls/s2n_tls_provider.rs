@@ -262,9 +262,11 @@ pub(crate) mod connect {
         T: Connection + tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
     {
         fn connected(&self) -> Connected {
-            // For tunneled connections, we can't easily access the underlying connection info
-            // from s2n-tls, so we'll return a basic Connected instance
-            Connected::new()
+            let inner_connected = self.inner.inner().get_ref().connected();
+            match self.inner.inner().as_ref().application_protocol() {
+                Some(b"h2") => inner_connected.negotiated_h2(),
+                _ => inner_connected,
+            }
         }
     }
 
