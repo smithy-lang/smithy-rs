@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::retry::{RetryConfig, RetrySpec};
 use std::time::{Duration, SystemTime};
 
 fn req() -> http_1x::Request<SdkBody> {
@@ -68,7 +68,7 @@ impl Intercept for StaticBackoffInterceptor {
     }
 }
 
-/// Latest BV: DynamoDB uses 25ms backoff and 4 max attempts.
+/// Retry 2.1: DynamoDB uses 25ms backoff and 4 max attempts.
 #[tokio::test]
 async fn dynamodb_v2_1_uses_25ms_backoff_and_4_max_attempts() {
     let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
@@ -79,14 +79,25 @@ async fn dynamodb_v2_1_uses_25ms_backoff_and_4_max_attempts() {
         ReplayEvent::new(req(), ok()),
     ]);
 
-    let config = Config::builder()
-        .with_test_defaults_v2()
+    // Build via SdkConfig so CopySdkConfigToClientConfig runs (applies DynamoDB's
+    // 25ms backoff and max_attempts=4 when RetrySpec::V2_1 is present).
+    let sdk_config = aws_types::SdkConfig::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .region(aws_types::region::Region::new("us-east-1"))
+        .credentials_provider(aws_sdk_dynamodb::config::SharedCredentialsProvider::new(
+            aws_sdk_dynamodb::config::Credentials::for_tests(),
+        ))
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
-        .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
         .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
-        .retry_partition(RetryPartition::new("dynamodb_v2_1"))
         .http_client(http_client.clone())
+        .build();
+
+    let config = Config::from(&sdk_config)
+        .to_builder()
+        .interceptor(StaticBackoffInterceptor)
+        .retry_partition(RetryPartition::new("dynamodb_v2_1"))
         .build();
 
     let client = Client::from_conf(config);
