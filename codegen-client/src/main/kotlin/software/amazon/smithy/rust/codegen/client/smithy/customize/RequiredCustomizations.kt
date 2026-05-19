@@ -21,7 +21,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryCla
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierOperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryClassifierServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetryModeFeatureTrackerRuntimePluginCustomization
-import software.amazon.smithy.rust.codegen.client.smithy.customizations.RetrySpecCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.TimeSourceCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
@@ -143,6 +142,5 @@ class RequiredCustomizations : ClientCodegenDecorator {
             ConnectionPoisoningRuntimePluginCustomization(codegenContext) +
             RetryClassifierServiceRuntimePluginCustomization(codegenContext) +
             RetryModeFeatureTrackerRuntimePluginCustomization(codegenContext) +
-            RetrySpecCustomization(codegenContext) +
             AuthEndpointOrchestrationV2MarkerCustomization(codegenContext)
 }

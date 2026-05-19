@@ -1,4 +1,18 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+May 19th, 2026
+==============
+**New this release:**
+- :bug: (server, [smithy-rs#4634](https://github.com/smithy-lang/smithy-rs/issues/4634), @jlizen) Strip trailing whitespace from generated Rust code. Smithy's `AbstractCodeWriter` adds indentation to blank lines, producing whitespace-only lines that cause `cargo fmt` to fail with `error[internal]: left behind trailing whitespace`.
+- :bug: (client, [smithy-rs#4614](https://github.com/smithy-lang/smithy-rs/issues/4614), @lnj) Fix `ProfileFileCredentialsProvider` so that profile-level `use_fips_endpoint` and `use_dualstack_endpoint` settings are propagated to the internal STS client used during assume-role credential chaining. Previously these settings were only applied when the provider was built through `aws_config::ConfigLoader::load`, so users constructing `ProfileFileCredentialsProvider` directly via its builder would see STS requests go to non-FIPS / non-dual-stack endpoints even when the selected profile enabled them.
+- :bug: (client, [smithy-rs#4632](https://github.com/smithy-lang/smithy-rs/issues/4632)) Fix adaptive retry rate limiter to never allow negative token bucket capacity. Previously, `acquire_permission_to_send_a_request` unconditionally deducted the request cost even when returning a delay, causing capacity to go negative. With multiple concurrent tasks, this produced cascading sleep times proportional to the number of tasks (e.g., task 50 sleeping 100s), leading to near-zero request rates that never recovered after a throttling event. Now, capacity is only deducted when a token is actually granted, and the orchestrator re-acquires after sleeping to account for concurrent state changes.
+- (client, @lnj) Optimized BDD endpoint resolution performance by replacing HashMap-based auth schemes with a typed `EndpointAuthScheme` struct, inlining the BDD evaluation loop, and adding a single-entry endpoint cache. The BDD resolver is now up to 49% faster than the original implementation and outperforms the tree-based resolver on most benchmarks.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @jlizen ([smithy-rs#4634](https://github.com/smithy-lang/smithy-rs/issues/4634))
+- @lnj ([smithy-rs#4614](https://github.com/smithy-lang/smithy-rs/issues/4614))
+
+
 April 16th, 2026
 ================
 **Breaking Changes:**

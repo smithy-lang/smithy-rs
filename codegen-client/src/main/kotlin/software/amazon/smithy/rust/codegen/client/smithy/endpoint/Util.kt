@@ -36,7 +36,25 @@ data class Context(
     val functionRegistry: FunctionRegistry,
     val runtimeConfig: RuntimeConfig,
     val isBddMode: Boolean = false,
+    /**
+     * Maps each reference's original Smithy name (`Identifier.toString()`) to the
+     * canonical rust identifier used in generated code. Non-empty only in BDD mode,
+     * and only when at least one SSA variable's snake_case form collides with a
+     * parameter name. Call sites that emit a reference in generated code should look
+     * up through this map so they receive the disambiguated name when applicable;
+     * other lookups fall back to `id.rustName()`.
+     *
+     * See `AnnotatedRefs.from` for how the disambiguation map is built.
+     */
+    val nameByOriginal: Map<String, String> = emptyMap(),
 )
+
+/**
+ * Returns the canonical rust identifier for a reference to [id] in this context.
+ * Transparent fallback to `id.rustName()` for identifiers that don't need
+ * disambiguation (the common case).
+ */
+fun Context.resolveName(id: Identifier): String = nameByOriginal[id.toString()] ?: id.rustName()
 
 /**
  * Utility function to convert an [Identifier] into a valid Rust identifier (snake case)
