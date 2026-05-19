@@ -876,15 +876,6 @@ mod loader {
             };
             let conf = conf.with_region(region.clone());
 
-            let retry_config = if let Some(retry_config) = self.retry_config {
-                retry_config
-            } else {
-                retry_config::default_provider()
-                    .configure(&conf)
-                    .retry_config()
-                    .await
-            };
-
             let app_name = if self.app_name.is_some() {
                 self.app_name
             } else {
@@ -937,10 +928,20 @@ mod loader {
             };
             let mut builder = SdkConfig::builder()
                 .region(region.clone())
-                .retry_config(retry_config)
                 .timeout_config(timeout_config)
                 .time_source(time_source)
                 .service_config(service_config);
+
+            let retry_config = if let Some(retry_config) = self.retry_config {
+                builder.insert_origin("retry_config", Origin::shared_config());
+                retry_config
+            } else {
+                retry_config::default_provider()
+                    .configure(&conf)
+                    .retry_config()
+                    .await
+            };
+            builder = builder.retry_config(retry_config);
 
             // If an endpoint URL is set programmatically, then our work is done.
             let endpoint_url = if self.endpoint_url.is_some() {
