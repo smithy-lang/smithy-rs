@@ -50,6 +50,33 @@ impl<'a> CborDeserializer<'a> {
     fn consume_break(&mut self) -> Result<(), SerdeError> {
         self.decoder.skip().map_err(deser_err)
     }
+
+    /// Reads a list of items using the provided element reader, handling
+    /// both definite and indefinite-length arrays.
+    fn read_list_items<T>(
+        &mut self,
+        mut read_element: impl FnMut(&mut crate::Decoder<'_>) -> Result<T, SerdeError>,
+    ) -> Result<Vec<T>, SerdeError> {
+        self.check_depth()?;
+        let len = self.decoder.list().map_err(deser_err)?;
+        let is_indefinite = len.is_none();
+        let count = len.unwrap_or(0) as usize;
+        let mut out = Vec::with_capacity(capped_container_size(count));
+        let mut i = 0;
+        loop {
+            if !is_indefinite && i >= count {
+                break;
+            }
+            if is_indefinite && self.is_break() {
+                self.consume_break()?;
+                break;
+            }
+            out.push(read_element(&mut self.decoder)?);
+            i += 1;
+        }
+        self.depth -= 1;
+        Ok(out)
+    }
 }
 
 impl ShapeDeserializer for CborDeserializer<'_> {
@@ -221,6 +248,57 @@ impl ShapeDeserializer for CborDeserializer<'_> {
             }
             _ => None,
         }
+    }
+
+    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        self.read_list_items(|dec| dec.str().map(|c| c.into_owned()).map_err(deser_err))
+    }
+
+    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+        self.read_list_items(|dec| dec.blob().map_err(deser_err))
+    }
+
+    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        self.read_list_items(|dec| dec.integer().map_err(deser_err))
+    }
+
+    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        self.read_list_items(|dec| dec.long().map_err(deser_err))
+    }
+
+    fn read_string_string_map(
+        &mut self,
+        _schema: &Schema,
+    ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        self.check_depth()?;
+        let len = self.decoder.map().map_err(deser_err)?;
+        let is_indefinite = len.is_none();
+        let count = len.unwrap_or(0) as usize;
+        let mut out = std::collections::HashMap::with_capacity(capped_container_size(count));
+        let mut i = 0;
+        loop {
+            if !is_indefinite && i >= count {
+                break;
+            }
+            if is_indefinite && self.is_break() {
+                self.consume_break()?;
+                break;
+            }
+            let key = self
+                .decoder
+                .str()
+                .map(|c| c.into_owned())
+                .map_err(deser_err)?;
+            let val = self
+                .decoder
+                .str()
+                .map(|c| c.into_owned())
+                .map_err(deser_err)?;
+            out.insert(key, val);
+            i += 1;
+        }
+        self.depth -= 1;
+        Ok(out)
     }
 }
 
