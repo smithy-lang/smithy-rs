@@ -571,4 +571,99 @@ mod tests {
         }
         de.read_struct(&SCHEMA, &mut recursive_consumer).unwrap();
     }
+
+    #[test]
+    fn test_read_struct_with_null_optional_members() {
+        // Struct with null value for an optional member — null should be skipped
+        let mut enc = crate::Encoder::new(Vec::new());
+        enc.begin_map()
+            .str("name")
+            .str("Alice")
+            .str("age")
+            .null()
+            .end();
+        let bytes = enc.into_writer();
+
+        static NAME: Schema =
+            Schema::new_member(shape_id!("test", "S"), ShapeType::String, "name", 0);
+        static AGE: Schema =
+            Schema::new_member(shape_id!("test", "S"), ShapeType::Integer, "age", 1);
+        static SCHEMA: Schema =
+            Schema::new_struct(shape_id!("test", "S"), ShapeType::Structure, &[&NAME, &AGE]);
+
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut name: Option<String> = None;
+        let mut age: Option<i32> = None;
+        de.read_struct(&SCHEMA, &mut |member, d| {
+            match member.member_name() {
+                Some("name") => {
+                    if !d.is_null() {
+                        name = Some(d.read_string(member)?);
+                    } else {
+                        d.read_null()?;
+                    }
+                }
+                Some("age") => {
+                    if !d.is_null() {
+                        age = Some(d.read_integer(member)?);
+                    } else {
+                        d.read_null()?;
+                    }
+                }
+                _ => {}
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(name, Some("Alice".to_string()));
+        assert_eq!(age, None);
+    }
+
+    #[test]
+    fn test_read_sparse_list_with_nulls() {
+        // @sparse list: [1, null, 3] — null should not be skipped
+        let mut enc = crate::Encoder::new(Vec::new());
+        enc.begin_array().integer(1).null().integer(3).end();
+        let bytes = enc.into_writer();
+
+        let list_schema = Schema::new(shape_id!("test", "L"), ShapeType::List);
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut items: Vec<Option<i32>> = Vec::new();
+        de.read_list(&list_schema, &mut |d| {
+            if d.is_null() {
+                d.read_null()?;
+                items.push(None);
+            } else {
+                items.push(Some(d.read_integer(&INTEGER)?));
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(items, vec![Some(1), None, Some(3)]);
+    }
+
+    #[test]
+    fn test_read_sparse_map_with_nulls() {
+        // @sparse map: {"a": "hello", "b": null} — null should not be skipped
+        let mut enc = crate::Encoder::new(Vec::new());
+        enc.begin_map().str("a").str("hello").str("b").null().end();
+        let bytes = enc.into_writer();
+
+        let map_schema = Schema::new(shape_id!("test", "M"), ShapeType::Map);
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut map: std::collections::HashMap<String, Option<String>> =
+            std::collections::HashMap::new();
+        de.read_map(&map_schema, &mut |key, d| {
+            if d.is_null() {
+                d.read_null()?;
+                map.insert(key, None);
+            } else {
+                map.insert(key, Some(d.read_string(&STRING)?));
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert_eq!(map.get("a"), Some(&Some("hello".to_string())));
+        assert_eq!(map.get("b"), Some(&None));
+    }
 }
