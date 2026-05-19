@@ -8,7 +8,9 @@
 use super::doc_error::DocError;
 use super::Document;
 use crate::Number;
-use serde::de::{self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, VariantAccess, Visitor};
+use serde::de::{
+    self, DeserializeSeed, EnumAccess, MapAccess, SeqAccess, Unexpected, VariantAccess, Visitor,
+};
 use serde::forward_to_deserialize_any;
 
 /// Convert a [`Document`] into any `T: DeserializeOwned`.
@@ -195,7 +197,7 @@ impl<'de> MapAccess<'de> for MapDeserializer {
         match self.iter.next() {
             Some((key, value)) => {
                 self.value = Some(value);
-                seed.deserialize(Document::String(key)).map(Some)
+                seed.deserialize(MapKeyDeserializer { key }).map(Some)
             }
             None => Ok(None),
         }
@@ -215,6 +217,220 @@ impl<'de> MapAccess<'de> for MapDeserializer {
     fn size_hint(&self) -> Option<usize> {
         let (lower, _) = self.iter.size_hint();
         Some(lower)
+    }
+}
+
+/// Deserializer for map keys.
+///
+/// Map keys in a [`Document`] are always stored as `String`, but the user's key type
+/// may be any `Deserialize` type (e.g., `HashMap<u32, _>`). This deserializer parses
+/// the string back into the requested primitive type when needed, mirroring how
+/// `serde_json` handles non-string map keys.
+struct MapKeyDeserializer {
+    key: String,
+}
+
+impl<'de> de::Deserializer<'de> for MapKeyDeserializer {
+    type Error = DocError;
+
+    fn deserialize_any<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_string(self.key)
+    }
+
+    fn deserialize_bool<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.as_str() {
+            "true" => visitor.visit_bool(true),
+            "false" => visitor.visit_bool(false),
+            _ => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_i8<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<i8>() {
+            Ok(v) => visitor.visit_i8(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_i16<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<i16>() {
+            Ok(v) => visitor.visit_i16(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_i32<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<i32>() {
+            Ok(v) => visitor.visit_i32(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_i64<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<i64>() {
+            Ok(v) => visitor.visit_i64(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_u8<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<u8>() {
+            Ok(v) => visitor.visit_u8(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_u16<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<u16>() {
+            Ok(v) => visitor.visit_u16(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_u32<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<u32>() {
+            Ok(v) => visitor.visit_u32(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_u64<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<u64>() {
+            Ok(v) => visitor.visit_u64(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_f32<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<f32>() {
+            Ok(v) => visitor.visit_f32(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_f64<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        match self.key.parse::<f64>() {
+            Ok(v) => visitor.visit_f64(v),
+            Err(_) => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_char<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        let mut chars = self.key.chars();
+        match (chars.next(), chars.next()) {
+            (Some(c), None) => visitor.visit_char(c),
+            _ => Err(de::Error::invalid_value(
+                Unexpected::Str(&self.key),
+                &visitor,
+            )),
+        }
+    }
+
+    fn deserialize_option<V>(self, visitor: V) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_some(self)
+    }
+
+    fn deserialize_newtype_struct<V>(
+        self,
+        _name: &'static str,
+        visitor: V,
+    ) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_newtype_struct(self)
+    }
+
+    fn deserialize_enum<V>(
+        self,
+        name: &'static str,
+        variants: &'static [&'static str],
+        visitor: V,
+    ) -> Result<V::Value, DocError>
+    where
+        V: Visitor<'de>,
+    {
+        Document::String(self.key).deserialize_enum(name, variants, visitor)
+    }
+
+    forward_to_deserialize_any! {
+        str string bytes byte_buf unit unit_struct seq tuple tuple_struct map
+        struct identifier ignored_any
     }
 }
 
