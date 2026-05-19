@@ -231,6 +231,36 @@ impl BuilderV2<TlsUnset> {
         let pool = build_http_pool_with_proxy(tcp, &self.proxy_config, config);
         V2HttpClient::new(pool, proxy_matcher).into_shared()
     }
+
+    /// Build an HTTP client from a raw TCP-level connector.
+    ///
+    /// The connector must be a `tower::Service<Uri>` producing an IO type
+    /// that implements hyper's `Read`, `Write`, and `Connection` traits.
+    /// The pool's Negotiate layer uses `Connection::connected().is_negotiated_h2()`
+    /// to route connections to the H2 path.
+    #[cfg(all(feature = "test-util", aws_sdk_unstable))]
+    #[doc(hidden)]
+    pub fn build_http_with_tcp_connector<C, IO>(self, connector: C) -> SharedHttpClient
+    where
+        C: tower::Service<http_1x::Uri, Response = IO> + Clone + Send + Sync + 'static,
+        C::Error: Into<aws_smithy_runtime_api::box_error::BoxError> + 'static,
+        C::Future: Unpin + Send + 'static,
+        IO: hyper::rt::Read
+            + hyper::rt::Write
+            + hyper_util::client::legacy::connect::Connection
+            + Unpin
+            + Send
+            + 'static,
+    {
+        let config = pool::PoolConfig {
+            max_connections: self.max_connections,
+            max_connections_per_host: self.max_connections_per_host,
+            pool_idle_timeout: self.pool_idle_timeout,
+            connection_event_listener: self.connection_event_listener.clone(),
+        };
+        let pool = pool::build_pool(connector, config);
+        V2HttpClient::new(pool, None).into_shared()
+    }
 }
 
 /// Build a no-TLS pool that honors `proxy_config`. Wraps the TCP connector
