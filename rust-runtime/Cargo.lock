@@ -570,7 +570,7 @@ version = "0.66.4"
 dependencies = [
  "aws-smithy-cbor 0.61.8",
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-runtime-api 1.12.1",
  "aws-smithy-types 1.4.8",
  "aws-smithy-xml 0.60.15",
@@ -581,7 +581,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.9.0",
  "hyper-util",
- "lambda_http 1.1.3",
+ "lambda_http 1.2.0",
  "mime",
  "nom",
  "pin-project-lite",
@@ -637,7 +637,7 @@ name = "aws-smithy-http-server-python"
 version = "0.67.1"
 dependencies = [
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-legacy-http-server",
  "aws-smithy-types 1.4.8",
  "aws-smithy-xml 0.60.15",
@@ -682,8 +682,10 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.5"
+version = "0.62.6"
 dependencies = [
+ "aws-smithy-runtime-api 1.12.1",
+ "aws-smithy-schema",
  "aws-smithy-types 1.4.8",
  "proptest",
  "serde_json",
@@ -691,7 +693,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-legacy-http"
-version = "0.62.14"
+version = "0.62.15"
 dependencies = [
  "async-stream",
  "aws-smithy-eventstream",
@@ -719,7 +721,7 @@ name = "aws-smithy-legacy-http-server"
 version = "0.65.14"
 dependencies = [
  "aws-smithy-cbor 0.61.8",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.12.1",
  "aws-smithy-types 1.4.8",
@@ -816,6 +818,7 @@ dependencies = [
  "aws-smithy-http-client",
  "aws-smithy-observability",
  "aws-smithy-runtime-api 1.12.1",
+ "aws-smithy-schema",
  "aws-smithy-types 1.4.8",
  "bytes",
  "fastrand 2.4.1",
@@ -875,6 +878,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
+]
+
+[[package]]
+name = "aws-smithy-schema"
+version = "0.1.0"
+dependencies = [
+ "aws-smithy-runtime-api 1.12.1",
+ "aws-smithy-types 1.4.8",
+ "http 1.4.0",
 ]
 
 [[package]]
@@ -998,9 +1010,9 @@ dependencies = [
 
 [[package]]
 name = "aws_lambda_events"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6714eb6910c2370e48e739252ebf5024c6609ee83fc74cde50a1764949d17974"
+checksum = "d02c123e89527e7b424f74f52d11be0d17ef2887819323a42dcae1c7630ca53d"
 dependencies = [
  "base64 0.22.1",
  "bytes",
@@ -1185,9 +1197,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.61"
+version = "1.2.62"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d16d90359e986641506914ba71350897565610e87ce0ad9e6f28569db3dd5c6d"
+checksum = "a1dce859f0832a7d088c4f1119888ab94ef4b5d6795d1ce05afb7fe159d79f98"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -2043,9 +2055,9 @@ dependencies = [
 
 [[package]]
 name = "hashbrown"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f467dd6dccf739c208452f8014c75c18bb8301b050ad1cfb27153803edb0f51"
+checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 
 [[package]]
 name = "heck"
@@ -2221,9 +2233,9 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hybrid-array"
-version = "0.4.11"
+version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08d46837a0ed51fe95bd3b05de33cd64a1ee88fc797477ca48446872504507c5"
+checksum = "9155a582abd142abc056962c29e3ce5ff2ad5469f4246b537ed42c5deba857da"
 dependencies = [
  "typenum",
 ]
@@ -2464,7 +2476,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
 dependencies = [
  "equivalent",
- "hashbrown 0.17.0",
+ "hashbrown 0.17.1",
  "serde",
  "serde_core",
 ]
@@ -2485,7 +2497,7 @@ dependencies = [
  "aws-smithy-cbor 0.61.8",
  "aws-smithy-compression",
  "aws-smithy-http 0.63.6",
- "aws-smithy-json 0.62.5",
+ "aws-smithy-json 0.62.6",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api 1.12.1",
  "aws-smithy-types 1.4.8",
@@ -2666,11 +2678,11 @@ dependencies = [
 
 [[package]]
 name = "lambda_http"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "731a62bf6abfb725284454871c73c4e801dc42359f3eecf03e86a98d547c7105"
+checksum = "7b5fc0b7ef9af5e63e348c4b11e7e31eab573603348b7eb9c3e831d8e87c1ecc"
 dependencies = [
- "aws_lambda_events 1.1.3",
+ "aws_lambda_events 1.2.0",
  "bytes",
  "encoding_rs",
  "futures-util",
@@ -2678,7 +2690,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 1.9.0",
- "lambda_runtime 1.1.3",
+ "lambda_runtime 1.2.0",
  "mime",
  "percent-encoding",
  "pin-project-lite",
@@ -2715,9 +2727,9 @@ dependencies = [
 
 [[package]]
 name = "lambda_runtime"
-version = "1.1.3"
+version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcfafa53f881580c291de6a487e7f6d3c5830744fb004581cc82736cac258e2a"
+checksum = "5cc1b380b7fb92ddf3913b01f094c3fcf59e31d995bb609645cd64dcdb56ce63"
 dependencies = [
  "async-stream",
  "base64 0.22.1",
@@ -4663,9 +4675,9 @@ dependencies = [
 
 [[package]]
 name = "tokio"
-version = "1.52.2"
+version = "1.52.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "110a78583f19d5cdb2c5ccf321d1290344e71313c6c37d43520d386027d18386"
+checksum = "8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe"
 dependencies = [
  "bytes",
  "libc",
@@ -5564,9 +5576,9 @@ dependencies = [
 
 [[package]]
 name = "zerofrom"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69faa1f2a1ea75661980b013019ed6687ed0e83d069bc1114e2cc74c6c04c4df"
+checksum = "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272"
 dependencies = [
  "zerofrom-derive",
 ]
