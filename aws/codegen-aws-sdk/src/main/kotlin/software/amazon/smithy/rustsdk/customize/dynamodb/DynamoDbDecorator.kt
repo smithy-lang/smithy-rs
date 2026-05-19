@@ -24,21 +24,20 @@ class DynamoDbDecorator : ClientCodegenDecorator {
             adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rustTemplate(
                     """
-                    if ${section.sdkConfig}.retry_config()
-                        .and_then(|rc| rc.retry_spec())
-                        .is_some_and(|s| s.is_at_least(#{RetrySpec}::V2_1))
-                    {
-                        let mut rc = #{RetryConfig}::standard()
-                            .with_retry_spec(
+                    if let #{Some}(existing_rc) = ${section.sdkConfig}.retry_config().cloned() {
+                        if existing_rc.retry_spec().is_some_and(|s| s.is_at_least(#{RetrySpec}::V2_1)) {
+                            let mut rc = existing_rc.with_retry_spec(
                                 #{RetrySpec}::v2_1()
                                     .with_non_throttling_initial_backoff(#{Duration}::from_millis(25))
                             );
-                        if !${section.sdkConfig}.get_origin("retry_config").is_client_config() {
-                            rc = rc.with_max_attempts(4);
+                            if !${section.sdkConfig}.get_origin("retry_config").is_client_config() {
+                                rc = rc.with_max_attempts(4);
+                            }
+                            ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}.retry_config(rc);
                         }
-                        ${section.serviceConfigBuilder} = ${section.serviceConfigBuilder}.retry_config(rc);
                     }
                     """,
+                    "Some" to RuntimeType.preludeScope.first { it.first == "Some" }.second,
                     "RetryConfig" to CargoDependency.smithyTypes(rc).toType().resolve("retry::RetryConfig"),
                     "RetrySpec" to CargoDependency.smithyTypes(rc).toType().resolve("retry::RetrySpec"),
                     "Duration" to RuntimeType.Duration,

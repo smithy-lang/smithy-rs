@@ -161,3 +161,48 @@ async fn dynamodb_v2_0_uses_1s_backoff_and_3_max_attempts() {
     // 1s * 2^0 + 1s * 2^1 = 3s
     assert_eq!(sleep_impl.total_duration(), Duration::from_secs(3));
 }
+
+/// When user explicitly sets max_attempts=6 with RetrySpec::v2_1() via SdkConfig
+/// with origin tracking, DynamoDB should preserve the user's max_attempts.
+#[tokio::test]
+async fn dynamodb_v2_1_preserves_user_max_attempts() {
+    let (time_source, sleep_impl) = instant_time_and_sleep(SystemTime::UNIX_EPOCH);
+    let http_client = StaticReplayClient::new(vec![
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), err()),
+        ReplayEvent::new(req(), ok()),
+    ]);
+
+    let mut sdk_config_builder = aws_types::SdkConfig::builder()
+        .behavior_version(BehaviorVersion::latest())
+        .region(aws_types::region::Region::new("us-east-1"))
+        .credentials_provider(aws_sdk_dynamodb::config::SharedCredentialsProvider::new(
+            aws_sdk_dynamodb::config::Credentials::for_tests(),
+        ))
+        .retry_config(
+            RetryConfig::standard()
+                .with_retry_spec(RetrySpec::v2_1())
+                .with_max_attempts(6),
+        )
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
+        .time_source(SharedTimeSource::new(time_source))
+        .sleep_impl(SharedAsyncSleep::new(sleep_impl.clone()))
+        .http_client(http_client.clone());
+    // Simulates what aws-config loader does when user calls .retry_config(...)
+    sdk_config_builder.insert_origin("retry_config", aws_types::origin::Origin::shared_config());
+    let sdk_config = sdk_config_builder.build();
+
+    let config = Config::from(&sdk_config)
+        .to_builder()
+        .interceptor(StaticBackoffInterceptor)
+        .retry_partition(RetryPartition::new("dynamodb_v2_1_user_max"))
+        .build();
+
+    let client = Client::from_conf(config);
+    let res = client.list_tables().send().await;
+    assert_eq!(http_client.actual_requests().count(), 6);
+    res.expect("with max_attempts=6 the 6th request should succeed");
+}
