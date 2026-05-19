@@ -77,6 +77,22 @@ pub struct Schema {
     /// Shape-type-specific member data.
     members: SchemaMembers,
 
+    /// The pre-synthesis shape name for synthetic operation input/output
+    /// shapes.
+    ///
+    /// Smithy's `OperationNormalizer` rewrites every operation's input/output
+    /// to a synthetic shape named `OperationNameInput` / `OperationNameOutput`;
+    /// this field surfaces the name component of
+    /// `SyntheticInputTrait::originalId` / `SyntheticOutputTrait::originalId`,
+    /// which preserves the user-authored shape name. `None` for non-synthetic
+    /// shapes and for member schemas.
+    ///
+    /// Currently consumed by the REST XML codec to determine the body root
+    /// element name when no `@xmlName` overrides it. Distinct from `xml_name`,
+    /// which carries an `@xmlName` trait value. Other consumers (logging,
+    /// future protocols) may also read this field.
+    original_name: Option<&'static str>,
+
     // -- Known serde trait fields (const-constructable) --
     // IMPORTANT: These fields and their `with_*` setters must stay in sync with
     // `knownTraitSetter` in `SchemaGenerator.kt`. If a new known trait is added
@@ -132,6 +148,7 @@ impl Schema {
         member_name: None,
         member_index: None,
         members: SchemaMembers::None,
+        original_name: None,
         sensitive: None,
         json_name: None,
         timestamp_format: None,
@@ -251,6 +268,11 @@ impl Schema {
         self.xml_name.as_ref()
     }
 
+    /// Returns the `@xmlNamespace` value if present.
+    pub fn xml_namespace(&self) -> Option<&trait_types::XmlNamespaceTrait> {
+        self.xml_namespace.as_ref()
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
@@ -309,6 +331,13 @@ impl Schema {
     }
 
     // -- Const setters for builder-style construction in generated code --
+
+    /// Sets the original (pre-synthesis) shape name for synthetic operation
+    /// input/output shapes. See [`Schema::original_name`] for semantics.
+    pub const fn with_original_name(mut self, name: &'static str) -> Self {
+        self.original_name = Some(name);
+        self
+    }
 
     /// Sets the `@sensitive` trait.
     pub const fn with_sensitive(mut self) -> Self {
@@ -425,8 +454,16 @@ impl Schema {
     }
 
     /// Sets the `@xmlNamespace` trait.
-    pub const fn with_xml_namespace(mut self) -> Self {
-        self.xml_namespace = Some(trait_types::XmlNamespaceTrait);
+    ///
+    /// `uri` is the namespace URI; `prefix` optionally declares the
+    /// `xmlns:prefix` form. Pass `None` for the default (unprefixed)
+    /// `xmlns="uri"` declaration.
+    pub const fn with_xml_namespace(
+        mut self,
+        uri: &'static str,
+        prefix: Option<&'static str>,
+    ) -> Self {
+        self.xml_namespace = Some(trait_types::XmlNamespaceTrait::new(uri, prefix));
         self
     }
 
@@ -447,6 +484,15 @@ impl Schema {
     /// Consumer code should not rely on specific position values as they may change.
     pub fn member_index(&self) -> Option<usize> {
         self.member_index
+    }
+
+    /// Returns the original (pre-synthesis) shape name for synthetic operation
+    /// input/output shapes.
+    ///
+    /// `None` for non-synthetic shapes. See the field documentation for full
+    /// semantics.
+    pub fn original_name(&self) -> Option<&str> {
+        self.original_name
     }
 
     /// Returns the member schema by name (for structures and unions).

@@ -31,6 +31,7 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.SparseTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.model.traits.TimestampFormatTrait
+import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.qualifiedName
@@ -43,6 +44,8 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.rustType
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
+import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.isStreaming
 import software.amazon.smithy.rust.codegen.core.util.isTargetUnit
@@ -1638,6 +1641,49 @@ class SchemaGenerator(
     }
 
     /**
+     * Returns the full trait setter chain to append after a member schema's
+     * `Schema::new_member(...)` constructor:
+     *
+     *  - `traitSetterChain(member)`: all known serde traits set directly on
+     *    the member shape (e.g., `@xmlName`, `@httpHeader`).
+     *  - `@timestampFormat` propagated from the target shape when the member
+     *    doesn't carry it itself and the target is a timestamp.
+     *  - `@mediaType` propagated from the target shape when the member doesn't
+     *    carry it itself.
+     *
+     * Used for struct/union members, list members, map keys, and map values —
+     * any [MemberShape] that gets emitted as a `_MEMBER` / `_KEY` / `_VALUE`
+     * schema constant. Mirrors Smithy semantics that target-shape traits apply
+     * transitively unless overridden by the member.
+     */
+    private fun memberTraitChain(member: software.amazon.smithy.model.shapes.MemberShape): String {
+        val target = model.expectShape(member.target)
+        val baseChain = traitSetterChain(member)
+        val targetTimestampFormat =
+            if (
+                target is software.amazon.smithy.model.shapes.TimestampShape &&
+                !member.hasTrait(TimestampFormatTrait::class.java) &&
+                target.hasTrait(TimestampFormatTrait::class.java)
+            ) {
+                knownTraitSetter(target.expectTrait(TimestampFormatTrait::class.java)) ?: ""
+            } else {
+                ""
+            }
+        val targetMediaType =
+            if (
+                !member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) &&
+                target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
+            ) {
+                knownTraitSetter(
+                    target.expectTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java),
+                ) ?: ""
+            } else {
+                ""
+            }
+        return baseChain + targetTimestampFormat + targetMediaType
+    }
+
+    /**
      * If this shape is an operation input, returns a `.with_http(...)` chain
      * for the operation's `@http` trait. The `@http` trait is operation-level
      * but is included on the input schema for convenience so the protocol
@@ -1657,6 +1703,21 @@ class SchemaGenerator(
             }
         }
         return ""
+    }
+
+    /**
+     * If this shape carries `SyntheticInputTrait` or `SyntheticOutputTrait`
+     * with a non-null `originalId`, returns a `.with_original_name(...)` call
+     * that surfaces the original (pre-synthesis) shape name. REST XML reads
+     * this when constructing the body root element name; other consumers
+     * (logging, future protocols) may also read it. Returns "" otherwise.
+     */
+    private fun originalNameChain(shape: Shape): String {
+        val originalName =
+            shape.getTrait(SyntheticInputTrait::class.java).orElse(null)?.originalId?.name
+                ?: shape.getTrait(SyntheticOutputTrait::class.java).orElse(null)?.originalId?.name
+                ?: return ""
+        return "\n    .with_original_name(${originalName.dq()})"
     }
 
     /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
@@ -1691,7 +1752,11 @@ class SchemaGenerator(
             "smithy.api#xmlName" -> "\n    .with_xml_name(${stringValue!!.dq()})"
             "smithy.api#xmlAttribute" -> "\n    .with_xml_attribute()"
             "smithy.api#xmlFlattened" -> "\n    .with_xml_flattened()"
-            "smithy.api#xmlNamespace" -> "\n    .with_xml_namespace()"
+            "smithy.api#xmlNamespace" -> {
+                val ns = trait as XmlNamespaceTrait
+                val prefix = ns.prefix.map { "Some(${it.dq()})" }.orElse("None")
+                "\n    .with_xml_namespace(${ns.uri.dq()}, $prefix)"
+            }
             "smithy.api#mediaType" -> "\n    .with_media_type(${stringValue!!.dq()})"
             "smithy.api#httpHeader" -> "\n    .with_http_header(${stringValue!!.dq()})"
             "smithy.api#httpLabel" -> "\n    .with_http_label()"
@@ -1738,7 +1803,7 @@ class SchemaGenerator(
                     } else {
                         "&[${allRefs.joinToString(", ")}]"
                     }
-                val traitChain = traitSetterChain(shape) + httpTraitChain(shape)
+                val traitChain = traitSetterChain(shape) + httpTraitChain(shape) + originalNameChain(shape)
                 if (hasUnknownTraits(shape)) {
                     writer.rustTemplate(
                         """
@@ -1829,28 +1894,7 @@ class SchemaGenerator(
                     val smithyMemberName = member.memberName
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
-                    val memberTraitChain = traitSetterChain(member)
-                    // Include @timestampFormat from the target shape if not already on the member
-                    val targetTimestampFormat =
-                        if (
-                            target is software.amazon.smithy.model.shapes.TimestampShape &&
-                            !member.hasTrait(TimestampFormatTrait::class.java) &&
-                            target.hasTrait(TimestampFormatTrait::class.java)
-                        ) {
-                            knownTraitSetter(target.expectTrait(TimestampFormatTrait::class.java)) ?: ""
-                        } else {
-                            ""
-                        }
-                    // Include @mediaType from the target shape if not already on the member
-                    val targetMediaType =
-                        if (
-                            !member.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java) &&
-                            target.hasTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)
-                        ) {
-                            knownTraitSetter(target.expectTrait(software.amazon.smithy.model.traits.MediaTypeTrait::class.java)) ?: ""
-                        } else {
-                            ""
-                        }
+                    val traitChain = memberTraitChain(member)
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
@@ -1862,7 +1906,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$memberTraitChain$targetTimestampFormat$targetMediaType;
+                        )$traitChain;
                         """,
                         *codegenScope,
                     )
@@ -1892,6 +1936,7 @@ class SchemaGenerator(
             is ListShape -> {
                 val target = model.expectShape(shape.member.target)
                 val escapedMemberId = shape.member.id.toString().replace("#", "##")
+                val traitChain = memberTraitChain(shape.member)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_MEMBER: #{Schema} = #{Schema}::new_member(
@@ -1903,7 +1948,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(target)},
                         "member",
                         0,
-                    );
+                    )$traitChain;
                     """,
                     *codegenScope,
                 )
@@ -1914,6 +1959,8 @@ class SchemaGenerator(
                 val valueTarget = model.expectShape(shape.value.target)
                 val escapedKeyId = shape.key.id.toString().replace("#", "##")
                 val escapedValueId = shape.value.id.toString().replace("#", "##")
+                val keyTraitChain = memberTraitChain(shape.key)
+                val valueTraitChain = memberTraitChain(shape.value)
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_KEY: #{Schema} = #{Schema}::new_member(
@@ -1925,7 +1972,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(keyTarget)},
                         "key",
                         0,
-                    );
+                    )$keyTraitChain;
 
                     static ${schemaPrefix}_VALUE: #{Schema} = #{Schema}::new_member(
                         #{ShapeId}::from_static(
@@ -1936,7 +1983,7 @@ class SchemaGenerator(
                         #{ShapeType}::${shapeTypeVariant(valueTarget)},
                         "value",
                         1,
-                    );
+                    )$valueTraitChain;
                     """,
                     *codegenScope,
                 )
