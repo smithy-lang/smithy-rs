@@ -19,6 +19,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
  * client's [BehaviorVersion]. This is done in codegen (not in the runtime's
  * default_plugins) so that old SDKs paired with a new runtime don't
  * inadvertently pick up new retry behavior.
+ *
+ * NOTE: Currently unused. Retry 2.1 is gated behind the AWS_NEW_RETRIES_2026
+ * env var (resolved in aws-config). Re-add this to RequiredCustomizations once
+ * retry 2.1 is on by default and tied to a BehaviorVersion.
  */
 class RetrySpecCustomization(private val codegenContext: ClientCodegenContext) :
     ServiceRuntimePluginCustomization() {

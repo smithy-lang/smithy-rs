@@ -13,7 +13,6 @@ use crate::client::http::body::content_length_enforcement::EnforceContentLengthR
 use crate::client::identity::IdentityCache;
 use crate::client::retries::strategy::standard::TokenBucketProvider;
 use crate::client::retries::strategy::StandardRetryStrategy;
-use crate::client::retries::token_bucket::TokenBucket;
 use crate::client::retries::RetryPartition;
 use aws_smithy_async::rt::sleep::default_async_sleep;
 use aws_smithy_async::time::SystemTimeSource;
@@ -30,7 +29,7 @@ use aws_smithy_runtime_api::client::runtime_plugin::{
 use aws_smithy_runtime_api::client::stalled_stream_protection::StalledStreamProtectionConfig;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
-use aws_smithy_types::retry::{ReconnectMode, RetryConfig};
+use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::borrow::Cow;
 use std::time::Duration;
@@ -142,9 +141,12 @@ pub fn default_retry_config_plugin(
                 .with_config_validator(SharedConfigValidator::base_client_config_fn(
                     validate_retry_config,
                 ))
+                // TODO(retry 2.1 on by default): revert TokenBucketProvider to the old
+                // approach: `new()` takes `init: impl FnOnce() -> TokenBucket`, eagerly
+                // calls `TOKEN_BUCKET.get_or_init(default_partition.clone(), init)`, stores
+                // the result directly (no OnceLock), and the hot path is just `.clone()`.
                 .with_interceptor(SharedInterceptor::permanent(TokenBucketProvider::new(
                     retry_partition.clone(),
-                    TokenBucket::default,
                 )))
         })
         .with_config(layer("default_retry_config", |layer| {
@@ -180,22 +182,6 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                 ))
                 .with_interceptor(SharedInterceptor::permanent(TokenBucketProvider::new(
                     retry_partition.clone(),
-                    {
-                        #[allow(deprecated)]
-                        let is_new_bv =
-                            behavior_version.is_at_least(BehaviorVersion::v2026_05_15());
-                        move || {
-                            if is_new_bv {
-                                TokenBucket::builder()
-                                    .retry_cost(14)
-                                    .throttling_retry_cost(5)
-                                    .timeout_retry_cost(14)
-                                    .build()
-                            } else {
-                                TokenBucket::default()
-                            }
-                        }
-                    },
                 )))
         })
         .with_config(layer("default_retry_config", |layer| {
@@ -206,12 +192,6 @@ pub fn default_retry_config_plugin_v2(params: &DefaultPluginParams) -> Option<Sh
                 } else {
                     RetryConfig::disabled()
                 };
-            #[allow(deprecated)]
-            let retry_config = if behavior_version.is_at_least(BehaviorVersion::v2026_05_15()) {
-                retry_config.with_reconnect_mode(ReconnectMode::ReuseAllConnections)
-            } else {
-                retry_config
-            };
             layer.store_put(retry_config);
             layer.store_put(retry_partition);
         }))
