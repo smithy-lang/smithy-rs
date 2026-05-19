@@ -18,3 +18,6 @@ cargo test --features wire-mock,default-client --test connection_harness_test
 
 echo "### Running tracing-assertion tests (require single-threaded execution)"
 cargo test --features wire-mock,default-client,test-util --test pool_behavior_test -- --ignored --test-threads=1
+
+echo "### Running H2 pool behavior tests (requires aws_sdk_unstable cfg)"
+RUSTFLAGS='--cfg aws_sdk_unstable' cargo test --features s2n-tls,rustls-aws-lc,wire-mock,default-client,test-util --test h2_pool_test
