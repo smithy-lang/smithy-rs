@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! V2 HTTP client.
+//! V2 HTTP client builder.
 //!
-//! Entry point: [`BuilderV2::new`] or [`Builder::new_v2`](super::Builder::new_v2).
+//! Entry point: [`Builder::new`] or [`crate::Builder::new_v2`].
 
-pub use super::pool::connection::{
+pub use super::connection::{
     Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
     ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
 };
@@ -28,10 +28,10 @@ use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use hyper_util::client::legacy::connect::HttpConnector as HyperHttpConnector;
 
-use super::downcast_error;
-use super::pool::{self, ConnectionPool, PoolConfig};
-use super::tls;
-use super::{TlsProviderSelected, TlsUnset};
+use super::{ConnectionPool, PoolConfig};
+use crate::client::downcast_error;
+use crate::client::tls;
+use crate::client::{TlsProviderSelected, TlsUnset};
 use crate::tls::TlsContext;
 
 /// Builder for the v2 HTTP client.
@@ -42,27 +42,27 @@ use crate::tls::TlsContext;
 /// # Examples
 ///
 /// ```no_run
-/// use aws_smithy_http_client::v2::BuilderV2;
+/// use aws_smithy_http_client::pool::Builder;
 /// use std::time::Duration;
 ///
-/// let client = BuilderV2::new()
+/// let client = Builder::new()
 ///     .pool_idle_timeout(Duration::from_secs(20))
 ///     .build_http();
 /// ```
 #[derive(Clone)]
-pub struct BuilderV2<Tls = TlsUnset> {
+pub struct Builder<Tls = TlsUnset> {
     pool_idle_timeout: Option<Duration>,
     tcp_nodelay: bool,
     max_connections: Option<usize>,
     max_connections_per_host: Option<usize>,
-    proxy_config: Option<super::proxy::ProxyConfig>,
-    connection_event_listener: Option<Arc<dyn super::pool::connection::ConnectionEventListener>>,
+    proxy_config: Option<crate::client::proxy::ProxyConfig>,
+    connection_event_listener: Option<Arc<dyn super::connection::ConnectionEventListener>>,
     tls: Tls,
 }
 
-impl<Tls: std::fmt::Debug> std::fmt::Debug for BuilderV2<Tls> {
+impl<Tls: std::fmt::Debug> std::fmt::Debug for Builder<Tls> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BuilderV2")
+        f.debug_struct("Builder")
             .field("pool_idle_timeout", &self.pool_idle_timeout)
             .field("tcp_nodelay", &self.tcp_nodelay)
             .field("max_connections", &self.max_connections)
@@ -76,7 +76,7 @@ impl<Tls: std::fmt::Debug> std::fmt::Debug for BuilderV2<Tls> {
     }
 }
 
-impl Default for BuilderV2<TlsUnset> {
+impl Default for Builder<TlsUnset> {
     fn default() -> Self {
         Self {
             pool_idle_timeout: None,
@@ -91,7 +91,7 @@ impl Default for BuilderV2<TlsUnset> {
 }
 
 // Methods available in any TLS state.
-impl<Tls> BuilderV2<Tls> {
+impl<Tls> Builder<Tls> {
     /// Set the pool idle timeout.
     ///
     /// Connections idle longer than this duration are evicted from the pool.
@@ -139,13 +139,16 @@ impl<Tls> BuilderV2<Tls> {
     ///
     /// To use environment variables (`HTTP_PROXY`, `HTTPS_PROXY`,
     /// `NO_PROXY`), pass `ProxyConfig::from_env()`.
-    pub fn proxy_config(mut self, config: super::proxy::ProxyConfig) -> Self {
+    pub fn proxy_config(mut self, config: crate::client::proxy::ProxyConfig) -> Self {
         self.proxy_config = Some(config);
         self
     }
 
     /// Mutable-reference variant of [`proxy_config`](Self::proxy_config).
-    pub fn set_proxy_config(&mut self, config: Option<super::proxy::ProxyConfig>) -> &mut Self {
+    pub fn set_proxy_config(
+        &mut self,
+        config: Option<crate::client::proxy::ProxyConfig>,
+    ) -> &mut Self {
         self.proxy_config = config;
         self
     }
@@ -153,7 +156,7 @@ impl<Tls> BuilderV2<Tls> {
     /// Set a listener for connection lifecycle events (created, reused, closed, failed).
     pub fn connection_event_listener(
         mut self,
-        listener: Arc<dyn super::pool::connection::ConnectionEventListener>,
+        listener: Arc<dyn super::connection::ConnectionEventListener>,
     ) -> Self {
         self.connection_event_listener = Some(listener);
         self
@@ -162,22 +165,22 @@ impl<Tls> BuilderV2<Tls> {
     /// Mutable-reference variant of [`connection_event_listener`](Self::connection_event_listener).
     pub fn set_connection_event_listener(
         &mut self,
-        listener: Option<Arc<dyn super::pool::connection::ConnectionEventListener>>,
+        listener: Option<Arc<dyn super::connection::ConnectionEventListener>>,
     ) -> &mut Self {
         self.connection_event_listener = listener;
         self
     }
 }
 
-impl BuilderV2<TlsUnset> {
+impl Builder<TlsUnset> {
     /// Create a new v2 client builder.
     pub fn new() -> Self {
         Self::default()
     }
 
     /// Set the TLS implementation.
-    pub fn tls_provider(self, provider: tls::Provider) -> BuilderV2<TlsProviderSelected> {
-        BuilderV2 {
+    pub fn tls_provider(self, provider: tls::Provider) -> Builder<TlsProviderSelected> {
+        Builder {
             pool_idle_timeout: self.pool_idle_timeout,
             tcp_nodelay: self.tcp_nodelay,
             max_connections: self.max_connections,
@@ -252,13 +255,13 @@ impl BuilderV2<TlsUnset> {
             + Send
             + 'static,
     {
-        let config = pool::PoolConfig {
+        let config = super::PoolConfig {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: self.pool_idle_timeout,
             connection_event_listener: self.connection_event_listener.clone(),
         };
-        let pool = pool::build_pool(connector, config);
+        let pool = super::build_pool(connector, config);
         V2HttpClient::new(pool, None).into_shared()
     }
 }
@@ -269,7 +272,7 @@ impl BuilderV2<TlsUnset> {
 /// proxy will fail at handshake time.
 fn build_http_pool_with_proxy<R>(
     tcp: HyperHttpConnector<R>,
-    proxy_config: &Option<super::proxy::ProxyConfig>,
+    proxy_config: &Option<crate::client::proxy::ProxyConfig>,
     config: PoolConfig,
 ) -> ConnectionPool
 where
@@ -279,7 +282,7 @@ where
     R::Future: Send,
     R::Error: Into<aws_smithy_runtime_api::box_error::BoxError>,
 {
-    use super::proxy;
+    use crate::client::proxy;
 
     let proxy_config = proxy_config
         .clone()
@@ -294,14 +297,14 @@ where
     }
 
     if proxy_config.is_disabled() {
-        pool::build_pool(tcp, config)
+        super::build_pool(tcp, config)
     } else {
-        let connector = super::connect::HttpProxyConnector::new(tcp, proxy_config);
-        pool::build_pool(connector, config)
+        let connector = crate::client::connect::HttpProxyConnector::new(tcp, proxy_config);
+        super::build_pool(connector, config)
     }
 }
 
-impl BuilderV2<TlsProviderSelected> {
+impl Builder<TlsProviderSelected> {
     /// Set the TLS context (custom trust store, etc.).
     pub fn tls_context(mut self, context: TlsContext) -> Self {
         self.tls.context = context;
@@ -336,7 +339,7 @@ impl BuilderV2<TlsProviderSelected> {
         R::Future: Send,
         R::Error: Into<aws_smithy_runtime_api::box_error::BoxError>,
     {
-        use super::proxy;
+        use crate::client::proxy;
 
         let config = PoolConfig {
             max_connections: self.max_connections,
@@ -364,7 +367,7 @@ impl BuilderV2<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = pool::build_pool(connector, config);
+                let pool = super::build_pool(connector, config);
                 V2HttpClient::new(pool, proxy_matcher).into_shared()
             }
             #[cfg(feature = "s2n-tls")]
@@ -374,7 +377,7 @@ impl BuilderV2<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = pool::build_pool(connector, config);
+                let pool = super::build_pool(connector, config);
                 V2HttpClient::new(pool, proxy_matcher).into_shared()
             }
             // Provider is #[non_exhaustive]; this arm is unreachable when any
@@ -433,7 +436,7 @@ impl HttpConnector for PooledConnector {
             // HTTPS-through-proxy uses CONNECT tunneling and authenticates
             // inside the tunnel-establishment exchange, not via this header.
             if let Some(matcher) = proxy_matcher.as_ref() {
-                super::proxy::add_proxy_auth_header(&mut request, matcher);
+                crate::client::proxy::add_proxy_auth_header(&mut request, matcher);
             }
 
             // Create a request-scoped capture the pool will fill in with
@@ -443,7 +446,7 @@ impl HttpConnector for PooledConnector {
             // `ConnectionMetadata::poison()`, it flips the `PoisonPill` on
             // the actual `ManagedConnection` selected for this request.
             if let Some(capture_smithy) = request.extensions().get::<CaptureSmithyConnection>() {
-                let capture = pool::ConnectionMetadataCapture::new();
+                let capture = super::ConnectionMetadataCapture::new();
                 let for_retriever = capture.clone();
                 capture_smithy.set_connection_retriever(move || for_retriever.get());
                 request.extensions_mut().insert(capture);
@@ -454,11 +457,9 @@ impl HttpConnector for PooledConnector {
             // request dispatch: bounds request-write + response-headers,
             // nothing else.
             if let Some((duration, sleep)) = read_timeout.zip(sleep_impl.clone()) {
-                request
-                    .extensions_mut()
-                    .insert(pool::ReadTimeoutHint(pool::TimeoutContext::new(
-                        duration, sleep,
-                    )));
+                request.extensions_mut().insert(super::ReadTimeoutHint(
+                    super::TimeoutContext::new(duration, sleep),
+                ));
             }
 
             // Set Host header from the URI authority if not already present.
@@ -485,11 +486,11 @@ impl HttpConnector for PooledConnector {
             // Build the connect context: routing URI + connect timeout.
             // Cache hits skip the connector entirely so connect_timeout is
             // automatically new-connection-only.
-            let connect_ctx = pool::ConnectCtx::new(
+            let connect_ctx = super::ConnectCtx::new(
                 full_uri,
                 connect_timeout
                     .zip(sleep_impl)
-                    .map(|(d, s)| pool::TimeoutContext::new(d, s)),
+                    .map(|(d, s)| super::TimeoutContext::new(d, s)),
             );
 
             let response = pool
@@ -511,7 +512,7 @@ impl HttpConnector for PooledConnector {
 /// constructed by `http_connector` can share the (immutable) matcher
 /// without per-call allocation.
 fn proxy_matcher_from(
-    proxy_config: &Option<super::proxy::ProxyConfig>,
+    proxy_config: &Option<crate::client::proxy::ProxyConfig>,
 ) -> Option<Arc<hyper_util::client::proxy::matcher::Matcher>> {
     proxy_config
         .as_ref()

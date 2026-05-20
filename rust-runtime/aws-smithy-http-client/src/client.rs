@@ -11,9 +11,7 @@ mod timeout;
 pub mod tls;
 
 pub(crate) mod connect;
-pub(crate) mod pool;
-/// V2 HTTP client backed by composable connection pools.
-pub mod v2;
+pub mod pool;
 
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
@@ -932,8 +930,8 @@ impl Builder<TlsUnset> {
     /// management, supporting per-host connection reuse with HTTP/1.1 and
     /// HTTP/2 protocol negotiation.
     #[doc(hidden)]
-    pub fn new_v2() -> v2::BuilderV2 {
-        v2::BuilderV2::new()
+    pub fn new_v2() -> pool::Builder {
+        pool::Builder::new()
     }
 
     /// Returns a [`SharedHttpClient`] that calls the given `connector` function to select an HTTP(S) connector.

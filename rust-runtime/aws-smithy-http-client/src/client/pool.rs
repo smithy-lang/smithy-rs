@@ -16,6 +16,16 @@ pub(crate) mod connection;
 mod handshake;
 mod vendored_cache;
 
+pub mod builder;
+
+// Public re-exports — make pool::Builder, pool::ConnectionEventListener, etc.
+// directly accessible without going through pool::builder.
+pub use builder::{
+    Authority, Builder, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent,
+    ConnectionEventListener, ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming,
+    NegotiatedProtocol,
+};
+
 /// Connection-caching pool layer.
 ///
 /// Re-exports [`vendored_cache`], our vendored copy of hyper-util's
@@ -45,8 +55,8 @@ use tokio::sync::{oneshot, Semaphore};
 use tower::{Service, ServiceExt};
 
 use connection::{
-    Authority, CachedConnection, CheckoutResponse, CloseReason, ConnectionClosedEvent,
-    ConnectionGuard, GuardedBody, H2ConnectionRef, SingletonConnection,
+    CachedConnection, CheckoutResponse, ConnectionGuard, GuardedBody, H2ConnectionRef,
+    SingletonConnection,
 };
 pub(crate) use connection::{ConnectCtx, ReadTimeoutHint, TimeoutContext};
 use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};

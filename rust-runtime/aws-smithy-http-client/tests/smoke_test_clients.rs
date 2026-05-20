@@ -130,12 +130,12 @@ async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>
 // v2 smoke tests
 // ---------------------------------------------------------------------------
 
-use aws_smithy_http_client::v2::BuilderV2;
+use aws_smithy_http_client::pool::Builder as PoolBuilder;
 
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test]
 async fn v2_aws_lc_client() {
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
@@ -146,7 +146,7 @@ async fn v2_aws_lc_client() {
 #[cfg(feature = "rustls-aws-lc-fips")]
 #[tokio::test]
 async fn v2_aws_lc_fips_client() {
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
@@ -157,7 +157,7 @@ async fn v2_aws_lc_fips_client() {
 #[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn v2_ring_client() {
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
@@ -168,7 +168,7 @@ async fn v2_ring_client() {
 #[cfg(feature = "s2n-tls")]
 #[tokio::test]
 async fn v2_s2n_tls_client() {
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::S2nTls)
         .build_https();
     smoke_test_client(&client).await.unwrap();
@@ -177,7 +177,7 @@ async fn v2_s2n_tls_client() {
 #[cfg(feature = "s2n-tls")]
 #[tokio::test]
 async fn v2_s2n_tls_timing_populated() {
-    use aws_smithy_http_client::v2::{ConnectionCreatedEvent, ConnectionEventListener};
+    use aws_smithy_http_client::pool::{ConnectionCreatedEvent, ConnectionEventListener};
     use std::sync::Mutex;
     use std::time::Duration;
 
@@ -189,7 +189,7 @@ async fn v2_s2n_tls_timing_populated() {
     }
 
     let listener = Arc::new(TimingListener(Mutex::new(None)));
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::S2nTls)
         .connection_event_listener(listener.clone() as Arc<dyn ConnectionEventListener>)
         .build_https();
@@ -209,7 +209,7 @@ async fn v2_s2n_tls_timing_populated() {
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test]
 async fn v2_rustls_timing_populated() {
-    use aws_smithy_http_client::v2::{ConnectionCreatedEvent, ConnectionEventListener};
+    use aws_smithy_http_client::pool::{ConnectionCreatedEvent, ConnectionEventListener};
     use std::sync::Mutex;
     use std::time::Duration;
 
@@ -221,7 +221,7 @@ async fn v2_rustls_timing_populated() {
     }
 
     let listener = Arc::new(TimingListener(Mutex::new(None)));
-    let client = BuilderV2::new()
+    let client = PoolBuilder::new()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))

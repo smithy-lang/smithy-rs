@@ -1205,9 +1205,9 @@ async fn make_v2_http_request_through_proxy(
     proxy_config: ProxyConfig,
     target_url: &str,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
-    use aws_smithy_http_client::v2::BuilderV2;
+    use aws_smithy_http_client::pool::Builder;
 
-    let http_client = BuilderV2::new().proxy_config(proxy_config).build_http();
+    let http_client = Builder::new().proxy_config(proxy_config).build_http();
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()
         .with_time_source(Some(SystemTimeSource::new()))
@@ -1234,9 +1234,9 @@ async fn make_v2_https_request_through_proxy(
     target_url: &str,
     tls_provider: tls::Provider,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
-    use aws_smithy_http_client::v2::BuilderV2;
+    use aws_smithy_http_client::pool::Builder;
 
-    let http_client = BuilderV2::new()
+    let http_client = Builder::new()
         .tls_provider(tls_provider)
         .proxy_config(proxy_config)
         .build_https();
@@ -1494,7 +1494,7 @@ async fn test_v2_direct_http_origin_uri_form() {
 
 #[tokio::test]
 async fn test_v2_set_proxy_config_none_clears_proxy() {
-    use aws_smithy_http_client::v2::BuilderV2;
+    use aws_smithy_http_client::pool::Builder;
 
     let mock_proxy = MockProxyServer::new(|_| {
         Response::builder()
@@ -1511,7 +1511,7 @@ async fn test_v2_set_proxy_config_none_clears_proxy() {
     })
     .await;
 
-    let mut builder = BuilderV2::new();
+    let mut builder = Builder::new();
     builder.set_proxy_config(Some(
         ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap(),
     ));
