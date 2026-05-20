@@ -48,13 +48,7 @@ object SchemaSerdeAllowlist {
      * protocols incrementally in follow-up PRs by adding entries such as
      * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
-    private val allowedProtocols: Set<ShapeId> =
-        setOf(
-            RestJson1Trait.ID,
-            AwsJson1_0Trait.ID,
-            AwsJson1_1Trait.ID,
-            Rpcv2CborTrait.ID,
-        )
+    private val allowedProtocols: Set<ShapeId> = emptySet()
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
