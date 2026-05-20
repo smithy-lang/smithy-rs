@@ -186,4 +186,37 @@ mod tests {
             "<X xmlns=\"urn:test\"><name>hello</name></X>"
         );
     }
+
+    #[test]
+    fn test_end_to_end_deserialize_through_codec() {
+        use aws_smithy_schema::serde::ShapeDeserializer;
+        use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+        static NAME: Schema =
+            Schema::new_member(shape_id!("test", "X$name"), ShapeType::String, "name", 0);
+        static AGE: Schema =
+            Schema::new_member(shape_id!("test", "X$age"), ShapeType::Integer, "age", 1);
+        static X_SCHEMA: Schema =
+            Schema::new_struct(shape_id!("test", "X"), ShapeType::Structure, &[&NAME, &AGE]);
+
+        let codec = XmlCodec::default();
+        let xml = b"<X><name>Alice</name><age>30</age></X>";
+        let mut deser = codec.create_deserializer(xml);
+
+        let mut name = String::new();
+        let mut age = 0i32;
+        deser
+            .read_struct(&X_SCHEMA, &mut |member, d| {
+                match member.member_name().unwrap() {
+                    "name" => name = d.read_string(member)?,
+                    "age" => age = d.read_integer(member)?,
+                    _ => {}
+                }
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(name, "Alice");
+        assert_eq!(age, 30);
+    }
 }
