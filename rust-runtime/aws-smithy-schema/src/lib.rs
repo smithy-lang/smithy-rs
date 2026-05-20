@@ -273,6 +273,16 @@ impl Schema {
         self.xml_namespace.as_ref()
     }
 
+    /// Returns `true` if this member has the `@xmlAttribute` trait.
+    pub fn xml_attribute(&self) -> bool {
+        self.xml_attribute.is_some()
+    }
+
+    /// Returns `true` if this member has the `@xmlFlattened` trait.
+    pub fn xml_flattened(&self) -> bool {
+        self.xml_flattened.is_some()
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).

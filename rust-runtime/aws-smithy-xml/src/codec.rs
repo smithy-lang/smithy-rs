@@ -157,4 +157,33 @@ mod tests {
         let _serializer = codec.create_serializer();
         let _deserializer = codec.create_deserializer(b"<Root/>");
     }
+
+    #[test]
+    fn test_end_to_end_serialize_through_codec() {
+        use aws_smithy_schema::codec::FinishSerializer;
+        use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
+        use aws_smithy_schema::{shape_id, Schema, ShapeType};
+
+        static NAME: Schema =
+            Schema::new_member(shape_id!("test", "X$name"), ShapeType::String, "name", 0);
+        static X_SCHEMA: Schema =
+            Schema::new_struct(shape_id!("test", "X"), ShapeType::Structure, &[&NAME])
+                .with_xml_namespace("urn:test", None);
+
+        struct X;
+        impl SerializableStruct for X {
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_string(&NAME, "hello")
+            }
+        }
+
+        let codec = XmlCodec::default();
+        let mut ser = codec.create_serializer();
+        ser.write_struct(&X_SCHEMA, &X).unwrap();
+        let bytes = ser.finish();
+        assert_eq!(
+            String::from_utf8(bytes).unwrap(),
+            "<X xmlns=\"urn:test\"><name>hello</name></X>"
+        );
+    }
 }
