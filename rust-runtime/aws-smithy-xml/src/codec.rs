@@ -113,6 +113,11 @@ impl XmlCodec {
         }
     }
 
+    /// Creates a new XML codec from a pre-existing shared settings.
+    pub fn from_shared_settings(settings: Arc<XmlCodecSettings>) -> Self {
+        Self { settings }
+    }
+
     /// Returns the codec settings.
     pub fn settings(&self) -> &XmlCodecSettings {
         &self.settings

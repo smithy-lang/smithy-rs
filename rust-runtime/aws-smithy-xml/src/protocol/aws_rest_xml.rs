@@ -1,0 +1,313 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! AWS REST XML protocol implementation (`aws.protocols#restXml`).
+
+use std::sync::Arc;
+
+use crate::codec::{XmlCodec, XmlCodecSettings, XmlDeserializer};
+use crate::decode::{try_data, Document};
+use aws_smithy_schema::http_protocol::HttpBindingProtocol;
+use aws_smithy_schema::serde::SerdeError;
+use aws_smithy_schema::Schema;
+use aws_smithy_schema::ShapeId;
+use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::date_time::Format as TimestampFormat;
+use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
+
+static PROTOCOL_ID: ShapeId = ShapeId::from_static("aws.protocols", "restXml", "");
+
+/// AWS REST XML protocol (`aws.protocols#restXml`).
+#[derive(Debug)]
+pub struct AwsRestXmlProtocol {
+    inner: HttpBindingProtocol<XmlCodec>,
+    settings: Arc<XmlCodecSettings>,
+    /// True if the service has `@restXml(noErrorWrapping: true)`.
+    no_error_wrapping: bool,
+}
+
+impl AwsRestXmlProtocol {
+    pub fn new() -> Self {
+        let settings = XmlCodecSettings::builder()
+            .default_timestamp_format(TimestampFormat::DateTime)
+            .build();
+        let settings = Arc::new(settings);
+        let codec = XmlCodec::from_shared_settings(settings.clone());
+        Self {
+            inner: HttpBindingProtocol::new(PROTOCOL_ID, codec, "application/xml"),
+            settings,
+            no_error_wrapping: false,
+        }
+    }
+
+    pub fn with_no_error_wrapping(mut self, v: bool) -> Self {
+        self.no_error_wrapping = v;
+        self
+    }
+
+    pub fn no_error_wrapping(&self) -> bool {
+        self.no_error_wrapping
+    }
+
+    /// Parses a REST XML error response envelope, extracting error metadata
+    /// (`Code`, `Message`, `Type`, `RequestId`) and returning a deserializer
+    /// positioned inside `<Error>` for per-error-shape member parsing.
+    pub fn deserialize_error_response<'a>(
+        &self,
+        body: &'a [u8],
+    ) -> Result<
+        (
+            ErrorMetadataBuilder,
+            Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
+        ),
+        SerdeError,
+    > {
+        let mut builder = ErrorMetadata::builder();
+
+        if self.no_error_wrapping {
+            // <Error><Code>...</Code><Message>...</Message>...members...</Error>
+            let mut doc = Document::new(
+                std::str::from_utf8(body)
+                    .map_err(|e| SerdeError::custom(format!("invalid UTF-8: {e}")))?,
+            );
+            let mut root = doc
+                .root_element()
+                .map_err(|e| SerdeError::custom(format!("{e}")))?;
+            while let Some(mut tag) = root.next_tag() {
+                match tag.start_el().local() {
+                    "Code" => {
+                        builder = builder.code(
+                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
+                        );
+                    }
+                    "Message" => {
+                        builder = builder.message(
+                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            // For unwrapped, the body IS the <Error> element — deserializer reads from root
+            let deser = XmlDeserializer::new(body, self.settings.clone());
+            Ok((builder, Box::new(deser)))
+        } else {
+            // <ErrorResponse><Error><Code>...</Code>...</Error><RequestId>...</RequestId></ErrorResponse>
+            let mut doc = Document::new(
+                std::str::from_utf8(body)
+                    .map_err(|e| SerdeError::custom(format!("invalid UTF-8: {e}")))?,
+            );
+            let mut root = doc
+                .root_element()
+                .map_err(|e| SerdeError::custom(format!("{e}")))?;
+            while let Some(mut tag) = root.next_tag() {
+                match tag.start_el().local() {
+                    "Error" => {
+                        while let Some(mut error_field) = tag.next_tag() {
+                            match error_field.start_el().local() {
+                                "Code" => {
+                                    builder = builder.code(
+                                        try_data(&mut error_field)
+                                            .map_err(|e| SerdeError::custom(format!("{e}")))?,
+                                    );
+                                }
+                                "Message" => {
+                                    builder = builder.message(
+                                        try_data(&mut error_field)
+                                            .map_err(|e| SerdeError::custom(format!("{e}")))?,
+                                    );
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    "RequestId" => {
+                        builder = builder.custom(
+                            "request_id",
+                            try_data(&mut tag).map_err(|e| SerdeError::custom(format!("{e}")))?,
+                        );
+                    }
+                    _ => {}
+                }
+            }
+            // For wrapped, we need the deserializer to see <Error> as root.
+            // Find the <Error>...</Error> substring in the body and create a
+            // deserializer over just that fragment.
+            let body_str = std::str::from_utf8(body).unwrap(); // already validated above
+            let deser = if let Some(start) = body_str.find("<Error>") {
+                let end = body_str.find("</Error>").unwrap_or(body_str.len());
+                let fragment = &body[start..end + "</Error>".len()];
+                XmlDeserializer::new(fragment, self.settings.clone())
+            } else {
+                // Fallback: use the whole body
+                XmlDeserializer::new(body, self.settings.clone())
+            };
+            Ok((builder, Box::new(deser)))
+        }
+    }
+}
+
+impl Default for AwsRestXmlProtocol {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
+    type Request = aws_smithy_runtime_api::http::Request;
+    type Response = aws_smithy_runtime_api::http::Response;
+
+    fn protocol_id(&self) -> &ShapeId {
+        self.inner.protocol_id()
+    }
+
+    fn serialize_request(
+        &self,
+        input: &dyn aws_smithy_schema::serde::SerializableStruct,
+        input_schema: &Schema,
+        endpoint: &str,
+        cfg: &ConfigBag,
+    ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
+        self.inner
+            .serialize_request(input, input_schema, endpoint, cfg)
+    }
+
+    fn deserialize_response<'a>(
+        &self,
+        response: &'a aws_smithy_runtime_api::http::Response,
+        output_schema: &Schema,
+        cfg: &ConfigBag,
+    ) -> Result<
+        Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
+        aws_smithy_schema::serde::SerdeError,
+    > {
+        self.inner
+            .deserialize_response(response, output_schema, cfg)
+    }
+
+    fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
+        self.inner.payload_codec()
+    }
+
+    fn update_endpoint(
+        &self,
+        request: &mut aws_smithy_runtime_api::http::Request,
+        endpoint: &aws_smithy_types::endpoint::Endpoint,
+        cfg: &ConfigBag,
+    ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+        self.inner.update_endpoint(request, endpoint, cfg)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aws_smithy_schema::protocol::ClientProtocolInner;
+    use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+    use aws_smithy_schema::{shape_id, ShapeType};
+
+    use aws_smithy_schema::traits::HttpTrait;
+
+    static NAME_MEMBER: Schema =
+        Schema::new_member(shape_id!("test", "Op$name"), ShapeType::String, "name", 0);
+    static OP_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "OpRequest"),
+        ShapeType::Structure,
+        &[&NAME_MEMBER],
+    )
+    .with_original_name("OpRequest")
+    .with_http(HttpTrait::new("PUT", "/op", None));
+
+    struct TestInput;
+    impl SerializableStruct for TestInput {
+        fn serialize_members(
+            &self,
+            ser: &mut dyn ShapeSerializer,
+        ) -> Result<(), aws_smithy_schema::serde::SerdeError> {
+            ser.write_string(&NAME_MEMBER, "Alice")
+        }
+    }
+
+    #[test]
+    fn serialize_request_produces_xml_body() {
+        let protocol = AwsRestXmlProtocol::new();
+        let cfg = ConfigBag::base();
+        let request = protocol
+            .serialize_request(&TestInput, &OP_SCHEMA, "", &cfg)
+            .unwrap();
+
+        assert_eq!(request.method(), "PUT");
+        assert_eq!(request.uri(), "/op");
+        assert_eq!(
+            request.headers().get("content-type").unwrap(),
+            "application/xml"
+        );
+        let body = std::str::from_utf8(request.body().bytes().unwrap()).unwrap();
+        assert_eq!(body, "<OpRequest><name>Alice</name></OpRequest>");
+    }
+
+    #[test]
+    fn deserialize_response_round_trips() {
+        let protocol = AwsRestXmlProtocol::new();
+        let cfg = ConfigBag::base();
+        let body = b"<OpResponse><name>Bob</name></OpResponse>";
+        let response = aws_smithy_runtime_api::http::Response::new(
+            aws_smithy_runtime_api::http::StatusCode::try_from(200).unwrap(),
+            aws_smithy_types::body::SdkBody::from(&body[..]),
+        );
+
+        let mut deser = protocol
+            .deserialize_response(&response, &OP_SCHEMA, &cfg)
+            .unwrap();
+
+        let mut name = String::new();
+        deser
+            .read_struct(&OP_SCHEMA, &mut |member, d| {
+                if member.member_name() == Some("name") {
+                    name = d.read_string(member)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(name, "Bob");
+    }
+
+    #[test]
+    fn deserialize_error_wrapped() {
+        let protocol = AwsRestXmlProtocol::new();
+        let body = b"<ErrorResponse><Error><Type>Sender</Type><Code>InvalidGreeting</Code><Message>Hi</Message><Greeting>Howdy</Greeting></Error><RequestId>req-1</RequestId></ErrorResponse>";
+
+        let (builder, mut deser) = protocol.deserialize_error_response(body).unwrap();
+        let meta = builder.build();
+        assert_eq!(meta.code(), Some("InvalidGreeting"));
+        assert_eq!(meta.message(), Some("Hi"));
+        assert_eq!(meta.extra("request_id"), Some("req-1"));
+
+        // The deserializer should be positioned inside <Error> and able to read members
+        let mut greeting = String::new();
+        deser
+            .read_struct(&OP_SCHEMA, &mut |member, d| {
+                if member.member_name() == Some("name") {
+                    greeting = d.read_string(member)?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        // "Greeting" doesn't match "name" member, so greeting stays empty
+        // But Code/Message/Type are skipped as unknown — this validates no panic
+    }
+
+    #[test]
+    fn deserialize_error_unwrapped() {
+        let protocol = AwsRestXmlProtocol::new().with_no_error_wrapping(true);
+        let body =
+            b"<Error><Code>NotFound</Code><Message>Gone</Message><Detail>extra</Detail></Error>";
+
+        let (builder, _deser) = protocol.deserialize_error_response(body).unwrap();
+        let meta = builder.build();
+        assert_eq!(meta.code(), Some("NotFound"));
+        assert_eq!(meta.message(), Some("Gone"));
+    }
+}
