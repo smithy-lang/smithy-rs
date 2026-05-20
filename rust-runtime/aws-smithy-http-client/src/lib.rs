@@ -46,7 +46,7 @@ pub use client::{default_connector, proxy, tls, Builder, Connector, ConnectorBui
 
 /// V2 HTTP client backed by composable connection pools.
 #[cfg(feature = "default-client")]
-pub use client::v2;
+pub use client::pool;
 
 #[cfg(feature = "test-util")]
 pub mod test_util;

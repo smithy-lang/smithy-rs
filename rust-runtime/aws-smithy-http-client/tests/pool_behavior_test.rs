@@ -12,11 +12,11 @@
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
 use aws_smithy_async::time::SystemTimeSource;
+use aws_smithy_http_client::pool::Builder as PoolBuilder;
 use aws_smithy_http_client::test_util::wire::connection::{
     ConnectionBehavior, ConnectionTestHarness,
 };
 use aws_smithy_http_client::test_util::wire::{ReplayedEvent, WireMockServer};
-use aws_smithy_http_client::v2::BuilderV2;
 use aws_smithy_http_client::{ev, match_events, Builder, Connector};
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
@@ -82,7 +82,7 @@ struct V2Client;
 
 impl MakeClient for V2Client {
     fn make(&self, config: ClientConfig) -> SharedHttpClient {
-        let mut builder = BuilderV2::new();
+        let mut builder = PoolBuilder::new();
         if let Some(timeout) = config.idle_timeout {
             builder = builder.pool_idle_timeout(timeout);
         }
@@ -1329,7 +1329,7 @@ async fn v2_connection_id_surfaced_through_metadata() {
 
 mod listener_tests {
     use super::*;
-    use aws_smithy_http_client::v2::{
+    use aws_smithy_http_client::pool::{
         CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
         ConnectionFailedEvent, ConnectionReusedEvent,
     };

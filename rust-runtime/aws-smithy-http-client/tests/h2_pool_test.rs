@@ -19,7 +19,7 @@
     aws_sdk_unstable
 ))]
 
-use aws_smithy_http_client::v2::BuilderV2;
+use aws_smithy_http_client::pool::Builder;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
 };
@@ -298,7 +298,7 @@ impl Service<http_1x::Uri> for H2Connector {
 // ---------------------------------------------------------------------------
 
 fn build_h2_client(server: &H2MockServer) -> SharedHttpClient {
-    BuilderV2::new().build_http_with_tcp_connector(H2Connector { addr: server.addr })
+    Builder::new().build_http_with_tcp_connector(H2Connector { addr: server.addr })
 }
 
 fn runtime_components() -> aws_smithy_runtime_api::client::runtime_components::RuntimeComponents {
@@ -465,9 +465,9 @@ async fn h2_poisoned_connection_not_reused() {
 
 #[cfg(feature = "rustls-aws-lc")]
 mod tls_h2 {
+    use aws_smithy_http_client::pool::Builder;
     use aws_smithy_http_client::tls;
     use aws_smithy_http_client::tls::{TlsContext, TrustStore};
-    use aws_smithy_http_client::v2::BuilderV2;
     use aws_smithy_runtime_api::client::http::{
         HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
     };
@@ -614,7 +614,7 @@ mod tls_h2 {
     #[tokio::test]
     async fn rustls_alpn_h2_multiplexing() {
         let server = TlsH2Server::start().await;
-        let client = BuilderV2::new()
+        let client = Builder::new()
             .tls_provider(tls::Provider::Rustls(
                 tls::rustls_provider::CryptoMode::AwsLc,
             ))
@@ -649,7 +649,7 @@ mod tls_h2 {
     #[tokio::test]
     async fn s2n_tls_alpn_h2_multiplexing() {
         let server = TlsH2Server::start().await;
-        let client = BuilderV2::new()
+        let client = Builder::new()
             .tls_provider(tls::Provider::S2nTls)
             .tls_context(tls_context())
             .build_https();
