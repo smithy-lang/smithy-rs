@@ -15,7 +15,7 @@ use aws_smithy_runtime_api::client::interceptors::Intercept;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
-use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::retry::{RetryConfig, RetrySpec};
 use std::time::{Duration, SystemTime};
 
 fn req() -> http_1x::Request<SdkBody> {
@@ -74,6 +74,7 @@ async fn long_polling_backoff_after_transient_error_when_token_bucket_empty() {
 
     let config = Config::builder()
         .with_test_defaults_v2()
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
@@ -108,6 +109,7 @@ async fn long_polling_backoff_after_throttling_error_when_token_bucket_empty() {
 
     let config = Config::builder()
         .with_test_defaults_v2()
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
@@ -144,6 +146,7 @@ async fn long_polling_max_attempts_exceeded_must_not_delay() {
 
     let config = Config::builder()
         .with_test_defaults_v2()
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
@@ -188,6 +191,7 @@ async fn long_polling_success_must_not_delay() {
 
     let config = Config::builder()
         .with_test_defaults_v2()
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
@@ -230,6 +234,7 @@ async fn long_polling_non_retryable_errors_must_not_delay() {
 
     let config = Config::builder()
         .with_test_defaults_v2()
+        .retry_config(RetryConfig::standard().with_retry_spec(RetrySpec::v2_1()))
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
         .interceptor(StaticBackoffInterceptor)
         .time_source(SharedTimeSource::new(time_source))
