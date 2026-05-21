@@ -17,6 +17,7 @@ mod handshake;
 mod vendored_cache;
 
 pub mod builder;
+pub mod partition;
 
 // Public re-exports — make pool::Builder, pool::ConnectionEventListener, etc.
 // directly accessible without going through pool::builder.
@@ -25,6 +26,7 @@ pub use builder::{
     ConnectionEventListener, ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming,
     NegotiatedProtocol,
 };
+pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId};
 
 /// Connection-caching pool layer.
 ///
