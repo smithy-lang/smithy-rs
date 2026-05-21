@@ -57,6 +57,7 @@ pub struct Builder<Tls = TlsUnset> {
     max_connections_per_host: Option<usize>,
     proxy_config: Option<crate::client::proxy::ProxyConfig>,
     connection_event_listener: Option<Arc<dyn super::connection::ConnectionEventListener>>,
+    cross_partition_policy: super::partition::CrossPartitionPolicy,
     tls: Tls,
 }
 
@@ -72,6 +73,7 @@ impl<Tls: std::fmt::Debug> std::fmt::Debug for Builder<Tls> {
                 "connection_event_listener",
                 &self.connection_event_listener.as_ref().map(|_| ".."),
             )
+            .field("cross_partition_policy", &self.cross_partition_policy)
             .finish()
     }
 }
@@ -85,6 +87,7 @@ impl Default for Builder<TlsUnset> {
             max_connections_per_host: None,
             proxy_config: None,
             connection_event_listener: None,
+            cross_partition_policy: super::partition::CrossPartitionPolicy::default(),
             tls: TlsUnset {},
         }
     }
@@ -170,6 +173,29 @@ impl<Tls> Builder<Tls> {
         self.connection_event_listener = listener;
         self
     }
+
+    /// Set the policy that governs checkout when the local partition has
+    /// no idle connection and the pool is at capacity.
+    ///
+    /// Defaults to [`CrossPartitionPolicy::Never`](super::partition::CrossPartitionPolicy::Never).
+    /// Has no observable effect with a single partition or when the pool
+    /// stays under capacity.
+    pub fn cross_partition_policy(
+        mut self,
+        policy: super::partition::CrossPartitionPolicy,
+    ) -> Self {
+        self.cross_partition_policy = policy;
+        self
+    }
+
+    /// Mutable-reference variant of [`cross_partition_policy`](Self::cross_partition_policy).
+    pub fn set_cross_partition_policy(
+        &mut self,
+        policy: super::partition::CrossPartitionPolicy,
+    ) -> &mut Self {
+        self.cross_partition_policy = policy;
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -187,6 +213,7 @@ impl Builder<TlsUnset> {
             max_connections_per_host: self.max_connections_per_host,
             proxy_config: self.proxy_config,
             connection_event_listener: self.connection_event_listener,
+            cross_partition_policy: self.cross_partition_policy,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
