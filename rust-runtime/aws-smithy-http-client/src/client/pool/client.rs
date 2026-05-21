@@ -9,6 +9,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 use std::time::Duration;
 
+use aws_smithy_async::rt::sleep::SharedAsyncSleep;
 use aws_smithy_runtime_api::client::connection::CaptureSmithyConnection;
 use aws_smithy_runtime_api::client::connector_metadata::ConnectorMetadata;
 use aws_smithy_runtime_api::client::http::{
@@ -17,10 +18,12 @@ use aws_smithy_runtime_api::client::http::{
 use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
 use super::partition::{DriverSpawner, PartitionId};
 use super::{ConnectionPool, SharedPool};
 use crate::client::downcast_error;
+use crate::client::proxy::add_proxy_auth_header;
 
 /// Per-partition view of a [`SharedPool`].
 ///
@@ -187,8 +190,8 @@ struct PooledConnector {
     pool: Arc<ConnectionPool>,
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
-    sleep_impl: Option<aws_smithy_async::rt::sleep::SharedAsyncSleep>,
-    proxy_matcher: Option<Arc<hyper_util::client::proxy::matcher::Matcher>>,
+    sleep_impl: Option<SharedAsyncSleep>,
+    proxy_matcher: Option<Arc<ProxyMatcher>>,
 }
 
 impl std::fmt::Debug for PooledConnector {
@@ -212,7 +215,7 @@ impl HttpConnector for PooledConnector {
             let full_uri = request.uri().clone();
 
             if let Some(matcher) = proxy_matcher.as_ref() {
-                crate::client::proxy::add_proxy_auth_header(&mut request, matcher);
+                add_proxy_auth_header(&mut request, matcher);
             }
 
             if let Some(capture_smithy) = request.extensions().get::<CaptureSmithyConnection>() {

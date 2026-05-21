@@ -3,14 +3,42 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Connection pool for the v2 HTTP client.
+//! HTTP connection pool.
 //!
-//! Routes requests by `(scheme, authority)` to per-host pool stacks,
-//! negotiates HTTP/1.1 vs HTTP/2 via ALPN, caches H1 connections for
-//! reuse, multiplexes over a singleton H2 connection per host, enforces
-//! total and per-host connection limits, and surfaces connection
-//! metadata (remote/local address, poison handle) to the adapter layer
-//! for the runtime's connection-poisoning interceptor.
+//! Pool ownership and per-client configuration are separated:
+//!
+//! - [`SharedPool`] owns connection lifecycle: TLS, DNS resolution,
+//!   connection limits, idle eviction, proxy routing, event listening.
+//!   Built via [`SharedPool::builder`] which returns a [`Builder`].
+//! - [`Client`] is a per-partition view over a [`SharedPool`] that
+//!   implements [`HttpClient`]. Multiple [`Client`]s may share one
+//!   [`SharedPool`], each with a distinct [`PartitionId`], network
+//!   interface binding, and driver spawner.
+//!
+//! For partition semantics, topologies, and cross-partition checkout
+//! policy, see the [`partition`] module.
+//!
+//! # Example
+//!
+//! ```no_run
+//! # #[cfg(feature = "rustls-aws-lc")]
+//! # {
+//! use aws_smithy_http_client::pool::{Client, SharedPool};
+//! use aws_smithy_http_client::tls;
+//! use std::time::Duration;
+//!
+//! let pool = SharedPool::builder()
+//!     .tls_provider(tls::Provider::Rustls(
+//!         tls::rustls_provider::CryptoMode::AwsLc,
+//!     ))
+//!     .max_connections(125)
+//!     .pool_idle_timeout(Duration::from_secs(20))
+//!     .build_https();
+//! let client = Client::new(&pool);
+//! # }
+//! ```
+//!
+//! [`HttpClient`]: aws_smithy_runtime_api::client::http::HttpClient
 
 pub(crate) mod connection;
 mod handshake;
@@ -20,14 +48,13 @@ pub mod builder;
 pub mod client;
 pub mod partition;
 
-// Public re-exports — make pool::Builder, pool::ConnectionEventListener, etc.
-// directly accessible without going through pool::builder.
-pub use builder::{
-    Authority, Builder, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent,
-    ConnectionEventListener, ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming,
-    NegotiatedProtocol,
-};
+// Public re-exports.
+pub use builder::Builder;
 pub use client::{Client, ClientBuilder};
+pub use connection::{
+    Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
+    ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
+};
 pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId};
 
 /// Connection-caching pool layer.
@@ -46,9 +73,12 @@ use std::sync::OnceLock;
 use std::task::Poll;
 use std::time::{Duration, Instant};
 
+use aws_smithy_runtime_api::box_error::BoxError;
+use aws_smithy_runtime_api::client::connection::ConnectionMetadata;
 use aws_smithy_types::body::SdkBody;
 use hyper_util::client::legacy::connect::Connection as HyperConnection;
 use hyper_util::client::pool as hpool;
+use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 use hyper_util::rt::TokioExecutor;
 use tokio::sync::{oneshot, Semaphore};
 use tower::{Service, ServiceExt};
@@ -60,7 +90,6 @@ use connection::{
 pub(crate) use connection::{ConnectCtx, ReadTimeoutHint, TimeoutContext};
 use handshake::{H1ConnectAndHandshake, H1SendRequest, H2ConnectAndHandshake};
 
-pub(crate) type BoxError = Box<dyn std::error::Error + Send + Sync>;
 type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 
 /// Request-extension slot the pool checkout fills in with the
@@ -79,7 +108,7 @@ type BoxFuture<T> = Pin<Box<dyn Future<Output = T> + Send>>;
 /// the connection used for that attempt.
 #[derive(Clone, Default)]
 pub(crate) struct ConnectionMetadataCapture {
-    slot: Arc<std::sync::OnceLock<aws_smithy_runtime_api::client::connection::ConnectionMetadata>>,
+    slot: Arc<std::sync::OnceLock<ConnectionMetadata>>,
 }
 
 impl ConnectionMetadataCapture {
@@ -87,18 +116,13 @@ impl ConnectionMetadataCapture {
         Self::default()
     }
 
-    pub(crate) fn set(
-        &self,
-        metadata: aws_smithy_runtime_api::client::connection::ConnectionMetadata,
-    ) {
+    pub(crate) fn set(&self, metadata: ConnectionMetadata) {
         // Silently ignore duplicate sets: single-set is the contract, extra
         // sets would only happen via pool-internal bugs.
         let _ = self.slot.set(metadata);
     }
 
-    pub(crate) fn get(
-        &self,
-    ) -> Option<aws_smithy_runtime_api::client::connection::ConnectionMetadata> {
+    pub(crate) fn get(&self) -> Option<ConnectionMetadata> {
         self.slot.get().cloned()
     }
 }
@@ -134,8 +158,7 @@ pub(crate) struct PoolConfig {
 /// can reference one `SharedPool`, each presenting a different
 /// per-partition view of the same underlying connections.
 ///
-/// Construct via [`SharedPool::builder`], which returns a
-/// [`Builder<TlsUnset>`](crate::client::pool::builder::Builder).
+/// Construct via [`SharedPool::builder`], which returns a [`Builder`].
 /// Cloning is cheap (shared via `Arc`).
 #[derive(Clone, Debug)]
 pub struct SharedPool {
@@ -144,7 +167,7 @@ pub struct SharedPool {
 
 pub(crate) struct SharedPoolInner {
     pub(crate) pool: Arc<ConnectionPool>,
-    pub(crate) proxy_matcher: Option<Arc<hyper_util::client::proxy::matcher::Matcher>>,
+    pub(crate) proxy_matcher: Option<Arc<ProxyMatcher>>,
 }
 
 impl std::fmt::Debug for SharedPoolInner {
@@ -155,8 +178,8 @@ impl std::fmt::Debug for SharedPoolInner {
 
 impl SharedPool {
     /// Create a [`Builder`] for configuring a new connection pool.
-    pub fn builder() -> builder::Builder<crate::client::TlsUnset> {
-        builder::Builder::default()
+    pub fn builder() -> Builder<super::TlsUnset> {
+        Builder::default()
     }
 }
 
