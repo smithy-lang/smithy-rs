@@ -15,6 +15,7 @@ import software.amazon.smithy.protocoltests.traits.HttpRequestTestCase
 import software.amazon.smithy.protocoltests.traits.HttpResponseTestCase
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientInstantiator
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -108,7 +109,21 @@ class ClientProtocolTestGenerator(
     override val appliesTo: AppliesTo
         get() = AppliesTo.CLIENT
     override val expectFail: Set<FailingTest>
-        get() = ExpectFail
+        get() =
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                // The schema path correctly handles these cases that the legacy path couldn't:
+                // - Explicit member values over defaults (rpcv2Cbor)
+                // - httpPrefixHeaders collision with @httpHeader (restJson, see #4184)
+                ExpectFail.filterNot {
+                    it is FailingTest.RequestTest && it.id in
+                        setOf(
+                            "RpcV2CborClientUsesExplicitlyProvidedMemberValuesOverDefaults",
+                            "RestJsonHttpEmptyPrefixHeadersRequestClient",
+                        )
+                }.toSet()
+            } else {
+                ExpectFail
+            }
     override val generateOnly: Set<String>
         get() = emptySet()
     override val disabledTests: Set<String>
@@ -271,7 +286,7 @@ class ClientProtocolTestGenerator(
         )
         val mediaType = testCase.bodyMediaType.orNull()
         val outputShape = operationShape.outputShape(codegenContext.model)
-        val schemaExclusive = software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+        val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
         val streamingBlobOutput = schemaExclusive && outputShape.hasStreamingMember(codegenContext.model)
         rustTemplate(
             """
@@ -378,8 +393,9 @@ class ClientProtocolTestGenerator(
     /** Generates Rust code to inject the protocol into a test config bag. */
     private fun protocolTestConfigBagSetup(): software.amazon.smithy.rust.codegen.core.rustlang.Writable =
         writable {
-            if (software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
                 val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                val smithyCbor = CargoDependency.smithyCbor(codegenContext.runtimeConfig).toType()
                 val smithySchema = RT.smithySchema(codegenContext.runtimeConfig)
                 val protocol = codegenContext.protocol
                 val serviceShapeName = codegenContext.serviceShape.id.name
@@ -392,6 +408,8 @@ class ClientProtocolTestGenerator(
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
+                            smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                         else -> return@writable
                     }
 
