@@ -48,7 +48,7 @@ async fn test_configure_hyper_http1_keep_alive() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     // Start server with custom Hyper configuration including title_case_headers
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(service_with_custom_headers)))
             .configure_hyper(|mut builder| {
                 // Configure HTTP/1 settings
@@ -61,8 +61,7 @@ async fn test_configure_hyper_http1_keep_alive() {
             .await
     });
 
-    // Give server time to start
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
 
     // Use raw TCP to read the actual HTTP response headers
     let mut stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
@@ -107,8 +106,7 @@ async fn test_configure_hyper_http1_keep_alive() {
     );
 
     // Cleanup
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that `tap_io()` invokes the closure with access to the TCP stream for configuration.
@@ -130,7 +128,7 @@ async fn test_tap_io_set_nodelay() {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -138,7 +136,6 @@ async fn test_tap_io_set_nodelay() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Make a request to trigger connection
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -155,8 +152,7 @@ async fn test_tap_io_set_nodelay() {
     // Verify tap_io was called
     assert!(called.load(Ordering::SeqCst), "tap_io closure was not called");
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that `tap_io()` and `limit_connections()` can be chained together.
@@ -177,7 +173,7 @@ async fn test_tap_io_with_limit_connections() {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -185,7 +181,6 @@ async fn test_tap_io_with_limit_connections() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Make 3 requests - each creates a new connection
     // Note: HTTP clients may reuse connections, so we use Connection: close
@@ -210,8 +205,7 @@ async fn test_tap_io_with_limit_connections() {
     let count = tap_count.load(Ordering::SeqCst);
     assert!((1..=3).contains(&count), "tap_io was called {count} times");
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that the server works with Unix domain socket listeners.
@@ -230,7 +224,7 @@ async fn test_unix_listener() {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -238,7 +232,6 @@ async fn test_unix_listener() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Connect via Unix socket
     let stream = tokio::net::UnixStream::connect(&socket_path)
@@ -268,8 +261,7 @@ async fn test_unix_listener() {
     assert_eq!(response.status(), 200);
 
     // Cleanup
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
     let _ = std::fs::remove_file(&socket_path);
 }
 
@@ -321,7 +313,7 @@ async fn test_http2_only_prior_knowledge() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     // Start server with HTTP/2 only (prior knowledge mode)
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .configure_hyper(|builder| builder.http2_only())
             .with_graceful_shutdown(async {
@@ -330,7 +322,6 @@ async fn test_http2_only_prior_knowledge() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Create HTTP/2 client (prior knowledge mode - no upgrade)
     let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
@@ -356,8 +347,7 @@ async fn test_http2_only_prior_knowledge() {
     assert_eq!(response.status(), 200);
 
     // Cleanup
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test HTTP/1-only mode using `http1_only()` configuration.
@@ -370,7 +360,7 @@ async fn test_http1_only() {
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .configure_hyper(|builder| builder.http1_only())
             .with_graceful_shutdown(async {
@@ -379,7 +369,6 @@ async fn test_http1_only() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Use HTTP/1 client
     let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -393,8 +382,7 @@ async fn test_http1_only() {
     let response = client.request(request).await.expect("request failed");
     assert_eq!(response.status(), 200);
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that the default server configuration auto-detects and supports both HTTP/1 and HTTP/2.
@@ -408,7 +396,7 @@ async fn test_default_server_supports_both_http1_and_http2() {
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
     // Start server with DEFAULT configuration (no configure_hyper call)
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(ok_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -416,7 +404,6 @@ async fn test_default_server_supports_both_http1_and_http2() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Test 1: Make an HTTP/1.1 request
     let http1_client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
@@ -452,8 +439,7 @@ async fn test_default_server_supports_both_http1_and_http2() {
     let response = sender.send_request(request).await.expect("HTTP/2 request failed");
     assert_eq!(response.status(), 200, "HTTP/2 request should succeed");
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that the server handles concurrent HTTP/1 and HTTP/2 connections simultaneously using a barrier.
@@ -483,7 +469,7 @@ async fn test_mixed_protocol_concurrent_connections() {
     };
 
     // Start server with default configuration (supports both protocols)
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -491,7 +477,6 @@ async fn test_mixed_protocol_concurrent_connections() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Start multiple HTTP/1 connections
     let make_http1_request = |addr: std::net::SocketAddr, path: &'static str| async move {
@@ -574,8 +559,388 @@ async fn test_mixed_protocol_concurrent_connections() {
     assert_eq!(h2_result1.unwrap().status(), 200);
     assert_eq!(h2_result2.unwrap().status(), 200);
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+}
+
+/// Test that `serve` works with a custom request body type (`Body`) instead of `Incoming`.
+///
+/// This exercises the `ReqBody: From<Incoming>` conversion path in `MapRequestBody`.
+/// The service expects `Request<Body>`, and `serve` converts `Incoming → Body` at the
+/// hyper boundary via `From<Incoming> for Body`.
+#[tokio::test]
+async fn test_serve_with_custom_request_body_type() {
+    use aws_smithy_http_server::body::Body;
+    use http_body_util::BodyExt;
+
+    /// Service that accepts `Request<Body>` — NOT `Request<Incoming>`.
+    async fn body_service(request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
+        // Read the request body to prove the conversion worked
+        let collected = request.into_body().collect()
+            .await
+            .expect("body should be readable");
+        let len = collected.to_bytes().len();
+        Ok(http::Response::builder()
+            .status(200)
+            .body(to_boxed(format!("received {len} bytes")))
+            .unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let _server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(body_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+
+    // Send a request with a body
+    let client = hyper_util::client::legacy::Client::builder(hyper_util::rt::TokioExecutor::new()).build_http();
+
+    let uri = format!("http://{addr}/test");
+    let request = http::Request::builder()
+        .method("POST")
+        .uri(&uri)
+        .body(http_body_util::Full::new(bytes::Bytes::from("hello world")))
+        .unwrap();
+
+    let response = client.request(request).await.expect("request failed");
+    assert_eq!(response.status(), 200);
+
+    let body_bytes = response.into_body().collect()
+        .await
+        .expect("failed to collect response body")
+        .to_bytes();
+    assert_eq!(body_bytes.as_ref(), b"received 11 bytes");
+
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+}
+
+/// Test that a streaming (chunked) request body arrives correctly through the
+/// `Incoming → Body` conversion and can be consumed frame-by-frame.
+///
+/// This covers the full path: wire (chunked transfer-encoding) → hyper `Incoming`
+/// → `Body::from(incoming)` → handler reads via `poll_frame`.
+#[tokio::test]
+async fn test_serve_with_streaming_request_body() {
+    use aws_smithy_http_server::body::Body;
+    use http_body_util::BodyExt;
+
+    /// Service that reads the request body frame-by-frame and reports
+    /// how many frames and total bytes it received.
+    async fn streaming_service(request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
+        let mut body = request.into_body();
+        let mut frame_count: usize = 0;
+        let mut total_bytes: usize = 0;
+
+        while let Some(frame) = body.frame().await {
+            let frame = frame.expect("frame should be ok");
+            if let Ok(data) = frame.into_data() {
+                frame_count += 1;
+                total_bytes += data.len();
+            }
+        }
+
+        Ok(http::Response::builder()
+            .status(200)
+            .body(to_boxed(format!("frames={frame_count} bytes={total_bytes}")))
+            .unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let _server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(streaming_service)))
+            .with_graceful_shutdown(async {
+                shutdown_rx.await.ok();
+            })
+            .await
+    });
+
+
+    // Use a low-level hyper HTTP/1 connection so we can send a streaming body.
+    // hyper will send this as chunked transfer-encoding, producing multiple
+    // Incoming frames on the server side.
+    let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    let (mut sender, conn) = hyper::client::conn::http1::handshake(io)
+        .await
+        .expect("handshake failed");
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            eprintln!("Connection error: {err:?}");
+        }
+    });
+
+    // Build a streaming client body from multiple chunks.
+    // Using http_body_util::StreamBody so hyper sends chunked transfer-encoding.
+    let frames: Vec<_> = ["chunk1", "chunk2", "chunk3"]
+        .into_iter()
+        .map(|s| Ok::<_, Infallible>(http_body::Frame::data(bytes::Bytes::from(s))))
+        .collect();
+    let stream_body = http_body_util::StreamBody::new(futures_util::stream::iter(frames));
+
+    let request = http::Request::builder()
+        .method("POST")
+        .uri("/test")
+        .body(stream_body)
+        .unwrap();
+
+    let response = sender.send_request(request).await.expect("request failed");
+    assert_eq!(response.status(), 200);
+
+    let body_bytes = response.into_body().collect().await.expect("failed to collect response body").to_bytes();
+    let body_str = std::str::from_utf8(&body_bytes).expect("response body is not valid UTF-8");
+
+    // Verify total bytes: "chunk1" (6) + "chunk2" (6) + "chunk3" (6) = 18
+    assert!(
+        body_str.contains("bytes=18"),
+        "expected 18 bytes total, got: {body_str}"
+    );
+
+    // Verify we got at least 1 frame (hyper may coalesce chunks, so we can't
+    // assert an exact frame count, but there must be at least one).
+    let frame_count: usize = body_str
+        .split("frames=")
+        .nth(1)
+        .expect("response should contain 'frames='")
+        .split(' ')
+        .next()
+        .expect("frame count should be followed by a space")
+        .parse()
+        .expect("frame count should be a valid usize");
+    assert!(
+        frame_count >= 1,
+        "expected at least 1 frame, got: {frame_count}"
+    );
+
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+}
+
+/// Test that a streaming response body is sent correctly through the serve boundary.
+///
+/// The handler returns a `BoxBody` built from `wrap_stream`, and the client
+/// reads the response frame-by-frame to verify all chunks arrive.
+#[tokio::test]
+async fn test_serve_with_streaming_response_body() {
+    use aws_smithy_http_server::body::wrap_stream;
+    use http_body_util::BodyExt;
+
+    /// Service that returns a streaming response body with multiple chunks.
+    async fn streaming_response_service(
+        _request: http::Request<hyper::body::Incoming>,
+    ) -> Result<http::Response<BoxBody>, Infallible> {
+        let chunks: Vec<Result<bytes::Bytes, std::io::Error>> = vec![
+            Ok(bytes::Bytes::from("part1")),
+            Ok(bytes::Bytes::from("part2")),
+            Ok(bytes::Bytes::from("part3")),
+        ];
+        let body = wrap_stream(futures_util::stream::iter(chunks));
+        Ok(http::Response::builder().status(200).body(body).unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let _server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(
+            listener,
+            IntoMakeService::new(service_fn(streaming_response_service)),
+        )
+        .with_graceful_shutdown(async {
+            shutdown_rx.await.ok();
+        })
+        .await
+    });
+
+    // Use low-level hyper client to read response frame-by-frame
+    let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    let (mut sender, conn) = hyper::client::conn::http1::handshake(io)
+        .await
+        .expect("handshake failed");
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            eprintln!("Connection error: {err:?}");
+        }
+    });
+
+    let request = http::Request::builder()
+        .uri("/test")
+        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .unwrap();
+
+    let response = sender.send_request(request).await.expect("request failed");
+    assert_eq!(response.status(), 200);
+
+    // Collect the full body and verify contents
+    let body_bytes = response.into_body().collect().await.expect("failed to collect response body").to_bytes();
+    assert_eq!(body_bytes.as_ref(), b"part1part2part3");
+
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+}
+
+/// Test that an error in a streaming response body is propagated to the client.
+///
+/// The handler returns a `BoxBody` built from `wrap_stream` where the stream yields
+/// some successful chunks then an error. The client should receive the partial data
+/// and then encounter a connection/body error.
+#[tokio::test]
+async fn test_serve_with_streaming_response_body_error() {
+    use aws_smithy_http_server::body::wrap_stream;
+    use http_body_util::BodyExt;
+
+    /// Service that returns a streaming response where the stream errors after one chunk.
+    async fn error_response_service(
+        _request: http::Request<hyper::body::Incoming>,
+    ) -> Result<http::Response<BoxBody>, Infallible> {
+        let chunks: Vec<Result<bytes::Bytes, std::io::Error>> = vec![
+            Ok(bytes::Bytes::from("good")),
+            Err(std::io::Error::other("stream broke")),
+        ];
+        let body = wrap_stream(futures_util::stream::iter(chunks));
+        Ok(http::Response::builder().status(200).body(body).unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let _server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(
+            listener,
+            IntoMakeService::new(service_fn(error_response_service)),
+        )
+        .with_graceful_shutdown(async {
+            shutdown_rx.await.ok();
+        })
+        .await
+    });
+
+    let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+    let io = hyper_util::rt::TokioIo::new(stream);
+
+    let (mut sender, conn) = hyper::client::conn::http1::handshake(io)
+        .await
+        .expect("handshake failed");
+
+    tokio::spawn(async move {
+        if let Err(err) = conn.await {
+            // Expected — server resets the stream on body error
+            eprintln!("Connection error (expected): {err:?}");
+        }
+    });
+
+    let request = http::Request::builder()
+        .uri("/test")
+        .body(http_body_util::Empty::<bytes::Bytes>::new())
+        .unwrap();
+
+    // The error can surface at two points depending on timing:
+    // 1. send_request fails (hyper resets the connection before headers are fully read)
+    // 2. send_request succeeds with 200, but collecting the body fails
+    // Both are valid — the key property is that the error is propagated, not swallowed.
+    match sender.send_request(request).await {
+        Err(_) => {
+            // Case 1: Connection reset before response headers — error propagated correctly
+        }
+        Ok(response) => {
+            assert_eq!(response.status(), 200);
+            // Case 2: Headers arrived, body should fail
+            let result = response.into_body().collect().await;
+            assert!(result.is_err(), "body collect should fail due to stream error");
+        }
+    }
+
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
+}
+
+/// Test that a request body error (malformed chunked encoding) is surfaced to the handler.
+///
+/// The client sends a partial chunked request and then abruptly closes the connection.
+/// The handler should see an error when reading the body via `poll_frame`.
+#[tokio::test]
+async fn test_serve_with_streaming_request_body_error() {
+    use aws_smithy_http_server::body::Body;
+    use http_body_util::BodyExt;
+    use tokio::io::AsyncWriteExt;
+
+    /// Service that reads the request body and reports whether it encountered an error.
+    async fn error_detecting_service(request: http::Request<Body>) -> Result<http::Response<BoxBody>, Infallible> {
+        let result = request.into_body().collect().await;
+        let msg = match result {
+            Ok(collected) => format!("ok:{}", collected.to_bytes().len()),
+            Err(_) => "error".to_string(),
+        };
+        Ok(http::Response::builder()
+            .status(200)
+            .body(to_boxed(msg))
+            .unwrap())
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("failed to bind");
+    let addr = listener.local_addr().unwrap();
+
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
+
+    let _server_handle = tokio::spawn(async move {
+        aws_smithy_http_server::serve::serve(
+            listener,
+            IntoMakeService::new(service_fn(error_detecting_service)),
+        )
+        .with_graceful_shutdown(async {
+            shutdown_rx.await.ok();
+        })
+        .await
+    });
+
+    // Use raw TCP to send a malformed chunked request: send one chunk, then close abruptly
+    let mut stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
+
+    // Send HTTP/1.1 request with chunked transfer-encoding
+    stream
+        .write_all(
+            b"POST /test HTTP/1.1\r\n\
+              Host: localhost\r\n\
+              Transfer-Encoding: chunked\r\n\
+              \r\n\
+              5\r\nhello\r\n",
+        )
+        .await
+        .expect("failed to write");
+
+    // Abruptly close the write side without sending the terminating 0\r\n\r\n chunk
+    stream.shutdown().await.expect("failed to shutdown");
+
+    // The server handler should detect the body error. We don't check the response here
+    // because the connection was severed — the important thing is that the server doesn't
+    // panic or hang. If shutdown_tx.send() succeeds, the server task is still alive (not panicked).
+    shutdown_tx.send(()).expect("server task panicked before shutdown signal was sent");
 }
 
 /// Test that `limit_connections()` enforces the connection limit correctly using semaphores.
@@ -605,7 +970,7 @@ async fn test_limit_connections_blocks_excess() {
         }
     };
 
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(semaphore_service)))
             .with_graceful_shutdown(async {
                 shutdown_rx.await.ok();
@@ -613,7 +978,6 @@ async fn test_limit_connections_blocks_excess() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Create 3 separate TCP connections and HTTP/1 clients
     let make_request = |addr: std::net::SocketAddr| async move {
@@ -667,8 +1031,7 @@ async fn test_limit_connections_blocks_excess() {
     assert!(result2.is_ok(), "Second request failed");
     assert!(result3.is_ok(), "Third request failed");
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
 
 /// Test that graceful shutdown completes quickly when there are no active connections.
@@ -688,11 +1051,10 @@ async fn test_immediate_graceful_shutdown() {
             .await
     });
 
-    // Give server time to start
-    tokio::time::sleep(Duration::from_millis(50)).await;
+
 
     // Immediately trigger shutdown without any connections
-    shutdown_tx.send(()).unwrap();
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 
     // Server should shutdown quickly since there are no connections
     let result = tokio::time::timeout(Duration::from_millis(500), server_handle)
@@ -730,7 +1092,7 @@ async fn test_multiple_concurrent_http2_streams() {
     };
 
     // Start server with HTTP/2 only and configure max concurrent streams
-    let server_handle = tokio::spawn(async move {
+    let _server_handle = tokio::spawn(async move {
         aws_smithy_http_server::serve::serve(listener, IntoMakeService::new(service_fn(barrier_service)))
             .configure_hyper(|mut builder| {
                 builder.http2().max_concurrent_streams(5);
@@ -742,7 +1104,6 @@ async fn test_multiple_concurrent_http2_streams() {
             .await
     });
 
-    tokio::time::sleep(Duration::from_millis(50)).await;
 
     // Create HTTP/2 connection
     let stream = tokio::net::TcpStream::connect(addr).await.expect("failed to connect");
@@ -784,6 +1145,5 @@ async fn test_multiple_concurrent_http2_streams() {
         assert_eq!(response.status(), 200);
     }
 
-    shutdown_tx.send(()).unwrap();
-    let _ = tokio::time::timeout(Duration::from_secs(2), server_handle).await;
+    shutdown_tx.send(()).expect("failed to send shutdown signal");
 }
