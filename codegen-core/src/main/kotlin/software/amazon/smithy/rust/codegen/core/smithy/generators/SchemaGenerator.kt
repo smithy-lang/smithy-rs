@@ -228,7 +228,7 @@ class SchemaGenerator(
                     val memberName = symbolProvider.toMemberName(member)
                     val memberSymbol = symbolProvider.toSymbol(member)
                     val memberSchemaRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
-                    val writeCall = writeMethodForShape(target, memberSchemaRef)
+                    val writeCall = writeMethodForShape(target, memberSchemaRef, member)
                     if (memberSymbol.isOptional()) {
                         rust(
                             """
@@ -458,8 +458,21 @@ class SchemaGenerator(
     private fun writeMethodForShape(
         target: Shape,
         memberSchemaRef: String,
-    ): String =
-        when (target) {
+        member: software.amazon.smithy.model.shapes.MemberShape? = null,
+    ): String {
+        // For @httpPayload struct/union members, pass the target's own SCHEMA so
+        // codecs use its proper name (with @xmlName, etc.) instead of the member
+        // schema's member_name. JSON output is unchanged (no member_name → no
+        // field-key prefix); XML now emits the correct root element name.
+        val isHttpPayload =
+            member?.hasTrait(software.amazon.smithy.model.traits.HttpPayloadTrait::class.java) == true
+        val structSchemaRef =
+            if (isHttpPayload) {
+                "${symbolProvider.toSymbol(target).fullName}::SCHEMA"
+            } else {
+                "&$memberSchemaRef"
+            }
+        return when (target) {
             is BooleanShape -> "ser.write_boolean(&$memberSchemaRef, *val)?;"
             is ByteShape -> "ser.write_byte(&$memberSchemaRef, *val)?;"
             is ShortShape -> "ser.write_short(&$memberSchemaRef, *val)?;"
@@ -546,10 +559,11 @@ class SchemaGenerator(
                 }
             }
 
-            is StructureShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
-            is UnionShape -> "ser.write_struct(&$memberSchemaRef, val)?;"
+            is StructureShape -> "ser.write_struct($structSchemaRef, val)?;"
+            is UnionShape -> "ser.write_struct($structSchemaRef, val)?;"
             else -> "todo!(\"schema: unsupported shape type for serialization\");"
         }
+    }
 
     /** Returns a write expression for a list element (no member name needed). */
     private fun elementWriteExpr(
@@ -1895,9 +1909,18 @@ class SchemaGenerator(
                     val target = model.expectShape(member.target)
                     val escapedMemberId = member.id.toString().replace("#", "##")
                     val traitChain = memberTraitChain(member)
+                    val memberConstName = "${schemaPrefix}_MEMBER_${constantName(rustMemberName)}"
+
+                    // For map / list members, emit key/value/element sub-schemas so the XML
+                    // codec can resolve entry element names. Recurses through nested
+                    // list/map shapes so the entire aggregate sub-graph is reachable from
+                    // the runtime via Schema::key() / .value() / .member().
+                    val mapMembersChain =
+                        emitAggregateMemberChain(writer, memberConstName, target, codegenScope)
+
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
+                        static $memberConstName: #{Schema} = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
@@ -1906,7 +1929,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$traitChain;
+                        )$traitChain$mapMembersChain;
                         """,
                         *codegenScope,
                     )

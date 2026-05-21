@@ -349,6 +349,19 @@ impl Schema {
         self
     }
 
+    /// Attaches key and value member schemas to a map member schema.
+    /// Used by the XML codec to resolve `<key>` and `<value>` element names.
+    pub const fn with_map_members(mut self, key: &'static Schema, value: &'static Schema) -> Self {
+        self.members = SchemaMembers::Map { key, value };
+        self
+    }
+
+    /// Sets the list member schema on a member schema that targets a list.
+    pub const fn with_list_member(mut self, member: &'static Schema) -> Self {
+        self.members = SchemaMembers::List { member };
+        self
+    }
+
     /// Sets the `@sensitive` trait.
     pub const fn with_sensitive(mut self) -> Self {
         self.sensitive = Some(trait_types::SensitiveTrait);

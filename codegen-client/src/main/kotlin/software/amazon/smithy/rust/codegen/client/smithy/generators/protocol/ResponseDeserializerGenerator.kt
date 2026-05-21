@@ -461,6 +461,7 @@ class ResponseDeserializerGenerator(
         )
 
         if (errors.isNotEmpty()) {
+            val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
             rustTemplate(
                 """
                 let error_code = match generic.code() {
@@ -475,6 +476,12 @@ class ResponseDeserializerGenerator(
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "error_symbol" to errorSymbol,
             )
+            if (errorBodyContentsFn != null) {
+                rustTemplate(
+                    "let error_body = #{error_body_contents}(body);",
+                    "error_body_contents" to errorBodyContentsFn,
+                )
+            }
             rustTemplate("let err = match error_code {")
             for (error in errors) {
                 val errorShape = model.expectShape(error.id, StructureShape::class.java)
@@ -484,21 +491,41 @@ class ResponseDeserializerGenerator(
                 val errorMessageMember = errorShape.errorMessageMember()
 
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
-                rustTemplate(
-                    """
-                    let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
-                        .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
-                    {
-                        #{Ok}(val) => val,
-                        #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                    };
-                    tmp.meta = generic;
-                    """,
-                    *codegenScope,
-                    "BoxError" to RuntimeType.boxError(runtimeConfig),
-                    "error_symbol" to errorSymbol,
-                    "ErrorType" to errorType,
-                )
+                if (errorBodyContentsFn != null) {
+                    rustTemplate(
+                        """
+                        let mut deser = protocol.payload_codec()
+                            .expect("protocol has a payload codec")
+                            .create_deserializer(error_body);
+                        let mut tmp = match #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), error_body)
+                        {
+                            #{Ok}(val) => val,
+                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                        };
+                        tmp.meta = generic;
+                        """,
+                        *codegenScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "error_symbol" to errorSymbol,
+                        "ErrorType" to errorType,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
+                            .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
+                        {
+                            #{Ok}(val) => val,
+                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                        };
+                        tmp.meta = generic;
+                        """,
+                        *codegenScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "error_symbol" to errorSymbol,
+                        "ErrorType" to errorType,
+                    )
+                }
                 if (errorMessageMember != null) {
                     val symbol = symbolProvider.toSymbol(errorMessageMember)
                     if (symbol.isOptional()) {

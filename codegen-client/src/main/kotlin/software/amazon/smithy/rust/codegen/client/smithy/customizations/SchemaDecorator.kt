@@ -8,6 +8,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
+import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 
 /**
  * Determines whether schema-based serialization/deserialization should be used
@@ -48,7 +50,10 @@ object SchemaSerdeAllowlist {
      * protocols incrementally in follow-up PRs by adding entries such as
      * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
-    private val allowedProtocols: Set<ShapeId> = emptySet()
+    private val allowedProtocols: Set<ShapeId> =
+        setOf(
+            RestXmlTrait.ID,
+        )
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
@@ -123,6 +128,12 @@ private class SchemaProtocolCustomization(
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                            protocol == RestXmlTrait.ID -> {
+                                val smithyXml = RuntimeType.smithyXml(codegenContext.runtimeConfig)
+                                val noWrap = codegenContext.serviceShape.expectTrait<RestXmlTrait>().isNoErrorWrapping
+                                val ctor = if (noWrap) "new().with_no_error_wrapping(true)" else "new()"
+                                smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to ctor
+                            }
                             else -> return@writable // Other protocols not yet implemented
                         }
 

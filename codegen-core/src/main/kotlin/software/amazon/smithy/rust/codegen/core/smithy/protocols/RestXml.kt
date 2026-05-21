@@ -66,6 +66,33 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
             }
         }
 
+    override fun errorBodyContents(operationShape: OperationShape): RuntimeType =
+        ProtocolFunctions.crossOperationFn("error_body_contents") { fnName ->
+            rustBlockTemplate(
+                "pub fn $fnName(body: &[u8]) -> &[u8]",
+                *errorScope,
+            ) {
+                if (restXml.isNoErrorWrapping) {
+                    // Unwrapped: <Error>...</Error> is the root, use full body
+                    rust("body")
+                } else {
+                    // Wrapped: <ErrorResponse><Error>...</Error></ErrorResponse>
+                    // Extract the <Error>...</Error> fragment
+                    rust(
+                        """
+                        let s = std::str::from_utf8(body).unwrap_or("");
+                        if let Some(start) = s.find("<Error>") {
+                            if let Some(end) = s.find("</Error>") {
+                                return &body[start..end + "</Error>".len()];
+                            }
+                        }
+                        body
+                        """,
+                    )
+                }
+            }
+        }
+
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
         ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustBlockTemplate(

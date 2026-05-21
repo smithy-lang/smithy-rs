@@ -22,6 +22,8 @@ pub struct XmlDeserializer<'a> {
     /// The parsing state — either we own the document (top-level) or we have
     /// pre-extracted text content (leaf scalar inside an element).
     state: DeserState<'a>,
+    /// Original input bytes, retained for zero-copy sub-slicing on aggregate children.
+    input: &'a [u8],
     settings: Arc<XmlCodecSettings>,
 }
 
@@ -35,13 +37,10 @@ enum DeserState<'a> {
 impl<'a> XmlDeserializer<'a> {
     /// Creates a new XML deserializer over raw bytes.
     pub(crate) fn new(input: &'a [u8], settings: Arc<XmlCodecSettings>) -> Self {
-        let doc = Document::try_from(input).unwrap_or_else(|_| {
-            // If UTF-8 conversion fails, create an empty document.
-            // Actual errors will surface when trying to read elements.
-            Document::new("")
-        });
+        let doc = Document::try_from(input).unwrap_or_else(|_| Document::new(""));
         Self {
             state: DeserState::Doc(doc),
+            input,
             settings,
         }
     }
@@ -50,6 +49,7 @@ impl<'a> XmlDeserializer<'a> {
     fn from_text(text: Cow<'a, str>, settings: Arc<XmlCodecSettings>) -> Self {
         Self {
             state: DeserState::Text(text),
+            input: b"",
             settings,
         }
     }
@@ -59,8 +59,11 @@ impl<'a> XmlDeserializer<'a> {
         match &mut self.state {
             DeserState::Text(t) => Ok(std::mem::replace(t, Cow::Borrowed(""))),
             DeserState::Doc(doc) => {
-                // Read text from the document's current position (inside an element scope).
-                decode::try_data(doc).map_err(|e| SerdeError::custom(e.to_string()))
+                // Enter the root element first, then read its text content.
+                let mut root = doc
+                    .root_element()
+                    .map_err(|e| SerdeError::custom(e.to_string()))?;
+                decode::try_data(&mut root).map_err(|e| SerdeError::custom(e.to_string()))
             }
         }
     }
@@ -75,6 +78,68 @@ impl<'a> XmlDeserializer<'a> {
                 m.member_name() == Some(element_name)
             }
         })
+    }
+
+    /// Find the byte slice in `input` that contains the element whose local name
+    /// pointer `el_local` points into `input`. Uses pointer arithmetic to locate
+    /// the `<` before the element name, then scans forward for the matching close
+    /// tag with depth tracking. Returns the sub-slice `<tag...>...</tag>`.
+    fn find_element_slice(input: &'a [u8], el_local: &str) -> &'a [u8] {
+        let input_str = std::str::from_utf8(input).unwrap_or("");
+        let input_start = input_str.as_ptr() as usize;
+        let name_ptr = el_local.as_ptr() as usize;
+
+        // The element name is inside the input string. Find the `<` before it.
+        // Account for possible prefix: `<prefix:local` — scan back past `:` and prefix.
+        let name_offset = name_ptr.saturating_sub(input_start);
+        let el_start = input_str[..name_offset].rfind('<').unwrap_or(0);
+
+        // Find matching close tag by scanning with depth tracking.
+        let tag_name = el_local;
+        let remaining = &input_str[el_start..];
+        let mut depth = 0i32;
+        let mut pos = 0;
+        while pos < remaining.len() {
+            if remaining[pos..].starts_with("</") {
+                // Close tag — check if it matches our tag name
+                let after_slash = pos + 2;
+                if remaining[after_slash..].starts_with(tag_name) {
+                    let after_name = after_slash + tag_name.len();
+                    if remaining.as_bytes().get(after_name) == Some(&b'>') {
+                        depth -= 1;
+                        if depth == 0 {
+                            let end = el_start + after_name + 1;
+                            return &input[el_start..end];
+                        }
+                    }
+                }
+                pos = after_slash;
+            } else if remaining.as_bytes()[pos] == b'<'
+                && remaining.as_bytes().get(pos + 1) != Some(&b'/')
+                && remaining.as_bytes().get(pos + 1) != Some(&b'?')
+            {
+                // Open tag — check if self-closing or matches our name
+                if let Some(gt) = remaining[pos..].find('>') {
+                    let tag_content = &remaining[pos + 1..pos + gt];
+                    let is_self_closing = tag_content.ends_with('/');
+                    let opens_our_tag = tag_content.starts_with(tag_name)
+                        && tag_content
+                            .as_bytes()
+                            .get(tag_name.len())
+                            .map_or(true, |&b| b == b' ' || b == b'>' || b == b'/');
+                    if opens_our_tag && !is_self_closing {
+                        depth += 1;
+                    }
+                    pos += gt + 1;
+                } else {
+                    pos += 1;
+                }
+            } else {
+                pos += 1;
+            }
+        }
+        // Fallback: return from el_start to end
+        &input[el_start..]
     }
 
     fn resolve_timestamp_format(&self, schema: &Schema) -> TimestampFormat {
@@ -126,15 +191,61 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             }
         }
 
+        // Track flattened-aggregate members: their wire format is repeated sibling
+        // elements that must be accumulated and dispatched as a single read_list /
+        // read_map call. Map: member_index -> (member_schema, accumulated XML bytes).
+        let mut flattened_groups: std::collections::HashMap<usize, (&Schema, Vec<u8>)> =
+            std::collections::HashMap::new();
+
         // Dispatch child elements.
         while let Some(mut child_scope) = root.next_tag() {
             let local = child_scope.start_el().local().to_owned();
             if let Some(member) = Self::resolve_member(schema, &local) {
-                let text = decode::try_data(&mut child_scope)
-                    .map_err(|e| SerdeError::custom(e.to_string()))?;
-                let mut child_deser = XmlDeserializer::from_text(text, self.settings.clone());
-                consumer(member, &mut child_deser)?;
+                // For non-flattened aggregate members, the child element IS the
+                // aggregate container (e.g., <myList><member>...</member></myList>).
+                // Use a sub-slice deserializer so read_struct/read_list/read_map works.
+                // For flattened aggregate members, accumulate the bytes of each
+                // matching sibling and dispatch them together below.
+                // For scalars (including flattened scalars), extract text.
+                let is_nested_aggregate =
+                    member.shape_type().is_aggregate() && !member.xml_flattened();
+                let is_flattened_aggregate =
+                    member.shape_type().is_aggregate() && member.xml_flattened();
+                if is_nested_aggregate {
+                    let el_local = child_scope.start_el().local();
+                    let sub = Self::find_element_slice(self.input, el_local);
+                    drop(child_scope);
+                    let mut child_deser = XmlDeserializer::new(sub, self.settings.clone());
+                    consumer(member, &mut child_deser)?;
+                } else if is_flattened_aggregate {
+                    let el_local = child_scope.start_el().local();
+                    let sub = Self::find_element_slice(self.input, el_local);
+                    drop(child_scope);
+                    let idx = member.member_index().unwrap_or(usize::MAX);
+                    let entry = flattened_groups
+                        .entry(idx)
+                        .or_insert_with(|| (member, Vec::new()));
+                    entry.1.extend_from_slice(sub);
+                } else {
+                    let text = decode::try_data(&mut child_scope)
+                        .map_err(|e| SerdeError::custom(e.to_string()))?;
+                    let mut child_deser = XmlDeserializer::from_text(text, self.settings.clone());
+                    consumer(member, &mut child_deser)?;
+                }
             }
+        }
+
+        // Dispatch each accumulated flattened-aggregate group as a single call.
+        // Wrap accumulated child elements in a synthetic root so read_list /
+        // read_map sees them as wrapper-children. The synthesized buffer lives
+        // in this stack frame for the duration of the dispatch.
+        for (_idx, (member, bytes)) in flattened_groups {
+            let mut wrapped = Vec::with_capacity(bytes.len() + 16);
+            wrapped.extend_from_slice(b"<__flat>");
+            wrapped.extend_from_slice(&bytes);
+            wrapped.extend_from_slice(b"</__flat>");
+            let mut child_deser = XmlDeserializer::new(&wrapped, self.settings.clone());
+            consumer(member, &mut child_deser)?;
         }
         Ok(())
     }
@@ -144,6 +255,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         _schema: &Schema,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        let input = self.input;
         let doc = match &mut self.state {
             DeserState::Doc(doc) => doc,
             DeserState::Text(_) => {
@@ -157,11 +269,18 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
 
-        // Each child tag is a list item (e.g. <member>value</member>).
-        while let Some(mut child_scope) = root.next_tag() {
-            let text = decode::try_data(&mut child_scope)
-                .map_err(|e| SerdeError::custom(e.to_string()))?;
-            let mut child_deser = XmlDeserializer::from_text(text, self.settings.clone());
+        // Each child tag is a list item. Provide each item as a Doc-state
+        // sub-deserializer over the full element (`<member>...</member>`).
+        // Scalar consumers will navigate to the text via take_text(); nested
+        // aggregate consumers (read_list / read_struct / read_map) will descend
+        // into the element's content. This keeps the deserializer compatible
+        // with both scalar list elements and nested aggregate elements (e.g.,
+        // list-of-lists or list-of-structs) without per-element type sniffing.
+        while let Some(child_scope) = root.next_tag() {
+            let el_local = child_scope.start_el().local();
+            let sub = Self::find_element_slice(input, el_local);
+            drop(child_scope);
+            let mut child_deser = XmlDeserializer::new(sub, self.settings.clone());
             consumer(&mut child_deser)?;
         }
         Ok(())
@@ -195,23 +314,45 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             .and_then(|v| v.xml_name().map(|t| t.value()))
             .unwrap_or("value");
 
+        // Aggregate (struct/list/map) value types need a sub-document deserializer
+        // since their content includes nested elements rather than just text.
+        let value_is_aggregate = schema
+            .member()
+            .map(|v| v.shape_type().is_aggregate())
+            .unwrap_or(false);
+
         // Each child tag is an entry (e.g. <entry><key>k</key><value>v</value></entry>).
         while let Some(mut entry_scope) = root.next_tag() {
-            let mut key = None;
-            let mut value = None;
+            let mut key: Option<String> = None;
+            let mut value_text: Option<Cow<'_, str>> = None;
+            let mut value_slice: Option<&[u8]> = None;
             while let Some(mut field_scope) = entry_scope.next_tag() {
                 let local = field_scope.start_el().local().to_owned();
-                let text = decode::try_data(&mut field_scope)
-                    .map_err(|e| SerdeError::custom(e.to_string()))?;
                 if local == key_name {
+                    let text = decode::try_data(&mut field_scope)
+                        .map_err(|e| SerdeError::custom(e.to_string()))?;
                     key = Some(text.into_owned());
                 } else if local == value_name {
-                    value = Some(text);
+                    if value_is_aggregate {
+                        let el_local = field_scope.start_el().local();
+                        let sub = Self::find_element_slice(self.input, el_local);
+                        drop(field_scope);
+                        value_slice = Some(sub);
+                    } else {
+                        let text = decode::try_data(&mut field_scope)
+                            .map_err(|e| SerdeError::custom(e.to_string()))?;
+                        value_text = Some(text);
+                    }
                 }
             }
-            if let (Some(k), Some(v)) = (key, value) {
-                let mut child_deser = XmlDeserializer::from_text(v, self.settings.clone());
-                consumer(k, &mut child_deser)?;
+            if let Some(k) = key {
+                if let Some(slice) = value_slice {
+                    let mut child_deser = XmlDeserializer::new(slice, self.settings.clone());
+                    consumer(k, &mut child_deser)?;
+                } else if let Some(t) = value_text {
+                    let mut child_deser = XmlDeserializer::from_text(t, self.settings.clone());
+                    consumer(k, &mut child_deser)?;
+                }
             }
         }
         Ok(())
@@ -577,7 +718,10 @@ mod tests {
             .read_struct(&S_SCHEMA, &mut |member, d| {
                 match member.member_name().unwrap() {
                     "name" => name = d.read_string(member)?,
-                    "items" => items.push(d.read_string(member)?),
+                    "items" => d.read_list(member, &mut |d| {
+                        items.push(d.read_string(member)?);
+                        Ok(())
+                    })?,
                     _ => {}
                 }
                 Ok(())
@@ -613,7 +757,10 @@ mod tests {
             .read_struct(&S_SCHEMA, &mut |member, d| {
                 match member.member_name().unwrap() {
                     "name" => name = d.read_string(member)?,
-                    "items" => items.push(d.read_string(member)?),
+                    "items" => d.read_list(member, &mut |d| {
+                        items.push(d.read_string(member)?);
+                        Ok(())
+                    })?,
                     _ => {}
                 }
                 Ok(())

@@ -178,10 +178,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // entirely to the body serializer.
             let schema = self.resolve_member(schema);
             if schema.http_payload().is_some() {
-                // @httpPayload struct/union: write as the body's top-level object
-                // without a member name prefix. Use a non-member schema for the
-                // write_struct call so prefix() doesn't emit a field name.
-                self.body.write_struct(&crate::prelude::DOCUMENT, value)?;
+                // @httpPayload struct/union: codegen routes these by passing the
+                // target struct's schema directly (not the member schema), so this
+                // path is normally unreachable. Kept as a safety net.
+                self.body.write_struct(schema, value)?;
                 return Ok(());
             }
             self.body.write_struct(schema, value)

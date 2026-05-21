@@ -384,6 +384,7 @@ class ClientProtocolTestGenerator(
                 val protocol = codegenContext.protocol
                 val serviceShapeName = codegenContext.serviceShape.id.name
 
+                val smithyXml = CargoDependency.smithyXml(codegenContext.runtimeConfig).toType()
                 val (protocolType, constructor) =
                     when {
                         protocol == software.amazon.smithy.aws.traits.protocols.RestJson1Trait.ID ->
@@ -392,6 +393,14 @@ class ClientProtocolTestGenerator(
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.aws.traits.protocols.RestXmlTrait.ID -> {
+                            val noWrap =
+                                codegenContext.serviceShape.getTrait(software.amazon.smithy.aws.traits.protocols.RestXmlTrait::class.java).map {
+                                    it.isNoErrorWrapping
+                                }.orElse(false)
+                            val ctor = if (noWrap) "new().with_no_error_wrapping(true)" else "new()"
+                            smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to ctor
+                        }
                         else -> return@writable
                     }
 
