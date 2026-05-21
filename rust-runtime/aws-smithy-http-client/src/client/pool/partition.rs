@@ -132,9 +132,8 @@
 /// Identifier for a pool partition.
 ///
 /// A partition's identity is opaque to the pool. The identifier is
-/// assigned at client construction; the pool validates that the same
-/// identifier is associated with the same driver spawner and network
-/// interface binding across all clients that reference it.
+/// assigned at client construction and groups connections that share
+/// a driver spawner and network interface binding.
 ///
 /// The default identifier denotes an anonymous partition used when
 /// partitioning is not configured.

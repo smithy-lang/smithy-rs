@@ -17,6 +17,7 @@ mod handshake;
 mod vendored_cache;
 
 pub mod builder;
+pub mod client;
 pub mod partition;
 
 // Public re-exports — make pool::Builder, pool::ConnectionEventListener, etc.
@@ -26,14 +27,10 @@ pub use builder::{
     ConnectionEventListener, ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming,
     NegotiatedProtocol,
 };
+pub use client::{Client, ClientBuilder};
 pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId};
 
 /// Connection-caching pool layer.
-///
-/// Re-exports [`vendored_cache`], our vendored copy of hyper-util's
-/// `pool::cache` with SDK-specific modifications. The re-export insulates
-/// callers from the vendoring detail; all pool code uses `cache::…`
-/// regardless of where the implementation lives.
 mod cache {
     pub(crate) use super::vendored_cache::*;
 }
@@ -108,14 +105,8 @@ impl ConnectionMetadataCapture {
 
 /// Pool-level configuration.
 ///
-/// Plumbed from the eventual `Builder::new_v2()` public API through
-/// `build_pool` to `ConnectionPool`. Internal type: the public surface
-/// is the builder's per-knob setters, not this struct.
-///
-/// All fields are `None` by default (defaults applied by the pool where
-/// they take effect, not here). Fields are `pub(crate)` because
-/// consumers of this struct are all within the pool module; accessor
-/// methods would add noise without benefit.
+/// Defaults are applied at the point each setting takes effect rather
+/// than in this struct.
 #[derive(Clone, Default)]
 pub(crate) struct PoolConfig {
     /// Upper bound on concurrent connections (total, across all hosts).
@@ -134,6 +125,39 @@ pub(crate) struct PoolConfig {
 
     /// Optional listener for connection lifecycle events.
     pub(crate) connection_event_listener: Option<Arc<dyn connection::ConnectionEventListener>>,
+}
+
+/// The connection pool's configuration surface.
+///
+/// Owns the connection lifecycle (creation, caching, eviction, health
+/// checking) and proxy routing decisions. Multiple [`Client`] instances
+/// can reference one `SharedPool`, each presenting a different
+/// per-partition view of the same underlying connections.
+///
+/// Construct via [`SharedPool::builder`], which returns a
+/// [`Builder<TlsUnset>`](crate::client::pool::builder::Builder).
+/// Cloning is cheap (shared via `Arc`).
+#[derive(Clone, Debug)]
+pub struct SharedPool {
+    pub(crate) inner: Arc<SharedPoolInner>,
+}
+
+pub(crate) struct SharedPoolInner {
+    pub(crate) pool: Arc<ConnectionPool>,
+    pub(crate) proxy_matcher: Option<Arc<hyper_util::client::proxy::matcher::Matcher>>,
+}
+
+impl std::fmt::Debug for SharedPoolInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SharedPoolInner").finish_non_exhaustive()
+    }
+}
+
+impl SharedPool {
+    /// Create a [`Builder`] for configuring a new connection pool.
+    pub fn builder() -> builder::Builder<crate::client::TlsUnset> {
+        builder::Builder::default()
+    }
 }
 
 /// Key for per-host connection pool routing.
@@ -443,9 +467,8 @@ pub(crate) struct ConnectionPool {
     drop_notifier: OnceLock<oneshot::Sender<Infallible>>,
 }
 
-/// Minimum eviction tick period, matching legacy hyper-util pool's
-/// `MIN_CHECK` constant. Prevents very short `pool_idle_timeout`s from
-/// causing the task to spin hot.
+/// Minimum eviction tick period. Prevents very short `pool_idle_timeout`s
+/// from causing the eviction task to spin hot.
 const MIN_EVICTION_TICK: Duration = Duration::from_millis(90);
 
 impl ConnectionPool {
@@ -493,9 +516,8 @@ impl ConnectionPool {
     /// `pool_idle_timeout` is configured.
     ///
     /// Idempotent and cheap after the first call (single relaxed
-    /// `AtomicBool` load returns early). Matches legacy
-    /// `spawn_idle_interval` semantics: no-op without a timeout, no-op
-    /// with a zero timeout, no-op if already spawned.
+    /// `AtomicBool` load returns early). No-op without a timeout, with
+    /// a zero timeout, or if already spawned.
     fn maybe_spawn_eviction_task(self: &Arc<Self>) {
         let timeout = match self.config.pool_idle_timeout {
             Some(d) if d > Duration::ZERO => d,
@@ -614,10 +636,8 @@ async fn eviction_task(
 /// - proxied non-CONNECT → absolute-form (full URL with scheme + authority)
 /// - direct non-CONNECT → origin-form (path + query only)
 ///
-/// Mirrors `hyper-util`'s legacy `client::Client::send_request` request
-/// preparation. Required because `hyper::client::conn::http1` sends the
-/// URI as-is; the form selection lives in the layer above the
-/// connection.
+/// The HTTP/1 connection sends request URIs as-is, so request-target
+/// form selection is the caller's responsibility.
 fn rewrite_h1_request_target(req: &mut http_1x::Request<SdkBody>, is_proxied: bool) {
     use http_1x::{uri::Parts, Method, Uri};
     if req.method() == Method::CONNECT {
@@ -963,8 +983,6 @@ mod tests {
     }
 
     /// Without a `pool_idle_timeout`, `maybe_spawn_eviction_task` is a no-op.
-    /// Matches legacy `spawn_idle_interval` which also skips without a
-    /// timeout.
     #[tokio::test]
     async fn eviction_task_no_spawn_without_timeout() {
         let pool = pool_with_config(PoolConfig {
@@ -976,8 +994,7 @@ mod tests {
         assert!(pool.drop_notifier.get().is_none());
     }
 
-    /// A zero `pool_idle_timeout` is treated the same as `None`. Matches
-    /// legacy `spawn_idle_interval` (returns early on `Duration::ZERO`).
+    /// A zero `pool_idle_timeout` is treated the same as `None`.
     #[tokio::test]
     async fn eviction_task_no_spawn_with_zero_timeout() {
         let pool = pool_with_config(PoolConfig {

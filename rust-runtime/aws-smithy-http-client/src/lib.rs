@@ -44,7 +44,7 @@ pub(crate) mod client;
 #[cfg(feature = "default-client")]
 pub use client::{default_connector, proxy, tls, Builder, Connector, ConnectorBuilder};
 
-/// V2 HTTP client backed by composable connection pools.
+/// HTTP client backed by composable connection pools.
 #[cfg(feature = "default-client")]
 pub use client::pool;
 

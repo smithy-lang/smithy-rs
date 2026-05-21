@@ -1205,9 +1205,12 @@ async fn make_v2_http_request_through_proxy(
     proxy_config: ProxyConfig,
     target_url: &str,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
-    use aws_smithy_http_client::pool::Builder;
+    use aws_smithy_http_client::pool::{Client, SharedPool};
 
-    let http_client = Builder::new().proxy_config(proxy_config).build_http();
+    let pool = SharedPool::builder()
+        .proxy_config(proxy_config)
+        .build_http();
+    let http_client = Client::new(&pool);
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()
         .with_time_source(Some(SystemTimeSource::new()))
@@ -1234,12 +1237,13 @@ async fn make_v2_https_request_through_proxy(
     target_url: &str,
     tls_provider: tls::Provider,
 ) -> Result<(StatusCode, String), Box<dyn std::error::Error + Send + Sync>> {
-    use aws_smithy_http_client::pool::Builder;
+    use aws_smithy_http_client::pool::{Client, SharedPool};
 
-    let http_client = Builder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls_provider)
         .proxy_config(proxy_config)
         .build_https();
+    let http_client = Client::new(&pool);
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()
         .with_time_source(Some(SystemTimeSource::new()))
@@ -1494,7 +1498,7 @@ async fn test_v2_direct_http_origin_uri_form() {
 
 #[tokio::test]
 async fn test_v2_set_proxy_config_none_clears_proxy() {
-    use aws_smithy_http_client::pool::Builder;
+    use aws_smithy_http_client::pool::{Client, SharedPool};
 
     let mock_proxy = MockProxyServer::new(|_| {
         Response::builder()
@@ -1511,12 +1515,13 @@ async fn test_v2_set_proxy_config_none_clears_proxy() {
     })
     .await;
 
-    let mut builder = Builder::new();
+    let mut builder = SharedPool::builder();
     builder.set_proxy_config(Some(
         ProxyConfig::http(format!("http://{}", mock_proxy.addr())).unwrap(),
     ));
     builder.set_proxy_config(None);
-    let http_client = builder.build_http();
+    let pool = builder.build_http();
+    let http_client = Client::new(&pool);
 
     let connector_settings = HttpConnectorSettings::builder().build();
     let runtime_components = RuntimeComponentsBuilder::for_tests()

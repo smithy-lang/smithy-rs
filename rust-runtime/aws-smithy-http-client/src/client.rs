@@ -924,16 +924,6 @@ impl Builder<TlsUnset> {
         Self::default()
     }
 
-    /// Creates a new builder backed by the v2 composable connection pool.
-    ///
-    /// The v2 client uses hyper-util's composable pool APIs for connection
-    /// management, supporting per-host connection reuse with HTTP/1.1 and
-    /// HTTP/2 protocol negotiation.
-    #[doc(hidden)]
-    pub fn new_v2() -> pool::Builder {
-        pool::Builder::new()
-    }
-
     /// Returns a [`SharedHttpClient`] that calls the given `connector` function to select an HTTP(S) connector.
     #[doc(hidden)]
     pub fn build_with_connector_fn<F>(self, connector_fn: F) -> SharedHttpClient

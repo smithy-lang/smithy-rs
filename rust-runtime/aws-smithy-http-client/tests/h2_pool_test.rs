@@ -19,12 +19,13 @@
     aws_sdk_unstable
 ))]
 
-use aws_smithy_http_client::pool::Builder;
+use aws_smithy_http_client::pool::{Client, SharedPool};
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_runtime_api::shared::IntoShared;
 use bytes::Bytes;
 use h2::server::SendResponse;
 use h2::RecvStream;
@@ -298,7 +299,9 @@ impl Service<http_1x::Uri> for H2Connector {
 // ---------------------------------------------------------------------------
 
 fn build_h2_client(server: &H2MockServer) -> SharedHttpClient {
-    Builder::new().build_http_with_tcp_connector(H2Connector { addr: server.addr })
+    let pool =
+        SharedPool::builder().build_http_with_tcp_connector(H2Connector { addr: server.addr });
+    Client::new(&pool).into_shared()
 }
 
 fn runtime_components() -> aws_smithy_runtime_api::client::runtime_components::RuntimeComponents {
@@ -465,7 +468,7 @@ async fn h2_poisoned_connection_not_reused() {
 
 #[cfg(feature = "rustls-aws-lc")]
 mod tls_h2 {
-    use aws_smithy_http_client::pool::Builder;
+    use aws_smithy_http_client::pool::{Client, SharedPool};
     use aws_smithy_http_client::tls;
     use aws_smithy_http_client::tls::{TlsContext, TrustStore};
     use aws_smithy_runtime_api::client::http::{
@@ -473,6 +476,7 @@ mod tls_h2 {
     };
     use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
     use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_runtime_api::shared::IntoShared;
     use http_body_util::BodyExt;
     use hyper_util::rt::TokioExecutor;
     use std::net::SocketAddr;
@@ -614,12 +618,13 @@ mod tls_h2 {
     #[tokio::test]
     async fn rustls_alpn_h2_multiplexing() {
         let server = TlsH2Server::start().await;
-        let client = Builder::new()
+        let pool = SharedPool::builder()
             .tls_provider(tls::Provider::Rustls(
                 tls::rustls_provider::CryptoMode::AwsLc,
             ))
             .tls_context(tls_context())
             .build_https();
+        let client: SharedHttpClient = Client::new(&pool).into_shared();
 
         let url = server.url();
 
@@ -649,10 +654,11 @@ mod tls_h2 {
     #[tokio::test]
     async fn s2n_tls_alpn_h2_multiplexing() {
         let server = TlsH2Server::start().await;
-        let client = Builder::new()
+        let pool = SharedPool::builder()
             .tls_provider(tls::Provider::S2nTls)
             .tls_context(tls_context())
             .build_https();
+        let client: SharedHttpClient = Client::new(&pool).into_shared();
 
         let url = server.url();
 
