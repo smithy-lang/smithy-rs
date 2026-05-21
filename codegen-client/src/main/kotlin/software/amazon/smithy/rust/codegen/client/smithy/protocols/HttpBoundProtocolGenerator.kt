@@ -59,7 +59,7 @@ private fun eventStreamWithInitialRequest(
                     """
                     {
                         let codec = protocol.payload_codec()
-                            .ok_or_else(|| "protocol has no payload codec")?;
+                            .ok_or("protocol has no payload codec")?;
                         let mut ser = codec.create_serializer();
                         #{ShapeSerializer}::write_struct(
                             &mut *ser,

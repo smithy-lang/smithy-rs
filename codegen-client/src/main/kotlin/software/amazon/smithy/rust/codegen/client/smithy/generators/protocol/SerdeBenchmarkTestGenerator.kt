@@ -222,6 +222,7 @@ class SerdeBenchmarkTestGenerator(
         writable {
             if (software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
                 val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                val smithyCbor = CargoDependency.smithyCbor(codegenContext.runtimeConfig).toType()
                 val smithySchema = RT.smithySchema(codegenContext.runtimeConfig)
                 val protocol = codegenContext.protocol
                 val serviceShapeName = codegenContext.serviceShape.id.name
@@ -234,6 +235,8 @@ class SerdeBenchmarkTestGenerator(
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
+                            smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                         else -> return@writable
                     }
 
