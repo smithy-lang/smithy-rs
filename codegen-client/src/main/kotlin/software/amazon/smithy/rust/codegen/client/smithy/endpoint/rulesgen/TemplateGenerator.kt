@@ -33,6 +33,20 @@ import software.amazon.smithy.rust.codegen.core.util.dq
 class TemplateGenerator(
     private val ownership: Ownership,
     private val exprGenerator: (Expression, Ownership) -> Writable,
+    /**
+     * Optional separate generator used **only** for dynamic elements inside a multipart
+     * template (the `out.push_str(&...)` parts). Defaults to [exprGenerator].
+     *
+     * BDD codegen needs this distinction because:
+     *   - In a multipart template, an optional `&Option<String>` reference must be reduced
+     *     to `&str` (e.g. via `.as_deref().unwrap_or_default()`) so it fits `out.push_str(&...)`.
+     *   - In a single-dynamic template (`"{ref}"`), the whole template result is the inner
+     *     expression's value. If the outer caller wraps that in `if let Some(param) = ...`,
+     *     the inner expression must remain `Option`-typed, so the unwrap must NOT be applied.
+     *
+     * Tree-mode callers ignore this parameter and pass a single generator for both.
+     */
+    private val multipartElementGenerator: (Expression, Ownership) -> Writable = exprGenerator,
 ) : TemplateVisitor<Writable> {
     override fun visitStaticTemplate(value: String) =
         writable {
@@ -60,7 +74,7 @@ class TemplateGenerator(
         writable {
             // we don't need to own the argument to push_str
             Attribute.AllowClippyNeedlessBorrow.render(this)
-            rust("out.push_str(&#W);", exprGenerator(expr, Ownership.Borrowed))
+            rust("out.push_str(&#W);", multipartElementGenerator(expr, Ownership.Borrowed))
         }
 
     override fun startMultipartTemplate() =

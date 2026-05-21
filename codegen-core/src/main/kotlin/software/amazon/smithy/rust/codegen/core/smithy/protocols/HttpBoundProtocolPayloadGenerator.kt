@@ -56,6 +56,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val protocol: Protocol,
     private val httpMessageType: HttpMessageType = HttpMessageType.REQUEST,
     private val renderEventStreamBody: (RustWriter, EventStreamBodyParams) -> Unit,
+    private val eventStreamUseSchemaSerde: Boolean = false,
 ) : ProtocolPayloadGenerator {
     private val symbolProvider = codegenContext.symbolProvider
     private val model = codegenContext.model
@@ -267,6 +268,7 @@ class HttpBoundProtocolPayloadGenerator(
                 unionShape,
                 serializerGenerator,
                 payloadContentType,
+                useSchemaSerde = eventStreamUseSchemaSerde,
             ).render()
 
         val eventStreamMarshallerGenerator =
@@ -278,6 +280,7 @@ class HttpBoundProtocolPayloadGenerator(
                 unionShape,
                 serializerGenerator,
                 payloadContentType,
+                useSchemaSerde = eventStreamUseSchemaSerde,
             )
 
         // TODO(EventStream): [RPC] For server, RPC protocols need to send an initial message with the

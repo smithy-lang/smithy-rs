@@ -228,4 +228,37 @@ class RustWriterTest {
         val sut = RustWriter.forModule("src/module_name")
         sut.module().shouldBe("module_name")
     }
+
+    // Regression test for https://github.com/smithy-lang/smithy-rs/issues/4634
+    @Test
+    fun `output does not contain trailing whitespace`() {
+        val sut = RustWriter.root()
+        // Reproduce the two patterns from the issue:
+        sut.rustBlock("fn example()") {
+            // join("\n") separator creates a blank line that gets indented
+            val writables =
+                listOf(
+                    writable { rust("let a = 1;") },
+                    writable { rust("let b = 2;") },
+                )
+            writables.join("\n")(this)
+
+            // Empty string interpolation leaves a blank line that gets indented
+            val empty = ""
+            rust(
+                """
+                something
+                    .method()
+                    $empty
+                    .chain()
+                """,
+            )
+        }
+        val output = sut.toString()
+        val trailingWhitespaceLines =
+            output.lines().filter { line ->
+                line != line.trimEnd()
+            }
+        trailingWhitespaceLines shouldBe emptyList()
+    }
 }

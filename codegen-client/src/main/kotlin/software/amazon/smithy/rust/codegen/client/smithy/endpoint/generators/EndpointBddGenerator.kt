@@ -45,6 +45,8 @@ import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.BddEx
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.ExpressionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen.Ownership
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.Attribute.Companion.allow
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
@@ -72,6 +74,20 @@ class EndpointBddGenerator(
         private const val RESULT_PREFIX = "Result"
         private const val BINDING_PREFIX = "binding_"
         private const val CONDITION_FN_PREFIX = "cond_"
+
+        private val allowLintsForBddResolver =
+            listOf(
+                "unused_variables",
+                "unused_parens",
+                "clippy::double_parens",
+                "clippy::useless_conversion",
+                "clippy::bool_comparison",
+                "clippy::comparison_to_empty",
+                "clippy::needless_borrow",
+                "clippy::useless_asref",
+                "clippy::redundant_closure_call",
+                "clippy::clone_on_copy",
+            )
     }
 
     private data class GenerationContext(
@@ -118,7 +134,7 @@ class EndpointBddGenerator(
         val resultCount = bddTrait.results.size
         val typeGenerator = EndpointTypesGenerator.fromContext(codegenContext)
         val registry = FunctionRegistry(stdlib)
-        val context = Context(registry, runtimeConfig, isBddMode = true)
+        val context = Context(registry, runtimeConfig, isBddMode = true, nameByOriginal = allRefs.originalNameMap)
 
         // Render conditions to a dummy writer to populate the function registry
         bddTrait.conditions.forEach { cond ->
@@ -171,9 +187,7 @@ class EndpointBddGenerator(
                         }
                     }
 
-                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
-                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
-                        clippy::needless_borrow, clippy::useless_asref, clippy::redundant_closure_call)]
+                    #{AllowLints:W}
                     fn resolve_endpoint<'a>(&'a self, params: &'a #{Params}) -> #{Result}<#{SmithyEndpoint}, #{BoxError}> {
                         let mut _diagnostic_collector = #{DiagnosticCollector}::new();
                         ##[allow(unused_mut)]
@@ -225,6 +239,7 @@ class EndpointBddGenerator(
                 }
                 """,
                 *preludeScope,
+                "AllowLints" to writable { Attribute(allow(allowLintsForBddResolver)).render(this) },
                 "ArcSwap" to CargoDependency.ArcSwap.toType().resolve("ArcSwap"),
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "CustomFields" to
@@ -265,12 +280,13 @@ class EndpointBddGenerator(
                         """
                         $idx => (|_diagnostic_collector: &mut #{DiagnosticCollector}| -> bool {
                             #{NonParamRefBindings:W}
-                            let partition_resolver = &self.partition_resolver;
+                            #{CustomFieldBindings:W}
                             #{body:W}
                         })(&mut _diagnostic_collector),
                         """,
                         "DiagnosticCollector" to EndpointsLib.DiagnosticCollector,
-                        "NonParamRefBindings" to generateNonParamReferences(),
+                        "NonParamRefBindings" to generateNonParamReferences(cond),
+                        "CustomFieldBindings" to generateCustomFieldBindings(genContext),
                         "body" to condBody,
                     )
                 }
@@ -294,10 +310,13 @@ class EndpointBddGenerator(
             object : ExpressionVisitor<Writable?> {
                 override fun visitIsSet(target: Expression): Writable? {
                     if (target !is Reference) return null
-                    val paramName = target.name.rustName()
-                    // Only inline for params (not context refs which need mutable borrows)
-                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
-                    return writable { rust("$paramName.is_some()") }
+                    // Only inline for params (not context refs which need mutable borrows).
+                    // Resolve by Identifier (not just rustName) so that an SSA variable
+                    // whose snake_case form collides with a parameter name doesn't
+                    // accidentally trigger the fast path.
+                    val ref = allRefs.resolve(target.name) ?: return null
+                    if (ref.refType != AnnotatedRefs.RefType.Parameter) return null
+                    return writable { rust("${ref.name}.is_some()") }
                 }
 
                 override fun visitBoolEquals(
@@ -311,8 +330,9 @@ class EndpointBddGenerator(
                             right is Reference -> right to left
                             else -> return null
                         }
-                    val paramName = refExpr.name.rustName()
-                    if (!bddTrait.parameters.toList().any { it.memberName() == paramName }) return null
+                    val ref = allRefs.resolve(refExpr.name) ?: return null
+                    if (ref.refType != AnnotatedRefs.RefType.Parameter) return null
+                    val paramName = ref.name
                     val litVal =
                         litExpr.accept(
                             object : ExpressionVisitor<Boolean?> {
@@ -390,9 +410,7 @@ class EndpointBddGenerator(
                 }
 
                 impl ConditionFn {
-                    ##[allow(unused_variables, unused_parens, clippy::double_parens,
-                        clippy::useless_conversion, clippy::bool_comparison, clippy::comparison_to_empty,
-                        clippy::needless_borrow, clippy::useless_asref, )]
+                    #{AllowLints:W}
                     fn evaluate<'a>(&self, params: &'a Params, context: &mut ConditionContext<'a>#{AdditionalArgsSigPrefix}#{AdditionalArgsSig}, _diagnostic_collector: &mut #{DiagnosticCollector}) -> bool {
                         // Param bindings
                         #{ParamBindings:W}
@@ -410,6 +428,7 @@ class EndpointBddGenerator(
                 ];
                 """,
                 *preludeScope,
+                "AllowLints" to writable { Attribute(allow(allowLintsForBddResolver)).render(this) },
                 "AdditionalArgsSig" to
                     writable {
                         genContext.additionalArgsSignature.forEachIndexed { i, it ->
@@ -500,12 +519,48 @@ class EndpointBddGenerator(
      * Generates references that do not come from the trait params. These can be set
      * as part of the evaluation of a Condition. They all start as `None` since they may
      * never be set.
+     *
+     * When [cond] is provided:
+     * - Only emit bindings for context vars actually referenced in the condition body
+     *   (plus the assigned var, if any). Unused `let X = &context.X` bindings are fine
+     *   for correctness but poison Rust's disjoint-capture analysis: a closure that
+     *   *uses* `context.X` (e.g. `if let Some(p) = first_arn { ... }`) captures
+     *   `&context.X`, and that conflicts with another match arm's closure that
+     *   mutably captures `&mut context.X` — even though only one arm runs per
+     *   iteration. Pruning unused bindings breaks that false conflict.
+     * - Bind the assigned var as `&mut`, and every other used var as `&`. Uniform
+     *   `&mut` forces read borrows to inherit the closure's short lifetime, breaking
+     *   library functions whose return types carry that lifetime (e.g.
+     *   `parse_arn(&str) -> Option<Arn<'_>>` assigned into an outer `Option<Arn<'a>>`).
+     *
+     * When [cond] is null (outer-scope callers with no specific condition), every
+     * variable is bound as `&mut`, matching the original behavior.
      */
-    private fun generateNonParamReferences() =
+    private fun generateNonParamReferences(cond: Condition? = null) =
         writable {
+            val assignedName = cond?.result?.orElse(null)?.let { allRefs.resolveName(it) }
+            val usedVars = cond?.let { collectUsedVariables(it) }
             val varRefs = allRefs.variableRefs()
             varRefs.forEach {
-                rust("let ${it.value.name} = &mut context.${it.value.name};")
+                val name = it.value.name
+                if (usedVars != null && !usedVars.contains(name)) {
+                    return@forEach
+                }
+                val binding = if (cond == null || name == assignedName) "&mut" else "&"
+                rust("let $name = $binding context.$name;")
+            }
+        }
+
+    /**
+     * Generate bindings for custom fields (e.g. partition_resolver) from self into the condition closure.
+     * Only emits bindings for functions that are actually used by the endpoint rules.
+     */
+    private fun generateCustomFieldBindings(genContext: GenerationContext) =
+        writable {
+            genContext.fnsUsed.forEach { fn ->
+                if (fn.structFieldBdd() != null) {
+                    rust("let partition_resolver = &self.partition_resolver;")
+                }
             }
         }
 
@@ -576,12 +631,13 @@ class EndpointBddGenerator(
         }
 
     /**
-     * Collect all variables (params and context refs) used in a rule.
+     * Walks an [Expression] and returns the set of variable names it references (by rust name).
+     * Used both to drive per-condition binding filtering and as the building block for
+     * [collectUsedVariables] on a rule.
      */
-    private fun collectUsedVariables(rule: Rule): Set<String> {
+    private fun collectUsedVariablesFromExpression(root: Expression): Set<String> {
         val usedVars = mutableSetOf<String>()
 
-        // Forward declaration via late init
         lateinit var collectFromExpression: (Expression) -> Unit
         lateinit var collectFromLiteral: (Literal) -> Unit
 
@@ -591,11 +647,9 @@ class EndpointBddGenerator(
                     override fun visitBoolean(b: Boolean) {}
 
                     override fun visitString(value: Template) {
-                        // For templates, we need to extract the dynamic parts
                         val parts =
                             value.accept(
-                                object :
-                                    TemplateVisitor<Expression?> {
+                                object : TemplateVisitor<Expression?> {
                                     override fun visitStaticTemplate(value: String) = null
 
                                     override fun visitSingleDynamicTemplate(expr: Expression) = expr
@@ -628,25 +682,17 @@ class EndpointBddGenerator(
         collectFromExpression = { expr ->
             expr.accept(
                 object : ExpressionVisitor<Unit> {
-                    override fun visitLiteral(literal: Literal) {
-                        collectFromLiteral(literal)
-                    }
+                    override fun visitLiteral(literal: Literal) = collectFromLiteral(literal)
 
                     override fun visitRef(reference: Reference) {
-                        usedVars.add(reference.name.rustName())
+                        usedVars.add(allRefs.resolveName(reference.name))
                     }
 
-                    override fun visitGetAttr(getAttr: GetAttr) {
-                        collectFromExpression(getAttr.target)
-                    }
+                    override fun visitGetAttr(getAttr: GetAttr) = collectFromExpression(getAttr.target)
 
-                    override fun visitIsSet(target: Expression) {
-                        collectFromExpression(target)
-                    }
+                    override fun visitIsSet(target: Expression) = collectFromExpression(target)
 
-                    override fun visitNot(not: Expression) {
-                        collectFromExpression(not)
-                    }
+                    override fun visitNot(not: Expression) = collectFromExpression(not)
 
                     override fun visitBoolEquals(
                         left: Expression,
@@ -674,20 +720,38 @@ class EndpointBddGenerator(
             )
         }
 
+        collectFromExpression(root)
+        return usedVars
+    }
+
+    /**
+     * Collect all variables (params and context refs) used in a condition's body expression.
+     * The assigned variable (if any) is also included so that its binding is emitted for
+     * the subsequent `*assigned = ...` write.
+     */
+    private fun collectUsedVariables(cond: Condition): Set<String> {
+        val used = collectUsedVariablesFromExpression(cond.function).toMutableSet()
+        cond.result.orElse(null)?.let { used.add(allRefs.resolveName(it)) }
+        return used
+    }
+
+    /**
+     * Collect all variables (params and context refs) used in a rule.
+     */
+    private fun collectUsedVariables(rule: Rule): Set<String> {
+        val exprs = mutableListOf<Expression>()
         when (rule) {
             is EndpointRule -> {
-                val endpoint = rule.endpoint
-                collectFromExpression(endpoint.url)
-                endpoint.headers.values.forEach { values -> values.forEach { collectFromExpression(it) } }
-                endpoint.properties.values.forEach { collectFromExpression(it) }
+                exprs.add(rule.endpoint.url)
+                rule.endpoint.headers.values.forEach { values -> values.forEach { exprs.add(it) } }
+                rule.endpoint.properties.values.forEach { exprs.add(it) }
             }
 
-            is ErrorRule -> {
-                collectFromExpression(rule.error)
-            }
+            is ErrorRule -> exprs.add(rule.error)
         }
-
-        return usedVars
+        val out = mutableSetOf<String>()
+        exprs.forEach { out.addAll(collectUsedVariablesFromExpression(it)) }
+        return out
     }
 
     /**
@@ -781,7 +845,7 @@ class EndpointBddGenerator(
      */
     private fun generateEndpoint(endpoint: Endpoint): Writable {
         val registry = FunctionRegistry(stdlib)
-        val context = Context(registry, runtimeConfig, isBddMode = true)
+        val context = Context(registry, runtimeConfig, isBddMode = true, nameByOriginal = allRefs.originalNameMap)
         val generator = ExpressionGenerator(Ownership.Owned, context)
         val url = generator.generate(endpoint.url)
         val headers = endpoint.headers.mapValues { entry -> entry.value.map { generator.generate(it) } }
@@ -826,7 +890,8 @@ class EndpointBddGenerator(
         // Use borrowed generator for auth scheme values — with_capacity and put accept
         // Into<Cow<'static, str>> and Into<Document>, both of which work with &str directly.
         val registry = FunctionRegistry(stdlib)
-        val borrowedContext = Context(registry, runtimeConfig, isBddMode = true)
+        val borrowedContext =
+            Context(registry, runtimeConfig, isBddMode = true, nameByOriginal = allRefs.originalNameMap)
         val borrowedGenerator = ExpressionGenerator(Ownership.Borrowed, borrowedContext)
 
         return writable {
@@ -892,8 +957,15 @@ class EndpointBddGenerator(
             var memberDefs =
                 varRefs.map { entry ->
                     val ref = entry.value
-                    val rustType = inferContextMemberType(ref, registry)
-                    formatContextMember(ref.name, rustType)
+                    if (ref.isBorrowedStr) {
+                        // Bypass the RuntimeType-based inferContextMemberType path:
+                        // there is no RuntimeType representation for `&'a str` since
+                        // RuntimeType cannot carry a lifetime. Emit the field directly.
+                        "pub(crate) ${ref.name}: Option<&'a str>"
+                    } else {
+                        val rustType = inferContextMemberType(ref, registry)
+                        formatContextMember(ref.name, rustType)
+                    }
                 }.joinToString(",\n")
 
             if (memberDefs.isNotEmpty()) {
@@ -1009,6 +1081,17 @@ fun matchRuleTypeToRustType(
  */
 class AnnotatedRefs(
     private val refs: Map<String, AnnotatedRef>,
+    /**
+     * Maps each reference's **original Smithy name** (`Identifier.toString()`) to the
+     * key under which it is stored in [refs]. The key is normally `id.rustName()` but
+     * is disambiguated when a parameter and an SSA variable share the same snake_case
+     * form (e.g. parameter `ResourceArn` and SSA variable `resourceArn` both
+     * rust-name to `resource_arn`). The resolved [AnnotatedRef.name] carries the
+     * disambiguated form so all codegen consumers emit a consistent, non-shadowing
+     * name. For identifiers without a collision, this map maps the original name to
+     * its plain rustName.
+     */
+    private val nameByOriginal: Map<String, String> = emptyMap(),
 ) {
     enum class RefType {
         Parameter,
@@ -1023,9 +1106,40 @@ class AnnotatedRefs(
         // These two are only present when RefType == Variable
         val condition: Condition?,
         val type: Type?,
+        /**
+         * True when this ref is a String-typed SSA variable whose assignment chain
+         * traces back to a parameter (via only borrow-preserving operations: direct
+         * references to params and GetAttr chains). Such refs are stored in the
+         * context as `Option<&'a str>` instead of `Option<String>` so that downstream
+         * consumers (notably [aws.parseArn]) can produce values carrying the outer
+         * `'a` lifetime and fit back into the lifetime-parameterized context fields
+         * without forming a self-referential struct.
+         */
+        val isBorrowedStr: Boolean = false,
     )
 
     operator fun get(name: String): AnnotatedRef? = refs[name]
+
+    /** Exposes the original-name-to-canonical-rustName map for tree-mode generators
+     *  that need to resolve references with the same disambiguation as BDD mode. */
+    val originalNameMap: Map<String, String>
+        get() = nameByOriginal
+
+    /**
+     * Look up an [AnnotatedRef] by its original Smithy identifier. This is the correct
+     * entry point for codegen that starts from a [Reference] or a `condition.result`
+     * identifier, because it handles the rare parameter/SSA-variable name-collision
+     * case correctly (see [nameByOriginal]).
+     */
+    fun resolve(id: Identifier): AnnotatedRef? = refs[nameByOriginal[id.toString()] ?: id.rustName()]
+
+    /**
+     * Returns the Rust identifier that should be emitted for a reference to [id].
+     * For most identifiers this is just `id.rustName()`; for SSA variables that
+     * collide with a parameter's snake_case name, it returns the disambiguated form
+     * (e.g. `resource_arn_v`).
+     */
+    fun resolveName(id: Identifier): String = resolve(id)?.name ?: id.rustName()
 
     fun filter(predicate: (AnnotatedRef) -> Boolean): List<AnnotatedRef> = refs.values.filter(predicate)
 
@@ -1043,6 +1157,7 @@ class AnnotatedRefs(
             runtimeConfig: RuntimeConfig,
         ): AnnotatedRefs {
             val refs = mutableMapOf<String, AnnotatedRef>()
+            val nameByOriginal = mutableMapOf<String, String>()
             val typeMapper = RustTypeMapper(runtimeConfig)
 
             bddTrait.parameters.forEach { param ->
@@ -1050,15 +1165,17 @@ class AnnotatedRefs(
                     param.type?.let { typeMapper.mapParameterType(it) }
                         ?: throw IllegalArgumentException("Unsupported parameter type ${param.type}")
 
-                refs[param.memberName()] =
+                val rustName = param.memberName()
+                refs[rustName] =
                     AnnotatedRef(
-                        param.memberName(),
+                        rustName,
                         RefType.Parameter,
                         !param.isRequired,
                         runtimeType,
                         null,
                         null,
                     )
+                nameByOriginal[param.name.toString()] = rustName
             }
 
             bddTrait.conditions.forEach { cond ->
@@ -1082,12 +1199,100 @@ class AnnotatedRefs(
                             else -> matchRuleTypeToRustType(returnType, runtimeConfig)
                         }
 
-                    refs[result.rustName()] =
-                        AnnotatedRef(result.rustName(), RefType.Variable, true, runtimeType, cond, returnType)
+                    // Detect borrow-preserving String assignments so we can store the
+                    // variable as `Option<&'a str>` and skip the clone on assignment.
+                    // See the doc on AnnotatedRef.isBorrowedStr for the motivation.
+                    //
+                    // Use `cond.function.type()` (the typechecked return type for this
+                    // specific call) rather than `functionDefinition.returnType` (which
+                    // is generic for polymorphic functions like `getAttr`). For
+                    // `getAttr(List<String>, "[0]")` the former reports `Optional<String>`
+                    // while the latter reports a type variable.
+                    val resolvedType =
+                        try {
+                            cond.function.type().let { if (it is OptionalType) it.inner() else it }
+                        } catch (_: RuntimeException) {
+                            null
+                        }
+                    val isBorrowedStr =
+                        resolvedType is StringType && isBorrowPreservingExpr(cond.function, refs, nameByOriginal)
+
+                    // Disambiguate the SSA variable name if its snake_case form
+                    // collides with an existing entry (parameter or earlier SSA var).
+                    // Without this, for example s3control's parameter `ResourceArn` and
+                    // SSA variable `resourceArn` both rust-name to `resource_arn`,
+                    // causing the per-condition `let resource_arn = &mut context.resource_arn;`
+                    // binding to shadow the top-level `let resource_arn = &params.resource_arn;`
+                    // inside the closure — which makes any condition body that references
+                    // the parameter (e.g. `parseArn(ResourceArn)`) see the uninitialized
+                    // context variable instead.
+                    //
+                    // The suffix is `_ctx_N` (1-indexed) rather than a bare `_v` /
+                    // `_v2` / `_v3` scheme so (a) every collision produces a uniformly
+                    // shaped name regardless of how many prior collisions there are,
+                    // (b) the suffix meaningfully communicates that the disambiguated
+                    // binding refers to the SSA variable in `ConditionContext`, as
+                    // distinct from the parameter in `Params`, and (c) it stays clear
+                    // of Smithy's own `_ssa_N` convention used for re-assignments.
+                    //
+                    // The upper bound prevents a pathological infinite loop if the
+                    // disambiguation itself somehow collides repeatedly. 1024 is well
+                    // beyond any plausible model.
+                    val rawRustName = result.rustName()
+                    var disambiguatedName = rawRustName
+                    var collisionIdx = 1
+                    while (refs.containsKey(disambiguatedName) && collisionIdx < 1024) {
+                        disambiguatedName = "${rawRustName}_ctx_$collisionIdx"
+                        collisionIdx += 1
+                    }
+                    check(!refs.containsKey(disambiguatedName)) {
+                        "Could not disambiguate name '$rawRustName' after $collisionIdx attempts " +
+                            "(model has a pathological number of colliding identifiers)"
+                    }
+
+                    refs[disambiguatedName] =
+                        AnnotatedRef(
+                            disambiguatedName,
+                            RefType.Variable,
+                            true,
+                            runtimeType,
+                            cond,
+                            returnType,
+                            isBorrowedStr,
+                        )
+                    nameByOriginal[result.toString()] = disambiguatedName
                 }
             }
 
-            return AnnotatedRefs(refs)
+            return AnnotatedRefs(refs, nameByOriginal)
         }
+
+        /**
+         * Returns true if [expr] is a chain of references / GetAttr operations rooted
+         * at a parameter (or another already-marked borrow-preserving variable).
+         *
+         * Such an expression, when generated without an intermediate `.cloned()`,
+         * produces a value whose lifetime flows from the parameters (outer `'a`).
+         * Functions (coalesce, substring, parseArn, ...) are excluded because they
+         * return owned data or types with their own lifetime parameter.
+         *
+         * Resolves each [Reference] via [nameByOriginal] so that the parameter/SSA
+         * collision case (see [AnnotatedRefs.from]) is handled correctly — we need to
+         * look up by original Smithy name, not by (possibly-colliding) rust name.
+         */
+        private fun isBorrowPreservingExpr(
+            expr: Expression,
+            refs: Map<String, AnnotatedRef>,
+            nameByOriginal: Map<String, String>,
+        ): Boolean =
+            when (expr) {
+                is Reference -> {
+                    val key = nameByOriginal[expr.name.toString()] ?: expr.name.rustName()
+                    val ref = refs[key]
+                    ref?.refType == RefType.Parameter || ref?.isBorrowedStr == true
+                }
+                is GetAttr -> isBorrowPreservingExpr(expr.target, refs, nameByOriginal)
+                else -> false
+            }
     }
 }
