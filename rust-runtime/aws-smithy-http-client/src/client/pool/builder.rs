@@ -7,47 +7,49 @@
 //!
 //! Entry point: [`SharedPool::builder`](super::SharedPool::builder).
 
-pub use super::connection::{
-    Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
-    ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
-};
-
 use std::sync::Arc;
 use std::time::Duration;
 
+use aws_smithy_runtime_api::client::dns::{ResolveDns, SharedDnsResolver};
+use aws_smithy_runtime_api::shared::IntoShared;
+use hyper_util::client::legacy::connect::dns::Name as DnsName;
 use hyper_util::client::legacy::connect::HttpConnector as HyperHttpConnector;
+use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
-use super::{ConnectionPool, PoolConfig};
+use super::connection::ConnectionEventListener;
+use super::partition::CrossPartitionPolicy;
+use super::{BoxError, ConnectionPool, PoolConfig};
+use crate::client::dns::HyperUtilResolver;
+use crate::client::proxy::ProxyConfig;
 use crate::client::tls;
 use crate::client::{TlsProviderSelected, TlsUnset};
 use crate::tls::TlsContext;
 
-/// Builder for the v2 HTTP client.
+/// Builder for a [`SharedPool`].
 ///
-/// Provides a flat, unified configuration surface for connection management,
-/// TLS, timeouts, and pool behavior (all knobs in one place).
+/// Configures pool-wide settings: TLS, DNS, connection limits, idle
+/// eviction, proxy, and connection event listening. Per-client settings
+/// (partition, network interface, driver spawner) are configured
+/// separately via [`ClientBuilder`].
 ///
-/// # Examples
+/// Type-state ensures TLS is configured before [`build_https`] is
+/// callable; calling [`tls_provider`] transitions the builder into the
+/// state where [`build_https`] is available.
 ///
-/// ```no_run
-/// use aws_smithy_http_client::pool::{SharedPool, Client};
-/// use std::time::Duration;
-///
-/// let pool = SharedPool::builder()
-///     .pool_idle_timeout(Duration::from_secs(20))
-///     .build_http();
-/// let client = Client::new(&pool);
-/// ```
+/// [`build_https`]: Builder::build_https
+/// [`tls_provider`]: Builder::tls_provider
+/// [`SharedPool`]: super::SharedPool
+/// [`ClientBuilder`]: super::ClientBuilder
 #[derive(Clone)]
 pub struct Builder<Tls = TlsUnset> {
     pool_idle_timeout: Option<Duration>,
     tcp_nodelay: bool,
     max_connections: Option<usize>,
     max_connections_per_host: Option<usize>,
-    proxy_config: Option<crate::client::proxy::ProxyConfig>,
-    connection_event_listener: Option<Arc<dyn super::connection::ConnectionEventListener>>,
-    cross_partition_policy: super::partition::CrossPartitionPolicy,
-    dns_resolver: Option<aws_smithy_runtime_api::client::dns::SharedDnsResolver>,
+    proxy_config: Option<ProxyConfig>,
+    connection_event_listener: Option<Arc<dyn ConnectionEventListener>>,
+    cross_partition_policy: CrossPartitionPolicy,
+    dns_resolver: Option<SharedDnsResolver>,
     tls: Tls,
 }
 
@@ -78,7 +80,7 @@ impl Default for Builder<TlsUnset> {
             max_connections_per_host: None,
             proxy_config: None,
             connection_event_listener: None,
-            cross_partition_policy: super::partition::CrossPartitionPolicy::default(),
+            cross_partition_policy: CrossPartitionPolicy::default(),
             dns_resolver: None,
             tls: TlsUnset {},
         }
@@ -89,8 +91,9 @@ impl Default for Builder<TlsUnset> {
 impl<Tls> Builder<Tls> {
     /// Set the pool idle timeout.
     ///
-    /// Connections idle longer than this duration are evicted from the pool.
-    /// Set below the server's idle timeout to avoid stale connection errors.
+    /// Connections idle longer than this duration are evicted from the
+    /// pool. Set below the server's idle timeout to avoid stale
+    /// connection errors. Defaults to no eviction when unset.
     pub fn pool_idle_timeout(mut self, timeout: Duration) -> Self {
         self.pool_idle_timeout = Some(timeout);
         self
@@ -127,35 +130,28 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Configure proxy support.
+    /// Route connections through an HTTP/HTTPS/SOCKS proxy.
     ///
-    /// Threads `config` through the connector chain: HTTP/HTTPS proxies
-    /// route requests via the proxy server; HTTPS-over-proxy uses
-    /// `CONNECT` tunneling. The per-host proxy decision is stable for
-    /// this builder's lifetime: all connections to a given authority
-    /// go through the same path.
+    /// Per-host proxy resolution is stable for the lifetime of the
+    /// pool: all connections to a given authority follow the same
+    /// proxy decision. HTTPS through an HTTP proxy uses `CONNECT`
+    /// tunneling.
     ///
-    /// To use environment variables (`HTTP_PROXY`, `HTTPS_PROXY`,
-    /// `NO_PROXY`), pass `ProxyConfig::from_env()`.
-    pub fn proxy_config(mut self, config: crate::client::proxy::ProxyConfig) -> Self {
+    /// Pass [`ProxyConfig::from_env`] to read configuration from the
+    /// `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables.
+    pub fn proxy_config(mut self, config: ProxyConfig) -> Self {
         self.proxy_config = Some(config);
         self
     }
 
     /// Mutable-reference variant of [`proxy_config`](Self::proxy_config).
-    pub fn set_proxy_config(
-        &mut self,
-        config: Option<crate::client::proxy::ProxyConfig>,
-    ) -> &mut Self {
+    pub fn set_proxy_config(&mut self, config: Option<ProxyConfig>) -> &mut Self {
         self.proxy_config = config;
         self
     }
 
     /// Set a listener for connection lifecycle events (created, reused, closed, failed).
-    pub fn connection_event_listener(
-        mut self,
-        listener: Arc<dyn super::connection::ConnectionEventListener>,
-    ) -> Self {
+    pub fn connection_event_listener(mut self, listener: Arc<dyn ConnectionEventListener>) -> Self {
         self.connection_event_listener = Some(listener);
         self
     }
@@ -163,7 +159,7 @@ impl<Tls> Builder<Tls> {
     /// Mutable-reference variant of [`connection_event_listener`](Self::connection_event_listener).
     pub fn set_connection_event_listener(
         &mut self,
-        listener: Option<Arc<dyn super::connection::ConnectionEventListener>>,
+        listener: Option<Arc<dyn ConnectionEventListener>>,
     ) -> &mut Self {
         self.connection_event_listener = listener;
         self
@@ -172,22 +168,16 @@ impl<Tls> Builder<Tls> {
     /// Set the policy that governs checkout when the local partition has
     /// no idle connection and the pool is at capacity.
     ///
-    /// Defaults to [`CrossPartitionPolicy::Never`](super::partition::CrossPartitionPolicy::Never).
-    /// Has no observable effect with a single partition or when the pool
-    /// stays under capacity.
-    pub fn cross_partition_policy(
-        mut self,
-        policy: super::partition::CrossPartitionPolicy,
-    ) -> Self {
+    /// Defaults to [`CrossPartitionPolicy::Never`]. Has no observable
+    /// effect with a single partition or when the pool stays under
+    /// capacity.
+    pub fn cross_partition_policy(mut self, policy: CrossPartitionPolicy) -> Self {
         self.cross_partition_policy = policy;
         self
     }
 
     /// Mutable-reference variant of [`cross_partition_policy`](Self::cross_partition_policy).
-    pub fn set_cross_partition_policy(
-        &mut self,
-        policy: super::partition::CrossPartitionPolicy,
-    ) -> &mut Self {
+    pub fn set_cross_partition_policy(&mut self, policy: CrossPartitionPolicy) -> &mut Self {
         self.cross_partition_policy = policy;
         self
     }
@@ -196,20 +186,13 @@ impl<Tls> Builder<Tls> {
     ///
     /// Connections established by this pool resolve hostnames through the
     /// given resolver. Defaults to the system resolver when unset.
-    pub fn dns_resolver(
-        mut self,
-        resolver: impl aws_smithy_runtime_api::client::dns::ResolveDns + 'static,
-    ) -> Self {
-        use aws_smithy_runtime_api::shared::IntoShared;
+    pub fn dns_resolver(mut self, resolver: impl ResolveDns + 'static) -> Self {
         self.dns_resolver = Some(resolver.into_shared());
         self
     }
 
     /// Mutable-reference variant of [`dns_resolver`](Self::dns_resolver).
-    pub fn set_dns_resolver(
-        &mut self,
-        resolver: Option<aws_smithy_runtime_api::client::dns::SharedDnsResolver>,
-    ) -> &mut Self {
+    pub fn set_dns_resolver(&mut self, resolver: Option<SharedDnsResolver>) -> &mut Self {
         self.dns_resolver = resolver;
         self
     }
@@ -247,7 +230,6 @@ impl Builder<TlsUnset> {
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
         let pool = match dns_resolver {
             Some(resolver) => {
-                use crate::client::dns::HyperUtilResolver;
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
                 build_http_pool_with_proxy(tcp, &self.proxy_config, config)
@@ -277,7 +259,7 @@ impl Builder<TlsUnset> {
     pub fn build_http_with_tcp_connector<C, IO>(self, connector: C) -> super::SharedPool
     where
         C: tower::Service<http_1x::Uri, Response = IO> + Clone + Send + Sync + 'static,
-        C::Error: Into<aws_smithy_runtime_api::box_error::BoxError> + 'static,
+        C::Error: Into<BoxError> + 'static,
         C::Future: Unpin + Send + 'static,
         IO: hyper::rt::Read
             + hyper::rt::Write
@@ -308,21 +290,17 @@ impl Builder<TlsUnset> {
 /// proxy will fail at handshake time.
 fn build_http_pool_with_proxy<R>(
     tcp: HyperHttpConnector<R>,
-    proxy_config: &Option<crate::client::proxy::ProxyConfig>,
+    proxy_config: &Option<ProxyConfig>,
     config: PoolConfig,
 ) -> ConnectionPool
 where
     R: Clone + Send + Sync + 'static,
-    R: tower::Service<hyper_util::client::legacy::connect::dns::Name>,
+    R: tower::Service<DnsName>,
     R::Response: Iterator<Item = std::net::SocketAddr>,
     R::Future: Send,
-    R::Error: Into<aws_smithy_runtime_api::box_error::BoxError>,
+    R::Error: Into<BoxError>,
 {
-    use crate::client::proxy;
-
-    let proxy_config = proxy_config
-        .clone()
-        .unwrap_or_else(proxy::ProxyConfig::disabled);
+    let proxy_config = proxy_config.clone().unwrap_or_else(ProxyConfig::disabled);
 
     if proxy_config.requires_tls() {
         tracing::warn!(
@@ -352,7 +330,6 @@ impl Builder<TlsProviderSelected> {
         let dns_resolver = self.dns_resolver.take();
         match dns_resolver {
             Some(resolver) => {
-                use crate::client::dns::HyperUtilResolver;
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
                 tcp.enforce_http(false);
@@ -370,13 +347,11 @@ impl Builder<TlsProviderSelected> {
     fn build_from_tcp<R>(self, tcp: HyperHttpConnector<R>) -> super::SharedPool
     where
         R: Clone + Send + Sync + 'static,
-        R: tower::Service<hyper_util::client::legacy::connect::dns::Name>,
+        R: tower::Service<DnsName>,
         R::Response: Iterator<Item = std::net::SocketAddr>,
         R::Future: Send,
-        R::Error: Into<aws_smithy_runtime_api::box_error::BoxError>,
+        R::Error: Into<BoxError>,
     {
-        use crate::client::proxy;
-
         let config = PoolConfig {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
@@ -387,7 +362,7 @@ impl Builder<TlsProviderSelected> {
         let proxy_config = self
             .proxy_config
             .clone()
-            .unwrap_or_else(proxy::ProxyConfig::disabled);
+            .unwrap_or_else(ProxyConfig::disabled);
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
 
         match &self.tls.provider {
@@ -438,9 +413,7 @@ impl Builder<TlsProviderSelected> {
 /// no proxy is configured. Wrapped in `Arc` so each `PooledConnector`
 /// constructed by `http_connector` can share the (immutable) matcher
 /// without per-call allocation.
-pub(super) fn proxy_matcher_from(
-    proxy_config: &Option<crate::client::proxy::ProxyConfig>,
-) -> Option<Arc<hyper_util::client::proxy::matcher::Matcher>> {
+pub(super) fn proxy_matcher_from(proxy_config: &Option<ProxyConfig>) -> Option<Arc<ProxyMatcher>> {
     proxy_config
         .as_ref()
         .map(|c| Arc::new(c.clone().into_hyper_util_matcher()))

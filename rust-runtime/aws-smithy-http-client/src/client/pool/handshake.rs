@@ -16,6 +16,7 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::time::Instant;
 
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_types::body::SdkBody;
 use hyper::rt::Executor;
@@ -28,7 +29,6 @@ use super::connection::{
     Authority, ConnectCtx, ConnectionCreatedEvent, ConnectionFailedEvent, ConnectionInfo,
     ConnectionPermit, ConnectionTiming, ManagedConnection, NegotiatedProtocol,
 };
-use super::BoxError;
 
 /// Pool-scoped instrumentation primitives shared across layers in the
 /// pool stack. Held by `ConnectionPool` for the pool's lifetime and

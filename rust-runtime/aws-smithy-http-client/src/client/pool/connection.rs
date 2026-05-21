@@ -12,6 +12,7 @@ use std::task::{Context, Poll};
 use std::time::{Duration, Instant};
 
 use aws_smithy_async::rt::sleep::SharedAsyncSleep;
+use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::{ConnectionId, ConnectionMetadata};
 use aws_smithy_types::body::SdkBody;
 use pin_project_lite::pin_project;
@@ -20,9 +21,8 @@ use tower::Service;
 
 use super::cache;
 use super::handshake::H1SendRequest;
-use super::BoxError;
 
-/// Opaque authority (host:port) associated with a pooled connection.
+/// Authority of a pooled connection (host with optional port).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Authority(Arc<str>);
 
@@ -289,11 +289,10 @@ impl ConnectionFailedEvent {
 /// Callback for connection lifecycle events within the pool.
 ///
 /// Implementations receive notifications when connections are created,
-/// reused from the pool, closed, or fail to establish. Useful for metrics,
-/// DNS failure feedback, or adaptive concurrency control.
+/// reused from the pool, closed, or fail to establish.
 ///
-/// Implementations must be cheap (nanoseconds). Expensive work should be
-/// deferred to a background task.
+/// Implementations must be non-blocking. Defer expensive work to a
+/// background task.
 pub trait ConnectionEventListener: Send + Sync + 'static {
     /// A new connection was established.
     fn on_created(&self, _event: &ConnectionCreatedEvent) {}
