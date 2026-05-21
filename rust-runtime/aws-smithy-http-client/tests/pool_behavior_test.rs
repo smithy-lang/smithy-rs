@@ -6,13 +6,12 @@
 //! Pool behavior tests parameterized over HTTP client implementations.
 //!
 //! Each test is written once as an `async fn` that takes a `&dyn MakeClient`,
-//! then invoked for each client implementation. When `Builder::new_v2()` is
-//! added, a single new `MakeClient` impl covers all tests.
+//! then invoked for each client implementation.
 
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_http_client::pool::Builder as PoolBuilder;
+use aws_smithy_http_client::pool::{Client as PoolClient, SharedPool};
 use aws_smithy_http_client::test_util::wire::connection::{
     ConnectionBehavior, ConnectionTestHarness,
 };
@@ -23,6 +22,7 @@ use aws_smithy_runtime_api::client::http::{
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+use aws_smithy_runtime_api::shared::IntoShared;
 use std::borrow::Cow;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
@@ -82,7 +82,7 @@ struct V2Client;
 
 impl MakeClient for V2Client {
     fn make(&self, config: ClientConfig) -> SharedHttpClient {
-        let mut builder = PoolBuilder::new();
+        let mut builder = SharedPool::builder();
         if let Some(timeout) = config.idle_timeout {
             builder = builder.pool_idle_timeout(timeout);
         }
@@ -92,7 +92,8 @@ impl MakeClient for V2Client {
         if let Some(n) = config.max_connections_per_host {
             builder = builder.max_connections_per_host(n);
         }
-        builder.build_http()
+        let pool = builder.build_http();
+        PoolClient::new(&pool).into_shared()
     }
 }
 
@@ -1381,12 +1382,14 @@ mod listener_tests {
         idle_timeout: Option<Duration>,
         listener: Arc<dyn ConnectionEventListener>,
     ) -> SharedHttpClient {
-        let mut builder =
-            aws_smithy_http_client::Builder::new_v2().connection_event_listener(listener);
+        let mut builder = aws_smithy_http_client::pool::SharedPool::builder()
+            .connection_event_listener(listener)
+            .dns_resolver(harness.dns_resolver());
         if let Some(timeout) = idle_timeout {
             builder = builder.pool_idle_timeout(timeout);
         }
-        builder.build_http_with_resolver(harness.dns_resolver())
+        let pool = builder.build_http();
+        PoolClient::new(&pool).into_shared()
     }
 
     /// Listener receives created on first request, reused on second, and

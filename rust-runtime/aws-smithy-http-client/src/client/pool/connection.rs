@@ -420,9 +420,9 @@ pub(crate) struct ConnectionInfo {
 /// Shared via `Arc`; all clones observe and control the same flag.
 /// `ManagedConnection` holds one and hands out clones (via `metadata()`)
 /// that let the adapter layer mark the connection poisoned through
-/// smithy's `ConnectionMetadata::poison_fn`. On next checkout / return,
-/// the pool sees the flag set and drops the connection instead of reusing
-/// it. Modeled after hyper-util's legacy `PoisonPill`, but owned by us.
+/// smithy's `ConnectionMetadata::poison_fn`. On next checkout or return,
+/// the pool sees the flag set and drops the connection instead of
+/// reusing it.
 #[derive(Debug, Clone, Default)]
 pub(crate) struct PoisonPill {
     flag: Arc<AtomicBool>,
@@ -986,9 +986,9 @@ pin_project! {
     ///
     /// The H2 variant carries a generic type parameter because
     /// `SingletonConnection<T>`'s inner `T` is `hyper_util::client::pool::
-    /// singleton::Singled<...>`, which is unnameable outside hyper-util. The
-    /// H1 variant is fully concrete since our vendored cache makes
-    /// `cache::Cached<...>` nameable.
+    /// singleton::Singled<...>`, which is unnameable outside hyper-util.
+    /// The H1 variant is fully concrete because `cache::Cached<...>` is
+    /// nameable.
     pub(crate) struct GuardedBody<H2Unnameable> {
         #[pin]
         inner: hyper::body::Incoming,
@@ -1046,8 +1046,7 @@ pub(crate) type CheckoutResponse<PoolUnnameable> = http_1x::Response<GuardedBody
 /// Wire-level IO wrapper that carries TCP connect timing.
 ///
 /// Sits below TLS in the connector stack. Pure passthrough; never
-/// modifies data or buffers. Establishes the seam for future
-/// wire-level byte counting and IO error observation.
+/// modifies data or buffers.
 pub(crate) struct TransportIo<IO> {
     inner: IO,
     tcp_connect_duration: Duration,

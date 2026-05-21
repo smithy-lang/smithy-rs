@@ -311,98 +311,98 @@ async fn test_s2n_tls_custom_ca() {
 // v2 TLS tests
 // ---------------------------------------------------------------------------
 
-use aws_smithy_http_client::pool::Builder as PoolBuilder;
+use aws_smithy_http_client::pool::{Client as PoolClient, SharedPool};
 
 #[cfg(feature = "rustls-aws-lc")]
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_v2_rustls_aws_lc_native_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test]
 async fn test_v2_rustls_aws_lc_custom_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "rustls-aws-lc-fips")]
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_v2_rustls_aws_lc_fips_native_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "rustls-aws-lc-fips")]
 #[tokio::test]
 async fn test_v2_rustls_aws_lc_fips_custom_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "rustls-ring")]
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_v2_rustls_ring_native_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn test_v2_rustls_ring_custom_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .tls_context(tls_context_from_pem("tests/server.pem"))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "s2n-tls")]
 #[should_panic(expected = "Certificate is untrusted")]
 #[tokio::test]
 async fn test_v2_s2n_native_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::S2nTls)
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 #[cfg(feature = "s2n-tls")]
 #[tokio::test]
 async fn test_v2_s2n_tls_custom_ca() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::S2nTls)
         .tls_context(tls_context_from_pem("tests/server.pem"))
         .build_https();
-    run_tls_test(&client).await.unwrap()
+    run_tls_test(&PoolClient::new(&pool)).await.unwrap()
 }
 
 async fn run_tls_test(client: &dyn HttpClient) -> Result<(), BoxError> {

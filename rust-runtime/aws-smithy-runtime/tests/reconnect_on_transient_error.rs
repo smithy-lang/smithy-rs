@@ -128,12 +128,15 @@ impl MakeClient for Hyper1xClient {
     }
 }
 
-/// v2 HTTP client (composable pool) via `BuilderV2::new_v2()`
+/// HTTP client backed by the composable connection pool.
 struct Hyper1xV2Client;
 
 impl MakeClient for Hyper1xV2Client {
     fn make(&self, mock: &WireMockServer) -> SharedHttpClient {
-        aws_smithy_http_client::v2::BuilderV2::new().build_http_with_resolver(mock.dns_resolver())
+        let pool = aws_smithy_http_client::pool::SharedPool::builder()
+            .dns_resolver(mock.dns_resolver())
+            .build_http();
+        aws_smithy_http_client::pool::Client::new(&pool).into_shared()
     }
 }
 

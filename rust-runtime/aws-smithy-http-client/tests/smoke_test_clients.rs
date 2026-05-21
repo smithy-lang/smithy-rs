@@ -130,48 +130,48 @@ async fn smoke_test_client(client: &dyn HttpClient) -> Result<(), Box<dyn Error>
 // v2 smoke tests
 // ---------------------------------------------------------------------------
 
-use aws_smithy_http_client::pool::Builder as PoolBuilder;
+use aws_smithy_http_client::pool::{Client as PoolClient, SharedPool};
 
 #[cfg(feature = "rustls-aws-lc")]
 #[tokio::test]
 async fn v2_aws_lc_client() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 }
 
 #[cfg(feature = "rustls-aws-lc-fips")]
 #[tokio::test]
 async fn v2_aws_lc_fips_client() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 }
 
 #[cfg(feature = "rustls-ring")]
 #[tokio::test]
 async fn v2_ring_client() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 }
 
 #[cfg(feature = "s2n-tls")]
 #[tokio::test]
 async fn v2_s2n_tls_client() {
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::S2nTls)
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 }
 
 #[cfg(feature = "s2n-tls")]
@@ -189,11 +189,11 @@ async fn v2_s2n_tls_timing_populated() {
     }
 
     let listener = Arc::new(TimingListener(Mutex::new(None)));
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::S2nTls)
         .connection_event_listener(listener.clone() as Arc<dyn ConnectionEventListener>)
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 
     let duration = listener
         .0
@@ -221,13 +221,13 @@ async fn v2_rustls_timing_populated() {
     }
 
     let listener = Arc::new(TimingListener(Mutex::new(None)));
-    let client = PoolBuilder::new()
+    let pool = SharedPool::builder()
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
         .connection_event_listener(listener.clone() as Arc<dyn ConnectionEventListener>)
         .build_https();
-    smoke_test_client(&client).await.unwrap();
+    smoke_test_client(&PoolClient::new(&pool)).await.unwrap();
 
     let duration = listener
         .0
