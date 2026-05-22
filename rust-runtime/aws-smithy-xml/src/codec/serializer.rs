@@ -8,19 +8,9 @@
 //! Implements the schema-serde [`ShapeSerializer`] trait for the AWS REST XML
 //! protocol. Serialization is single-pass with a deferred start-tag flush:
 //! when a struct's start tag is written, the closing `>` is held back until
-//! either an attribute is added (Phase 3.3) or the first child element /
-//! text is written. This lets us emit attributes inline with the start tag
-//! without buffering the start tag separately.
-//!
-//! Phase 3 sub-tasks:
-//!  - 3.1 (this commit): frame state machine, `write_struct`, `write_string`.
-//!  - 3.2: scalar member writes.
-//!  - 3.3: attribute writes via `xml_attribute()`.
-//!  - 3.4: namespace emission on root element.
-//!  - 3.5: list serialization.
-//!  - 3.6: map serialization.
-//!  - 3.7: `write_document` returns `SerdeError`.
-//!  - 3.8: codec wiring.
+//! either an attribute is added or the first child element / text is
+//! written. This lets us emit attributes inline with the start tag without
+//! buffering the start tag separately.
 
 use super::XmlCodecSettings;
 use aws_smithy_schema::codec::FinishSerializer;
@@ -1053,7 +1043,7 @@ mod tests {
         assert_eq!(out, "<FooRequest/>");
     }
 
-    // --- Phase 3.2 scalar tests ---
+    // Scalar member writes (boolean, ints, floats, blob, timestamp).
 
     static SCALAR_MEMBER: Schema =
         Schema::new_member(shape_id!("test", "S$v"), ShapeType::Integer, "v", 0);
@@ -1130,7 +1120,7 @@ mod tests {
         assert_eq!(out, "");
     }
 
-    // --- Phase 3.3 attribute tests ---
+    // `@xmlAttribute` emission and ordering relative to child elements.
 
     #[test]
     fn attribute_string_on_struct() {
@@ -1217,7 +1207,7 @@ mod tests {
         assert!(result.is_err());
     }
 
-    // --- Phase 3.4 namespace tests ---
+    // `@xmlNamespace` emission on root and child elements.
 
     #[test]
     fn namespace_on_struct() {
@@ -1272,7 +1262,7 @@ mod tests {
         assert_eq!(out, "<X xmlns=\"urn:foo\"><v>hi</v></X>");
     }
 
-    // --- Phase 3.5 list tests ---
+    // List serialization: wrapped, flattened, and `@xmlName` overrides.
 
     #[test]
     fn list_wrapped() {
@@ -1343,7 +1333,7 @@ mod tests {
         assert_eq!(out, "<item>a</item><item>b</item>");
     }
 
-    // --- Phase 3.6 map tests ---
+    // Map serialization: wrapped, flattened, and `@xmlName` on key/value.
 
     // Helper: simulates generated code writing one map entry as
     // <entry><key>k</key><value>v</value></entry> using write_struct.

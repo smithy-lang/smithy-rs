@@ -5,10 +5,10 @@
 
 //! XML codec implementation for schema-based serialization.
 //!
-//! This module is currently a skeleton — types and trait impls compile but
-//! every method body is `todo!()`. Phase 3 (`XmlSerializer`) and Phase 4
-//! (`XmlDeserializer`) of the AWS REST XML schema-serde plan will fill in
-//! the actual logic.
+//! Provides [`XmlCodec`] — a [`Codec`] producing the [`XmlSerializer`] /
+//! [`XmlDeserializer`] pair used by the AWS REST XML protocol. Per-protocol
+//! behavior (default timestamp format, etc.) is configured via
+//! [`XmlCodecSettings`].
 
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_types::date_time::Format as TimestampFormat;

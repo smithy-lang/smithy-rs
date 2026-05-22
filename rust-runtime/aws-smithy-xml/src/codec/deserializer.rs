@@ -18,12 +18,26 @@ use std::sync::Arc;
 ///
 /// Wraps the existing `aws_smithy_xml::decode` SAX-like API and provides
 /// schema-driven dispatch for struct members, lists, and maps.
+///
+/// The deserializer holds the input as `&'a [u8]` throughout. For aggregate
+/// reads (`read_struct`, `read_list`, `read_map`) we construct a fresh
+/// `Document` over `input` on demand. For scalar reads we either parse
+/// `input` to extract the root element's text, or — when a parent
+/// aggregate has already extracted the leaf text from its child element —
+/// take the pre-extracted text directly via `text`.
+///
+/// Sibling dispatch within an aggregate read avoids per-iteration
+/// `XmlDeserializer` construction by reusing `&mut self` through
+/// `dispatch_subslice` / `dispatch_text` helpers, which save and restore
+/// the relevant state across the closure call.
 pub struct XmlDeserializer<'a> {
-    /// The parsing state — either we own the document (top-level) or we have
-    /// pre-extracted text content (leaf scalar inside an element).
-    state: DeserState<'a>,
-    /// Original input bytes, retained for zero-copy sub-slicing on aggregate children.
+    /// XML bytes for this deserializer. For the document root and for
+    /// aggregate sub-deserializers this is the slice of the parent input
+    /// covering the relevant element. Ignored when `text` is set.
     input: &'a [u8],
+    /// Pre-extracted leaf text. When `Some`, scalar reads consume it
+    /// directly without re-parsing `input`; aggregate reads error.
+    text: Option<Cow<'a, str>>,
     settings: Arc<XmlCodecSettings>,
     /// Optional schema override consulted by the next aggregate read
     /// (`read_struct` / `read_list` / `read_map`) when codegen passes a
@@ -36,54 +50,86 @@ pub struct XmlDeserializer<'a> {
     schema_override: Option<&'static Schema>,
 }
 
-enum DeserState<'a> {
-    /// Top-level: owns the Document, ready to parse structure/elements.
-    Doc(Document<'a>),
-    /// Leaf: holds already-extracted text content for scalar reads.
-    Text(Cow<'a, str>),
-}
-
 impl<'a> XmlDeserializer<'a> {
     /// Creates a new XML deserializer over raw bytes.
     pub(crate) fn new(input: &'a [u8], settings: Arc<XmlCodecSettings>) -> Self {
-        let doc = Document::try_from(input).unwrap_or_else(|_| Document::new(""));
         Self {
-            state: DeserState::Doc(doc),
             input,
+            text: None,
             settings,
             schema_override: None,
         }
     }
 
-    /// Creates a deserializer positioned at already-extracted text content.
+    /// Creates a deserializer pre-loaded with leaf text content. Used by
+    /// tests; runtime dispatch uses [`dispatch_text`](Self::dispatch_text)
+    /// to repoint an existing deserializer at leaf text rather than
+    /// constructing a new instance.
+    #[cfg(test)]
     fn from_text(text: Cow<'a, str>, settings: Arc<XmlCodecSettings>) -> Self {
         Self {
-            state: DeserState::Text(text),
             input: b"",
+            text: Some(text),
             settings,
             schema_override: None,
         }
     }
 
-    /// Sets the schema-override consulted by the next aggregate read.
-    /// See [`schema_override`](Self::schema_override) field doc.
-    fn with_schema_override(mut self, schema: Option<&'static Schema>) -> Self {
-        self.schema_override = schema;
-        self
+    /// Construct a fresh `Document` over `self.input`. Errors if the
+    /// deserializer holds pre-extracted text (an aggregate read was
+    /// expected on this deserializer).
+    fn document(&self) -> Result<Document<'a>, SerdeError> {
+        if self.text.is_some() {
+            return Err(SerdeError::custom("expected XML element, found text"));
+        }
+        Ok(Document::try_from(self.input).unwrap_or_else(|_| Document::new("")))
     }
 
-    /// Extract the text content from the current state.
+    /// Extract the leaf text content. If `text` was pre-set, returns it
+    /// directly; otherwise parses `input`, navigates to the root element,
+    /// and reads its text content.
     fn take_text(&mut self) -> Result<Cow<'a, str>, SerdeError> {
-        match &mut self.state {
-            DeserState::Text(t) => Ok(std::mem::replace(t, Cow::Borrowed(""))),
-            DeserState::Doc(doc) => {
-                // Enter the root element first, then read its text content.
-                let mut root = doc
-                    .root_element()
-                    .map_err(|e| SerdeError::custom(e.to_string()))?;
-                decode::try_data(&mut root).map_err(|e| SerdeError::custom(e.to_string()))
-            }
+        if let Some(t) = self.text.take() {
+            return Ok(t);
         }
+        let mut doc = Document::try_from(self.input).unwrap_or_else(|_| Document::new(""));
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        decode::try_data(&mut root).map_err(|e| SerdeError::custom(e.to_string()))
+    }
+
+    /// Run `f` against `self` after temporarily repointing it at a sub-slice
+    /// of the parent input. State (input, text, schema_override) is
+    /// saved on entry and restored on return so the deserializer can be
+    /// reused for sibling dispatches without per-iteration allocation.
+    fn dispatch_subslice<R>(
+        &mut self,
+        sub: &'a [u8],
+        schema_override: Option<&'static Schema>,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let saved_input = std::mem::replace(&mut self.input, sub);
+        let saved_text = self.text.take();
+        let saved_override = std::mem::replace(&mut self.schema_override, schema_override);
+        let r = f(self);
+        self.input = saved_input;
+        self.text = saved_text;
+        self.schema_override = saved_override;
+        r
+    }
+
+    /// Run `f` against `self` after temporarily setting pre-extracted leaf
+    /// text. State is restored on return.
+    fn dispatch_text<R>(&mut self, text: Cow<'a, str>, f: impl FnOnce(&mut Self) -> R) -> R {
+        let saved_input = std::mem::replace(&mut self.input, b"");
+        let saved_text = self.text.replace(text);
+        let saved_override = self.schema_override.take();
+        let r = f(self);
+        self.input = saved_input;
+        self.text = saved_text;
+        self.schema_override = saved_override;
+        r
     }
 
     /// Resolve a child element name to a member schema by matching against
@@ -189,13 +235,13 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        let doc = match &mut self.state {
-            DeserState::Doc(doc) => doc,
-            DeserState::Text(_) => {
-                return Err(SerdeError::custom("expected XML element, found text"));
-            }
-        };
-
+        // Build a Document over `self.input` locally. Doing it here (rather
+        // than as part of `XmlDeserializer` state) keeps the iteration
+        // borrow scoped to this stack frame, which lets us mutate `self`
+        // (via `dispatch_*`) for child-consumer dispatches without fighting
+        // a long-lived borrow on `self.state`.
+        let input = self.input;
+        let mut doc = self.document()?;
         let mut root = doc
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
@@ -209,11 +255,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     .or(member.member_name())
                     .unwrap_or("");
                 if let Some(value) = root.start_el().attr(attr_name) {
-                    let mut child_deser = XmlDeserializer::from_text(
-                        Cow::Owned(value.to_owned()),
-                        self.settings.clone(),
-                    );
-                    consumer(member, &mut child_deser)?;
+                    let text = Cow::Owned(value.to_owned());
+                    self.dispatch_text(text, |this| consumer(member, this))?;
                 }
             }
         }
@@ -227,45 +270,48 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         // Dispatch child elements.
         while let Some(mut child_scope) = root.next_tag() {
             let local = child_scope.start_el().local().to_owned();
-            if let Some(member) = Self::resolve_member(schema, &local) {
-                // For non-flattened aggregate members, the child element IS the
-                // aggregate container (e.g., <myList><member>...</member></myList>).
-                // Use a sub-slice deserializer so read_struct/read_list/read_map works.
-                // For flattened aggregate members, accumulate the bytes of each
-                // matching sibling and dispatch them together below.
-                // For scalars (including flattened scalars), extract text.
-                let is_nested_aggregate =
-                    member.shape_type().is_aggregate() && !member.xml_flattened();
-                let is_flattened_aggregate =
-                    member.shape_type().is_aggregate() && member.xml_flattened();
-                if is_nested_aggregate {
-                    let el_local = child_scope.start_el().local();
-                    let sub = Self::find_element_slice(self.input, el_local);
-                    drop(child_scope);
-                    let mut child_deser = XmlDeserializer::new(sub, self.settings.clone());
-                    consumer(member, &mut child_deser)?;
-                } else if is_flattened_aggregate {
-                    let el_local = child_scope.start_el().local();
-                    let sub = Self::find_element_slice(self.input, el_local);
-                    drop(child_scope);
-                    let idx = member.member_index().unwrap_or(usize::MAX);
-                    let entry = flattened_groups
-                        .entry(idx)
-                        .or_insert_with(|| (member, Vec::new()));
-                    entry.1.extend_from_slice(sub);
-                } else {
-                    let text = decode::try_data(&mut child_scope)
-                        .map_err(|e| SerdeError::custom(e.to_string()))?;
-                    let mut child_deser = XmlDeserializer::from_text(text, self.settings.clone());
-                    consumer(member, &mut child_deser)?;
-                }
+            let Some(member) = Self::resolve_member(schema, &local) else {
+                continue;
+            };
+            // For non-flattened aggregate members, the child element IS the
+            // aggregate container (e.g. `<myList><member>...</member></myList>`).
+            // Use a sub-slice into `input` so the consumer's read_list / read_map
+            // / read_struct can build its own Document over the child element.
+            // For flattened aggregate members, accumulate the bytes of each
+            // matching sibling and dispatch them together below.
+            // For scalars (including flattened scalars), extract text inline.
+            let is_aggregate = member.shape_type().is_aggregate();
+            if is_aggregate && !member.xml_flattened() {
+                let el_local = child_scope.start_el().local();
+                let sub = Self::find_element_slice(input, el_local);
+                drop(child_scope);
+                self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
+            } else if is_aggregate {
+                // Flattened aggregate: capture this sibling's slice; dispatch
+                // the merged group below.
+                let el_local = child_scope.start_el().local();
+                let sub = Self::find_element_slice(input, el_local);
+                drop(child_scope);
+                let idx = member.member_index().unwrap_or(usize::MAX);
+                let entry = flattened_groups
+                    .entry(idx)
+                    .or_insert_with(|| (member, Vec::new()));
+                entry.1.extend_from_slice(sub);
+            } else {
+                let text = decode::try_data(&mut child_scope)
+                    .map_err(|e| SerdeError::custom(e.to_string()))?;
+                drop(child_scope);
+                self.dispatch_text(text, |this| consumer(member, this))?;
             }
         }
 
         // Dispatch each accumulated flattened-aggregate group as a single call.
-        // Wrap accumulated child elements in a synthetic root so read_list /
-        // read_map sees them as wrapper-children. The synthesized buffer lives
-        // in this stack frame for the duration of the dispatch.
+        // We synthesize a `<__flat>...</__flat>` wrapper so the consumer's
+        // `read_list` / `read_map` sees the collected siblings as
+        // wrapper-children and iterates them normally. The wrapper buffer is
+        // owned locally (lifetime is shorter than `'a`), so we cannot route
+        // it through `dispatch_subslice` — keep a fresh deserializer for
+        // this case only.
         for (_idx, (member, bytes)) in flattened_groups {
             let mut wrapped = Vec::with_capacity(bytes.len() + 16);
             wrapped.extend_from_slice(b"<__flat>");
@@ -283,32 +329,24 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         let input = self.input;
-        let doc = match &mut self.state {
-            DeserState::Doc(doc) => doc,
-            DeserState::Text(_) => {
-                return Err(SerdeError::custom(
-                    "expected XML element for list, found text",
-                ));
-            }
-        };
-
+        let mut doc = self.document()?;
         let mut root = doc
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
 
-        // Each child tag is a list item. Provide each item as a Doc-state
-        // sub-deserializer over the full element (`<member>...</member>`).
-        // Scalar consumers will navigate to the text via take_text(); nested
-        // aggregate consumers (read_list / read_struct / read_map) will descend
-        // into the element's content. This keeps the deserializer compatible
-        // with both scalar list elements and nested aggregate elements (e.g.,
-        // list-of-lists or list-of-structs) without per-element type sniffing.
+        // Each child tag is a list item. Provide each item to the consumer
+        // by re-pointing `self` at the item's sub-slice via dispatch_subslice.
+        // Scalar consumers will navigate to the text via `take_text()`;
+        // aggregate consumers (read_list / read_struct / read_map) will
+        // descend into the element's content. This keeps the deserializer
+        // compatible with both scalar list elements and nested aggregate
+        // elements (e.g. list-of-lists, list-of-structs) without per-element
+        // type sniffing.
         while let Some(child_scope) = root.next_tag() {
             let el_local = child_scope.start_el().local();
             let sub = Self::find_element_slice(input, el_local);
             drop(child_scope);
-            let mut child_deser = XmlDeserializer::new(sub, self.settings.clone());
-            consumer(&mut child_deser)?;
+            self.dispatch_subslice(sub, None, |this| consumer(this))?;
         }
         Ok(())
     }
@@ -332,15 +370,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         self.schema_override = None;
         let schema = effective_schema;
 
-        let doc = match &mut self.state {
-            DeserState::Doc(doc) => doc,
-            DeserState::Text(_) => {
-                return Err(SerdeError::custom(
-                    "expected XML element for map, found text",
-                ));
-            }
-        };
-
+        let input = self.input;
+        let mut doc = self.document()?;
         let mut root = doc
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
@@ -364,14 +395,16 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         // For aggregate values, save the value member's `'static` schema so a
         // nested inner aggregate read (which codegen invokes with
         // `prelude::DOCUMENT`) can recover its own `_KEY`/`_VALUE`
-        // chain via `with_schema_override`.
+        // chain via the `schema_override` parameter on `dispatch_subslice`.
         let value_schema_static = schema.member_static();
 
         // Each child tag is an entry (e.g. <entry><key>k</key><value>v</value></entry>).
         while let Some(mut entry_scope) = root.next_tag() {
             let mut key: Option<String> = None;
+            // For scalar values we capture the text upfront; for aggregate
+            // values we capture the element sub-slice. At most one is set.
             let mut value_text: Option<Cow<'_, str>> = None;
-            let mut value_slice: Option<&[u8]> = None;
+            let mut value_slice: Option<&'_ [u8]> = None;
             while let Some(mut field_scope) = entry_scope.next_tag() {
                 let local = field_scope.start_el().local().to_owned();
                 if local == key_name {
@@ -381,7 +414,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 } else if local == value_name {
                     if value_is_aggregate {
                         let el_local = field_scope.start_el().local();
-                        let sub = Self::find_element_slice(self.input, el_local);
+                        let sub = Self::find_element_slice(input, el_local);
                         drop(field_scope);
                         value_slice = Some(sub);
                     } else {
@@ -391,14 +424,16 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     }
                 }
             }
+            drop(entry_scope);
             if let Some(k) = key {
                 if let Some(slice) = value_slice {
-                    let mut child_deser = XmlDeserializer::new(slice, self.settings.clone())
-                        .with_schema_override(value_schema_static);
-                    consumer(k, &mut child_deser)?;
+                    self.dispatch_subslice(slice, value_schema_static, |this| consumer(k, this))?;
                 } else if let Some(t) = value_text {
-                    let mut child_deser = XmlDeserializer::from_text(t, self.settings.clone());
-                    consumer(k, &mut child_deser)?;
+                    // Re-borrow t as 'a — the text was extracted from `doc`
+                    // which borrows `self.input: &'a [u8]`, so its lifetime
+                    // is `'a`.
+                    let t: Cow<'_, str> = t;
+                    self.dispatch_text(t.into_owned().into(), |this| consumer(k, this))?;
                 }
             }
         }
@@ -517,15 +552,16 @@ mod tests {
 
     #[test]
     fn read_string_from_doc_text_content() {
+        // Verify a Doc-state deserializer can extract leaf text via the
+        // public `read_string` API (which goes through `take_text` →
+        // lazy Document construction over `self.input`).
+        static V_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "X$v"), ShapeType::String, "v", 0);
         let xml = b"<root>world</root>";
         let settings = Arc::new(XmlCodecSettings::default());
         let mut deser = XmlDeserializer::new(xml, settings);
-        // Advance past the root element start tag by entering root_element scope
-        if let DeserState::Doc(ref mut doc) = deser.state {
-            let mut scope = doc.root_element().unwrap();
-            let text = decode::try_data(&mut scope).unwrap();
-            assert_eq!(text, "world");
-        }
+        let result = deser.read_string(&V_MEMBER).unwrap();
+        assert_eq!(result, "world");
     }
 
     #[test]
@@ -535,7 +571,7 @@ mod tests {
         assert!(!deser.is_null());
     }
 
-    // --- Phase 4.2 tests ---
+    // Struct member dispatch by element name (`@xmlName` and member name).
 
     static NAME_MEMBER: Schema = Schema::new_member(
         shape_id!("test", "Person$name"),
@@ -620,7 +656,7 @@ mod tests {
         assert_eq!(nick, "Ally");
     }
 
-    // --- Phase 4.3 tests ---
+    // `@xmlAttribute` dispatch from the start element's attributes.
 
     static ATTR_MEMBER: Schema =
         Schema::new_member(shape_id!("test", "X$id"), ShapeType::String, "id", 0)
@@ -657,7 +693,7 @@ mod tests {
         assert_eq!(name, "hello");
     }
 
-    // --- Phase 4.4 tests ---
+    // Wrapped list / map reads with element-name resolution.
 
     #[test]
     fn read_list_wrapped() {
@@ -738,7 +774,7 @@ mod tests {
         assert_eq!(entries, vec![("a".to_owned(), "s".to_owned())]);
     }
 
-    // --- Phase 4.5 tests ---
+    // Flattened collections: repeated sibling elements accumulated into one read.
 
     #[test]
     fn read_struct_flattened_list() {
@@ -818,7 +854,7 @@ mod tests {
         assert_eq!(items, vec!["x", "y"]);
     }
 
-    // --- Phase 4.6 tests ---
+    // Scalar reads (booleans, ints, floats, blob, timestamp) and document rejection.
 
     #[test]
     fn read_scalars() {
