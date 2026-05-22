@@ -115,6 +115,13 @@ class XmlBindingTraitParserGenerator(
             "aws_smithy_types" to CargoDependency.smithyTypes(runtimeConfig).toType(),
             *RuntimeType.preludeScope,
         )
+
+    // Maximum shape-tree recursion depth permitted by generated deserializers.
+    // Guards against stack overflow from deeply-nested payloads targeting recursive shapes.
+    // Matches serde_json's default of 128.
+    private val maxDepth: Int = 128
+    private val depthErrorMessage: String = "maximum nesting depth exceeded"
+
     private val model = codegenContext.model
     private val index = HttpBindingIndex.of(model)
     private val xmlIndex = XmlNameIndex.of(model)
@@ -154,6 +161,8 @@ class XmlBindingTraitParserGenerator(
                     if !(${shapeName.matchExpression("start_el")}) {
                         return Err(#{XmlDecodeError}::custom(format!("invalid root, expected $shapeName got {start_el:?}")))
                     }
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     """,
                     *codegenScope,
                 )
@@ -201,6 +210,8 @@ class XmlBindingTraitParserGenerator(
                     let mut decoder = doc.root_element()?;
                     ##[allow(unused_variables)]
                     let start_el = decoder.start_el();
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     """,
                     *codegenScope,
                 )
@@ -233,6 +244,8 @@ class XmlBindingTraitParserGenerator(
                         let mut document = #{Document}::try_from(inp)?;
                         ##[allow(unused_mut)]
                         let mut error_decoder = #{xml_errors}::error_scope(&mut document)?;
+                        ##[allow(unused_variables)]
+                        let depth = 0u32;
                         """,
                         *codegenScope,
                         "xml_errors" to xmlErrors,
@@ -265,6 +278,8 @@ class XmlBindingTraitParserGenerator(
                     ##[allow(unused_mut)]
                     let mut decoder = doc.root_element()?;
                     let start_el = decoder.start_el();
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     """,
                     *codegenScope,
                 )
@@ -446,9 +461,17 @@ class XmlBindingTraitParserGenerator(
         val nestedParser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
                     *codegenScope, "Shape" to symbol,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{XmlDecodeError}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     val members = shape.members()
                     rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to symbol)
                     parseLoop(Ctx(tag = "decoder", accum = null), ignoreUnexpected = false) { ctx ->
@@ -488,7 +511,7 @@ class XmlBindingTraitParserGenerator(
                     )
                 }
             }
-        rust("#T(&mut ${ctx.tag})", nestedParser)
+        rust("#T(&mut ${ctx.tag}, depth + 1)", nestedParser)
     }
 
     /**
@@ -517,9 +540,17 @@ class XmlBindingTraitParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 Attribute.AllowNeedlessQuestionMark.render(this)
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
                     *codegenScope, "Shape" to symbol,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{XmlDecodeError}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     Attribute.AllowUnusedMut.render(this)
                     rustTemplate("let mut builder = #{Shape}::builder();", *codegenScope, "Shape" to symbol)
                     val members = shape.xmlMembers()
@@ -542,7 +573,7 @@ class XmlBindingTraitParserGenerator(
                     rust("Ok(#T)", builder)
                 }
             }
-        rust("#T(&mut ${ctx.tag})", nestedParser)
+        rust("#T(&mut ${ctx.tag}, depth + 1)", nestedParser)
     }
 
     private fun RustWriter.parseList(
@@ -553,10 +584,18 @@ class XmlBindingTraitParserGenerator(
         val listParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{List}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{List}, #{XmlDecodeError}>",
                     *codegenScope,
                     "List" to symbolProvider.toSymbol(target),
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{XmlDecodeError}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     rust("let mut out = std::vec::Vec::new();")
                     parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                         case(member) {
@@ -568,7 +607,7 @@ class XmlBindingTraitParserGenerator(
                     rust("Ok(out)")
                 }
             }
-        rust("#T(&mut ${ctx.tag})", listParser)
+        rust("#T(&mut ${ctx.tag}, depth + 1)", listParser)
     }
 
     private fun RustWriter.parseFlatList(
@@ -593,20 +632,28 @@ class XmlBindingTraitParserGenerator(
         val mapParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
-                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}) -> #{Result}<#{Map}, #{XmlDecodeError}>",
+                    "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Map}, #{XmlDecodeError}>",
                     *codegenScope,
                     "Map" to symbolProvider.toSymbol(target),
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{XmlDecodeError}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     rust("let mut out = #T::new();", RuntimeType.HashMap)
                     parseLoop(Ctx(tag = "decoder", accum = null)) { ctx ->
                         rustBlock("s if ${XmlName("entry").matchExpression("s")} => ") {
-                            rust("#T(&mut ${ctx.tag}, &mut out)?;", mapEntryParser(target, ctx))
+                            rust("#T(&mut ${ctx.tag}, &mut out, depth)?;", mapEntryParser(target, ctx))
                         }
                     }
                     rust("Ok(out)")
                 }
             }
-        rust("#T(&mut ${ctx.tag})", mapParser)
+        rust("#T(&mut ${ctx.tag}, depth + 1)", mapParser)
     }
 
     private fun RustWriter.parseFlatMap(
@@ -620,7 +667,7 @@ class XmlBindingTraitParserGenerator(
             rustTemplate(
                 """
                 let mut $map = $accum.unwrap_or_default();
-                #{decoder}(&mut tag, &mut $map)?;
+                #{decoder}(&mut tag, &mut $map, depth)?;
                 $map
                 """,
                 *codegenScope,
@@ -635,10 +682,18 @@ class XmlBindingTraitParserGenerator(
     ): RuntimeType {
         return protocolFunctions.deserializeFn(target, "entry") { fnName ->
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}) -> #{Result}<(), #{XmlDecodeError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}, depth: u32) -> #{Result}<(), #{XmlDecodeError}>",
                 *codegenScope,
                 "Map" to symbolProvider.toSymbol(target),
             ) {
+                rustTemplate(
+                    """
+                    if depth >= ${maxDepth}u32 {
+                        return Err(#{XmlDecodeError}::custom(${depthErrorMessage.dq()}));
+                    }
+                    """,
+                    *codegenScope,
+                )
                 val keySymbol = symbolProvider.toSymbol(target.key)
                 rust("let mut k: Option<#T> = None;", keySymbol)
                 rust(
