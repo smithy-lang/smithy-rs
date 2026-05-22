@@ -10,13 +10,13 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRuntimePluginSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ConfigCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.config.ServiceConfig
-import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -115,7 +115,8 @@ private class SchemaProtocolCustomization(
         writable {
             when (section) {
                 is ServiceRuntimePluginSection.AdditionalConfig -> {
-                    val smithyJson = CargoDependency.smithyJson(codegenContext.runtimeConfig).toType()
+                    val smithyJson = RuntimeType.smithyJson(codegenContext.runtimeConfig)
+                    val smithyCbor = RuntimeType.smithyCbor(codegenContext.runtimeConfig)
                     val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
                     val protocol = codegenContext.protocol
                     val serviceShapeName = codegenContext.serviceShape.id.name
@@ -134,6 +135,8 @@ private class SchemaProtocolCustomization(
                                 val ctor = if (noWrap) "new().with_no_error_wrapping(true)" else "new()"
                                 smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to ctor
                             }
+                            protocol == Rpcv2CborTrait.ID ->
+                                smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                             else -> return@writable // Other protocols not yet implemented
                         }
 

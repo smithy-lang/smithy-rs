@@ -823,7 +823,9 @@ class SchemaGenerator(
                             rust(
                                 """
                                 Some($idx) => {
-                                    builder.$memberName = Some($wrapped);
+                                    if deser.is_null() { deser.read_null()?; } else {
+                                        builder.$memberName = Some($wrapped);
+                                    }
                                 }
                                 """,
                             )

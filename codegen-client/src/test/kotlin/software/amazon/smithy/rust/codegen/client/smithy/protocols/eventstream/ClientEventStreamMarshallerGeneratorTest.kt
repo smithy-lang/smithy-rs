@@ -15,6 +15,7 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
@@ -389,6 +390,8 @@ fun eventStreamSerdeConstructExpr(
                     "::aws_smithy_json::protocol::aws_json_rpc::AwsJsonRpcProtocol::aws_json_1_1(\"TestService\")"
                 RestXmlTrait.ID ->
                     "::aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol::new()"
+                Rpcv2CborTrait.ID ->
+                    "::aws_smithy_cbor::protocol::RpcV2CborProtocol::new()"
                 else -> error("unexpected schema-serde protocol: ${codegenContext.protocol}")
             }
         "$typePath::new(::aws_smithy_schema::protocol::SharedClientProtocol::new($constructor))"
