@@ -55,7 +55,7 @@ pub use connection::{
     Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
     ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
 };
-pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId};
+pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId, TokioDriverSpawner};
 
 /// Connection-caching pool layer.
 mod cache {
