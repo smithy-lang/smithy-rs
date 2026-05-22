@@ -232,6 +232,7 @@ impl<'b> Decoder<'b> {
                 "expected timestamp tag",
             )))
         } else {
+            // RFC 8949 §3.4.2: tag 1 content MUST be int OR float.
             // Values that are more granular than millisecond precision SHOULD be truncated to fit
             // millisecond precision for epoch-seconds:
             // https://smithy.io/2.0/spec/protocol-traits.html#timestamp-formats
@@ -240,7 +241,12 @@ impl<'b> Decoder<'b> {
             // fail since the upstream test expect `123000000` in subsec but the decoded actual
             // subsec would be `123000025`.
             // https://github.com/smithy-lang/smithy/blob/6466fe77c65b8a17b219f0b0a60c767915205f95/smithy-protocol-tests/model/rpcv2Cbor/fractional-seconds.smithy#L17
-            let epoch_seconds = self.decoder.f64().map_err(DeserializeError::new)?;
+            let epoch_seconds = match self.decoder.datatype().map_err(DeserializeError::new)? {
+                minicbor::data::Type::F16
+                | minicbor::data::Type::F32
+                | minicbor::data::Type::F64 => self.decoder.f64().map_err(DeserializeError::new)?,
+                _ => self.decoder.i64().map_err(DeserializeError::new)? as f64,
+            };
             let mut result = DateTime::from_secs_f64(epoch_seconds);
             let subsec_nanos = result.subsec_nanos();
             result.set_subsec_nanos((subsec_nanos / 1_000_000) * 1_000_000);
@@ -379,5 +385,17 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_timestamp_integer_epoch_seconds() {
+        // RFC 8949 §3.4.2: tag 1 content MUST be int OR float.
+        // tag(1) + uint(1700000000) = 0xc1 0x1a 0x65 0x53 0xf1 0x00
+        let bytes = [0xc1u8, 0x1a, 0x65, 0x53, 0xf1, 0x00];
+        let mut decoder = Decoder::new(&bytes);
+        let timestamp = decoder
+            .timestamp()
+            .expect("should decode integer timestamp");
+        assert_eq!(timestamp, aws_smithy_types::DateTime::from_secs(1700000000));
     }
 }
