@@ -4,10 +4,7 @@
  */
 
 #![cfg(any(
-    feature = "rustls-ring",
-    feature = "rustls-aws-lc",
-    feature = "rustls-aws-lc-fips",
-    feature = "rustls-custom-provider",
+    feature = "__rustls",
     feature = "s2n-tls",
 ))]
 
@@ -265,7 +262,7 @@ async fn test_rustls_ring_custom_ca() {
     run_tls_test(&client).await.unwrap()
 }
 
-#[cfg(all(feature = "rustls-custom-provider", feature = "rustls-ring"))]
+#[cfg(all(aws_sdk_unstable, feature = "rustls-ring"))]
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
 async fn test_rustls_custom_provider_native_ca() {
@@ -279,7 +276,7 @@ async fn test_rustls_custom_provider_native_ca() {
     run_tls_test(&client).await.unwrap()
 }
 
-#[cfg(all(feature = "rustls-custom-provider", feature = "rustls-ring"))]
+#[cfg(all(aws_sdk_unstable, feature = "rustls-ring"))]
 #[tokio::test]
 async fn test_rustls_custom_provider_custom_ca() {
     let ring_provider = rustls::crypto::ring::default_provider();

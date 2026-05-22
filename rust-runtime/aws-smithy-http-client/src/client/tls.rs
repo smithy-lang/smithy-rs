@@ -9,12 +9,7 @@ use crate::HttpClientError;
 #[derive(Debug, PartialEq, Clone)]
 #[non_exhaustive]
 pub enum Provider {
-    #[cfg(any(
-        feature = "rustls-aws-lc",
-        feature = "rustls-aws-lc-fips",
-        feature = "rustls-ring",
-        feature = "rustls-custom-provider"
-    ))]
+    #[cfg(feature = "__rustls")]
     /// TLS provider based on [rustls](https://github.com/rustls/rustls)
     Rustls(rustls_provider::CryptoMode),
     /// TLS provider based on [s2n-tls](https://github.com/aws/s2n-tls)
@@ -22,7 +17,7 @@ pub enum Provider {
     S2nTls,
 }
 
-#[cfg(not(feature = "rustls-custom-provider"))]
+#[cfg(not(all(aws_sdk_unstable, feature = "__rustls")))]
 impl Eq for Provider {}
 
 /// TLS related configuration object

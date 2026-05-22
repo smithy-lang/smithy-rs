@@ -58,17 +58,11 @@ pub(crate) mod cfg {
         ($($item:item)*) => {
             $(
                 #[cfg(any(
-                    feature = "rustls-aws-lc",
-                    feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring",
-                    feature = "rustls-custom-provider",
+                    feature = "__rustls",
                     feature = "s2n-tls",
                 ))]
                 #[cfg_attr(docsrs, doc(cfg(any(
-                    feature = "rustls-aws-lc",
-                    feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring",
-                    feature = "rustls-custom-provider",
+                    feature = "__rustls",
                     feature = "s2n-tls",
                 ))))]
                 $item
@@ -80,18 +74,8 @@ pub(crate) mod cfg {
     macro_rules! cfg_rustls {
         ($($item:item)*) => {
             $(
-                #[cfg(any(
-                    feature = "rustls-aws-lc",
-                    feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring",
-                    feature = "rustls-custom-provider",
-                ))]
-                #[cfg_attr(docsrs, doc(cfg(any(
-                    feature = "rustls-aws-lc",
-                    feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring",
-                    feature = "rustls-custom-provider",
-))))]
+                #[cfg(feature = "__rustls")]
+                #[cfg_attr(docsrs, doc(cfg(feature = "__rustls")))]
                 $item
             )*
         }

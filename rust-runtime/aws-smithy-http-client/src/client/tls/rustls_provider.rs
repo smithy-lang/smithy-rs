@@ -23,7 +23,10 @@ pub enum CryptoMode {
     /// Unlike the built-in modes, the cipher-suite restriction normally
     /// applied by smithy-rs is skipped -- the caller is expected
     /// to select the applicable cipher suites via the supplied provider.
-    #[cfg(feature = "rustls-custom-provider")]
+    ///
+    /// This variant is provided behind an `aws_sdk_unstable` cfg flag,
+    /// because the version of rustls may change in the future,
+    #[cfg(all(aws_sdk_unstable, feature = "__rustls"))]
     Custom(CryptoProvider),
 }
 
@@ -45,7 +48,7 @@ impl std::cmp::PartialEq for CryptoMode {
     }
 }
 
-#[cfg(not(feature = "rustls-custom-provider"))]
+#[cfg(not(all(aws_sdk_unstable, feature = "__rustls")))]
 impl Eq for CryptoMode {}
 
 impl CryptoMode {
@@ -66,18 +69,17 @@ impl CryptoMode {
                 );
                 provider
             }
-
-            #[cfg(feature = "rustls-custom-provider")]
+            #[cfg(all(aws_sdk_unstable, feature = "__rustls"))]
             CryptoMode::Custom(provider) => provider,
         }
     }
 
-    #[cfg(feature = "rustls-custom-provider")]
+    #[cfg(all(aws_sdk_unstable, feature = "__rustls"))]
     fn is_custom(&self) -> bool {
         matches!(self, Self::Custom(_))
     }
 
-    #[cfg(not(feature = "rustls-custom-provider"))]
+    #[cfg(not(all(aws_sdk_unstable, feature = "__rustls")))]
     fn is_custom(&self) -> bool {
         false
     }

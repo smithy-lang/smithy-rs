@@ -4,10 +4,7 @@
  */
 
 #![cfg(any(
-    feature = "rustls-ring",
-    feature = "rustls-aws-lc",
-    feature = "rustls-aws-lc-fips",
-    feature = "rustls-custom-provider",
+    feature = "__rustls",
     feature = "s2n-tls",
 ))]
 
@@ -56,7 +53,7 @@ async fn aws_lc_client() {
     smoke_test_client(&client).await.unwrap();
 }
 
-#[cfg(all(feature = "rustls-custom-provider", feature = "rustls-ring",))]
+#[cfg(all(aws_sdk_unstable, feature = "rustls-ring",))]
 #[tokio::test]
 async fn custom_provider_client() {
     let provider = rustls::crypto::ring::default_provider();
