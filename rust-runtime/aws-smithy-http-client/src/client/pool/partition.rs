@@ -168,46 +168,52 @@ impl Default for PartitionId {
 
 /// Spawner for connection driver tasks.
 ///
-/// A driver is the task that owns a connection's I/O. The spawner
-/// determines which runtime executes that task. Per-runtime spawners
-/// allow each connection's I/O to remain on a specific runtime.
+/// A driver is the task that owns an HTTP connection's I/O state machine:
+/// reading frames, writing frames, and managing protocol-level events.
+/// Calls through a connection's request handle flow through this driver.
+/// The pool spawns one driver per established connection.
 ///
-/// Construct via [`DriverSpawner::current_tokio`] (captures the
-/// current tokio runtime handle) or [`DriverSpawner::from_tokio_handle`]
-/// (uses a specific runtime handle).
-#[derive(Clone)]
-pub struct DriverSpawner {
-    inner: SpawnerInner,
+/// Different partitions may use different spawners, allowing each
+/// partition's drivers to run on a specific runtime.
+pub trait DriverSpawner: std::fmt::Debug + Send + Sync + 'static {
+    /// Spawn the connection driver future on this spawner's runtime.
+    fn spawn(
+        &self,
+        driver: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
+    );
 }
 
-#[derive(Clone)]
-enum SpawnerInner {
-    TokioHandle(tokio::runtime::Handle),
+/// Driver spawner backed by a tokio runtime handle.
+///
+/// Spawns the connection driver via [`tokio::runtime::Handle::spawn`].
+/// The handle is captured at construction; the driver runs on the
+/// runtime the handle refers to, regardless of which runtime called
+/// [`DriverSpawner::spawn`].
+#[derive(Clone, Debug)]
+pub struct TokioDriverSpawner {
+    handle: tokio::runtime::Handle,
 }
 
-impl DriverSpawner {
-    /// Spawner that uses the current tokio runtime.
+impl TokioDriverSpawner {
+    /// Spawner using the current tokio runtime handle (captured eagerly).
     ///
-    /// Captures the runtime handle eagerly at the call site. Panics
-    /// if invoked outside a tokio runtime context.
-    pub fn current_tokio() -> Self {
-        Self::from_tokio_handle(tokio::runtime::Handle::current())
+    /// Panics if invoked outside a tokio runtime context.
+    pub fn current() -> Self {
+        Self::from_handle(tokio::runtime::Handle::current())
     }
 
-    /// Spawner targeting the given tokio runtime handle.
-    pub fn from_tokio_handle(handle: tokio::runtime::Handle) -> Self {
-        Self {
-            inner: SpawnerInner::TokioHandle(handle),
-        }
+    /// Spawner using a specific tokio runtime handle.
+    pub fn from_handle(handle: tokio::runtime::Handle) -> Self {
+        Self { handle }
     }
 }
 
-impl std::fmt::Debug for DriverSpawner {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let variant = match &self.inner {
-            SpawnerInner::TokioHandle(_) => "TokioHandle",
-        };
-        f.debug_tuple("DriverSpawner").field(&variant).finish()
+impl DriverSpawner for TokioDriverSpawner {
+    fn spawn(
+        &self,
+        driver: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
+    ) {
+        self.handle.spawn(driver);
     }
 }
 
@@ -253,13 +259,34 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn driver_spawner_current_tokio() {
-        let _ = DriverSpawner::current_tokio();
+    async fn tokio_driver_spawner_current() {
+        let _ = TokioDriverSpawner::current();
     }
 
     #[tokio::test]
-    async fn driver_spawner_from_handle() {
+    async fn tokio_driver_spawner_from_handle() {
         let h = tokio::runtime::Handle::current();
-        let _ = DriverSpawner::from_tokio_handle(h);
+        let _ = TokioDriverSpawner::from_handle(h);
+    }
+
+    #[tokio::test]
+    async fn tokio_driver_spawner_runs_future() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
+        let sp = TokioDriverSpawner::current();
+        let flag = Arc::new(AtomicBool::new(false));
+        let f = flag.clone();
+        sp.spawn(Box::pin(async move {
+            f.store(true, Ordering::SeqCst);
+        }));
+        // Yield enough times for the spawned task to run.
+        for _ in 0..10 {
+            tokio::task::yield_now().await;
+            if flag.load(Ordering::SeqCst) {
+                break;
+            }
+        }
+        assert!(flag.load(Ordering::SeqCst), "spawned future did not run");
     }
 }

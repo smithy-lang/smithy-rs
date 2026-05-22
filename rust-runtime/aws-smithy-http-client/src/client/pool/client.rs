@@ -20,7 +20,7 @@ use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
-use super::partition::{DriverSpawner, PartitionId};
+use super::partition::{DriverSpawner, PartitionId, TokioDriverSpawner};
 use super::{ConnectionPool, SharedPool};
 use crate::client::downcast_error;
 use crate::client::proxy::add_proxy_auth_header;
@@ -41,7 +41,7 @@ pub struct Client {
     pool: SharedPool,
     partition: PartitionId,
     interface: Option<String>,
-    driver_spawner: DriverSpawner,
+    driver_spawner: Arc<dyn DriverSpawner>,
 }
 
 impl std::fmt::Debug for Client {
@@ -119,7 +119,7 @@ pub struct ClientBuilder {
     pool: SharedPool,
     partition: PartitionId,
     interface: Option<String>,
-    driver_spawner: Option<DriverSpawner>,
+    driver_spawner: Option<Arc<dyn DriverSpawner>>,
 }
 
 impl ClientBuilder {
@@ -148,14 +148,14 @@ impl ClientBuilder {
     }
 
     /// Set the driver spawner (consuming builder).
-    pub fn driver_spawner(mut self, sp: DriverSpawner) -> Self {
-        self.driver_spawner = Some(sp);
+    pub fn driver_spawner<S: DriverSpawner>(mut self, sp: S) -> Self {
+        self.driver_spawner = Some(Arc::new(sp));
         self
     }
 
     /// Set the driver spawner (mutable reference).
-    pub fn set_driver_spawner(&mut self, sp: DriverSpawner) -> &mut Self {
-        self.driver_spawner = Some(sp);
+    pub fn set_driver_spawner<S: DriverSpawner>(&mut self, sp: S) -> &mut Self {
+        self.driver_spawner = Some(Arc::new(sp));
         self
     }
 
@@ -164,9 +164,9 @@ impl ClientBuilder {
     /// Captures the current tokio runtime handle for the driver spawner
     /// if one was not explicitly provided.
     pub fn build(self) -> Client {
-        let driver_spawner = self
+        let driver_spawner: Arc<dyn DriverSpawner> = self
             .driver_spawner
-            .unwrap_or_else(DriverSpawner::current_tokio);
+            .unwrap_or_else(|| Arc::new(TokioDriverSpawner::current()));
 
         Client {
             pool: self.pool,
