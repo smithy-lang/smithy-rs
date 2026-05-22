@@ -1192,9 +1192,11 @@ class SchemaGenerator(
                             map.insert(suffix.to_string(), val.to_string());
                         }
                     }
-                    if !map.is_empty() {
-                        builder.${prefixMember.memberName} = Some(map);
-                    }
+                    // Per the Smithy spec, an `@httpPrefixHeaders`-bound map
+                    // member is always populated on the output (an empty map
+                    // when no matching headers are present). Don't guard with
+                    // `!map.is_empty()`.
+                    builder.${prefixMember.memberName} = Some(map);
                 }
                 """,
             )
@@ -1735,6 +1737,87 @@ class SchemaGenerator(
                 ?: return ""
         return "\n    .with_original_name(${originalName.dq()})"
     }
+
+    /**
+     * For a member targeting a list or map, emits the corresponding nested
+     * member sub-schema statics (`_KEY` / `_VALUE` for map, `_MEMBER` for
+     * list) and returns a `.with_map_members(...)` / `.with_list_member(...)`
+     * chain string to attach to the parent member's schema. Recurses for
+     * nested aggregates (e.g., `map<string, map<...>>`, `list<list<...>>`)
+     * so the entire aggregate sub-graph is reachable from the runtime via
+     * `Schema::key()` / `.value()` / `.member()`.
+     *
+     * Returns `""` for non-aggregate targets.
+     */
+    private fun emitAggregateMemberChain(
+        writer: RustWriter,
+        prefix: String,
+        target: Shape,
+        codegenScope: Array<out Pair<String, Any>>,
+    ): String =
+        when (target) {
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val valueTarget = model.expectShape(target.value.target)
+                val escapedKeyId = target.key.id.toString().replace("#", "##")
+                val escapedValueId = target.value.id.toString().replace("#", "##")
+                val keyTraitChain = memberTraitChain(target.key)
+                val valueTraitChain = memberTraitChain(target.value)
+                // Recurse before emitting so nested chains attach correctly.
+                val keyAggChain = emitAggregateMemberChain(writer, "${prefix}_KEY", keyTarget, codegenScope)
+                val valueAggChain = emitAggregateMemberChain(writer, "${prefix}_VALUE", valueTarget, codegenScope)
+                writer.rustTemplate(
+                    """
+                    static ${prefix}_KEY: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedKeyId",
+                            "${target.key.id.namespace}",
+                            "${target.key.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(keyTarget)},
+                        "key",
+                        0,
+                    )$keyTraitChain$keyAggChain;
+                    static ${prefix}_VALUE: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedValueId",
+                            "${target.value.id.namespace}",
+                            "${target.value.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(valueTarget)},
+                        "value",
+                        1,
+                    )$valueTraitChain$valueAggChain;
+                    """,
+                    *codegenScope,
+                )
+                "\n    .with_map_members(&${prefix}_KEY, &${prefix}_VALUE)"
+            }
+            is ListShape -> {
+                val listMemberTarget = model.expectShape(target.member.target)
+                val escapedListMemberId = target.member.id.toString().replace("#", "##")
+                val listMemberTraitChain = memberTraitChain(target.member)
+                val nestedChain =
+                    emitAggregateMemberChain(writer, "${prefix}_MEMBER", listMemberTarget, codegenScope)
+                writer.rustTemplate(
+                    """
+                    static ${prefix}_MEMBER: #{Schema} = #{Schema}::new_member(
+                        #{ShapeId}::from_static(
+                            "$escapedListMemberId",
+                            "${target.member.id.namespace}",
+                            "${target.member.id.name}",
+                        ),
+                        #{ShapeType}::${shapeTypeVariant(listMemberTarget)},
+                        "member",
+                        0,
+                    )$listMemberTraitChain$nestedChain;
+                    """,
+                    *codegenScope,
+                )
+                "\n    .with_list_member(&${prefix}_MEMBER)"
+            }
+            else -> ""
+        }
 
     /** Returns true if the shape has any filtered traits that are NOT known direct fields. */
     private fun hasUnknownTraits(shape: Shape): Boolean =

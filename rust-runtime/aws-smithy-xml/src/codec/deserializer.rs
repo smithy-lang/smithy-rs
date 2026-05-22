@@ -25,6 +25,15 @@ pub struct XmlDeserializer<'a> {
     /// Original input bytes, retained for zero-copy sub-slicing on aggregate children.
     input: &'a [u8],
     settings: Arc<XmlCodecSettings>,
+    /// Optional schema override consulted by the next aggregate read
+    /// (`read_struct` / `read_list` / `read_map`) when codegen passes a
+    /// shapeless placeholder schema (e.g. `prelude::DOCUMENT`) for an
+    /// inner aggregate. Used to thread the outer aggregate's
+    /// `value_schema` / `member_schema` (with its own
+    /// `with_map_members`/`with_list_member` chain) into nested reads so
+    /// nested element-name overrides (`@xmlName` on inner key/value) can
+    /// be honored.
+    schema_override: Option<&'static Schema>,
 }
 
 enum DeserState<'a> {
@@ -42,6 +51,7 @@ impl<'a> XmlDeserializer<'a> {
             state: DeserState::Doc(doc),
             input,
             settings,
+            schema_override: None,
         }
     }
 
@@ -51,7 +61,15 @@ impl<'a> XmlDeserializer<'a> {
             state: DeserState::Text(text),
             input: b"",
             settings,
+            schema_override: None,
         }
+    }
+
+    /// Sets the schema-override consulted by the next aggregate read.
+    /// See [`schema_override`](Self::schema_override) field doc.
+    fn with_schema_override(mut self, schema: Option<&'static Schema>) -> Self {
+        self.schema_override = schema;
+        self
     }
 
     /// Extract the text content from the current state.
@@ -149,10 +167,19 @@ impl<'a> XmlDeserializer<'a> {
                 aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
                     TimestampFormat::EpochSeconds
                 }
-                aws_smithy_schema::traits::TimestampFormat::DateTime => TimestampFormat::DateTime,
+                // Use the lenient `DateTimeWithOffset` so timezone-suffixed
+                // RFC-3339 strings (e.g. `2019-12-17T00:48:18+01:00`) parse —
+                // matches the Smithy `date-time` protocol-test expectations
+                // and the JSON codec's behavior.
+                aws_smithy_schema::traits::TimestampFormat::DateTime => {
+                    TimestampFormat::DateTimeWithOffset
+                }
                 aws_smithy_schema::traits::TimestampFormat::HttpDate => TimestampFormat::HttpDate,
             })
-            .unwrap_or(self.settings.default_timestamp_format())
+            .unwrap_or_else(|| match self.settings.default_timestamp_format() {
+                TimestampFormat::DateTime => TimestampFormat::DateTimeWithOffset,
+                other => other,
+            })
     }
 }
 
@@ -291,6 +318,20 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         schema: &Schema,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // If a parent aggregate read installed a `schema_override` on us, it
+        // takes priority. Codegen generates inner `read_map` calls reusing
+        // the outer `member` schema (closure variable shadowing) — so the
+        // arg here is the outer map's schema, not the inner's. The override
+        // carries the outer's `_VALUE` schema (which chains the inner map's
+        // `_KEY` / `_VALUE`) and is the right one for nested element-name
+        // resolution.
+        let effective_schema: &Schema =
+            self.schema_override.map(|s| s as &Schema).unwrap_or(schema);
+        // Once we've read this override, clear it so it doesn't leak to
+        // sibling reads on the same deserializer.
+        self.schema_override = None;
+        let schema = effective_schema;
+
         let doc = match &mut self.state {
             DeserState::Doc(doc) => doc,
             DeserState::Text(_) => {
@@ -320,6 +361,11 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             .member()
             .map(|v| v.shape_type().is_aggregate())
             .unwrap_or(false);
+        // For aggregate values, save the value member's `'static` schema so a
+        // nested inner aggregate read (which codegen invokes with
+        // `prelude::DOCUMENT`) can recover its own `_KEY`/`_VALUE`
+        // chain via `with_schema_override`.
+        let value_schema_static = schema.member_static();
 
         // Each child tag is an entry (e.g. <entry><key>k</key><value>v</value></entry>).
         while let Some(mut entry_scope) = root.next_tag() {
@@ -347,7 +393,8 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             }
             if let Some(k) = key {
                 if let Some(slice) = value_slice {
-                    let mut child_deser = XmlDeserializer::new(slice, self.settings.clone());
+                    let mut child_deser = XmlDeserializer::new(slice, self.settings.clone())
+                        .with_schema_override(value_schema_static);
                     consumer(k, &mut child_deser)?;
                 } else if let Some(t) = value_text {
                     let mut child_deser = XmlDeserializer::from_text(t, self.settings.clone());

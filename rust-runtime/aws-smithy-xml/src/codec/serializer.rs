@@ -77,6 +77,15 @@ pub struct XmlSerializer {
     /// two-pass for simplicity and predictability; revisit if benchmarks
     /// show double-iteration is a real cost.
     member_filter: MemberFilter,
+    /// One-shot override for the wrapper element name on the next
+    /// document-root `write_struct`. Consumed (`take`d) on first use.
+    /// Set externally (e.g. by `AwsRestXmlProtocol::serialize_request`)
+    /// when the body root must be named after a member's `@xmlName` that
+    /// the codec couldn't see — for example, an `@httpPayload` struct member
+    /// whose codegen passes the *target* shape's `SCHEMA` (which may carry
+    /// its own `@xmlName`) but whose member-level `@xmlName` should win
+    /// per the Smithy spec.
+    next_root_xml_name: Option<String>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -102,6 +111,11 @@ struct MapState {
     key_namespace: Option<(String, Option<String>)>,
     /// `@xmlNamespace` (uri, prefix) on the value member, if any.
     value_namespace: Option<(String, Option<String>)>,
+    /// Schema of this map's value member. Used by a nested inner `write_map`
+    /// (when codegen passes `prelude::DOCUMENT` for the inner aggregate)
+    /// to recover the inner map's own `_KEY` / `_VALUE` schemas through
+    /// `value_schema.key()` / `.value()`. `None` when the value is a scalar.
+    value_schema: Option<&'static Schema>,
     /// True when the next write is a key (odd writes), false for value (even writes).
     expecting_key: bool,
 }
@@ -142,7 +156,18 @@ impl XmlSerializer {
             list_item_name: None,
             list_item_namespace: None,
             member_filter: MemberFilter::None,
+            next_root_xml_name: None,
         }
+    }
+
+    /// Sets a one-shot override for the wrapper element name on the next
+    /// document-root `write_struct`. Consumed on first use. Intended for
+    /// protocol-layer use (e.g. REST XML routing of `@httpPayload` struct
+    /// members whose member-level `@xmlName` would otherwise be invisible
+    /// to the codec — codegen passes the target shape's `SCHEMA`, which
+    /// carries the target's `@xmlName` but not the member's).
+    pub fn set_next_root_xml_name(&mut self, name: String) {
+        self.next_root_xml_name = Some(name);
     }
 
     /// Returns true if a write of `schema` should produce output under the
@@ -411,7 +436,19 @@ impl ShapeSerializer for XmlSerializer {
             write!(self.output, "</{val_name}></{entry}>").unwrap();
             self.map_state = saved_map_state;
         } else {
-            let name = if schema.xml_name().is_none() {
+            // Document-root override: if a protocol layer pre-set
+            // `next_root_xml_name` (e.g. REST XML resolving an
+            // `@httpPayload` member's `@xmlName` that codegen couldn't
+            // surface), consume it here. Only applies at the document root —
+            // nested struct calls always have at least one open frame.
+            let root_override = if self.frames.is_empty() {
+                self.next_root_xml_name.take()
+            } else {
+                None
+            };
+            let name = if let Some(override_name) = root_override {
+                override_name
+            } else if schema.xml_name().is_none() {
                 self.list_item_name
                     .clone()
                     .unwrap_or_else(|| Self::element_name(schema).to_string())
@@ -572,6 +609,24 @@ impl ShapeSerializer for XmlSerializer {
 
         self.flush_start_tag();
 
+        // If we're being called as a value of an outer map and the schema we
+        // were given has no map members chained (e.g. codegen passed
+        // `prelude::DOCUMENT` for the inner aggregate), substitute in the
+        // outer map's saved `value_schema`, which carries the inner map's
+        // own `_KEY` / `_VALUE` chain (set up by the outer `write_map`).
+        // This is what lets nested-map element-name overrides (`@xmlName`
+        // on inner key / value) reach the runtime without making codegen
+        // recurse into the body emission path.
+        let effective_schema: &Schema = if schema.key().is_none() && schema.member().is_none() {
+            self.map_state
+                .as_ref()
+                .and_then(|s| s.value_schema)
+                .unwrap_or(schema)
+        } else {
+            schema
+        };
+        let schema = effective_schema;
+
         // Handle being called as a map value (nested maps)
         let in_map_value = if let Some(map_state) = &mut self.map_state {
             if !map_state.expecting_key {
@@ -626,6 +681,10 @@ impl ShapeSerializer for XmlSerializer {
                 v.xml_namespace()
                     .map(|ns| (ns.uri().to_owned(), ns.prefix().map(|p| p.to_owned())))
             }),
+            // Save the value member's full schema so a nested inner write_map
+            // (which codegen may invoke with `prelude::DOCUMENT`) can recover
+            // the inner aggregate's own `_KEY`/`_VALUE` (or `_MEMBER`) chain.
+            value_schema: schema.member_static(),
             expecting_key: true,
         });
 

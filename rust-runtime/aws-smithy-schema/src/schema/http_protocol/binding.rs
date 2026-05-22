@@ -39,6 +39,182 @@ impl<C: Codec> HttpBindingProtocol<C> {
             content_type,
         }
     }
+
+    /// Returns a reference to the body codec. Used by wrapper protocols
+    /// (e.g. `AwsRestXmlProtocol`) that need to construct and pre-configure
+    /// a body serializer before delegating to
+    /// [`serialize_request_with_body`](Self::serialize_request_with_body).
+    pub fn codec(&self) -> &C {
+        &self.codec
+    }
+
+    /// Body-providable variant of [`serialize_request`](Self::serialize_request).
+    /// The caller supplies an already-constructed body serializer, allowing
+    /// codec-specific pre-configuration (e.g. setting one-shot state on the
+    /// body codec before binding-driven serialization begins). The default
+    /// `serialize_request` implementation calls this with a fresh serializer
+    /// from the codec.
+    ///
+    /// This is the extension point used by `AwsRestXmlProtocol` to inject the
+    /// member-level `@xmlName` for an `@httpPayload` struct member into the
+    /// body codec — a value the codec couldn't otherwise see because codegen
+    /// passes the *target* shape's `SCHEMA` for that member, which carries
+    /// the target's `@xmlName` but not the member's.
+    pub fn serialize_request_with_body(
+        &self,
+        body: <C as Codec>::Serializer,
+        input: &dyn SerializableStruct,
+        input_schema: &Schema,
+        endpoint: &str,
+        _cfg: &ConfigBag,
+    ) -> Result<Request, SerdeError> {
+        let mut binder = HttpBindingSerializer::new(body, Some(input_schema));
+
+        // Check if there's an @httpPayload member targeting a structure/union.
+        // In that case, the payload member's own write_struct provides the body
+        // framing, so we must not add top-level struct framing.
+        let has_struct_payload = input_schema.members().iter().any(|m| {
+            m.http_payload().is_some()
+                && matches!(
+                    m.shape_type(),
+                    crate::ShapeType::Structure | crate::ShapeType::Union
+                )
+        });
+        if has_struct_payload {
+            binder.is_top_level = false;
+            input.serialize_members(&mut binder)?;
+        } else {
+            binder.write_struct(input_schema, input)?;
+        }
+        let raw_payload = binder.raw_payload;
+        let mut body = if raw_payload.is_some() {
+            // @httpPayload blob/string — don't use the codec output
+            Vec::new()
+        } else {
+            binder.body.finish()
+        };
+
+        // Per the REST-JSON content-type handling spec:
+        // - If @httpPayload targets a blob/string: send raw bytes, no Content-Type when empty
+        // - If body members exist (even if all optional and unset): send `{}` with Content-Type
+        // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
+        let has_blob_or_string_payload = raw_payload.is_some();
+        let has_body_members = has_struct_payload
+            || input_schema.members().iter().any(|m| {
+                m.http_header().is_none()
+                    && m.http_query().is_none()
+                    && m.http_label().is_none()
+                    && m.http_prefix_headers().is_none()
+                    && m.http_query_params().is_none()
+                    && m.http_payload().is_none()
+            });
+
+        let set_content_type = if has_blob_or_string_payload {
+            // Blob/string payload: Content-Type comes from the @httpHeader("Content-Type")
+            // member if present, or defaults to application/octet-stream for blobs.
+            // Don't set the protocol's codec content type (e.g., application/json).
+            false
+        } else if has_body_members {
+            // Operation has body members — body includes framing (e.g., `{}`).
+            // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
+            true
+        } else {
+            // No body members at all — empty body, no Content-Type.
+            body = Vec::new();
+            false
+        };
+
+        // Build URI: use @http trait if available (with label substitution from binder),
+        // otherwise fall back to endpoint with manual label substitution.
+        let mut uri = match input_schema.http() {
+            Some(h) => {
+                let mut path = h.uri().to_string();
+                for (name, value) in &binder.labels {
+                    // Try greedy label first ({name+}), then regular ({name})
+                    let greedy = format!("{{{name}+}}");
+                    if path.contains(&greedy) {
+                        // Greedy labels: encode each path segment separately, preserve /
+                        let encoded = value
+                            .split('/')
+                            .map(percent_encode)
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        path = path.replace(&greedy, &encoded);
+                    } else {
+                        let placeholder = format!("{{{name}}}");
+                        path = path.replace(&placeholder, &percent_encode(value));
+                    }
+                }
+                if endpoint.is_empty() {
+                    path
+                } else {
+                    format!("{}{}", endpoint, path)
+                }
+            }
+            None => {
+                let mut u = if endpoint.is_empty() {
+                    "/".to_string()
+                } else {
+                    endpoint.to_string()
+                };
+                for (name, value) in &binder.labels {
+                    let greedy = format!("{{{name}+}}");
+                    if u.contains(&greedy) {
+                        let encoded = value
+                            .split('/')
+                            .map(percent_encode)
+                            .collect::<Vec<_>>()
+                            .join("/");
+                        u = u.replace(&greedy, &encoded);
+                    } else {
+                        let placeholder = format!("{{{name}}}");
+                        u = u.replace(&placeholder, &percent_encode(value));
+                    }
+                }
+                u
+            }
+        };
+        if !binder.query_params.is_empty() {
+            uri.push(if uri.contains('?') { '&' } else { '?' });
+            let pairs: Vec<String> = binder
+                .query_params
+                .iter()
+                .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
+                .collect();
+            uri.push_str(&pairs.join("&"));
+        }
+
+        let mut request = if let Some(payload) = raw_payload {
+            Request::new(SdkBody::from(payload))
+        } else {
+            Request::new(SdkBody::from(body))
+        };
+        // Set HTTP method from @http trait
+        if let Some(http) = input_schema.http() {
+            request
+                .set_method(http.method())
+                .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
+        }
+        request
+            .set_uri(uri.as_str())
+            .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
+        if set_content_type {
+            request
+                .headers_mut()
+                .insert("Content-Type", self.content_type);
+        }
+        if let Some(len) = request.body().content_length() {
+            if len > 0 || set_content_type {
+                request
+                    .headers_mut()
+                    .insert("Content-Length", len.to_string());
+            }
+        }
+        for (name, value) in &binder.headers {
+            request.headers_mut().insert(name.clone(), value.clone());
+        }
+        Ok(request)
+    }
 }
 
 // Note: there is a percent_encoding crate we use some other places for this, but I'm trying to keep
@@ -819,155 +995,10 @@ where
         input: &dyn SerializableStruct,
         input_schema: &Schema,
         endpoint: &str,
-        _cfg: &ConfigBag,
+        cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
-        let mut binder =
-            HttpBindingSerializer::new(self.codec.create_serializer(), Some(input_schema));
-
-        // Check if there's an @httpPayload member targeting a structure/union.
-        // In that case, the payload member's own write_struct provides the body
-        // framing, so we must not add top-level struct framing.
-        let has_struct_payload = input_schema.members().iter().any(|m| {
-            m.http_payload().is_some()
-                && matches!(
-                    m.shape_type(),
-                    crate::ShapeType::Structure | crate::ShapeType::Union
-                )
-        });
-        if has_struct_payload {
-            binder.is_top_level = false;
-            input.serialize_members(&mut binder)?;
-        } else {
-            binder.write_struct(input_schema, input)?;
-        }
-        let raw_payload = binder.raw_payload;
-        let mut body = if raw_payload.is_some() {
-            // @httpPayload blob/string — don't use the codec output
-            Vec::new()
-        } else {
-            binder.body.finish()
-        };
-
-        // Per the REST-JSON content-type handling spec:
-        // - If @httpPayload targets a blob/string: send raw bytes, no Content-Type when empty
-        // - If body members exist (even if all optional and unset): send `{}` with Content-Type
-        // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
-        let has_blob_or_string_payload = raw_payload.is_some();
-        let has_body_members = has_struct_payload
-            || input_schema.members().iter().any(|m| {
-                m.http_header().is_none()
-                    && m.http_query().is_none()
-                    && m.http_label().is_none()
-                    && m.http_prefix_headers().is_none()
-                    && m.http_query_params().is_none()
-                    && m.http_payload().is_none()
-            });
-
-        let set_content_type = if has_blob_or_string_payload {
-            // Blob/string payload: Content-Type comes from the @httpHeader("Content-Type")
-            // member if present, or defaults to application/octet-stream for blobs.
-            // Don't set the protocol's codec content type (e.g., application/json).
-            false
-        } else if has_body_members {
-            // Operation has body members — body includes framing (e.g., `{}`).
-            // Per the REST-JSON spec, even if all members are optional and unset, send `{}`.
-            true
-        } else {
-            // No body members at all — empty body, no Content-Type.
-            body = Vec::new();
-            false
-        };
-
-        // Build URI: use @http trait if available (with label substitution from binder),
-        // otherwise fall back to endpoint with manual label substitution.
-        let mut uri = match input_schema.http() {
-            Some(h) => {
-                let mut path = h.uri().to_string();
-                for (name, value) in &binder.labels {
-                    // Try greedy label first ({name+}), then regular ({name})
-                    let greedy = format!("{{{name}+}}");
-                    if path.contains(&greedy) {
-                        // Greedy labels: encode each path segment separately, preserve /
-                        let encoded = value
-                            .split('/')
-                            .map(percent_encode)
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        path = path.replace(&greedy, &encoded);
-                    } else {
-                        let placeholder = format!("{{{name}}}");
-                        path = path.replace(&placeholder, &percent_encode(value));
-                    }
-                }
-                if endpoint.is_empty() {
-                    path
-                } else {
-                    format!("{}{}", endpoint, path)
-                }
-            }
-            None => {
-                let mut u = if endpoint.is_empty() {
-                    "/".to_string()
-                } else {
-                    endpoint.to_string()
-                };
-                for (name, value) in &binder.labels {
-                    let greedy = format!("{{{name}+}}");
-                    if u.contains(&greedy) {
-                        let encoded = value
-                            .split('/')
-                            .map(percent_encode)
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        u = u.replace(&greedy, &encoded);
-                    } else {
-                        let placeholder = format!("{{{name}}}");
-                        u = u.replace(&placeholder, &percent_encode(value));
-                    }
-                }
-                u
-            }
-        };
-        if !binder.query_params.is_empty() {
-            uri.push(if uri.contains('?') { '&' } else { '?' });
-            let pairs: Vec<String> = binder
-                .query_params
-                .iter()
-                .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
-                .collect();
-            uri.push_str(&pairs.join("&"));
-        }
-
-        let mut request = if let Some(payload) = raw_payload {
-            Request::new(SdkBody::from(payload))
-        } else {
-            Request::new(SdkBody::from(body))
-        };
-        // Set HTTP method from @http trait
-        if let Some(http) = input_schema.http() {
-            request
-                .set_method(http.method())
-                .map_err(|e| SerdeError::custom(format!("invalid HTTP method: {e}")))?;
-        }
-        request
-            .set_uri(uri.as_str())
-            .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
-        if set_content_type {
-            request
-                .headers_mut()
-                .insert("Content-Type", self.content_type);
-        }
-        if let Some(len) = request.body().content_length() {
-            if len > 0 || set_content_type {
-                request
-                    .headers_mut()
-                    .insert("Content-Length", len.to_string());
-            }
-        }
-        for (name, value) in &binder.headers {
-            request.headers_mut().insert(name.clone(), value.clone());
-        }
-        Ok(request)
+        let body = self.codec.create_serializer();
+        self.serialize_request_with_body(body, input, input_schema, endpoint, cfg)
     }
 
     fn deserialize_response<'a>(

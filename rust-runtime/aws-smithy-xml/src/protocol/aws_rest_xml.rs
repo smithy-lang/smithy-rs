@@ -170,8 +170,33 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
+        // XML-specific pre-scan: if the input has an `@httpPayload` struct or
+        // union member with its own `@xmlName`, the body's wrapper element
+        // must be that name. Codegen passes the *target* shape's `SCHEMA`
+        // for the payload member's `write_struct` call (so the codec sees
+        // the target's `@xmlName`, not the member's), so the codec on its
+        // own would emit the wrong wrapper. Look up the member here, where
+        // we have the input schema in hand, and pre-set the override on the
+        // body serializer; the XmlSerializer consumes it on the first
+        // root-level `write_struct`.
+        let payload_xml_name = input_schema.members().iter().find_map(|m| {
+            if m.http_payload().is_some()
+                && matches!(
+                    m.shape_type(),
+                    aws_smithy_schema::ShapeType::Structure | aws_smithy_schema::ShapeType::Union
+                )
+            {
+                m.xml_name().map(|n| n.value().to_owned())
+            } else {
+                None
+            }
+        });
+        let mut body = aws_smithy_schema::codec::Codec::create_serializer(self.inner.codec());
+        if let Some(name) = payload_xml_name {
+            body.set_next_root_xml_name(name);
+        }
         self.inner
-            .serialize_request(input, input_schema, endpoint, cfg)
+            .serialize_request_with_body(body, input, input_schema, endpoint, cfg)
     }
 
     fn deserialize_response<'a>(

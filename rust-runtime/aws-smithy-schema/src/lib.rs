@@ -557,10 +557,31 @@ impl Schema {
         }
     }
 
+    /// Like [`member`](Self::member) but returns the `'static` borrow that
+    /// codegen actually stores. Needed when callers (e.g. the XML codec)
+    /// must hold a reference to a value/element member schema across nested
+    /// callbacks without inheriting the parent borrow's lifetime.
+    pub fn member_static(&self) -> Option<&'static Schema> {
+        match &self.members {
+            SchemaMembers::List { member } => Some(*member),
+            SchemaMembers::Map { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
+
     /// Returns the key schema for maps.
     pub fn key(&self) -> Option<&Schema> {
         match &self.members {
             SchemaMembers::Map { key, .. } => Some(key),
+            _ => None,
+        }
+    }
+
+    /// Like [`key`](Self::key) but returns the `'static` borrow that codegen
+    /// stores. See [`member_static`](Self::member_static).
+    pub fn key_static(&self) -> Option<&'static Schema> {
+        match &self.members {
+            SchemaMembers::Map { key, .. } => Some(*key),
             _ => None,
         }
     }
