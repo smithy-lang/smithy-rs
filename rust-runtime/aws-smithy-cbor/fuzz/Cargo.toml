@@ -1,0 +1,32 @@
+[package]
+name = "aws-smithy-cbor-fuzz"
+version = "0.0.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+aws-smithy-cbor = { path = ".." }
+aws-smithy-schema = { path = "../../aws-smithy-schema" }
+aws-smithy-types = { path = "../../aws-smithy-types" }
+libfuzzer-sys = "=0.4.7"
+arbitrary = { version = "1", features = ["derive"] }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "schema_cbor_deserialize"
+path = "fuzz_targets/schema_cbor_deserialize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_cbor_roundtrip"
+path = "fuzz_targets/schema_cbor_roundtrip.rs"
+test = false
+doc = false
