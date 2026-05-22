@@ -6,6 +6,7 @@
 package software.amazon.smithy.rustsdk
 
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.Visibility
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeCrateLocation
@@ -50,6 +51,7 @@ object AwsRuntimeType {
                 visibility = Visibility.PUBCRATE,
                 AwsCargoDependency.awsSigv4(runtimeConfig),
                 CargoDependency.smithyRuntimeApiClient(runtimeConfig),
+                InlineDependency.serializationSettings(runtimeConfig),
             ),
         )
 

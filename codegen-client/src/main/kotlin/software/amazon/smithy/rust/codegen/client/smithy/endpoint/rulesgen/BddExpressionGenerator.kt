@@ -5,14 +5,15 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.endpoint.rulesgen
 
+import software.amazon.smithy.rulesengine.language.evaluation.type.ArrayType
 import software.amazon.smithy.rulesengine.language.evaluation.type.BooleanType
 import software.amazon.smithy.rulesengine.language.evaluation.type.OptionalType
 import software.amazon.smithy.rulesengine.language.evaluation.type.StringType
 import software.amazon.smithy.rulesengine.language.evaluation.type.Type
-import software.amazon.smithy.rulesengine.language.syntax.Identifier
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Expression
 import software.amazon.smithy.rulesengine.language.syntax.expressions.ExpressionVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.Reference
+import software.amazon.smithy.rulesengine.language.syntax.expressions.TemplateVisitor
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.FunctionDefinition
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.GetAttr
 import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.LibraryFunction
@@ -48,11 +49,19 @@ class BddExpressionGenerator(
      * This allows us to unwrap them safely without additional checks.
      */
     private val knownSomeRefs: MutableSet<AnnotatedRefs.AnnotatedRef> = mutableSetOf(),
+    /**
+     * When true, the outermost GetAttr being generated is assigning to a context
+     * variable that is typed `Option<&'a str>` (see [AnnotatedRefs.AnnotatedRef.isBorrowedStr]).
+     *
+     * The path lowering must skip `.cloned()` on index access (to avoid allocating
+     * an owned `String`), and the outer assignment wrapper must skip the
+     * `.map(|inner| inner.into())` / `.into()` conversions (which would demand an
+     * owned target). This flag is only true for the sub-tree of the direct
+     * assignment; nested expressions within conditions retain the default behavior.
+     */
+    private val borrowedStrTarget: Boolean = false,
 ) {
-    private val optionalRefNames = refs.filter { it.isOptional }.map { it.name }
     private val knownSomeRefsNames = knownSomeRefs.map { it.name }
-    private val documentRefNames =
-        refs.filter { it.runtimeType == RuntimeType.document(codegenContext.runtimeConfig) }.map { it.name }
 
     fun generateCondition(condition: Condition): Writable {
         return condition.function.accept(OuterExprGeneratorVisitor(ownership))
@@ -69,15 +78,45 @@ class BddExpressionGenerator(
     // ============================================================================
 
     private fun isOptionalRef(expr: Expression): Boolean =
-        expr is Reference && optionalRefNames.contains(expr.name.rustName())
+        expr is Reference && refs.resolve(expr.name)?.isOptional == true
 
     private fun isDocumentRef(expr: Expression): Boolean =
-        expr is Reference && documentRefNames.contains(expr.name.rustName())
+        expr is Reference &&
+            refs.resolve(expr.name)?.runtimeType == RuntimeType.document(codegenContext.runtimeConfig)
 
-    private fun isKnownSomeRef(ref: Reference): Boolean = knownSomeRefsNames.contains(ref.name.rustName())
+    private fun isKnownSomeRef(ref: Reference): Boolean = knownSomeRefsNames.contains(refs.resolveName(ref.name))
 
-    private fun createChildGenerator(): BddExpressionGenerator =
-        BddExpressionGenerator(condition, ownership, context, refs, codegenContext, knownSomeRefs)
+    /**
+     * True when the reference's underlying type is a String (possibly wrapped in Optional).
+     * Used to decide whether `.as_deref().unwrap_or_default()` is a legal lowering.
+     *
+     * Document-typed references explicitly return `false` even when their type can be
+     * resolved, because `Option<Document>` does not support `as_deref()`.
+     *
+     * Falls back to `false` when typechecking is unavailable. This is conservative:
+     * the caller falls through to the default expression generator, which preserves the
+     * Option layer — a small performance loss compared to the unwrap, but compiles
+     * correctly for all reference types (the previous default of `true` would emit
+     * `as_deref().unwrap_or_default()` for non-string types like Document, producing
+     * uncompilable Rust).
+     */
+    private fun isStringTypedRef(expr: Expression): Boolean {
+        if (expr !is Reference) return false
+        if (isDocumentRef(expr)) return false
+        return try {
+            val t = expr.type()
+            val underlying = if (t is OptionalType) t.inner() else t
+            underlying is StringType
+        } catch (_: RuntimeException) {
+            false
+        }
+    }
+
+    private fun createChildGenerator(
+        childOwnership: Ownership = this.ownership,
+        childBorrowedStrTarget: Boolean = this.borrowedStrTarget,
+    ): BddExpressionGenerator =
+        BddExpressionGenerator(condition, childOwnership, context, refs, codegenContext, knownSomeRefs, childBorrowedStrTarget)
 
     // ============================================================================
     // Expression Generation - Inner Visitor
@@ -91,15 +130,59 @@ class BddExpressionGenerator(
     ) :
         ExpressionVisitor<Writable> {
         override fun visitLiteral(literal: Literal): Writable {
-            return literal.accept(LiteralGenerator(ownership, context))
+            // Thread BDD state through literal template expansion so that GetAttr on
+            // optional assigned variables inside a template string (e.g. "{PartitionResult#attr}")
+            // receives the same `if let Some(inner) = ...` unwrap as GetAttr outside a template.
+            //
+            // For **multipart** templates the dynamic parts feed into `out.push_str(&...)` under
+            // forced-Borrowed ownership (see TemplateGenerator.visitDynamicElement). That means
+            // any expression rendered there must produce a `&str`-compatible borrow. BDD mode
+            // flattens condition evaluation into match arms without the tree-based resolver's
+            // outer `if let Some(x) = x` wrappers, so an optional String reference like `region`
+            // (typed `&Option<String>`) needs an explicit `as_deref().unwrap_or_default()` to
+            // reach `&str`. The BDD's control flow guarantees the ref is Some on any path
+            // reaching this condition (prior `isSet(...)` condition edges filter None cases).
+            //
+            // For **single-dynamic** templates (`"{ref}"`) the whole template result IS the
+            // inner expression's value. Outer callers (e.g. `wrapDefaultArg`) wrap it in
+            // `if let Some(param) = ... { param } else { return false }`, expecting an
+            // Option-typed value. We must NOT eagerly unwrap there — fall through to the
+            // default tree-mode generator which preserves the Option layer.
+            return literal.accept(
+                LiteralGenerator(
+                    ownership,
+                    context,
+                    // single-dynamic and outer-template path: delegate to the BDD child generator
+                    // (which preserves Option for bare references and unwraps Option-typed GetAttr).
+                    { expr, templateOwnership ->
+                        createChildGenerator(templateOwnership).generateExpression(expr)
+                    },
+                    // multipart `out.push_str(&...)` path: optional String references get an explicit
+                    // `as_deref().unwrap_or_default()` because they're going through `&str` push_str.
+                    { expr, templateOwnership ->
+                        when {
+                            expr is Reference &&
+                                templateOwnership == Ownership.Borrowed &&
+                                isOptionalRef(expr) &&
+                                isStringTypedRef(expr) ->
+                                writable {
+                                    rust("${refs.resolveName(expr.name)}.as_deref().unwrap_or_default()")
+                                }
+                            else ->
+                                createChildGenerator(templateOwnership).generateExpression(expr)
+                        }
+                    },
+                ),
+            )
         }
 
         override fun visitRef(ref: Reference) =
             writable {
+                val name = refs.resolveName(ref.name)
                 if (isKnownSomeRef(ref)) {
-                    rust("""${ref.name.rustName()}.expect("${ref.name.rustName()} was set my a previous condition.")""")
+                    rust("""$name.expect("$name was set my a previous condition.")""")
                 } else {
-                    rust(ref.name.rustName())
+                    rust(name)
                 }
             }
 
@@ -116,20 +199,26 @@ class BddExpressionGenerator(
 
         private fun generateAttrPath(getAttr: GetAttr): Writable =
             writable {
+                // When assigning to an `Option<&'a str>` context var, avoid the
+                // `.cloned()` that would materialize an owned String. Use
+                // `.map(|s| s.as_str())` instead so the result is `Option<&'a str>`.
+                val indexTail = if (borrowedStrTarget) ".map(|s| s.as_str())" else ".cloned()"
                 getAttr.path.toList().forEach { part ->
                     when (part) {
                         is GetAttr.Part.Key -> rust(".${part.key().rustName()}()")
                         is GetAttr.Part.Index -> {
                             val index = part.index()
                             when {
-                                index == 0 -> rust(".first().cloned()")
-                                index < 0 -> rust(".iter().nth_back(${-index - 1}).cloned()")
-                                else -> rust(".get($index).cloned()")
+                                index == 0 -> rust(".first()$indexTail")
+                                index < 0 -> rust(".iter().nth_back(${-index - 1})$indexTail")
+                                else -> rust(".get($index)$indexTail")
                             }
                         }
                     }
                 }
-                if (ownership == Ownership.Owned && shouldAddToOwned(getAttr)) {
+                // Skip the to_owned/into trailer for borrowed-str targets; their
+                // context slot is `&'a str`, which refuses ownership conversions.
+                if (!borrowedStrTarget && ownership == Ownership.Owned && shouldAddToOwned(getAttr)) {
                     rust(if (getAttr.type() is OptionalType) ".map(|t|t.to_owned())" else ".to_owned()")
                 }
             }
@@ -164,7 +253,7 @@ class BddExpressionGenerator(
                 val expressionGenerator = createChildGenerator()
                 if (fn is Reference) {
                     // All references are in refs so safe to assert non-null
-                    knownSomeRefs.add(refs.get(fn.name.rustName())!!)
+                    knownSomeRefs.add(refs.resolve(fn.name)!!)
                 }
                 rust("#W.is_some()", expressionGenerator.generateExpression(fn))
             }
@@ -196,17 +285,29 @@ class BddExpressionGenerator(
             left: Expression,
             right: Expression,
         ) = writable {
-            val expressionGenerator = createChildGenerator()
             val lhsIsOptionalRef = isOptionalRef(left)
             val rhsIsOptionalRef = isOptionalRef(right)
             val (lhsInto, rhsInto) = getStringEqualityModifier(left, lhsIsOptionalRef, right, rhsIsOptionalRef)
 
+            // When wrapping a Literal in `&mut Some(...)` for comparison against an `Option<String>`
+            // reference, the wrapped expression must produce an owned `String`. Multipart template
+            // strings emit `&{ let mut out = String::new(); ...; out }` under Borrowed ownership
+            // (see TemplateGenerator.startMultipartTemplate), which yields `&String` — `.into()`
+            // cannot coerce that into `String`, causing the outer `&mut Some(&String)` to be
+            // `&mut Option<&String>` instead of `&mut Option<String>`. Under Owned ownership the
+            // leading `&` is omitted, so the block returns an owned `String` and the comparison
+            // types line up.
+            val leftOwnership = if (rhsIsOptionalRef && left is Literal) Ownership.Owned else ownership
+            val rightOwnership = if (lhsIsOptionalRef && right is Literal) Ownership.Owned else ownership
+            val leftGenerator = createChildGenerator(leftOwnership)
+            val rightGenerator = createChildGenerator(rightOwnership)
+
             conditionalBlock("&mut Some(", ")", conditional = rhsIsOptionalRef) {
-                rust("(#W$lhsInto)", expressionGenerator.generateExpression(left))
+                rust("(#W$lhsInto)", leftGenerator.generateExpression(left))
             }
             rust("==")
             conditionalBlock("&mut Some(", ")", conditional = lhsIsOptionalRef) {
-                rust("(#W$rhsInto)", expressionGenerator.generateExpression(right))
+                rust("(#W$rhsInto)", rightGenerator.generateExpression(right))
             }
         }
 
@@ -243,8 +344,41 @@ class BddExpressionGenerator(
 
         private fun isOptionalArgument(arg: Expression): Boolean {
             return isOptionalRef(arg) ||
-                (arg is StringLiteral && optionalRefNames.contains(Identifier.of(arg.value().toString()).rustName())) ||
+                (arg is StringLiteral && isOptionalSingleDynamicReference(arg)) ||
                 (arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType)
+        }
+
+        /**
+         * True if [literal] is a single-dynamic-element template (e.g. `"{Bucket}"`) whose
+         * inner expression is a [Reference] to an optional value.
+         *
+         * This replaces an earlier text-match heuristic that compared the literal's raw
+         * value against parameter names — that approach could fire on a static literal
+         * whose text happened to equal a parameter's Smithy name (e.g. literal `"Bucket"`
+         * in `substring("Bucket", ...)` when a parameter `Bucket` exists), causing
+         * `wrapDefaultArg` to wrap a non-Option `&str` in `if let Some(param) = ...`,
+         * which is a Rust type error. Inspecting the [Template] structure is the correct
+         * way to recognise the "single-element template wrapping a Reference" case.
+         */
+        private fun isOptionalSingleDynamicReference(literal: StringLiteral): Boolean {
+            val inner: Reference =
+                literal.value().accept(
+                    object : TemplateVisitor<Reference?> {
+                        override fun visitStaticTemplate(value: String): Reference? = null
+
+                        override fun visitSingleDynamicTemplate(expr: Expression): Reference? = expr as? Reference
+
+                        // Multipart templates emit start/elements/finish — not a single-element wrap.
+                        override fun visitStaticElement(str: String): Reference? = null
+
+                        override fun visitDynamicElement(expr: Expression): Reference? = null
+
+                        override fun startMultipartTemplate(): Reference? = null
+
+                        override fun finishMultipartTemplate(): Reference? = null
+                    },
+                ).filter { it != null }.findFirst().orElse(null) ?: return false
+            return refs.resolve(inner.name)?.isOptional == true
         }
 
         /**
@@ -269,7 +403,17 @@ class BddExpressionGenerator(
         ): Writable =
             writable {
                 when {
-                    !isOptionalArgument(arg) -> rust("#W", expressionGenerator.generateExpression(arg))
+                    !isOptionalArgument(arg) -> {
+                        rust("#W", expressionGenerator.generateExpression(arg))
+                        // Coalesce macro's autoderef specialization requires owned values to
+                        // match the (Option<T>, T) impl. Params are bound as references,
+                        // and string literals are &str — need conversion to owned types.
+                        if (arg is Reference) {
+                            rust(".clone()")
+                        } else if (arg is Literal && arg.type() is StringType) {
+                            rust(".to_string()")
+                        }
+                    }
                     arg is LibraryFunction && arg.functionDefinition.returnType is OptionalType ->
                         rust(
                             """
@@ -282,7 +426,7 @@ class BddExpressionGenerator(
                             expressionGenerator.generateExpression(arg),
                         )
 
-                    else -> rust("*#W", expressionGenerator.generateExpression(arg))
+                    else -> rust("#W.clone()", expressionGenerator.generateExpression(arg))
                 }
             }
 
@@ -387,12 +531,14 @@ class BddExpressionGenerator(
          */
         override fun visitGetAttr(getAttr: GetAttr): Writable =
             writable {
-                val innerGen = createChildGenerator()
+                val targetRef = condition.result.orElse(null)?.let { refs.resolve(it) }
+                val isBorrowedTarget = targetRef?.isBorrowedStr == true
+                val innerGen = createChildGenerator(childBorrowedStrTarget = isBorrowedTarget)
                 val fnExpr = innerGen.generateExpression(condition.function)
                 val pathContainsIdx = getAttr.path.toList().any { it is GetAttr.Part.Index }
 
                 if (condition.result.isPresent) {
-                    rust("#W", generateGetAttrAssignment(fnExpr, pathContainsIdx))
+                    rust("#W", generateGetAttrAssignment(fnExpr, pathContainsIdx, isBorrowedTarget))
                 } else {
                     rust("#W", generateGetAttrEvaluation(fnExpr, pathContainsIdx))
                 }
@@ -401,31 +547,60 @@ class BddExpressionGenerator(
         private fun generateGetAttrAssignment(
             fnExpr: Writable,
             pathContainsIdx: Boolean,
+            isBorrowedTarget: Boolean,
         ): Writable =
             writable {
-                val resultName = condition.result.get().rustName()
+                val resultName = refs.resolveName(condition.result.get())
                 if (pathContainsIdx) {
                     // Path contains index, resulting type is Option<T>
-                    rustTemplate(
-                        """
-                        {
-                            *$resultName = #{FN:W}.map(|inner| inner.into());
-                            $resultName.is_some()
-                        }
-                        """.trimIndent(),
-                        "FN" to fnExpr,
-                    )
+                    if (isBorrowedTarget) {
+                        // fnExpr already yields Option<&'a str> (via .map(|s| s.as_str())
+                        // in generateAttrPath). Assign directly — no `.into()` wrapping.
+                        rustTemplate(
+                            """
+                            {
+                                *$resultName = #{FN:W};
+                                $resultName.is_some()
+                            }
+                            """.trimIndent(),
+                            "FN" to fnExpr,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            {
+                                *$resultName = #{FN:W}.map(|inner| inner.into());
+                                $resultName.is_some()
+                            }
+                            """.trimIndent(),
+                            "FN" to fnExpr,
+                        )
+                    }
                 } else {
                     // No index in path, getting the field is infallible
-                    rustTemplate(
-                        """
-                        {
-                            *$resultName = Some(#{FN:W}.into());
-                            true
-                        }
-                        """.trimIndent(),
-                        "FN" to fnExpr,
-                    )
+                    if (isBorrowedTarget) {
+                        // fnExpr yields `&'a str` directly; wrap in Some without
+                        // `.into()` (which would demand an owned target).
+                        rustTemplate(
+                            """
+                            {
+                                *$resultName = Some(#{FN:W});
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to fnExpr,
+                        )
+                    } else {
+                        rustTemplate(
+                            """
+                            {
+                                *$resultName = Some(#{FN:W}.into());
+                                true
+                            }
+                            """.trimIndent(),
+                            "FN" to fnExpr,
+                        )
+                    }
                 }
             }
 
@@ -450,7 +625,9 @@ class BddExpressionGenerator(
             writable {
                 val innerGen = createChildGenerator()
                 val fnExpr = innerGen.generateExpression(condition.function)
-                val fnReturnType = condition.function.functionDefinition.returnType
+                // Use .type() for the actual resolved return type (not functionDefinition.returnType
+                // which is the generic declared type and doesn't account for coalesce's type-dependent returns)
+                val fnReturnType = condition.function.type()
 
                 if (condition.result.isPresent) {
                     rust("#W", generateLibraryFunctionAssignment(fnExpr, fnReturnType))
@@ -464,9 +641,14 @@ class BddExpressionGenerator(
             returnType: Type,
         ): Writable =
             writable {
-                val resultName = condition.result.get().rustName()
+                val resultName = refs.resolveName(condition.result.get())
                 val isOptional = returnType is OptionalType
                 val isBoolean = returnType is BooleanType
+                val innerType = if (isOptional) (returnType as OptionalType).inner() else returnType
+                val isArray = innerType is ArrayType
+
+                // Conversion expression: .into() for scalars, .into_iter().map(...).collect() for arrays
+                val intoExpr = if (isArray) ".into_iter().map(|s| s.to_owned()).collect()" else ".into()"
 
                 when {
                     // Non-optional boolean: assign and return the value
@@ -486,7 +668,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                *$resultName = Some(#{FN:W}.into());
+                                *$resultName = Some(#{FN:W}$intoExpr);
                                 true
                             }
                             """.trimIndent(),
@@ -497,7 +679,7 @@ class BddExpressionGenerator(
                         rustTemplate(
                             """
                             {
-                                *$resultName = #{FN:W}.map(|inner| inner.into());
+                                *$resultName = #{FN:W}.map(|inner| inner$intoExpr);
                                 $resultName.is_some()
                             }
                             """.trimIndent(),

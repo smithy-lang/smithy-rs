@@ -66,15 +66,15 @@ object EventStreamUnmarshallTestCases {
         codegenContext: CodegenContext,
         testCase: EventStreamTestModels.TestCase,
         optionalBuilderInputs: Boolean = false,
+        unmarshallerNew: String = "crate::event_stream_serde::TestStreamUnmarshaller::new()",
     ) {
-        val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
         writeUnmarshallTestUtil(codegenContext)
 
         unitTest("message_with_blob") {
             rustTemplate(
                 """
                 let message = msg("event", "MessageWithBlob", "application/octet-stream", b"hello, world!");
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithBlob(
@@ -97,7 +97,7 @@ object EventStreamUnmarshallTestCases {
             rustTemplate(
                 """
                 let message = msg("event", "MessageWithString", "text/plain", b"hello, world!");
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithString(MessageWithString::builder().data(#{DataInput}).build()),
@@ -117,7 +117,7 @@ object EventStreamUnmarshallTestCases {
                     "${testCase.responseContentType}",
                     ${testCase.generateRustPayloadInitializer(testCase.validTestStruct)}
                 );
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithStruct(MessageWithStruct::builder().some_struct(#{StructInput}).build()),
@@ -148,7 +148,7 @@ object EventStreamUnmarshallTestCases {
                     "${testCase.responseContentType}",
                     ${testCase.generateRustPayloadInitializer(testCase.validTestUnion)}
                 );
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithUnion(MessageWithUnion::builder().some_union(#{UnionInput}).build()),
@@ -171,7 +171,7 @@ object EventStreamUnmarshallTestCases {
                     .add_header(Header::new("short", HeaderValue::Int16(16_000i16)))
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
                     .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithHeaders(MessageWithHeaders::builder()
@@ -204,7 +204,7 @@ object EventStreamUnmarshallTestCases {
                 """
                 let message = msg("event", "MessageWithHeaderAndPayload", "application/octet-stream", b"payload")
                     .add_header(Header::new("header", HeaderValue::String("header".into())));
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithHeaderAndPayload(MessageWithHeaderAndPayload::builder()
@@ -229,7 +229,7 @@ object EventStreamUnmarshallTestCases {
                     "${testCase.responseContentType}",
                     ${testCase.generateRustPayloadInitializer(testCase.validMessageWithNoHeaderPayloadTraits)}
                 );
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 assert_eq!(
                     TestStream::MessageWithNoHeaderPayloadTraits(MessageWithNoHeaderPayloadTraits::builder()
@@ -254,7 +254,7 @@ object EventStreamUnmarshallTestCases {
                     "${testCase.responseContentType}",
                     ${testCase.generateRustPayloadInitializer(testCase.validSomeError)}
                 );
-                let result = $generator::new().unmarshall(&message);
+                let result = $unmarshallerNew.unmarshall(&message);
                 assert!(result.is_ok(), "expected ok, got: {:?}", result);
                 match expect_error(result.unwrap()) {
                     TestStreamError::SomeError(err) => assert_eq!(Some("some error"), err.message()),
@@ -275,7 +275,7 @@ object EventStreamUnmarshallTestCases {
                 "wrong-content-type",
                 ${testCase.generateRustPayloadInitializer(testCase.validTestStruct)}
             );
-            let result = $generator::new().unmarshall(&message);
+            let result = $unmarshallerNew.unmarshall(&message);
             assert!(result.is_err(), "expected error, got: {:?}", result);
             assert!(format!("{}", result.err().unwrap()).contains("expected :content-type to be"));
             """,
