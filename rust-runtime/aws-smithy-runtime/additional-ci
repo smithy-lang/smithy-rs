@@ -11,3 +11,7 @@ set -e
 echo "### Testing every combination of features (excluding --all-features)"
 # Skip deprecated features that are re-exported from `aws-smithy-http-client` (and tested there already)
 cargo hack test --feature-powerset --exclude-all-features --exclude-features legacy-test-util,wire-mock,connector-hyper-0-14-x,tls-rustls
+
+echo "### Testing aws-smithy-http-client with unstable custom rustls crypto provider"
+# Enabling ring because the tests use it as the "custom" provider, and it transitively enables __rustls
+RUSTFLAGS="--cfg aws_sdk_unstable" cargo test --package aws-smithy-http-client --features rustls-ring-provider
