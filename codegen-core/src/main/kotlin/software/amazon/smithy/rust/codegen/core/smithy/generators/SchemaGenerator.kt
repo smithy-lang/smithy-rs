@@ -1724,6 +1724,31 @@ class SchemaGenerator(
     }
 
     /**
+     * If this shape is the output of an operation carrying the AWS
+     * S3 `S3UnwrappedXmlOutputTrait` customization, returns a
+     * `.with_xml_unwrapped_output()` chain.
+     *
+     * The trait is operation-level but its effect (the XML wire format
+     * omits the outer wrapper element) only matters for the OUTPUT
+     * struct's deserialization, so we surface it on the output schema.
+     * The XML codec reads `schema.xml_unwrapped_output()` when
+     * deserializing; other codecs ignore it. Schema-level metadata
+     * (rather than codegen-level body wrapping) keeps runtime protocol
+     * swap unaffected.
+     */
+    private fun s3UnwrappedXmlOutputChain(shape: Shape): String {
+        val operationIndex = software.amazon.smithy.model.knowledge.OperationIndex.of(model)
+        for (operation in model.operationShapes) {
+            if (operationIndex.getOutputShape(operation).orElse(null)?.id == shape.id &&
+                operation.hasTrait(software.amazon.smithy.aws.traits.customizations.S3UnwrappedXmlOutputTrait::class.java)
+            ) {
+                return "\n    .with_xml_unwrapped_output()"
+            }
+        }
+        return ""
+    }
+
+    /**
      * If this shape carries `SyntheticInputTrait` or `SyntheticOutputTrait`
      * with a non-null `originalId`, returns a `.with_original_name(...)` call
      * that surfaces the original (pre-synthesis) shape name. REST XML reads
@@ -1902,7 +1927,9 @@ class SchemaGenerator(
                     } else {
                         "&[${allRefs.joinToString(", ")}]"
                     }
-                val traitChain = traitSetterChain(shape) + httpTraitChain(shape) + originalNameChain(shape)
+                val traitChain =
+                    traitSetterChain(shape) + httpTraitChain(shape) +
+                        s3UnwrappedXmlOutputChain(shape) + originalNameChain(shape)
                 if (hasUnknownTraits(shape)) {
                     writer.rustTemplate(
                         """

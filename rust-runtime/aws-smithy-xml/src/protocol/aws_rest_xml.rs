@@ -26,6 +26,11 @@ pub struct AwsRestXmlProtocol {
     settings: Arc<XmlCodecSettings>,
     /// True if the service has `@restXml(noErrorWrapping: true)`.
     no_error_wrapping: bool,
+    /// Service-level `@xmlNamespace` URI/prefix. Per the Smithy spec, this is
+    /// the default xmlns applied to operation request/response root elements
+    /// when the operation's input/output struct (or its `@httpPayload` target)
+    /// doesn't declare its own `@xmlNamespace`.
+    service_xml_namespace: Option<(String, Option<String>)>,
 }
 
 impl AwsRestXmlProtocol {
@@ -39,6 +44,7 @@ impl AwsRestXmlProtocol {
             inner: HttpBindingProtocol::new(PROTOCOL_ID, codec, "application/xml"),
             settings,
             no_error_wrapping: false,
+            service_xml_namespace: None,
         }
     }
 
@@ -49,6 +55,19 @@ impl AwsRestXmlProtocol {
 
     pub fn no_error_wrapping(&self) -> bool {
         self.no_error_wrapping
+    }
+
+    /// Configures the service-level `@xmlNamespace` declared on the Smithy
+    /// service shape. Applied to request/response XML root elements that
+    /// don't carry their own `@xmlNamespace` (e.g. S3's
+    /// `http://s3.amazonaws.com/doc/2006-03-01/`).
+    pub fn with_service_xml_namespace(
+        mut self,
+        uri: impl Into<String>,
+        prefix: Option<String>,
+    ) -> Self {
+        self.service_xml_namespace = Some((uri.into(), prefix));
+        self
     }
 
     /// Parses a REST XML error response envelope, extracting error metadata
@@ -194,6 +213,13 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         let mut body = aws_smithy_schema::codec::Codec::create_serializer(self.inner.codec());
         if let Some(name) = payload_xml_name {
             body.set_next_root_xml_name(name);
+        }
+        // Apply service-level `@xmlNamespace` as the document-root xmlns
+        // fallback. Consumed by the codec on the first root-level
+        // `write_struct` only if the struct's schema has no own
+        // `@xmlNamespace`.
+        if let Some((uri, prefix)) = &self.service_xml_namespace {
+            body.set_next_root_xml_namespace(uri.clone(), prefix.clone());
         }
         self.inner
             .serialize_request_with_body(body, input, input_schema, endpoint, cfg)

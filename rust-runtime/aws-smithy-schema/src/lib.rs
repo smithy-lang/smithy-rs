@@ -103,6 +103,12 @@ pub struct Schema {
     xml_name: Option<trait_types::XmlNameTrait>,
     xml_attribute: Option<trait_types::XmlAttributeTrait>,
     xml_flattened: Option<trait_types::XmlFlattenedTrait>,
+    /// Marks an operation output struct whose XML wire format omits the
+    /// outer wrapper element (set by codegen for operations carrying the
+    /// AWS-customization `S3UnwrappedXmlOutputTrait`). Honored by the XML
+    /// codec; ignored by other codecs (so the schema remains protocol-neutral
+    /// — runtime protocol swap is unaffected).
+    xml_unwrapped_output: bool,
     xml_namespace: Option<trait_types::XmlNamespaceTrait>,
     http_header: Option<trait_types::HttpHeaderTrait>,
     http_label: Option<trait_types::HttpLabelTrait>,
@@ -155,6 +161,7 @@ impl Schema {
         xml_name: None,
         xml_attribute: None,
         xml_flattened: None,
+        xml_unwrapped_output: false,
         xml_namespace: None,
         http_header: None,
         http_label: None,
@@ -283,6 +290,12 @@ impl Schema {
         self.xml_flattened.is_some()
     }
 
+    /// Returns `true` if this struct's XML wire format omits the outer
+    /// wrapper element. See field doc for details.
+    pub fn xml_unwrapped_output(&self) -> bool {
+        self.xml_unwrapped_output
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
@@ -395,6 +408,12 @@ impl Schema {
     /// Sets the `@xmlFlattened` trait.
     pub const fn with_xml_flattened(mut self) -> Self {
         self.xml_flattened = Some(trait_types::XmlFlattenedTrait);
+        self
+    }
+
+    /// Marks the struct as an unwrapped XML output. See field doc for details.
+    pub const fn with_xml_unwrapped_output(mut self) -> Self {
+        self.xml_unwrapped_output = true;
         self
     }
 

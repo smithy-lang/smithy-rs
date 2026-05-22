@@ -235,6 +235,16 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // Empty input → empty struct. Mirrors how the JSON codec treats an
+        // empty body: the consumer is never called, the builder takes its
+        // defaults, and the builder's @httpHeader / @httpResponseCode reads
+        // (which happen *outside* read_struct, in `deserialize_with_response`)
+        // are still free to populate the rest of the output. This is what
+        // S3 HEAD operations and any other header-only / empty-body response
+        // depend on.
+        if self.text.is_none() && self.input.is_empty() {
+            return Ok(());
+        }
         // Build a Document over `self.input` locally. Doing it here (rather
         // than as part of `XmlDeserializer` state) keeps the iteration
         // borrow scoped to this stack frame, which lets us mutate `self`
@@ -245,6 +255,26 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         let mut root = doc
             .root_element()
             .map_err(|e| SerdeError::custom(e.to_string()))?;
+
+        // Unwrapped XML output (e.g. S3 `GetBucketLocation` whose body is
+        // `<LocationConstraint>...</LocationConstraint>` rather than
+        // `<GetBucketLocationOutput><LocationConstraint>...`). The body's
+        // root element IS the (sole) member element — dispatch it directly
+        // and skip the normal "enter wrapper, iterate children" path. The
+        // schema flag is set by codegen for operations with the
+        // `S3UnwrappedXmlOutputTrait` AWS customization; non-XML codecs
+        // ignore the field, preserving runtime protocol-swap compatibility.
+        if schema.xml_unwrapped_output() {
+            let local = root.start_el().local().to_owned();
+            // Release the iterator borrow on `doc` so we can mutate `self`.
+            drop(root);
+            drop(doc);
+            if let Some(member) = Self::resolve_member(schema, &local) {
+                let sub = Self::find_element_slice(input, &local);
+                self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
+            }
+            return Ok(());
+        }
 
         // Dispatch @xmlAttribute members from the start element's attributes.
         for member in schema.members() {
@@ -328,6 +358,10 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         _schema: &Schema,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // Empty input → empty list. See `read_struct` for rationale.
+        if self.text.is_none() && self.input.is_empty() {
+            return Ok(());
+        }
         let input = self.input;
         let mut doc = self.document()?;
         let mut root = doc
@@ -369,6 +403,11 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         // sibling reads on the same deserializer.
         self.schema_override = None;
         let schema = effective_schema;
+
+        // Empty input → empty map. See `read_struct` for rationale.
+        if self.text.is_none() && self.input.is_empty() {
+            return Ok(());
+        }
 
         let input = self.input;
         let mut doc = self.document()?;
@@ -889,5 +928,50 @@ mod tests {
             deser.read_document(&STRING_MEMBER).unwrap_err().to_string(),
             "document types are not supported by REST XML"
         );
+    }
+
+    // Empty body → empty struct/list/map. Required by S3 HEAD operations and
+    // any restXml response whose Output members are entirely HTTP-bound
+    // (headers, status code) with no body content.
+    #[test]
+    fn read_struct_empty_body_is_empty_struct() {
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(b"", settings);
+        let mut called = false;
+        deser
+            .read_struct(&PERSON_SCHEMA, &mut |_member, _d| {
+                called = true;
+                Ok(())
+            })
+            .expect("empty body should be accepted as empty struct");
+        assert!(!called, "consumer must not run for empty input");
+    }
+
+    #[test]
+    fn read_list_empty_body_is_empty_list() {
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(b"", settings);
+        let mut called = false;
+        deser
+            .read_list(&PERSON_SCHEMA, &mut |_d| {
+                called = true;
+                Ok(())
+            })
+            .expect("empty body should be accepted as empty list");
+        assert!(!called, "consumer must not run for empty input");
+    }
+
+    #[test]
+    fn read_map_empty_body_is_empty_map() {
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(b"", settings);
+        let mut called = false;
+        deser
+            .read_map(&PERSON_SCHEMA, &mut |_k, _d| {
+                called = true;
+                Ok(())
+            })
+            .expect("empty body should be accepted as empty map");
+        assert!(!called, "consumer must not run for empty input");
     }
 }

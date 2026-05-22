@@ -16,6 +16,7 @@ pub fn body_is_error(body: &[u8]) -> Result<bool, XmlDecodeError> {
     Ok(scoped.start_el().matches("Error"))
 }
 
+#[allow(unused)]
 pub fn error_scope<'a, 'b>(
     doc: &'a mut Document<'b>,
 ) -> Result<ScopedDecoder<'b, 'a>, XmlDecodeError> {

@@ -10,6 +10,7 @@ import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
+import software.amazon.smithy.model.traits.XmlNamespaceTrait
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -132,8 +133,16 @@ private class SchemaProtocolCustomization(
                             protocol == RestXmlTrait.ID -> {
                                 val smithyXml = RuntimeType.smithyXml(codegenContext.runtimeConfig)
                                 val noWrap = codegenContext.serviceShape.expectTrait<RestXmlTrait>().isNoErrorWrapping
-                                val ctor = if (noWrap) "new().with_no_error_wrapping(true)" else "new()"
-                                smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to ctor
+                                val serviceNs =
+                                    codegenContext.serviceShape.getTrait(XmlNamespaceTrait::class.java).orElse(null)
+                                val builderChain = StringBuilder("new()")
+                                if (noWrap) builderChain.append(".with_no_error_wrapping(true)")
+                                if (serviceNs != null) {
+                                    val uri = serviceNs.uri.dq()
+                                    val prefix = serviceNs.prefix.orElse(null)?.let { "Some(${it.dq()}.to_owned())" } ?: "None"
+                                    builderChain.append(".with_service_xml_namespace($uri.to_owned(), $prefix)")
+                                }
+                                smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to builderChain.toString()
                             }
                             protocol == Rpcv2CborTrait.ID ->
                                 smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"

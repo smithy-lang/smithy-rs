@@ -76,6 +76,16 @@ pub struct XmlSerializer {
     /// its own `@xmlName`) but whose member-level `@xmlName` should win
     /// per the Smithy spec.
     next_root_xml_name: Option<String>,
+    /// One-shot override for the `xmlns` attribute on the next document-root
+    /// element. Consumed on first use. Intended for protocol-layer use:
+    /// REST XML services may declare a service-level `@xmlNamespace` that
+    /// applies as the default xmlns to every operation's request/response
+    /// XML root, but per the Smithy spec a shape- or member-level
+    /// `@xmlNamespace` overrides it. Schemas only carry shape/member
+    /// namespaces; the protocol pre-sets this field with the service
+    /// default, and the codec consumes it on the next root write — but
+    /// only if the schema itself has no `xml_namespace`.
+    next_root_xml_namespace: Option<(String, Option<String>)>,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -147,6 +157,7 @@ impl XmlSerializer {
             list_item_namespace: None,
             member_filter: MemberFilter::None,
             next_root_xml_name: None,
+            next_root_xml_namespace: None,
         }
     }
 
@@ -158,6 +169,16 @@ impl XmlSerializer {
     /// carries the target's `@xmlName` but not the member's).
     pub fn set_next_root_xml_name(&mut self, name: String) {
         self.next_root_xml_name = Some(name);
+    }
+
+    /// Sets a one-shot fallback xmlns for the document-root element. Consumed
+    /// on the first root-level `write_struct` only when the struct's own
+    /// schema has no `xml_namespace` (per the Smithy spec, a shape-level
+    /// `@xmlNamespace` overrides any service-level default). Intended for
+    /// the REST XML protocol to apply the service-level `@xmlNamespace`
+    /// to operation request/response root elements.
+    pub fn set_next_root_xml_namespace(&mut self, uri: String, prefix: Option<String>) {
+        self.next_root_xml_namespace = Some((uri, prefix));
     }
 
     /// Returns true if a write of `schema` should produce output under the
@@ -222,8 +243,26 @@ impl XmlSerializer {
     /// used — this is how a list's inner-member `@xmlNamespace` reaches each
     /// scalar item write whose schema is a generic prelude type and therefore
     /// doesn't carry the trait itself.
+    ///
+    /// If neither schema nor `inherited` provides a namespace AND this is
+    /// the document-root frame (only one frame on the stack), the
+    /// one-shot [`Self::next_root_xml_namespace`] override is consumed.
+    /// This is how the REST XML protocol applies a service-level
+    /// `@xmlNamespace` to the request/response root element without
+    /// codec-time knowledge of the service.
     fn write_xmlns(&mut self, schema: &Schema, inherited: Option<&(String, Option<String>)>) {
         use std::fmt::Write;
+        let is_document_root = self.frames.len() == 1;
+        // Consume the document-root override only at the root, only when
+        // the schema and any caller-provided fallback don't already carry a
+        // namespace. Take it eagerly so it cannot leak to a subsequent root
+        // write on the same serializer (which is unusual but possible).
+        let root_override =
+            if is_document_root && schema.xml_namespace().is_none() && inherited.is_none() {
+                self.next_root_xml_namespace.take()
+            } else {
+                None
+            };
         let Some(Frame::StartTagPending { attrs, .. }) = self.frames.last_mut() else {
             return;
         };
@@ -234,6 +273,11 @@ impl XmlSerializer {
             }
         } else if let Some((uri, prefix)) = inherited {
             match prefix.as_deref() {
+                Some(p) => write!(attrs, " xmlns:{p}=\"{uri}\"").unwrap(),
+                None => write!(attrs, " xmlns=\"{uri}\"").unwrap(),
+            }
+        } else if let Some((uri, prefix)) = root_override {
+            match prefix {
                 Some(p) => write!(attrs, " xmlns:{p}=\"{uri}\"").unwrap(),
                 None => write!(attrs, " xmlns=\"{uri}\"").unwrap(),
             }

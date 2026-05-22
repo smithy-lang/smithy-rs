@@ -278,7 +278,11 @@ class RequestSerializerGenerator(
             ).map_err(#{BoxError}::from)?;
             // Streaming blob payload: replace the body with the raw ByteStream.
             *request.body_mut() = input.$memberName.into_inner();
-            request.headers_mut().insert("Content-Type", ${contentType.dq()});
+            // Default Content-Type for the streaming blob, unless an @httpHeader-bound
+            // member already provided one (which the binding protocol set above).
+            if !request.headers().contains_key("Content-Type") {
+                request.headers_mut().insert("Content-Type", ${contentType.dq()});
+            }
             if let #{Some}(content_length) = request.body().content_length() {
                 request.headers_mut().insert("Content-Length", content_length.to_string());
             }
@@ -410,7 +414,9 @@ class RequestSerializerGenerator(
                         let mut json = String::new();
                         ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
                         *request.body_mut() = #{SdkBody}::from(json.into_bytes());
-                        request.headers_mut().insert("Content-Type", "application/json");
+                        if !request.headers().contains_key("Content-Type") {
+                            request.headers_mut().insert("Content-Type", "application/json");
+                        }
                         if let #{Some}(content_length) = request.body().content_length() {
                             request.headers_mut().insert("Content-Length", content_length.to_string());
                         }
