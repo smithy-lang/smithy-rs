@@ -14,6 +14,11 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document as Smith
 use std::borrow::Cow;
 use std::sync::Arc;
 
+/// Maximum recursion depth for deserialization. Payloads nested deeper than
+/// this will produce a [`SerdeError`] instead of risking a stack overflow.
+/// Matches the default used by the JSON and CBOR codecs.
+pub(crate) const MAX_DESERIALIZE_DEPTH: u32 = 128;
+
 /// XML deserializer that implements the `ShapeDeserializer` trait.
 ///
 /// Wraps the existing `aws_smithy_xml::decode` SAX-like API and provides
@@ -48,6 +53,12 @@ pub struct XmlDeserializer<'a> {
     /// nested element-name overrides (`@xmlName` on inner key/value) can
     /// be honored.
     schema_override: Option<&'static Schema>,
+    /// Aggregate nesting depth. Incremented at the top of each
+    /// `read_struct` / `read_list` / `read_map` and decremented before
+    /// they return so sibling reads on the same deserializer don't
+    /// accumulate. Compared against [`XmlCodecSettings::max_depth`] to
+    /// reject deeply-nested payloads before they exhaust the stack.
+    depth: u32,
 }
 
 impl<'a> XmlDeserializer<'a> {
@@ -58,6 +69,7 @@ impl<'a> XmlDeserializer<'a> {
             text: None,
             settings,
             schema_override: None,
+            depth: 0,
         }
     }
 
@@ -72,7 +84,26 @@ impl<'a> XmlDeserializer<'a> {
             text: Some(text),
             settings,
             schema_override: None,
+            depth: 0,
         }
+    }
+
+    /// Increment the recursion-depth counter and return an error if the
+    /// configured maximum has been exceeded. Caller is responsible for
+    /// decrementing on the way out (see [`Self::leave_aggregate`]).
+    fn enter_aggregate(&mut self) -> Result<(), SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
+        Ok(())
+    }
+
+    /// Decrement the recursion-depth counter. Pair with each successful
+    /// [`Self::enter_aggregate`] call.
+    fn leave_aggregate(&mut self) {
+        debug_assert!(self.depth > 0, "leave_aggregate without enter_aggregate");
+        self.depth = self.depth.saturating_sub(1);
     }
 
     /// Construct a fresh `Document` over `self.input`. Errors if the
@@ -235,6 +266,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         schema: &Schema,
         consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.enter_aggregate()?;
         // Empty input → empty struct. Mirrors how the JSON codec treats an
         // empty body: the consumer is never called, the builder takes its
         // defaults, and the builder's @httpHeader / @httpResponseCode reads
@@ -243,6 +275,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         // S3 HEAD operations and any other header-only / empty-body response
         // depend on.
         if self.text.is_none() && self.input.is_empty() {
+            self.leave_aggregate();
             return Ok(());
         }
         // Build a Document over `self.input` locally. Doing it here (rather
@@ -273,6 +306,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let sub = Self::find_element_slice(input, &local);
                 self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
             }
+            self.leave_aggregate();
             return Ok(());
         }
 
@@ -350,6 +384,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             let mut child_deser = XmlDeserializer::new(&wrapped, self.settings.clone());
             consumer(member, &mut child_deser)?;
         }
+        self.leave_aggregate();
         Ok(())
     }
 
@@ -358,8 +393,10 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         _schema: &Schema,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.enter_aggregate()?;
         // Empty input → empty list. See `read_struct` for rationale.
         if self.text.is_none() && self.input.is_empty() {
+            self.leave_aggregate();
             return Ok(());
         }
         let input = self.input;
@@ -382,6 +419,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
             drop(child_scope);
             self.dispatch_subslice(sub, None, |this| consumer(this))?;
         }
+        self.leave_aggregate();
         Ok(())
     }
 
@@ -390,6 +428,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         schema: &Schema,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        self.enter_aggregate()?;
         // If a parent aggregate read installed a `schema_override` on us, it
         // takes priority. Codegen generates inner `read_map` calls reusing
         // the outer `member` schema (closure variable shadowing) — so the
@@ -406,6 +445,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
 
         // Empty input → empty map. See `read_struct` for rationale.
         if self.text.is_none() && self.input.is_empty() {
+            self.leave_aggregate();
             return Ok(());
         }
 
@@ -476,6 +516,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 }
             }
         }
+        self.leave_aggregate();
         Ok(())
     }
 
@@ -973,5 +1014,150 @@ mod tests {
             })
             .expect("empty body should be accepted as empty map");
         assert!(!called, "consumer must not run for empty input");
+    }
+
+    // Recursion-depth guard tests. These pin the read_struct / read_list /
+    // read_map paths to a small custom `max_depth` so we can exercise the
+    // overflow path without constructing pathologically large XML.
+
+    /// Lower max_depth to `n` for the test deserializer.
+    fn settings_with_max_depth(n: u32) -> Arc<XmlCodecSettings> {
+        Arc::new(XmlCodecSettings::builder().max_depth(n).build())
+    }
+
+    /// Build a `<r>(<r>)*N(value)(</r>)*N` chain `depth` levels deep.
+    fn nested_struct_xml(depth: u32) -> Vec<u8> {
+        let mut s = String::new();
+        for _ in 0..depth {
+            s.push_str("<r>");
+        }
+        s.push_str("v");
+        for _ in 0..depth {
+            s.push_str("</r>");
+        }
+        s.into_bytes()
+    }
+
+    #[test]
+    fn read_struct_rejects_overdeep_payloads() {
+        // Self-referential schema: `R { r: R }`. Each `read_struct` with the
+        // same schema increments depth and recurses one level via the
+        // member dispatch.
+        static R_MEMBER_SELF: Schema =
+            Schema::new_member(shape_id!("test", "R$r"), ShapeType::Structure, "r", 0);
+        static R_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "R"),
+            ShapeType::Structure,
+            &[&R_MEMBER_SELF],
+        );
+
+        // Tighter limit so the test is fast.
+        let max = 4;
+        let xml = nested_struct_xml(max + 2);
+        let mut deser = XmlDeserializer::new(&xml, settings_with_max_depth(max));
+
+        // Recursive consumer: each entry into `<r>` calls read_struct again.
+        fn consume(_m: &Schema, d: &mut dyn ShapeDeserializer) -> Result<(), SerdeError> {
+            d.read_struct(&R_SCHEMA, &mut consume)
+        }
+        let err = deser
+            .read_struct(&R_SCHEMA, &mut consume)
+            .expect_err("must reject payload exceeding max_depth");
+        assert!(
+            format!("{err}").contains("maximum nesting depth exceeded"),
+            "expected depth-exceeded error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn read_struct_accepts_payloads_up_to_max_depth() {
+        // Inverse of the above: at exactly `max_depth` we should succeed.
+        // Walking the chain `max_depth` times consumes `max_depth` enter
+        // calls (the outermost is the test's own call, inner consumer
+        // recursions add one each).
+        static R_MEMBER_SELF: Schema =
+            Schema::new_member(shape_id!("test", "R$r"), ShapeType::Structure, "r", 0);
+        static R_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "R"),
+            ShapeType::Structure,
+            &[&R_MEMBER_SELF],
+        );
+
+        // 4 nested `<r>` opens; the consumer recurses for each `<r>` it
+        // encounters as a child member. At depth=max we stop recursing
+        // (consumer only recurses when it sees an `<r>` child element).
+        let max = 4;
+        let xml = nested_struct_xml(max);
+        let mut deser = XmlDeserializer::new(&xml, settings_with_max_depth(max));
+
+        let mut depth_seen = 0u32;
+        fn consume(
+            _m: &Schema,
+            d: &mut dyn ShapeDeserializer,
+            depth_seen: &mut u32,
+        ) -> Result<(), SerdeError> {
+            *depth_seen += 1;
+            d.read_struct(&R_SCHEMA, &mut |m, d2| consume(m, d2, depth_seen))
+        }
+
+        deser
+            .read_struct(&R_SCHEMA, &mut |m, d| consume(m, d, &mut depth_seen))
+            .expect("payload at exactly max_depth must succeed");
+    }
+
+    #[test]
+    fn read_list_rejects_overdeep_payloads() {
+        // Nested lists: `<l><l><l>...</l></l></l>` exceeds max_depth.
+        static L_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "L$member"), ShapeType::List, "member", 0);
+        static L_SCHEMA: Schema = Schema::new_list(shape_id!("test", "L"), &L_MEMBER);
+
+        let max = 3;
+        // 5 levels of `<l>` — exceeds 3.
+        let xml = b"<l><l><l><l><l/></l></l></l></l>";
+        let mut deser = XmlDeserializer::new(xml, settings_with_max_depth(max));
+
+        fn consume(d: &mut dyn ShapeDeserializer) -> Result<(), SerdeError> {
+            d.read_list(&L_SCHEMA, &mut consume)
+        }
+        let err = deser
+            .read_list(&L_SCHEMA, &mut consume)
+            .expect_err("nested-list payload exceeding max_depth must error");
+        assert!(
+            format!("{err}").contains("maximum nesting depth exceeded"),
+            "expected depth-exceeded error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn depth_resets_between_sibling_reads() {
+        // After a successful aggregate read, the depth counter must return
+        // to its prior value so the next sibling read isn't poisoned.
+        static R_MEMBER_SELF: Schema =
+            Schema::new_member(shape_id!("test", "R$r"), ShapeType::Structure, "r", 0);
+        static R_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "R"),
+            ShapeType::Structure,
+            &[&R_MEMBER_SELF],
+        );
+
+        let max = 4;
+        let xml = nested_struct_xml(2);
+        let mut deser = XmlDeserializer::new(&xml, settings_with_max_depth(max));
+
+        // First read: 2 levels deep, well under max.
+        deser
+            .read_struct(&R_SCHEMA, &mut |_m, d| {
+                d.read_struct(&R_SCHEMA, &mut |_, _| Ok(()))
+            })
+            .expect("first read at depth=2 must succeed");
+
+        // Second read on the same deserializer with the same payload:
+        // would fail if depth had leaked from the first call.
+        deser
+            .read_struct(&R_SCHEMA, &mut |_m, d| {
+                d.read_struct(&R_SCHEMA, &mut |_, _| Ok(()))
+            })
+            .expect("sibling read on the same deserializer must succeed");
     }
 }

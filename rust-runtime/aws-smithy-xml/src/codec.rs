@@ -31,6 +31,7 @@ pub use serializer::XmlSerializer;
 #[derive(Debug)]
 pub struct XmlCodecSettings {
     default_timestamp_format: TimestampFormat,
+    max_depth: u32,
 }
 
 impl XmlCodecSettings {
@@ -44,12 +45,20 @@ impl XmlCodecSettings {
     pub fn default_timestamp_format(&self) -> TimestampFormat {
         self.default_timestamp_format
     }
+
+    /// Maximum aggregate nesting depth the deserializer will accept before
+    /// returning an error. Defends against stack overflow on recursive
+    /// shapes and deeply-nested XML payloads.
+    pub fn max_depth(&self) -> u32 {
+        self.max_depth
+    }
 }
 
 impl Default for XmlCodecSettings {
     fn default() -> Self {
         Self {
             default_timestamp_format: TimestampFormat::DateTime,
+            max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
         }
     }
 }
@@ -58,12 +67,14 @@ impl Default for XmlCodecSettings {
 #[derive(Debug, Clone)]
 pub struct XmlCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
+    max_depth: u32,
 }
 
 impl Default for XmlCodecSettingsBuilder {
     fn default() -> Self {
         Self {
             default_timestamp_format: TimestampFormat::DateTime,
+            max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
         }
     }
 }
@@ -75,10 +86,18 @@ impl XmlCodecSettingsBuilder {
         self
     }
 
+    /// Sets the maximum aggregate nesting depth the deserializer will accept
+    /// before returning an error. Defaults to 128.
+    pub fn max_depth(mut self, value: u32) -> Self {
+        self.max_depth = value;
+        self
+    }
+
     /// Builds the settings.
     pub fn build(self) -> XmlCodecSettings {
         XmlCodecSettings {
             default_timestamp_format: self.default_timestamp_format,
+            max_depth: self.max_depth,
         }
     }
 }
