@@ -134,6 +134,12 @@ class JsonParserGenerator(
             *preludeScope,
         )
 
+    // Maximum shape-tree recursion depth permitted by generated deserializers.
+    // Guards against stack overflow from deeply-nested payloads targeting recursive shapes.
+    // Matches serde_json's default of 128.
+    private val maxDepth: Int = 128
+    private val depthErrorMessage: String = "maximum nesting depth exceeded"
+
     /**
      * Reusable structure parser implementation that can be used to generate parsing code for
      * operation, error and structure shapes.
@@ -159,6 +165,8 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}(#{or_empty}(_value)).peekable();
                     let tokens = &mut tokens_owned;
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     #{expect_start_object}(tokens.next())?;
                     """,
                     *codegenScope,
@@ -193,6 +201,8 @@ class JsonParserGenerator(
                     """
                     let mut tokens_owned = #{json_token_iter}($input).peekable();
                     let tokens = &mut tokens_owned;
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     """,
                     *codegenScope,
                 )
@@ -434,12 +444,20 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8], depth: u32) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbol,
                     *codegenScope,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     startArrayOrNull {
                         rust("let mut items = Vec::new();")
                         rustBlock("loop") {
@@ -478,7 +496,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens, _value)?", parser)
+        rust("#T(tokens, _value, depth + 1)?", parser)
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
@@ -489,12 +507,20 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8], depth: u32) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
                     *codegenScope,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     startObjectOrNull {
                         rust("let mut map = #T::new();", RuntimeType.HashMap)
                         objectKeyLoop(hasMembers = true) {
@@ -525,7 +551,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens, _value)?", parser)
+        rust("#T(tokens, _value, depth + 1)?", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
@@ -534,12 +560,20 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{ReturnType}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8], depth: u32) -> #{Result}<Option<#{ReturnType}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     "ReturnType" to returnSymbolToParse.symbol,
                     *codegenScope,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     startObjectOrNull {
                         Attribute.AllowUnusedMut.render(this)
                         rustTemplate(
@@ -560,7 +594,7 @@ class JsonParserGenerator(
                     }
                 }
             }
-        rust("#T(tokens, _value)?", nestedParser)
+        rust("#T(tokens, _value, depth + 1)?", nestedParser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
@@ -569,12 +603,20 @@ class JsonParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     """
-                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8]) -> #{Result}<Option<#{Shape}>, #{Error}>
+                    pub(crate) fn $fnName<'a, I>(tokens: &mut #{Peekable}<I>, _value: &'a [u8], depth: u32) -> #{Result}<Option<#{Shape}>, #{Error}>
                         where I: Iterator<Item = Result<#{Token}<'a>, #{Error}>>
                     """,
                     *codegenScope,
                     "Shape" to returnSymbolToParse.symbol,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     // Apply any custom union deserialization logic before processing tokens.
                     // This allows for customization of how union variants are handled,
                     // particularly their discrimination mechanism.
@@ -676,7 +718,7 @@ class JsonParserGenerator(
                     rust("Ok(variant)")
                 }
             }
-        rust("#T(tokens, _value)?", nestedParser)
+        rust("#T(tokens, _value, depth + 1)?", nestedParser)
     }
 
     private fun RustWriter.unwrapOrDefaultOrError(
