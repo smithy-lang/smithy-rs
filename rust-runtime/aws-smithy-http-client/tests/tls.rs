@@ -3,10 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-#![cfg(any(
-    feature = "__rustls",
-    feature = "s2n-tls",
-))]
+#![cfg(any(feature = "__rustls", feature = "s2n-tls",))]
 
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http_client::tls;
