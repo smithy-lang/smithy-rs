@@ -284,18 +284,26 @@ impl XmlSerializer {
         }
     }
 
-    /// Pop the top frame and emit the closing tag. If the frame is still in
-    /// [`Frame::StartTagPending`] (no children were written), emits `/>` to
-    /// self-close; otherwise emits `</name>`.
+    /// Pop the top frame and emit the closing tag.
+    ///
+    /// Always emits `<name attrs>...</name>` form, never `<name attrs/>`.
+    /// Both forms are equivalent XML, but legacy smithy-rs (and S3's recorded
+    /// request fixtures) use the explicit-close form. Matching that prevents
+    /// false-positive content-length mismatches in DVR-replay tests like
+    /// `s3::select_object_content::test_success`, where `<CSV></CSV>` differs
+    /// from `<CSV/>` by 5 bytes.
     fn close_element(&mut self) {
         let frame = self
             .frames
             .pop()
             .expect("close_element called with empty frame stack");
         match frame {
-            Frame::StartTagPending { attrs, .. } => {
+            Frame::StartTagPending { name, attrs } => {
                 self.output.push_str(&attrs);
-                self.output.push_str("/>");
+                self.output.push('>');
+                self.output.push_str("</");
+                self.output.push_str(&name);
+                self.output.push('>');
             }
             Frame::Open { name } => {
                 self.output.push_str("</");
@@ -967,7 +975,7 @@ mod tests {
             Schema::new_struct(shape_id!("test", "Empty"), ShapeType::Structure, &[]);
 
         let out = serialize(|ser| ser.write_struct(&EMPTY_SCHEMA, &Empty));
-        assert_eq!(out, "<Empty/>");
+        assert_eq!(out, "<Empty></Empty>");
     }
 
     #[test]
@@ -1084,7 +1092,7 @@ mod tests {
         }
 
         let out = serialize(|ser| ser.write_struct(&SYNTHETIC, &Empty));
-        assert_eq!(out, "<FooRequest/>");
+        assert_eq!(out, "<FooRequest></FooRequest>");
     }
 
     // Scalar member writes (boolean, ints, floats, blob, timestamp).
@@ -1207,7 +1215,7 @@ mod tests {
         }
 
         let out = serialize(|ser| ser.write_struct(&X_SCHEMA, &X));
-        assert_eq!(out, "<X count=\"7\"/>");
+        assert_eq!(out, "<X count=\"7\"></X>");
     }
 
     #[test]
@@ -1226,7 +1234,7 @@ mod tests {
         }
 
         let out = serialize(|ser| ser.write_struct(&X_SCHEMA, &X));
-        assert_eq!(out, "<X v=\"a&quot;b&amp;c\"/>");
+        assert_eq!(out, "<X v=\"a&quot;b&amp;c\"></X>");
     }
 
     #[test]
@@ -1267,7 +1275,7 @@ mod tests {
         }
 
         let out = serialize(|ser| ser.write_struct(&NS_SCHEMA, &Empty));
-        assert_eq!(out, "<X xmlns=\"https://example.com\"/>");
+        assert_eq!(out, "<X xmlns=\"https://example.com\"></X>");
     }
 
     #[test]
@@ -1284,7 +1292,7 @@ mod tests {
         }
 
         let out = serialize(|ser| ser.write_struct(&NS_SCHEMA, &Empty));
-        assert_eq!(out, "<X xmlns:ex=\"https://example.com\"/>");
+        assert_eq!(out, "<X xmlns:ex=\"https://example.com\"></X>");
     }
 
     #[test]

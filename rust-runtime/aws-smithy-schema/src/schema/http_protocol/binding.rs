@@ -262,6 +262,14 @@ struct HttpBindingSerializer<'a, S> {
     /// Safety: the referenced bytes are borrowed from the input struct passed to
     /// `serialize_request`, which outlives this serializer.
     raw_payload: Option<&'a [u8]>,
+    /// Tracks member indices that have already been routed to HTTP bindings
+    /// (`@httpHeader`, `@httpQuery`, `@httpLabel`, `@httpPrefixHeaders`,
+    /// `@httpQueryParams`). Some body codecs (notably `XmlSerializer`) call
+    /// `serialize_members` more than once on a single struct (a two-pass for
+    /// attribute / element ordering). Without this guard each HTTP-bound
+    /// member would be appended to its target collection on every pass,
+    /// duplicating header / query entries and breaking presigning signatures.
+    visited_bound_members: std::collections::HashSet<usize>,
 }
 
 impl<'a, S> HttpBindingSerializer<'a, S> {
@@ -274,7 +282,26 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             input_schema,
             is_top_level: true,
             raw_payload: None,
+            visited_bound_members: std::collections::HashSet::new(),
         }
+    }
+
+    /// Returns `true` the first time this member's HTTP binding is observed
+    /// on this serializer, marking it visited. Some body codecs (notably
+    /// `XmlSerializer`) invoke `serialize_members` more than once on the same
+    /// struct (a two-pass for attribute / element ordering). Without this
+    /// guard each HTTP-bound member would be appended to its target
+    /// collection on every pass, duplicating header / query / label entries
+    /// and producing wrong-signed presigned URLs.
+    ///
+    /// HTTP-bound members are always struct members and so always have an
+    /// index. The `unwrap_or(true)` fallback for schemas without an index
+    /// keeps the helper conservative — it routes when it can't dedupe.
+    fn should_route_binding(&mut self, schema: &Schema) -> bool {
+        schema
+            .member_index()
+            .map(|idx| self.visited_bound_members.insert(idx))
+            .unwrap_or(true)
     }
 
     /// Resolve the effective member schema: if an input_schema override is set,
@@ -372,6 +399,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         let schema = self.resolve_member(schema);
         // @httpHeader on a list: collect elements as comma-separated header value
         if let Some(header) = schema.http_header() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             let mut collector = ListElementCollector::for_header();
             write_elements(&mut collector)?;
             // RFC 7230: string values containing commas or quotes need quoting.
@@ -394,6 +424,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         }
         // @httpQuery on a list: add each element as a separate query param
         if let Some(query) = schema.http_query() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             let mut collector = ListElementCollector::for_query();
             write_elements(&mut collector)?;
             for val in collector.values {
@@ -412,6 +445,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         let schema = self.resolve_member(schema);
         // @httpPrefixHeaders: serialize map entries as prefixed headers
         if let Some(prefix) = schema.http_prefix_headers() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             // Collect entries via a temporary serializer
             let mut collector = MapEntryCollector::new(prefix.value().to_string());
             write_entries(&mut collector)?;
@@ -420,6 +456,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         }
         // @httpQueryParams: serialize map entries as query params
         if schema.http_query_params().is_some() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             let mut collector = MapEntryCollector::new(String::new());
             write_entries(&mut collector)?;
             // Filter out keys that overlap with explicit @httpQuery params
@@ -534,6 +573,9 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             return self.add_binding(binding, schema, value);
         }
         if schema.http_payload().is_some() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             // SAFETY: We extend the lifetime of `value.as_bytes()` from its anonymous
             // lifetime to `'a`. This is sound because:
             // 1. `value` is borrowed from the input struct passed to `serialize_request`.
@@ -558,12 +600,18 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if schema.http_header().is_some() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
             self.headers
                 .push((schema.http_header().unwrap().value().to_string(), encoded));
             return Ok(());
         }
         if schema.http_payload().is_some() {
+            if !self.should_route_binding(schema) {
+                return Ok(());
+            }
             // SAFETY: We extend the lifetime of `value.as_ref()` (a `&[u8]`) from its
             // anonymous lifetime to `'a`. This is sound because:
             // 1. `value` is borrowed from the input struct passed to `serialize_request`.
@@ -656,6 +704,12 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         schema: &Schema,
         value: &str,
     ) -> Result<(), SerdeError> {
+        // Dedupe per-member: see `should_route_binding`. Without this, a
+        // multi-pass body codec invokes `serialize_members` more than once
+        // and each pass would append to `headers` / `query_params` / `labels`.
+        if !self.should_route_binding(schema) {
+            return Ok(());
+        }
         match binding {
             HttpBinding::Header(name) => {
                 self.headers.push((name.to_string(), value.to_string()));
@@ -1007,10 +1061,19 @@ where
         _output_schema: &Schema,
         _cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
-        let body = response
-            .body()
-            .bytes()
-            .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
+        // For non-streaming responses the orchestrator has already loaded
+        // the body into an in-memory `Once(...)`, so `bytes()` returns the
+        // payload to feed into the codec. For streaming responses (whose
+        // outputs have an `@httpPayload` streaming blob or event-stream
+        // member) the body is left as a streaming `BoxBody` — possibly
+        // further wrapped by interceptors such as `ResponseChecksumInterceptor`
+        // — and `bytes()` returns `None`. The streaming codegen path
+        // doesn't actually feed the body through this deserializer (it
+        // passes `&[]` to `deserialize_with_response`), so we hand back an
+        // empty-input deserializer instead of erroring. Empty input is
+        // interpreted by the codec as "no body members to read", which
+        // matches the streaming path's contract.
+        let body = response.body().bytes().unwrap_or(&[]);
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
 

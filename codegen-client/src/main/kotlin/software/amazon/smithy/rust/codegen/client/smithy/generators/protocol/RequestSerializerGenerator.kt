@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators.protocol
 
+import software.amazon.smithy.model.knowledge.HttpBinding
+import software.amazon.smithy.model.knowledge.HttpBindingIndex
 import software.amazon.smithy.model.shapes.BlobShape
 import software.amazon.smithy.model.shapes.DocumentShape
 import software.amazon.smithy.model.shapes.EnumShape
@@ -23,14 +25,18 @@ import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
+import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.preludeScope
+import software.amazon.smithy.rust.codegen.core.smithy.generators.OperationBuildError
 import software.amazon.smithy.rust.codegen.core.smithy.generators.protocol.ProtocolPayloadGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.findStreamingMember
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.inputShape
 
 class RequestSerializerGenerator(
@@ -68,6 +74,68 @@ class RequestSerializerGenerator(
 
     private val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
 
+    private val httpBindingIndex by lazy { HttpBindingIndex.of(codegenContext.model) }
+
+    /**
+     * Schema-serde mirror of the legacy `RequestBindingGenerator` validation
+     * for required @httpQuery and @httpLabel members.
+     *
+     * The schema-serde path bypasses `RequestBindingGenerator`, but the
+     * `@required` trait is intentionally not in `SchemaTraitFilter.DEFAULT_INCLUDED_TRAITS`
+     * (per the SEP appendix's "only if pre-existing enforcement" guidance), so the
+     * runtime `HttpBindingProtocol` cannot make this decision from the schema. The
+     * validation is therefore emitted in generated code, before
+     * `protocol.serialize_request(...)`.
+     *
+     * Behavior matches `RequestBindingGenerator`:
+     * - For required members targeting query string or URI label bindings:
+     *     emit `ok_or_else(|| BuildError::missing_field(...))?` to fail on `None`.
+     * - For required members targeting non-enum strings:
+     *     additionally emit `is_empty()` check, failing with the same BuildError.
+     *
+     * The propagated `BuildError` reaches the `Result<HttpRequest, BoxError>`
+     * return type via the existing `From<BuildError> for BoxError` conversion.
+     *
+     * Header bindings (`@httpHeader`, `@httpPrefixHeaders`, `@httpQueryParams`)
+     * are intentionally not validated here — neither does the legacy path.
+     */
+    private fun validateRequiredHttpBindings(operationShape: OperationShape): Writable =
+        writable {
+            val queryBindings = httpBindingIndex.getRequestBindings(operationShape, HttpBinding.Location.QUERY)
+            val labelBindings = httpBindingIndex.getRequestBindings(operationShape, HttpBinding.Location.LABEL)
+            for (binding in queryBindings + labelBindings) {
+                val memberShape = binding.member
+                if (!memberShape.isRequired) continue
+                val target = codegenContext.model.expectShape(memberShape.target)
+                val memberName = symbolProvider.toMemberName(memberShape)
+                val memberSymbol = symbolProvider.toSymbol(memberShape)
+                val codegenScope =
+                    arrayOf(
+                        *preludeScope,
+                        "BuildError" to
+                            OperationBuildError(codegenContext.runtimeConfig).missingField(
+                                memberName,
+                                "cannot be empty or unset",
+                            ),
+                    )
+                if (memberSymbol.isOptional()) {
+                    rustTemplate(
+                        "let _required_check = input.$memberName.as_ref().ok_or_else(|| #{BuildError:W})?;",
+                        *codegenScope,
+                    )
+                    if (target.isStringShape && !target.hasTrait<EnumTrait>()) {
+                        rustBlock("if _required_check.is_empty()") {
+                            rustTemplate("return #{Err}(#{BuildError:W}.into());", *codegenScope)
+                        }
+                    }
+                } else if (target.isStringShape && !target.hasTrait<EnumTrait>()) {
+                    rustBlock("if input.$memberName.is_empty()") {
+                        rustTemplate("return #{Err}(#{BuildError:W}.into());", *codegenScope)
+                    }
+                }
+            }
+        }
+
     fun render(
         writer: RustWriter,
         operationShape: OperationShape,
@@ -104,6 +172,7 @@ class RequestSerializerGenerator(
                 ##[allow(unused_mut, clippy::let_and_return, clippy::needless_borrow, clippy::useless_conversion)]
                 fn serialize_input(&self, input: #{Input}, _cfg: &mut #{ConfigBag}) -> #{Result}<#{HttpRequest}, #{BoxError}> {
                     let input = input.downcast::<#{ConcreteInput}>().expect("correct type");
+                    #{validate_required}
                     let protocol = _cfg.load::<#{SharedClientProtocol}>()
                         .expect("a SharedClientProtocol is required");
                     #{schema_serialize}
@@ -112,6 +181,7 @@ class RequestSerializerGenerator(
             """,
             *codegenScope,
             "ConcreteInput" to inputSymbol,
+            "validate_required" to validateRequiredHttpBindings(operationShape),
             "schema_serialize" to schemaSerialize(operationShape, operationName, inputShape, schemaRef),
         )
     }
@@ -278,13 +348,27 @@ class RequestSerializerGenerator(
             ).map_err(#{BoxError}::from)?;
             // Streaming blob payload: replace the body with the raw ByteStream.
             *request.body_mut() = input.$memberName.into_inner();
-            // Default Content-Type for the streaming blob, unless an @httpHeader-bound
-            // member already provided one (which the binding protocol set above).
-            if !request.headers().contains_key("Content-Type") {
+            // Default Content-Type / Content-Length for the streaming blob.
+            // Both honor `HeaderSerializationSettings` (used by presigning to
+            // omit the defaults so they don't get included in the signed
+            // header set), and both only fire when the header isn't already
+            // present — an `@httpHeader`-bound member like S3
+            // `PutObject::content_length` / `content_type` wins.
+            let _hss = _cfg
+                .load::<#{HeaderSerializationSettings}>()
+                .cloned()
+                .unwrap_or_default();
+            if !_hss.should_omit_default_content_type()
+                && !request.headers().contains_key("Content-Type")
+            {
                 request.headers_mut().insert("Content-Type", ${contentType.dq()});
             }
-            if let #{Some}(content_length) = request.body().content_length() {
-                request.headers_mut().insert("Content-Length", content_length.to_string());
+            if !_hss.should_omit_default_content_length()
+                && !request.headers().contains_key("Content-Length")
+            {
+                if let #{Some}(content_length) = request.body().content_length() {
+                    request.headers_mut().insert("Content-Length", content_length.to_string());
+                }
             }
             #{add_headers}
             return #{Ok}(request);
@@ -387,11 +471,21 @@ class RequestSerializerGenerator(
                     ).map_err(#{BoxError}::from)?;
                     if let #{Some}(payload) = payload {
                         *request.body_mut() = #{SdkBody}::from($bodyExpr);
-                        if !request.headers().contains_key("Content-Type") {
+                        let _hss = _cfg
+                            .load::<#{HeaderSerializationSettings}>()
+                            .cloned()
+                            .unwrap_or_default();
+                        if !_hss.should_omit_default_content_type()
+                            && !request.headers().contains_key("Content-Type")
+                        {
                             request.headers_mut().insert("Content-Type", ${contentType.dq()});
                         }
-                        if let #{Some}(content_length) = request.body().content_length() {
-                            request.headers_mut().insert("Content-Length", content_length.to_string());
+                        if !_hss.should_omit_default_content_length()
+                            && !request.headers().contains_key("Content-Length")
+                        {
+                            if let #{Some}(content_length) = request.body().content_length() {
+                                request.headers_mut().insert("Content-Length", content_length.to_string());
+                            }
                         }
                     }
                     #{add_headers}
@@ -414,11 +508,21 @@ class RequestSerializerGenerator(
                         let mut json = String::new();
                         ::aws_smithy_json::serialize::JsonValueWriter::new(&mut json).document(&payload);
                         *request.body_mut() = #{SdkBody}::from(json.into_bytes());
-                        if !request.headers().contains_key("Content-Type") {
+                        let _hss = _cfg
+                            .load::<#{HeaderSerializationSettings}>()
+                            .cloned()
+                            .unwrap_or_default();
+                        if !_hss.should_omit_default_content_type()
+                            && !request.headers().contains_key("Content-Type")
+                        {
                             request.headers_mut().insert("Content-Type", "application/json");
                         }
-                        if let #{Some}(content_length) = request.body().content_length() {
-                            request.headers_mut().insert("Content-Length", content_length.to_string());
+                        if !_hss.should_omit_default_content_length()
+                            && !request.headers().contains_key("Content-Length")
+                        {
+                            if let #{Some}(content_length) = request.body().content_length() {
+                                request.headers_mut().insert("Content-Length", content_length.to_string());
+                            }
                         }
                     }
                     #{add_headers}

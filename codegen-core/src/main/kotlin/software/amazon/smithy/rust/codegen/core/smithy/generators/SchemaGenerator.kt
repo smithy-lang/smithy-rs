@@ -927,6 +927,46 @@ class SchemaGenerator(
                         member.memberName != "_request_id"
                 }
             if (hasBodyMembers) {
+                // Error types may legitimately receive an empty wire body
+                // (e.g., S3's `HeadObject` 404 returns an empty document and
+                // signals `NotFound` via status code + headers only). The
+                // legacy XML codegen short-circuited on `inp.is_empty()` for
+                // error parsers; mirror that here for `@error`-marked structs
+                // so an empty body deserializes into a default-built error
+                // (its `meta` / `_request_id` are populated by the caller).
+                // For non-error structs the body deserializer is invoked
+                // unconditionally — an empty body falls through to the
+                // codec's empty-input handling, which surfaces the
+                // malformed-response error rather than silently accepting
+                // it. This matches both the legacy XML strictness and
+                // JSON's `{}` semantics.
+                val isError = structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+                val bodyParamName = if (isError) "body" else "_body"
+                val errorEmptyBodyShortcut: Writable =
+                    if (isError) {
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Self::builder().build()
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                    }
+                                    """,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Ok(Self::builder().build());
+                                    }
+                                    """,
+                                )
+                            }
+                        }
+                    } else {
+                        writable {}
+                    }
                 writer.rustTemplate(
                     """
                     impl $structName {
@@ -935,8 +975,9 @@ class SchemaGenerator(
                             deserializer: &mut dyn #{ShapeDeserializer},
                             _headers: &#{Headers},
                             _status: u16,
-                            _body: &[u8],
+                            $bodyParamName: &[u8],
                         ) -> ::std::result::Result<Self, #{SerdeError}> {
+                            #{ErrorEmptyBodyShortcut}
                             Self::deserialize(deserializer)
                         }
                     }
@@ -944,6 +985,7 @@ class SchemaGenerator(
                     "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                     "SerdeError" to smithySchema.resolve("serde::SerdeError"),
                     "Headers" to RuntimeType.smithyRuntimeApi(runtimeConfig).resolve("http::Headers"),
+                    "ErrorEmptyBodyShortcut" to errorEmptyBodyShortcut,
                 )
             } else {
                 // No body members — skip body deserialization. Per the Smithy HTTP binding spec,
@@ -980,7 +1022,6 @@ class SchemaGenerator(
         }
 
         val headersParam = if (headerMembers.isNotEmpty() || prefixMember != null) "headers" else "_headers"
-        val bodyParam = if (hasPayloadHandling) "body" else "_body"
         // Check if there are any body members (non-HTTP-bound, non-synthetic, non-streaming)
         val hasBodyMembers =
             structShape.allMembers.values.any { member ->
@@ -990,6 +1031,14 @@ class SchemaGenerator(
                     !member.isStreaming(model) &&
                     member.memberName != "_request_id"
             }
+        // Error structs with body members need access to `body` to short-
+        // circuit on empty wire bodies (matching the legacy
+        // `if inp.is_empty() { return Ok(builder); }` behavior). Otherwise
+        // `body` is only referenced for `@httpPayload` handling.
+        val isErrorWithBodyMembers =
+            hasBodyMembers &&
+                structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+        val bodyParam = if (hasPayloadHandling || isErrorWithBodyMembers) "body" else "_body"
         val deserializerParam = if (isRawPayload || !hasBodyMembers) "_deserializer" else "deserializer"
 
         writer.rustTemplate(
@@ -1319,9 +1368,41 @@ class SchemaGenerator(
                         },
                 )
             } else {
-                // Now deserialize body members
+                // Now deserialize body members. For `@error`-marked structs
+                // an empty wire body is legitimate (see path 1 above for
+                // rationale) — short-circuit before invoking the
+                // deserializer so we surface the error variant built from
+                // headers/defaults rather than failing the whole error
+                // parse.
+                val isError = structShape.hasTrait(software.amazon.smithy.model.traits.ErrorTrait::class.java)
+                val errorEmptyBodyShortcut: Writable =
+                    if (isError) {
+                        writable {
+                            if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return builder.build()
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                    }
+                                    """,
+                                )
+                            } else {
+                                rust(
+                                    """
+                                    if body.is_empty() {
+                                        return Ok(builder.build());
+                                    }
+                                    """,
+                                )
+                            }
+                        }
+                    } else {
+                        writable {}
+                    }
                 writer.rustTemplate(
                     """
+                    #{ErrorEmptyBodyShortcut}
                     ##[allow(unused_variables, unreachable_code, clippy::single_match, clippy::match_single_binding, clippy::diverging_sub_expression)]
                     deserializer.read_struct(&${schemaPrefix}_SCHEMA, &mut |member, deser| {
                         match member.member_index() {
@@ -1336,6 +1417,7 @@ class SchemaGenerator(
                     """,
                     "ShapeDeserializer" to smithySchema.resolve("serde::ShapeDeserializer"),
                     "SerdeError" to smithySchema.resolve("serde::SerdeError"),
+                    "ErrorEmptyBodyShortcut" to errorEmptyBodyShortcut,
                     "buildExpr" to
                         writable {
                             if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {

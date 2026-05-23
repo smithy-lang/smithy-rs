@@ -53,7 +53,11 @@ object SchemaSerdeAllowlist {
      */
     private val allowedProtocols: Set<ShapeId> =
         setOf(
+            RestJson1Trait.ID,
+            AwsJson1_0Trait.ID,
+            AwsJson1_1Trait.ID,
             RestXmlTrait.ID,
+            Rpcv2CborTrait.ID,
         )
 
     /** Individual services allowed regardless of protocol. */
