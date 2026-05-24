@@ -377,6 +377,17 @@ impl ConnectionPermit {
     }
 }
 
+/// Outcome of establishing a new transport connection (TCP + TLS).
+///
+/// Carries the IO handle and the connection permit acquired during
+/// connection establishment. The IO handle drives the protocol
+/// handshake; the permit holds the connection's slot in the pool's
+/// limit semaphores until the connection is dropped.
+pub(crate) struct EstablishedConnection<IO> {
+    pub(crate) io: IO,
+    pub(crate) permit: Arc<ConnectionPermit>,
+}
+
 /// Error returned by `ManagedConnection::poll_ready` when the connection
 /// has been marked poisoned and should not be reused.
 #[derive(Debug)]

@@ -274,11 +274,9 @@ where
 
             let stack = hpool::negotiate::builder()
                 .connect(limited)
-                .inspect(
-                    |(conn, _permit): &(IO, Arc<connection::ConnectionPermit>)| {
-                        conn.connected().is_negotiated_h2()
-                    },
-                )
+                .inspect(|established: &connection::EstablishedConnection<IO>| {
+                    established.io.connected().is_negotiated_h2()
+                })
                 .fallback({
                     let retainers = retainers.clone();
                     let pool_hooks = pool_hooks.clone();
