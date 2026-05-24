@@ -6,7 +6,7 @@
 //! Tower service adapters for hyper's HTTP protocol handshake.
 //!
 //! - `ConnectionLimit`: wraps a connector, acquires semaphore permits before
-//!   connecting, and returns `(IO, Arc<ConnectionPermit>)`.
+//!   connecting, and returns an `EstablishedConnection`.
 //! - `H1ConnectAndHandshake` / `H2ConnectAndHandshake`: perform the protocol
 //!   handshake on an already-connected IO stream, producing a `ManagedConnection`.
 
@@ -27,7 +27,8 @@ use tower::Service;
 
 use super::connection::{
     Authority, ConnectCtx, ConnectionCreatedEvent, ConnectionFailedEvent, ConnectionInfo,
-    ConnectionPermit, ConnectionTiming, ManagedConnection, NegotiatedProtocol,
+    ConnectionPermit, ConnectionTiming, EstablishedConnection, ManagedConnection,
+    NegotiatedProtocol,
 };
 
 /// Pool-scoped instrumentation primitives shared across layers in the
@@ -88,7 +89,7 @@ impl PoolHooks {
 
 /// Wraps a connector service, acquiring semaphore permits before connecting.
 ///
-/// Returns `(IO, Arc<ConnectionPermit>)` so the permit can be stored on
+/// Returns an [`EstablishedConnection`] so the permit can be stored on
 /// `ManagedConnection` and held for the connection's lifetime.
 ///
 /// Target type is `ConnectCtx`: the inner TCP connector is `Service<Uri>`,
@@ -134,7 +135,7 @@ where
     C::Future: Send + 'static,
     IO: Send + 'static,
 {
-    type Response = (IO, Arc<ConnectionPermit>);
+    type Response = EstablishedConnection<IO>;
     type Error = BoxError;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
@@ -177,7 +178,7 @@ where
                 super::super::timeout::TimeoutKind::Connect,
             )
             .await?;
-            Ok((io, permit))
+            Ok(EstablishedConnection { io, permit })
         })
     }
 }
@@ -267,7 +268,7 @@ fn spawn_driver(future: impl Future<Output = ()> + Send + 'static) {
 
 /// Connects and performs an HTTP/1.1 handshake.
 ///
-/// The connector is expected to return `(IO, Arc<ConnectionPermit>)`, typically
+/// The connector is expected to return an [`EstablishedConnection`], typically
 /// produced by [`ConnectionLimit`] wrapping a TCP/TLS connector.
 pub(crate) struct H1ConnectAndHandshake<C> {
     connector: C,
@@ -291,7 +292,7 @@ impl<C: Clone> Clone for H1ConnectAndHandshake<C> {
 
 impl<C, IO> Service<ConnectCtx> for H1ConnectAndHandshake<C>
 where
-    C: Service<ConnectCtx, Response = (IO, Arc<ConnectionPermit>)>,
+    C: Service<ConnectCtx, Response = EstablishedConnection<IO>>,
     C::Error: Into<BoxError> + 'static,
     C::Future: Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + Connection + Unpin + Send + 'static,
@@ -315,7 +316,7 @@ where
         let fut = self.connector.call(ctx);
         Box::pin(async move {
             let connect_start = Instant::now();
-            let (io, permit) = match fut.await.map_err(Into::into) {
+            let EstablishedConnection { io, permit } = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
                     hooks.on_connection_failed(&ConnectionFailedEvent::new(
@@ -436,7 +437,7 @@ impl<C: Clone> Clone for H2ConnectAndHandshake<C> {
 
 impl<C, IO> Service<()> for H2ConnectAndHandshake<C>
 where
-    C: Service<(), Response = (IO, Arc<ConnectionPermit>)>,
+    C: Service<(), Response = EstablishedConnection<IO>>,
     C::Error: Into<BoxError> + 'static,
     C::Future: Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + Connection + Unpin + Send + 'static,
@@ -456,7 +457,7 @@ where
         let authority = self.authority.clone();
         Box::pin(async move {
             let connect_start = Instant::now();
-            let (io, permit) = match fut.await.map_err(Into::into) {
+            let EstablishedConnection { io, permit } = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
                     hooks.on_connection_failed(&ConnectionFailedEvent::new(
