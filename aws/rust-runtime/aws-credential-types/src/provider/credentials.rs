@@ -179,7 +179,7 @@ impl ResolveIdentity for SharedCredentialsProvider {
         use super::error::CredentialsError;
         let creds_err = error.downcast_ref::<CredentialsError>()?;
         match creds_err {
-            CredentialsError::ProviderTimedOut(_) | CredentialsError::ProviderError(_) => {
+            CredentialsError::ProviderTimedOut(_) | CredentialsError::TransientError(_) => {
                 Some(aws_smithy_types::retry::ErrorKind::TransientError)
             }
             _ => None,

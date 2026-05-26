@@ -54,6 +54,10 @@ pub enum CredentialsError {
     CredentialsNotLoaded(CredentialsNotLoaded),
 
     /// Loading credentials from this provider exceeded the maximum allowed duration
+    ///
+    /// This is a specific transient error indicating the provider ran out of time.
+    /// Unlike [`TransientError`](Self::TransientError), it carries only the timeout
+    /// duration and not the underlying cause.
     ProviderTimedOut(ProviderTimedOut),
 
     /// The provider was given an invalid configuration
@@ -68,6 +72,15 @@ pub enum CredentialsError {
     /// This may include errors like a 503 from STS or a file system error when attempting to
     /// read a configuration file.
     ProviderError(ProviderError),
+
+    /// A transient error occurred during credential resolution that may succeed on retry.
+    ///
+    /// Examples: STS throttling, network timeout, transient DNS failure.
+    /// The operation-level retry loop will re-attempt identity resolution for this error.
+    ///
+    /// This is the general-purpose transient error variant that carries the underlying cause.
+    /// For timeout-specific errors without a source, see [`ProviderTimedOut`](Self::ProviderTimedOut).
+    TransientError(ProviderError),
 
     /// An unexpected error occurred during credential resolution
     ///
@@ -119,6 +132,15 @@ impl CredentialsError {
         })
     }
 
+    /// A transient error occurred that may succeed on retry.
+    ///
+    /// Examples: STS throttling, network timeout, DNS failure (EAI_AGAIN).
+    pub fn transient_error(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::TransientError(ProviderError {
+            source: source.into(),
+        })
+    }
+
     /// The provided configuration for a provider was invalid
     pub fn invalid_configuration(
         source: impl Into<Box<dyn Error + Send + Sync + 'static>>,
@@ -151,6 +173,9 @@ impl fmt::Display for CredentialsError {
             CredentialsError::ProviderError(_) => {
                 write!(f, "an error occurred while loading credentials")
             }
+            CredentialsError::TransientError(_) => {
+                write!(f, "a transient error occurred while loading credentials")
+            }
             CredentialsError::Unhandled(_) => {
                 write!(f, "unexpected credentials error")
             }
@@ -167,6 +192,7 @@ impl Error for CredentialsError {
             CredentialsError::ProviderTimedOut(_) => None,
             CredentialsError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
             CredentialsError::ProviderError(details) => Some(details.source.as_ref() as _),
+            CredentialsError::TransientError(details) => Some(details.source.as_ref() as _),
             CredentialsError::Unhandled(details) => Some(details.source.as_ref() as _),
         }
     }
