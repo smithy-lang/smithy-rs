@@ -206,5 +206,7 @@ internal class RustReservedWordSymbolProviderTest {
         expectEnumRename("SelfValue", MaybeRenamed("SelfValue_", "SelfValue"))
         expectEnumRename("SelfOther", MaybeRenamed("SelfOther", null))
         expectEnumRename("SELF", MaybeRenamed("SelfValue", "Self"))
+
+        expectEnumRename("_2DBarcode", MaybeRenamed("_2DBarcode", "2DBarcode"))
     }
 }
