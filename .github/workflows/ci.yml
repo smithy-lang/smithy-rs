@@ -201,6 +201,45 @@ jobs:
       with:
         action: ${{ matrix.test.action }}
 
+  test-with-serde:
+    name: Test the SDK with `serde` feature enabled.
+    needs: generate
+    runs-on: ${{ matrix.test.runner }}
+    env:
+      RUSTFLAGS: --cfg aws_sdk_unstable
+      CARGO_FEATURE_SERDE_SERIALIZE: true
+      CARGO_FEATURE_SERDE_DESERIALIZE: true
+    # To avoid repeating setup boilerplate, we have the actual test commands
+    # in a matrix strategy. These commands get run in the steps after all the setup.
+    strategy:
+      fail-fast: false
+      matrix:
+        # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
+        test:
+        - action: check-aws-config
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-canary
+          runner: ubuntu-latest
+        - action: check-aws-sdk-cargo-deny
+          runner: ubuntu-latest
+        - action: check-only-aws-sdk-services
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-smoketest-unit-tests
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-standalone-integration-tests
+          runner: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Run ${{ matrix.test.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.test.action }}
+
   test-rust-windows:
     name: Rust Tests on Windows
     runs-on: windows-latest
