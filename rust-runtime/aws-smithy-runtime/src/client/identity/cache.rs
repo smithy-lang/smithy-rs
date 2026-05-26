@@ -13,6 +13,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 mod lazy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 pub use lazy::LazyCacheBuilder;
+pub(crate) use lazy::TimedOutError;
 
 /// Identity cache configuration.
 ///

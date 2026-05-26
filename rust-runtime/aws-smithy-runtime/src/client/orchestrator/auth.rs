@@ -5,6 +5,7 @@
 
 use crate::client::auth::no_auth::NO_AUTH_SCHEME_ID;
 use crate::client::identity::IdentityCache;
+use crate::client::identity::TimedOutError;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::auth::{
     AuthScheme, AuthSchemeEndpointConfig, AuthSchemeId, AuthSchemeOption,
@@ -14,9 +15,12 @@ use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEn
 use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
+use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Storable, StoreReplace};
 use aws_smithy_types::endpoint::Endpoint;
+use aws_smithy_types::retry::ErrorKind;
 use aws_smithy_types::Document;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -169,8 +173,28 @@ pub(super) async fn resolve_identity(
                             cfg.push_shared_layer(properties);
                         }
                         let identity = identity_cache
-                            .resolve_cached_identity(identity_resolver, runtime_components, cfg)
-                            .await?;
+                            .resolve_cached_identity(
+                                identity_resolver.clone(),
+                                runtime_components,
+                                cfg,
+                            )
+                            .await
+                            .map_err(|err| {
+                                // Identity cache timeout — same crate, downcast directly
+                                if err.downcast_ref::<TimedOutError>().is_some() {
+                                    return Box::new(ConnectorError::other(
+                                        err,
+                                        Some(ErrorKind::TransientError),
+                                    )) as BoxError;
+                                }
+                                // Ask the resolver to classify its own errors
+                                match identity_resolver.classify_error(err.as_ref()) {
+                                    Some(kind) => {
+                                        Box::new(ConnectorError::other(err, Some(kind))) as BoxError
+                                    }
+                                    None => err,
+                                }
+                            })?;
                         trace!(identity = ?identity, "resolved identity");
                         // Extract the FrozenLayer placed in the Identity property bag by the From<Credentials> impl.
                         // This layer contains feature data for the user agent and potentially other metadata.

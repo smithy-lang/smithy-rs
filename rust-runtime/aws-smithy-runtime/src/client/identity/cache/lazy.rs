@@ -428,7 +428,7 @@ impl ResolveCachedIdentity for LazyCache {
 }
 
 #[derive(Debug)]
-struct TimedOutError(Duration);
+pub(crate) struct TimedOutError(pub(crate) Duration);
 
 impl std::error::Error for TimedOutError {}
 

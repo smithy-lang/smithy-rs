@@ -87,6 +87,20 @@ impl ResolveIdentity for SharedTokenProvider {
         IdentityFuture::new(async move { Ok(self.provide_token().await?.into()) })
     }
 
+    fn classify_error(
+        &self,
+        error: &(dyn std::error::Error + 'static),
+    ) -> Option<aws_smithy_types::retry::ErrorKind> {
+        use super::error::TokenError;
+        let token_err = error.downcast_ref::<TokenError>()?;
+        match token_err {
+            TokenError::ProviderTimedOut(_) | TokenError::ProviderError(_) => {
+                Some(aws_smithy_types::retry::ErrorKind::TransientError)
+            }
+            _ => None,
+        }
+    }
+
     fn cache_partition(&self) -> Option<IdentityCachePartition> {
         Some(self.1)
     }

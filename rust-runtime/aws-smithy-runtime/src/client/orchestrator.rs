@@ -21,7 +21,7 @@ use aws_smithy_runtime_api::client::interceptors::context::{
 use aws_smithy_runtime_api::client::orchestrator::{
     HttpResponse, LoadedRequestBody, OrchestratorError,
 };
-use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_runtime_api::client::result::{ConnectorError, SdkError};
 use aws_smithy_runtime_api::client::retries::{RequestAttempts, RetryStrategy, ShouldAttempt};
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugins;
@@ -387,7 +387,12 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
-    let (scheme_id, identity, endpoint) = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(OrchestratorError::other));
+    let (scheme_id, identity, endpoint) = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(|err| {
+        match err.downcast::<ConnectorError>() {
+            Ok(connector_err) => OrchestratorError::connector(*connector_err),
+            Err(other) => OrchestratorError::other(other),
+        }
+    }));
 
     match endpoint {
         Some(endpoint) => {

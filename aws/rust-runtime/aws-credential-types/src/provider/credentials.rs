@@ -172,6 +172,20 @@ impl ResolveIdentity for SharedCredentialsProvider {
         IdentityFuture::new(async move { Ok(self.provide_credentials().await?.into()) })
     }
 
+    fn classify_error(
+        &self,
+        error: &(dyn std::error::Error + 'static),
+    ) -> Option<aws_smithy_types::retry::ErrorKind> {
+        use super::error::CredentialsError;
+        let creds_err = error.downcast_ref::<CredentialsError>()?;
+        match creds_err {
+            CredentialsError::ProviderTimedOut(_) | CredentialsError::ProviderError(_) => {
+                Some(aws_smithy_types::retry::ErrorKind::TransientError)
+            }
+            _ => None,
+        }
+    }
+
     fn fallback_on_interrupt(&self) -> Option<Identity> {
         ProvideCredentials::fallback_on_interrupt(self).map(|creds| creds.into())
     }

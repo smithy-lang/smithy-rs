@@ -177,6 +177,20 @@ pub trait ResolveIdentity: Send + Sync + Debug {
     fn cache_partition(&self) -> Option<IdentityCachePartition> {
         None
     }
+
+    /// Classify whether an identity resolution error is retryable.
+    ///
+    /// The orchestrator calls this after identity resolution fails. Implementors
+    /// that know their error types can override this to provide accurate classification
+    /// without the orchestrator needing to know about provider-specific error types.
+    ///
+    /// Returns `Some(ErrorKind)` if the error should be retried, `None` otherwise.
+    fn classify_error(
+        &self,
+        _error: &(dyn std::error::Error + 'static),
+    ) -> Option<aws_smithy_types::retry::ErrorKind> {
+        None
+    }
 }
 
 /// Cache location for identity caching.
@@ -233,6 +247,13 @@ impl ResolveIdentity for SharedIdentityResolver {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         self.inner.resolve_identity(runtime_components, config_bag)
+    }
+
+    fn classify_error(
+        &self,
+        error: &(dyn std::error::Error + 'static),
+    ) -> Option<aws_smithy_types::retry::ErrorKind> {
+        self.inner.classify_error(error)
     }
 
     fn cache_location(&self) -> IdentityCacheLocation {

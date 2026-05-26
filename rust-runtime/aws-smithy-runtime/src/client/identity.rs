@@ -4,6 +4,7 @@
  */
 
 mod cache;
+pub(crate) use cache::TimedOutError;
 pub use cache::{IdentityCache, LazyCacheBuilder};
 
 /// Identity resolver implementation for "no auth".
