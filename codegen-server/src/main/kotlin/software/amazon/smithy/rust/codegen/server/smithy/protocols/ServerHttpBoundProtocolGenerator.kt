@@ -797,9 +797,34 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             val expectedRequestContentType =
                 httpBindingResolver.requestContentType(operationShape)!!
 
-            // Generate different body collection code based on HTTP version
-            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
-                // For HTTP 1.x: use http-body-util's BodyExt trait
+            // Generate body collection code. When `requestBodyMaxBytes` is > 0, we call the
+            // `collect_body_limited` helper exposed by both the HTTP 1.x (`aws-smithy-http-server`)
+            // and HTTP 0.x (`aws-smithy-legacy-http-server`) runtime crates. That helper caps the
+            // amount of data a single request can buffer in memory — this prevents denial-of-service
+            // attacks in which a client streams an unbounded `Transfer-Encoding: chunked` body.
+            //
+            // If the limit is exceeded the helper returns a `BodyLimitExceeded` error that bubbles
+            // up as `RequestRejection::BufferHttpBodyBytes` and surfaces to the client as
+            // `400 Bad Request` (plus the server drops the connection).
+            //
+            // Services that legitimately need to accept larger payloads can raise the limit via
+            // the `requestBodyMaxBytes` codegen setting. Setting it to `0` disables the check
+            // entirely (not recommended).
+            val requestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+            if (requestBodyMaxBytes > 0L) {
+                rustTemplate(
+                    """
+                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${requestBodyMaxBytes}usize).await {
+                        #{Ok}(bytes) => bytes,
+                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                        }
+                    };
+                    """,
+                    *codegenScope,
+                )
+            } else if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                 rustTemplate(
                     """
                     let bytes = {
@@ -811,7 +836,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
                 )
             } else {
-                // For HTTP 0.x: use hyper's to_bytes
                 rustTemplate("let bytes = #{Hyper}::body::to_bytes(body).await?;", *codegenScope)
             }
             // Note that the server is being very lenient here. We're accepting an empty body for when there is modeled
@@ -1030,9 +1054,30 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                         }
                                     }
                             }
-                        // Generate different body collection code based on HTTP version
-                        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
-                            // For HTTP 1.x: use http-body-util's BodyExt trait
+                        // Generate body collection code. See the long comment in
+                        // `serverRenderShapeParser` for why we wrap the body in a size-limited
+                        // reader (same reasoning applies here).
+                        val payloadRequestBodyMaxBytes = codegenContext.settings.codegenConfig.requestBodyMaxBytes
+                        if (payloadRequestBodyMaxBytes > 0L) {
+                            rustTemplate(
+                                """
+                                {
+                                    let bytes = match #{SmithyHttpServer}::body::collect_body_limited(body, ${payloadRequestBodyMaxBytes}usize).await {
+                                        #{Ok}(bytes) => bytes,
+                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::Body(err)) => return #{Err}(#{RequestRejection}::from(err)),
+                                        #{Err}(#{SmithyHttpServer}::body::CollectBodyError::TooLarge(err)) => {
+                                            return #{Err}(#{RequestRejection}::BufferHttpBodyBytes(#{SmithyHttpServer}::error::Error::new(err)));
+                                        }
+                                    };
+                                    #{VerifyRequestContentTypeHeader:W}
+                                    #{Deserializer}(&bytes)?
+                                }
+                                """,
+                                "Deserializer" to deserializer,
+                                "VerifyRequestContentTypeHeader" to verifyRequestContentTypeHeader,
+                                *codegenScope,
+                            )
+                        } else if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
                             rustTemplate(
                                 """
                                 {
@@ -1050,7 +1095,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 "HttpBodyUtil" to software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency.HttpBodyUtil01x.toType(),
                             )
                         } else {
-                            // For HTTP 0.x: use hyper's to_bytes
                             rustTemplate(
                                 """
                                 {
