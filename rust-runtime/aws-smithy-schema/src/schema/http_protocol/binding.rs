@@ -80,15 +80,39 @@ impl<C: Codec> HttpBindingProtocol<C> {
                     crate::ShapeType::Structure | crate::ShapeType::Union
                 )
         });
-        if has_struct_payload {
+        // If the schema declares zero body members (every member is HTTP-bound,
+        // and any `@httpPayload` is on a scalar that bypasses the codec),
+        // we can skip body-codec invocation entirely. The wasted work would be:
+        //   - XmlSerializer/JsonSerializer::write_struct opens a wrapper element
+        //   - Proxy::serialize_members re-enters the binder
+        //   - close-element is emitted
+        //   - bytes are collected by `body.finish()` and then discarded
+        //     (since `has_body_members == false` later forces `body = Vec::new()`)
+        // Skipping all of that just calls `serialize_members` directly through
+        // the binder so HTTP-bound members are still routed to headers / query /
+        // labels. `is_top_level` is cleared first so any nested struct that
+        // happens to still pass through (none do in this branch by definition,
+        // but defensive) takes the body-delegation path.
+        //
+        // Codegen sets `with_no_body_members()` on operation input shapes whose
+        // members are all HTTP-bound (e.g., S3 PutObjectInput, CopyObjectInput).
+        // Hand-constructed schemas default to `has_body_members == true` so this
+        // optimization is never silently applied to a schema that actually has
+        // body members.
+        let skip_body_codec = !input_schema.has_body_members() && !has_struct_payload;
+        if skip_body_codec {
+            binder.is_top_level = false;
+            input.serialize_members(&mut binder)?;
+        } else if has_struct_payload {
             binder.is_top_level = false;
             input.serialize_members(&mut binder)?;
         } else {
             binder.write_struct(input_schema, input)?;
         }
         let raw_payload = binder.raw_payload;
-        let mut body = if raw_payload.is_some() {
-            // @httpPayload blob/string — don't use the codec output
+        let mut body = if raw_payload.is_some() || skip_body_codec {
+            // @httpPayload blob/string — don't use the codec output.
+            // skip_body_codec — body codec was never written to.
             Vec::new()
         } else {
             binder.body.finish()
@@ -99,15 +123,19 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // - If body members exist (even if all optional and unset): send `{}` with Content-Type
         // - If no body members at all (everything is in headers/query/labels): empty body, no Content-Type
         let has_blob_or_string_payload = raw_payload.is_some();
+        // Mirror the schema's compile-time signal at runtime. When the schema
+        // says no body members AND there's no struct-payload override, this
+        // is straightforwardly false.
         let has_body_members = has_struct_payload
-            || input_schema.members().iter().any(|m| {
-                m.http_header().is_none()
-                    && m.http_query().is_none()
-                    && m.http_label().is_none()
-                    && m.http_prefix_headers().is_none()
-                    && m.http_query_params().is_none()
-                    && m.http_payload().is_none()
-            });
+            || (input_schema.has_body_members()
+                && input_schema.members().iter().any(|m| {
+                    m.http_header().is_none()
+                        && m.http_query().is_none()
+                        && m.http_label().is_none()
+                        && m.http_prefix_headers().is_none()
+                        && m.http_query_params().is_none()
+                        && m.http_payload().is_none()
+                }));
 
         let set_content_type = if has_blob_or_string_payload {
             // Blob/string payload: Content-Type comes from the @httpHeader("Content-Type")
@@ -1355,6 +1383,193 @@ mod tests {
             )
             .unwrap();
         assert!(request.headers().get("Content-Type").is_none());
+    }
+
+    /// When a schema is annotated `with_no_body_members()`, the body codec
+    /// must not be invoked (no XML/JSON wrapper element gets opened, no
+    /// `serialize_members` re-entry through a Proxy). HTTP-bound members
+    /// still get routed to headers/query/labels via the binder. Verified by
+    /// substituting a body codec that panics on any write call.
+    #[test]
+    fn serialize_skips_body_codec_when_no_body_members() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        static WRITE_CALLS: AtomicUsize = AtomicUsize::new(0);
+
+        struct PanicSerializer;
+        impl FinishSerializer for PanicSerializer {
+            fn finish(self) -> Vec<u8> {
+                panic!("body codec finish() called — short-circuit failed");
+            }
+        }
+        impl ShapeSerializer for PanicSerializer {
+            fn write_struct(
+                &mut self,
+                _: &Schema,
+                _: &dyn SerializableStruct,
+            ) -> Result<(), SerdeError> {
+                WRITE_CALLS.fetch_add(1, Ordering::SeqCst);
+                panic!("body codec write_struct() called — short-circuit failed");
+            }
+            fn write_list(
+                &mut self,
+                _: &Schema,
+                _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_list() called");
+            }
+            fn write_map(
+                &mut self,
+                _: &Schema,
+                _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_map() called");
+            }
+            fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+                panic!("body codec write_boolean() called");
+            }
+            fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+                panic!("body codec write_byte() called");
+            }
+            fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+                panic!("body codec write_short() called");
+            }
+            fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+                panic!("body codec write_integer() called");
+            }
+            fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+                panic!("body codec write_long() called");
+            }
+            fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+                panic!("body codec write_float() called");
+            }
+            fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+                panic!("body codec write_double() called");
+            }
+            fn write_big_integer(
+                &mut self,
+                _: &Schema,
+                _: &aws_smithy_types::BigInteger,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_big_integer() called");
+            }
+            fn write_big_decimal(
+                &mut self,
+                _: &Schema,
+                _: &aws_smithy_types::BigDecimal,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_big_decimal() called");
+            }
+            fn write_string(&mut self, _: &Schema, _: &str) -> Result<(), SerdeError> {
+                panic!("body codec write_string() called");
+            }
+            fn write_blob(
+                &mut self,
+                _: &Schema,
+                _: &aws_smithy_types::Blob,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_blob() called");
+            }
+            fn write_timestamp(
+                &mut self,
+                _: &Schema,
+                _: &aws_smithy_types::DateTime,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_timestamp() called");
+            }
+            fn write_document(
+                &mut self,
+                _: &Schema,
+                _: &aws_smithy_types::Document,
+            ) -> Result<(), SerdeError> {
+                panic!("body codec write_document() called");
+            }
+            fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+                panic!("body codec write_null() called");
+            }
+        }
+
+        #[derive(Debug)]
+        struct PanicCodec;
+        impl Codec for PanicCodec {
+            type Serializer = PanicSerializer;
+            type Deserializer<'a> = TestDeserializer<'a>;
+            fn create_serializer(&self) -> Self::Serializer {
+                PanicSerializer
+            }
+            fn create_deserializer<'a>(&self, input: &'a [u8]) -> Self::Deserializer<'a> {
+                TestDeserializer { input }
+            }
+        }
+
+        // Header-only struct: one `@httpHeader` member, marked
+        // `with_no_body_members()`. The runtime should never touch the body
+        // codec.
+        static HEADER_MEMBER: Schema = Schema::new_member(
+            crate::shape_id!("test", "HeaderOnlyStruct"),
+            ShapeType::String,
+            "x_header",
+            0,
+        )
+        .with_http_header("X-Header");
+        static HEADER_MEMBERS: &[&Schema] = &[&HEADER_MEMBER];
+        static HEADER_ONLY_SCHEMA: Schema = Schema::new_struct(
+            crate::shape_id!("test", "HeaderOnlyStruct"),
+            ShapeType::Structure,
+            HEADER_MEMBERS,
+        )
+        .with_no_body_members();
+
+        struct HeaderOnlyStruct;
+        impl SerializableStruct for HeaderOnlyStruct {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&HEADER_MEMBER, "hello")
+            }
+        }
+
+        let protocol = HttpBindingProtocol::new(
+            crate::shape_id!("test", "testProtocol"),
+            PanicCodec,
+            "application/test",
+        );
+        let request = protocol
+            .serialize_request(
+                &HeaderOnlyStruct,
+                &HEADER_ONLY_SCHEMA,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+
+        // No body, no Content-Type, header is set
+        assert_eq!(request.body().bytes().unwrap_or(&[]), b"");
+        assert!(request.headers().get("Content-Type").is_none());
+        assert_eq!(request.headers().get("X-Header").unwrap(), "hello");
+        // Sanity: the panic-on-write codec was never written to
+        assert_eq!(WRITE_CALLS.load(Ordering::SeqCst), 0);
+    }
+
+    /// Inverse case: a struct WITHOUT `with_no_body_members()` (default
+    /// `has_body_members == true`) and an actual body member must still
+    /// invoke the body codec. Guards against accidentally short-circuiting
+    /// schemas that were never opted in.
+    #[test]
+    fn serialize_invokes_body_codec_when_has_body_members() {
+        let request = make_protocol()
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        // TestSerializer writes "{Alice}" — the wrapper braces prove the
+        // body codec was invoked.
+        assert_eq!(request.body().bytes().unwrap(), b"{Alice}");
+        assert_eq!(
+            request.headers().get("Content-Type").unwrap(),
+            "application/test"
+        );
     }
 
     #[test]

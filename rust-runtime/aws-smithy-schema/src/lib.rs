@@ -109,6 +109,20 @@ pub struct Schema {
     /// codec; ignored by other codecs (so the schema remains protocol-neutral
     /// — runtime protocol swap is unaffected).
     xml_unwrapped_output: bool,
+    /// `true` (the default, conservative) means this struct has at least one
+    /// member that serializes to the request/response body — i.e., a member
+    /// without any HTTP binding trait, OR a member with `@httpPayload`
+    /// targeting a struct/union (which provides body framing through the codec).
+    ///
+    /// `false` (set by codegen via [`with_no_body_members`](Schema::with_no_body_members))
+    /// means every member is HTTP-bound (header / query / label / prefix-headers
+    /// / query-params, or scalar `@httpPayload` whose bytes go into the request
+    /// body raw). The HTTP binding protocol uses this to skip body codec
+    /// invocation entirely on the request side: no XML/JSON wrapper element
+    /// is opened, no `serialize_members` re-entry through the codec proxy
+    /// happens, and the body bytes are never collected (they'd be discarded
+    /// anyway). Saves ~15-20% on header-heavy SER cases like S3 PutObject.
+    has_body_members: bool,
     xml_namespace: Option<trait_types::XmlNamespaceTrait>,
     http_header: Option<trait_types::HttpHeaderTrait>,
     http_label: Option<trait_types::HttpLabelTrait>,
@@ -162,6 +176,7 @@ impl Schema {
         xml_attribute: None,
         xml_flattened: None,
         xml_unwrapped_output: false,
+        has_body_members: true,
         xml_namespace: None,
         http_header: None,
         http_label: None,
@@ -296,6 +311,13 @@ impl Schema {
         self.xml_unwrapped_output
     }
 
+    /// Returns `true` if this struct has at least one member that serializes
+    /// to the request/response body, `false` if every member is HTTP-bound.
+    /// See field doc on [`has_body_members`] for the optimization this gates.
+    pub fn has_body_members(&self) -> bool {
+        self.has_body_members
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
@@ -414,6 +436,13 @@ impl Schema {
     /// Marks the struct as an unwrapped XML output. See field doc for details.
     pub const fn with_xml_unwrapped_output(mut self) -> Self {
         self.xml_unwrapped_output = true;
+        self
+    }
+
+    /// Marks this struct as having no body members — every member is HTTP-bound.
+    /// See [`has_body_members`](Schema::has_body_members) for what this enables.
+    pub const fn with_no_body_members(mut self) -> Self {
+        self.has_body_members = false;
         self
     }
 
