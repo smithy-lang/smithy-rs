@@ -119,7 +119,7 @@ impl EcsCredentialsProvider {
                         .last()
                         .map(|b| b.is_ascii_whitespace())
                         .unwrap_or(false),
-                    "invalid auth token from file; value redacted"
+                    "invalid auth token from file"
                 );
                 CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
                     err,
@@ -134,7 +134,7 @@ impl EcsCredentialsProvider {
                         .last()
                         .map(|c| c.is_ascii_whitespace())
                         .unwrap_or(false),
-                    "invalid auth token from env; value redacted"
+                    "invalid auth token from env"
                 );
                 CredentialsError::invalid_configuration(EcsConfigurationError::InvalidAuthToken {
                     err,
@@ -276,7 +276,7 @@ impl Display for EcsConfigurationError {
             ),
             EcsConfigurationError::InvalidAuthToken { err } => write!(
                 f,
-                "the auth token could not be used as an HTTP header value (value redacted). {err}",
+                "the auth token could not be used as an HTTP header value. {err}",
             ),
         }
     }
