@@ -270,7 +270,7 @@ async fn load_sso_credentials(
         .account_id(&sso_provider_config.account_id)
         .send()
         .await
-        .map_err(CredentialsError::provider_error)?;
+        .map_err(crate::retry::classify_credentials_error)?;
     let credentials: RoleCredentials = resp
         .role_credentials
         .ok_or_else(|| CredentialsError::unhandled("SSO did not return credentials"))?;

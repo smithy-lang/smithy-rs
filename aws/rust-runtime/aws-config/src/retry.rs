@@ -13,6 +13,44 @@ pub use aws_smithy_types::retry::RetryConfigBuilder;
 pub use aws_smithy_types::retry::RetryKind;
 pub use aws_smithy_types::retry::RetryMode;
 
+use aws_credential_types::provider::error::CredentialsError;
+use aws_runtime::retries::classifiers::{THROTTLING_ERRORS, TRANSIENT_ERRORS};
+use aws_smithy_runtime_api::client::result::SdkError;
+use aws_smithy_types::error::metadata::ProvideErrorMetadata;
+
+/// Classify an `SdkError` from an inner SDK call (e.g. STS, SSO) into the appropriate
+/// `CredentialsError` variant for operation-level retry.
+///
+/// - `TimeoutError` → `CredentialsError::transient_error`
+/// - `DispatchFailure` with timeout/IO/other → `CredentialsError::transient_error`
+/// - `ServiceError` with a throttling or transient error code → `CredentialsError::transient_error`
+/// - All other errors → `CredentialsError::provider_error`
+pub(crate) fn classify_credentials_error<E, R>(sdk_error: SdkError<E, R>) -> CredentialsError
+where
+    E: ProvideErrorMetadata + std::error::Error + Send + Sync + 'static,
+    R: std::fmt::Debug + Send + Sync + 'static,
+{
+    match &sdk_error {
+        SdkError::TimeoutError(_) => CredentialsError::transient_error(sdk_error),
+        SdkError::DispatchFailure(df) => {
+            if df.is_timeout() || df.is_io() || df.as_other().is_some() {
+                CredentialsError::transient_error(sdk_error)
+            } else {
+                CredentialsError::provider_error(sdk_error)
+            }
+        }
+        SdkError::ServiceError(ctx) => {
+            let code = ctx.err().code().unwrap_or("");
+            if THROTTLING_ERRORS.contains(&code) || TRANSIENT_ERRORS.contains(&code) {
+                CredentialsError::transient_error(sdk_error)
+            } else {
+                CredentialsError::provider_error(sdk_error)
+            }
+        }
+        _ => CredentialsError::provider_error(sdk_error),
+    }
+}
+
 /// Errors for retry configuration
 pub mod error {
     use std::fmt;

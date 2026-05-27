@@ -278,7 +278,7 @@ async fn load_credentials(
         .await
         .map_err(|sdk_error| {
             tracing::warn!(error = %DisplayErrorContext(&sdk_error), "STS returned an error assuming web identity role");
-            CredentialsError::provider_error(sdk_error)
+            crate::retry::classify_credentials_error(sdk_error)
         })?;
     sts::util::into_credentials(resp.credentials, resp.assumed_role_user, "WebIdentityToken")
 }

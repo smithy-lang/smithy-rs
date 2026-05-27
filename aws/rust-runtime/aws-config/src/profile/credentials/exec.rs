@@ -12,9 +12,7 @@ use crate::profile::credentials::ProfileFileError;
 use crate::provider_config::ProviderConfig;
 use crate::sts;
 use crate::web_identity_token::{StaticConfiguration, WebIdentityTokenCredentialsProvider};
-use aws_credential_types::provider::{
-    self, error::CredentialsError, ProvideCredentials, SharedCredentialsProvider,
-};
+use aws_credential_types::provider::{self, ProvideCredentials, SharedCredentialsProvider};
 use aws_sdk_sts::config::Credentials;
 use aws_sdk_sts::Client as StsClient;
 use aws_smithy_async::time::SharedTimeSource;
@@ -51,7 +49,7 @@ impl AssumeRoleProvider {
             .role_session_name(session_name)
             .send()
             .await
-            .map_err(CredentialsError::provider_error)?;
+            .map_err(crate::retry::classify_credentials_error)?;
         sts::util::into_credentials(
             assume_role_output.credentials,
             assume_role_output.assumed_role_user,

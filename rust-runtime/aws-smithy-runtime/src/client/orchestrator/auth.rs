@@ -15,7 +15,6 @@ use aws_smithy_runtime_api::client::endpoint::{EndpointResolverParams, ResolveEn
 use aws_smithy_runtime_api::client::identity::{Identity, ResolveIdentity};
 use aws_smithy_runtime_api::client::identity::{IdentityCacheLocation, ResolveCachedIdentity};
 use aws_smithy_runtime_api::client::interceptors::context::InterceptorContext;
-use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
 use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Storable, StoreReplace};

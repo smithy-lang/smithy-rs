@@ -173,7 +173,7 @@ impl ImdsCredentialsProvider {
                     source: context.into_source().into(),
                 }))
             }
-            Err(other) => Err(CredentialsError::provider_error(other)),
+            Err(other) => Err(CredentialsError::transient_error(other)),
         }
     }
 
@@ -228,7 +228,7 @@ impl ImdsCredentialsProvider {
                 "/latest/meta-data/iam/security-credentials/{profile}",
             ))
             .await
-            .map_err(CredentialsError::provider_error)?;
+            .map_err(CredentialsError::transient_error)?;
         match parse_json_credentials(credentials.as_ref()) {
             Ok(JsonCredentials::RefreshableCredentials(RefreshableCredentials {
                 access_key_id,

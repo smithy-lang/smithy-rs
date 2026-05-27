@@ -339,9 +339,13 @@ impl Inner {
             }
             Err(SdkError::ServiceError(ref context)) => {
                 tracing::warn!(error = %DisplayErrorContext(context.err()), "STS refused to grant assume role");
-                Err(CredentialsError::provider_error(assumed.err().unwrap()))
+                Err(crate::retry::classify_credentials_error(
+                    assumed.err().unwrap(),
+                ))
             }
-            Err(err) => Err(CredentialsError::provider_error(err)),
+            Err(_) => Err(crate::retry::classify_credentials_error(
+                assumed.err().unwrap(),
+            )),
         };
 
         assumed.map(|mut creds| {
