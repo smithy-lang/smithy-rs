@@ -127,6 +127,12 @@ class CborParserGenerator(
             *preludeScope,
         )
 
+    // Maximum shape-tree recursion depth permitted by generated deserializers.
+    // Guards against stack overflow from deeply-nested payloads targeting recursive shapes.
+    // Matches serde_json's default of 128.
+    private val maxDepth: Int = 128
+    private val depthErrorMessage: String = "maximum nesting depth exceeded"
+
     private fun handleNullForCollection(
         collectionName: String,
         isSparse: Boolean,
@@ -158,9 +164,11 @@ class CborParserGenerator(
     ) = writable {
         rustBlockTemplate(
             """
+            ##[allow(unused_variables)]
             fn member(
                 mut list: #{ListSymbol},
                 decoder: &mut #{Decoder},
+                depth: u32,
             ) -> #{Result}<#{ListSymbol}, #{Error}>
             """,
             *codegenScope,
@@ -206,9 +214,11 @@ class CborParserGenerator(
     ) = writable {
         rustBlockTemplate(
             """
+            ##[allow(unused_variables)]
             fn pair(
                 mut map: #{MapSymbol},
                 decoder: &mut #{Decoder},
+                depth: u32,
             ) -> #{Result}<#{MapSymbol}, #{Error}>
             """,
             *codegenScope,
@@ -257,10 +267,11 @@ class CborParserGenerator(
     ) = writable {
         rustBlockTemplate(
             """
-            ##[allow(clippy::match_single_binding)]
+            ##[allow(clippy::match_single_binding, unused_variables)]
             fn pair(
                 mut builder: #{Builder},
-                decoder: &mut #{Decoder}
+                decoder: &mut #{Decoder},
+                depth: u32,
             ) -> #{Result}<#{Builder}, #{Error}>
             """,
             *codegenScope,
@@ -339,8 +350,10 @@ class CborParserGenerator(
 
             rustBlockTemplate(
                 """
+                ##[allow(unused_variables)]
                 fn pair(
-                    decoder: &mut #{DecoderSymbol}
+                    decoder: &mut #{DecoderSymbol},
+                    depth: u32,
                 ) -> #{Result}<#{UnionSymbol}, #{Error}>
                 """,
                 *codegenScope,
@@ -453,13 +466,13 @@ class CborParserGenerator(
                             break;
                         }
                         _ => {
-                            $variableBindingName = $decodeItemFnName($variableBindingName, decoder)?;
+                            $variableBindingName = $decodeItemFnName($variableBindingName, decoder, depth)?;
                         }
                     };
                 },
                 Some(n) => {
                     for _ in 0..n {
-                        $variableBindingName = $decodeItemFnName($variableBindingName, decoder)?;
+                        $variableBindingName = $decodeItemFnName($variableBindingName, decoder, depth)?;
                     }
                 }
             };
@@ -493,6 +506,8 @@ class CborParserGenerator(
                     #{StructurePairParserFn:W}
 
                     let decoder = &mut #{Decoder}::new(value);
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
 
                     #{DecodeStructureMapLoop:W}
 
@@ -522,6 +537,8 @@ class CborParserGenerator(
                 """
                 pub(crate) fn $fnName(value: &[u8]) -> #{Result}<#{ReturnType}, #{Error}> {
                     let decoder = &mut #{Decoder}::new(value);
+                    ##[allow(unused_variables)]
+                    let depth = 0u32;
                     #{DeserializeMember}
                 }
                 """,
@@ -637,7 +654,11 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}, depth: u32) -> #{Result}<#{ReturnType}, #{Error}> {
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}, decoder.position()));
+                        }
+
                         #{ListMemberParserFn:W}
 
                         #{InitContainerWritable:W}
@@ -660,7 +681,7 @@ class CborParserGenerator(
                     *codegenScope,
                 )
             }
-        rust("#T(decoder)", parser)
+        rust("#T(decoder, depth + 1)", parser)
     }
 
     private fun RustWriter.deserializeMap(shape: MapShape) {
@@ -680,7 +701,11 @@ class CborParserGenerator(
 
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}, depth: u32) -> #{Result}<#{ReturnType}, #{Error}> {
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}, decoder.position()));
+                        }
+
                         #{MapPairParserFn:W}
 
                         #{InitContainerWritable:W}
@@ -704,7 +729,7 @@ class CborParserGenerator(
                     *codegenScope,
                 )
             }
-        rust("#T(decoder)", parser)
+        rust("#T(decoder, depth + 1)", parser)
     }
 
     private fun RustWriter.deserializeStruct(shape: StructureShape) {
@@ -712,10 +737,18 @@ class CborParserGenerator(
         val parser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
-                    "pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{ReturnType}, #{Error}>",
+                    "pub(crate) fn $fnName(decoder: &mut #{Decoder}, depth: u32) -> #{Result}<#{ReturnType}, #{Error}>",
                     "ReturnType" to returnSymbolToParse.symbol,
                     *codegenScope,
                 ) {
+                    rustTemplate(
+                        """
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}, decoder.position()));
+                        }
+                        """,
+                        *codegenScope,
+                    )
                     val builderSymbol = symbolProvider.symbolForBuilder(shape)
                     val includedMembers = shape.members()
 
@@ -752,7 +785,7 @@ class CborParserGenerator(
                     }
                 }
             }
-        rust("#T(decoder)", parser)
+        rust("#T(decoder, depth + 1)", parser)
     }
 
     private fun RustWriter.deserializeUnion(shape: UnionShape) {
@@ -770,13 +803,17 @@ class CborParserGenerator(
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustTemplate(
                     """
-                    pub(crate) fn $fnName(decoder: &mut #{Decoder}) -> #{Result}<#{UnionSymbol}, #{Error}> {
+                    pub(crate) fn $fnName(decoder: &mut #{Decoder}, depth: u32) -> #{Result}<#{UnionSymbol}, #{Error}> {
+                        if depth >= ${maxDepth}u32 {
+                            return Err(#{Error}::custom(${depthErrorMessage.dq()}, decoder.position()));
+                        }
+
                         #{UnionPairParserFnWritable}
                         #{BeforeDecoderMapCustomization:W}
 
                         match decoder.map()? {
                             None => {
-                                let variant = pair(decoder)?;
+                                let variant = pair(decoder, depth)?;
                                 match decoder.datatype()? {
                                     #{SmithyCbor}::data::Type::Break => {
                                         decoder.skip()?;
@@ -790,7 +827,7 @@ class CborParserGenerator(
                                     ),
                                 }
                             }
-                            Some(1) => pair(decoder),
+                            Some(1) => pair(decoder, depth),
                             Some(_) => Err(#{Error}::mixed_union_variants(decoder.position()))
                         }
                     }
@@ -801,6 +838,6 @@ class CborParserGenerator(
                     *codegenScope,
                 )
             }
-        rust("#T(decoder)", parser)
+        rust("#T(decoder, depth + 1)", parser)
     }
 }

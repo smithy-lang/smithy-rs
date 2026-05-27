@@ -95,6 +95,10 @@ data class ServerRustSettings(
  * [publicConstrainedTypes]: Generate constrained wrapper newtypes for constrained shapes
  * [ignoreUnsupportedConstraints]: Generate model even though unsupported constraints are present
  * [http1x]: Enable HTTP 1.x support (hyper 1.x and http 1.x types)
+ * [requestBodyMaxBytes]: Maximum number of bytes to buffer when deserializing a non-streaming
+ *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
+ *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
+ *   values). Default is `0` (no limit) for backwards compatibility.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -117,6 +121,7 @@ data class ServerCodegenConfig(
     val addValidationExceptionToConstrainedOperations: Boolean? = null,
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
+    val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -126,6 +131,15 @@ data class ServerCodegenConfig(
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
         const val DEFAULT_HTTP_1X = false
+
+        /**
+         * The default maximum size (in bytes) of a non-streaming request body that the generated
+         * server will buffer into memory. `0` means no limit (the historical behavior).
+         *
+         * Services should set `requestBodyMaxBytes` to a positive value to prevent
+         * memory-exhaustion denial-of-service attacks via unbounded request bodies.
+         */
+        const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
 
         /**
          * Configuration key for the HTTP 1.x flag.
@@ -144,6 +158,9 @@ data class ServerCodegenConfig(
          */
         const val HTTP_1X_CONFIG_KEY = "http-1x"
 
+        /** Configuration key for the per-request body size limit. */
+        const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -154,6 +171,7 @@ data class ServerCodegenConfig(
                 "addValidationExceptionToConstrainedOperations",
                 "alwaysSendEventStreamInitialResponse",
                 HTTP_1X_CONFIG_KEY,
+                REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -201,7 +219,16 @@ data class ServerCodegenConfig(
                         HTTP_1X_CONFIG_KEY,
                         DEFAULT_HTTP_1X,
                     ),
-            )
+                requestBodyMaxBytes =
+                    node.get().getNumberMemberOrDefault(
+                        REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
+                        DEFAULT_REQUEST_BODY_MAX_BYTES,
+                    ).toLong(),
+            ).also {
+                require(it.requestBodyMaxBytes >= 0) {
+                    "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
+                }
+            }
         } else {
             ServerCodegenConfig(
                 formatTimeoutSeconds = coreCodegenConfig.formatTimeoutSeconds,
