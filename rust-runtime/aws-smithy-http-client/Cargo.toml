@@ -67,9 +67,10 @@ legacy-test-util = [
 
 legacy-rustls-ring = ["dep:legacy-hyper-rustls", "dep:legacy-rustls", "dep:rustls-native-certs", "hyper-014"]
 
-rustls-ring = ["dep:rustls", "rustls?/ring", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
-rustls-aws-lc = ["dep:rustls", "rustls?/aws_lc_rs", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
-rustls-aws-lc-fips = ["dep:rustls", "rustls?/fips", "rustls?/prefer-post-quantum", "dep:hyper-rustls", "dep:tokio-rustls","default-client"]
+__rustls = ["dep:rustls", "dep:hyper-rustls", "dep:tokio-rustls", "default-client"]
+rustls-ring = ["__rustls", "rustls?/ring"]
+rustls-aws-lc = ["__rustls", "rustls?/aws_lc_rs", "rustls?/prefer-post-quantum"]
+rustls-aws-lc-fips = ["__rustls", "rustls?/fips", "rustls?/prefer-post-quantum"]
 s2n-tls = ["dep:s2n-tls", "dep:s2n-tls-hyper", "dep:s2n-tls-tokio", "default-client"]
 
 [dependencies]
@@ -167,3 +168,6 @@ targets = ["x86_64-unknown-linux-gnu"]
 cargo-args = ["-Zunstable-options", "-Zrustdoc-scrape-examples"]
 rustdoc-args = ["--cfg", "docsrs"]
 # End of docs.rs metadata
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(aws_sdk_unstable)'] }

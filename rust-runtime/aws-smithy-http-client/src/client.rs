@@ -805,11 +805,7 @@ cfg_tls! {
         {
             match &self.tls.provider {
                 // TODO(hyper1) - fix cfg_rustls! to allow matching on patterns so we can re-use it and not duplicate these cfg matches everywhere
-                #[cfg(any(
-                    feature = "rustls-aws-lc",
-                    feature = "rustls-aws-lc-fips",
-                    feature = "rustls-ring"
-                ))]
+                #[cfg(feature = "__rustls")]
                 tls::Provider::Rustls(crypto_mode) => {
                     let proxy_config = self.proxy_config.clone()
                         .unwrap_or_else(proxy::ProxyConfig::disabled);
