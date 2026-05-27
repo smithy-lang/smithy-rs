@@ -54,7 +54,7 @@ impl ProvideCredentials for TransientlyFailingProvider {
     {
         let attempt = self.attempt.fetch_add(1, Ordering::SeqCst);
         if attempt < self.fail_count {
-            ProvideCredentialsFuture::ready(Err(CredentialsError::provider_error(
+            ProvideCredentialsFuture::ready(Err(CredentialsError::transient_error(
                 "Throttling: Rate exceeded",
             )))
         } else {
@@ -93,7 +93,7 @@ impl ProvideCredentials for DnsFailingProvider {
     {
         let attempt = self.attempt.fetch_add(1, Ordering::SeqCst);
         if attempt < self.fail_count {
-            ProvideCredentialsFuture::ready(Err(CredentialsError::provider_error(
+            ProvideCredentialsFuture::ready(Err(CredentialsError::transient_error(
                 std::io::Error::new(
                     std::io::ErrorKind::Other,
                     "EAI_AGAIN: Temporary failure in name resolution",
@@ -109,7 +109,6 @@ impl ProvideCredentials for DnsFailingProvider {
 
 /// A transient credential failure SHOULD BE retried at the operation level.
 #[tokio::test]
-#[should_panic]
 async fn transient_credential_error_is_retried_by_operation() {
     let http_client = infallible_client_fn(|_req| {
         http_1x::Response::builder()
@@ -238,7 +237,6 @@ async fn dns_failure_on_s3_call_is_retried() {
 /// Transient DNS failure during credential resolution SHOULD BE retried at the operation level.
 /// Currently the operation fails without retrying identity resolution.
 #[tokio::test]
-#[should_panic]
 async fn transient_dns_failure_during_credential_resolution_is_retried() {
     // Provider that fails once with a DNS error (simulating EAI_AGAIN during STS call),
     // then succeeds on the next attempt.
