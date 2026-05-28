@@ -9,7 +9,7 @@ use crate::codec::{Codec, FinishSerializer};
 use crate::protocol::{apply_http_endpoint, ClientProtocolInner};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::{Schema, ShapeId};
-use aws_smithy_runtime_api::http::{Request, Response};
+use aws_smithy_runtime_api::http::{Headers, Request, Response};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use std::borrow::Cow;
@@ -69,7 +69,12 @@ impl<C: Codec> HttpBindingProtocol<C> {
         endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
-        let mut binder = HttpBindingSerializer::new(body, Some(input_schema));
+        // Construct the request up front with an empty body. The binder is
+        // given a `&mut Headers` reference into this request and inserts
+        // headers directly as it walks members — avoiding the cost of an
+        // intermediate `Vec<(...)>` plus a late flush loop. The body and URI
+        // are populated after the binder's borrow is released.
+        let mut request = Request::new(SdkBody::empty());
 
         // Check if there's an @httpPayload member targeting a structure/union.
         // In that case, the payload member's own write_struct provides the body
@@ -101,25 +106,35 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // optimization is never silently applied to a schema that actually has
         // body members.
         let skip_body_codec = !input_schema.has_body_members() && !has_struct_payload;
-        if skip_body_codec || has_struct_payload {
-            // skip_body_codec: input has no body members at all → all members
-            //                  route to HTTP bindings, body bytes are unused.
-            // has_struct_payload: an @httpPayload struct member writes itself
-            //                     to the body without wrapping — call
-            //                     serialize_members directly so framing comes
-            //                     from the payload struct, not from the binder.
-            binder.is_top_level = false;
-            input.serialize_members(&mut binder)?;
-        } else {
-            binder.write_struct(input_schema, input)?;
-        }
-        let raw_payload = binder.raw_payload;
-        let mut body = if raw_payload.is_some() || skip_body_codec {
-            // @httpPayload blob/string — don't use the codec output.
-            // skip_body_codec — body codec was never written to.
-            Vec::new()
-        } else {
-            binder.body.finish()
+
+        // Run the binder in a scope so its `&mut Headers` borrow on `request`
+        // is released before we mutate the request again (set_uri / body swap
+        // / Content-Type / Content-Length).
+        let (raw_payload, body_bytes, query_params, labels) = {
+            let mut binder =
+                HttpBindingSerializer::new(body, Some(input_schema), request.headers_mut());
+
+            if skip_body_codec || has_struct_payload {
+                // skip_body_codec: input has no body members at all → all members
+                //                  route to HTTP bindings, body bytes are unused.
+                // has_struct_payload: an @httpPayload struct member writes itself
+                //                     to the body without wrapping — call
+                //                     serialize_members directly so framing comes
+                //                     from the payload struct, not from the binder.
+                binder.is_top_level = false;
+                input.serialize_members(&mut binder)?;
+            } else {
+                binder.write_struct(input_schema, input)?;
+            }
+            let raw_payload = binder.raw_payload;
+            let body_bytes = if raw_payload.is_some() || skip_body_codec {
+                // @httpPayload blob/string — don't use the codec output.
+                // skip_body_codec — body codec was never written to.
+                Vec::new()
+            } else {
+                binder.body.finish()
+            };
+            (raw_payload, body_bytes, binder.query_params, binder.labels)
         };
 
         // Per the REST-JSON content-type handling spec:
@@ -141,6 +156,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
                         && m.http_payload().is_none()
                 }));
 
+        let mut body_bytes = body_bytes;
         let set_content_type = if has_blob_or_string_payload {
             // Blob/string payload: Content-Type comes from the @httpHeader("Content-Type")
             // member if present, or defaults to application/octet-stream for blobs.
@@ -152,74 +168,61 @@ impl<C: Codec> HttpBindingProtocol<C> {
             true
         } else {
             // No body members at all — empty body, no Content-Type.
-            body = Vec::new();
+            body_bytes = Vec::new();
             false
         };
 
-        // Build URI: use @http trait if available (with label substitution from binder),
-        // otherwise fall back to endpoint with manual label substitution.
-        let mut uri = match input_schema.http() {
-            Some(h) => {
-                let mut path = h.uri().to_string();
-                for (name, value) in &binder.labels {
-                    // Try greedy label first ({name+}), then regular ({name})
-                    let greedy = format!("{{{name}+}}");
-                    if path.contains(&greedy) {
-                        // Greedy labels: encode each path segment separately, preserve /
-                        let encoded = value
-                            .split('/')
-                            .map(percent_encode)
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        path = path.replace(&greedy, &encoded);
-                    } else {
-                        let placeholder = format!("{{{name}}}");
-                        path = path.replace(&placeholder, &percent_encode(value));
-                    }
+        // Build URI: write directly into a single, capacity-hinted String
+        // instead of repeatedly `format!`-allocating placeholders and
+        // `replace`-allocating new copies of the path. Profiling on PutObject
+        // SER showed `format::format_inner` + `alloc::str::replace` together
+        // were ~25% of bench loop. The new path is one allocation per request
+        // for the URI string itself; percent-encoding writes through
+        // `percent_encode_into` to avoid per-segment String allocs.
+        let template_opt = input_schema.http().map(|h| h.uri());
+        // Capacity heuristic: endpoint + template + slack for label expansion
+        // (greedy labels typically expand by O(1.5x)). Better-than-default
+        // initial capacity avoids the first 1-2 reallocs.
+        let mut uri =
+            String::with_capacity(endpoint.len() + template_opt.map(|t| t.len()).unwrap_or(1) + 64);
+        match template_opt {
+            Some(template) => {
+                if !endpoint.is_empty() {
+                    uri.push_str(endpoint);
                 }
-                if endpoint.is_empty() {
-                    path
-                } else {
-                    format!("{}{}", endpoint, path)
-                }
+                append_uri_with_labels(template, &labels, &mut uri);
             }
             None => {
-                let mut u = if endpoint.is_empty() {
-                    "/".to_string()
+                if endpoint.is_empty() {
+                    uri.push('/');
                 } else {
-                    endpoint.to_string()
-                };
-                for (name, value) in &binder.labels {
-                    let greedy = format!("{{{name}+}}");
-                    if u.contains(&greedy) {
-                        let encoded = value
-                            .split('/')
-                            .map(percent_encode)
-                            .collect::<Vec<_>>()
-                            .join("/");
-                        u = u.replace(&greedy, &encoded);
-                    } else {
-                        let placeholder = format!("{{{name}}}");
-                        u = u.replace(&placeholder, &percent_encode(value));
-                    }
+                    // Endpoint may contain `{...}` label placeholders to
+                    // substitute (this branch is for shapes without an
+                    // `@http` trait, where the endpoint *is* the template).
+                    append_uri_with_labels(endpoint, &labels, &mut uri);
                 }
-                u
             }
-        };
-        if !binder.query_params.is_empty() {
+        }
+        if !query_params.is_empty() {
             uri.push(if uri.contains('?') { '&' } else { '?' });
-            let pairs: Vec<String> = binder
-                .query_params
-                .iter()
-                .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
-                .collect();
-            uri.push_str(&pairs.join("&"));
+            let mut first = true;
+            for (k, v) in &query_params {
+                if !first {
+                    uri.push('&');
+                }
+                percent_encode_into(k, &mut uri);
+                uri.push('=');
+                percent_encode_into(v, &mut uri);
+                first = false;
+            }
         }
 
-        let mut request = if let Some(payload) = raw_payload {
-            Request::new(SdkBody::from(payload))
+        // Swap the body in place. Headers were inserted directly during the
+        // binder phase, so no flush loop is needed here.
+        *request.body_mut() = if let Some(payload) = raw_payload {
+            SdkBody::from(payload)
         } else {
-            Request::new(SdkBody::from(body))
+            SdkBody::from(body_bytes)
         };
         // Set HTTP method from @http trait
         if let Some(http) = input_schema.http() {
@@ -230,20 +233,21 @@ impl<C: Codec> HttpBindingProtocol<C> {
         request
             .set_uri(uri.as_str())
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
-        if set_content_type {
+        // Customer-supplied @httpHeader("Content-Type") wins over the
+        // protocol default. (Pre-opt2 the late flush loop overwrote our
+        // default after we set it; with direct insertion the customer header
+        // is already present, so we must not clobber it.)
+        if set_content_type && request.headers().get("Content-Type").is_none() {
             request
                 .headers_mut()
                 .insert("Content-Type", self.content_type);
         }
         if let Some(len) = request.body().content_length() {
-            if len > 0 || set_content_type {
+            if (len > 0 || set_content_type) && request.headers().get("Content-Length").is_none() {
                 request
                     .headers_mut()
                     .insert("Content-Length", len.to_string());
             }
-        }
-        for (name, value) in &binder.headers {
-            request.headers_mut().insert(name.clone(), value.clone());
         }
         Ok(request)
     }
@@ -254,19 +258,102 @@ impl<C: Codec> HttpBindingProtocol<C> {
 /// Percent-encode a string per RFC 3986 section 2.3 (unreserved characters only).
 pub fn percent_encode(input: &str) -> String {
     let mut out = String::with_capacity(input.len());
-    for byte in input.bytes() {
-        match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-                out.push(byte as char);
+    percent_encode_into(input, &mut out);
+    out
+}
+
+/// Percent-encode `input` per RFC 3986 section 2.3 (unreserved characters only),
+/// appending the result to `out`. Bulk-copies runs of already-safe bytes via
+/// `push_str` instead of pushing one byte at a time, which is the common case
+/// for URI labels and query values (typical inputs need no escaping).
+pub fn percent_encode_into(input: &str, out: &mut String) {
+    let bytes = input.as_bytes();
+    let mut start = 0usize;
+    for (i, &b) in bytes.iter().enumerate() {
+        let safe = matches!(
+            b,
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~'
+        );
+        if !safe {
+            // Bulk-copy the run of safe bytes ending just before `i`.
+            // SAFETY: `start..i` is a slice of `input`'s UTF-8 bytes, and
+            // every byte in `start..i` was confirmed `safe` (ASCII), so the
+            // slice is valid UTF-8.
+            if start < i {
+                out.push_str(&input[start..i]);
             }
-            _ => {
-                out.push('%');
-                out.push(char::from(HEX[(byte >> 4) as usize]));
-                out.push(char::from(HEX[(byte & 0x0f) as usize]));
-            }
+            out.push('%');
+            out.push(char::from(HEX[(b >> 4) as usize]));
+            out.push(char::from(HEX[(b & 0x0f) as usize]));
+            start = i + 1;
         }
     }
-    out
+    if start < bytes.len() {
+        out.push_str(&input[start..]);
+    }
+}
+
+/// Walk a URI template like `/{Bucket}/{Key+}` and append the substituted
+/// path to `out`. `labels` is a small list (typically <4) so a linear
+/// scan per label-site is fine. Greedy labels (`{Name+}`) preserve `/`
+/// separators and percent-encode each segment independently; regular
+/// labels percent-encode the value as a whole.
+///
+/// Replaces an older implementation that did
+/// `path.replace(&format!("{{{name}}}"), ...)` per label — multiple
+/// String allocations per label and quadratic full-string scans. Top
+/// hot path on PutObject SER (~25% of bench loop pre-fix).
+fn append_uri_with_labels(
+    template: &str,
+    labels: &[(Cow<'static, str>, String)],
+    out: &mut String,
+) {
+    let mut rem = template;
+    while let Some(open) = rem.find('{') {
+        out.push_str(&rem[..open]);
+        let after_open = &rem[open + 1..];
+        let close = match after_open.find('}') {
+            Some(c) => c,
+            None => {
+                // Malformed template (unmatched `{`); preserve verbatim.
+                out.push('{');
+                rem = after_open;
+                continue;
+            }
+        };
+        let label = &after_open[..close];
+        let (name, greedy) = match label.strip_suffix('+') {
+            Some(n) => (n, true),
+            None => (label, false),
+        };
+        // Linear lookup — labels.len() is typically <= 4.
+        let value = labels
+            .iter()
+            .find(|(n, _)| n.as_ref() == name)
+            .map(|(_, v)| v.as_str());
+        if let Some(v) = value {
+            if greedy {
+                // Encode each `/`-separated segment independently to preserve `/`.
+                let mut first = true;
+                for seg in v.split('/') {
+                    if !first {
+                        out.push('/');
+                    }
+                    percent_encode_into(seg, out);
+                    first = false;
+                }
+            } else {
+                percent_encode_into(v, out);
+            }
+        }
+        // else: label not provided — leave it as nothing (matches previous
+        // behavior where `replace` would not match because the input never
+        // contained the placeholder).
+        rem = &after_open[close + 1..];
+    }
+    if !rem.is_empty() {
+        out.push_str(rem);
+    }
 }
 
 pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
@@ -278,9 +365,13 @@ pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
 /// serializer unchanged.
 struct HttpBindingSerializer<'a, S> {
     body: S,
-    headers: Vec<(Cow<'static, str>, String)>,
+    /// Headers are inserted directly into the `Request`'s header map as they
+    /// are encountered, avoiding the cost of a `Vec<(...)>` intermediate plus
+    /// a late flush loop. The borrow ends when the binder is dropped at the
+    /// end of `serialize_request_with_body`'s binder-scope.
+    headers: &'a mut Headers,
     query_params: Vec<(Cow<'static, str>, String)>,
-    labels: Vec<(String, String)>,
+    labels: Vec<(Cow<'static, str>, String)>,
     /// When set, member schemas are resolved from this schema by name to find
     /// HTTP binding traits. This allows the protocol to override bindings
     /// (e.g., for presigning where body members become query params).
@@ -305,10 +396,10 @@ struct HttpBindingSerializer<'a, S> {
 }
 
 impl<'a, S> HttpBindingSerializer<'a, S> {
-    fn new(body: S, input_schema: Option<&'a Schema>) -> Self {
+    fn new(body: S, input_schema: Option<&'a Schema>, headers: &'a mut Headers) -> Self {
         Self {
             body,
-            headers: Vec::new(),
+            headers,
             query_params: Vec::new(),
             labels: Vec::new(),
             input_schema,
@@ -451,8 +542,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.headers
-                .push((Cow::Borrowed(header.value()), header_val));
+            self.headers.insert(header.value(), header_val);
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -484,13 +574,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // Collect entries via a temporary serializer
             let mut collector = MapEntryCollector::new(prefix.value().to_string());
             write_entries(&mut collector)?;
-            // Names are dynamic (prefix + map key), so they are Cow::Owned.
-            self.headers.extend(
-                collector
-                    .entries
-                    .into_iter()
-                    .map(|(k, v)| (Cow::Owned(k), v)),
-            );
+            // Names are dynamic (prefix + map key) — owned Strings.
+            for (k, v) in collector.entries {
+                self.headers.insert(k, v);
+            }
             return Ok(());
         }
         // @httpQueryParams: serialize map entries as query params
@@ -643,10 +730,8 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 return Ok(());
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
-            self.headers.push((
-                Cow::Borrowed(schema.http_header().unwrap().value()),
-                encoded,
-            ));
+            self.headers
+                .insert(schema.http_header().unwrap().value(), encoded);
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -753,7 +838,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
         match binding {
             HttpBinding::Header(name) => {
-                self.headers.push((Cow::Borrowed(name), value.to_string()));
+                self.headers.insert(name, value.to_string());
             }
             HttpBinding::Query(name) => {
                 self.query_params
@@ -763,7 +848,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
                 let name = schema
                     .member_name()
                     .ok_or_else(|| SerdeError::custom("httpLabel on non-member schema"))?;
-                self.labels.push((name.to_string(), value.to_string()));
+                self.labels.push((Cow::Borrowed(name), value.to_string()));
             }
         }
         Ok(())

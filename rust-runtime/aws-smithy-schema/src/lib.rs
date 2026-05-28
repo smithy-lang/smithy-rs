@@ -545,7 +545,11 @@ impl Schema {
     }
 
     /// Returns the member name if this is a member schema.
-    pub fn member_name(&self) -> Option<&str> {
+    ///
+    /// Returns `Option<&'static str>` so callers can store the name in
+    /// `Cow::Borrowed` or other `'static`-lifetime contexts without
+    /// allocating, matching the underlying field type.
+    pub fn member_name(&self) -> Option<&'static str> {
         self.member_name
     }
 
