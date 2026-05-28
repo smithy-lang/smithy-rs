@@ -120,6 +120,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun requestBodyMaxBytes(maxBytes: Long): Builder {
+                settings.add(RequestBodyMaxBytes(maxBytes))
+                return this
+            }
+
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
@@ -148,6 +153,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("http-1x", enabled)
+                    .build()
+        }
+
+        private data class RequestBodyMaxBytes(val maxBytes: Long) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("requestBodyMaxBytes", maxBytes)
                     .build()
         }
 
