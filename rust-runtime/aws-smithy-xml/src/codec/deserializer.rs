@@ -179,28 +179,41 @@ impl<'a> XmlDeserializer<'a> {
     /// pointer `el_local` points into `input`. Uses pointer arithmetic to locate
     /// the `<` before the element name, then scans forward for the matching close
     /// tag with depth tracking. Returns the sub-slice `<tag...>...</tag>`.
+    ///
+    /// Operates purely on byte slices — `<`, `>`, `/`, and `?` are all single-
+    /// byte ASCII characters, so the byte-level scanning we do here is correct
+    /// regardless of the multi-byte UTF-8 sequences that may appear in element
+    /// content (e.g. attribute values, text nodes containing non-ASCII chars).
+    /// Previous versions converted to `&str` and panicked on
+    /// `start byte index N is not a char boundary` when a byte-level `pos += 1`
+    /// landed inside a multi-byte sequence; sticking to bytes throughout
+    /// avoids the issue.
     fn find_element_slice(input: &'a [u8], el_local: &str) -> &'a [u8] {
-        let input_str = std::str::from_utf8(input).unwrap_or("");
-        let input_start = input_str.as_ptr() as usize;
         let name_ptr = el_local.as_ptr() as usize;
+        let input_start = input.as_ptr() as usize;
+        let name_offset = name_ptr.saturating_sub(input_start).min(input.len());
 
-        // The element name is inside the input string. Find the `<` before it.
-        // Account for possible prefix: `<prefix:local` — scan back past `:` and prefix.
-        let name_offset = name_ptr.saturating_sub(input_start);
-        let el_start = input_str[..name_offset].rfind('<').unwrap_or(0);
+        // The element name is inside the input. Find the `<` immediately
+        // preceding it.
+        let el_start = input[..name_offset]
+            .iter()
+            .rposition(|&b| b == b'<')
+            .unwrap_or(0);
 
-        // Find matching close tag by scanning with depth tracking.
-        let tag_name = el_local;
-        let remaining = &input_str[el_start..];
+        // Scan forward, byte by byte, tracking nesting of elements with the
+        // same local name. `<`, `>`, `/`, `?` are single-byte ASCII so the
+        // byte-level cursor is always at the start of a UTF-8 char.
+        let tag_name = el_local.as_bytes();
+        let remaining = &input[el_start..];
         let mut depth = 0i32;
         let mut pos = 0;
         while pos < remaining.len() {
-            if remaining[pos..].starts_with("</") {
-                // Close tag — check if it matches our tag name
+            if remaining[pos..].starts_with(b"</") {
+                // Close tag — check if it matches our tag name.
                 let after_slash = pos + 2;
                 if remaining[after_slash..].starts_with(tag_name) {
                     let after_name = after_slash + tag_name.len();
-                    if remaining.as_bytes().get(after_name) == Some(&b'>') {
+                    if remaining.get(after_name) == Some(&b'>') {
                         depth -= 1;
                         if depth == 0 {
                             let end = el_start + after_name + 1;
@@ -209,19 +222,18 @@ impl<'a> XmlDeserializer<'a> {
                     }
                 }
                 pos = after_slash;
-            } else if remaining.as_bytes()[pos] == b'<'
-                && remaining.as_bytes().get(pos + 1) != Some(&b'/')
-                && remaining.as_bytes().get(pos + 1) != Some(&b'?')
+            } else if remaining[pos] == b'<'
+                && remaining.get(pos + 1) != Some(&b'/')
+                && remaining.get(pos + 1) != Some(&b'?')
             {
-                // Open tag — check if self-closing or matches our name
-                if let Some(gt) = remaining[pos..].find('>') {
+                // Open tag — check if self-closing or matches our name.
+                if let Some(gt) = remaining[pos..].iter().position(|&b| b == b'>') {
                     let tag_content = &remaining[pos + 1..pos + gt];
-                    let is_self_closing = tag_content.ends_with('/');
+                    let is_self_closing = tag_content.last() == Some(&b'/');
                     let opens_our_tag = tag_content.starts_with(tag_name)
                         && tag_content
-                            .as_bytes()
                             .get(tag_name.len())
-                            .map_or(true, |&b| b == b' ' || b == b'>' || b == b'/');
+                            .is_none_or(|&b| b == b' ' || b == b'>' || b == b'/');
                     if opens_our_tag && !is_self_closing {
                         depth += 1;
                     }
@@ -230,6 +242,11 @@ impl<'a> XmlDeserializer<'a> {
                     pos += 1;
                 }
             } else {
+                // Any other byte (text content, attribute byte, multi-byte
+                // UTF-8 lead/continuation, etc.) — advance by one byte. This
+                // is correct because we never `&str`-index into `remaining`,
+                // only byte-slice it, and byte slicing on a `&[u8]` accepts
+                // any offset.
                 pos += 1;
             }
         }
@@ -289,8 +306,12 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         if schema.xml_unwrapped_output() {
             let local = root.start_el().local().to_owned();
             // Release the iterator borrow on `doc` so we can mutate `self`.
+            // `root` is a `ScopedDecoder` (whose `Drop` advances the tokenizer
+            // past the close tag) and is dropped explicitly. `doc` is a
+            // `decode::Document` which has no `Drop` impl; binding to `_`
+            // consumes it without firing clippy's `drop_non_drop` lint.
             drop(root);
-            drop(doc);
+            let _ = doc;
             if let Some(member) = Self::resolve_member(schema, &local) {
                 let sub = Self::find_element_slice(input, &local);
                 self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
@@ -1130,5 +1151,55 @@ mod tests {
                 d.read_struct(&R_SCHEMA, &mut |_, _| Ok(()))
             })
             .expect("sibling read on the same deserializer must succeed");
+    }
+
+    /// Regression test for a UTF-8 char-boundary panic in `find_element_slice`.
+    ///
+    /// Found via `schema_xml_roundtrip` fuzz target on input
+    /// `StringStringMap([("Б", "")])`. The serialized payload contains a
+    /// Cyrillic `Б` (UTF-8 bytes `0xD0 0x91`) inside a map-key element. The
+    /// previous implementation operated on `&str` and advanced its scan
+    /// cursor by one byte per non-`<` character, which landed mid-char on
+    /// the second byte of `Б` and panicked with
+    /// `start byte index N is not a char boundary`. The fix moves all
+    /// scanning to byte slices since `<`, `>`, `/`, and `?` are single-byte
+    /// ASCII and the multi-byte content is opaque to the search.
+    #[test]
+    fn find_element_slice_handles_multibyte_utf8() {
+        // Build a struct-with-map XML payload containing Cyrillic text in a
+        // map-key element. The exact wire form matches what `XmlSerializer`
+        // emits for `StringStringMap([("Б", "")])` wrapped in
+        // `WRAPPER_STRING_STRING_MAP_SCHEMA`.
+        static KEY_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "Wrapper$k"), ShapeType::Map, "entries", 0);
+        static MAP_SCHEMA: Schema = Schema::new_map(
+            shape_id!("test", "MyMap"),
+            &aws_smithy_schema::prelude::STRING,
+            &aws_smithy_schema::prelude::STRING,
+        );
+        static WRAPPER: Schema = Schema::new_struct(
+            shape_id!("test", "Wrapper"),
+            ShapeType::Structure,
+            &[&KEY_MEMBER],
+        );
+        let _ = MAP_SCHEMA; // referenced for documentation; not directly used
+
+        let xml =
+            "<Wrapper><entries><entry><key>Б</key><value></value></entry></entries></Wrapper>";
+
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml.as_bytes(), settings);
+
+        let mut entries = Vec::new();
+        deser
+            .read_struct(&WRAPPER, &mut |member, d| {
+                d.read_map(member, &mut |k, d| {
+                    entries.push((k, d.read_string(&aws_smithy_schema::prelude::STRING)?));
+                    Ok(())
+                })
+            })
+            .expect("must not panic on multi-byte UTF-8 inside map elements");
+
+        assert_eq!(entries, vec![("Б".to_owned(), String::new())]);
     }
 }
