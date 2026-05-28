@@ -12,6 +12,7 @@ use crate::{Schema, ShapeId};
 use aws_smithy_runtime_api::http::{Request, Response};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
+use std::borrow::Cow;
 
 /// An HTTP protocol for REST-style APIs that use HTTP bindings.
 ///
@@ -100,10 +101,13 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // optimization is never silently applied to a schema that actually has
         // body members.
         let skip_body_codec = !input_schema.has_body_members() && !has_struct_payload;
-        if skip_body_codec {
-            binder.is_top_level = false;
-            input.serialize_members(&mut binder)?;
-        } else if has_struct_payload {
+        if skip_body_codec || has_struct_payload {
+            // skip_body_codec: input has no body members at all → all members
+            //                  route to HTTP bindings, body bytes are unused.
+            // has_struct_payload: an @httpPayload struct member writes itself
+            //                     to the body without wrapping — call
+            //                     serialize_members directly so framing comes
+            //                     from the payload struct, not from the binder.
             binder.is_top_level = false;
             input.serialize_members(&mut binder)?;
         } else {
@@ -274,8 +278,8 @@ pub(crate) const HEX: &[u8; 16] = b"0123456789ABCDEF";
 /// serializer unchanged.
 struct HttpBindingSerializer<'a, S> {
     body: S,
-    headers: Vec<(String, String)>,
-    query_params: Vec<(String, String)>,
+    headers: Vec<(Cow<'static, str>, String)>,
+    query_params: Vec<(Cow<'static, str>, String)>,
     labels: Vec<(String, String)>,
     /// When set, member schemas are resolved from this schema by name to find
     /// HTTP binding traits. This allows the protocol to override bindings
@@ -447,7 +451,8 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.headers.push((header.value().to_string(), header_val));
+            self.headers
+                .push((Cow::Borrowed(header.value()), header_val));
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -458,7 +463,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             let mut collector = ListElementCollector::for_query();
             write_elements(&mut collector)?;
             for val in collector.values {
-                self.query_params.push((query.value().to_string(), val));
+                self.query_params.push((Cow::Borrowed(query.value()), val));
             }
             return Ok(());
         }
@@ -479,7 +484,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             // Collect entries via a temporary serializer
             let mut collector = MapEntryCollector::new(prefix.value().to_string());
             write_entries(&mut collector)?;
-            self.headers.extend(collector.entries);
+            // Names are dynamic (prefix + map key), so they are Cow::Owned.
+            self.headers.extend(
+                collector
+                    .entries
+                    .into_iter()
+                    .map(|(k, v)| (Cow::Owned(k), v)),
+            );
             return Ok(());
         }
         // @httpQueryParams: serialize map entries as query params
@@ -502,7 +513,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 .unwrap_or_default();
             for (k, v) in collector.entries {
                 if !explicit_query_keys.contains(&k.as_str()) {
-                    self.query_params.push((k, v));
+                    self.query_params.push((Cow::Owned(k), v));
                 }
             }
             return Ok(());
@@ -632,8 +643,10 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 return Ok(());
             }
             let encoded = aws_smithy_types::base64::encode(value.as_ref());
-            self.headers
-                .push((schema.http_header().unwrap().value().to_string(), encoded));
+            self.headers.push((
+                Cow::Borrowed(schema.http_header().unwrap().value()),
+                encoded,
+            ));
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -705,14 +718,14 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 }
 
 /// Which HTTP location a member is bound to.
-enum HttpBinding<'a> {
-    Header(&'a str),
-    Query(&'a str),
+enum HttpBinding {
+    Header(&'static str),
+    Query(&'static str),
     Label,
 }
 
 /// Determine the HTTP binding for a member schema, if any.
-fn http_string_binding(schema: &Schema) -> Option<HttpBinding<'_>> {
+fn http_string_binding(schema: &Schema) -> Option<HttpBinding> {
     if let Some(h) = schema.http_header() {
         return Some(HttpBinding::Header(h.value()));
     }
@@ -728,7 +741,7 @@ fn http_string_binding(schema: &Schema) -> Option<HttpBinding<'_>> {
 impl<'a, S> HttpBindingSerializer<'a, S> {
     fn add_binding(
         &mut self,
-        binding: HttpBinding<'_>,
+        binding: HttpBinding,
         schema: &Schema,
         value: &str,
     ) -> Result<(), SerdeError> {
@@ -740,11 +753,11 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
         match binding {
             HttpBinding::Header(name) => {
-                self.headers.push((name.to_string(), value.to_string()));
+                self.headers.push((Cow::Borrowed(name), value.to_string()));
             }
             HttpBinding::Query(name) => {
                 self.query_params
-                    .push((name.to_string(), value.to_string()));
+                    .push((Cow::Borrowed(name), value.to_string()));
             }
             HttpBinding::Label => {
                 let name = schema

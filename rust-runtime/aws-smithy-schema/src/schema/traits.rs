@@ -51,7 +51,7 @@ macro_rules! string_trait {
             }
 
             /// Returns the trait value.
-            pub fn value(&self) -> &str {
+            pub fn value(&self) -> &'static str {
                 self.value
             }
         }
