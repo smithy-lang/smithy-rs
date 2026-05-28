@@ -42,9 +42,11 @@ class EventStreamErrorMarshallerGenerator(
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
-) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType) {
+    private val useSchemaSerde: Boolean = false,
+) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType, useSchemaSerde) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
+    private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
 
     private val operationErrorSymbol =
         if (target == CodegenTarget.SERVER && unionShape.eventStreamErrors().isEmpty()) {
@@ -61,6 +63,7 @@ class EventStreamErrorMarshallerGenerator(
             "Header" to smithyTypes.resolve("event_stream::Header"),
             "HeaderValue" to smithyTypes.resolve("event_stream::HeaderValue"),
             "Error" to smithyEventStream.resolve("error::Error"),
+            "SharedClientProtocol" to smithySchema.resolve("protocol::SharedClientProtocol"),
         )
 
     override fun render(): RuntimeType {
@@ -76,19 +79,42 @@ class EventStreamErrorMarshallerGenerator(
         marshallerType: RuntimeType,
         unionSymbol: Symbol,
     ) {
-        rust(
-            """
-            ##[non_exhaustive]
-            ##[derive(Debug)]
-            pub struct ${marshallerType.name};
-
-            impl ${marshallerType.name} {
-                pub fn new() -> Self {
-                    ${marshallerType.name}
+        if (useSchemaSerde) {
+            rustTemplate(
+                """
+                ##[non_exhaustive]
+                ##[derive(Debug)]
+                pub struct ${marshallerType.name} {
+                    // `protocol` is used by error variants whose payloads go through the codec.
+                    // When no such variant exists (e.g., all errors are header-only or empty),
+                    // the field is unused but still kept for API uniformity across operations.
+                    ##[allow(dead_code)]
+                    protocol: #{SharedClientProtocol},
                 }
-            }
-            """,
-        )
+
+                impl ${marshallerType.name} {
+                    pub fn new(protocol: #{SharedClientProtocol}) -> Self {
+                        Self { protocol }
+                    }
+                }
+                """,
+                *codegenScope,
+            )
+        } else {
+            rust(
+                """
+                ##[non_exhaustive]
+                ##[derive(Debug)]
+                pub struct ${marshallerType.name};
+
+                impl ${marshallerType.name} {
+                    pub fn new() -> Self {
+                        ${marshallerType.name}
+                    }
+                }
+                """,
+            )
+        }
 
         rustBlockTemplate(
             "impl #{MarshallMessage} for ${marshallerType.name}",

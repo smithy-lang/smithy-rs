@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.protocols.eventstream
 
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
+import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
@@ -34,17 +35,26 @@ class ClientEventStreamUnmarshallerGeneratorTest {
             testCase.model,
             IntegrationTestParams(service = "test#TestService"),
         ) { codegenContext, rustCrate ->
-            val generator = "crate::event_stream_serde::TestStreamUnmarshaller"
+            val unmarshallerNew =
+                unmarshallerConstructExpr(
+                    codegenContext,
+                    "crate::event_stream_serde::TestStreamUnmarshaller",
+                )
 
             rustCrate.testModule {
                 rust("##![allow(unused_imports, dead_code)]")
-                writeUnmarshallTestCases(codegenContext, testCase, optionalBuilderInputs = false)
+                writeUnmarshallTestCases(
+                    codegenContext,
+                    testCase,
+                    optionalBuilderInputs = false,
+                    unmarshallerNew = unmarshallerNew,
+                )
 
                 unitTest(
                     "unknown_message",
                     """
                     let message = msg("event", "NewUnmodeledMessageType", "application/octet-stream", b"hello, world!");
-                    let result = $generator::new().unmarshall(&message);
+                    let result = $unmarshallerNew.unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     assert!(expect_event(result.unwrap()).is_unknown());
                     """,
@@ -59,7 +69,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                         "${testCase.responseContentType}",
                         ${testCase.generateRustPayloadInitializer(testCase.validUnmodeledError)}
                     );
-                    let result = $generator::new().unmarshall(&message);
+                    let result = $unmarshallerNew.unmarshall(&message);
                     assert!(result.is_ok(), "expected ok, got: {:?}", result);
                     match expect_error(result.unwrap()) {
                         err @ TestStreamError::Unhandled(_) => {
@@ -104,6 +114,11 @@ class ClientEventStreamUnmarshallerGeneratorTest {
             initialResponseAssertion: Writable,
             eventStreamReceiver: Writable = defaultEventStreamReceiver,
         ) {
+            val marshallerExpr =
+                eventStreamSerdeConstructExpr(
+                    codegenContext as ClientCodegenContext,
+                    "crate::event_stream_serde::TestStreamMarshaller",
+                )
             rustTemplate(
                 """
                 use aws_smithy_eventstream::frame::{MarshallMessage, write_message_to};
@@ -116,7 +131,7 @@ class ClientEventStreamUnmarshallerGeneratorTest {
                 let event = TestStream::MessageWithString(
                     MessageWithString::builder().data("hello, world!").build(),
                 );
-                let event_stream_payload = crate::event_stream_serde::TestStreamMarshaller::new()
+                let event_stream_payload = $marshallerExpr
                     .marshall(event.clone())
                     .unwrap();
                 let mut buffer = vec![];

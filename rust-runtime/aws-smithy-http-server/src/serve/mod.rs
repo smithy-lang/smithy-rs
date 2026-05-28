@@ -137,10 +137,10 @@
 //!
 //! | Timeout Type | What It Does | How to Configure |
 //! |--------------|--------------|------------------|
-//! | **Header Read** | Time limit for reading HTTP headers | `.configure_hyper()` with `.http1().header_read_timeout()` |
+//! | **Header Read** | Time limit for reading HTTP headers | 30 s by default; override via `.configure_hyper()` with `.http1().header_read_timeout()` |
 //! | **Request** | Time limit for processing one request | Tower's `TimeoutLayer` |
 //! | **Connection Duration** | Total connection lifetime limit | Custom accept loop with `tokio::time::timeout` |
-//! | **HTTP/2 Keep-Alive** | Idle timeout between HTTP/2 requests | `.configure_hyper()` with `.http2().keep_alive_*()` |
+//! | **HTTP/2 Keep-Alive** | Idle timeout between HTTP/2 requests | 20 s ping interval by default; override via `.configure_hyper()` with `.http2().keep_alive_*()` |
 //!
 //! **Examples:**
 //! - `examples/header_read_timeout.rs` - Configure header read timeout
@@ -288,7 +288,7 @@ use std::time::Duration;
 
 use http_body::Body as HttpBody;
 use hyper::body::Incoming;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
 use tower::{Service, ServiceExt as _};
@@ -448,6 +448,9 @@ where
 
 /// Serve the service with the supplied listener.
 ///
+/// The default connection builder applies a 30-second HTTP/1 header-read timeout
+/// and a 20-second HTTP/2 keep-alive ping interval.
+///
 /// This implementation provides zero-cost abstraction for shutdown coordination.
 /// When graceful shutdown is not used, there is no runtime overhead - no watch channels
 /// are allocated and no `tokio::select!` is used.
@@ -596,6 +599,9 @@ where
     ///
     /// This allows you to customize Hyper's HTTP/1 and HTTP/2 settings,
     /// such as timeouts, max concurrent streams, keep-alive behavior, etc.
+    ///
+    /// **Note:** Calling this replaces the default builder entirely, opting out of the built-in
+    /// defaults. You are responsible for setting your own timeouts.
     ///
     /// The configuration is applied once and the configured builder is cloned
     /// for each connection, providing optimal performance.
@@ -911,10 +917,20 @@ async fn handle_connection<L, M, S, B>(
 
     let hyper_service = TowerToHyperService::new(tower_service);
 
-    // Clone the Arc (cheap - just increments refcount) or create a default builder
-    let builder = hyper_builder
-        .map(Arc::clone)
-        .unwrap_or_else(|| Arc::new(Builder::new(TokioExecutor::new())));
+    // Clone the Arc (cheap - just increments refcount) or create a default builder.
+    // A TokioTimer is required to activate hyper's header_read_timeout (default 30 s).
+    // HTTP/2 keep_alive_interval (20 s) detects idle connections; timeout defaults to 20 s.
+    let builder = hyper_builder.map(Arc::clone).unwrap_or_else(|| {
+        let mut b = Builder::new(TokioExecutor::new());
+        b.http1()
+            .timer(TokioTimer::new())
+            .header_read_timeout(Duration::from_secs(30));
+        b.http2()
+            .timer(TokioTimer::new())
+            .keep_alive_interval(Some(Duration::from_secs(20)))
+            .keep_alive_timeout(Duration::from_secs(20));
+        Arc::new(b)
+    });
 
     tokio::spawn(async move {
         let result = if use_upgrades {

@@ -18,6 +18,7 @@ import software.amazon.smithy.rulesengine.language.syntax.expressions.functions.
 import software.amazon.smithy.rulesengine.language.syntax.expressions.literal.Literal
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.Context
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.generators.EndpointResolverGenerator
+import software.amazon.smithy.rust.codegen.client.smithy.endpoint.resolveName
 import software.amazon.smithy.rust.codegen.client.smithy.endpoint.rustName
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.join
@@ -52,35 +53,39 @@ class ExpressionGenerator(
 
         override fun visitRef(ref: Reference) =
             writable {
+                // Resolve the name through the context so BDD-mode SSA variables that
+                // collide with parameter names get their disambiguated rust-name (e.g.
+                // `resource_arn_v`). See Context.resolveName / AnnotatedRefs.from.
+                val name = context.resolveName(ref.name)
                 if (ownership == Ownership.Owned) {
                     try {
                         when (ref.type()) {
-                            is BooleanType -> rust("*${ref.name.rustName()}")
-                            else -> rust("${ref.name.rustName()}.to_owned()")
+                            is BooleanType -> rust("*$name")
+                            else -> rust("$name.to_owned()")
                         }
                     } catch (_: RuntimeException) {
                         // Typechecking was never invoked, default to .to_owned()
-                        rust("${ref.name.rustName()}.to_owned()")
+                        rust("$name.to_owned()")
                     }
                 } else {
                     try {
                         when (ref.type()) {
-                            // This ensures we obtain a `&str`, regardless of whether `ref.name.rustName()` returns a `String` or a `&str`.
-                            // Typically, we don't know which type will be returned due to code generation.
-                            // In BDD mode, parameters are already bound as references, so the cast is unnecessary and causes errors.
+                            // This ensures we obtain a `&str`, regardless of whether the bound name
+                            // refers to a `String` or a `&str`. In BDD mode, parameters are already
+                            // bound as references, so the `as &str` cast is unnecessary and causes errors.
                             is StringType -> {
                                 if (context.isBddMode) {
-                                    rust("${ref.name.rustName()}.as_ref()")
+                                    rust("$name.as_ref()")
                                 } else {
-                                    rust("${ref.name.rustName()}.as_ref() as &str")
+                                    rust("$name.as_ref() as &str")
                                 }
                             }
-                            else -> rust(ref.name.rustName())
+                            else -> rust(name)
                         }
                     } catch (_: RuntimeException) {
-                        // Because Typechecking was never invoked upon calling `.type()` on Reference for an expression
-                        // like "{ref}: rust". See `generateLiterals2` in ExprGeneratorTest.
-                        rust(ref.name.rustName())
+                        // Typechecking was never invoked upon calling `.type()` on Reference for an
+                        // expression like "{ref}: rust". See `generateLiterals2` in ExprGeneratorTest.
+                        rust(name)
                     }
                 }
             }

@@ -57,6 +57,7 @@ class TimeoutConfigMergingTest {
                         }
                     }
                     #{tokio_test}
+                    ##[allow(deprecated)]
                     async fn test_all_timeouts() {
                         let (_logs, _guard) = capture_test_logs();
                         let connect_timeout = Duration::from_secs(1);
