@@ -1387,29 +1387,6 @@ mod tests {
 
     // Map serialization: wrapped, flattened, and `@xmlName` on key/value.
 
-    // Helper: simulates generated code writing one map entry as
-    // <entry><key>k</key><value>v</value></entry> using write_struct.
-    static ENTRY_KEY: Schema =
-        Schema::new_member(shape_id!("test", "E$key"), ShapeType::String, "key", 0);
-    static ENTRY_VALUE: Schema =
-        Schema::new_member(shape_id!("test", "E$value"), ShapeType::String, "value", 1);
-    static ENTRY_SCHEMA: Schema = Schema::new_struct(
-        shape_id!("test", "E"),
-        ShapeType::Structure,
-        &[&ENTRY_KEY, &ENTRY_VALUE],
-    );
-
-    struct MapEntry<'a> {
-        key: &'a str,
-        value: &'a str,
-    }
-    impl SerializableStruct for MapEntry<'_> {
-        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-            ser.write_string(&ENTRY_KEY, self.key)?;
-            ser.write_string(&ENTRY_VALUE, self.value)
-        }
-    }
-
     #[test]
     fn map_wrapped() {
         static KEY_SCHEMA: Schema =

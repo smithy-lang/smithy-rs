@@ -602,6 +602,154 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         ))
     }
 
+    // -------- Specialized collection overrides --------
+    //
+    // The default trait impls of `read_*_list` / `read_string_string_map`
+    // call `self.read_list` / `self.read_map` with a `&mut dyn FnMut` consumer
+    // that itself calls `&mut dyn ShapeDeserializer::read_X` per element.
+    // For XML this is doubly wasteful: each list element pays
+    //
+    //   1. one `&mut dyn FnMut` indirect call,
+    //   2. one `&mut dyn ShapeDeserializer` virtual call,
+    //   3. and — because the consumer goes through `dispatch_subslice` —
+    //      a fresh `Document::try_from` over the element's sub-slice plus
+    //      a save/restore of (`input`, `text`, `schema_override`).
+    //
+    // The overrides below walk the existing tokenizer once and extract
+    // text inline via `decode::try_data`, eliminating all three costs.
+    // They preserve the default behavior of accepting any child element
+    // name (matching `XmlDeserializer::read_list` / `read_map` which do
+    // not validate element names against the schema's expected member
+    // name — element-name dispatch is the deserializer's responsibility
+    // for structs only).
+    //
+    // Sparse lists are not routed here: `SchemaGenerator` only emits
+    // `read_string_list` / `read_blob_list` / `read_integer_list` /
+    // `read_long_list` / `read_string_string_map` for non-sparse element
+    // shapes (see SchemaGenerator.kt line ~1497).
+
+    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+        self.enter_aggregate()?;
+        let mut doc = self.document()?;
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        let mut out = Vec::new();
+        while let Some(mut child_scope) = root.next_tag() {
+            let text = decode::try_data(&mut child_scope)
+                .map_err(|e| SerdeError::custom(e.to_string()))?;
+            out.push(text.into_owned());
+        }
+        self.leave_aggregate();
+        Ok(out)
+    }
+
+    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+        use aws_smithy_types::base64;
+        self.enter_aggregate()?;
+        let mut doc = self.document()?;
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        let mut out = Vec::new();
+        while let Some(mut child_scope) = root.next_tag() {
+            let text = decode::try_data(&mut child_scope)
+                .map_err(|e| SerdeError::custom(e.to_string()))?;
+            let bytes = base64::decode(text.as_ref())
+                .map_err(|e| SerdeError::custom(format!("invalid base64: {e}")))?;
+            out.push(Blob::new(bytes));
+        }
+        self.leave_aggregate();
+        Ok(out)
+    }
+
+    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+        self.enter_aggregate()?;
+        let mut doc = self.document()?;
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        let mut out = Vec::new();
+        while let Some(mut child_scope) = root.next_tag() {
+            let text = decode::try_data(&mut child_scope)
+                .map_err(|e| SerdeError::custom(e.to_string()))?;
+            let v: i32 = text
+                .parse()
+                .map_err(|e| SerdeError::custom(format!("{e}")))?;
+            out.push(v);
+        }
+        self.leave_aggregate();
+        Ok(out)
+    }
+
+    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+        self.enter_aggregate()?;
+        let mut doc = self.document()?;
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        let mut out = Vec::new();
+        while let Some(mut child_scope) = root.next_tag() {
+            let text = decode::try_data(&mut child_scope)
+                .map_err(|e| SerdeError::custom(e.to_string()))?;
+            let v: i64 = text
+                .parse()
+                .map_err(|e| SerdeError::custom(format!("{e}")))?;
+            out.push(v);
+        }
+        self.leave_aggregate();
+        Ok(out)
+    }
+
+    fn read_string_string_map(
+        &mut self,
+        schema: &Schema,
+    ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        // Mirror the schema_override / key-name / value-name resolution
+        // used by `read_map` so the override is a behavioral drop-in.
+        let effective_schema: &Schema =
+            self.schema_override.map(|s| s as &Schema).unwrap_or(schema);
+        self.schema_override = None;
+        let schema = effective_schema;
+
+        let key_name = schema
+            .key()
+            .and_then(|k| k.xml_name().map(|t| t.value()))
+            .unwrap_or("key");
+        let value_name = schema
+            .member()
+            .and_then(|v| v.xml_name().map(|t| t.value()))
+            .unwrap_or("value");
+
+        self.enter_aggregate()?;
+        let mut doc = self.document()?;
+        let mut root = doc
+            .root_element()
+            .map_err(|e| SerdeError::custom(e.to_string()))?;
+        let mut out = std::collections::HashMap::new();
+        while let Some(mut entry_scope) = root.next_tag() {
+            let mut k: Option<String> = None;
+            let mut v: Option<String> = None;
+            while let Some(mut field_scope) = entry_scope.next_tag() {
+                let local = field_scope.start_el().local().to_owned();
+                if local == key_name {
+                    let text = decode::try_data(&mut field_scope)
+                        .map_err(|e| SerdeError::custom(e.to_string()))?;
+                    k = Some(text.into_owned());
+                } else if local == value_name {
+                    let text = decode::try_data(&mut field_scope)
+                        .map_err(|e| SerdeError::custom(e.to_string()))?;
+                    v = Some(text.into_owned());
+                }
+            }
+            if let (Some(k), Some(v)) = (k, v) {
+                out.insert(k, v);
+            }
+        }
+        self.leave_aggregate();
+        Ok(out)
+    }
+
     fn is_null(&self) -> bool {
         // XML represents absence by omitting the element entirely.
         // If we have a deserializer, the element exists, so it's not null.
@@ -1023,7 +1171,7 @@ mod tests {
         for _ in 0..depth {
             s.push_str("<r>");
         }
-        s.push_str("v");
+        s.push('v');
         for _ in 0..depth {
             s.push_str("</r>");
         }
@@ -1201,5 +1349,154 @@ mod tests {
             .expect("must not panic on multi-byte UTF-8 inside map elements");
 
         assert_eq!(entries, vec![("Б".to_owned(), String::new())]);
+    }
+
+    // -------- Specialized collection-helper override tests --------
+    //
+    // These exercise the inlined `read_*_list` / `read_string_string_map`
+    // overrides on `XmlDeserializer`, confirming behavioral parity with
+    // the trait's default-impl path (which goes through `read_list` /
+    // `read_map` + `&mut dyn ShapeDeserializer`).
+
+    #[test]
+    fn read_string_list_helper() {
+        let xml = b"<items><member>a</member><member>b</member><member></member></items>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "L$member"),
+            ShapeType::String,
+            "member",
+            0,
+        );
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "L"), &LIST_MEMBER);
+
+        let out = deser.read_string_list(&LIST_SCHEMA).unwrap();
+        assert_eq!(out, vec!["a".to_owned(), "b".to_owned(), String::new()]);
+    }
+
+    #[test]
+    fn read_string_list_helper_renamed_member_name() {
+        // Codegen-emitted call site for a list whose member shape has
+        // `@xmlName("Item")`. Like `read_list`, the helper does not
+        // validate child element names against the schema — it accepts
+        // whatever the wire form provides. This matches the default impl.
+        let xml = b"<items><Item>x</Item><Item>y</Item></items>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "L$member"),
+            ShapeType::String,
+            "member",
+            0,
+        );
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "L"), &LIST_MEMBER);
+
+        let out = deser.read_string_list(&LIST_SCHEMA).unwrap();
+        assert_eq!(out, vec!["x".to_owned(), "y".to_owned()]);
+    }
+
+    #[test]
+    fn read_blob_list_helper() {
+        // Each element's text is base64-decoded into a Blob.
+        let xml = b"<blobs><member>aGVsbG8=</member><member>d29ybGQ=</member></blobs>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "B$member"), ShapeType::Blob, "member", 0);
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "B"), &LIST_MEMBER);
+
+        let out = deser.read_blob_list(&LIST_SCHEMA).unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[0].as_ref(), b"hello");
+        assert_eq!(out[1].as_ref(), b"world");
+    }
+
+    #[test]
+    fn read_blob_list_helper_rejects_invalid_base64() {
+        let xml = b"<blobs><member>!!!not-base64!!!</member></blobs>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "B$member"), ShapeType::Blob, "member", 0);
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "B"), &LIST_MEMBER);
+
+        let err = deser.read_blob_list(&LIST_SCHEMA).unwrap_err();
+        assert!(format!("{err}").contains("base64"));
+    }
+
+    #[test]
+    fn read_integer_list_helper() {
+        let xml = b"<nums><member>1</member><member>-42</member><member>0</member></nums>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "I$member"),
+            ShapeType::Integer,
+            "member",
+            0,
+        );
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "I"), &LIST_MEMBER);
+
+        let out = deser.read_integer_list(&LIST_SCHEMA).unwrap();
+        assert_eq!(out, vec![1i32, -42, 0]);
+    }
+
+    #[test]
+    fn read_long_list_helper() {
+        let xml = b"<nums><member>9223372036854775807</member><member>-1</member></nums>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static LIST_MEMBER: Schema =
+            Schema::new_member(shape_id!("test", "Lo$member"), ShapeType::Long, "member", 0);
+        static LIST_SCHEMA: Schema = Schema::new_list(shape_id!("test", "Lo"), &LIST_MEMBER);
+
+        let out = deser.read_long_list(&LIST_SCHEMA).unwrap();
+        assert_eq!(out, vec![i64::MAX, -1]);
+    }
+
+    #[test]
+    fn read_string_string_map_helper() {
+        let xml = b"<m><entry><key>a</key><value>1</value></entry>\
+                    <entry><key>b</key><value>2</value></entry></m>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static MAP_KEY: Schema =
+            Schema::new_member(shape_id!("test", "M$key"), ShapeType::String, "key", 0);
+        static MAP_VALUE: Schema =
+            Schema::new_member(shape_id!("test", "M$value"), ShapeType::String, "value", 0);
+        static MAP_SCHEMA: Schema = Schema::new_map(shape_id!("test", "M"), &MAP_KEY, &MAP_VALUE);
+
+        let out = deser.read_string_string_map(&MAP_SCHEMA).unwrap();
+        assert_eq!(out.len(), 2);
+        assert_eq!(out.get("a").map(String::as_str), Some("1"));
+        assert_eq!(out.get("b").map(String::as_str), Some("2"));
+    }
+
+    #[test]
+    fn read_string_string_map_helper_with_renamed_key_value() {
+        // @xmlName overrides on the map's key / value members — the
+        // helper resolves these from the schema, mirroring `read_map`.
+        let xml = b"<m><entry><K>a</K><V>1</V></entry></m>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static MAP_KEY: Schema =
+            Schema::new_member(shape_id!("test", "M2$key"), ShapeType::String, "key", 0)
+                .with_xml_name("K");
+        static MAP_VALUE: Schema =
+            Schema::new_member(shape_id!("test", "M2$value"), ShapeType::String, "value", 0)
+                .with_xml_name("V");
+        static MAP_SCHEMA: Schema = Schema::new_map(shape_id!("test", "M2"), &MAP_KEY, &MAP_VALUE);
+
+        let out = deser.read_string_string_map(&MAP_SCHEMA).unwrap();
+        assert_eq!(out.get("a").map(String::as_str), Some("1"));
     }
 }
