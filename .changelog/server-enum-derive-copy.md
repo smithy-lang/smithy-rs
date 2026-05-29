@@ -1,8 +1,10 @@
 ---
 applies_to:
-  - server
+- server
 authors:
-  - amodam-user
+- amodam-user
+references:
+- smithy-rs#4669
 breaking: false
 new_feature: true
 bug_fix: false
