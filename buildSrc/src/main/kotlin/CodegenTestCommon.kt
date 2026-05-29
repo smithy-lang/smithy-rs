@@ -133,6 +133,7 @@ private fun generateSmithyBuild(
     pluginName: String,
     tests: List<CodegenTest>,
 ): String {
+    val escapedProjectDir = File(projectDir).invariantSeparatorsPath
     val projections =
         tests.joinToString(",\n") {
             """
@@ -141,7 +142,7 @@ private fun generateSmithyBuild(
                 "plugins": {
                     "$pluginName": {
                         "runtimeConfig": {
-                            "relativePath": "$projectDir/rust-runtime"
+                            "relativePath": "$escapedProjectDir/rust-runtime"
                         },
                         "codegen": {
                             ${it.extraCodegenConfig ?: ""}
