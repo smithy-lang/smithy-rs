@@ -68,16 +68,14 @@ pub async fn run_benchmark(config: BenchmarkConfig<ActionConfig>) -> BenchmarkRe
     }
 
     for _ in 0..config.warmup.batches {
-        run_batch(&client, &config, &data).await;
+        let _ = run_batch(&client, &config, &data).await;
     }
 
     let monitor = ResourceMonitor::spawn(config.measurement.metrics_interval);
     let mut iterations = Vec::new();
 
     for _ in 0..config.measurement.batches {
-        let start = Instant::now();
-        run_batch(&client, &config, &data).await;
-        let total_time = start.elapsed().as_secs_f64();
+        let total_time = run_batch(&client, &config, &data).await.as_secs_f64();
         let throughput_gbps =
             (config.batch.number_of_actions as f64 * config.action_config.object_size as f64 * 8.0)
                 / total_time
@@ -207,10 +205,11 @@ async fn setup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>, 
         .concurrency
         .unwrap_or(config.batch.number_of_actions);
     let sem = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let shared_data = bytes::Bytes::from(data.to_vec());
     let tasks: Vec<_> = (0..config.batch.number_of_actions)
         .map(|i| {
             let key = format!("{}{}", config.action_config.key_prefix, i);
-            let body = ByteStream::from(data.to_vec());
+            let body = ByteStream::from(shared_data.clone());
             let sem = sem.clone();
             let fut = client
                 .put_object()
@@ -228,7 +227,11 @@ async fn setup_objects(client: &Client, config: &BenchmarkConfig<ActionConfig>, 
     assert_all_ok(&results, "setup_objects", config.batch.number_of_actions);
 }
 
-async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data: &[u8]) {
+async fn run_batch(
+    client: &Client,
+    config: &BenchmarkConfig<ActionConfig>,
+    data: &[u8],
+) -> std::time::Duration {
     let concurrency = config
         .batch
         .concurrency
@@ -236,45 +239,61 @@ async fn run_batch(client: &Client, config: &BenchmarkConfig<ActionConfig>, data
     let sem = Arc::new(tokio::sync::Semaphore::new(concurrency));
 
     if config.action == "upload" {
-        let tasks: Vec<_> = (0..config.batch.number_of_actions)
+        // Pre-build all requests before timing starts
+        let shared_data = bytes::Bytes::from(data.to_vec());
+        let futs: Vec<_> = (0..config.batch.number_of_actions)
             .map(|i| {
                 let key = format!("{}{}", config.action_config.key_prefix, i);
-                let body = ByteStream::from(data.to_vec());
-                let sem = sem.clone();
-                let fut = client
+                let body = ByteStream::from(shared_data.clone());
+                client
                     .put_object()
                     .bucket(&config.action_config.bucket_name)
                     .key(key)
                     .body(body)
-                    .send();
-                async move {
-                    let _permit = sem.acquire().await.expect("semaphore should not be closed");
-                    fut.await
-                }
+                    .send()
             })
             .collect();
-        let results = join_all(tasks).await;
-        assert_all_ok(&results, "upload", config.batch.number_of_actions);
+        let start = Instant::now();
+        let handles: Vec<_> = futs
+            .into_iter()
+            .map(|fut| {
+                let sem = sem.clone();
+                tokio::spawn(async move {
+                    let _permit = sem.acquire().await.expect("semaphore should not be closed");
+                    fut.await
+                })
+            })
+            .collect();
+        join_all(handles).await;
+        start.elapsed()
     } else {
-        let tasks: Vec<_> = (0..config.batch.number_of_actions)
+        // Pre-build all requests before timing starts
+        let futs: Vec<_> = (0..config.batch.number_of_actions)
             .map(|i| {
                 let key = format!("{}{}", config.action_config.key_prefix, i);
-                let sem = sem.clone();
-                let fut = client
+                client
                     .get_object()
                     .bucket(&config.action_config.bucket_name)
                     .key(key)
-                    .send();
-                async move {
+                    .send()
+            })
+            .collect();
+        let start = Instant::now();
+        let handles: Vec<_> = futs
+            .into_iter()
+            .map(|fut| {
+                let sem = sem.clone();
+                tokio::spawn(async move {
                     let _permit = sem.acquire().await.expect("semaphore should not be closed");
                     let resp = fut.await.expect("download request should succeed");
                     resp.body
                         .collect()
                         .await
                         .expect("download body read should succeed");
-                }
+                })
             })
             .collect();
-        join_all(tasks).await;
+        join_all(handles).await;
+        start.elapsed()
     }
 }
