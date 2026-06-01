@@ -124,7 +124,6 @@ impl Encoder {
         self
     }
 
-    /// Writes a blob. Collapses header+data into a single reserve+write.
     /// Writes a `BigInteger` using preferred serialization per RFC 8949 §3.4.3.
     ///
     /// Values that fit in a CBOR major type 0 or 1 integer are encoded directly
@@ -187,6 +186,7 @@ impl Encoder {
         self
     }
 
+    /// Writes a blob. Collapses header+data into a single reserve+write.
     pub fn blob(&mut self, x: &Blob) -> &mut Self {
         let data = x.as_ref();
         let writer = self.encoder.writer_mut();

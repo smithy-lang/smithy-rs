@@ -529,6 +529,18 @@ mod tests {
     }
 
     #[test]
+    fn big_integer_from_plain_cbor_positive_signed() {
+        // A positive value such as +123 is encoded as CBOR major type 0 (unsigned)
+        // per preferred serialization and must decode back to the same value.
+        let mut enc = minicbor::Encoder::new(Vec::new());
+        enc.i64(123).unwrap();
+        let bytes = enc.into_writer();
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode positive plain integer");
+        assert_eq!(result.as_ref(), "123");
+    }
+
+    #[test]
     fn big_integer_tag3_empty_byte_string() {
         // Tag 3 with empty byte string = -1 - 0 = -1
         let bytes = [0xc3, 0x40]; // tag 3, empty byte string
