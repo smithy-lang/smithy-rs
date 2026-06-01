@@ -1,0 +1,20 @@
+[package]
+name = "aws-smithy-xml-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[workspace]
+
+[dependencies]
+aws-smithy-schema = { path = "../../aws-smithy-schema" }
+aws-smithy-xml = { path = ".." }
+libfuzzer-sys = "0.4"
+
+[[bin]]
+name = "schema_xml_deserialize"
+path = "fuzz_targets/schema_xml_deserialize.rs"
+doc = false

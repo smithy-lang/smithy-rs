@@ -88,6 +88,9 @@ pub struct Schema {
     xml_attribute: Option<trait_types::XmlAttributeTrait>,
     xml_flattened: Option<trait_types::XmlFlattenedTrait>,
     xml_namespace: Option<trait_types::XmlNamespaceTrait>,
+    xml_collection_member_name: Option<&'static str>,
+    xml_map_key_name: Option<&'static str>,
+    xml_map_value_name: Option<&'static str>,
     http_header: Option<trait_types::HttpHeaderTrait>,
     http_label: Option<trait_types::HttpLabelTrait>,
     http_payload: Option<trait_types::HttpPayloadTrait>,
@@ -139,6 +142,9 @@ impl Schema {
         xml_attribute: None,
         xml_flattened: None,
         xml_namespace: None,
+        xml_collection_member_name: None,
+        xml_map_key_name: None,
+        xml_map_value_name: None,
         http_header: None,
         http_label: None,
         http_payload: None,
@@ -251,6 +257,22 @@ impl Schema {
         self.xml_name.as_ref()
     }
 
+    pub fn xml_flattened(&self) -> Option<&trait_types::XmlFlattenedTrait> {
+        self.xml_flattened.as_ref()
+    }
+
+    pub fn xml_collection_member_name(&self) -> Option<&'static str> {
+        self.xml_collection_member_name
+    }
+
+    pub fn xml_map_key_name(&self) -> Option<&'static str> {
+        self.xml_map_key_name
+    }
+
+    pub fn xml_map_value_name(&self) -> Option<&'static str> {
+        self.xml_map_value_name
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
@@ -343,6 +365,21 @@ impl Schema {
     /// Sets the `@xmlFlattened` trait.
     pub const fn with_xml_flattened(mut self) -> Self {
         self.xml_flattened = Some(trait_types::XmlFlattenedTrait);
+        self
+    }
+
+    pub const fn with_xml_collection_member_name(mut self, name: &'static str) -> Self {
+        self.xml_collection_member_name = Some(name);
+        self
+    }
+
+    pub const fn with_xml_map_key_name(mut self, name: &'static str) -> Self {
+        self.xml_map_key_name = Some(name);
+        self
+    }
+
+    pub const fn with_xml_map_value_name(mut self, name: &'static str) -> Self {
+        self.xml_map_value_name = Some(name);
         self
     }
 

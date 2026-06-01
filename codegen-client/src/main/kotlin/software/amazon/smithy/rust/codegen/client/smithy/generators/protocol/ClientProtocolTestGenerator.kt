@@ -408,6 +408,10 @@ class ClientProtocolTestGenerator(
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                         protocol == software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait.ID ->
                             smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsQueryTrait.ID -> {
+                            val smithyQuery = CargoDependency.smithyQuery(codegenContext.runtimeConfig).toType()
+                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                        }
                         protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
                             smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                         else -> return@writable
