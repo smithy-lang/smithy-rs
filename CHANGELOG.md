@@ -1,4 +1,35 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 1st, 2026
+==============
+**New this release:**
+- :tada: (all, @dnorred) Implement `serde::Serializer` and `serde::Deserializer` traits for `aws_smithy_types::Document`, allowing it to be used as a self-describing data format. This enables converting any `Serialize` type into a `Document` via `to_document()` and deserializing a `Document` into any `Deserialize` type via `from_document()`.
+- :tada: (server, [smithy-rs#4640](https://github.com/smithy-lang/smithy-rs/issues/4640)) Add `requestBodyMaxBytes` codegen setting to limit the size of non-streaming request bodies buffered into memory. When set, requests exceeding the limit are rejected with a 400 response before additional data is read. This prevents memory-exhaustion denial-of-service attacks via unbounded `Transfer-Encoding: chunked` bodies. The default is `0` (no limit) for backwards compatibility. Streaming operations are unaffected.
+
+    To enable, add to your `smithy-build.json`:
+    ```json
+    {
+      "codegen": {
+        "requestBodyMaxBytes": 2097152
+      }
+    }
+    ```
+- :tada: (server, [smithy-rs#4669](https://github.com/smithy-lang/smithy-rs/issues/4669), @amodam-user) Server-generated Rust enums for named Smithy `@enum` shapes now additionally derive `Copy`. Server enums are closed (no `Unknown(...)` fallback) and contain only unit variants, so they are universally `Copy`-eligible. Unnamed `@enum` string shapes are unaffected because they generate a `String` newtype that cannot be `Copy`.
+- :tada: (client, [smithy-rs#4662](https://github.com/smithy-lang/smithy-rs/issues/4662), @jcdyer) # Add `tls::rustls::CryptoMode::Custom(rustls::crypto::CryptoProvider)` to allow custom TLS handling
+
+    This enables custom tls handling through the mechanisms enabled by rustls, including support for custom
+    providers like `rustls-openssl`.
+- :bug: (client) Improve the `Debug` output of HTTP `Headers` and `Request` in `aws-smithy-runtime-api` to redact values of headers commonly used to carry sensitive data. The header name remains visible and the value is replaced with a placeholder that includes the original byte length to preserve diagnostic utility. The `aws-sigv4` signer applies the same redaction when logging the canonical request. The plain `Display` impl on `CanonicalRequest` is unchanged to preserve the raw canonical form used by downstream consumers.
+- :bug: (client) Fix paginator codegen for operations whose `@paginated` `outputToken` targets a `@required` member. Previously, the generated `src/lens.rs` borrowing accessor emitted a direct field access (`input.field`) instead of a reference (`&input.field`) for required members, causing a type mismatch (`Option<&String>` vs `String`).
+- :bug: (client, @PeterUlb) Fix `ConnectorBuilder::default()` to enable `TCP_NODELAY` by default. Previously, the auto-derived `Default` impl left `enable_tcp_nodelay` at `false`, while the curated `Connector::builder()` initialized it to `true`. The `Default` impl on `ConnectorBuilder` is now hand-written to match `Connector::builder()`, so all construction paths, including the SDK's `default_https_client`, get `enable_tcp_nodelay = true` consistently. Without `TCP_NODELAY`, Nagle's algorithm can hold small writes in the kernel waiting for ACKs; on request shapes emitted as multiple small sub-MSS writes, such as the tested HTTP/2 small-body SDK path where HEADERS and DATA are flushed separately, this can add roughly one RTT plus delayed-ACK time. Callers who relied on the previous unintended `enable_tcp_nodelay = false` default of `ConnectorBuilder::default()` can restore that behavior with `.enable_tcp_nodelay(false)`.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @PeterUlb
+- @amodam-user ([smithy-rs#4669](https://github.com/smithy-lang/smithy-rs/issues/4669))
+- @dnorred
+- @jcdyer ([smithy-rs#4662](https://github.com/smithy-lang/smithy-rs/issues/4662))
+
+
 May 19th, 2026
 ==============
 **New this release:**
