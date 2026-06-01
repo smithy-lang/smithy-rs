@@ -542,7 +542,9 @@ mod tests {
         enc.i64(123).unwrap();
         let bytes = enc.into_writer();
         let mut decoder = Decoder::new(&bytes);
-        let result = decoder.big_integer().expect("should decode positive plain integer");
+        let result = decoder
+            .big_integer()
+            .expect("should decode positive plain integer");
         assert_eq!(result.as_ref(), "123");
     }
 
