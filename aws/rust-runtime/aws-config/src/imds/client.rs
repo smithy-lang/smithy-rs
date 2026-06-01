@@ -457,8 +457,13 @@ impl Builder {
             endpoint_source: Arc::new(endpoint_source),
             mode_override: self.mode_override,
         };
-        let retry_config = RetryConfig::standard()
-            .with_max_attempts(self.max_attempts.unwrap_or(DEFAULT_ATTEMPTS));
+        let retry_config = config
+            .retry_config()
+            .unwrap_or_else(|| RetryConfig::standard().with_max_attempts(DEFAULT_ATTEMPTS));
+        let retry_config = match self.max_attempts {
+            Some(max) => retry_config.with_max_attempts(max),
+            None => retry_config,
+        };
         let retry_classifier = self.retry_classifier.unwrap_or(SharedRetryClassifier::new(
             ImdsResponseRetryClassifier::default(),
         ));
