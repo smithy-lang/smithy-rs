@@ -132,7 +132,11 @@ impl Builder {
         }
         if let Some(sleep_impl) = provider_config.sleep_impl() {
             builder = builder
-                .standard_retry(&RetryConfig::standard())
+                .standard_retry(
+                    &provider_config
+                        .retry_config()
+                        .unwrap_or_else(RetryConfig::standard),
+                )
                 // The following errors are retryable:
                 //   - Socket errors
                 //   - Networking timeouts
