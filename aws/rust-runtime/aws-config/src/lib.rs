@@ -910,6 +910,18 @@ mod loader {
                 .unwrap_or_else(|| TimeoutConfig::builder().build());
             timeout_config.take_defaults_from(&base_config);
 
+            let (retry_config, retry_config_explicitly_set) = match self.retry_config {
+                Some(rc) => (rc, true),
+                None => (
+                    retry_config::default_provider()
+                        .configure(&conf)
+                        .retry_config()
+                        .await,
+                    false,
+                ),
+            };
+            let conf = conf.with_retry_config(retry_config.clone());
+
             let credentials_provider = match self.credentials_provider {
                 TriStateOption::Set(provider) => Some(provider),
                 TriStateOption::NotSet => {
@@ -932,15 +944,9 @@ mod loader {
                 .time_source(time_source)
                 .service_config(service_config);
 
-            let retry_config = if let Some(retry_config) = self.retry_config {
+            if retry_config_explicitly_set {
                 builder.insert_origin("retry_config", Origin::shared_config());
-                retry_config
-            } else {
-                retry_config::default_provider()
-                    .configure(&conf)
-                    .retry_config()
-                    .await
-            };
+            }
             builder = builder.retry_config(retry_config);
 
             // If an endpoint URL is set programmatically, then our work is done.
