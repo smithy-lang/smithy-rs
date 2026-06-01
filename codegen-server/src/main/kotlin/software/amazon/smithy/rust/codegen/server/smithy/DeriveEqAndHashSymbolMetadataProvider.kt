@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.StreamingTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustMetadata
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
@@ -24,13 +25,14 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.SymbolMetadataProvider
 import software.amazon.smithy.rust.codegen.core.smithy.expectRustMetadata
+import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
- * This symbol metadata provider adds derives to implement the [`Eq`] and [`Hash`] traits for shapes, whenever
- * possible.
+ * This symbol metadata provider adds derives to implement the [`Eq`], [`Hash`], and [`Copy`] traits for shapes,
+ * whenever possible.
  *
- * These traits can be implemented by any shape _except_ if the shape's closure contains:
+ * `Eq` and `Hash` can be implemented by any shape _except_ if the shape's closure contains:
  *
  *     1. A `float`, `double`, or `document` shape: floating point types in Rust do not implement `Eq`. Similarly,
  *        [`document` shapes] may contain arbitrary JSON-like data containing floating point values.
@@ -41,8 +43,13 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  *     1. A `map` shape: we render `map` shapes as `std::collections::HashMap`, which _do not_ implement `Hash`.
  *        See https://github.com/awslabs/smithy/issues/1567.
  *
+ * `Copy` is added to named string enum shapes only. Server enums with names render as a closed Rust `enum`
+ * with unit-only variants (no `Unknown(...)` fallback, unlike client enums), so they are always `Copy`-eligible.
+ * Unnamed enums render as `pub struct Foo(String)` newtypes, which cannot be `Copy`.
+ *
  * [`Eq`]: https://doc.rust-lang.org/std/cmp/trait.Eq.html
  * [`Hash`]: https://doc.rust-lang.org/std/hash/trait.Hash.html
+ * [`Copy`]: https://doc.rust-lang.org/std/marker/trait.Copy.html
  * [`document` shapes]: https://smithy.io/2.0/spec/simple-types.html#document
  * [@streaming]: https://smithy.io/2.0/spec/streaming.html
  */
@@ -86,7 +93,15 @@ class DeriveEqAndHashSymbolMetadataProvider(
 
     override fun unionMeta(unionShape: UnionShape) = addDeriveEqAndHashIfPossible(unionShape)
 
-    override fun enumMeta(stringShape: StringShape) = addDeriveEqAndHashIfPossible(stringShape)
+    override fun enumMeta(stringShape: StringShape): RustMetadata {
+        var ret = addDeriveEqAndHashIfPossible(stringShape)
+        // Only named enums are rendered as a Rust `enum` with unit-only variants. Unnamed enums are rendered
+        // as a `String` newtype struct (see `EnumGenerator.renderUnnamedEnum`), which cannot be `Copy`.
+        if (stringShape.expectTrait<EnumTrait>().hasNames()) {
+            ret = ret.withDerives(RuntimeType.Copy)
+        }
+        return ret
+    }
 
     override fun listMeta(listShape: ListShape): RustMetadata = addDeriveEqAndHashIfPossible(listShape)
 

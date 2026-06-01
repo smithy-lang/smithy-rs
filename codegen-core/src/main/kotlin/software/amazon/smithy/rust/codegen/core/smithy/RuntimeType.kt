@@ -217,7 +217,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val preludeScope by lazy {
             arrayOf(
                 // Rust 1.0
-                "Copy" to std.resolve("marker::Copy"),
+                "Copy" to Copy,
                 "Send" to Send,
                 "Sized" to std.resolve("marker::Sized"),
                 "Sync" to Sync,
@@ -269,6 +269,7 @@ data class RuntimeType(val path: String, val dependency: RustDependency? = null)
         val Box = std.resolve("boxed::Box")
         val ByteSlab = std.resolve("vec::Vec<u8>")
         val Clone = std.resolve("clone::Clone")
+        val Copy = std.resolve("marker::Copy")
         val Cow = std.resolve("borrow::Cow")
 
         fun lifetimeCow(lifetimeName: String = "a") = std.resolve("borrow::Cow<'$lifetimeName>")
