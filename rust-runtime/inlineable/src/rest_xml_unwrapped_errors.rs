@@ -16,6 +16,13 @@ pub fn body_is_error(body: &[u8]) -> Result<bool, XmlDecodeError> {
     Ok(scoped.start_el().matches("Error"))
 }
 
+// TODO(schema-serde): remove when the legacy XML codegen path is deleted.
+// Schema-serde's REST XML protocol takes its own envelope-walking path
+// (see `aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol`)
+// and does not call `error_scope`, so the function is dead for the
+// schema-serde path but still emitted by the legacy code generator
+// (`codegen-core/.../RestXml.kt`) for non-allowlisted services. Once
+// the legacy path is gone, drop this function and the attribute.
 #[allow(unused)]
 pub fn error_scope<'a, 'b>(
     doc: &'a mut Document<'b>,

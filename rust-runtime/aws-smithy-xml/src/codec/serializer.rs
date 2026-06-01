@@ -131,17 +131,28 @@ enum Frame {
     Open { name: String },
 }
 
-/// Format an `xmlns` / `xmlns:prefix` attribute string from an
-/// optional `(uri, prefix)` tuple. Returns the empty string when
-/// `ns` is `None`. Used by inline element emission paths
-/// (e.g., map entries) where the frame-based [`XmlSerializer::write_xmlns`]
-/// helper isn't applicable because the element is emitted in a single
-/// `write!` call without going through `open_element`.
-fn format_xmlns_attr(ns: Option<&(String, Option<String>)>) -> String {
+/// Append the `xmlns="..."` (or `xmlns:prefix="..."`) attribute fragment
+/// for `ns` directly into `out`. A no-op when `ns` is `None`.
+///
+/// Used by inline element emission paths (e.g., map entries) where the
+/// frame-based [`XmlSerializer::write_xmlns`] helper isn't applicable
+/// because the element is emitted via `write!(self.output, ...)` rather
+/// than going through `open_element`.
+///
+/// Replaces an earlier `format_xmlns_attr -> String` helper that
+/// allocated a fresh `String` per call. Per-entry map serialization can
+/// call this twice per entry (key + value), so on map-heavy payloads the
+/// allocations added up.
+fn write_xmlns_attr(out: &mut String, ns: Option<&(String, Option<String>)>) {
+    use std::fmt::Write;
     match ns {
-        Some((uri, Some(prefix))) => format!(" xmlns:{prefix}=\"{uri}\""),
-        Some((uri, None)) => format!(" xmlns=\"{uri}\""),
-        None => String::new(),
+        Some((uri, Some(prefix))) => {
+            write!(out, " xmlns:{prefix}=\"{uri}\"").unwrap();
+        }
+        Some((uri, None)) => {
+            write!(out, " xmlns=\"{uri}\"").unwrap();
+        }
+        None => {}
     }
 }
 
@@ -331,19 +342,17 @@ impl XmlSerializer {
                 // Open entry element, write key (with optional key @xmlNamespace)
                 let entry = &map_state.entry_name.clone();
                 let key = &map_state.key_name.clone();
-                let key_ns = format_xmlns_attr(map_state.key_namespace.as_ref());
-                write!(self.output, "<{entry}><{key}{key_ns}>{content}</{key}>").unwrap();
+                write!(self.output, "<{entry}><{key}").unwrap();
+                write_xmlns_attr(&mut self.output, map_state.key_namespace.as_ref());
+                write!(self.output, ">{content}</{key}>").unwrap();
                 map_state.expecting_key = false;
             } else {
                 // Write value (with optional value @xmlNamespace), close entry element
                 let entry = &map_state.entry_name.clone();
                 let value = &map_state.value_name.clone();
-                let val_ns = format_xmlns_attr(map_state.value_namespace.as_ref());
-                write!(
-                    self.output,
-                    "<{value}{val_ns}>{content}</{value}></{entry}>"
-                )
-                .unwrap();
+                write!(self.output, "<{value}").unwrap();
+                write_xmlns_attr(&mut self.output, map_state.value_namespace.as_ref());
+                write!(self.output, ">{content}</{value}></{entry}>").unwrap();
                 map_state.expecting_key = true;
             }
         } else {
@@ -460,13 +469,21 @@ impl ShapeSerializer for XmlSerializer {
 
         if in_map_value {
             // Map value struct: serialize members directly (no struct element wrapper).
-            // Two-pass for attribute ordering: pass 1 emits attribute members
-            // (which will no-op here since map values are typically scalar/struct
-            // bodies, but we still call to keep the contract consistent), pass 2
-            // emits non-attribute members.
+            // Two-pass for attribute ordering: pass 1 emits attribute members,
+            // pass 2 emits non-attribute members. The first pass is skipped
+            // entirely when no member of this struct has `@xmlAttribute` —
+            // every `write_*` call would otherwise no-op via `filter_allows`,
+            // but the codegen-generated `serialize_members` body still
+            // iterates each value field on the way to those no-ops. Avoiding
+            // a full pass over value fields when there's nothing to emit
+            // halves the per-struct serialization cost on the common case
+            // (Smithy structures with no attributes).
             let saved_filter = self.member_filter;
-            self.member_filter = MemberFilter::AttributesOnly;
-            value.serialize_members(self)?;
+            let has_attrs = schema.members().iter().any(|m| m.xml_attribute());
+            if has_attrs {
+                self.member_filter = MemberFilter::AttributesOnly;
+                value.serialize_members(self)?;
+            }
             self.member_filter = MemberFilter::NonAttributesOnly;
             value.serialize_members(self)?;
             self.member_filter = saved_filter;
@@ -502,10 +519,15 @@ impl ShapeSerializer for XmlSerializer {
             self.write_xmlns(schema, None);
             // Two-pass: attributes first (so they land in the still-pending
             // start tag), non-attributes second (which flushes the start tag
-            // and emits child elements).
+            // and emits child elements). The attributes pass is skipped
+            // entirely when no member has `@xmlAttribute` — see comment in
+            // the map-value branch above.
             let saved_filter = self.member_filter;
-            self.member_filter = MemberFilter::AttributesOnly;
-            value.serialize_members(self)?;
+            let has_attrs = schema.members().iter().any(|m| m.xml_attribute());
+            if has_attrs {
+                self.member_filter = MemberFilter::AttributesOnly;
+                value.serialize_members(self)?;
+            }
             self.member_filter = MemberFilter::NonAttributesOnly;
             value.serialize_members(self)?;
             self.member_filter = saved_filter;
@@ -852,18 +874,16 @@ impl ShapeSerializer for XmlSerializer {
             if map_state.expecting_key {
                 let entry = &map_state.entry_name.clone();
                 let key = &map_state.key_name.clone();
-                let key_ns = format_xmlns_attr(map_state.key_namespace.as_ref());
-                write!(self.output, "<{entry}><{key}{key_ns}>{escaped}</{key}>").unwrap();
+                write!(self.output, "<{entry}><{key}").unwrap();
+                write_xmlns_attr(&mut self.output, map_state.key_namespace.as_ref());
+                write!(self.output, ">{escaped}</{key}>").unwrap();
                 map_state.expecting_key = false;
             } else {
                 let entry = &map_state.entry_name.clone();
                 let val_name = &map_state.value_name.clone();
-                let val_ns = format_xmlns_attr(map_state.value_namespace.as_ref());
-                write!(
-                    self.output,
-                    "<{val_name}{val_ns}>{escaped}</{val_name}></{entry}>"
-                )
-                .unwrap();
+                write!(self.output, "<{val_name}").unwrap();
+                write_xmlns_attr(&mut self.output, map_state.value_namespace.as_ref());
+                write!(self.output, ">{escaped}</{val_name}></{entry}>").unwrap();
                 map_state.expecting_key = true;
             }
         } else {

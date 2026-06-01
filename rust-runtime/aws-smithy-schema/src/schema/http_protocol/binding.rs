@@ -392,7 +392,75 @@ struct HttpBindingSerializer<'a, S> {
     /// attribute / element ordering). Without this guard each HTTP-bound
     /// member would be appended to its target collection on every pass,
     /// duplicating header / query entries and breaking presigning signatures.
-    visited_bound_members: std::collections::HashSet<usize>,
+    ///
+    /// Implementation: see [`VisitedMembers`]. Stack-only for shapes with up
+    /// to `VisitedMembers::INLINE_CAPACITY` HTTP-bound members; the JSON
+    /// path (single-pass codec, never observes a duplicate) therefore pays
+    /// no per-request allocation here.
+    visited_bound_members: VisitedMembers,
+}
+
+/// Compact dedup set for member indices seen during HTTP-binding routing.
+///
+/// Replaces `HashSet<usize>` for two reasons:
+/// 1. `HashSet::new()` is zero-alloc, but the first `.insert()` allocates
+///    the bucket array. Single-pass codecs (e.g. `JsonSerializer`) call
+///    `should_route_binding` once per HTTP-bound member but never observe a
+///    duplicate, so that allocation is pure waste on a hot path.
+/// 2. For typical structs (≤ `INLINE_CAPACITY` HTTP-bound members), inline
+///    storage avoids the heap entirely and a linear scan over `u32`s is
+///    cheaper than a hash + bucket lookup.
+///
+/// Spills to a `Vec` for larger structures (rare — S3 `CopyObject`'s
+/// 22-binding worst case still fits within `INLINE_CAPACITY`).
+#[derive(Debug)]
+struct VisitedMembers {
+    inline: [u32; Self::INLINE_CAPACITY],
+    inline_len: u8,
+    overflow: Vec<u32>,
+}
+
+impl VisitedMembers {
+    /// Sized to cover the widest real Smithy operation input shapes we
+    /// know about (S3 `CopyObject`: 22 HTTP-bound members) without
+    /// spilling to the heap. The dedup logic stays correct beyond this
+    /// limit; only the no-allocation property is lost.
+    const INLINE_CAPACITY: usize = 24;
+
+    const fn new() -> Self {
+        Self {
+            inline: [0; Self::INLINE_CAPACITY],
+            inline_len: 0,
+            overflow: Vec::new(),
+        }
+    }
+
+    /// Record `idx` as visited. Returns `true` if newly inserted, `false`
+    /// if already present (matching `HashSet::insert`'s semantics).
+    fn insert(&mut self, idx: usize) -> bool {
+        // Cap the cast at u32::MAX. Smithy member indices in practice are
+        // tiny (the largest model in the AWS catalog has fewer than 1000
+        // members on any single shape), so the truncation is unreachable
+        // except in pathological hand-constructed schemas — in which case
+        // dedup is a no-op for the truncated indices, which is correct
+        // behavior (no duplicate routing) at the cost of a possible spurious
+        // re-route.
+        let idx = idx.min(u32::MAX as usize) as u32;
+        let len = self.inline_len as usize;
+        if self.inline[..len].contains(&idx) {
+            return false;
+        }
+        if !self.overflow.is_empty() && self.overflow.contains(&idx) {
+            return false;
+        }
+        if len < Self::INLINE_CAPACITY {
+            self.inline[len] = idx;
+            self.inline_len += 1;
+        } else {
+            self.overflow.push(idx);
+        }
+        true
+    }
 }
 
 impl<'a, S> HttpBindingSerializer<'a, S> {
@@ -405,7 +473,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             input_schema,
             is_top_level: true,
             raw_payload: None,
-            visited_bound_members: std::collections::HashSet::new(),
+            visited_bound_members: VisitedMembers::new(),
         }
     }
 
@@ -1222,6 +1290,49 @@ mod tests {
     use super::*;
     use crate::serde::SerializableStruct;
     use crate::{prelude::*, ShapeType};
+
+    #[test]
+    fn visited_members_inline_dedup() {
+        let mut v = VisitedMembers::new();
+        // First insert returns true; identical second insert returns false.
+        assert!(v.insert(3));
+        assert!(!v.insert(3));
+        // Distinct indices return true.
+        assert!(v.insert(7));
+        assert!(v.insert(0));
+        // Re-asserting any of the above returns false.
+        assert!(!v.insert(3));
+        assert!(!v.insert(7));
+        assert!(!v.insert(0));
+    }
+
+    #[test]
+    fn visited_members_spills_to_overflow() {
+        // Exceeding INLINE_CAPACITY pushes additional entries into the heap
+        // overflow vec. Both halves must dedup correctly.
+        let mut v = VisitedMembers::new();
+        let n = VisitedMembers::INLINE_CAPACITY;
+        // Fill inline storage.
+        for i in 0..n {
+            assert!(v.insert(i), "fresh inline insert at {i} must return true");
+        }
+        // Inserting again into inline range returns false (no allocation).
+        for i in 0..n {
+            assert!(
+                !v.insert(i),
+                "duplicate inline insert at {i} must return false"
+            );
+        }
+        // Cross the capacity boundary — these go into overflow.
+        assert!(v.insert(n));
+        assert!(v.insert(n + 5));
+        // Duplicates of overflow entries return false.
+        assert!(!v.insert(n));
+        assert!(!v.insert(n + 5));
+        // And duplicates of inline entries still return false even after
+        // the overflow vec is non-empty.
+        assert!(!v.insert(0));
+    }
 
     struct TestSerializer {
         output: Vec<u8>,

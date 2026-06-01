@@ -34,6 +34,17 @@ pub struct AwsRestXmlProtocol {
 }
 
 impl AwsRestXmlProtocol {
+    /// Construct a new `AwsRestXmlProtocol` with default settings:
+    /// Content-Type `application/xml`, `date-time` default timestamp
+    /// format, error envelopes wrapped in `<ErrorResponse>` (i.e.
+    /// `noErrorWrapping = false`), and no service-level `@xmlNamespace`.
+    ///
+    /// Use [`Self::with_no_error_wrapping`] to opt in to the `noErrorWrapping`
+    /// variant of the `@restXml` trait, and
+    /// [`Self::with_service_xml_namespace`] to set a service-level default
+    /// xmlns. Both methods are typically called by code generation based on
+    /// the service shape's traits; manual construction is fine for tests
+    /// or custom protocols.
     pub fn new() -> Self {
         let settings = XmlCodecSettings::builder()
             .default_timestamp_format(TimestampFormat::DateTime)
@@ -48,11 +59,18 @@ impl AwsRestXmlProtocol {
         }
     }
 
+    /// Configure whether error responses use the `noErrorWrapping` variant
+    /// of the `@restXml` trait. When `true`, error response bodies have
+    /// `<Error>` as the document root; when `false` (default), they are
+    /// wrapped in `<ErrorResponse><Error>...</Error>...</ErrorResponse>`.
+    /// Drives the parsing branch in [`Self::deserialize_error_response`].
     pub fn with_no_error_wrapping(mut self, v: bool) -> Self {
         self.no_error_wrapping = v;
         self
     }
 
+    /// Returns the current `noErrorWrapping` setting. See
+    /// [`Self::with_no_error_wrapping`] for semantics.
     pub fn no_error_wrapping(&self) -> bool {
         self.no_error_wrapping
     }
@@ -121,9 +139,24 @@ impl AwsRestXmlProtocol {
             let mut root = doc
                 .root_element()
                 .map_err(|e| SerdeError::custom(format!("{e}")))?;
+            // Captured during the structural walk below — bytes of the
+            // `<Error>...</Error>` sub-element. Replaces a previous
+            // `body_str.find("<Error>")` substring search that would
+            // match `<Error>` literally inside attribute values, CDATA
+            // sections, comments, or text content. The structural walk
+            // already locates the element correctly via the XML parser;
+            // capturing the slice during the walk reuses that work and
+            // matches only an actual `<Error>` element.
+            let mut error_fragment: Option<&'a [u8]> = None;
             while let Some(mut tag) = root.next_tag() {
                 match tag.start_el().local() {
                     "Error" => {
+                        // `local()` returns a `&str` borrowed from the
+                        // input bytes — exactly what `find_element_slice`
+                        // expects (its pointer-arithmetic invariant
+                        // requires the name to lie within `body`).
+                        let el_local = tag.start_el().local();
+                        error_fragment = Some(XmlDeserializer::find_element_slice(body, el_local));
                         while let Some(mut error_field) = tag.next_tag() {
                             match error_field.start_el().local() {
                                 "Code" => {
@@ -151,17 +184,14 @@ impl AwsRestXmlProtocol {
                     _ => {}
                 }
             }
-            // For wrapped, we need the deserializer to see <Error> as root.
-            // Find the <Error>...</Error> substring in the body and create a
-            // deserializer over just that fragment.
-            let body_str = std::str::from_utf8(body).unwrap(); // already validated above
-            let deser = if let Some(start) = body_str.find("<Error>") {
-                let end = body_str.find("</Error>").unwrap_or(body_str.len());
-                let fragment = &body[start..end + "</Error>".len()];
-                XmlDeserializer::new(fragment, self.settings.clone())
-            } else {
-                // Fallback: use the whole body
-                XmlDeserializer::new(body, self.settings.clone())
+            // The deserializer that downstream error-shape parsing reads
+            // from must see `<Error>` as its root element. If we found
+            // one, point at that fragment; otherwise the body is malformed
+            // and the fallback to the whole body lets downstream parsing
+            // produce an "unknown error" rather than a panic.
+            let deser = match error_fragment {
+                Some(fragment) => XmlDeserializer::new(fragment, self.settings.clone()),
+                None => XmlDeserializer::new(body, self.settings.clone()),
             };
             Ok((builder, Box::new(deser)))
         }
@@ -360,5 +390,36 @@ mod tests {
         let meta = builder.build();
         assert_eq!(meta.code(), Some("NotFound"));
         assert_eq!(meta.message(), Some("Gone"));
+    }
+
+    #[test]
+    fn deserialize_error_wrapped_ignores_literal_error_in_cdata() {
+        // Regression: the previous implementation used
+        // `body_str.find("<Error>")` to locate the envelope's `<Error>`
+        // sub-element, which would also match the literal bytes of
+        // `<Error>` inside an unrelated CDATA section. The new
+        // structural walk uses the XML parser, which treats CDATA as
+        // opaque text and only matches a real `<Error>` element.
+        //
+        // The body below has the literal bytes `<Error><Code>FAKE</Code></Error>`
+        // INSIDE a CDATA section before the real envelope's `<Error>`.
+        // The substring-search code would slice from the CDATA's
+        // `<Error>`, producing a fragment whose `Code` reads `FAKE`.
+        // The structural walk slices from the real `<Error>` and the
+        // fragment's `Code` reads `RealCode`.
+        let protocol = AwsRestXmlProtocol::new();
+        let body = b"<ErrorResponse>\
+            <Description><![CDATA[<Error><Code>FAKE</Code></Error>]]></Description>\
+            <Error><Code>RealCode</Code><Message>Real message</Message></Error>\
+            <RequestId>req-1</RequestId>\
+            </ErrorResponse>";
+
+        let (builder, _deser) = protocol.deserialize_error_response(body).unwrap();
+        let meta = builder.build();
+        // The structural walk skips the CDATA content and finds the
+        // real <Error>'s <Code>.
+        assert_eq!(meta.code(), Some("RealCode"));
+        assert_eq!(meta.message(), Some("Real message"));
+        assert_eq!(meta.extra("request_id"), Some("req-1"));
     }
 }
