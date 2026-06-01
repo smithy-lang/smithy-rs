@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-cbor"
-version = "0.61.8"
+version = "0.61.9"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "David Pérez <d@vidp.dev>",
@@ -12,7 +12,7 @@ repository = "https://github.com/awslabs/smithy-rs"
 rust-version = "1.91.1"
 
 [dependencies.minicbor]
-version = "0.24.2"
+version = "2.2.1"
 features = [
     # To write to a `Vec<u8>`: https://docs.rs/minicbor/latest/minicbor/encode/write/trait.Write.html#impl-Write-for-Vec%3Cu8%3E
     "alloc",
@@ -21,6 +21,8 @@ features = [
 ]
 
 [dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types" }
 num-bigint = "0.4.6"
 

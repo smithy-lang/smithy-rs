@@ -17,6 +17,7 @@ import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.transform.ModelTransformer
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.ClientEnumGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationGenerator
@@ -40,6 +41,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProvider
 import software.amazon.smithy.rust.codegen.core.smithy.RustSymbolProviderConfig
 import software.amazon.smithy.rust.codegen.core.smithy.contextName
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
@@ -276,6 +278,7 @@ class ClientCodegenVisitor(
                             errorTrait,
                             codegenDecorator.errorImplCustomizations(codegenContext, emptyList()),
                             codegenContext.structSettings(),
+                            codegenDecorator.structureCustomizations(codegenContext, emptyList()),
                         )
                     errorGenerator::renderStruct to errorGenerator::renderBuilder
                 }
@@ -318,6 +321,9 @@ class ClientCodegenVisitor(
     override fun unionShape(shape: UnionShape) {
         rustCrate.inPrivateModuleWithReexport(privateModule(shape), symbolProvider.toSymbol(shape)) {
             UnionGenerator(model, symbolProvider, this, shape, renderUnknownVariant = true).render()
+            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                SchemaGenerator(codegenContext, this, shape).render()
+            }
         }
         if (shape.isEventStream()) {
             rustCrate.withModule(symbolProvider.moduleForEventStreamError(shape)) {

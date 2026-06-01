@@ -88,4 +88,49 @@ class ServerEnumGeneratorTest {
         ).render(writer)
         writer.toString() shouldNotContain "#[non_exhaustive]"
     }
+
+    @Test
+    fun `named enums derive Copy`() {
+        ServerEnumGenerator(
+            codegenContext,
+            shape,
+            SmithyValidationExceptionConversionGenerator(codegenContext),
+            emptyList(),
+        ).render(writer)
+        writer.compileAndTest(
+            """
+            // `Copy` semantics: binding-by-value does not move out of the original.
+            let a = InstanceType::T2Nano;
+            let b = a;
+            assert_eq!(a, b);
+            // Confirm `Copy` is implemented at the trait level too.
+            fn assert_copy<T: Copy>() {}
+            assert_copy::<InstanceType>();
+            """,
+        )
+    }
+
+    @Test
+    fun `unnamed enums do not derive Copy`() {
+        val unnamedEnumModel =
+            """
+            namespace test
+            @enum([
+                { value: "YES" },
+                { value: "NO" },
+            ])
+            string YesNo
+            """.asSmithyModel()
+        val unnamedContext = serverTestCodegenContext(unnamedEnumModel)
+        val unnamedWriter = RustWriter.forModule("model")
+        val unnamedShape = unnamedEnumModel.lookup<StringShape>("test#YesNo")
+        ServerEnumGenerator(
+            unnamedContext,
+            unnamedShape,
+            SmithyValidationExceptionConversionGenerator(unnamedContext),
+            emptyList(),
+        ).render(unnamedWriter)
+        // Unnamed enums render as `pub struct YesNo(String)`, which cannot be `Copy`.
+        unnamedWriter.toString() shouldNotContain "Copy"
+    }
 }

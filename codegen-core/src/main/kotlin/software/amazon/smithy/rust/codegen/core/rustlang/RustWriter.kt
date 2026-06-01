@@ -598,6 +598,8 @@ class RustWriter private constructor(
 ) :
     SymbolWriter<RustWriter, UseDeclarations>(UseDeclarations(namespace)) {
         companion object {
+            private val TRAILING_WHITESPACE_RE = Regex("[ \\t]+\\n")
+
             fun root() = forModule(null)
 
             fun forModule(module: String?): RustWriter =
@@ -925,6 +927,7 @@ class RustWriter private constructor(
                     null
                 }
             return listOfNotNull(preheader, header, useDecls, contents).joinToString(separator = "\n", postfix = "\n")
+                .replace(TRAILING_WHITESPACE_RE, "\n")
         }
 
         fun format(r: Any) = formatter.apply(r, "")

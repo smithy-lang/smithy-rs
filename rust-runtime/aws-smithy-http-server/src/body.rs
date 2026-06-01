@@ -10,6 +10,7 @@
 
 use crate::error::{BoxError, Error};
 use bytes::Bytes;
+use std::fmt;
 
 // Used in the codegen in trait bounds.
 #[doc(hidden)]
@@ -106,6 +107,119 @@ where
 /// Create a body from bytes.
 pub fn from_bytes(bytes: Bytes) -> BoxBody {
     boxed(http_body_util::Full::new(bytes))
+}
+
+// ============================================================================
+// Size-limited Body Collection
+// ============================================================================
+
+/// An error produced by [`collect_body_limited`] when the body exceeds the configured limit.
+///
+/// This is intentionally a simple struct so it can be downcast via
+/// `Box<dyn std::error::Error>` from code that processes the error chain.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy)]
+pub struct BodyLimitExceeded {
+    /// The configured maximum, in bytes.
+    pub limit: usize,
+}
+
+impl fmt::Display for BodyLimitExceeded {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "request body exceeded the configured maximum of {} bytes",
+            self.limit
+        )
+    }
+}
+
+impl std::error::Error for BodyLimitExceeded {}
+
+/// The error returned by [`collect_body_limited`].
+///
+/// Either the underlying body produced an error, or the configured size limit was
+/// exceeded. The generic over `E` lets the helper work with body error types that
+/// are `Send` but not `Sync` (the generated-server code carries only a `Send` bound),
+/// while still letting callers `?` the result into a `RequestRejection`.
+#[doc(hidden)]
+#[derive(Debug)]
+pub enum CollectBodyError<E> {
+    /// The underlying body produced an error while being read.
+    Body(E),
+    /// The body exceeded the configured maximum size.
+    TooLarge(BodyLimitExceeded),
+}
+
+impl<E: fmt::Display> fmt::Display for CollectBodyError<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Body(e) => write!(f, "error reading request body: {e}"),
+            Self::TooLarge(e) => e.fmt(f),
+        }
+    }
+}
+
+impl<E: std::error::Error + 'static> std::error::Error for CollectBodyError<E> {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Self::Body(e) => Some(e),
+            Self::TooLarge(e) => Some(e),
+        }
+    }
+}
+
+/// Collect an HTTP body into a [`Bytes`] buffer, enforcing a maximum size.
+///
+/// If the body produces more than `limit` bytes (including via
+/// `Transfer-Encoding: chunked` or a mismatched `Content-Length`), the function
+/// returns an error *before* buffering additional data.
+///
+/// Passing `limit == 0` disables the check and collects the entire body (the
+/// historical behavior, *not* recommended — see the security notes on the
+/// `requestBodyMaxBytes` codegen setting).
+#[doc(hidden)]
+pub async fn collect_body_limited<B>(body: B, limit: usize) -> Result<Bytes, CollectBodyError<B::Error>>
+where
+    B: HttpBody,
+{
+    use http_body_util::BodyExt;
+
+    if limit == 0 {
+        return body
+            .collect()
+            .await
+            .map(|c| c.to_bytes())
+            .map_err(CollectBodyError::Body);
+    }
+
+    // Walk frames ourselves (rather than using `http_body_util::Limited`) so we
+    // don't require `B::Error: Send + Sync + 'static`. The generated server
+    // deserializer only carries a `Send` bound on body errors.
+    let lower = body.size_hint().lower() as usize;
+    if lower > limit {
+        return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
+    }
+
+    let mut body = std::pin::pin!(body);
+    let mut collected = bytes::BytesMut::with_capacity(lower);
+    while let Some(frame) = std::future::poll_fn(|cx| body.as_mut().poll_frame(cx))
+        .await
+        .transpose()
+        .map_err(CollectBodyError::Body)?
+    {
+        if let Ok(data) = frame.into_data() {
+            use bytes::{Buf, BufMut};
+            let data_len = data.remaining();
+            if collected.len().saturating_add(data_len) > limit {
+                return Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit }));
+            }
+            collected.put(data);
+        }
+        // Trailer / non-data frames are discarded; we don't surface trailers.
+    }
+
+    Ok(collected.freeze())
 }
 
 // ============================================================================
@@ -570,5 +684,43 @@ mod tests {
         let body = boxed_sync(Full::new(Bytes::from("test")));
         fn check_sync<T: Sync>(_: &T) {}
         check_sync(&body);
+    }
+
+    #[tokio::test]
+    async fn test_collect_body_limited_under_limit() {
+        let body = from_bytes(Bytes::from("hello"));
+        let result = collect_body_limited(body, 1024).await;
+        assert_eq!(result.unwrap(), Bytes::from("hello"));
+    }
+
+    #[tokio::test]
+    async fn test_collect_body_limited_over_limit() {
+        let body = from_bytes(Bytes::from("this is way too long"));
+        let result = collect_body_limited(body, 5).await;
+        assert!(matches!(
+            result,
+            Err(CollectBodyError::TooLarge(BodyLimitExceeded { limit: 5 }))
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_collect_body_limited_chunked_exceeds_mid_stream() {
+        use futures_util::stream;
+
+        // Simulate a chunked body where the limit is crossed on the second chunk.
+        let chunks = vec![
+            Ok::<_, std::io::Error>(http_body::Frame::data(Bytes::from("aaaa"))), // 4 bytes
+            Ok(http_body::Frame::data(Bytes::from("bbbb"))),                      // +4 = 8, over limit of 6
+        ];
+        let body = http_body_util::StreamBody::new(stream::iter(chunks));
+        let result = collect_body_limited(body, 6).await;
+        assert!(matches!(result, Err(CollectBodyError::TooLarge(_))));
+    }
+
+    #[tokio::test]
+    async fn test_collect_body_limited_empty_body() {
+        let body = empty();
+        let result = collect_body_limited(body, 100).await;
+        assert_eq!(result.unwrap(), Bytes::from(""));
     }
 }

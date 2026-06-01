@@ -14,7 +14,9 @@ import software.amazon.smithy.rust.codegen.client.smithy.customizations.ClientCu
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpAuthDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.HttpConnectorConfigDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.IdempotencyTokenDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.LongPollingOperationDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.NoAuthDecorator
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.SensitiveOutputDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customizations.StaticSdkFeatureTrackerDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
@@ -71,7 +73,9 @@ class RustClientCodegenPlugin : ClientDecoratableBuildPlugin() {
                 HttpAuthDecorator(),
                 HttpConnectorConfigDecorator(),
                 SensitiveOutputDecorator(),
+                SchemaDecorator(),
                 IdempotencyTokenDecorator(),
+                LongPollingOperationDecorator(),
                 StalledStreamProtectionDecorator(),
                 StaticSdkFeatureTrackerDecorator(),
                 *decorator,
