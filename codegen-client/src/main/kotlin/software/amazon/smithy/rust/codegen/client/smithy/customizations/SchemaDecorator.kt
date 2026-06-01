@@ -52,13 +52,10 @@ object SchemaSerdeAllowlist {
      * protocols incrementally in follow-up PRs by adding entries such as
      * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
-    // Remove before merge (smithy-rs#4668) — enabled for CI validation.
-    private val allowedProtocols: Set<ShapeId> = setOf(AwsQueryTrait.ID, AwsQueryCompatibleTrait.ID)
+    private val allowedProtocols: Set<ShapeId> = setOf(AwsQueryTrait.ID, AwsQueryCompatibleTrait.ID) // Remove before merge (smithy-rs#4668)
 
     /** Individual services allowed regardless of protocol. */
-    // Remove before merge (smithy-rs#4668) — QueryCompatService uses awsJson1_0,
-    // so it must be allowlisted by service name rather than protocol.
-    private val allowedServices: Set<String> = setOf("aws.protocoltests.misc#QueryCompatService")
+    private val allowedServices: Set<String> = setOf("aws.protocoltests.misc#QueryCompatService") // Remove before merge (smithy-rs#4668)
 
     /** Returns true if schema-based serde should be used exclusively (no fallback). */
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
