@@ -1669,4 +1669,130 @@ mod tests {
         let out = deser.read_string_string_map(&MAP_SCHEMA).unwrap();
         assert_eq!(out.get("a").map(String::as_str), Some("1"));
     }
+
+    // Regression tests adapted from review comments on PR #4668 against an
+    // earlier schema-XML deserializer that reconstructed sub-trees with
+    // `try_data` + `format!("<{}>{}</{}>", ...)`. That pattern broke (a) on
+    // structs with element children >1 level deep (because `try_data` errors
+    // on a non-text token) and (b) on text containing `&` or `<` (because
+    // unescape ran before re-emitting into fabricated tags, producing
+    // invalid XML on re-parse). Our deserializer propagates raw byte slices
+    // for aggregate sub-trees via `find_element_slice` and `dispatch_subslice`,
+    // so neither bug should reproduce — these tests lock that in.
+    #[test]
+    fn nested_struct_three_levels_deep() {
+        static LEAF: Schema =
+            Schema::new_member(shape_id!("t", "Inner"), ShapeType::String, "Leaf", 0);
+        static INNER_SCHEMA: Schema =
+            Schema::new_struct(shape_id!("t", "Inner"), ShapeType::Structure, &[&LEAF]);
+        static INNER_MEMBER: Schema =
+            Schema::new_member(shape_id!("t", "Middle"), ShapeType::Structure, "Inner", 0);
+        static MIDDLE_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("t", "Middle"),
+            ShapeType::Structure,
+            &[&INNER_MEMBER],
+        );
+        static MIDDLE_MEMBER: Schema =
+            Schema::new_member(shape_id!("t", "Outer"), ShapeType::Structure, "Middle", 0);
+        static OUTER_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("t", "Outer"),
+            ShapeType::Structure,
+            &[&MIDDLE_MEMBER],
+        );
+        static OUTER_MEMBER: Schema =
+            Schema::new_member(shape_id!("t", "Root"), ShapeType::Structure, "Outer", 0);
+        static ROOT: Schema = Schema::new_struct(
+            shape_id!("t", "Root"),
+            ShapeType::Structure,
+            &[&OUTER_MEMBER],
+        );
+
+        let xml = b"<Root><Outer><Middle><Inner><Leaf>value</Leaf></Inner></Middle></Outer></Root>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+        let mut leaf = String::new();
+        deser
+            .read_struct(&ROOT, &mut |outer_m, d_outer| {
+                assert_eq!(outer_m.member_name(), Some("Outer"));
+                d_outer.read_struct(&OUTER_SCHEMA, &mut |middle_m, d_middle| {
+                    assert_eq!(middle_m.member_name(), Some("Middle"));
+                    d_middle.read_struct(&MIDDLE_SCHEMA, &mut |inner_m, d_inner| {
+                        assert_eq!(inner_m.member_name(), Some("Inner"));
+                        d_inner.read_struct(&INNER_SCHEMA, &mut |leaf_m, d_leaf| {
+                            if leaf_m.member_name() == Some("Leaf") {
+                                leaf = d_leaf.read_string(leaf_m)?;
+                            }
+                            Ok(())
+                        })
+                    })
+                })
+            })
+            .expect("3-level nested struct should round-trip");
+        assert_eq!(leaf, "value");
+    }
+
+    #[test]
+    fn struct_member_with_escaped_text_round_trips() {
+        static VALUE: Schema =
+            Schema::new_member(shape_id!("t", "Body"), ShapeType::String, "value", 0);
+        static BODY_SCHEMA: Schema =
+            Schema::new_struct(shape_id!("t", "Body"), ShapeType::Structure, &[&VALUE]);
+        static PAYLOAD_MEMBER: Schema = Schema::new_member(
+            shape_id!("t", "Envelope"),
+            ShapeType::Structure,
+            "payload",
+            0,
+        );
+        static ENVELOPE_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("t", "Envelope"),
+            ShapeType::Structure,
+            &[&PAYLOAD_MEMBER],
+        );
+
+        // Server response with an XML-escaped `&` in the leaf value.
+        // After `unescape`, the original value is `foo&bar`. The PR's
+        // deserializer would re-emit the unescaped text into reconstructed
+        // markup, producing invalid XML and an error or wrong value.
+        let xml = b"<Envelope><payload><value>foo&amp;bar</value></payload></Envelope>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+        let mut value_str = String::new();
+        deser
+            .read_struct(&ENVELOPE_SCHEMA, &mut |payload_m, d_payload| {
+                let _ = payload_m;
+                d_payload.read_struct(&BODY_SCHEMA, &mut |inner_m, d_inner| {
+                    if inner_m.member_name() == Some("value") {
+                        value_str = d_inner.read_string(inner_m)?;
+                    }
+                    Ok(())
+                })
+            })
+            .expect("escaped text inside a nested struct should round-trip");
+        assert_eq!(value_str, "foo&bar");
+    }
+
+    #[test]
+    fn read_map_preserves_empty_string_key() {
+        // The PR's deserializer had a guard that dropped entries with empty
+        // keys. Empty string is a valid map key per Smithy semantics.
+        static KEY: Schema =
+            Schema::new_member(shape_id!("t", "M$key"), ShapeType::String, "key", 0);
+        static VALUE: Schema =
+            Schema::new_member(shape_id!("t", "M$value"), ShapeType::String, "value", 1);
+        static MAP: Schema = Schema::new_map(shape_id!("t", "M"), &KEY, &VALUE);
+
+        let xml = b"<Root><entry><key></key><value>v1</value></entry></Root>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        let mut got: std::collections::HashMap<String, String> = Default::default();
+        deser
+            .read_map(&MAP, &mut |k, d| {
+                let v = d.read_string(&VALUE)?;
+                got.insert(k, v);
+                Ok(())
+            })
+            .expect("empty-key entry should be preserved");
+        assert_eq!(got.get("").map(String::as_str), Some("v1"));
+    }
 }
