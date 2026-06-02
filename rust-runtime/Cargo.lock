@@ -377,6 +377,7 @@ dependencies = [
  "aws-smithy-types 1.4.9",
  "criterion",
  "minicbor 2.2.2",
+ "num-bigint",
 ]
 
 [[package]]
@@ -723,7 +724,7 @@ name = "aws-smithy-legacy-http-server"
 version = "0.65.15"
 dependencies = [
  "aws-smithy-cbor 0.61.10",
- "aws-smithy-json 0.62.8",
+ "aws-smithy-json 0.62.7",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.12.3",
  "aws-smithy-types 1.4.9",

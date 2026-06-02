@@ -65,7 +65,7 @@ class CborSerializerGeneratorTest {
         """.asSmithyModel()
 
     @Test
-    fun `throws CodegenException when serializing BigInteger with CBOR`() {
+    fun `generates serializer for BigInteger with CBOR`() {
         val model = OperationNormalizer.transform(modelWithBigInteger)
         val codegenContext = testCodegenContext(model)
         val symbolProvider = codegenContext.symbolProvider
@@ -78,25 +78,20 @@ class CborSerializerGeneratorTest {
 
         val project = TestWorkspace.testProject(symbolProvider)
 
-        val exception =
-            assertThrows<CodegenException> {
-                project.lib {
-                    unitTest(
-                        "cbor_serializer",
-                        """
-                        let input = crate::test_input::TestOpInput::builder().build();
-                        let _serialized = ${format(operationGenerator!!)}(&input);
-                        """,
-                    )
-                }
+        project.lib {
+            unitTest(
+                "cbor_big_integer_serializer",
+                """
+                let input = crate::test_input::TestOpInput::builder().build().unwrap();
+                let _serialized = ${format(operationGenerator!!)}(&input);
+                """,
+            )
+        }
 
-                model.lookup<OperationShape>("test#TestOp").inputShape(model).also { input ->
-                    input.renderWithModelBuilder(model, symbolProvider, project)
-                }
-                project.compileAndTest()
-            }
-
-        assert(exception.message!!.contains("BigInteger is not supported with Concise Binary Object Representation (CBOR)"))
+        model.lookup<OperationShape>("test#TestOp").inputShape(model).also { input ->
+            input.renderWithModelBuilder(model, symbolProvider, project)
+        }
+        project.compileAndTest()
     }
 
     @Test
