@@ -214,10 +214,7 @@ impl AwsRestXmlProtocol {
 ///
 /// Robust to start-tag attributes (e.g. `<Error xmlns="..."`), nested
 /// same-name elements, comments, and CDATA sections — all of which a naive
-/// `body_str.find("<Error>")` substring match would mishandle. This is the
-/// runtime entry-point for codegen-emitted REST XML error-envelope
-/// stripping; see [`crate::codec::deserializer::XmlDeserializer::find_element_slice`]
-/// for the underlying byte-level scanner.
+/// `body_str.find("<Error>")` substring match would mishandle.
 pub fn find_error_element_slice(body: &[u8]) -> &[u8] {
     // `Document::try_from` validates UTF-8 internally and constructs the
     // tokenizer over `body`. Non-UTF-8 service responses are out of spec;
