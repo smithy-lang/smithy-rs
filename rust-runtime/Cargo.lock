@@ -370,13 +370,14 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.61.9"
+version = "0.61.10"
 dependencies = [
  "aws-smithy-runtime-api 1.12.3",
  "aws-smithy-schema",
  "aws-smithy-types 1.4.9",
  "criterion",
  "minicbor 2.2.2",
+ "num-bigint",
 ]
 
 [[package]]
@@ -570,7 +571,7 @@ dependencies = [
 name = "aws-smithy-http-server"
 version = "0.66.5"
 dependencies = [
- "aws-smithy-cbor 0.61.9",
+ "aws-smithy-cbor 0.61.10",
  "aws-smithy-http 0.63.6",
  "aws-smithy-json 0.62.7",
  "aws-smithy-runtime-api 1.12.3",
@@ -722,7 +723,7 @@ dependencies = [
 name = "aws-smithy-legacy-http-server"
 version = "0.65.15"
 dependencies = [
- "aws-smithy-cbor 0.61.9",
+ "aws-smithy-cbor 0.61.10",
  "aws-smithy-json 0.62.7",
  "aws-smithy-legacy-http",
  "aws-smithy-runtime-api 1.12.3",
@@ -2496,7 +2497,7 @@ dependencies = [
 name = "inlineable"
 version = "0.1.0"
 dependencies = [
- "aws-smithy-cbor 0.61.9",
+ "aws-smithy-cbor 0.61.10",
  "aws-smithy-compression",
  "aws-smithy-http 0.63.6",
  "aws-smithy-json 0.62.7",
