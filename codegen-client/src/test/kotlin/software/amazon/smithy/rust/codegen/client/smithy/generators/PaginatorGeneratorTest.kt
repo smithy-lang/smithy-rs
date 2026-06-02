@@ -86,6 +86,57 @@ internal class PaginatorGeneratorTest {
         }
     }
 
+    // Regression: when a @paginated operation's top-level outputToken targets a @required member,
+    // the borrowing lens accessor in src/lens.rs previously moved the owned value instead of
+    // borrowing it, producing Option<String> where Option<&String> is expected.
+    @Test
+    fun `paginators with required top-level outputToken compile`() {
+        val requiredTokenModel =
+            """
+            namespace test
+            use aws.protocols#awsJson1_1
+
+            @awsJson1_1
+            service TestService {
+                operations: [ListThings]
+            }
+
+            @readonly
+            @optionalAuth
+            @paginated(inputToken: "nextToken", outputToken: "nextToken",
+                       pageSize: "maxResults", items: "thingSummaries")
+            operation ListThings {
+                input: ListThingsInput,
+                output: ListThingsOutput
+            }
+
+            structure ListThingsInput {
+                maxResults: Integer,
+                nextToken: String
+            }
+
+            structure ListThingsOutput {
+                @required
+                nextToken: String,
+
+                @required
+                thingSummaries: StringList
+            }
+
+            list StringList {
+                member: String
+            }
+            // disableValidation: Smithy's paginated-trait lint flags a @required outputToken; we intentionally model it that way to exercise the codegen path.
+            """.asSmithyModel(disableValidation = true)
+
+        clientIntegrationTest(requiredTokenModel) { clientCodegenContext, rustCrate ->
+            rustCrate.integrationTest("paginators_required_top_level_token") {
+                Attribute.AllowUnusedImports.render(this)
+                rust("use ${clientCodegenContext.moduleUseName()}::operation::list_things::paginator::ListThingsPaginator;")
+            }
+        }
+    }
+
     @Test
     fun `isTruncated paginators compile`() {
         // Adding IsTruncated trait to the output shape

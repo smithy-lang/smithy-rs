@@ -104,7 +104,11 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                         )
                     }
                 } else {
-                    rust("let input = input.${symbolProvider.toMemberName(head)};")
+                    if (reference) {
+                        rust("let input = &input.${symbolProvider.toMemberName(head)};")
+                    } else {
+                        rust("let input = input.${symbolProvider.toMemberName(head)};")
+                    }
                 }
                 // Note: although _this_ function is recursive, it generates a series of `if let` statements with early returns.
                 generateBody(path.drop(1), reference)(this)
