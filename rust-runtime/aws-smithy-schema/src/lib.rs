@@ -313,7 +313,6 @@ impl Schema {
 
     /// Returns `true` if this struct has at least one member that serializes
     /// to the request/response body, `false` if every member is HTTP-bound.
-    /// See field doc on [`has_body_members`] for the optimization this gates.
     pub fn has_body_members(&self) -> bool {
         self.has_body_members
     }

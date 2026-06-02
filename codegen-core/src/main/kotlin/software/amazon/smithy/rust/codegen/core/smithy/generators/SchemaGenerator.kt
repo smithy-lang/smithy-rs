@@ -353,43 +353,86 @@ class SchemaGenerator(
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                // Use helpers for simple non-enum element types
-                when (elementTarget) {
-                    is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
-                    is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
-                    is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
-                    is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
-                    else -> null
-                } ?: run {
-                    val elementWrite = elementWriteExpr(elementTarget, "item")
-                    """
-                    ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for item in $varName {
-                            $elementWrite
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // Specialized helpers (write_*_list) take `&[T]`, but sparse
+                // lists generate as `&[Option<T>]`, so we can only use them
+                // for non-sparse lists. Sparse lists fall through to the
+                // generic write_list path below, which destructures
+                // `Option<T>` per element and emits write_null for None.
+                val helperExpr =
+                    if (isSparse) {
+                        null
+                    } else {
+                        when (elementTarget) {
+                            is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
+                            is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
+                            is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
+                            is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                            else -> null
                         }
-                        Ok(())
-                    })?;
-                    """
+                    }
+                helperExpr ?: run {
+                    val elementWrite = elementWriteExpr(elementTarget, "item")
+                    if (isSparse) {
+                        """
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for item in $varName {
+                                match item {
+                                    Some(item) => { $elementWrite }
+                                    None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                                }
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    } else {
+                        """
+                        ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for item in $varName {
+                                $elementWrite
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    }
                 }
             }
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
-                // Use helper for non-enum string key, string value maps
-                if (!isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // The string-string map helper takes `&HashMap<String, String>`.
+                // Sparse maps have `Option<String>` values, so the helper
+                // doesn't apply.
+                if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
                     "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
                 } else {
                     val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                     val valueWrite = mapValueWriteExpr(valueTarget, "value")
-                    """
-                    ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                        for (key, value) in $varName {
-                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
-                            $valueWrite
-                        }
-                        Ok(())
-                    })?;
-                    """
+                    if (isSparse) {
+                        """
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for (key, value) in $varName {
+                                ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                                match value {
+                                    Some(value) => { $valueWrite }
+                                    None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                                }
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    } else {
+                        """
+                        ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                            for (key, value) in $varName {
+                                ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
+                                $valueWrite
+                            }
+                            Ok(())
+                        })?;
+                        """
+                    }
                 }
             }
             is UnionShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
@@ -633,14 +676,29 @@ class SchemaGenerator(
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for item in $varName {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                if (isSparse) {
+                    """
+                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            match item {
+                                Some(item) => { $elementWrite }
+                                None => { ser.write_null(&::aws_smithy_schema::prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
 
             is UnionShape -> {
@@ -719,14 +777,29 @@ class SchemaGenerator(
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
                 val elementWrite = elementWriteExpr(elementTarget, "item")
-                """
-                ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
-                    for item in $varName {
-                        $elementWrite
-                    }
-                    Ok(())
-                })?;
-                """
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                if (isSparse) {
+                    """
+                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            match item {
+                                Some(item) => { $elementWrite }
+                                None => { ser.write_null(&$prelude::STRING)?; }
+                            }
+                        }
+                        Ok(())
+                    })?;
+                    """
+                } else {
+                    """
+                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                        for item in $varName {
+                            $elementWrite
+                        }
+                        Ok(())
+                    })?;
+                    """
+                }
             }
 
             is UnionShape -> {

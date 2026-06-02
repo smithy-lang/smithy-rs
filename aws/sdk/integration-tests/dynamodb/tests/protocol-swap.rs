@@ -164,11 +164,14 @@ async fn swap_to_rest_json_protocol() {
 // generated `protocol(...)` setter goes away, this test will need to be
 // disabled too — group it with the rest of the file then.
 
-use aws_sdk_dynamodb::config::{Credentials, Region, StalledStreamProtectionConfig};
+use aws_sdk_dynamodb::config::{
+    BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
+};
 use aws_smithy_http_client::test_util::capture_request;
 
 fn xml_swap_base_config() -> aws_sdk_dynamodb::config::Builder {
     aws_sdk_dynamodb::config::Builder::new()
+        .behavior_version(BehaviorVersion::latest())
         .region(Region::new("us-east-1"))
         .credentials_provider(Credentials::for_tests())
         .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
