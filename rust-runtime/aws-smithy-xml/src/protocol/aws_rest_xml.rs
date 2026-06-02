@@ -198,6 +198,57 @@ impl AwsRestXmlProtocol {
     }
 }
 
+/// Locate the `<Error>` element within an AWS REST XML error response body
+/// and return a byte slice covering it (`<Error>...</Error>`).
+///
+/// Handles both wrapped and unwrapped error envelopes:
+/// - **Wrapped** (`<ErrorResponse>...<Error>...</Error>...</ErrorResponse>`):
+///   returns the inner `<Error>` element's slice.
+/// - **Unwrapped** (`<Error>...</Error>` as the document root): returns the
+///   full body unchanged (the root *is* the `<Error>` element).
+///
+/// Falls back to the full `body` if it isn't valid UTF-8, isn't parseable as
+/// XML, or contains no `<Error>` element. Returning the body unchanged on
+/// failure lets downstream error deserialization surface a generic /
+/// "unhandled" error variant rather than panicking on malformed responses.
+///
+/// Robust to start-tag attributes (e.g. `<Error xmlns="..."`), nested
+/// same-name elements, comments, and CDATA sections — all of which a naive
+/// `body_str.find("<Error>")` substring match would mishandle. This is the
+/// runtime entry-point for codegen-emitted REST XML error-envelope
+/// stripping; see [`crate::codec::deserializer::XmlDeserializer::find_element_slice`]
+/// for the underlying byte-level scanner.
+pub fn find_error_element_slice(body: &[u8]) -> &[u8] {
+    // `Document::try_from` validates UTF-8 internally and constructs the
+    // tokenizer over `body`. Non-UTF-8 service responses are out of spec;
+    // fall back to the full body so downstream parsing produces a
+    // malformed-error result rather than panicking.
+    let mut doc = match Document::try_from(body) {
+        Ok(d) => d,
+        Err(_) => return body,
+    };
+    let mut root = match doc.root_element() {
+        Ok(r) => r,
+        Err(_) => return body,
+    };
+    // Unwrapped envelope: the root element IS `<Error>`. Return body
+    // unchanged — the root's start/end tags are already at the boundaries.
+    if root.start_el().local() == "Error" {
+        return body;
+    }
+    // Wrapped envelope: scan the root's children for `<Error>`.
+    while let Some(tag) = root.next_tag() {
+        if tag.start_el().local() == "Error" {
+            // `start_el().local()` returns a `&str` whose pointer lies inside
+            // `s` (and therefore inside `body`). That satisfies the
+            // pointer-containment invariant of `find_element_slice`.
+            let el_local = tag.start_el().local();
+            return XmlDeserializer::find_element_slice(body, el_local);
+        }
+    }
+    body
+}
+
 impl Default for AwsRestXmlProtocol {
     fn default() -> Self {
         Self::new()
@@ -421,5 +472,67 @@ mod tests {
         assert_eq!(meta.code(), Some("RealCode"));
         assert_eq!(meta.message(), Some("Real message"));
         assert_eq!(meta.extra("request_id"), Some("req-1"));
+    }
+
+    // Regression tests for `find_error_element_slice` covering the cases
+    // where a naive `body.find("<Error>")` substring match would
+    // mishandle the input.
+    #[test]
+    fn find_error_element_slice_strips_wrapped_envelope() {
+        let body =
+            b"<ErrorResponse><Error><Code>X</Code></Error><RequestId>r</RequestId></ErrorResponse>";
+        let slice = find_error_element_slice(body);
+        assert_eq!(slice, b"<Error><Code>X</Code></Error>");
+    }
+
+    #[test]
+    fn find_error_element_slice_handles_xmlns_on_inner_error() {
+        // The exact case the substring-find fails on: `xmlns` directly
+        // on the inner `<Error>` start tag means `body.find("<Error>")`
+        // returns `None` and the previous codegen returned the full
+        // body, breaking downstream error-code lookup.
+        let body = br#"<ErrorResponse><Error xmlns="http://example.com/"><Code>X</Code></Error></ErrorResponse>"#;
+        let slice = find_error_element_slice(body);
+        assert_eq!(
+            slice,
+            br#"<Error xmlns="http://example.com/"><Code>X</Code></Error>"#
+        );
+    }
+
+    #[test]
+    fn find_error_element_slice_returns_body_when_root_is_error() {
+        // `noErrorWrapping` mode: the root element IS `<Error>`. The
+        // slice should be the full body, since the root's tags are
+        // already at the boundaries.
+        let body = b"<Error><Code>X</Code><Message>m</Message></Error>";
+        let slice = find_error_element_slice(body);
+        assert_eq!(slice, body);
+    }
+
+    #[test]
+    fn find_error_element_slice_falls_back_for_missing_error() {
+        // Defensive: if the body doesn't contain an `<Error>` element
+        // anywhere, return the body unchanged so downstream parsing
+        // produces a malformed/unhandled error rather than panicking.
+        let body = b"<SomethingElse><Code>X</Code></SomethingElse>";
+        let slice = find_error_element_slice(body);
+        assert_eq!(slice, body);
+    }
+
+    #[test]
+    fn find_error_element_slice_falls_back_for_invalid_xml() {
+        // Defensive: malformed XML returns the body unchanged.
+        let body = b"not xml at all";
+        let slice = find_error_element_slice(body);
+        assert_eq!(slice, body);
+    }
+
+    #[test]
+    fn find_error_element_slice_falls_back_for_invalid_utf8() {
+        // Defensive: non-UTF-8 bytes return the body unchanged. The
+        // `Document::try_from(&[u8])` path validates UTF-8.
+        let body = &[0xFFu8, 0xFE, 0xFD][..];
+        let slice = find_error_element_slice(body);
+        assert_eq!(slice, body);
     }
 }

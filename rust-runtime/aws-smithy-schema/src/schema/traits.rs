@@ -122,7 +122,7 @@ impl XmlNamespaceTrait {
     }
 
     /// The namespace URI.
-    pub fn uri(&self) -> &str {
+    pub fn uri(&self) -> &'static str {
         self.uri
     }
 
@@ -130,7 +130,7 @@ impl XmlNamespaceTrait {
     ///
     /// When `Some(prefix)`, the namespace is declared as
     /// `xmlns:prefix="uri"`. When `None`, it is declared as `xmlns="uri"`.
-    pub fn prefix(&self) -> Option<&str> {
+    pub fn prefix(&self) -> Option<&'static str> {
         self.prefix
     }
 }

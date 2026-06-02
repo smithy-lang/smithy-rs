@@ -479,7 +479,13 @@ impl ShapeSerializer for XmlSerializer {
             // halves the per-struct serialization cost on the common case
             // (Smithy structures with no attributes).
             let saved_filter = self.member_filter;
-            let has_attrs = schema.members().iter().any(|m| m.xml_attribute());
+            // See the comment on the corresponding `has_attrs` check in the
+            // non-map-value branch below: member schemas (`Schema::new_member`)
+            // leave `members()` empty regardless of the target's shape type,
+            // so we run the AttributesOnly pass conservatively when the
+            // schema is a member.
+            let has_attrs = schema.member_name().is_some()
+                || schema.members().iter().any(|m| m.xml_attribute());
             if has_attrs {
                 self.member_filter = MemberFilter::AttributesOnly;
                 value.serialize_members(self)?;
@@ -522,8 +528,21 @@ impl ShapeSerializer for XmlSerializer {
             // and emits child elements). The attributes pass is skipped
             // entirely when no member has `@xmlAttribute` — see comment in
             // the map-value branch above.
+            //
+            // Member schemas (`Schema::new_member`) carry the target shape's
+            // `shape_type` but leave `members()` empty — the target struct's
+            // member list lives on the target schema, not on the member
+            // wrapper. When `schema` is a member schema, `members().iter()`
+            // can't see the target's `@xmlAttribute` members, so we
+            // conservatively run the AttributesOnly pass and let the
+            // per-member `filter_allows` checks gate emission. Root-struct
+            // calls (`schema` is a struct schema with `members()`
+            // populated) keep the optimization. The discriminator is
+            // `member_name()` — `Some(_)` only when the schema was built
+            // via `Schema::new_member`.
             let saved_filter = self.member_filter;
-            let has_attrs = schema.members().iter().any(|m| m.xml_attribute());
+            let has_attrs = schema.member_name().is_some()
+                || schema.members().iter().any(|m| m.xml_attribute());
             if has_attrs {
                 self.member_filter = MemberFilter::AttributesOnly;
                 value.serialize_members(self)?;
@@ -1528,5 +1547,83 @@ mod tests {
             out,
             "<myMap><entry><key>baz</key><value><hi>bye</hi></value></entry></myMap>"
         );
+    }
+
+    /// Regression test for a `has_attrs` short-circuit bug:
+    /// `write_struct(member_schema, value)` where `member_schema` was
+    /// produced by `Schema::new_member` and the target struct has
+    /// `@xmlAttribute` members.
+    ///
+    /// Pre-fix: `has_attrs = schema.members().iter().any(|m| m.xml_attribute())`
+    /// looked at `member_schema.members()`, which is empty for member
+    /// schemas regardless of the target's actual member list. The
+    /// AttributesOnly pass was therefore skipped and the attribute was
+    /// dropped.
+    ///
+    /// Post-fix: when `schema.member_name().is_some()` (i.e. the schema
+    /// was built via `Schema::new_member`), the codec runs the
+    /// AttributesOnly pass conservatively. The per-member
+    /// `filter_allows` check then correctly emits the attribute.
+    ///
+    /// Surfaced by the Smithy `XmlNamespaceSimpleScalarProperties`
+    /// protocol test where `<Nested xsi:someName="...">` was missing
+    /// the `someName` attribute when emitted via a member schema.
+    #[test]
+    fn member_schema_struct_emits_attribute_member() {
+        // Inner struct with an attribute member.
+        static ATTR_FIELD_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "Inner$attrField"),
+            ShapeType::String,
+            "attrField",
+            0,
+        )
+        .with_xml_name("xsi:someName")
+        .with_xml_attribute();
+        static INNER_TARGET: Schema = Schema::new_struct(
+            shape_id!("test", "Inner"),
+            ShapeType::Structure,
+            &[&ATTR_FIELD_MEMBER],
+        );
+        // Outer struct with a member pointing at `Inner`. Crucially this
+        // is a member schema (Schema::new_member), not the target
+        // struct's schema.
+        static INNER_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "Outer$nested"),
+            ShapeType::Structure,
+            "nested",
+            0,
+        );
+        static OUTER_SCHEMA: Schema = Schema::new_struct(
+            shape_id!("test", "Outer"),
+            ShapeType::Structure,
+            &[&INNER_MEMBER],
+        );
+
+        struct Inner<'a> {
+            attr: &'a str,
+        }
+        impl SerializableStruct for Inner<'_> {
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_string(&ATTR_FIELD_MEMBER, self.attr)
+            }
+        }
+        struct Outer<'a> {
+            inner: Inner<'a>,
+        }
+        impl SerializableStruct for Outer<'_> {
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                // Pass the *member* schema (matches codegen output), not
+                // the target struct's `INNER_TARGET`. This is the
+                // configuration that triggered the original bug.
+                let _ = &INNER_TARGET;
+                ser.write_struct(&INNER_MEMBER, &self.inner)
+            }
+        }
+
+        let outer = Outer {
+            inner: Inner { attr: "v" },
+        };
+        let out = serialize(|ser| ser.write_struct(&OUTER_SCHEMA, &outer));
+        assert_eq!(out, r#"<Outer><nested xsi:someName="v"></nested></Outer>"#);
     }
 }

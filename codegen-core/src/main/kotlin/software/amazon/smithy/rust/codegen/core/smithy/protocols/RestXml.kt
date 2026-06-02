@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
+import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.RestXmlParserGenerator
@@ -76,18 +77,18 @@ open class RestXml(val codegenContext: CodegenContext) : Protocol {
                     // Unwrapped: <Error>...</Error> is the root, use full body
                     rust("body")
                 } else {
-                    // Wrapped: <ErrorResponse><Error>...</Error></ErrorResponse>
-                    // Extract the <Error>...</Error> fragment
-                    rust(
-                        """
-                        let s = std::str::from_utf8(body).unwrap_or("");
-                        if let Some(start) = s.find("<Error>") {
-                            if let Some(end) = s.find("</Error>") {
-                                return &body[start..end + "</Error>".len()];
-                            }
-                        }
-                        body
-                        """,
+                    // Wrapped: <ErrorResponse><Error>...</Error></ErrorResponse>.
+                    // Delegate to the runtime helper, which performs a
+                    // structural walk via xmlparser to locate the inner
+                    // `<Error>` element. Robust to start-tag attributes such
+                    // as `<Error xmlns="...">`, CDATA sections, and nested
+                    // same-name elements — all of which a naive
+                    // `body.find("<Error>")` substring match mishandles.
+                    rustTemplate(
+                        "#{find_error_element_slice}(body)",
+                        "find_error_element_slice" to
+                            RuntimeType.smithyXml(runtimeConfig)
+                                .resolve("protocol::aws_rest_xml::find_error_element_slice"),
                     )
                 }
             }
