@@ -191,7 +191,7 @@ mod tests {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema, _: &aws_smithy_types::Blob) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(

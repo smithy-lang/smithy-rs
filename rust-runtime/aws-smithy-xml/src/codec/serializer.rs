@@ -17,7 +17,7 @@ use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 use std::sync::Arc;
 
 /// XML serializer that implements the [`ShapeSerializer`] trait.
@@ -906,8 +906,8 @@ impl ShapeSerializer for XmlSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &Blob) -> Result<(), SerdeError> {
-        let encoded = aws_smithy_types::base64::encode(value.as_ref());
+    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+        let encoded = aws_smithy_types::base64::encode(value);
         self.write_safe_element(schema, &encoded);
         Ok(())
     }
@@ -940,6 +940,7 @@ impl ShapeSerializer for XmlSerializer {
 mod tests {
     use super::*;
     use aws_smithy_schema::{prelude, shape_id, Schema, ShapeType};
+    use aws_smithy_types::Blob;
 
     /// Renders a struct with one string member named `name`.
     static NAME_MEMBER: Schema = Schema::new_member(
@@ -1163,7 +1164,7 @@ mod tests {
     #[test]
     fn write_blob_base64() {
         let blob = Blob::new(b"hello");
-        let out = serialize(|ser| ser.write_blob(&SCALAR_MEMBER, &blob));
+        let out = serialize(|ser| ser.write_blob(&SCALAR_MEMBER, blob.as_ref()));
         assert_eq!(out, "<v>aGVsbG8=</v>");
     }
 

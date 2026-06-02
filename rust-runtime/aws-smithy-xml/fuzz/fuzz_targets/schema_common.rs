@@ -544,7 +544,7 @@ fn write_member(
         FuzzValue::Float(v) => ser.write_float(&MEMBER_FLOAT, *v),
         FuzzValue::Double(v) => ser.write_double(&MEMBER_DOUBLE, *v),
         FuzzValue::String(v) => ser.write_string(&MEMBER_STR, v),
-        FuzzValue::Blob(v) => ser.write_blob(&MEMBER_BLOB, &aws_smithy_types::Blob::new(v.clone())),
+        FuzzValue::Blob(v) => ser.write_blob(&MEMBER_BLOB, v),
         FuzzValue::StringList(items) => ser.write_list(&MEMBER_STRING_LIST, &|ser| {
             for item in items {
                 ser.write_string(&STRING, item)?;
@@ -565,7 +565,7 @@ fn write_member(
         }),
         FuzzValue::BlobList(items) => ser.write_list(&MEMBER_BLOB_LIST, &|ser| {
             for item in items {
-                ser.write_blob(&BLOB, &aws_smithy_types::Blob::new(item.clone()))?;
+                ser.write_blob(&BLOB, item)?;
             }
             Ok(())
         }),

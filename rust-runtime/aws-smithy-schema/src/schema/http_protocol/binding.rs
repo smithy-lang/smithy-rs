@@ -787,17 +787,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_string(schema, value)
     }
 
-    fn write_blob(
-        &mut self,
-        schema: &Schema,
-        value: &aws_smithy_types::Blob,
-    ) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if schema.http_header().is_some() {
             if !self.should_route_binding(schema) {
                 return Ok(());
             }
-            let encoded = aws_smithy_types::base64::encode(value.as_ref());
+            let encoded = aws_smithy_types::base64::encode(value);
             self.headers
                 .insert(schema.http_header().unwrap().value(), encoded);
             return Ok(());
@@ -806,7 +802,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             if !self.should_route_binding(schema) {
                 return Ok(());
             }
-            // SAFETY: We extend the lifetime of `value.as_ref()` (a `&[u8]`) from its
+            // SAFETY: We extend the lifetime of `value` (a `&[u8]`) from its
             // anonymous lifetime to `'a`. This is sound because:
             // 1. `value` is borrowed from the input struct passed to `serialize_request`.
             // 2. `HttpBindingSerializer` is a local variable within `serialize_request`
@@ -816,8 +812,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             //    `serialize_members` returns, before the input is dropped.
             // We use transmute rather than copying to avoid allocating for potentially
             // multi-GB blob payloads.
-            self.raw_payload =
-                Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value.as_ref()) });
+            self.raw_payload = Some(unsafe { std::mem::transmute::<&[u8], &'a [u8]>(value) });
             return Ok(());
         }
         self.body.write_blob(schema, value)
@@ -1030,12 +1025,8 @@ impl ShapeSerializer for ListElementCollector {
         );
         Ok(())
     }
-    fn write_blob(
-        &mut self,
-        _schema: &Schema,
-        value: &aws_smithy_types::Blob,
-    ) -> Result<(), SerdeError> {
-        self.push(aws_smithy_types::base64::encode(value.as_ref()));
+    fn write_blob(&mut self, _schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+        self.push(aws_smithy_types::base64::encode(value));
         Ok(())
     }
     // Remaining methods are no-ops for list element collection
@@ -1204,7 +1195,7 @@ impl ShapeSerializer for MapEntryCollector {
     ) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_blob(&mut self, _: &Schema, _: &aws_smithy_types::Blob) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_timestamp(
@@ -1408,7 +1399,7 @@ mod tests {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema, _: &aws_smithy_types::Blob) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(
@@ -1672,11 +1663,7 @@ mod tests {
             fn write_string(&mut self, _: &Schema, _: &str) -> Result<(), SerdeError> {
                 panic!("body codec write_string() called");
             }
-            fn write_blob(
-                &mut self,
-                _: &Schema,
-                _: &aws_smithy_types::Blob,
-            ) -> Result<(), SerdeError> {
+            fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
                 panic!("body codec write_blob() called");
             }
             fn write_timestamp(
