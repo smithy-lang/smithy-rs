@@ -41,6 +41,47 @@ pub enum SerdeError {
         /// Description of the write failure.
         message: String,
     },
+    /// A numeric coercion overflowed the target type's representable
+    /// range.
+    ///
+    /// Emitted by [`Document::as_byte`](crate::document::Document::as_byte)
+    /// (and the other narrow numeric accessors) when the source value
+    /// is outside the target's `[min, max]` range.
+    NumericCoercionOverflow {
+        /// Target type name (e.g. `"byte"`, `"integer"`, `"long"`).
+        target: String,
+        /// String representation of the overflowing value, included
+        /// for diagnostics.
+        value: String,
+    },
+    /// A numeric coercion would lose precision in a context where
+    /// precision loss is not acceptable.
+    ///
+    /// **Not currently emitted by `Document::as_*` accessors.** Per the
+    /// SEP "Number coercion" rules, precision loss is silently ignored
+    /// on the standard Document accessor path. This variant is
+    /// reserved for callers (e.g. strict deserializers, customer code
+    /// using a custom accessor) that choose to enforce lossless
+    /// coercion.
+    NumericCoercionLossy {
+        /// Target type name.
+        target: String,
+        /// String representation of the value that would lose precision.
+        value: String,
+    },
+    /// Failed to decode a blob from its wire-format representation —
+    /// for example, invalid base64 in a JSON payload.
+    BlobDecodeFailed {
+        /// Description of the decode failure.
+        message: String,
+    },
+    /// Failed to parse a timestamp from its wire-format representation —
+    /// for example, a malformed RFC-3339 string or an out-of-range
+    /// epoch-seconds value.
+    TimestampParseFailed {
+        /// Description of the parse failure.
+        message: String,
+    },
     /// Catch-all for errors not covered by other variants.
     Custom {
         /// Explanatory message.
@@ -63,6 +104,19 @@ impl fmt::Display for SerdeError {
                 write!(f, "unsupported operation: {message}")
             }
             SerdeError::WriteFailed { message } => write!(f, "write failed: {message}"),
+            SerdeError::NumericCoercionOverflow { target, value } => {
+                write!(f, "numeric value {value} out of range for {target}")
+            }
+            SerdeError::NumericCoercionLossy { target, value } => {
+                write!(
+                    f,
+                    "numeric value {value} cannot be coerced to {target} without precision loss"
+                )
+            }
+            SerdeError::BlobDecodeFailed { message } => write!(f, "blob decode failed: {message}"),
+            SerdeError::TimestampParseFailed { message } => {
+                write!(f, "timestamp parse failed: {message}")
+            }
             SerdeError::Custom { message } => f.write_str(message),
         }
     }
