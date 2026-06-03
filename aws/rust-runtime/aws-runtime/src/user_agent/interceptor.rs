@@ -379,8 +379,8 @@ mod tests {
         let app_value = "app/my_awesome_app";
         let header = expect_header(&context, "user-agent");
         assert!(
-            !header.contains(app_value),
-            "expected `{header}` to not contain `{app_value}`"
+            header.contains(app_value),
+            "expected `{header}` to contain `{app_value}`"
         );
 
         let header = expect_header(&context, "x-amz-user-agent");

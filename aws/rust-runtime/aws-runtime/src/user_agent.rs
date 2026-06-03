@@ -278,7 +278,13 @@ impl AwsUserAgent {
         use std::fmt::Write;
         write!(ua_value, "{} ", &self.sdk_metadata).unwrap();
         write!(ua_value, "{} ", &self.os_metadata).unwrap();
-        write!(ua_value, "{}", &self.language_metadata).unwrap();
+        write!(ua_value, "{} ", &self.language_metadata).unwrap();
+        if let Some(app_name) = &self.app_name {
+            write!(ua_value, "app/{app_name}").unwrap();
+        }
+        if ua_value.ends_with(' ') {
+            ua_value.truncate(ua_value.len() - 1);
+        }
         ua_value
     }
 }
@@ -705,7 +711,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0 app/my_app"
         );
     }
 
