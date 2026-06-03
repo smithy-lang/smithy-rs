@@ -5,7 +5,7 @@
 
 use std::borrow::Cow;
 
-use aws_smithy_types::{Blob, DateTime};
+use aws_smithy_types::{BigInteger, Blob, DateTime};
 use minicbor::decode::Error;
 
 use crate::data::Type;
@@ -253,6 +253,71 @@ impl<'b> Decoder<'b> {
             Ok(result)
         }
     }
+
+    /// Returns a `BigInteger` from either a CBOR tag 2/3 (bignum) or a plain integer.
+    ///
+    /// Per RFC 8949 §3.4.3, tag 2 encodes unsigned bignum `n` and tag 3 encodes
+    /// negative bignum `-1 - n`, where `n` is the unsigned integer from the byte
+    /// string in network byte order. Plain CBOR integers (major types 0 and 1)
+    /// are also accepted per preferred serialization rules.
+    pub fn big_integer(&mut self) -> Result<BigInteger, DeserializeError> {
+        use num_bigint::BigInt;
+
+        match self.decoder.datatype().map_err(DeserializeError::new)? {
+            minicbor::data::Type::Tag => {
+                let tag = self.decoder.tag().map_err(DeserializeError::new)?;
+                let bytes = self.decoder.bytes().map_err(DeserializeError::new)?;
+                let n = BigInt::from_bytes_be(num_bigint::Sign::Plus, bytes);
+
+                let value = match tag.as_u64() {
+                    2 => n,
+                    3 => -n - 1, // tag 3 value = -1 - n
+                    _ => {
+                        return Err(DeserializeError::new(Error::message(
+                            "expected CBOR tag 2 (positive bignum) or tag 3 (negative bignum)",
+                        )));
+                    }
+                };
+                value
+                    .to_string()
+                    .parse()
+                    .map_err(|_| DeserializeError::new(Error::message("invalid bignum value")))
+            }
+            minicbor::data::Type::U8
+            | minicbor::data::Type::U16
+            | minicbor::data::Type::U32
+            | minicbor::data::Type::U64 => {
+                let value = self.decoder.u64().map_err(DeserializeError::new)?;
+                value
+                    .to_string()
+                    .parse()
+                    .map_err(|_| DeserializeError::new(Error::message("invalid integer value")))
+            }
+            minicbor::data::Type::I8
+            | minicbor::data::Type::I16
+            | minicbor::data::Type::I32
+            | minicbor::data::Type::I64 => {
+                let value = self.decoder.i64().map_err(DeserializeError::new)?;
+                value
+                    .to_string()
+                    .parse()
+                    .map_err(|_| DeserializeError::new(Error::message("invalid integer value")))
+            }
+            // Int covers CBOR major type 1 values that exceed i64 range
+            // (argument > i64::MAX, i.e. values from -2^64 to -(i64::MAX+2)).
+            minicbor::data::Type::Int => {
+                let int_val = self.decoder.int().map_err(DeserializeError::new)?;
+                let value: i128 = int_val.into();
+                BigInt::from(value)
+                    .to_string()
+                    .parse()
+                    .map_err(|_| DeserializeError::new(Error::message("invalid integer value")))
+            }
+            _ => Err(DeserializeError::new(Error::message(
+                "expected CBOR integer or bignum tag",
+            ))),
+        }
+    }
 }
 
 #[allow(dead_code)] // to avoid `never constructed` warning
@@ -385,6 +450,141 @@ mod tests {
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn big_integer_round_trip_positive() {
+        for value in ["0", "1", "23", "256", "65535", "18446744073709551615"] {
+            let mut encoder = crate::Encoder::new(Vec::new());
+            encoder.big_integer(&value.parse().unwrap());
+            let bytes = encoder.into_writer();
+            let mut decoder = Decoder::new(&bytes);
+            let result = decoder.big_integer().expect("should decode");
+            assert_eq!(result.as_ref(), value, "round-trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn big_integer_round_trip_negative() {
+        for value in ["-1", "-42", "-256", "-18446744073709551616"] {
+            let mut encoder = crate::Encoder::new(Vec::new());
+            encoder.big_integer(&value.parse().unwrap());
+            let bytes = encoder.into_writer();
+            let mut decoder = Decoder::new(&bytes);
+            let result = decoder.big_integer().expect("should decode");
+            assert_eq!(result.as_ref(), value, "round-trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn big_integer_round_trip_large() {
+        let large_pos = "123456789012345678901234567890";
+        let large_neg = "-123456789012345678901234567890";
+        for value in [large_pos, large_neg] {
+            let mut encoder = crate::Encoder::new(Vec::new());
+            encoder.big_integer(&value.parse().unwrap());
+            let bytes = encoder.into_writer();
+            let mut decoder = Decoder::new(&bytes);
+            let result = decoder.big_integer().expect("should decode");
+            assert_eq!(result.as_ref(), value, "round-trip failed for {value}");
+        }
+    }
+
+    #[test]
+    fn big_integer_rfc8949_appendix_a_positive() {
+        // RFC 8949 Appendix A: 18446744073709551616 (2^64) = 0xc249010000000000000000
+        let bytes = [
+            0xc2, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode");
+        assert_eq!(result.as_ref(), "18446744073709551616");
+    }
+
+    #[test]
+    fn big_integer_rfc8949_appendix_a_negative() {
+        // RFC 8949 Appendix A: -18446744073709551617 = 0xc349010000000000000000
+        let bytes = [
+            0xc3, 0x49, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+        ];
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode");
+        assert_eq!(result.as_ref(), "-18446744073709551617");
+    }
+
+    #[test]
+    fn big_integer_from_plain_cbor_unsigned() {
+        let mut enc = minicbor::Encoder::new(Vec::new());
+        enc.u64(9999).unwrap();
+        let bytes = enc.into_writer();
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode plain integer");
+        assert_eq!(result.as_ref(), "9999");
+    }
+
+    #[test]
+    fn big_integer_from_plain_cbor_negative() {
+        let mut enc = minicbor::Encoder::new(Vec::new());
+        enc.i64(-500).unwrap();
+        let bytes = enc.into_writer();
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder
+            .big_integer()
+            .expect("should decode negative plain integer");
+        assert_eq!(result.as_ref(), "-500");
+    }
+
+    #[test]
+    fn big_integer_from_plain_cbor_positive_signed() {
+        // A positive value such as +123 is encoded as CBOR major type 0 (unsigned)
+        // per preferred serialization and must decode back to the same value.
+        let mut enc = minicbor::Encoder::new(Vec::new());
+        enc.i64(123).unwrap();
+        let bytes = enc.into_writer();
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder
+            .big_integer()
+            .expect("should decode positive plain integer");
+        assert_eq!(result.as_ref(), "123");
+    }
+
+    #[test]
+    fn big_integer_tag3_empty_byte_string() {
+        // Tag 3 with empty byte string = -1 - 0 = -1
+        let bytes = [0xc3, 0x40]; // tag 3, empty byte string
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode");
+        assert_eq!(result.as_ref(), "-1");
+    }
+
+    #[test]
+    fn big_integer_tag2_empty_byte_string() {
+        // Tag 2 with empty byte string = 0
+        let bytes = [0xc2, 0x40]; // tag 2, empty byte string
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder.big_integer().expect("should decode");
+        assert_eq!(result.as_ref(), "0");
+    }
+
+    #[test]
+    fn big_integer_rejects_invalid_tag() {
+        // Tag 4 (decimal fraction) should be rejected.
+        let bytes = [0xc4, 0x82, 0x21, 0x19, 0x6a, 0xb3];
+        let mut decoder = Decoder::new(&bytes);
+        assert!(decoder.big_integer().is_err());
+    }
+
+    #[test]
+    fn big_integer_decode_major_type_1_exceeding_i64() {
+        // CBOR major type 1 with argument u64::MAX (0x3b + 8 bytes of 0xff).
+        // Value = -1 - u64::MAX = -18446744073709551616.
+        // This exercises the minicbor Type::Int path in the decoder.
+        let bytes = [0x3b, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff];
+        let mut decoder = Decoder::new(&bytes);
+        let result = decoder
+            .big_integer()
+            .expect("should decode major type 1 > i64::MAX");
+        assert_eq!(result.as_ref(), "-18446744073709551616");
     }
 
     #[test]
