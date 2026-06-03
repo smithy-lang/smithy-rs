@@ -386,7 +386,7 @@ mod tests {
     #[test]
     fn test_read_blob() {
         let blob = Blob::new(b"binary");
-        let bytes = make_deser(|s| s.write_blob(&BLOB, &blob).unwrap());
+        let bytes = make_deser(|s| s.write_blob(&BLOB, blob.as_ref()).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
         assert_eq!(de.read_blob(&BLOB).unwrap(), blob);
     }

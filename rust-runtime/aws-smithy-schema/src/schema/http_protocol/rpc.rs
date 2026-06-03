@@ -88,10 +88,12 @@ where
         _output_schema: &Schema,
         _cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
-        let body = response
-            .body()
-            .bytes()
-            .ok_or_else(|| SerdeError::custom("response body is not available as bytes"))?;
+        // See `HttpBindingProtocol::deserialize_response` for the rationale
+        // behind tolerating an unreadable (streaming) body. RPC protocols
+        // also flow through `deserialize_with_response` for streaming
+        // outputs and the `&[]` body slice signals "no body members to
+        // read".
+        let body = response.body().bytes().unwrap_or(&[]);
         Ok(Box::new(self.codec.create_deserializer(body)))
     }
 
@@ -189,7 +191,7 @@ mod tests {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema, _: &aws_smithy_types::Blob) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(
