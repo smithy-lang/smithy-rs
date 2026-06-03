@@ -20,6 +20,7 @@ mod schema {
     pub mod traits;
 
     pub mod codec;
+    pub mod document;
     pub mod http_protocol;
     pub mod prelude;
     pub mod protocol;
@@ -46,6 +47,10 @@ pub mod traits {
 
 pub mod codec {
     pub use crate::schema::codec::*;
+}
+
+pub mod document {
+    pub use crate::schema::document::*;
 }
 
 pub mod protocol {
