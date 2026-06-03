@@ -384,6 +384,7 @@ dependencies = [
 name = "aws-smithy-checksums"
 version = "0.64.8"
 dependencies = [
+ "aws-lc-rs",
  "aws-smithy-http 0.63.6",
  "aws-smithy-types 1.4.9",
  "bytes",
