@@ -151,6 +151,24 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         None
     }
+
+    /// Returns static headers that should be added to every request for this protocol.
+    ///
+    /// Override this to inject protocol-level headers (e.g., `x-amzn-query-mode`).
+    fn static_headers(&self) -> &'static [(&'static str, &'static str)] {
+        &[]
+    }
+
+    /// Resolves the error code from response headers, allowing protocol-specific overrides.
+    ///
+    /// Default: returns the code unchanged.
+    fn resolve_error_code<'a>(
+        &self,
+        _headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str {
+        code
+    }
 }
 
 /// Object-safe view of [`ClientProtocolInner`] parameterized over concrete
@@ -198,6 +216,13 @@ pub trait ClientProtocol<
 
     /// Returns the codec used for payload (de)serialization, if any.
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec>;
+
+    /// Resolves the error code from response headers.
+    fn resolve_error_code<'a>(
+        &self,
+        headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str;
 }
 
 // Blanket impl: any `ClientProtocolInner` is automatically a `ClientProtocol`
@@ -240,6 +265,14 @@ where
 
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         <Self as ClientProtocolInner>::payload_codec(self)
+    }
+
+    fn resolve_error_code<'a>(
+        &self,
+        headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str {
+        <Self as ClientProtocolInner>::resolve_error_code(self, headers, code)
     }
 }
 

@@ -475,6 +475,11 @@ class ResponseDeserializerGenerator(
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "error_symbol" to errorSymbol,
             )
+            rustTemplate(
+                """
+                let error_code = protocol.resolve_error_code(headers, error_code);
+                """,
+            )
             rustTemplate("let err = match error_code {")
             for (error in errors) {
                 val errorShape = model.expectShape(error.id, StructureShape::class.java)

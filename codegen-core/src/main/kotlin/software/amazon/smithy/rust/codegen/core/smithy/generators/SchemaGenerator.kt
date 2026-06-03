@@ -1853,6 +1853,25 @@ class SchemaGenerator(
                         } else {
                             ""
                         }
+                    // Include collection member @xmlName from the target list/map shape
+                    val collectionMemberName =
+                        if (target is software.amazon.smithy.model.shapes.ListShape) {
+                            val listMember = target.member
+                            val xmlNameTrait = listMember.getTrait(software.amazon.smithy.model.traits.XmlNameTrait::class.java)
+                            if (xmlNameTrait.isPresent) {
+                                "\n    .with_xml_collection_member_name(${xmlNameTrait.get().value.dq()})"
+                            } else {
+                                ""
+                            }
+                        } else if (target is software.amazon.smithy.model.shapes.MapShape) {
+                            val keyXmlName = target.key.getTrait(software.amazon.smithy.model.traits.XmlNameTrait::class.java)
+                            val valueXmlName = target.value.getTrait(software.amazon.smithy.model.traits.XmlNameTrait::class.java)
+                            val keyPart = if (keyXmlName.isPresent) "\n    .with_xml_map_key_name(${keyXmlName.get().value.dq()})" else ""
+                            val valuePart = if (valueXmlName.isPresent) "\n    .with_xml_map_value_name(${valueXmlName.get().value.dq()})" else ""
+                            "$keyPart$valuePart"
+                        } else {
+                            ""
+                        }
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(rustMemberName)}: #{Schema} = #{Schema}::new_member(
@@ -1864,7 +1883,7 @@ class SchemaGenerator(
                             #{ShapeType}::${shapeTypeVariant(target)},
                             ${templateEscape(smithyMemberName.dq())},
                             $idx,
-                        )$memberTraitChain$targetTimestampFormat$targetMediaType;
+                        )$memberTraitChain$targetTimestampFormat$targetMediaType$collectionMemberName;
                         """,
                         *codegenScope,
                     )
