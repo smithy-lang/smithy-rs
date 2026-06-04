@@ -5,15 +5,15 @@
 
 //! HTTP connection pool.
 //!
-//! Pool ownership and per-client configuration are separated:
+//! Pool ownership and partition topology are declared at build time:
 //!
 //! - [`SharedPool`] owns connection lifecycle: TLS, DNS resolution,
-//!   connection limits, idle eviction, proxy routing, event listening.
-//!   Built via [`SharedPool::builder`] which returns a [`Builder`].
+//!   connection limits, idle eviction, proxy routing, event listening,
+//!   and the partition registry. Built via [`SharedPool::builder`] which
+//!   returns a [`Builder`].
 //! - [`Client`] is a per-partition view over a [`SharedPool`] that
 //!   implements [`HttpClient`]. Multiple [`Client`]s may share one
-//!   [`SharedPool`], each with a distinct [`PartitionId`], network
-//!   interface binding, and driver spawner.
+//!   [`SharedPool`], each targeting a distinct declared partition.
 //!
 //! For partition semantics, topologies, and cross-partition checkout
 //! policy, see the [`partition`] module.
@@ -50,12 +50,14 @@ pub mod partition;
 
 // Public re-exports.
 pub use builder::Builder;
-pub use client::{Client, ClientBuilder};
+pub use client::Client;
 pub use connection::{
     Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
     ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
 };
-pub use partition::{CrossPartitionPolicy, DriverSpawner, PartitionId, TokioDriverSpawner};
+pub use partition::{
+    CrossPartitionPolicy, DriverSpawner, Partition, PartitionId, TokioDriverSpawner,
+};
 
 /// Connection-caching pool layer.
 mod cache {
@@ -230,7 +232,12 @@ impl BoxedRetainer {
 /// `layer_fn`s the first time `Negotiate` constructs each leg.
 type RetainerSlot = Arc<Mutex<Vec<BoxedRetainer>>>;
 
-pub(crate) fn build_pool<C, IO>(connector: C, config: PoolConfig) -> ConnectionPool
+pub(crate) fn build_pool<C, IO>(
+    connector: C,
+    config: PoolConfig,
+    registry: Arc<partition::PartitionRegistry>,
+    cross_partition_policy: partition::CrossPartitionPolicy,
+) -> ConnectionPool
 where
     C: Service<http_1x::Uri, Response = IO> + Clone + Send + Sync + 'static,
     C::Error: Into<BoxError> + 'static,
@@ -458,6 +465,8 @@ where
         make_entry: Box::new(make_entry),
         eviction_spawned: AtomicBool::new(false),
         drop_notifier: OnceLock::new(),
+        registry,
+        cross_partition_policy,
     }
 }
 
@@ -471,6 +480,13 @@ pub(crate) struct ConnectionPool {
     config: PoolConfig,
     hosts: Mutex<HashMap<PoolKey, Box<dyn PoolEntry>>>,
     make_entry: Box<dyn Fn(&http_1x::Uri) -> Box<dyn PoolEntry> + Send + Sync>,
+
+    /// Immutable partition registry, resolved at build time.
+    registry: Arc<partition::PartitionRegistry>,
+
+    // stored for later steps (send path unchanged this step)
+    #[allow(dead_code)]
+    cross_partition_policy: partition::CrossPartitionPolicy,
 
     /// Latches `true` once the eviction task has been spawned. Subsequent
     /// `send_request` calls observe the latch and skip the spawn path.
@@ -493,6 +509,11 @@ pub(crate) struct ConnectionPool {
 const MIN_EVICTION_TICK: Duration = Duration::from_millis(90);
 
 impl ConnectionPool {
+    /// Access the immutable partition registry.
+    pub(crate) fn registry(&self) -> &Arc<partition::PartitionRegistry> {
+        &self.registry
+    }
+
     /// Send a request through the pool.
     ///
     /// Routes to the appropriate per-host pool stack and sends the request.
@@ -1000,6 +1021,10 @@ mod tests {
             make_entry: Box::new(|_| Box::new(NullPoolEntry)),
             eviction_spawned: AtomicBool::new(false),
             drop_notifier: OnceLock::new(),
+            registry: Arc::new(partition::PartitionRegistry::build(Vec::new(), || {
+                Arc::new(partition::TokioDriverSpawner::current())
+            })),
+            cross_partition_policy: CrossPartitionPolicy::default(),
         })
     }
 

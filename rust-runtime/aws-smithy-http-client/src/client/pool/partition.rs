@@ -235,6 +235,124 @@ pub enum CrossPartitionPolicy {
     PreferLocal,
 }
 
+/// A declared pool partition: a driver-spawner runtime and an optional
+/// NIC binding, identified by a caller-owned [`PartitionId`]. Declared on
+/// the pool builder via `Builder::partitions`; the pool owns the topology
+/// for its lifetime.
+#[derive(Clone, Debug)]
+pub struct Partition {
+    id: PartitionId,
+    spawner: std::sync::Arc<dyn DriverSpawner>,
+    nic: Option<String>,
+}
+
+impl Partition {
+    /// Declare a partition with the given id and driver spawner.
+    pub fn new<S: DriverSpawner>(id: PartitionId, spawner: S) -> Self {
+        Self {
+            id,
+            spawner: std::sync::Arc::new(spawner),
+            nic: None,
+        }
+    }
+
+    /// Bind this partition's connections to a network interface.
+    pub fn interface(mut self, nic: impl Into<String>) -> Self {
+        self.nic = Some(nic.into());
+        self
+    }
+
+    // used by pool build validation (later step)
+    #[allow(dead_code)]
+    pub(crate) fn id(&self) -> PartitionId {
+        self.id
+    }
+}
+
+/// Pool-owned state for one declared partition. Resolved once at pool
+/// build time and referenced by [`Client`](super::Client) handles.
+#[derive(Debug)]
+pub(crate) struct PartitionState {
+    pub(crate) id: PartitionId,
+    // used by connection driver spawn (later step)
+    #[allow(dead_code)]
+    pub(crate) spawner: std::sync::Arc<dyn DriverSpawner>,
+    // used by socket bind (later step)
+    #[allow(dead_code)]
+    pub(crate) nic: Option<String>,
+}
+
+/// Immutable registry of declared partitions, built once at pool
+/// construction. Maps ids and NIC groups to partition state and records
+/// the default partition used by [`Client::new`](super::Client::new).
+#[derive(Debug)]
+pub(crate) struct PartitionRegistry {
+    by_id: std::collections::HashMap<PartitionId, std::sync::Arc<PartitionState>>,
+    // used by cross-partition borrow (later step)
+    #[allow(dead_code)]
+    by_nic: std::collections::HashMap<Option<String>, Vec<PartitionId>>,
+    default_partition: PartitionId,
+}
+
+impl PartitionRegistry {
+    /// Build a registry from declared partitions. When `partitions` is
+    /// empty, creates a single anonymous partition (`PartitionId::default()`)
+    /// with the given fallback spawner and no NIC binding. The default
+    /// partition is the first declared (or the anonymous one when none are
+    /// declared). Panics on a duplicate `PartitionId`.
+    pub(crate) fn build(
+        partitions: Vec<Partition>,
+        anonymous_spawner: impl FnOnce() -> std::sync::Arc<dyn DriverSpawner>,
+    ) -> Self {
+        let partitions = if partitions.is_empty() {
+            vec![Partition {
+                id: PartitionId::default(),
+                spawner: anonymous_spawner(),
+                nic: None,
+            }]
+        } else {
+            partitions
+        };
+        let default_partition = partitions[0].id;
+        let mut by_id = std::collections::HashMap::new();
+        let mut by_nic: std::collections::HashMap<Option<String>, Vec<PartitionId>> =
+            std::collections::HashMap::new();
+        for p in partitions {
+            by_nic.entry(p.nic.clone()).or_default().push(p.id);
+            let state = std::sync::Arc::new(PartitionState {
+                id: p.id,
+                spawner: p.spawner,
+                nic: p.nic,
+            });
+            if by_id.insert(p.id, state).is_some() {
+                panic!("duplicate PartitionId declared: {:?}", p.id);
+            }
+        }
+        Self {
+            by_id,
+            by_nic,
+            default_partition,
+        }
+    }
+
+    /// Resolve the default partition (first declared or anonymous).
+    pub(crate) fn default_partition(&self) -> std::sync::Arc<PartitionState> {
+        self.by_id
+            .get(&self.default_partition)
+            .expect("default partition exists")
+            .clone()
+    }
+
+    /// Resolve a declared partition by id. Panics if the id was not
+    /// declared (programming error: the caller declared the topology).
+    pub(crate) fn partition(&self, id: PartitionId) -> std::sync::Arc<PartitionState> {
+        self.by_id
+            .get(&id)
+            .unwrap_or_else(|| panic!("partition not declared: {:?}", id))
+            .clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
