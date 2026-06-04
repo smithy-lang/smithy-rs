@@ -5,10 +5,11 @@
 
 //! JSON serializer implementation.
 
+use aws_smithy_schema::document::Document;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
 use crate::codec::JsonCodecSettings;
 
@@ -84,10 +85,18 @@ impl JsonSerializer {
         self.settings.default_timestamp_format
     }
 
-    fn write_json_value(&mut self, doc: &Document) {
+    fn write_json_value(&mut self, doc: &Document) -> Result<(), SerdeError> {
         use crate::serialize::JsonValueWriter;
+        // Bridge to the legacy `aws_smithy_types::Document` for the JSON
+        // emission path. Rich variants (Blob, Timestamp, BigInteger,
+        // BigDecimal) and discriminator-tagged structures are handled in
+        // Phase 7 (`JsonDocumentSettings`) per the
+        // `Document Types & Type Registries` plan; for now, those return
+        // a `TypeMismatch` error.
+        let legacy = aws_smithy_types::Document::try_from(doc.clone())?;
         let writer = JsonValueWriter::new(&mut self.output);
-        writer.document(doc);
+        writer.document(&legacy);
+        Ok(())
     }
 }
 
@@ -313,7 +322,7 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_document(&mut self, schema: &Schema, value: &Document) -> Result<(), SerdeError> {
         self.prefix(schema);
-        self.write_json_value(value);
+        self.write_json_value(value)?;
         Ok(())
     }
 

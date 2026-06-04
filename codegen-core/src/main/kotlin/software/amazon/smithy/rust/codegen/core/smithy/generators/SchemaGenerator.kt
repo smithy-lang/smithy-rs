@@ -436,7 +436,7 @@ class SchemaGenerator(
                 }
             }
             is UnionShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
-            is DocumentShape -> "ser.write_document(&$memberSchemaRef, $varName)?;"
+            is DocumentShape -> "ser.write_document(&$memberSchemaRef, &::aws_smithy_schema::document::Document::from($varName.clone()))?;"
             else -> "todo!(\"schema: unsupported union variant type\");"
         }
     }
@@ -541,7 +541,7 @@ class SchemaGenerator(
                 }
 
             is TimestampShape -> "ser.write_timestamp(&$memberSchemaRef, val)?;"
-            is DocumentShape -> "ser.write_document(&$memberSchemaRef, val)?;"
+            is DocumentShape -> "ser.write_document(&$memberSchemaRef, &::aws_smithy_schema::document::Document::from(val.clone()))?;"
             is ListShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
@@ -634,7 +634,7 @@ class SchemaGenerator(
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
-            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
+            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, &::aws_smithy_schema::document::Document::from($varName.clone()))?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
@@ -736,7 +736,7 @@ class SchemaGenerator(
 
             is BlobShape -> "ser.write_blob(&$prelude::BLOB, $varName.as_ref())?;"
             is TimestampShape -> "ser.write_timestamp(&$prelude::TIMESTAMP, $varName)?;"
-            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, $varName)?;"
+            is DocumentShape -> "ser.write_document(&$prelude::DOCUMENT, &::aws_smithy_schema::document::Document::from($varName.clone()))?;"
             is StructureShape -> {
                 val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
                 "ser.write_struct($targetQualified::SCHEMA, $varName)?;"
@@ -1402,7 +1402,7 @@ class SchemaGenerator(
             writer.rust(
                 """
                 if !body.is_empty() {
-                    builder.$memberName = Some(deserializer.read_document(&$memberSchemaRef)?);
+                    builder.$memberName = Some(::aws_smithy_types::Document::try_from(deserializer.read_document(&$memberSchemaRef)?)?);
                 }
                 """,
             )
@@ -1564,7 +1564,7 @@ class SchemaGenerator(
                 }
 
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
-            is DocumentShape -> "deser.read_document($memberRef)?"
+            is DocumentShape -> "::aws_smithy_types::Document::try_from(deser.read_document($memberRef)?)?"
             is ListShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
@@ -1668,7 +1668,7 @@ class SchemaGenerator(
 
             is BlobShape -> "deser.read_blob($memberRef)?"
             is TimestampShape -> "deser.read_timestamp($memberRef)?"
-            is DocumentShape -> "deser.read_document($memberRef)?"
+            is DocumentShape -> "::aws_smithy_types::Document::try_from(deser.read_document($memberRef)?)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"

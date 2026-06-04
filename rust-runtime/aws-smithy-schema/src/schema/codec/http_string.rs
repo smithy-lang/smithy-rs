@@ -7,7 +7,9 @@
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+
+use crate::document::Document;
 
 /// Serializer for converting Smithy types to strings (for HTTP headers, query params, labels).
 pub struct HttpStringSerializer {
