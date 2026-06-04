@@ -74,6 +74,7 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeId};
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::endpoint::Endpoint;
+use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 
 /// Statically-dispatched client protocol trait — the one implementors write.
 ///
@@ -125,6 +126,61 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
         output_schema: &Schema,
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
+
+    /// Extracts canonical error metadata (code, message, request id) from a
+    /// response's wire envelope.
+    ///
+    /// Returns a [`Builder`](ErrorMetadataBuilder) so callers can attach
+    /// per-request fields (e.g., `x-amzn-RequestId` from an HTTP header) before
+    /// finalizing.
+    ///
+    /// Concrete protocols override this to extract their envelope-specific
+    /// fields:
+    /// - awsJson1.0 / awsJson1.1: `__type` from the body, `X-Amzn-Errortype`
+    ///   header fallback.
+    /// - restJson1: same as awsJson.
+    /// - restXml (wrapped): `<ErrorResponse><Error><Code>` etc.
+    /// - restXml (`@restXml(noErrorWrapping: true)`): `<Error><Code>` etc.
+    /// - awsQuery / ec2Query: `<ErrorResponse><Error><Code>` etc.
+    /// - rpcv2Cbor: `__type` from the CBOR map.
+    ///
+    /// The default implementation returns an empty
+    /// [`Builder`](ErrorMetadataBuilder) — sufficient for protocols that
+    /// haven't migrated to schema-driven error dispatch yet, but
+    /// callers will see `Option::None` for `code()` / `message()` and treat
+    /// the response as an unhandled error.
+    fn parse_error_metadata(
+        &self,
+        response: &Self::Response,
+        cfg: &ConfigBag,
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        let _ = (response, cfg);
+        Ok(ErrorMetadata::builder())
+    }
+
+    /// Returns a [`ShapeDeserializer`] positioned at the body of an error
+    /// response — *inside* the protocol's error envelope, where applicable.
+    ///
+    /// Generated error dispatch code calls this to obtain a deserializer
+    /// usable with `<SpecificError>::deserialize_with_response(...)` (or the
+    /// equivalent generated `deserialize`), regardless of which protocol is
+    /// active at runtime.
+    ///
+    /// For envelope-less protocols (awsJson1.0/1.1, restJson1, rpcv2Cbor) the
+    /// default implementation suffices: the body root *is* the error body, so
+    /// it forwards to [`deserialize_response`](Self::deserialize_response)
+    /// against [`prelude::DOCUMENT`](crate::prelude::DOCUMENT).
+    ///
+    /// Envelope-bearing protocols (restXml wrapped / unwrapped, awsQuery,
+    /// ec2Query) MUST override to strip the outer `<ErrorResponse>` /
+    /// `<Error>` wrapper before returning the deserializer.
+    fn deserialize_error_response<'a>(
+        &self,
+        response: &'a Self::Response,
+        cfg: &ConfigBag,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+        self.deserialize_response(response, &crate::prelude::DOCUMENT, cfg)
+    }
 
     /// Updates a previously serialized request with a resolved endpoint.
     ///
@@ -188,6 +244,25 @@ pub trait ClientProtocol<
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
 
+    /// Extracts canonical error metadata from a response.
+    ///
+    /// See [`ClientProtocolInner::parse_error_metadata`] for the contract.
+    fn parse_error_metadata(
+        &self,
+        response: &Res,
+        cfg: &ConfigBag,
+    ) -> Result<ErrorMetadataBuilder, SerdeError>;
+
+    /// Returns a [`ShapeDeserializer`] positioned at the body of an error
+    /// response — inside the protocol's error envelope, where applicable.
+    ///
+    /// See [`ClientProtocolInner::deserialize_error_response`] for the contract.
+    fn deserialize_error_response<'a>(
+        &self,
+        response: &'a Res,
+        cfg: &ConfigBag,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError>;
+
     /// Updates a previously serialized request with a resolved endpoint.
     fn update_endpoint(
         &self,
@@ -227,6 +302,22 @@ where
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         <Self as ClientProtocolInner>::deserialize_response(self, response, output_schema, cfg)
+    }
+
+    fn parse_error_metadata(
+        &self,
+        response: &P::Response,
+        cfg: &ConfigBag,
+    ) -> Result<ErrorMetadataBuilder, SerdeError> {
+        <Self as ClientProtocolInner>::parse_error_metadata(self, response, cfg)
+    }
+
+    fn deserialize_error_response<'a>(
+        &self,
+        response: &'a P::Response,
+        cfg: &ConfigBag,
+    ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+        <Self as ClientProtocolInner>::deserialize_error_response(self, response, cfg)
     }
 
     fn update_endpoint(
@@ -374,7 +465,7 @@ mod tests {
     use super::*;
     use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
     use crate::{Schema, ShapeId};
-    use aws_smithy_runtime_api::http::{Request, Response};
+    use aws_smithy_runtime_api::http::{Request, Response, StatusCode};
     use aws_smithy_types::body::SdkBody;
     use aws_smithy_types::config_bag::{ConfigBag, Layer};
     use aws_smithy_types::endpoint::Endpoint;
@@ -488,5 +579,81 @@ mod tests {
 
         ClientProtocolInner::update_endpoint(&proto, &mut req, &endpoint, &cfg).unwrap();
         assert_eq!(req.uri(), "https://example.com/base/operation");
+    }
+
+    // -- Default impls for parse_error_metadata + deserialize_error_response --
+
+    #[test]
+    fn parse_error_metadata_default_returns_empty_builder() {
+        let proto = StubProtocol;
+        let response = Response::new(StatusCode::try_from(500).unwrap(), SdkBody::empty());
+        let cfg = ConfigBag::base();
+
+        let builder = ClientProtocolInner::parse_error_metadata(&proto, &response, &cfg).unwrap();
+        let meta = builder.build();
+        assert!(meta.code().is_none());
+        assert!(meta.message().is_none());
+    }
+
+    /// Records the [`Schema`] id passed to `deserialize_response` so the
+    /// `deserialize_error_response` default forwarding can be asserted.
+    #[derive(Debug, Default)]
+    struct RecordingProtocol {
+        last_schema_id: std::sync::Mutex<Option<ShapeId>>,
+    }
+
+    static REC_ID: ShapeId =
+        ShapeId::from_static("test#RecordingProtocol", "test", "RecordingProtocol");
+
+    impl ClientProtocolInner for RecordingProtocol {
+        type Request = Request;
+        type Response = Response;
+
+        fn protocol_id(&self) -> &ShapeId {
+            &REC_ID
+        }
+        fn serialize_request(
+            &self,
+            _input: &dyn SerializableStruct,
+            _input_schema: &Schema,
+            _endpoint: &str,
+            _cfg: &ConfigBag,
+        ) -> Result<Request, SerdeError> {
+            unimplemented!()
+        }
+        fn deserialize_response<'a>(
+            &self,
+            _response: &'a Response,
+            output_schema: &Schema,
+            _cfg: &ConfigBag,
+        ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
+            *self.last_schema_id.lock().unwrap() = Some(*output_schema.shape_id());
+            // Return an Err so we don't have to construct a real deserializer;
+            // the test only cares which schema was forwarded.
+            Err(SerdeError::custom("recording stub"))
+        }
+        fn update_endpoint(
+            &self,
+            _request: &mut Request,
+            _endpoint: &Endpoint,
+            _cfg: &ConfigBag,
+        ) -> Result<(), SerdeError> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn deserialize_error_response_default_forwards_with_prelude_document_schema() {
+        let proto = RecordingProtocol::default();
+        let response = Response::new(StatusCode::try_from(500).unwrap(), SdkBody::empty());
+        let cfg = ConfigBag::base();
+
+        // The default impl forwards to deserialize_response. Our recording
+        // stub captures the schema and then returns an error — we don't
+        // care about the result, only the schema observed.
+        let _ = ClientProtocolInner::deserialize_error_response(&proto, &response, &cfg);
+
+        let observed = proto.last_schema_id.lock().unwrap().expect("captured");
+        assert_eq!(observed, *crate::prelude::DOCUMENT.shape_id());
     }
 }
