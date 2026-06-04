@@ -17,7 +17,7 @@ use hyper_util::client::legacy::connect::HttpConnector as HyperHttpConnector;
 use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
 use super::connection::ConnectionEventListener;
-use super::partition::CrossPartitionPolicy;
+use super::partition::{CrossPartitionPolicy, Partition};
 use super::{BoxError, ConnectionPool, PoolConfig};
 use crate::client::dns::HyperUtilResolver;
 use crate::client::proxy::ProxyConfig;
@@ -28,9 +28,7 @@ use crate::tls::TlsContext;
 /// Builder for a [`SharedPool`].
 ///
 /// Configures pool-wide settings: TLS, DNS, connection limits, idle
-/// eviction, proxy, and connection event listening. Per-client settings
-/// (partition, network interface, driver spawner) are configured
-/// separately via [`ClientBuilder`].
+/// eviction, proxy, partition topology, and connection event listening.
 ///
 /// Type-state ensures TLS is configured before [`build_https`] is
 /// callable; calling [`tls_provider`] transitions the builder into the
@@ -39,7 +37,6 @@ use crate::tls::TlsContext;
 /// [`build_https`]: Builder::build_https
 /// [`tls_provider`]: Builder::tls_provider
 /// [`SharedPool`]: super::SharedPool
-/// [`ClientBuilder`]: super::ClientBuilder
 #[derive(Clone)]
 pub struct Builder<Tls = TlsUnset> {
     pool_idle_timeout: Option<Duration>,
@@ -50,6 +47,7 @@ pub struct Builder<Tls = TlsUnset> {
     connection_event_listener: Option<Arc<dyn ConnectionEventListener>>,
     cross_partition_policy: CrossPartitionPolicy,
     dns_resolver: Option<SharedDnsResolver>,
+    partitions: Vec<Partition>,
     tls: Tls,
 }
 
@@ -67,6 +65,7 @@ impl<Tls: std::fmt::Debug> std::fmt::Debug for Builder<Tls> {
             )
             .field("cross_partition_policy", &self.cross_partition_policy)
             .field("dns_resolver", &self.dns_resolver.as_ref().map(|_| ".."))
+            .field("partitions", &self.partitions.len())
             .finish()
     }
 }
@@ -82,6 +81,7 @@ impl Default for Builder<TlsUnset> {
             connection_event_listener: None,
             cross_partition_policy: CrossPartitionPolicy::default(),
             dns_resolver: None,
+            partitions: Vec::new(),
             tls: TlsUnset {},
         }
     }
@@ -196,6 +196,14 @@ impl<Tls> Builder<Tls> {
         self.dns_resolver = resolver;
         self
     }
+
+    /// Declare the pool's partition topology. Each [`Partition`] carries a
+    /// driver-spawner runtime and optional NIC binding. When omitted, the
+    /// pool uses a single anonymous partition on the current tokio runtime.
+    pub fn partitions(mut self, partitions: impl IntoIterator<Item = Partition>) -> Self {
+        self.partitions = partitions.into_iter().collect();
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -210,6 +218,7 @@ impl Builder<TlsUnset> {
             connection_event_listener: self.connection_event_listener,
             cross_partition_policy: self.cross_partition_policy,
             dns_resolver: self.dns_resolver,
+            partitions: self.partitions,
             tls: TlsProviderSelected {
                 provider,
                 context: TlsContext::default(),
@@ -228,16 +237,21 @@ impl Builder<TlsUnset> {
             connection_event_listener: self.connection_event_listener.clone(),
         };
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
+        let registry = Arc::new(super::partition::PartitionRegistry::build(
+            std::mem::take(&mut self.partitions),
+            || Arc::new(super::partition::TokioDriverSpawner::current()),
+        ));
+        let policy = self.cross_partition_policy;
         let pool = match dns_resolver {
             Some(resolver) => {
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
-                build_http_pool_with_proxy(tcp, &self.proxy_config, config)
+                build_http_pool_with_proxy(tcp, &self.proxy_config, config, registry, policy)
             }
             None => {
                 let mut tcp = HyperHttpConnector::new();
                 tcp.set_nodelay(self.tcp_nodelay);
-                build_http_pool_with_proxy(tcp, &self.proxy_config, config)
+                build_http_pool_with_proxy(tcp, &self.proxy_config, config, registry, policy)
             }
         };
         super::SharedPool {
@@ -274,7 +288,12 @@ impl Builder<TlsUnset> {
             pool_idle_timeout: self.pool_idle_timeout,
             connection_event_listener: self.connection_event_listener.clone(),
         };
-        let pool = super::build_pool(connector, config);
+        let registry = Arc::new(super::partition::PartitionRegistry::build(
+            self.partitions,
+            || Arc::new(super::partition::TokioDriverSpawner::current()),
+        ));
+        let policy = self.cross_partition_policy;
+        let pool = super::build_pool(connector, config, registry, policy);
         super::SharedPool {
             inner: Arc::new(super::SharedPoolInner {
                 pool: Arc::new(pool),
@@ -292,6 +311,8 @@ fn build_http_pool_with_proxy<R>(
     tcp: HyperHttpConnector<R>,
     proxy_config: &Option<ProxyConfig>,
     config: PoolConfig,
+    registry: Arc<super::partition::PartitionRegistry>,
+    policy: CrossPartitionPolicy,
 ) -> ConnectionPool
 where
     R: Clone + Send + Sync + 'static,
@@ -311,10 +332,10 @@ where
     }
 
     if proxy_config.is_disabled() {
-        super::build_pool(tcp, config)
+        super::build_pool(tcp, config, registry, policy)
     } else {
         let connector = crate::client::connect::HttpProxyConnector::new(tcp, proxy_config);
-        super::build_pool(connector, config)
+        super::build_pool(connector, config, registry, policy)
     }
 }
 
@@ -364,6 +385,11 @@ impl Builder<TlsProviderSelected> {
             .clone()
             .unwrap_or_else(ProxyConfig::disabled);
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
+        let registry = Arc::new(super::partition::PartitionRegistry::build(
+            self.partitions,
+            || Arc::new(super::partition::TokioDriverSpawner::current()),
+        ));
+        let policy = self.cross_partition_policy;
 
         match &self.tls.provider {
             #[cfg(any(
@@ -378,7 +404,7 @@ impl Builder<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = super::build_pool(connector, config);
+                let pool = super::build_pool(connector, config, registry, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),
@@ -393,7 +419,7 @@ impl Builder<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = super::build_pool(connector, config);
+                let pool = super::build_pool(connector, config, registry, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Per-partition client and its builder.
+//! Per-partition client handle.
 
 use std::borrow::Cow;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ use aws_smithy_runtime_api::client::result::ConnectorError;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
-use super::partition::{DriverSpawner, PartitionId, TokioDriverSpawner};
+use super::partition::{PartitionId, PartitionState};
 use super::{ConnectionPool, SharedPool};
 use crate::client::downcast_error;
 use crate::client::proxy::add_proxy_auth_header;
@@ -29,47 +29,53 @@ use crate::client::proxy::add_proxy_auth_header;
 ///
 /// Implements [`HttpClient`] by routing requests through the shared
 /// connection pool. Multiple `Client` instances can reference the same
-/// pool, each carrying a distinct [`PartitionId`], network interface
-/// binding, and [`DriverSpawner`].
+/// pool, each targeting a distinct declared partition.
 ///
 /// Construct via [`Client::new`] (default partition) or
-/// [`Client::builder`] for per-partition configuration.
+/// [`Client::from_partition`] for a specific declared partition.
 ///
-/// Cloning is cheap: all fields are either `Arc`-backed or small values.
+/// Cloning is cheap: all fields are `Arc`-backed.
 #[derive(Clone)]
 pub struct Client {
     pool: SharedPool,
-    partition: PartitionId,
-    interface: Option<String>,
-    driver_spawner: Arc<dyn DriverSpawner>,
+    partition: Arc<PartitionState>,
 }
 
 impl std::fmt::Debug for Client {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Client")
-            .field("partition", &self.partition)
-            .field("interface", &self.interface)
-            .field("driver_spawner", &self.driver_spawner)
+            .field("partition_id", &self.partition.id)
+            .field("nic", &self.partition.nic)
             .finish_non_exhaustive()
     }
 }
 
 impl Client {
-    /// Construct a `Client` using the default partition.
-    ///
-    /// Equivalent to `Client::builder(pool).build()`.
+    /// Construct a `Client` targeting the pool's default partition (the
+    /// first declared, or the anonymous partition when none were declared).
     pub fn new(pool: &SharedPool) -> Self {
-        Self::builder(pool).build()
+        let partition = pool.inner.pool.registry().default_partition();
+        Self {
+            pool: pool.clone(),
+            partition,
+        }
     }
 
-    /// Return a [`ClientBuilder`] for advanced per-partition configuration.
-    pub fn builder(pool: &SharedPool) -> ClientBuilder {
-        ClientBuilder {
+    /// Construct a `Client` targeting a specific declared partition.
+    /// Panics if `id` was not declared on the pool builder (programming
+    /// error: the caller declared the topology).
+    pub fn from_partition(pool: &SharedPool, id: PartitionId) -> Self {
+        let partition = pool.inner.pool.registry().partition(id);
+        Self {
             pool: pool.clone(),
-            partition: PartitionId::default(),
-            interface: None,
-            driver_spawner: None,
+            partition,
         }
+    }
+
+    /// The partition id this client targets.
+    #[cfg(test)]
+    fn partition_id(&self) -> PartitionId {
+        self.partition.id
     }
 }
 
@@ -101,79 +107,6 @@ impl HttpClient for Client {
 
     fn connector_metadata(&self) -> Option<ConnectorMetadata> {
         Some(ConnectorMetadata::new("hyper", Some(Cow::Borrowed("1.x"))))
-    }
-}
-
-/// Builder for configuring a [`Client`] with per-partition settings.
-///
-/// Three knobs control partition behavior:
-///
-/// - [`partition`](Self::partition) assigns a [`PartitionId`] (default:
-///   anonymous).
-/// - [`interface`](Self::interface) binds connections to a network
-///   interface (default: none).
-/// - [`driver_spawner`](Self::driver_spawner) selects the runtime for
-///   connection driver tasks (default: captured from the current tokio
-///   runtime at [`build`](Self::build) time).
-pub struct ClientBuilder {
-    pool: SharedPool,
-    partition: PartitionId,
-    interface: Option<String>,
-    driver_spawner: Option<Arc<dyn DriverSpawner>>,
-}
-
-impl ClientBuilder {
-    /// Set the partition identifier (consuming builder).
-    pub fn partition(mut self, id: PartitionId) -> Self {
-        self.partition = id;
-        self
-    }
-
-    /// Set the partition identifier (mutable reference).
-    pub fn set_partition(&mut self, id: PartitionId) -> &mut Self {
-        self.partition = id;
-        self
-    }
-
-    /// Bind connections to a network interface (consuming builder).
-    pub fn interface(mut self, iface: impl Into<String>) -> Self {
-        self.interface = Some(iface.into());
-        self
-    }
-
-    /// Set or clear the network interface binding (mutable reference).
-    pub fn set_interface(&mut self, iface: Option<String>) -> &mut Self {
-        self.interface = iface;
-        self
-    }
-
-    /// Set the driver spawner (consuming builder).
-    pub fn driver_spawner<S: DriverSpawner>(mut self, sp: S) -> Self {
-        self.driver_spawner = Some(Arc::new(sp));
-        self
-    }
-
-    /// Set the driver spawner (mutable reference).
-    pub fn set_driver_spawner<S: DriverSpawner>(&mut self, sp: S) -> &mut Self {
-        self.driver_spawner = Some(Arc::new(sp));
-        self
-    }
-
-    /// Build the [`Client`].
-    ///
-    /// Captures the current tokio runtime handle for the driver spawner
-    /// if one was not explicitly provided.
-    pub fn build(self) -> Client {
-        let driver_spawner: Arc<dyn DriverSpawner> = self
-            .driver_spawner
-            .unwrap_or_else(|| Arc::new(TokioDriverSpawner::current()));
-
-        Client {
-            pool: self.pool,
-            partition: self.partition,
-            interface: self.interface,
-            driver_spawner,
-        }
     }
 }
 
@@ -259,5 +192,37 @@ impl HttpConnector for PooledConnector {
 
             HttpResponse::try_from(response).map_err(|err| ConnectorError::other(err.into(), None))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::pool::partition::{Partition, TokioDriverSpawner};
+
+    #[tokio::test]
+    async fn client_new_uses_default_partition() {
+        let pool = SharedPool::builder().build_http();
+        let client = Client::new(&pool);
+        assert_eq!(client.partition_id(), PartitionId::default());
+    }
+
+    #[tokio::test]
+    async fn from_partition_resolves_declared() {
+        let pool = SharedPool::builder()
+            .partitions([Partition::new(
+                PartitionId::from_index(3),
+                TokioDriverSpawner::current(),
+            )])
+            .build_http();
+        let client = Client::from_partition(&pool, PartitionId::from_index(3));
+        assert_eq!(client.partition_id(), PartitionId::from_index(3));
+    }
+
+    #[tokio::test]
+    #[should_panic(expected = "partition not declared")]
+    async fn from_partition_unknown_panics() {
+        let pool = SharedPool::builder().build_http();
+        Client::from_partition(&pool, PartitionId::from_index(99));
     }
 }
