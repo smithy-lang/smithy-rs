@@ -5,10 +5,11 @@
 
 //! JSON deserializer implementation.
 
+use aws_smithy_schema::document::Document;
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
@@ -667,12 +668,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         let result = match self.remaining().first() {
-            Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
-            Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
+            Some(b'"') => Ok(Document::string(self.read_string(_schema)?)),
+            Some(b't') | Some(b'f') => Ok(Document::boolean(self.read_boolean(_schema)?)),
             Some(b'n') => {
                 if self.remaining().starts_with(b"null") {
                     self.advance_by(4);
-                    Ok(Document::Null)
+                    Ok(Document::null())
                 } else {
                     Err(SerdeError::InvalidInput {
                         message: "unexpected token in document".into(),
@@ -704,7 +705,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     let value = self.read_document(_schema)?;
                     map.insert(key, value);
                 }
-                Ok(Document::Object(map))
+                Ok(Document::map(map))
             }
             Some(b'[') => {
                 self.advance_by(1);
@@ -724,7 +725,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         _ => arr.push(self.read_document(_schema)?),
                     }
                 }
-                Ok(Document::Array(arr))
+                Ok(Document::list(arr))
             }
             Some(c) if *c == b'-' || c.is_ascii_digit() => {
                 // Parse number — determine if integer or float
@@ -756,17 +757,17 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
                         message: e.to_string(),
                     })?;
-                    Ok(Document::Number(aws_smithy_types::Number::Float(f)))
+                    Ok(Document::number(aws_smithy_types::Number::Float(f)))
                 } else if is_negative {
                     let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
                         message: e.to_string(),
                     })?;
-                    Ok(Document::Number(aws_smithy_types::Number::NegInt(n)))
+                    Ok(Document::number(aws_smithy_types::Number::NegInt(n)))
                 } else {
                     let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
                         message: e.to_string(),
                     })?;
-                    Ok(Document::Number(aws_smithy_types::Number::PosInt(n)))
+                    Ok(Document::number(aws_smithy_types::Number::PosInt(n)))
                 }
             }
             _ => Err(SerdeError::InvalidInput {

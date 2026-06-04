@@ -204,7 +204,7 @@ mod tests {
         fn write_document(
             &mut self,
             _: &Schema,
-            _: &aws_smithy_types::Document,
+            _: &crate::document::Document,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -283,8 +283,8 @@ mod tests {
         fn read_timestamp(&mut self, _: &Schema) -> Result<aws_smithy_types::DateTime, SerdeError> {
             Ok(aws_smithy_types::DateTime::from_secs(0))
         }
-        fn read_document(&mut self, _: &Schema) -> Result<aws_smithy_types::Document, SerdeError> {
-            Ok(aws_smithy_types::Document::Null)
+        fn read_document(&mut self, _: &Schema) -> Result<crate::document::Document, SerdeError> {
+            Ok(crate::document::Document::null())
         }
         fn is_null(&self) -> bool {
             false

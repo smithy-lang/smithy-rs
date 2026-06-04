@@ -6,8 +6,9 @@
 //! Shape serialization interfaces for the Smithy data model.
 
 use super::error::SerdeError;
+use crate::document::Document;
 use crate::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
 /// Serializes Smithy shapes to a target format.
 ///

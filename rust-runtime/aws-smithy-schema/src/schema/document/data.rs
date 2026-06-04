@@ -358,6 +358,55 @@ impl Document {
         &self.inner
     }
 
+    // -- High-level entry points ----------------------------------------
+
+    /// Constructs a [`Document`] tree from any
+    /// [`SerializableStruct`](crate::serde::SerializableStruct) by
+    /// driving it through a `DocumentShapeSerializer`.
+    ///
+    /// This is the SEP's `Document.of(struct)` entry point. The
+    /// resulting document carries `schema.shape_id()` as its
+    /// discriminator so the reverse conversion via a type registry can
+    /// find the right schema.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let bird_doc = Document::from_struct(Bird::SCHEMA, &my_bird)?;
+    /// assert_eq!(bird_doc.discriminator().unwrap().as_str(), "com.example#Bird");
+    /// ```
+    pub fn from_struct(
+        schema: &Schema,
+        value: &dyn crate::serde::SerializableStruct,
+    ) -> Result<Self, SerdeError> {
+        use crate::serde::ShapeSerializer;
+        let mut ser = super::DocumentShapeSerializer::new();
+        ser.write_struct(schema, value)?;
+        ser.finish()
+    }
+
+    /// Reifies this [`Document`] as a typed shape by driving the given
+    /// `deserialize` callback through a `DocumentShapeDeserializer`.
+    ///
+    /// This is the SEP's `Document::asShape` entry point. The callback
+    /// is typically the generated `<Type>::deserialize` function on a
+    /// shape's data carrier or builder; it sees a fresh
+    /// [`ShapeDeserializer`](crate::serde::ShapeDeserializer)
+    /// positioned at this document.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// let bird: Bird = bird_doc.as_shape(|deser| Bird::deserialize(deser))?;
+    /// ```
+    pub fn as_shape<T, F>(&self, deserialize: F) -> Result<T, SerdeError>
+    where
+        F: FnOnce(&mut dyn crate::serde::ShapeDeserializer) -> Result<T, SerdeError>,
+    {
+        let mut deser = super::DocumentShapeDeserializer::new(self);
+        deserialize(&mut deser)
+    }
+
     // -- Shape type reporting -------------------------------------------
 
     /// Returns the [`ShapeType`] this document would be reported as if
@@ -1051,7 +1100,9 @@ mod tests {
             ShapeType::BigInteger
         );
 
-        let bd: BigDecimal = "3.14159265358979323846".parse().unwrap();
+        let bd: BigDecimal = "12345678901234567890.123456789012345678901"
+            .parse()
+            .unwrap();
         assert_eq!(
             Document::big_decimal(bd).shape_type(),
             ShapeType::BigDecimal
@@ -1338,13 +1389,13 @@ mod tests {
     #[test]
     fn as_double_across_sources() {
         assert_eq!(Document::integer(42).as_double().unwrap(), 42.0);
-        assert_eq!(Document::double(3.14).as_double().unwrap(), 3.14);
+        assert_eq!(Document::double(2.5).as_double().unwrap(), 2.5);
 
         let bi = "12345".parse::<BigInteger>().unwrap();
         assert_eq!(Document::big_integer(bi).as_double().unwrap(), 12345.0);
 
-        let bd = "3.14".parse::<BigDecimal>().unwrap();
-        assert_eq!(Document::big_decimal(bd).as_double().unwrap(), 3.14);
+        let bd = "2.5".parse::<BigDecimal>().unwrap();
+        assert_eq!(Document::big_decimal(bd).as_double().unwrap(), 2.5);
     }
 
     #[test]
@@ -1631,5 +1682,59 @@ mod tests {
         let new: Document = original.clone().into();
         let round_tripped: aws_smithy_types::Document = new.try_into().unwrap();
         assert_eq!(round_tripped, original);
+    }
+
+    // -- from_struct / as_shape entry points ----------------------------
+
+    use crate::serde::{SerializableStruct, ShapeDeserializer, ShapeSerializer};
+
+    const TINY_ID: ShapeId = shape_id!("smithy.example", "Tiny");
+    const TINY_FLAG_ID: ShapeId = shape_id!("smithy.example", "Tiny", "flag");
+    static TINY_FLAG_MEMBER: Schema =
+        Schema::new_member(TINY_FLAG_ID, ShapeType::Boolean, "flag", 0);
+    static TINY_SCHEMA: Schema =
+        Schema::new_struct(TINY_ID, ShapeType::Structure, &[&TINY_FLAG_MEMBER]);
+
+    #[derive(Debug, PartialEq)]
+    struct Tiny {
+        flag: bool,
+    }
+
+    impl SerializableStruct for Tiny {
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            ser.write_boolean(&TINY_FLAG_MEMBER, self.flag)
+        }
+    }
+
+    fn deserialize_tiny(deser: &mut dyn ShapeDeserializer) -> Result<Tiny, SerdeError> {
+        let mut flag = false;
+        deser.read_struct(&TINY_SCHEMA, &mut |member, sub| {
+            if member.member_index() == Some(0) {
+                flag = sub.read_boolean(member)?;
+            }
+            Ok(())
+        })?;
+        Ok(Tiny { flag })
+    }
+
+    #[test]
+    fn from_struct_attaches_discriminator() {
+        let doc = Document::from_struct(&TINY_SCHEMA, &Tiny { flag: true }).unwrap();
+        assert_eq!(
+            doc.discriminator().map(|id| id.as_str()),
+            Some("smithy.example#Tiny")
+        );
+        assert_eq!(
+            doc.member("flag").and_then(Document::as_boolean),
+            Some(true)
+        );
+    }
+
+    #[test]
+    fn as_shape_round_trips_through_document() {
+        let original = Tiny { flag: true };
+        let doc = Document::from_struct(&TINY_SCHEMA, &original).unwrap();
+        let restored: Tiny = doc.as_shape(deserialize_tiny).unwrap();
+        assert_eq!(restored, original);
     }
 }

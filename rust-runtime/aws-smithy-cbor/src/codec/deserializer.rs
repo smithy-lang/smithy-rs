@@ -7,7 +7,9 @@
 
 use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+
+use aws_smithy_schema::document::Document;
 
 use crate::data::Type;
 

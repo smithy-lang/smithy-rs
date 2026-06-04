@@ -281,7 +281,7 @@ mod test {
         fn write_document(
             &mut self,
             _schema: &Schema,
-            _value: &aws_smithy_types::Document,
+            _value: &crate::document::Document,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -387,8 +387,8 @@ mod test {
         fn read_document(
             &mut self,
             _schema: &Schema,
-        ) -> Result<aws_smithy_types::Document, SerdeError> {
-            Ok(aws_smithy_types::Document::Null)
+        ) -> Result<crate::document::Document, SerdeError> {
+            Ok(crate::document::Document::null())
         }
 
         fn is_null(&self) -> bool {
