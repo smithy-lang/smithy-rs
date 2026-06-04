@@ -159,7 +159,27 @@ pub(crate) fn parse_error_envelope_metadata(
     if let Some(message) = message {
         builder = builder.message(message);
     }
+    // `@awsQueryCompatible` services emit `X-Amzn-Query-Error: <code>;<type>`
+    // and the awsQueryError code (the part before `;`) is the dispatch key
+    // baked into generated code. Per the legacy
+    // `codegen-core/.../AwsQueryCompatible.kt` wrapper, this header overrides
+    // any body-derived code and adds the AWS error type as the `type` extra.
+    //
+    // Non-queryCompatible services do not emit this header, so the override
+    // is a no-op for them.
+    if let Some((qc_code, qc_type)) = parse_query_compatible_header(headers) {
+        builder = builder.code(qc_code).custom("type", qc_type);
+    }
     Ok(builder)
+}
+
+/// Parses an `X-Amzn-Query-Error: <code>;<type>` header, returning the two
+/// halves. Returns `None` if the header is absent or malformed.
+fn parse_query_compatible_header(headers: &Headers) -> Option<(&str, &str)> {
+    let value = headers.get("x-amzn-query-error")?;
+    value
+        .find(';')
+        .map(|idx| (&value[..idx], &value[idx + 1..]))
 }
 
 #[cfg(test)]
@@ -288,5 +308,53 @@ mod tests {
             .unwrap()
             .build();
         assert_eq!(meta.code(), Some("FooError"));
+    }
+
+    #[test]
+    fn query_compat_header_overrides_body_code() {
+        // Legacy `AwsQueryCompatible.kt` wrapper behavior: when
+        // X-Amzn-Query-Error is present, its code overrides the body code,
+        // and the AWS error type lands in the `type` custom field.
+        let resp = response(
+            &[("x-amzn-query-error", "Customized;Sender")],
+            r#"{"__type":"CustomCodeError","message":"Hi"}"#,
+        );
+        let meta = parse_error_envelope_metadata(resp.body().bytes().unwrap(), resp.headers())
+            .unwrap()
+            .build();
+        assert_eq!(meta.code(), Some("Customized"));
+        assert_eq!(meta.message(), Some("Hi"));
+        assert_eq!(meta.extra("type"), Some("Sender"));
+    }
+
+    #[test]
+    fn query_compat_header_overrides_x_amzn_errortype() {
+        // queryCompatible header beats the standard error-type header too.
+        let resp = response(
+            &[
+                ("x-amzn-errortype", "FromHeaderType"),
+                ("x-amzn-query-error", "FromQuery;Receiver"),
+            ],
+            "",
+        );
+        let meta = parse_error_envelope_metadata(resp.body().bytes().unwrap(), resp.headers())
+            .unwrap()
+            .build();
+        assert_eq!(meta.code(), Some("FromQuery"));
+        assert_eq!(meta.extra("type"), Some("Receiver"));
+    }
+
+    #[test]
+    fn malformed_query_compat_header_is_ignored() {
+        // Header without the `;` separator is ignored — body code wins.
+        let resp = response(
+            &[("x-amzn-query-error", "no-separator-here")],
+            r#"{"__type":"BodyError"}"#,
+        );
+        let meta = parse_error_envelope_metadata(resp.body().bytes().unwrap(), resp.headers())
+            .unwrap()
+            .build();
+        assert_eq!(meta.code(), Some("BodyError"));
+        assert_eq!(meta.extra("type"), None);
     }
 }

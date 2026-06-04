@@ -353,11 +353,23 @@ class ResponseDeserializerGenerator(
         customizations: List<OperationCustomization>,
     ) {
         if (schemaExclusive) {
+            // `body` is used by per-error `deserialize_with_response` calls; `headers` is used
+            // by request-id-applying customizations (e.g. AWS SDK `apply_request_id`,
+            // `apply_extended_request_id`). `status` is consumed inside
+            // `protocol.parse_error_metadata(response, _cfg)` and via
+            // `response.status().into()` at the deserialize site, so no local binding is needed.
+            //
+            // Either binding can be unused depending on operation shape: streaming operations
+            // with zero modeled errors don't reference `body`; protocol-test models without
+            // request-id customizations don't reference `headers`. The bindings stay
+            // unconditional and are annotated to suppress the warning, mirroring the
+            // `#[allow(unused_mut)]` idiom used elsewhere in this generator.
             rustTemplate(
                 """
                 // For streaming operations, we only hit this case if its an error
+                ##[allow(unused_variables)]
                 let body = response.body().bytes().expect("body loaded");
-                let status = response.status().as_u16();
+                ##[allow(unused_variables)]
                 let headers = response.headers();
                 """,
                 *codegenScope,
@@ -467,8 +479,15 @@ class ResponseDeserializerGenerator(
 
     /**
      * Renders schema-based error parsing code.
-     * Assumes `status`, `headers`, `body`, and `_cfg` are in scope.
+     * Assumes `response`, `body`, and `_cfg` are in scope.
      * Emits a complete expression that returns `OutputOrError`.
+     *
+     * Calls the protocol's [`ClientProtocolInner::parse_error_metadata`] to
+     * extract `code` / `message` / `request_id` from the wire envelope, then
+     * matches on the resolved code and per-variant calls
+     * [`ClientProtocolInner::deserialize_error_response`] to obtain a body
+     * deserializer positioned wherever the variant's members live (e.g.
+     * inside `<Error>` for restXml).
      */
     private fun RustWriter.renderSchemaErrorParsing(
         operationShape: OperationShape,
@@ -477,17 +496,24 @@ class ResponseDeserializerGenerator(
         val errorSymbol = symbolProvider.symbolForOperationError(operationShape)
         val errors = operationShape.operationErrors(model)
 
+        // Both `parse_error_metadata` and (per-variant)
+        // `deserialize_error_response` are trait methods on the protocol, so
+        // the protocol must be in scope before extracting the metadata
+        // builder. The `parseHttpErrorMetadata` free-function call and the
+        // protocol-specific `errorBodyContents` shim that the legacy schema
+        // path used are eliminated.
         rustTemplate(
             """
+            let protocol = _cfg.load::<#{SharedClientProtocol}>()
+                .expect("a SharedClientProtocol is required");
             ##[allow(unused_mut)]
-            let mut generic_builder = #{parse_http_error_metadata}(status, headers, body)
+            let mut generic_builder = protocol.parse_error_metadata(response, _cfg)
                 .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
             #{PopulateErrorMetadataExtras}
             let generic = generic_builder.build();
             """,
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
-            "parse_http_error_metadata" to protocol.parseHttpErrorMetadata(operationShape),
             "PopulateErrorMetadataExtras" to
                 writable {
                     writeCustomizations(
@@ -498,7 +524,6 @@ class ResponseDeserializerGenerator(
         )
 
         if (errors.isNotEmpty()) {
-            val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
             rustTemplate(
                 """
                 let error_code = match generic.code() {
@@ -506,19 +531,11 @@ class ResponseDeserializerGenerator(
                     #{None} => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(#{error_symbol}::unhandled(generic)))),
                 };
                 let _error_message = generic.message().map(|msg| msg.to_owned());
-                let protocol = _cfg.load::<#{SharedClientProtocol}>()
-                    .expect("a SharedClientProtocol is required");
                 """,
                 *codegenScope,
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "error_symbol" to errorSymbol,
             )
-            if (errorBodyContentsFn != null) {
-                rustTemplate(
-                    "let error_body = #{error_body_contents}(body);",
-                    "error_body_contents" to errorBodyContentsFn,
-                )
-            }
             rustTemplate("let err = match error_code {")
             for (error in errors) {
                 val errorShape = model.expectShape(error.id, StructureShape::class.java)
@@ -528,41 +545,25 @@ class ResponseDeserializerGenerator(
                 val errorMessageMember = errorShape.errorMessageMember()
 
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
-                if (errorBodyContentsFn != null) {
-                    rustTemplate(
-                        """
-                        let mut deser = protocol.payload_codec()
-                            .expect("protocol has a payload codec")
-                            .create_deserializer(error_body);
-                        let mut tmp = match #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), error_body)
-                        {
-                            #{Ok}(val) => val,
-                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                        };
-                        tmp.meta = generic;
-                        """,
-                        *codegenScope,
-                        "BoxError" to RuntimeType.boxError(runtimeConfig),
-                        "error_symbol" to errorSymbol,
-                        "ErrorType" to errorType,
-                    )
-                } else {
-                    rustTemplate(
-                        """
-                        let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
-                            .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
-                        {
-                            #{Ok}(val) => val,
-                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                        };
-                        tmp.meta = generic;
-                        """,
-                        *codegenScope,
-                        "BoxError" to RuntimeType.boxError(runtimeConfig),
-                        "error_symbol" to errorSymbol,
-                        "ErrorType" to errorType,
-                    )
-                }
+                // The protocol decides where the error body deserializer is
+                // positioned: for envelope-less protocols (awsJson, restJson1)
+                // it's the response body root; for restXml it's inside
+                // `<Error>`. Generated code is uniform across protocols.
+                rustTemplate(
+                    """
+                    let mut tmp = match protocol.deserialize_error_response(response, _cfg)
+                        .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
+                    {
+                        #{Ok}(val) => val,
+                        #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                    };
+                    tmp.meta = generic;
+                    """,
+                    *codegenScope,
+                    "BoxError" to RuntimeType.boxError(runtimeConfig),
+                    "error_symbol" to errorSymbol,
+                    "ErrorType" to errorType,
+                )
                 if (errorMessageMember != null) {
                     val symbol = symbolProvider.toSymbol(errorMessageMember)
                     if (symbol.isOptional()) {
