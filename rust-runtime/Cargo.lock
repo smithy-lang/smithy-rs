@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-eventstream"
-version = "0.60.20"
+version = "0.60.21"
 dependencies = [
  "arbitrary",
  "aws-smithy-types 1.5.0",
