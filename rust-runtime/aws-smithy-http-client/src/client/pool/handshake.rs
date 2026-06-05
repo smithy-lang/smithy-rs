@@ -19,7 +19,6 @@ use std::time::Instant;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::connection::ConnectionId;
 use aws_smithy_types::body::SdkBody;
-use hyper::rt::Executor;
 use hyper_util::client::legacy::connect::{Connection, HttpInfo};
 use hyper_util::rt::TokioExecutor;
 use tokio::sync::Semaphore;
@@ -30,6 +29,7 @@ use super::connection::{
     ConnectionPermit, ConnectionTiming, EstablishedConnection, ManagedConnection,
     NegotiatedProtocol,
 };
+use super::partition::DriverSpawner;
 
 /// Pool-scoped instrumentation primitives shared across layers in the
 /// pool stack. Held by `ConnectionPool` for the pool's lifetime and
@@ -259,25 +259,24 @@ fn capture_info<IO: Connection>(io: &IO, authority: Authority) -> ConnectionInfo
     }
 }
 
-/// Spawn a connection driver future onto the runtime.
-///
-// TODO - revisit tokio default without flags
-fn spawn_driver(future: impl Future<Output = ()> + Send + 'static) {
-    TokioExecutor::new().execute(future);
-}
-
-/// Connects and performs an HTTP/1.1 handshake.
+/// Connects and performs an HTTP/1.1 handshake, spawning the connection
+/// driver onto the partition's runtime via the captured [`DriverSpawner`].
 ///
 /// The connector is expected to return an [`EstablishedConnection`], typically
 /// produced by [`ConnectionLimit`] wrapping a TCP/TLS connector.
 pub(crate) struct H1ConnectAndHandshake<C> {
     connector: C,
     hooks: PoolHooks,
+    spawner: Arc<dyn DriverSpawner>,
 }
 
 impl<C> H1ConnectAndHandshake<C> {
-    pub(crate) fn new(connector: C, hooks: PoolHooks) -> Self {
-        Self { connector, hooks }
+    pub(crate) fn new(connector: C, hooks: PoolHooks, spawner: Arc<dyn DriverSpawner>) -> Self {
+        Self {
+            connector,
+            hooks,
+            spawner,
+        }
     }
 }
 
@@ -286,6 +285,7 @@ impl<C: Clone> Clone for H1ConnectAndHandshake<C> {
         Self {
             connector: self.connector.clone(),
             hooks: self.hooks.clone(),
+            spawner: self.spawner.clone(),
         }
     }
 }
@@ -307,6 +307,7 @@ where
 
     fn call(&mut self, ctx: ConnectCtx) -> Self::Future {
         let hooks = self.hooks.clone();
+        let spawner = self.spawner.clone();
         let authority = Authority::new(
             ctx.uri
                 .authority()
@@ -363,7 +364,7 @@ where
                 ConnectionTiming::new(connect_duration),
             ));
 
-            spawn_driver({
+            spawner.spawn(Box::pin({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
                 async move {
@@ -378,7 +379,7 @@ where
                         );
                     }
                 }
-            });
+            }));
 
             Ok(ManagedConnection::new(
                 H1SendRequest::new(tx),
@@ -390,7 +391,8 @@ where
     }
 }
 
-/// Connects and performs an HTTP/2 handshake.
+/// Connects and performs an HTTP/2 handshake, spawning the connection
+/// driver onto the partition's runtime via the captured [`DriverSpawner`].
 ///
 /// Pinned to `Service<()>` because this service sits in the Negotiate
 /// upgrade path: the connection is already established via the shared
@@ -400,6 +402,7 @@ pub(crate) struct H2ConnectAndHandshake<C> {
     h2_ref: super::connection::H2ConnectionRef,
     hooks: PoolHooks,
     authority: Authority,
+    spawner: Arc<dyn DriverSpawner>,
 }
 
 impl<C> H2ConnectAndHandshake<C> {
@@ -414,12 +417,14 @@ impl<C> H2ConnectAndHandshake<C> {
         h2_ref: super::connection::H2ConnectionRef,
         hooks: PoolHooks,
         authority: Authority,
+        spawner: Arc<dyn DriverSpawner>,
     ) -> Self {
         Self {
             connector,
             h2_ref,
             hooks,
             authority,
+            spawner,
         }
     }
 }
@@ -431,6 +436,7 @@ impl<C: Clone> Clone for H2ConnectAndHandshake<C> {
             h2_ref: self.h2_ref.clone(),
             hooks: self.hooks.clone(),
             authority: self.authority.clone(),
+            spawner: self.spawner.clone(),
         }
     }
 }
@@ -455,6 +461,7 @@ where
         let h2_ref = self.h2_ref.clone();
         let hooks = self.hooks.clone();
         let authority = self.authority.clone();
+        let spawner = self.spawner.clone();
         Box::pin(async move {
             let connect_start = Instant::now();
             let EstablishedConnection { io, permit } = match fut.await.map_err(Into::into) {
@@ -504,7 +511,7 @@ where
                 ConnectionTiming::new(connect_duration),
             ));
 
-            spawn_driver({
+            spawner.spawn(Box::pin({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
                 async move {
@@ -519,7 +526,7 @@ where
                         );
                     }
                 }
-            });
+            }));
 
             let managed = ManagedConnection::new(H2SendRequest::new(tx), info, conn_id, permit);
             // Publish this connection's state (metadata + active_streams +
