@@ -237,21 +237,18 @@ impl Builder<TlsUnset> {
             connection_event_listener: self.connection_event_listener.clone(),
         };
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
-        let registry = Arc::new(super::partition::PartitionRegistry::build(
-            std::mem::take(&mut self.partitions),
-            || Arc::new(super::partition::TokioDriverSpawner::current()),
-        ));
+        let partitions = std::mem::take(&mut self.partitions);
         let policy = self.cross_partition_policy;
         let pool = match dns_resolver {
             Some(resolver) => {
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
-                build_http_pool_with_proxy(tcp, &self.proxy_config, config, registry, policy)
+                build_http_pool_with_proxy(tcp, &self.proxy_config, config, partitions, policy)
             }
             None => {
                 let mut tcp = HyperHttpConnector::new();
                 tcp.set_nodelay(self.tcp_nodelay);
-                build_http_pool_with_proxy(tcp, &self.proxy_config, config, registry, policy)
+                build_http_pool_with_proxy(tcp, &self.proxy_config, config, partitions, policy)
             }
         };
         super::SharedPool {
@@ -288,12 +285,8 @@ impl Builder<TlsUnset> {
             pool_idle_timeout: self.pool_idle_timeout,
             connection_event_listener: self.connection_event_listener.clone(),
         };
-        let registry = Arc::new(super::partition::PartitionRegistry::build(
-            self.partitions,
-            || Arc::new(super::partition::TokioDriverSpawner::current()),
-        ));
         let policy = self.cross_partition_policy;
-        let pool = super::build_pool(connector, config, registry, policy);
+        let pool = super::build_pool(connector, config, self.partitions, policy);
         super::SharedPool {
             inner: Arc::new(super::SharedPoolInner {
                 pool: Arc::new(pool),
@@ -311,7 +304,7 @@ fn build_http_pool_with_proxy<R>(
     tcp: HyperHttpConnector<R>,
     proxy_config: &Option<ProxyConfig>,
     config: PoolConfig,
-    registry: Arc<super::partition::PartitionRegistry>,
+    partitions: Vec<Partition>,
     policy: CrossPartitionPolicy,
 ) -> ConnectionPool
 where
@@ -332,10 +325,10 @@ where
     }
 
     if proxy_config.is_disabled() {
-        super::build_pool(tcp, config, registry, policy)
+        super::build_pool(tcp, config, partitions, policy)
     } else {
         let connector = crate::client::connect::HttpProxyConnector::new(tcp, proxy_config);
-        super::build_pool(connector, config, registry, policy)
+        super::build_pool(connector, config, partitions, policy)
     }
 }
 
@@ -385,10 +378,7 @@ impl Builder<TlsProviderSelected> {
             .clone()
             .unwrap_or_else(ProxyConfig::disabled);
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
-        let registry = Arc::new(super::partition::PartitionRegistry::build(
-            self.partitions,
-            || Arc::new(super::partition::TokioDriverSpawner::current()),
-        ));
+        let partitions = self.partitions;
         let policy = self.cross_partition_policy;
 
         match &self.tls.provider {
@@ -404,7 +394,7 @@ impl Builder<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = super::build_pool(connector, config, registry, policy);
+                let pool = super::build_pool(connector, config, partitions, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),
@@ -419,7 +409,7 @@ impl Builder<TlsProviderSelected> {
                     &self.tls.context,
                     proxy_config,
                 );
-                let pool = super::build_pool(connector, config, registry, policy);
+                let pool = super::build_pool(connector, config, partitions, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),

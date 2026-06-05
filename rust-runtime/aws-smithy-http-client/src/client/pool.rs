@@ -187,13 +187,13 @@ impl SharedPool {
 
 /// Key for per-host connection pool routing.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct PoolKey {
+pub(crate) struct PoolKey {
     scheme: http_1x::uri::Scheme,
     authority: http_1x::uri::Authority,
 }
 
 impl PoolKey {
-    fn from_uri(uri: &http_1x::Uri) -> Option<Self> {
+    pub(crate) fn from_uri(uri: &http_1x::Uri) -> Option<Self> {
         Some(Self {
             scheme: uri.scheme()?.clone(),
             authority: uri.authority()?.clone(),
@@ -232,10 +232,51 @@ impl BoxedRetainer {
 /// `layer_fn`s the first time `Negotiate` constructs each leg.
 type RetainerSlot = Arc<Mutex<Vec<BoxedRetainer>>>;
 
+/// Per-partition stack factory: builds a host's Negotiate(Cache,Singleton)
+/// entry on first touch. Captures the partition's connector; the shared
+/// budget/hooks arrive via `&SharedPoolState` at call time.
+pub(crate) type MakeStack =
+    Arc<dyn Fn(&http_1x::Uri, &SharedPoolState) -> Box<dyn PoolEntry> + Send + Sync>;
+
+/// Connection-lifecycle machinery shared across every partition: event
+/// hooks, the global connection budget, and the per-host budgets. One
+/// instance per pool, held behind `Arc` on `ConnectionPool`.
+pub(crate) struct SharedPoolState {
+    pub(crate) hooks: handshake::PoolHooks,
+    pub(crate) global_sem: Option<Arc<Semaphore>>,
+    max_connections_per_host: Option<usize>,
+    per_host_sems: Mutex<HashMap<PoolKey, Arc<Semaphore>>>,
+}
+
+impl SharedPoolState {
+    pub(crate) fn new(config: &PoolConfig) -> Self {
+        Self {
+            hooks: handshake::PoolHooks::new(config.connection_event_listener.clone()),
+            global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+            max_connections_per_host: config.max_connections_per_host,
+            per_host_sems: Mutex::new(HashMap::new()),
+        }
+    }
+
+    /// The shared per-host semaphore for `key`, created on first request
+    /// for that key. Returns `None` when no per-host limit is configured.
+    /// Shared across all partitions: two partitions to the same host
+    /// contend on the same budget.
+    pub(crate) fn per_host_sem(&self, key: &PoolKey) -> Option<Arc<Semaphore>> {
+        let n = self.max_connections_per_host?;
+        let mut map = self.per_host_sems.lock().expect("per_host_sems poisoned");
+        Some(
+            map.entry(key.clone())
+                .or_insert_with(|| Arc::new(Semaphore::new(n)))
+                .clone(),
+        )
+    }
+}
+
 pub(crate) fn build_pool<C, IO>(
     connector: C,
     config: PoolConfig,
-    registry: Arc<partition::PartitionRegistry>,
+    partitions: Vec<partition::Partition>,
     cross_partition_policy: partition::CrossPartitionPolicy,
 ) -> ConnectionPool
 where
@@ -244,9 +285,7 @@ where
     C::Future: Unpin + Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + HyperConnection + Unpin + Send + 'static,
 {
-    let global_sem = config.max_connections.map(|n| Arc::new(Semaphore::new(n)));
-    let max_per_host = config.max_connections_per_host;
-    let pool_hooks = handshake::PoolHooks::new(config.connection_event_listener.clone());
+    let shared = Arc::new(SharedPoolState::new(&config));
 
     tracing::debug!(
         max_connections = ?config.max_connections,
@@ -255,20 +294,22 @@ where
         "pool: initialized"
     );
 
-    let make_entry = {
-        let pool_hooks = pool_hooks.clone();
-        move |uri: &http_1x::Uri| -> Box<dyn PoolEntry> {
+    let make_stack: MakeStack = Arc::new(
+        move |uri: &http_1x::Uri, shared: &SharedPoolState| -> Box<dyn PoolEntry> {
             let authority = Authority::new(
                 uri.authority()
                     .expect("pool entry URI has authority")
                     .as_str(),
             );
-            let per_host_sem = max_per_host.map(|n| Arc::new(Semaphore::new(n)));
+            let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
+            let per_host_sem = shared.per_host_sem(&key);
             let limited = handshake::ConnectionLimit::new(
                 connector.clone(),
-                global_sem.clone(),
+                shared.global_sem.clone(),
                 per_host_sem,
             );
+
+            let pool_hooks = shared.hooks.clone();
 
             // Per-host bridge: `H2ConnectAndHandshake` publishes on each new
             // handshake; `SingletonConnection` reads the current entry at
@@ -456,13 +497,18 @@ where
                 })
                 .build();
             Box::new(TypedPoolEntry { stack, retainers })
-        }
-    };
+        },
+    );
+
+    let registry = Arc::new(partition::PartitionRegistry::build(
+        partitions,
+        || Arc::new(partition::TokioDriverSpawner::current()),
+        make_stack,
+    ));
 
     ConnectionPool {
         config,
-        hosts: Mutex::new(HashMap::new()),
-        make_entry: Box::new(make_entry),
+        shared,
         eviction_spawned: AtomicBool::new(false),
         drop_notifier: OnceLock::new(),
         registry,
@@ -478,13 +524,14 @@ where
 pub(crate) struct ConnectionPool {
     /// Pool-wide configuration.
     config: PoolConfig,
-    hosts: Mutex<HashMap<PoolKey, Box<dyn PoolEntry>>>,
-    make_entry: Box<dyn Fn(&http_1x::Uri) -> Box<dyn PoolEntry> + Send + Sync>,
+
+    /// Shared connection-lifecycle machinery (hooks, semaphores).
+    shared: Arc<SharedPoolState>,
 
     /// Immutable partition registry, resolved at build time.
     registry: Arc<partition::PartitionRegistry>,
 
-    // stored for later steps (send path unchanged this step)
+    // used by cross-partition checkout
     #[allow(dead_code)]
     cross_partition_policy: partition::CrossPartitionPolicy,
 
@@ -516,11 +563,12 @@ impl ConnectionPool {
 
     /// Send a request through the pool.
     ///
-    /// Routes to the appropriate per-host pool stack and sends the request.
-    /// `ctx` carries the routing URI plus per-operation connect-time data
-    /// (connect_timeout). Per-operation read_timeout, if any, must be
-    /// attached to `req.extensions_mut()` as [`ReadTimeoutHint`] before
-    /// calling; the checkout services read it from there.
+    /// Routes to the appropriate per-host pool stack in the given partition
+    /// and sends the request. `ctx` carries the routing URI plus
+    /// per-operation connect-time data (connect_timeout). Per-operation
+    /// read_timeout, if any, must be attached to `req.extensions_mut()` as
+    /// [`ReadTimeoutHint`] before calling; the checkout services read it
+    /// from there.
     ///
     /// Takes `self: &Arc<Self>` so the lazy eviction task can hold a
     /// `Weak<Self>` as a fallback exit signal (primary exit is the drop
@@ -528,6 +576,7 @@ impl ConnectionPool {
     /// missed drop signal).
     pub(crate) async fn send_request(
         self: &Arc<Self>,
+        partition: &Arc<partition::PartitionState>,
         ctx: ConnectCtx,
         req: http_1x::Request<SdkBody>,
     ) -> Result<http_1x::Response<SdkBody>, BoxError> {
@@ -544,11 +593,12 @@ impl ConnectionPool {
         // `send`; all I/O happens in the returned future, outside the
         // lock.
         let fut = {
-            let mut hosts = self.hosts.lock().unwrap();
-            if !hosts.contains_key(&key) {
-                hosts.insert(key.clone(), (self.make_entry)(&ctx.uri));
+            let mut auth = partition.authorities.lock().unwrap();
+            if !auth.contains_key(&key) {
+                let entry = (partition.make_stack)(&ctx.uri, &self.shared);
+                auth.insert(key.clone(), entry);
             }
-            hosts.get_mut(&key).unwrap().send(ctx, req)
+            auth.get_mut(&key).unwrap().send(ctx, req)
         };
 
         fut.await
@@ -595,34 +645,24 @@ impl ConnectionPool {
         tokio::spawn(eviction_task(weak, rx, timeout));
     }
 
-    /// Walk the host map, dropping idle connections that have exceeded
+    /// Walk all partitions, dropping idle connections that have exceeded
     /// `timeout` and removing host entries whose retainers are empty.
     ///
-    /// Called by the eviction task on each tick. Safe to call when the
-    /// host map is empty (no-op).
-    fn retain_idle_hosts(&self, timeout: Duration) {
-        let mut hosts = self.hosts.lock().unwrap();
-        let before = hosts.len();
-        hosts.retain(|key, entry| {
-            entry.retain_idle(timeout);
-            if entry.is_empty() {
-                tracing::debug!(
-                    authority = %key.authority,
-                    scheme = %key.scheme,
-                    "pool: host entry removed (empty after retain)"
-                );
-                false
-            } else {
-                true
-            }
-        });
-        let after = hosts.len();
-        drop(hosts);
-        tracing::trace!(
-            hosts_before = before,
-            hosts_after = after,
-            "pool: eviction tick complete"
-        );
+    /// Called by the eviction task on each tick. Safe to call when
+    /// partitions are empty (no-op).
+    fn retain_idle(&self, timeout: Duration) {
+        for partition in self.registry.partitions() {
+            let mut auth = partition.authorities.lock().unwrap();
+            auth.retain(|_key, entry| {
+                entry.retain_idle(timeout);
+                if entry.is_empty() {
+                    tracing::debug!("pool: host entry removed (empty after retain)");
+                    false
+                } else {
+                    true
+                }
+            });
+        }
     }
 }
 
@@ -662,7 +702,7 @@ async fn eviction_task(
             _ = &mut drop_notifier => break,
             _ = interval.tick() => {
                 match pool.upgrade() {
-                    Some(pool) => pool.retain_idle_hosts(timeout),
+                    Some(pool) => pool.retain_idle(timeout),
                     None => break,
                 }
             }
@@ -873,7 +913,7 @@ where
 ///
 /// `send` performs checkout, health filtering, request dispatch, and
 /// body-guard setup atomically for a single request.
-trait PoolEntry: Send + Sync {
+pub(crate) trait PoolEntry: Send + Sync {
     fn send(
         &mut self,
         ctx: ConnectCtx,
@@ -1015,16 +1055,21 @@ mod tests {
     }
 
     fn pool_with_config(config: PoolConfig) -> Arc<ConnectionPool> {
+        let shared = Arc::new(SharedPoolState::new(&config));
+        let make_stack: MakeStack =
+            Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>);
+        let registry = Arc::new(partition::PartitionRegistry::build(
+            Vec::new(),
+            || Arc::new(partition::TokioDriverSpawner::current()),
+            make_stack,
+        ));
         Arc::new(ConnectionPool {
             config,
-            hosts: Mutex::new(HashMap::new()),
-            make_entry: Box::new(|_| Box::new(NullPoolEntry)),
+            shared,
+            registry,
+            cross_partition_policy: CrossPartitionPolicy::default(),
             eviction_spawned: AtomicBool::new(false),
             drop_notifier: OnceLock::new(),
-            registry: Arc::new(partition::PartitionRegistry::build(Vec::new(), || {
-                Arc::new(partition::TokioDriverSpawner::current())
-            })),
-            cross_partition_policy: CrossPartitionPolicy::default(),
         })
     }
 
@@ -1075,7 +1120,7 @@ mod tests {
         );
     }
 
-    /// `retain_idle_hosts` drops host entries whose retainers report empty.
+    /// `retain_idle` drops host entries whose retainers report empty.
     /// Uses `NullPoolEntry` whose `is_empty` returns `true`, so the first
     /// tick should remove every entry.
     #[tokio::test]
@@ -1083,16 +1128,69 @@ mod tests {
         let pool = pool_with_config(PoolConfig::default());
         let uri: http_1x::Uri = "http://example.com".parse().unwrap();
         let key = PoolKey::from_uri(&uri).unwrap();
-        pool.hosts
+        let partition = pool.registry().default_partition();
+        partition
+            .authorities
             .lock()
             .unwrap()
             .insert(key.clone(), Box::new(NullPoolEntry));
-        assert_eq!(pool.hosts.lock().unwrap().len(), 1);
-        pool.retain_idle_hosts(Duration::from_secs(30));
+        assert_eq!(partition.authorities.lock().unwrap().len(), 1);
+        pool.retain_idle(Duration::from_secs(30));
         assert_eq!(
-            pool.hosts.lock().unwrap().len(),
+            partition.authorities.lock().unwrap().len(),
             0,
             "empty entry should have been evicted"
+        );
+    }
+
+    #[test]
+    fn per_host_sem_shared_by_key() {
+        let cfg = PoolConfig {
+            max_connections_per_host: Some(2),
+            ..PoolConfig::default()
+        };
+        let s = SharedPoolState::new(&cfg);
+        let uri: http_1x::Uri = "https://example.com".parse().unwrap();
+        let key = PoolKey::from_uri(&uri).unwrap();
+        let a = s.per_host_sem(&key).unwrap();
+        let b = s.per_host_sem(&key).unwrap();
+        assert!(Arc::ptr_eq(&a, &b), "same key must share one semaphore");
+        let uri2: http_1x::Uri = "https://other.com".parse().unwrap();
+        let key2 = PoolKey::from_uri(&uri2).unwrap();
+        let c = s.per_host_sem(&key2).unwrap();
+        assert!(
+            !Arc::ptr_eq(&a, &c),
+            "different key must get a distinct semaphore"
+        );
+    }
+
+    #[tokio::test]
+    async fn two_partitions_independent_storage() {
+        let pool = SharedPool::builder()
+            .partitions([
+                partition::Partition::new(
+                    partition::PartitionId::from_index(0),
+                    partition::TokioDriverSpawner::current(),
+                ),
+                partition::Partition::new(
+                    partition::PartitionId::from_index(1),
+                    partition::TokioDriverSpawner::current(),
+                ),
+            ])
+            .build_http();
+        let p0 = pool
+            .inner
+            .pool
+            .registry()
+            .partition(partition::PartitionId::from_index(0));
+        let p1 = pool
+            .inner
+            .pool
+            .registry()
+            .partition(partition::PartitionId::from_index(1));
+        assert!(
+            !Arc::ptr_eq(&p0, &p1),
+            "distinct partition ids must yield distinct PartitionState arcs"
         );
     }
 }
