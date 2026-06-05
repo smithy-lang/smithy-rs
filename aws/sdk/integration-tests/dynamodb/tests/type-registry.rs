@@ -73,8 +73,7 @@ fn registry_errors_when_discriminator_missing() {
 #[test]
 fn registry_excludes_errors() {
     // Per the SEP, error shapes are not in the primary type registry — they
-    // belong in the (forthcoming) `Client::error_registry()`. ResourceInUseException
-    // is a real DynamoDB error shape; assert it's not in the primary registry.
+    // belong in `Client::error_registry()` instead.
     let id = shape_id!("com.amazonaws.dynamodb", "ResourceInUseException");
     assert!(
         Client::registry().schema_for(&id).is_none(),
@@ -91,4 +90,60 @@ fn registry_excludes_synthetic_input_output() {
         Client::registry().schema_for(&synthetic).is_none(),
         "synthetic operation input/output shapes must not appear in the primary type registry"
     );
+}
+
+// ---- Phase 6.4-6.5: error_registry coverage ----
+
+#[test]
+fn error_registry_contains_modeled_errors() {
+    // The service-wide error registry should hold a schema for every
+    // @error-trait shape in the service closure.
+    let id = shape_id!("com.amazonaws.dynamodb", "ResourceInUseException");
+    assert!(
+        Client::error_registry().schema_for(&id).is_some(),
+        "error_registry must contain ResourceInUseException"
+    );
+    let id = shape_id!("com.amazonaws.dynamodb", "ConditionalCheckFailedException");
+    assert!(
+        Client::error_registry().schema_for(&id).is_some(),
+        "error_registry must contain ConditionalCheckFailedException"
+    );
+}
+
+#[test]
+fn error_registry_excludes_non_error_shapes() {
+    // Non-error structures (data shapes) MUST NOT appear in the error
+    // registry. Capacity is a regular data structure.
+    let id = shape_id!("com.amazonaws.dynamodb", "Capacity");
+    assert!(
+        Client::error_registry().schema_for(&id).is_none(),
+        "non-error shapes must not appear in the error registry"
+    );
+}
+
+#[test]
+fn error_registry_deserialize_document_round_trip() {
+    use aws_sdk_dynamodb::types::error::ConditionalCheckFailedException;
+
+    // Build a Document representing a ConditionalCheckFailedException with
+    // the Smithy-modeled `Message` member set. Members come from the schema's
+    // member_name (Smithy convention), not the snake_case Rust field name.
+    let mut members: HashMap<String, Document> = HashMap::new();
+    members.insert(
+        "message".to_owned(),
+        Document::string("the conditional request failed"),
+    );
+    let doc = Document::map(members).with_discriminator(shape_id!(
+        "com.amazonaws.dynamodb",
+        "ConditionalCheckFailedException"
+    ));
+
+    let typed = Client::error_registry()
+        .deserialize_document(&doc)
+        .expect("ConditionalCheckFailedException is registered");
+    let err = typed
+        .downcast::<ConditionalCheckFailedException>()
+        .expect("registered DeserializeFn returns the correct concrete type");
+
+    assert_eq!(err.message(), Some("the conditional request failed"));
 }
