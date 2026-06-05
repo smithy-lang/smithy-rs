@@ -1,0 +1,573 @@
+/*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+//! Runtime type registry for resolving schemas by `ShapeId`.
+//!
+//! A [`TypeRegistry`] maps shape IDs to a pair of (a) the corresponding
+//! [`Schema`] and (b) a deserialize function that produces a typed value
+//! from a [`ShapeDeserializer`].
+//!
+//! Registries are the runtime piece behind the SEP's "Type Registry" concept.
+//! They support two main use cases:
+//!
+//! 1. **Document → typed shape conversion.** Given a [`Document`] carrying
+//!    a discriminator ([`ShapeId`]), the registry resolves the discriminator
+//!    to a `RegistryEntry`, walks the document via [`DocumentShapeDeserializer`],
+//!    and returns the typed value as a [`TypeErasedBox`] for the caller to
+//!    downcast.
+//! 2. **Schema lookup by shape ID.** Given a [`ShapeId`] (e.g. one extracted
+//!    from an error envelope discriminator), the registry returns the
+//!    corresponding [`Schema`] so generated code can dispatch on it.
+//!
+//! Registries are normally constructed at the package level by code generation
+//! and exposed through `Client::registry()` (per the paired SEP). They can
+//! also be composed via [`TypeRegistry::compose`] to combine, for example,
+//! a service's primary registry with an extension package's registry.
+//!
+//! See `.kiro/document_types_and_type_registries.md` for the full specification.
+
+use std::collections::hash_map;
+use std::collections::HashMap;
+use std::fmt;
+
+use aws_smithy_types::type_erasure::TypeErasedBox;
+
+use crate::document::{Document, DocumentShapeDeserializer};
+use crate::serde::{SerdeError, ShapeDeserializer};
+use crate::Schema;
+use crate::ShapeId;
+
+/// Type-erased deserialize function.
+///
+/// Takes a [`ShapeDeserializer`] positioned at the value to be read and
+/// returns the constructed value as a [`TypeErasedBox`]. The caller
+/// downcasts to recover the concrete type.
+///
+/// Code generation produces one of these per registered shape; the body
+/// is typically a thin wrapper around the shape's generated `deserialize`
+/// method that wraps the result in `TypeErasedBox::new(...)`.
+pub type DeserializeFn = fn(&mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError>;
+
+/// A single entry in a [`TypeRegistry`], pairing a shape's [`Schema`]
+/// with a [`DeserializeFn`] that constructs the typed value.
+#[derive(Clone, Copy)]
+pub struct RegistryEntry {
+    schema: &'static Schema,
+    deserialize: DeserializeFn,
+}
+
+impl RegistryEntry {
+    /// Build a `RegistryEntry` from a static schema reference and a
+    /// type-erased deserialize function.
+    pub const fn new(schema: &'static Schema, deserialize: DeserializeFn) -> Self {
+        Self {
+            schema,
+            deserialize,
+        }
+    }
+
+    /// The static schema for this entry's shape.
+    pub fn schema(&self) -> &'static Schema {
+        self.schema
+    }
+
+    /// The type-erased deserialize function for this entry.
+    pub fn deserialize_fn(&self) -> DeserializeFn {
+        self.deserialize
+    }
+}
+
+impl fmt::Debug for RegistryEntry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // The DeserializeFn pointer is not useful to print; show the shape id.
+        f.debug_struct("RegistryEntry")
+            .field("shape_id", self.schema.shape_id())
+            .finish_non_exhaustive()
+    }
+}
+
+/// A runtime mapping of [`ShapeId`] to [`RegistryEntry`].
+///
+/// Backed by a `HashMap<ShapeId, RegistryEntry>`. Construct via
+/// [`TypeRegistry::builder`] for the most common pattern, or
+/// [`TypeRegistry::new`]/[`Default::default`] for an empty registry.
+///
+/// Use [`TypeRegistry::compose`] to merge two registries; entries in the
+/// argument registry override entries with the same shape ID in `self`.
+#[derive(Default)]
+pub struct TypeRegistry {
+    entries: HashMap<ShapeId, RegistryEntry>,
+}
+
+impl TypeRegistry {
+    /// Create an empty registry.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Start building a registry. See [`TypeRegistryBuilder`].
+    pub fn builder() -> TypeRegistryBuilder {
+        TypeRegistryBuilder {
+            entries: HashMap::new(),
+        }
+    }
+
+    /// Look up the static schema for `id`, or `None` if not registered.
+    pub fn schema_for(&self, id: &ShapeId) -> Option<&'static Schema> {
+        self.entries.get(id).map(|e| e.schema)
+    }
+
+    /// Look up the entry (schema + deserialize fn) for `id`, or `None`
+    /// if not registered.
+    pub fn entry_for(&self, id: &ShapeId) -> Option<&RegistryEntry> {
+        self.entries.get(id)
+    }
+
+    /// Deserialize the given `document` into the shape pointed to by its
+    /// discriminator.
+    ///
+    /// Returns `Err(SerdeError::InvalidInput { .. })` if the document has no
+    /// discriminator, and `Err(SerdeError::UnknownMember { .. })` if the
+    /// discriminator does not match a registered shape.
+    ///
+    /// On success, the returned [`TypeErasedBox`] carries an instance of the
+    /// concrete data type that the registered [`DeserializeFn`] produces.
+    /// Callers downcast via [`TypeErasedBox::downcast`].
+    pub fn deserialize_document(&self, document: &Document) -> Result<TypeErasedBox, SerdeError> {
+        let id = document
+            .discriminator()
+            .ok_or_else(|| SerdeError::InvalidInput {
+                message: "document has no discriminator; cannot resolve shape via TypeRegistry"
+                    .to_string(),
+            })?;
+        let entry = self
+            .entries
+            .get(id)
+            .ok_or_else(|| SerdeError::UnknownMember {
+                member_name: id.to_string(),
+            })?;
+        let mut deser = DocumentShapeDeserializer::new(document);
+        (entry.deserialize)(&mut deser)
+    }
+
+    /// Combine `self` and `other` into a new registry containing the union
+    /// of their entries.
+    ///
+    /// On shape ID collision, entries from `other` override entries in
+    /// `self`. This matches the typical use case where the caller wants
+    /// extension-package entries to take precedence over base-package
+    /// entries.
+    pub fn compose(mut self, other: TypeRegistry) -> TypeRegistry {
+        for (id, entry) in other.entries {
+            self.entries.insert(id, entry);
+        }
+        self
+    }
+
+    /// Iterate the registry's `(ShapeId, RegistryEntry)` pairs. Iteration
+    /// order is unspecified.
+    pub fn iter(&self) -> Iter<'_> {
+        Iter {
+            inner: self.entries.iter(),
+        }
+    }
+
+    /// Number of registered entries.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// `true` iff the registry has no entries.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}
+
+impl fmt::Debug for TypeRegistry {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TypeRegistry")
+            .field("entries", &self.entries.len())
+            .finish_non_exhaustive()
+    }
+}
+
+/// Builder for [`TypeRegistry`].
+#[derive(Default)]
+pub struct TypeRegistryBuilder {
+    entries: HashMap<ShapeId, RegistryEntry>,
+}
+
+impl TypeRegistryBuilder {
+    /// Insert an explicit `(ShapeId, RegistryEntry)` pair.
+    pub fn insert(mut self, id: ShapeId, entry: RegistryEntry) -> Self {
+        self.entries.insert(id, entry);
+        self
+    }
+
+    /// Insert a registration derived from a schema and a deserialize
+    /// function. The shape ID is taken from the schema.
+    ///
+    /// This is the form generated code typically uses.
+    pub fn insert_shape(mut self, schema: &'static Schema, deserialize: DeserializeFn) -> Self {
+        let id = *schema.shape_id();
+        self.entries
+            .insert(id, RegistryEntry::new(schema, deserialize));
+        self
+    }
+
+    /// Finalize the builder into a [`TypeRegistry`].
+    pub fn build(self) -> TypeRegistry {
+        TypeRegistry {
+            entries: self.entries,
+        }
+    }
+}
+
+/// Iterator over the entries of a [`TypeRegistry`]. Returned by
+/// [`TypeRegistry::iter`].
+pub struct Iter<'a> {
+    inner: hash_map::Iter<'a, ShapeId, RegistryEntry>,
+}
+
+impl<'a> Iterator for Iter<'a> {
+    type Item = (&'a ShapeId, &'a RegistryEntry);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.inner.size_hint()
+    }
+}
+
+impl ExactSizeIterator for Iter<'_> {
+    fn len(&self) -> usize {
+        self.inner.len()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::document::Document;
+    use crate::shape_id;
+    use crate::ShapeType;
+
+    // -- Schemas used across tests --------------------------------------------------------------
+
+    static M_FOO_NAME: Schema = Schema::new_member(
+        shape_id!("smithy.example", "Foo", "name"),
+        ShapeType::String,
+        "name",
+        0,
+    );
+    static FOO_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("smithy.example", "Foo"),
+        ShapeType::Structure,
+        &[&M_FOO_NAME],
+    );
+
+    static M_BAR_VALUE: Schema = Schema::new_member(
+        shape_id!("smithy.example", "Bar", "value"),
+        ShapeType::Integer,
+        "value",
+        0,
+    );
+    static BAR_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("smithy.example", "Bar"),
+        ShapeType::Structure,
+        &[&M_BAR_VALUE],
+    );
+
+    // -- Test types and their deserialize fns ---------------------------------------------------
+
+    #[derive(Debug, PartialEq)]
+    struct Foo {
+        name: Option<String>,
+    }
+
+    fn deserialize_foo(deser: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
+        let mut out = Foo { name: None };
+        deser.read_struct(&FOO_SCHEMA, &mut |member, sub| {
+            if let Some(0) = member.member_index() {
+                out.name = Some(sub.read_string(member)?);
+            }
+            Ok(())
+        })?;
+        Ok(TypeErasedBox::new(out))
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct Bar {
+        value: Option<i32>,
+    }
+
+    fn deserialize_bar(deser: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
+        let mut out = Bar { value: None };
+        deser.read_struct(&BAR_SCHEMA, &mut |member, sub| {
+            if let Some(0) = member.member_index() {
+                out.value = Some(sub.read_integer(member)?);
+            }
+            Ok(())
+        })?;
+        Ok(TypeErasedBox::new(out))
+    }
+
+    // An alternative deserialize fn for Foo that returns a different type, used to
+    // verify `compose` override semantics.
+    #[derive(Debug, PartialEq)]
+    struct FooReplacement {
+        replaced: bool,
+    }
+
+    fn deserialize_foo_replacement(
+        _deser: &mut dyn ShapeDeserializer,
+    ) -> Result<TypeErasedBox, SerdeError> {
+        Ok(TypeErasedBox::new(FooReplacement { replaced: true }))
+    }
+
+    // -- Lookup tests ---------------------------------------------------------------------------
+
+    #[test]
+    fn schema_for_returns_registered_schema() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        let foo = registry
+            .schema_for(&shape_id!("smithy.example", "Foo"))
+            .unwrap();
+        assert_eq!(foo.shape_id(), FOO_SCHEMA.shape_id());
+
+        let bar = registry
+            .schema_for(&shape_id!("smithy.example", "Bar"))
+            .unwrap();
+        assert_eq!(bar.shape_id(), BAR_SCHEMA.shape_id());
+    }
+
+    #[test]
+    fn schema_for_returns_none_for_unregistered_shape() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        assert!(registry
+            .schema_for(&shape_id!("smithy.example", "DoesNotExist"))
+            .is_none());
+    }
+
+    #[test]
+    fn entry_for_returns_schema_and_fn() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        let entry = registry
+            .entry_for(&shape_id!("smithy.example", "Foo"))
+            .unwrap();
+        assert_eq!(entry.schema().shape_id(), FOO_SCHEMA.shape_id());
+        // Function pointer comparison: same fn we registered.
+        assert!(std::ptr::fn_addr_eq(
+            entry.deserialize_fn(),
+            deserialize_foo as DeserializeFn
+        ));
+    }
+
+    #[test]
+    fn len_and_is_empty() {
+        let empty = TypeRegistry::new();
+        assert_eq!(empty.len(), 0);
+        assert!(empty.is_empty());
+
+        let populated = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+        assert_eq!(populated.len(), 2);
+        assert!(!populated.is_empty());
+    }
+
+    #[test]
+    fn iter_yields_all_entries() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        let mut ids: Vec<String> = registry.iter().map(|(id, _)| id.to_string()).collect();
+        ids.sort();
+        assert_eq!(
+            ids,
+            vec![
+                "smithy.example#Bar".to_string(),
+                "smithy.example#Foo".to_string(),
+            ]
+        );
+        // ExactSizeIterator: len() agrees with registry len.
+        assert_eq!(registry.iter().len(), 2);
+    }
+
+    // -- Composition tests ----------------------------------------------------------------------
+
+    #[test]
+    fn compose_unions_disjoint_registries() {
+        let a = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let b = TypeRegistry::builder()
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        let merged = a.compose(b);
+        assert_eq!(merged.len(), 2);
+        assert!(merged
+            .schema_for(&shape_id!("smithy.example", "Foo"))
+            .is_some());
+        assert!(merged
+            .schema_for(&shape_id!("smithy.example", "Bar"))
+            .is_some());
+    }
+
+    #[test]
+    fn compose_lets_other_override_self() {
+        // `a` registers `Foo` → deserialize_foo (returns Foo)
+        // `b` registers `Foo` → deserialize_foo_replacement (returns FooReplacement)
+        // After compose, `Foo` should resolve to the replacement.
+        let a = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let b = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo_replacement)
+            .build();
+
+        let merged = a.compose(b);
+        assert_eq!(merged.len(), 1);
+
+        // Resolve Foo and round-trip through deserialize_document.
+        let doc = Document::map(Default::default()).with_discriminator(*FOO_SCHEMA.shape_id());
+        let boxed = merged.deserialize_document(&doc).unwrap();
+        let result = *boxed.downcast::<FooReplacement>().expect("override fn ran");
+        assert_eq!(result, FooReplacement { replaced: true });
+    }
+
+    // -- deserialize_document tests -------------------------------------------------------------
+
+    #[test]
+    fn deserialize_document_round_trip() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        // Build a Foo document with a "name" member and the Foo discriminator.
+        let mut foo_members: HashMap<String, Document> = HashMap::new();
+        foo_members.insert("name".to_string(), Document::string("hello"));
+        let foo_doc = Document::map(foo_members).with_discriminator(*FOO_SCHEMA.shape_id());
+
+        let boxed = registry.deserialize_document(&foo_doc).unwrap();
+        let foo = *boxed.downcast::<Foo>().expect("downcast to Foo");
+        assert_eq!(
+            foo,
+            Foo {
+                name: Some("hello".to_string())
+            }
+        );
+
+        // Same for Bar.
+        let mut bar_members: HashMap<String, Document> = HashMap::new();
+        bar_members.insert("value".to_string(), Document::integer(42));
+        let bar_doc = Document::map(bar_members).with_discriminator(*BAR_SCHEMA.shape_id());
+
+        let boxed = registry.deserialize_document(&bar_doc).unwrap();
+        let bar = *boxed.downcast::<Bar>().expect("downcast to Bar");
+        assert_eq!(bar, Bar { value: Some(42) });
+    }
+
+    #[test]
+    fn deserialize_document_errors_when_discriminator_missing() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        // No discriminator attached.
+        let doc = Document::map(Default::default());
+
+        let err = registry.deserialize_document(&doc).unwrap_err();
+        match err {
+            SerdeError::InvalidInput { message } => {
+                assert!(
+                    message.contains("discriminator"),
+                    "expected message to mention discriminator, got: {message}"
+                );
+            }
+            other => panic!("expected InvalidInput, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserialize_document_errors_when_shape_id_unregistered() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        let doc = Document::map(Default::default())
+            .with_discriminator(shape_id!("smithy.example", "Unregistered"));
+
+        let err = registry.deserialize_document(&doc).unwrap_err();
+        match err {
+            SerdeError::UnknownMember { member_name } => {
+                assert_eq!(member_name, "smithy.example#Unregistered");
+            }
+            other => panic!("expected UnknownMember, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn deserialize_document_propagates_inner_error() {
+        // Foo expects `name` to be a String; supplying an integer will trigger a
+        // type-mismatch from the deserialize fn.
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        let mut foo_members: HashMap<String, Document> = HashMap::new();
+        foo_members.insert("name".to_string(), Document::integer(5));
+        let doc = Document::map(foo_members).with_discriminator(*FOO_SCHEMA.shape_id());
+
+        let err = registry.deserialize_document(&doc).unwrap_err();
+        match err {
+            SerdeError::TypeMismatch { .. } => {}
+            other => panic!("expected TypeMismatch, got {other:?}"),
+        }
+    }
+
+    // -- Builder + Debug tests ------------------------------------------------------------------
+
+    #[test]
+    fn builder_insert_keyed_form() {
+        // Verify that the keyed `insert(id, entry)` form works alongside `insert_shape`.
+        let id = *FOO_SCHEMA.shape_id();
+        let registry = TypeRegistry::builder()
+            .insert(id, RegistryEntry::new(&FOO_SCHEMA, deserialize_foo))
+            .build();
+
+        assert_eq!(registry.len(), 1);
+        assert!(registry.schema_for(&id).is_some());
+    }
+
+    #[test]
+    fn debug_impls_do_not_panic() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let entry = registry.entry_for(FOO_SCHEMA.shape_id()).unwrap();
+
+        let _ = format!("{registry:?}");
+        let _ = format!("{entry:?}");
+    }
+}
