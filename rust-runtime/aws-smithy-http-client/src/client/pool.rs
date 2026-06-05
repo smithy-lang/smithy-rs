@@ -294,216 +294,239 @@ where
         "pool: initialized"
     );
 
-    let make_stack: MakeStack = Arc::new(
-        move |uri: &http_1x::Uri, shared: &SharedPoolState| -> Box<dyn PoolEntry> {
-            let authority = Authority::new(
-                uri.authority()
-                    .expect("pool entry URI has authority")
-                    .as_str(),
-            );
-            let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
-            let per_host_sem = shared.per_host_sem(&key);
-            let limited = handshake::ConnectionLimit::new(
-                connector.clone(),
-                shared.global_sem.clone(),
-                per_host_sem,
-            );
+    let make_stack_for = {
+        let connector = connector.clone();
+        move |spawner: &Arc<dyn partition::DriverSpawner>| -> MakeStack {
+            let connector = connector.clone();
+            let spawner = spawner.clone();
+            Arc::new(
+                move |uri: &http_1x::Uri, shared: &SharedPoolState| -> Box<dyn PoolEntry> {
+                    let authority = Authority::new(
+                        uri.authority()
+                            .expect("pool entry URI has authority")
+                            .as_str(),
+                    );
+                    let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
+                    let per_host_sem = shared.per_host_sem(&key);
+                    let limited = handshake::ConnectionLimit::new(
+                        connector.clone(),
+                        shared.global_sem.clone(),
+                        per_host_sem,
+                    );
 
-            let pool_hooks = shared.hooks.clone();
+                    let pool_hooks = shared.hooks.clone();
 
-            // Per-host bridge: `H2ConnectAndHandshake` publishes on each new
-            // handshake; `SingletonConnection` reads the current entry at
-            // checkout. Clones share the underlying slot.
-            let h2_ref = H2ConnectionRef::new();
+                    // Per-host bridge: `H2ConnectAndHandshake` publishes on each new
+                    // handshake; `SingletonConnection` reads the current entry at
+                    // checkout. Clones share the underlying slot.
+                    let h2_ref = H2ConnectionRef::new();
 
-            // Bounded at two: the H1 fallback and H2 upgrade `layer_fn`s
-            // each push one entry on first construction.
-            let retainers: RetainerSlot = Arc::new(Mutex::new(Vec::with_capacity(2)));
+                    // Bounded at two: the H1 fallback and H2 upgrade `layer_fn`s
+                    // each push one entry on first construction.
+                    let retainers: RetainerSlot = Arc::new(Mutex::new(Vec::with_capacity(2)));
 
-            let stack = hpool::negotiate::builder()
-                .connect(limited)
-                .inspect(|established: &connection::EstablishedConnection<IO>| {
-                    established.io.connected().is_negotiated_h2()
-                })
-                .fallback({
-                    let retainers = retainers.clone();
-                    let pool_hooks = pool_hooks.clone();
-                    tower::layer::layer_fn(move |inspector| {
-                        let cache = cache::builder()
-                            .executor(TokioExecutor::new())
-                            .build(H1ConnectAndHandshake::new(inspector, pool_hooks.clone()));
-                        // Capture a clone of the Cache for eviction. `Cache`
-                        // is Clone and shares state via its internal
-                        // `Arc<Mutex<Shared>>`, so the clone here and the
-                        // original-stack consumption below observe the same
-                        // idle set.
-                        let cache_for_retain = Arc::new(std::sync::Mutex::new(cache.clone()));
-                        let cache_for_empty = cache_for_retain.clone();
-                        retainers
-                            .lock()
-                            .expect("retainer slot poisoned")
-                            .push(BoxedRetainer {
-                                retain_fn: Box::new({
-                                    let listener = pool_hooks.listener.clone();
-                                    move |timeout| {
-                                        let now = Instant::now();
-                                        cache_for_retain
-                                            .lock()
-                                            .expect("retain cache lock poisoned")
-                                            .retain(|managed| {
-                                                let keep = !managed.is_poisoned()
-                                                    && now.saturating_duration_since(
-                                                        managed.idle_at(),
-                                                    ) < timeout;
-                                                if !keep {
-                                                    let reason = if managed.is_poisoned() {
-                                                        "poisoned"
-                                                    } else {
-                                                        "idle_expired"
-                                                    };
-                                                    let idle_duration = now
-                                                        .saturating_duration_since(
+                    let stack =
+                        hpool::negotiate::builder()
+                            .connect(limited)
+                            .inspect(|established: &connection::EstablishedConnection<IO>| {
+                                established.io.connected().is_negotiated_h2()
+                            })
+                            .fallback({
+                                let retainers = retainers.clone();
+                                let pool_hooks = pool_hooks.clone();
+                                let spawner = spawner.clone();
+                                tower::layer::layer_fn(move |inspector| {
+                                    let cache = cache::builder()
+                                        .executor(TokioExecutor::new())
+                                        .build(H1ConnectAndHandshake::new(
+                                            inspector,
+                                            pool_hooks.clone(),
+                                            spawner.clone(),
+                                        ));
+                                    // Capture a clone of the Cache for eviction. `Cache`
+                                    // is Clone and shares state via its internal
+                                    // `Arc<Mutex<Shared>>`, so the clone here and the
+                                    // original-stack consumption below observe the same
+                                    // idle set.
+                                    let cache_for_retain =
+                                        Arc::new(std::sync::Mutex::new(cache.clone()));
+                                    let cache_for_empty = cache_for_retain.clone();
+                                    retainers.lock().expect("retainer slot poisoned").push(
+                                        BoxedRetainer {
+                                            retain_fn: Box::new({
+                                                let listener = pool_hooks.listener.clone();
+                                                move |timeout| {
+                                                    let now = Instant::now();
+                                                    cache_for_retain
+                                                .lock()
+                                                .expect("retain cache lock poisoned")
+                                                .retain(|managed| {
+                                                    let keep = !managed.is_poisoned()
+                                                        && now.saturating_duration_since(
                                                             managed.idle_at(),
+                                                        ) < timeout;
+                                                    if !keep {
+                                                        let reason = if managed.is_poisoned() {
+                                                            "poisoned"
+                                                        } else {
+                                                            "idle_expired"
+                                                        };
+                                                        let idle_duration = now
+                                                            .saturating_duration_since(
+                                                                managed.idle_at(),
+                                                            );
+                                                        tracing::debug!(
+                                                            conn_id = %managed.conn_id(),
+                                                            reason,
+                                                            ?idle_duration,
+                                                            "pool: connection evicted"
                                                         );
-                                                    tracing::debug!(
-                                                        conn_id = %managed.conn_id(),
-                                                        reason,
-                                                        ?idle_duration,
-                                                        "pool: connection evicted"
-                                                    );
-                                                    if let Some(ref l) = listener {
-                                                        l.on_closed(&ConnectionClosedEvent::new(
-                                                            managed.conn_id(),
-                                                            managed.info.authority.clone(),
-                                                            managed.info.remote_addr,
-                                                            if managed.is_poisoned() {
-                                                                CloseReason::Poisoned
-                                                            } else {
-                                                                CloseReason::IdleTimeout
-                                                            },
-                                                            None,
-                                                        ));
+                                                        if let Some(ref l) = listener {
+                                                            l.on_closed(&ConnectionClosedEvent::new(
+                                                                managed.conn_id(),
+                                                                managed.info.authority.clone(),
+                                                                managed.info.remote_addr,
+                                                                if managed.is_poisoned() {
+                                                                    CloseReason::Poisoned
+                                                                } else {
+                                                                    CloseReason::IdleTimeout
+                                                                },
+                                                                None,
+                                                            ));
+                                                        }
                                                     }
+                                                    keep
+                                                });
                                                 }
-                                                keep
-                                            });
-                                    }
-                                }),
-                                is_empty_fn: Box::new(move || {
-                                    cache_for_empty
-                                        .lock()
-                                        .expect("is_empty cache lock poisoned")
-                                        .is_empty()
-                                }),
-                            });
-                        cache.map_response({
-                            let listener = pool_hooks.listener.clone();
-                            move |cached| {
-                                H1Checkout::new(CachedConnection::new(cached, listener.clone()))
-                            }
-                        })
-                    })
-                })
-                .upgrade({
-                    let h2_ref = h2_ref.clone();
-                    let retainers = retainers.clone();
-                    let pool_hooks = pool_hooks.clone();
-                    tower::layer::layer_fn(move |inspected| {
-                        let singleton =
-                            hpool::singleton::Singleton::new(H2ConnectAndHandshake::new(
-                                inspected,
-                                h2_ref.clone(),
-                                pool_hooks.clone(),
-                                authority.clone(),
-                            ));
-                        let singleton_for_retain =
-                            Arc::new(std::sync::Mutex::new(singleton.clone()));
-                        let singleton_for_empty = singleton_for_retain.clone();
-                        retainers
-                            .lock()
-                            .expect("retainer slot poisoned")
-                            .push(BoxedRetainer {
-                                retain_fn: Box::new({
-                                    let listener = pool_hooks.listener.clone();
-                                    move |timeout| {
-                                        let now = Instant::now();
-                                        singleton_for_retain
-                                            .lock()
-                                            .expect("retain singleton lock poisoned")
-                                            .retain(|managed| {
-                                                // For H2 the connection stays in
-                                                // Singleton while serving streams, so
-                                                // `idle_at` alone is not a valid
-                                                // idleness signal. Keep the
-                                                // connection if any stream is in
-                                                // flight; only evict when truly idle
-                                                // AND `idle_at` has exceeded the
-                                                // timeout (stamped on the 1 → 0
-                                                // transition by
-                                                // `SingletonConnection::drop`).
-                                                let keep = !managed.is_poisoned()
-                                                    && (managed.active_streams_count() > 0
-                                                        || now.saturating_duration_since(
-                                                            managed.idle_at(),
-                                                        ) < timeout);
-                                                if !keep {
-                                                    let reason = if managed.is_poisoned() {
-                                                        "poisoned"
-                                                    } else {
-                                                        "idle_expired"
-                                                    };
-                                                    let idle_duration = now
-                                                        .saturating_duration_since(
-                                                            managed.idle_at(),
+                                            }),
+                                            is_empty_fn: Box::new(move || {
+                                                cache_for_empty
+                                                    .lock()
+                                                    .expect("is_empty cache lock poisoned")
+                                                    .is_empty()
+                                            }),
+                                        },
+                                    );
+                                    cache.map_response({
+                                        let listener = pool_hooks.listener.clone();
+                                        move |cached| {
+                                            H1Checkout::new(CachedConnection::new(
+                                                cached,
+                                                listener.clone(),
+                                            ))
+                                        }
+                                    })
+                                })
+                            })
+                            .upgrade({
+                                let h2_ref = h2_ref.clone();
+                                let retainers = retainers.clone();
+                                let pool_hooks = pool_hooks.clone();
+                                let spawner = spawner.clone();
+                                tower::layer::layer_fn(move |inspected| {
+                                    let singleton = hpool::singleton::Singleton::new(
+                                        H2ConnectAndHandshake::new(
+                                            inspected,
+                                            h2_ref.clone(),
+                                            pool_hooks.clone(),
+                                            authority.clone(),
+                                            spawner.clone(),
+                                        ),
+                                    );
+                                    let singleton_for_retain =
+                                        Arc::new(std::sync::Mutex::new(singleton.clone()));
+                                    let singleton_for_empty = singleton_for_retain.clone();
+                                    retainers.lock().expect("retainer slot poisoned").push(
+                                        BoxedRetainer {
+                                            retain_fn: Box::new({
+                                                let listener = pool_hooks.listener.clone();
+                                                move |timeout| {
+                                                    let now = Instant::now();
+                                                    singleton_for_retain
+                                                .lock()
+                                                .expect("retain singleton lock poisoned")
+                                                .retain(|managed| {
+                                                    // For H2 the connection stays in
+                                                    // Singleton while serving streams, so
+                                                    // `idle_at` alone is not a valid
+                                                    // idleness signal. Keep the
+                                                    // connection if any stream is in
+                                                    // flight; only evict when truly idle
+                                                    // AND `idle_at` has exceeded the
+                                                    // timeout (stamped on the 1 → 0
+                                                    // transition by
+                                                    // `SingletonConnection::drop`).
+                                                    let keep = !managed.is_poisoned()
+                                                        && (managed.active_streams_count() > 0
+                                                            || now.saturating_duration_since(
+                                                                managed.idle_at(),
+                                                            ) < timeout);
+                                                    if !keep {
+                                                        let reason = if managed.is_poisoned() {
+                                                            "poisoned"
+                                                        } else {
+                                                            "idle_expired"
+                                                        };
+                                                        let idle_duration = now
+                                                            .saturating_duration_since(
+                                                                managed.idle_at(),
+                                                            );
+                                                        tracing::debug!(
+                                                            conn_id = %managed.conn_id(),
+                                                            reason,
+                                                            ?idle_duration,
+                                                            "pool: connection evicted"
                                                         );
-                                                    tracing::debug!(
-                                                        conn_id = %managed.conn_id(),
-                                                        reason,
-                                                        ?idle_duration,
-                                                        "pool: connection evicted"
-                                                    );
-                                                    if let Some(ref l) = listener {
-                                                        l.on_closed(&ConnectionClosedEvent::new(
-                                                            managed.conn_id(),
-                                                            managed.info.authority.clone(),
-                                                            managed.info.remote_addr,
-                                                            if managed.is_poisoned() {
-                                                                CloseReason::Poisoned
-                                                            } else {
-                                                                CloseReason::IdleTimeout
-                                                            },
-                                                            None,
-                                                        ));
+                                                        if let Some(ref l) = listener {
+                                                            l.on_closed(&ConnectionClosedEvent::new(
+                                                                managed.conn_id(),
+                                                                managed.info.authority.clone(),
+                                                                managed.info.remote_addr,
+                                                                if managed.is_poisoned() {
+                                                                    CloseReason::Poisoned
+                                                                } else {
+                                                                    CloseReason::IdleTimeout
+                                                                },
+                                                                None,
+                                                            ));
+                                                        }
                                                     }
+                                                    keep
+                                                });
                                                 }
-                                                keep
-                                            });
-                                    }
-                                }),
-                                is_empty_fn: Box::new(move || {
-                                    singleton_for_empty
-                                        .lock()
-                                        .expect("is_empty singleton lock poisoned")
-                                        .is_empty()
-                                }),
-                            });
-                        singleton.map_response({
-                            let h2_ref = h2_ref.clone();
-                            move |singled| {
-                                H2Checkout::new(SingletonConnection::new(singled, h2_ref.clone()))
-                            }
-                        })
-                    })
-                })
-                .build();
-            Box::new(TypedPoolEntry { stack, retainers })
-        },
-    );
+                                            }),
+                                            is_empty_fn: Box::new(move || {
+                                                singleton_for_empty
+                                                    .lock()
+                                                    .expect("is_empty singleton lock poisoned")
+                                                    .is_empty()
+                                            }),
+                                        },
+                                    );
+                                    singleton.map_response({
+                                        let h2_ref = h2_ref.clone();
+                                        move |singled| {
+                                            H2Checkout::new(SingletonConnection::new(
+                                                singled,
+                                                h2_ref.clone(),
+                                            ))
+                                        }
+                                    })
+                                })
+                            })
+                            .build();
+                    Box::new(TypedPoolEntry { stack, retainers })
+                },
+            )
+        }
+    };
 
+    let partitions = partition::normalize_partitions(partitions, || {
+        Arc::new(partition::TokioDriverSpawner::current())
+    });
     let registry = Arc::new(partition::PartitionRegistry::build(
         partitions,
-        || Arc::new(partition::TokioDriverSpawner::current()),
-        make_stack,
+        make_stack_for,
     ));
 
     ConnectionPool {
@@ -1056,12 +1079,15 @@ mod tests {
 
     fn pool_with_config(config: PoolConfig) -> Arc<ConnectionPool> {
         let shared = Arc::new(SharedPoolState::new(&config));
-        let make_stack: MakeStack =
-            Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>);
+        let make_stack_for = |_spawner: &Arc<dyn partition::DriverSpawner>| -> MakeStack {
+            Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
+        };
+        let partitions = partition::normalize_partitions(Vec::new(), || {
+            Arc::new(partition::TokioDriverSpawner::current())
+        });
         let registry = Arc::new(partition::PartitionRegistry::build(
-            Vec::new(),
-            || Arc::new(partition::TokioDriverSpawner::current()),
-            make_stack,
+            partitions,
+            make_stack_for,
         ));
         Arc::new(ConnectionPool {
             config,

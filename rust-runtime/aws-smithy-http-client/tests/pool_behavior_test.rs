@@ -1604,3 +1604,111 @@ mod listener_tests {
         assert!(duration > Duration::ZERO, "connect_duration should be > 0");
     }
 }
+
+/// Prove that a partition's declared spawner is used to spawn the connection
+/// driver, not the free `TokioExecutor::new().execute(…)` helper that would
+/// target whatever runtime is current at connect time.
+#[tokio::test]
+async fn partition_spawners_are_isolated() {
+    use aws_smithy_http_client::pool::{DriverSpawner, Partition, PartitionId, TokioDriverSpawner};
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    /// A spawner that records how many times `spawn` was called, then
+    /// delegates to an inner `TokioDriverSpawner` so the driver runs.
+    #[derive(Debug)]
+    struct RecordingSpawner {
+        inner: TokioDriverSpawner,
+        spawned: Arc<AtomicUsize>,
+    }
+
+    impl RecordingSpawner {
+        fn new(spawned: Arc<AtomicUsize>) -> Self {
+            Self {
+                inner: TokioDriverSpawner::current(),
+                spawned,
+            }
+        }
+    }
+
+    impl DriverSpawner for RecordingSpawner {
+        fn spawn(
+            &self,
+            driver: std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'static>>,
+        ) {
+            self.spawned.fetch_add(1, Ordering::Relaxed);
+            self.inner.spawn(driver);
+        }
+    }
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"hello",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"hello",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    // Two partitions, each with its own recording spawner.
+    let count0 = Arc::new(AtomicUsize::new(0));
+    let count1 = Arc::new(AtomicUsize::new(0));
+    let p0 = Partition::new(
+        PartitionId::from_index(0),
+        RecordingSpawner::new(count0.clone()),
+    );
+    let p1 = Partition::new(
+        PartitionId::from_index(1),
+        RecordingSpawner::new(count1.clone()),
+    );
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .partitions([p0, p1])
+        .build_http();
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+    // A request on partition 0 must drive its connection through spawner 0
+    // only — spawner 1 stays untouched (no cross-partition leakage).
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let (status, _) = send_and_read_body(&client0, &url)
+        .await
+        .expect("p0 request should succeed");
+    assert_eq!(status, 200);
+    assert!(
+        count0.load(Ordering::Relaxed) >= 1,
+        "partition 0's spawner should have driven its connection"
+    );
+    assert_eq!(
+        count1.load(Ordering::Relaxed),
+        0,
+        "partition 1's spawner must not be touched by a partition 0 request"
+    );
+
+    // A request on partition 1 drives through spawner 1; spawner 0's count
+    // does not change (each partition opens its own connection).
+    let count0_before = count0.load(Ordering::Relaxed);
+    let client1 = PoolClient::from_partition(&pool, PartitionId::from_index(1)).into_shared();
+    let (status, _) = send_and_read_body(&client1, &url)
+        .await
+        .expect("p1 request should succeed");
+    assert_eq!(status, 200);
+    assert!(
+        count1.load(Ordering::Relaxed) >= 1,
+        "partition 1's spawner should have driven its connection"
+    );
+    assert_eq!(
+        count0.load(Ordering::Relaxed),
+        count0_before,
+        "partition 0's spawner must not be touched by a partition 1 request"
+    );
+}

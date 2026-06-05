@@ -273,7 +273,7 @@ impl Partition {
 /// build time and referenced by [`Client`](super::Client) handles.
 pub(crate) struct PartitionState {
     pub(crate) id: PartitionId,
-    // used by connection driver spawn
+    // captured into make_stack via the factory; field retained for later NIC/runtime use
     #[allow(dead_code)]
     pub(crate) spawner: std::sync::Arc<dyn DriverSpawner>,
     // used by socket bind (later step)
@@ -297,6 +297,31 @@ impl std::fmt::Debug for PartitionState {
     }
 }
 
+/// Normalize a caller-declared partition set for pool construction: when
+/// no partitions are declared, synthesize a single anonymous partition
+/// (`PartitionId::default()`, no NIC binding) using `anonymous_spawner`.
+/// Returns the caller's set unchanged when non-empty.
+///
+/// This is the one place the "no topology declared" default is decided;
+/// [`PartitionRegistry::build`] then indexes whatever set it is given.
+/// `anonymous_spawner` is a closure so the runtime handle is captured
+/// only when actually needed (e.g. `TokioDriverSpawner::current()` panics
+/// off a runtime).
+pub(crate) fn normalize_partitions(
+    partitions: Vec<Partition>,
+    anonymous_spawner: impl FnOnce() -> std::sync::Arc<dyn DriverSpawner>,
+) -> Vec<Partition> {
+    if partitions.is_empty() {
+        vec![Partition {
+            id: PartitionId::default(),
+            spawner: anonymous_spawner(),
+            nic: None,
+        }]
+    } else {
+        partitions
+    }
+}
+
 /// Immutable registry of declared partitions, built once at pool
 /// construction. Maps ids and NIC groups to partition state and records
 /// the default partition used by [`Client::new`](super::Client::new).
@@ -310,37 +335,32 @@ pub(crate) struct PartitionRegistry {
 }
 
 impl PartitionRegistry {
-    /// Build a registry from declared partitions. When `partitions` is
-    /// empty, creates a single anonymous partition (`PartitionId::default()`)
-    /// with the given fallback spawner and no NIC binding. The default
-    /// partition is the first declared (or the anonymous one when none are
-    /// declared). Panics on a duplicate `PartitionId`.
+    /// Build a registry from a non-empty set of declared partitions. The
+    /// default partition is the first in the slice. Panics on a duplicate
+    /// `PartitionId`, or if `partitions` is empty (callers normalize the
+    /// no-topology case via [`normalize_partitions`] first).
     pub(crate) fn build(
         partitions: Vec<Partition>,
-        anonymous_spawner: impl FnOnce() -> std::sync::Arc<dyn DriverSpawner>,
-        make_stack: super::MakeStack,
+        make_stack_for: impl Fn(&std::sync::Arc<dyn DriverSpawner>) -> super::MakeStack,
     ) -> Self {
-        let partitions = if partitions.is_empty() {
-            vec![Partition {
-                id: PartitionId::default(),
-                spawner: anonymous_spawner(),
-                nic: None,
-            }]
-        } else {
-            partitions
-        };
+        assert!(
+            !partitions.is_empty(),
+            "PartitionRegistry::build requires at least one partition; \
+             normalize the empty case with normalize_partitions"
+        );
         let default_partition = partitions[0].id;
         let mut by_id = std::collections::HashMap::new();
         let mut by_nic: std::collections::HashMap<Option<String>, Vec<PartitionId>> =
             std::collections::HashMap::new();
         for p in partitions {
             by_nic.entry(p.nic.clone()).or_default().push(p.id);
+            let make_stack = make_stack_for(&p.spawner);
             let state = std::sync::Arc::new(PartitionState {
                 id: p.id,
                 spawner: p.spawner,
                 nic: p.nic,
                 authorities: std::sync::Mutex::new(std::collections::HashMap::new()),
-                make_stack: make_stack.clone(),
+                make_stack,
             });
             if by_id.insert(p.id, state).is_some() {
                 panic!("duplicate PartitionId declared: {:?}", p.id);
