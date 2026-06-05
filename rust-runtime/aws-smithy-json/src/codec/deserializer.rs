@@ -5,7 +5,7 @@
 
 //! JSON deserializer implementation.
 
-use aws_smithy_schema::document::Document;
+use aws_smithy_schema::document::{Document, DocumentSettings};
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
@@ -777,7 +777,24 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         if result.is_ok() {
             self.depth -= 1;
         }
-        result
+        // Attach the codec's settings to the produced Document so downstream
+        // accessors like [`Document::as_blob`] and [`Document::as_timestamp`]
+        // can perform JSON-specific coercion (base64-decoded blobs, format-aware
+        // timestamps). Recursive calls into `read_document` already attach
+        // settings to the nested values they return, so wrapping just the
+        // top-level produced Document propagates settings through the tree.
+        //
+        // Note: this implementation does not lift a top-level `__type` field
+        // into [`Document::with_discriminator`]. The discriminator slot stores
+        // a [`ShapeId`] whose components are `&'static str`, which precludes
+        // construction from a runtime-parsed wire string without either
+        // leaking memory or a broader `ShapeId` API change. Callers that need
+        // discriminator-driven dispatch (e.g. `TypeRegistry::deserialize_document`)
+        // currently supply the discriminator via the compile-time `shape_id!`
+        // macro before invoking the registry. Lifting `__type` automatically
+        // is tracked as a follow-up.
+        let settings: Arc<dyn DocumentSettings> = self.settings.clone();
+        result.map(|doc| doc.with_settings(settings))
     }
 
     fn is_null(&self) -> bool {
@@ -2171,5 +2188,70 @@ mod tests {
         deser_ok
             .read_list(dummy_schema(), &mut recursive_list_consumer)
             .expect("10-level nesting should succeed under custom limit");
+    }
+
+    // --- read_document attaches DocumentSettings ----------------------------
+
+    #[test]
+    fn read_document_attaches_settings_to_top_level_value() {
+        let mut deser = JsonDeserializer::new(b"\"hello\"", Arc::new(JsonCodecSettings::default()));
+        let doc = deser.read_document(dummy_schema()).unwrap();
+        assert!(
+            doc.settings().is_some(),
+            "settings should be attached to the produced Document"
+        );
+    }
+
+    #[test]
+    fn read_document_attaches_settings_to_nested_map_values() {
+        let mut deser = JsonDeserializer::new(
+            br#"{"inner":"value"}"#,
+            Arc::new(JsonCodecSettings::default()),
+        );
+        let doc = deser.read_document(dummy_schema()).unwrap();
+        let inner = doc.member("inner").expect("inner member exists");
+        assert!(
+            inner.settings().is_some(),
+            "settings should propagate to nested map values"
+        );
+    }
+
+    #[test]
+    fn read_document_attaches_settings_to_nested_list_elements() {
+        let mut deser =
+            JsonDeserializer::new(br#"["a","b"]"#, Arc::new(JsonCodecSettings::default()));
+        let doc = deser.read_document(dummy_schema()).unwrap();
+        let elements = doc.as_list().expect("list");
+        for (idx, element) in elements.iter().enumerate() {
+            assert!(
+                element.settings().is_some(),
+                "settings should propagate to list element at index {idx}"
+            );
+        }
+    }
+
+    #[test]
+    fn read_document_settings_enable_blob_coercion() {
+        // "aGVsbG8=" is base64("hello"). Without settings, as_blob on a String
+        // document returns UnsupportedOperation. With settings attached by
+        // `read_document`, JsonCodecSettings::coerce_string_to_blob decodes it.
+        let mut deser =
+            JsonDeserializer::new(br#""aGVsbG8=""#, Arc::new(JsonCodecSettings::default()));
+        let doc = deser.read_document(dummy_schema()).unwrap();
+        let bytes = doc.as_blob().expect("base64 string should decode to blob");
+        assert_eq!(&*bytes, b"hello");
+    }
+
+    #[test]
+    fn read_document_settings_enable_timestamp_coercion() {
+        // EpochSeconds is the JSON default; a number value coerces via
+        // `coerce_number_to_timestamp`.
+        let mut deser =
+            JsonDeserializer::new(b"1577836800", Arc::new(JsonCodecSettings::default()));
+        let doc = deser.read_document(dummy_schema()).unwrap();
+        let ts = doc
+            .as_timestamp()
+            .expect("epoch-seconds number should decode to timestamp");
+        assert_eq!(ts.secs(), 1577836800);
     }
 }

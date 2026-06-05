@@ -332,13 +332,19 @@ impl Document {
     /// Attaches protocol-specific deserialization settings to this
     /// document.
     ///
-    /// Crate-internal: settings are populated by codec
-    /// `read_document` implementations during parsing and by the
-    /// `DocumentShapeSerializer` machinery when round-tripping. User
-    /// code constructs documents without settings and relies on the
-    /// default Smithy data-model semantics.
-    #[allow(dead_code)] // populated by codec read_document impls in Phase 7.
-    pub(crate) fn with_settings(mut self, settings: Arc<dyn DocumentSettings>) -> Self {
+    /// Settings carry codec-level context (timestamp format defaults,
+    /// `@jsonName` toggle, etc.) that the format-aware accessors
+    /// [`Document::as_blob`] and [`Document::as_timestamp`] consult
+    /// when coercing from the wire-format representation.
+    ///
+    /// Settings are typically populated by codec `read_document`
+    /// implementations during parsing — see
+    /// `aws_smithy_json::codec::JsonDeserializer` for an example.
+    /// User code constructing documents from typed shapes via
+    /// [`Document::from_struct`] does not attach settings; format
+    /// coercion is unnecessary because such documents already carry
+    /// native `Blob` / `Timestamp` variants.
+    pub fn with_settings(mut self, settings: Arc<dyn DocumentSettings>) -> Self {
         self.settings = Some(settings);
         self
     }
