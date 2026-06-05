@@ -98,6 +98,7 @@ impl HttpClient for Client {
 
         SharedHttpConnector::new(PooledConnector {
             pool: self.pool.inner.pool.clone(),
+            partition: self.partition.clone(),
             connect_timeout,
             read_timeout,
             sleep_impl,
@@ -121,6 +122,7 @@ impl HttpClient for Client {
 /// timeouts). The pool itself is shared across all operations via `Arc`.
 struct PooledConnector {
     pool: Arc<ConnectionPool>,
+    partition: Arc<PartitionState>,
     connect_timeout: Option<Duration>,
     read_timeout: Option<Duration>,
     sleep_impl: Option<SharedAsyncSleep>,
@@ -136,6 +138,7 @@ impl std::fmt::Debug for PooledConnector {
 impl HttpConnector for PooledConnector {
     fn call(&self, request: HttpRequest) -> HttpConnectorFuture {
         let pool = self.pool.clone();
+        let partition = self.partition.clone();
         let connect_timeout = self.connect_timeout;
         let read_timeout = self.read_timeout;
         let sleep_impl = self.sleep_impl.clone();
@@ -186,7 +189,7 @@ impl HttpConnector for PooledConnector {
             );
 
             let response = pool
-                .send_request(connect_ctx, request)
+                .send_request(&partition, connect_ctx, request)
                 .await
                 .map_err(downcast_error)?;
 

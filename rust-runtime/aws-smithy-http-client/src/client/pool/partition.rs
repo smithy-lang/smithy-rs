@@ -271,15 +271,30 @@ impl Partition {
 
 /// Pool-owned state for one declared partition. Resolved once at pool
 /// build time and referenced by [`Client`](super::Client) handles.
-#[derive(Debug)]
 pub(crate) struct PartitionState {
     pub(crate) id: PartitionId,
-    // used by connection driver spawn (later step)
+    // used by connection driver spawn
     #[allow(dead_code)]
     pub(crate) spawner: std::sync::Arc<dyn DriverSpawner>,
     // used by socket bind (later step)
     #[allow(dead_code)]
     pub(crate) nic: Option<String>,
+    /// Per-host connection storage for this partition. Keyed by
+    /// (scheme, authority); entries built lazily on first request.
+    pub(crate) authorities:
+        std::sync::Mutex<std::collections::HashMap<super::PoolKey, Box<dyn super::PoolEntry>>>,
+    /// Builds a host entry on first touch, capturing this partition's
+    /// connector; shared budget/hooks arrive via `&SharedPoolState`.
+    pub(crate) make_stack: super::MakeStack,
+}
+
+impl std::fmt::Debug for PartitionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PartitionState")
+            .field("id", &self.id)
+            .field("nic", &self.nic)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Immutable registry of declared partitions, built once at pool
@@ -303,6 +318,7 @@ impl PartitionRegistry {
     pub(crate) fn build(
         partitions: Vec<Partition>,
         anonymous_spawner: impl FnOnce() -> std::sync::Arc<dyn DriverSpawner>,
+        make_stack: super::MakeStack,
     ) -> Self {
         let partitions = if partitions.is_empty() {
             vec![Partition {
@@ -323,6 +339,8 @@ impl PartitionRegistry {
                 id: p.id,
                 spawner: p.spawner,
                 nic: p.nic,
+                authorities: std::sync::Mutex::new(std::collections::HashMap::new()),
+                make_stack: make_stack.clone(),
             });
             if by_id.insert(p.id, state).is_some() {
                 panic!("duplicate PartitionId declared: {:?}", p.id);
@@ -350,6 +368,11 @@ impl PartitionRegistry {
             .get(&id)
             .unwrap_or_else(|| panic!("partition not declared: {:?}", id))
             .clone()
+    }
+
+    /// Iterate all declared partitions.
+    pub(crate) fn partitions(&self) -> impl Iterator<Item = &std::sync::Arc<PartitionState>> {
+        self.by_id.values()
     }
 }
 
