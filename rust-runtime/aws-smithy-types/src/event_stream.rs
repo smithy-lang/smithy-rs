@@ -311,3 +311,18 @@ impl DeferredSignerSender {
 impl Storable for DeferredSignerSender {
     type Storer = StoreReplace<Self>;
 }
+
+/// An error that occurs when signing an Event Stream message.
+pub type SignMessageError = Box<dyn std::error::Error + Send + Sync + 'static>;
+
+/// Signs an Event Stream message.
+pub trait SignMessage: fmt::Debug {
+    /// Signs a message, returning the signed version.
+    fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
+
+    /// SigV4 requires an empty last signed message to be sent.
+    /// Other protocols do not require one.
+    /// Return `Some(_)` to send a signed last empty message, before completing the stream.
+    /// Return `None` to not send one and terminate the stream immediately.
+    fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>>;
+}

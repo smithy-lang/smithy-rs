@@ -13,7 +13,6 @@ use aws_smithy_types::event_stream::{DeferredSignerReceiver, Header, HeaderValue
 use aws_smithy_types::str_bytes::StrBytes;
 use aws_smithy_types::DateTime;
 use bytes::{Buf, BufMut};
-use std::error::Error as StdError;
 use std::fmt;
 use std::mem::size_of;
 
@@ -34,18 +33,7 @@ pub(crate) const TYPE_STRING: u8 = 7;
 pub(crate) const TYPE_TIMESTAMP: u8 = 8;
 pub(crate) const TYPE_UUID: u8 = 9;
 
-pub type SignMessageError = Box<dyn StdError + Send + Sync + 'static>;
-
-/// Signs an Event Stream message.
-pub trait SignMessage: fmt::Debug {
-    fn sign(&mut self, message: Message) -> Result<Message, SignMessageError>;
-
-    /// SigV4 requires an empty last signed message to be sent.
-    /// Other protocols do not require one.
-    /// Return `Some(_)` to send a signed last empty message, before completing the stream.
-    /// Return `None` to not send one and terminate the stream immediately.
-    fn sign_empty(&mut self) -> Option<Result<Message, SignMessageError>>;
-}
+pub use aws_smithy_types::event_stream::{SignMessage, SignMessageError};
 
 /// Deferred event stream signer to allow a signer to be wired up later.
 ///
