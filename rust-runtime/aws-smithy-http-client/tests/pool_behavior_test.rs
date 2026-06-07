@@ -1712,3 +1712,211 @@ async fn partition_spawners_are_isolated() {
         "partition 0's spawner must not be touched by a partition 1 request"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Test implementations: stats read API
+// ---------------------------------------------------------------------------
+
+/// SharedPool::stats returns sparse per-partition snapshots: only partitions
+/// that have touched an authority appear. After a request completes and the
+/// body is consumed, counters reflect the idle state.
+#[tokio::test]
+async fn v2_stats_reports_per_partition_sparse() {
+    use aws_smithy_http_client::pool::{Authority, Partition, PartitionId, TokioDriverSpawner};
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![ConnectionBehavior::RespondKeepAlive {
+                status: 200,
+                body: b"stats-test",
+            }],
+        )
+        .build()
+        .await;
+
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current());
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current());
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .partitions([p0, p1])
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let authority = Authority::from_host(format!("127.0.0.1:{port}"));
+
+    // Before any request, stats are empty for this authority.
+    let stats = pool.stats(&authority);
+    assert!(
+        stats.is_empty(),
+        "no partition should have touched this authority yet"
+    );
+
+    // Send a request on partition 0, consume the body so the connection idles.
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let (status, body) = send_and_read_body(&client0, &url)
+        .await
+        .expect("p0 request should succeed");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"stats-test");
+
+    // After the request idles, partition 0 should appear, partition 1 should not.
+    let stats = pool.stats(&authority);
+    assert_eq!(stats.len(), 1, "only partition 0 should appear (sparse)");
+
+    let p0_stats = stats
+        .get(PartitionId::from_index(0))
+        .expect("partition 0 should have stats");
+    assert_eq!(p0_stats.established, 1, "one connection established");
+    assert_eq!(p0_stats.establishing, 0, "no handshakes in flight");
+    assert_eq!(p0_stats.active, 0, "connection is idle after body consumed");
+    assert_eq!(p0_stats.idle(), 1, "one idle connection");
+    // H1 cell: capacity_hint is Some(idle)
+    assert_eq!(p0_stats.capacity_hint(), Some(1));
+
+    assert!(
+        stats.get(PartitionId::from_index(1)).is_none(),
+        "partition 1 has not touched this authority"
+    );
+}
+
+/// `active` tracks an in-flight request end-to-end. The H1 checkout guard
+/// rides the response body (`GuardedBody`): it is held while the response
+/// value is alive and releases when the body is consumed/dropped, returning
+/// the connection to the pool. So `active == 1` is observable for as long as
+/// the caller holds the response, and drops to 0 once the body is drained.
+#[tokio::test]
+async fn v2_stats_active_tracks_in_flight_request() {
+    use aws_smithy_http_client::pool::{Authority, PartitionId};
+    use http_body_util::BodyExt;
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![ConnectionBehavior::RespondKeepAlive {
+                status: 200,
+                body: b"in-flight",
+            }],
+        )
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let authority = Authority::from_host(format!("127.0.0.1:{port}"));
+    let partition = PartitionId::default();
+
+    let client = PoolClient::new(&pool).into_shared();
+
+    // Issue the request but hold the response without draining the body. The
+    // connection is checked out: its guard is alive inside `resp`'s body.
+    let resp = send_to(&client, &url)
+        .await
+        .expect("request should succeed");
+    assert_eq!(resp.status().as_u16(), 200);
+
+    let stats = pool.stats(&authority);
+    let in_flight = stats
+        .get(partition)
+        .expect("partition should have touched this authority");
+    assert_eq!(in_flight.established, 1, "one connection established");
+    assert_eq!(
+        in_flight.active, 1,
+        "request is in flight, connection checked out"
+    );
+    assert_eq!(in_flight.idle(), 0, "no idle connection while in flight");
+
+    // Drain the body: the GuardedBody drops, CachedConnection::Drop fires,
+    // active decrements and the connection returns to the pool as idle.
+    let body = resp
+        .into_body()
+        .collect()
+        .await
+        .expect("body should be readable")
+        .to_bytes()
+        .to_vec();
+    assert_eq!(body, b"in-flight");
+
+    let stats = pool.stats(&authority);
+    let idle = stats
+        .get(partition)
+        .expect("partition still present after request completes");
+    assert_eq!(idle.established, 1, "connection still established (idle)");
+    assert_eq!(idle.active, 0, "no in-flight request after body drained");
+    assert_eq!(idle.idle(), 1, "connection is idle and reusable");
+}
+
+/// Eviction decrements `established` and prunes the stats-index cell through
+/// its real trigger — the background eviction task — not a direct prune call.
+/// After an idle connection is evicted, the host entry is removed and the
+/// eviction-triggered prune drops the now-dead cell from the index, so
+/// `stats()` reports the authority as untracked.
+#[tokio::test]
+async fn v2_stats_pruned_after_eviction() {
+    use aws_smithy_http_client::pool::{Authority, PartitionId};
+
+    let idle_timeout = Duration::from_millis(100);
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"evict-me",
+                },
+                // A second connection is available if eviction forces a reconnect;
+                // the test asserts on stats, not connection count.
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"evict-me",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .pool_idle_timeout(idle_timeout)
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let authority = Authority::from_host(format!("127.0.0.1:{port}"));
+
+    let client = PoolClient::new(&pool).into_shared();
+
+    // Request completes and the connection idles. This also lazily spawns the
+    // eviction task (pool_idle_timeout is set).
+    let (status, _) = send_and_read_body(&client, &url)
+        .await
+        .expect("request should succeed");
+    assert_eq!(status, 200);
+
+    let stats = pool.stats(&authority);
+    assert_eq!(
+        stats
+            .get(PartitionId::default())
+            .expect("partition present after request")
+            .established,
+        1,
+        "one established idle connection before eviction"
+    );
+
+    // Wait past the idle timeout: the eviction task drops the idle connection,
+    // removes the host entry, and prunes the now-dead index cell.
+    tokio::time::sleep(idle_timeout * 3).await;
+
+    let stats = pool.stats(&authority);
+    assert!(
+        stats.is_empty(),
+        "eviction should have decremented established and pruned the cell"
+    );
+}
