@@ -31,6 +31,22 @@ impl Authority {
         Self(s.into())
     }
 
+    /// Construct an authority key for a host, as `host` or `host:port`.
+    ///
+    /// Used to query connection counts via [`SharedPool::stats`]. The
+    /// pool keys connection state by the authority component of each
+    /// request's URI, compared as an exact byte string. The value passed
+    /// here must match that form for a lookup to hit: notably, a port is
+    /// present only when the URI carried a non-default port (an HTTPS URI
+    /// to `example.com` keys as `example.com`, not `example.com:443`), and
+    /// the host is matched case-sensitively. A value that does not match
+    /// any keyed authority yields empty stats rather than an error.
+    ///
+    /// [`SharedPool::stats`]: crate::client::pool::SharedPool::stats
+    pub fn from_host(host: impl Into<Arc<str>>) -> Self {
+        Self(host.into())
+    }
+
     /// The authority as a string slice.
     pub fn as_str(&self) -> &str {
         &self.0
@@ -386,6 +402,7 @@ impl ConnectionPermit {
 pub(crate) struct EstablishedConnection<IO> {
     pub(crate) io: IO,
     pub(crate) permit: Arc<ConnectionPermit>,
+    pub(crate) establishing: super::stats::EstablishingGuard,
 }
 
 /// Error returned by `ManagedConnection::poll_ready` when the connection
@@ -501,6 +518,9 @@ pub(crate) struct ManagedConnection<S> {
     active_streams: Arc<std::sync::atomic::AtomicUsize>,
     poison: PoisonPill,
     _permit: Arc<ConnectionPermit>,
+    /// Fires `established--` when the last clone drops. Arc-shared so H2
+    /// clones share one guard that drops once.
+    _established: Arc<super::stats::EstablishedGuard>,
 }
 
 impl<S> ManagedConnection<S> {
@@ -510,6 +530,7 @@ impl<S> ManagedConnection<S> {
         info: ConnectionInfo,
         conn_id: ConnectionId,
         permit: Arc<ConnectionPermit>,
+        established: super::stats::EstablishedGuard,
     ) -> Self {
         let now = Instant::now();
         Self {
@@ -521,6 +542,7 @@ impl<S> ManagedConnection<S> {
             active_streams: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             poison: PoisonPill::healthy(),
             _permit: permit,
+            _established: Arc::new(established),
         }
     }
 
@@ -629,6 +651,7 @@ impl<S: Clone> Clone for ManagedConnection<S> {
             active_streams: self.active_streams.clone(),
             poison: self.poison.clone(),
             _permit: self._permit.clone(),
+            _established: self._established.clone(),
         }
     }
 }
@@ -668,13 +691,16 @@ where
 pub(crate) struct CachedConnection<S> {
     inner: Option<cache::Cached<ManagedConnection<S>>>,
     listener: Option<Arc<dyn ConnectionEventListener>>,
+    counters: Arc<super::stats::ConnectionCounters>,
 }
 
 impl<S> CachedConnection<S> {
     pub(crate) fn new(
         cached: cache::Cached<ManagedConnection<S>>,
         listener: Option<Arc<dyn ConnectionEventListener>>,
+        counters: Arc<super::stats::ConnectionCounters>,
     ) -> Self {
+        counters.incr_active();
         let is_reuse = *cached.inner().idle_at.lock().unwrap() > cached.inner().created_at;
         if is_reuse {
             let conn_id = cached.inner().conn_id();
@@ -687,6 +713,7 @@ impl<S> CachedConnection<S> {
         Self {
             inner: Some(cached),
             listener,
+            counters,
         }
     }
 
@@ -761,6 +788,7 @@ where
 
 impl<S> Drop for CachedConnection<S> {
     fn drop(&mut self) {
+        self.counters.decr_active();
         if let Some(cached) = self.inner.take() {
             let managed = cached.inner();
             let conn_id = managed.conn_id;
@@ -866,25 +894,29 @@ impl H2ConnectionRef {
 struct DispatchGuard {
     active_streams: Arc<std::sync::atomic::AtomicUsize>,
     idle_at: Arc<Mutex<Instant>>,
+    counters: Arc<super::stats::ConnectionCounters>,
 }
 
 impl DispatchGuard {
     /// Start a dispatch against the connection described by `state`.
     /// Increments `active_streams`; the returned guard releases the
     /// increment on drop.
-    fn start(state: &H2ConnectionState) -> Self {
+    fn start(state: &H2ConnectionState, counters: Arc<super::stats::ConnectionCounters>) -> Self {
         state
             .active_streams
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        counters.incr_active();
         Self {
             active_streams: state.active_streams.clone(),
             idle_at: state.idle_at.clone(),
+            counters,
         }
     }
 }
 
 impl Drop for DispatchGuard {
     fn drop(&mut self) {
+        self.counters.decr_active();
         let prev = self
             .active_streams
             .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
@@ -930,15 +962,22 @@ pub(crate) struct SingletonConnection<T> {
     /// Active-stream guard. `Some` between [`Self::call`] and drop.
     /// `None` if `call` was never invoked or before `call` runs.
     dispatch: Option<DispatchGuard>,
+    /// Pool-level warmth counters for this (partition, authority) cell.
+    counters: Arc<super::stats::ConnectionCounters>,
 }
 
 impl<T> SingletonConnection<T> {
-    pub(crate) fn new(inner: T, h2_ref: H2ConnectionRef) -> Self {
+    pub(crate) fn new(
+        inner: T,
+        h2_ref: H2ConnectionRef,
+        counters: Arc<super::stats::ConnectionCounters>,
+    ) -> Self {
         let state = h2_ref.current();
         Self {
             inner,
             state,
             dispatch: None,
+            counters,
         }
     }
 
@@ -967,7 +1006,7 @@ where
 
     fn call(&mut self, req: Req) -> Self::Future {
         if let Some(state) = self.state.as_ref() {
-            self.dispatch = Some(DispatchGuard::start(state));
+            self.dispatch = Some(DispatchGuard::start(state, self.counters.clone()));
         }
         self.inner.call(req)
     }
@@ -1226,7 +1265,8 @@ mod tests {
         let (active, _) = publish_state(&h2_ref);
         assert_eq!(active.load(Ordering::Acquire), 0);
 
-        let mut sc = SingletonConnection::new(OkService, h2_ref);
+        let counters = Arc::new(super::super::stats::ConnectionCounters::default());
+        let mut sc = SingletonConnection::new(OkService, h2_ref, counters);
         let _ = sc.call(()).await;
         assert_eq!(
             active.load(Ordering::Acquire),
@@ -1251,7 +1291,8 @@ mod tests {
         let (active, _) = publish_state(&h2_ref);
         active.store(5, Ordering::Release);
 
-        let sc = SingletonConnection::new(OkService, h2_ref);
+        let counters = Arc::new(super::super::stats::ConnectionCounters::default());
+        let sc = SingletonConnection::new(OkService, h2_ref, counters);
         drop(sc);
         assert_eq!(
             active.load(Ordering::Acquire),
@@ -1272,9 +1313,21 @@ mod tests {
         // Capture the stamp from construction to detect updates.
         let original_idle = *idle_at.lock().unwrap();
 
-        let mut a = SingletonConnection::new(OkService, h2_ref.clone());
-        let mut b = SingletonConnection::new(OkService, h2_ref.clone());
-        let mut c = SingletonConnection::new(OkService, h2_ref);
+        let mut a = SingletonConnection::new(
+            OkService,
+            h2_ref.clone(),
+            Arc::new(super::super::stats::ConnectionCounters::default()),
+        );
+        let mut b = SingletonConnection::new(
+            OkService,
+            h2_ref.clone(),
+            Arc::new(super::super::stats::ConnectionCounters::default()),
+        );
+        let mut c = SingletonConnection::new(
+            OkService,
+            h2_ref,
+            Arc::new(super::super::stats::ConnectionCounters::default()),
+        );
 
         let _ = a.call(()).await;
         let _ = b.call(()).await;

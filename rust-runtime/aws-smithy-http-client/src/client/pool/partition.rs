@@ -341,7 +341,7 @@ impl PartitionRegistry {
     /// no-topology case via [`normalize_partitions`] first).
     pub(crate) fn build(
         partitions: Vec<Partition>,
-        make_stack_for: impl Fn(&std::sync::Arc<dyn DriverSpawner>) -> super::MakeStack,
+        make_stack_for: impl Fn(PartitionId, &std::sync::Arc<dyn DriverSpawner>) -> super::MakeStack,
     ) -> Self {
         assert!(
             !partitions.is_empty(),
@@ -354,7 +354,7 @@ impl PartitionRegistry {
             std::collections::HashMap::new();
         for p in partitions {
             by_nic.entry(p.nic.clone()).or_default().push(p.id);
-            let make_stack = make_stack_for(&p.spawner);
+            let make_stack = make_stack_for(p.id, &p.spawner);
             let state = std::sync::Arc::new(PartitionState {
                 id: p.id,
                 spawner: p.spawner,

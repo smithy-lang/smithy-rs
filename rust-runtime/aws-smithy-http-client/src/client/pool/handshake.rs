@@ -102,6 +102,7 @@ pub(crate) struct ConnectionLimit<C> {
     inner: C,
     global: Option<Arc<Semaphore>>,
     per_host: Option<Arc<Semaphore>>,
+    counters: Arc<super::stats::ConnectionCounters>,
 }
 
 impl<C> ConnectionLimit<C> {
@@ -109,11 +110,13 @@ impl<C> ConnectionLimit<C> {
         inner: C,
         global: Option<Arc<Semaphore>>,
         per_host: Option<Arc<Semaphore>>,
+        counters: Arc<super::stats::ConnectionCounters>,
     ) -> Self {
         Self {
             inner,
             global,
             per_host,
+            counters,
         }
     }
 }
@@ -124,6 +127,7 @@ impl<C: Clone> Clone for ConnectionLimit<C> {
             inner: self.inner.clone(),
             global: self.global.clone(),
             per_host: self.per_host.clone(),
+            counters: self.counters.clone(),
         }
     }
 }
@@ -147,6 +151,7 @@ where
         let mut inner = self.inner.clone();
         let global = self.global.clone();
         let per_host = self.per_host.clone();
+        let counters = self.counters.clone();
         Box::pin(async move {
             // Acquire per-host permit first, then global. This ordering
             // prevents deadlock: a request never holds a global permit
@@ -161,6 +166,7 @@ where
                 None => None,
             };
             let permit = Arc::new(ConnectionPermit::new(global_permit, per_host_permit));
+            let establishing = super::stats::EstablishingGuard::new(counters);
 
             std::future::poll_fn(|cx| inner.poll_ready(cx))
                 .await
@@ -178,7 +184,11 @@ where
                 super::super::timeout::TimeoutKind::Connect,
             )
             .await?;
-            Ok(EstablishedConnection { io, permit })
+            Ok(EstablishedConnection {
+                io,
+                permit,
+                establishing,
+            })
         })
     }
 }
@@ -317,7 +327,11 @@ where
         let fut = self.connector.call(ctx);
         Box::pin(async move {
             let connect_start = Instant::now();
-            let EstablishedConnection { io, permit } = match fut.await.map_err(Into::into) {
+            let EstablishedConnection {
+                io,
+                permit,
+                establishing,
+            } = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
                     hooks.on_connection_failed(&ConnectionFailedEvent::new(
@@ -364,6 +378,8 @@ where
                 ConnectionTiming::new(connect_duration),
             ));
 
+            let established = establishing.promote(super::stats::PROTO_H1);
+
             spawner.spawn(Box::pin({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
@@ -386,6 +402,7 @@ where
                 info,
                 conn_id,
                 permit,
+                established,
             ))
         })
     }
@@ -464,7 +481,11 @@ where
         let spawner = self.spawner.clone();
         Box::pin(async move {
             let connect_start = Instant::now();
-            let EstablishedConnection { io, permit } = match fut.await.map_err(Into::into) {
+            let EstablishedConnection {
+                io,
+                permit,
+                establishing,
+            } = match fut.await.map_err(Into::into) {
                 Ok(v) => v,
                 Err(e) => {
                     hooks.on_connection_failed(&ConnectionFailedEvent::new(
@@ -511,6 +532,8 @@ where
                 ConnectionTiming::new(connect_duration),
             ));
 
+            let established = establishing.promote(super::stats::PROTO_H2);
+
             spawner.spawn(Box::pin({
                 let remote_addr = info.remote_addr;
                 let local_addr = info.local_addr;
@@ -528,7 +551,8 @@ where
                 }
             }));
 
-            let managed = ManagedConnection::new(H2SendRequest::new(tx), info, conn_id, permit);
+            let managed =
+                ManagedConnection::new(H2SendRequest::new(tx), info, conn_id, permit, established);
             // Publish this connection's state (metadata + active_streams +
             // idle_at refs) for the checkout side. Singleton replaces its
             // stored connection wholesale on each new handshake, so
@@ -557,7 +581,12 @@ mod tests {
     /// and produce an `HTTP connect timeout occurred after …` error.
     #[tokio::test(start_paused = true)]
     async fn connect_timeout_fires_on_slow_connector() {
-        let mut svc = ConnectionLimit::new(NeverConnects::default(), None, None);
+        let mut svc = ConnectionLimit::new(
+            NeverConnects::default(),
+            None,
+            None,
+            Arc::new(super::super::stats::ConnectionCounters::default()),
+        );
         let sleep = SharedAsyncSleep::new(TokioSleep::new());
         let ctx = ConnectCtx::new(
             "http://example.com".parse().unwrap(),
@@ -588,7 +617,12 @@ mod tests {
     /// still pending after a short yield).
     #[tokio::test(start_paused = true)]
     async fn no_timeout_does_not_bound_connector() {
-        let mut svc = ConnectionLimit::new(NeverConnects::default(), None, None);
+        let mut svc = ConnectionLimit::new(
+            NeverConnects::default(),
+            None,
+            None,
+            Arc::new(super::super::stats::ConnectionCounters::default()),
+        );
         let ctx = ConnectCtx::new("http://example.com".parse().unwrap(), None);
         let fut = svc.call(ctx);
         // A brief tokio yield shouldn't resolve the never-connects future.

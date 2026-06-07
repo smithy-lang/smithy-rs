@@ -42,6 +42,7 @@
 
 pub(crate) mod connection;
 mod handshake;
+pub(crate) mod stats;
 mod vendored_cache;
 
 pub mod builder;
@@ -58,6 +59,9 @@ pub use connection::{
 pub use partition::{
     CrossPartitionPolicy, DriverSpawner, Partition, PartitionId, TokioDriverSpawner,
 };
+pub use stats::{AuthorityStats, PartitionStats};
+
+pub(crate) use stats::{ConnectionCounters, StatsIndex};
 
 /// Connection-caching pool layer.
 mod cache {
@@ -183,6 +187,20 @@ impl SharedPool {
     pub fn builder() -> Builder<super::TlsUnset> {
         Builder::default()
     }
+
+    /// Point-in-time, per-partition snapshot of connection counts for `authority`.
+    ///
+    /// Relaxed atomics; values may be stale. Sparse — only partitions that have
+    /// opened a connection to this authority appear.
+    ///
+    /// The `authority` must match the form the pool keys on (see
+    /// [`Authority::from_host`]); a value that matches no keyed authority
+    /// yields empty stats.
+    ///
+    /// [`Authority::from_host`]: crate::client::pool::Authority::from_host
+    pub fn stats(&self, authority: &Authority) -> stats::AuthorityStats {
+        self.inner.pool.shared.stats_index().snapshot(authority)
+    }
 }
 
 /// Key for per-host connection pool routing.
@@ -246,6 +264,7 @@ pub(crate) struct SharedPoolState {
     pub(crate) global_sem: Option<Arc<Semaphore>>,
     max_connections_per_host: Option<usize>,
     per_host_sems: Mutex<HashMap<PoolKey, Arc<Semaphore>>>,
+    stats_index: StatsIndex,
 }
 
 impl SharedPoolState {
@@ -255,6 +274,7 @@ impl SharedPoolState {
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
+            stats_index: StatsIndex::default(),
         }
     }
 
@@ -270,6 +290,11 @@ impl SharedPoolState {
                 .or_insert_with(|| Arc::new(Semaphore::new(n)))
                 .clone(),
         )
+    }
+
+    /// Pool-level inverted index for stats reads.
+    pub(crate) fn stats_index(&self) -> &StatsIndex {
+        &self.stats_index
     }
 }
 
@@ -296,7 +321,9 @@ where
 
     let make_stack_for = {
         let connector = connector.clone();
-        move |spawner: &Arc<dyn partition::DriverSpawner>| -> MakeStack {
+        move |partition_id: partition::PartitionId,
+              spawner: &Arc<dyn partition::DriverSpawner>|
+              -> MakeStack {
             let connector = connector.clone();
             let spawner = spawner.clone();
             Arc::new(
@@ -306,12 +333,19 @@ where
                             .expect("pool entry URI has authority")
                             .as_str(),
                     );
+
+                    let counters = Arc::new(ConnectionCounters::default());
+                    shared
+                        .stats_index()
+                        .register(authority.clone(), partition_id, &counters);
+
                     let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
                     let per_host_sem = shared.per_host_sem(&key);
                     let limited = handshake::ConnectionLimit::new(
                         connector.clone(),
                         shared.global_sem.clone(),
                         per_host_sem,
+                        counters.clone(),
                     );
 
                     let pool_hooks = shared.hooks.clone();
@@ -335,6 +369,7 @@ where
                                 let retainers = retainers.clone();
                                 let pool_hooks = pool_hooks.clone();
                                 let spawner = spawner.clone();
+                                let counters = counters.clone();
                                 tower::layer::layer_fn(move |inspector| {
                                     let cache = cache::builder()
                                         .executor(TokioExecutor::new())
@@ -409,10 +444,12 @@ where
                                     );
                                     cache.map_response({
                                         let listener = pool_hooks.listener.clone();
+                                        let counters = counters.clone();
                                         move |cached| {
                                             H1Checkout::new(CachedConnection::new(
                                                 cached,
                                                 listener.clone(),
+                                                counters.clone(),
                                             ))
                                         }
                                     })
@@ -423,6 +460,7 @@ where
                                 let retainers = retainers.clone();
                                 let pool_hooks = pool_hooks.clone();
                                 let spawner = spawner.clone();
+                                let counters = counters.clone();
                                 tower::layer::layer_fn(move |inspected| {
                                     let singleton = hpool::singleton::Singleton::new(
                                         H2ConnectAndHandshake::new(
@@ -505,17 +543,23 @@ where
                                     );
                                     singleton.map_response({
                                         let h2_ref = h2_ref.clone();
+                                        let counters = counters.clone();
                                         move |singled| {
                                             H2Checkout::new(SingletonConnection::new(
                                                 singled,
                                                 h2_ref.clone(),
+                                                counters.clone(),
                                             ))
                                         }
                                     })
                                 })
                             })
                             .build();
-                    Box::new(TypedPoolEntry { stack, retainers })
+                    Box::new(TypedPoolEntry {
+                        stack,
+                        retainers,
+                        counters,
+                    })
                 },
             )
         }
@@ -675,16 +719,30 @@ impl ConnectionPool {
     /// partitions are empty (no-op).
     fn retain_idle(&self, timeout: Duration) {
         for partition in self.registry.partitions() {
-            let mut auth = partition.authorities.lock().unwrap();
-            auth.retain(|_key, entry| {
-                entry.retain_idle(timeout);
-                if entry.is_empty() {
-                    tracing::debug!("pool: host entry removed (empty after retain)");
-                    false
-                } else {
-                    true
-                }
-            });
+            let partition_id = partition.id;
+            let mut evicted: Vec<Authority> = Vec::new();
+            {
+                let mut auth = partition.authorities.lock().unwrap();
+                auth.retain(|key, entry| {
+                    entry.retain_idle(timeout);
+                    if entry.is_empty() {
+                        tracing::debug!("pool: host entry removed (empty after retain)");
+                        evicted.push(Authority::new(key.authority.as_str()));
+                        false
+                    } else {
+                        true
+                    }
+                });
+                // `auth` guard drops here, dropping the removed entries (and
+                // the strong `Arc<ConnectionCounters>` they held). Only then
+                // can the index prune observe a zero strong count — unless a
+                // checkout is still in flight, in which case the cell stays.
+            }
+            for authority in evicted {
+                self.shared
+                    .stats_index()
+                    .prune_if_dead(&authority, partition_id);
+            }
         }
     }
 }
@@ -969,6 +1027,9 @@ struct TypedPoolEntry<S> {
     /// Empty until the first request against this host; safe to iterate
     /// at any point (no leg = no-op retain, trivially empty).
     retainers: RetainerSlot,
+    // active write-handle; read API added in a later change
+    #[allow(dead_code)]
+    counters: Arc<ConnectionCounters>,
 }
 
 impl<S, Conn, PoolUnnameable> PoolEntry for TypedPoolEntry<S>
@@ -1079,7 +1140,9 @@ mod tests {
 
     fn pool_with_config(config: PoolConfig) -> Arc<ConnectionPool> {
         let shared = Arc::new(SharedPoolState::new(&config));
-        let make_stack_for = |_spawner: &Arc<dyn partition::DriverSpawner>| -> MakeStack {
+        let make_stack_for = |_partition_id: partition::PartitionId,
+                              _spawner: &Arc<dyn partition::DriverSpawner>|
+         -> MakeStack {
             Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
         };
         let partitions = partition::normalize_partitions(Vec::new(), || {
@@ -1218,5 +1281,60 @@ mod tests {
             !Arc::ptr_eq(&p0, &p1),
             "distinct partition ids must yield distinct PartitionState arcs"
         );
+    }
+
+    /// End-to-end lifecycle: `EstablishingGuard::new` → `promote` →
+    /// `ManagedConnection` holds `EstablishedGuard` → drop decrements.
+    /// Verifies the wiring from handshake through connection lifetime.
+    #[test]
+    fn established_set_after_handshake() {
+        use connection::{Authority, ConnectionInfo, ConnectionPermit, ManagedConnection};
+        use stats::{ConnectionCounters, EstablishingGuard};
+
+        let counters = Arc::new(ConnectionCounters::default());
+        let authority = Authority::new("example.com:443");
+        let partition_id = partition::PartitionId::from_index(0);
+
+        // Register in StatsIndex so we can read through that path too
+        let index = StatsIndex::default();
+        index.register(authority.clone(), partition_id, &counters);
+
+        // Simulate: ConnectionLimit creates guard post-permit
+        let establishing = EstablishingGuard::new(counters.clone());
+        assert_eq!(index.establishing_for(&authority, partition_id), 1);
+        assert_eq!(index.established_for(&authority, partition_id), 0);
+
+        // Simulate: handshake succeeds, promote
+        let established = establishing.promote(stats::PROTO_H1);
+        assert_eq!(index.establishing_for(&authority, partition_id), 0);
+        assert_eq!(index.established_for(&authority, partition_id), 1);
+
+        // Simulate: ManagedConnection holds the EstablishedGuard
+        let permit = Arc::new(ConnectionPermit::new(None, None));
+        let info = ConnectionInfo {
+            remote_addr: None,
+            local_addr: None,
+            is_proxied: false,
+            authority: authority.clone(),
+        };
+        let conn: ManagedConnection<()> = ManagedConnection::new(
+            (),
+            info,
+            aws_smithy_runtime_api::client::connection::ConnectionId::new(0),
+            permit,
+            established,
+        );
+
+        // H2-style: clone shares the same Arc<EstablishedGuard>
+        let conn2 = conn.clone();
+        assert_eq!(index.established_for(&authority, partition_id), 1);
+
+        // Drop one clone — guard still alive via the other
+        drop(conn);
+        assert_eq!(index.established_for(&authority, partition_id), 1);
+
+        // Drop last clone — guard fires, established decrements
+        drop(conn2);
+        assert_eq!(index.established_for(&authority, partition_id), 0);
     }
 }
