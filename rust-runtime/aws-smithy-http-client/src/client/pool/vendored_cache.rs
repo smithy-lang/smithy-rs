@@ -182,6 +182,21 @@ mod internal {
         pub fn is_empty(&self) -> bool {
             self.shared.lock().unwrap().services.is_empty()
         }
+
+        // SDK MODIFICATION: added `try_pop_idle` so a caller can remove an
+        // idle cached service to free whatever resource it holds, instead
+        // of waiting for it to be re-handed-out or evicted.
+        /// Remove and return one idle cached service, if any.
+        ///
+        /// Unlike [`Service::call`], which wraps the taken service in a
+        /// [`Cached`] that returns to the pool on drop, this hands back the
+        /// raw service with no return-to-pool wrapper: dropping it drops the
+        /// service outright. Serialized against [`Self::retain`] by the
+        /// shared `Mutex`, so a popped service is removed before a retain
+        /// pass can observe it.
+        pub fn try_pop_idle(&self) -> Option<M::Response> {
+            self.shared.lock().unwrap().services.pop()
+        }
     }
 
     impl<M, Dst, Ev> Service<Dst> for Cache<M, Dst, Ev>

@@ -233,6 +233,12 @@ impl PoolKey {
 pub(crate) struct BoxedRetainer {
     retain_fn: Box<dyn Fn(Duration) + Send + Sync + 'static>,
     is_empty_fn: Box<dyn Fn() -> bool + Send + Sync + 'static>,
+    /// Pop one idle connection and drop it to free its permit (active
+    /// reclaim). Returns `true` if a connection was freed. The H1 cache
+    /// leg pops from its idle Vec; the H2 singleton leg has no
+    /// simply-reclaimable idle (an idle H2 connection still multiplexes),
+    /// so its `reclaim_fn` is a no-op returning `false`.
+    reclaim_fn: Box<dyn Fn() -> bool + Send + Sync + 'static>,
 }
 
 impl BoxedRetainer {
@@ -242,6 +248,10 @@ impl BoxedRetainer {
 
     fn is_empty(&self) -> bool {
         (self.is_empty_fn)()
+    }
+
+    fn reclaim_one(&self) -> bool {
+        (self.reclaim_fn)()
     }
 }
 
@@ -386,6 +396,7 @@ where
                                     let cache_for_retain =
                                         Arc::new(std::sync::Mutex::new(cache.clone()));
                                     let cache_for_empty = cache_for_retain.clone();
+                                    let cache_for_reclaim = cache_for_retain.clone();
                                     retainers.lock().expect("retainer slot poisoned").push(
                                         BoxedRetainer {
                                             retain_fn: Box::new({
@@ -439,6 +450,47 @@ where
                                                     .lock()
                                                     .expect("is_empty cache lock poisoned")
                                                     .is_empty()
+                                            }),
+                                            reclaim_fn: Box::new({
+                                                let listener = pool_hooks.listener.clone();
+                                                move || {
+                                                    // Pop under the cache lock, RELEASE the
+                                                    // lock, THEN drop the connection (never
+                                                    // drop while holding the cache Mutex).
+                                                    let managed = cache_for_reclaim
+                                                        .lock()
+                                                        .expect("reclaim cache lock poisoned")
+                                                        .try_pop_idle();
+                                                    match managed {
+                                                        Some(managed) => {
+                                                            tracing::debug!(
+                                                                conn_id = %managed.conn_id(),
+                                                                "pool: connection reclaimed"
+                                                            );
+                                                            if let Some(ref l) = listener {
+                                                                l.on_closed(
+                                                                    &ConnectionClosedEvent::new(
+                                                                        managed.conn_id(),
+                                                                        managed
+                                                                            .info
+                                                                            .authority
+                                                                            .clone(),
+                                                                        managed.info.remote_addr,
+                                                                        CloseReason::Reclaimed,
+                                                                        None,
+                                                                    ),
+                                                                );
+                                                            }
+                                                            // `managed` drops here, after the
+                                                            // cache lock is released: its
+                                                            // `ConnectionPermit` returns a
+                                                            // permit to the shared semaphore.
+                                                            drop(managed);
+                                                            true
+                                                        }
+                                                        None => false,
+                                                    }
+                                                }
                                             }),
                                         },
                                     );
@@ -539,6 +591,10 @@ where
                                                     .expect("is_empty singleton lock poisoned")
                                                     .is_empty()
                                             }),
+                                            // An idle H2 connection still multiplexes; it is
+                                            // not simply-reclaimable like an H1 cache entry.
+                                            // Reclaim skips the H2 leg.
+                                            reclaim_fn: Box::new(|| false),
                                         },
                                     );
                                     singleton.map_response({
@@ -1013,6 +1069,15 @@ pub(crate) trait PoolEntry: Send + Sync {
     /// singleton empty). Used to drop empty host entries from the map
     /// after `retain_idle`.
     fn is_empty(&self) -> bool;
+
+    /// Pop one idle connection and drop it to free its permit, returning
+    /// `true` if one was freed. Drives cross-partition active reclaim: a
+    /// starved partition frees an over-supplied peer's idle capacity at
+    /// the cap-bound point. The dropped connection's `ConnectionPermit`
+    /// releases back to the shared semaphore. Fires `on_closed` with
+    /// [`CloseReason::Reclaimed`] for the freed connection. Best-effort:
+    /// returns `false` if the entry has no reclaimable idle.
+    fn try_reclaim_one(&self) -> bool;
 }
 
 /// Concrete PoolEntry wrapping a Negotiate stack.
@@ -1101,6 +1166,14 @@ where
         let retainers = self.retainers.lock().expect("retainer slot poisoned");
         retainers.iter().all(|r| r.is_empty())
     }
+
+    fn try_reclaim_one(&self) -> bool {
+        let retainers = self.retainers.lock().expect("retainer slot poisoned");
+        // Stop at the first leg that frees a connection. The H1 cache leg
+        // pops an idle connection; the H2 leg is a no-op (no
+        // simply-reclaimable idle).
+        retainers.iter().any(|r| r.reclaim_one())
+    }
 }
 
 #[cfg(test)]
@@ -1135,6 +1208,9 @@ mod tests {
         fn retain_idle(&self, _timeout: Duration) {}
         fn is_empty(&self) -> bool {
             true
+        }
+        fn try_reclaim_one(&self) -> bool {
+            false
         }
     }
 

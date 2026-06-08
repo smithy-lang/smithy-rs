@@ -89,6 +89,11 @@ pub enum CloseReason {
     Unusable,
     /// The pool itself was dropped.
     PoolDropped,
+    /// Dropped to free a connection permit for another partition under
+    /// cap pressure (cross-partition active reclaim). Distinct from
+    /// `IdleTimeout`: the connection was still within its idle window but
+    /// was reclaimed because a starved partition needed the capacity.
+    Reclaimed,
 }
 
 /// Timing breakdown for connection establishment.
