@@ -24,14 +24,14 @@ use aws_smithy_types::config_bag::ConfigBag;
 /// * `C` — the payload codec (ex: `JsonCodec`, `CborCodec`)
 #[derive(Debug)]
 pub struct HttpRpcProtocol<C> {
-    protocol_id: ShapeId,
+    protocol_id: ShapeId<'static>,
     codec: C,
     content_type: &'static str,
 }
 
 impl<C: Codec> HttpRpcProtocol<C> {
     /// Creates a new HTTP RPC protocol.
-    pub fn new(protocol_id: ShapeId, codec: C, content_type: &'static str) -> Self {
+    pub fn new(protocol_id: ShapeId<'static>, codec: C, content_type: &'static str) -> Self {
         Self {
             protocol_id,
             codec,
@@ -48,7 +48,7 @@ where
     type Request = Request;
     type Response = Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol_id
     }
 

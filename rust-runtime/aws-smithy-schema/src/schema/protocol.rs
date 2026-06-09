@@ -38,7 +38,7 @@
 //!     type Request = aws_smithy_runtime_api::http::Request;
 //!     type Response = aws_smithy_runtime_api::http::Response;
 //!
-//!     fn protocol_id(&self) -> &ShapeId { &MY_PROTOCOL_ID }
+//!     fn protocol_id(&self) -> &ShapeId<'static> { &MY_PROTOCOL_ID }
 //!
 //!     fn serialize_request(
 //!         &self,
@@ -103,7 +103,7 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     type Response;
 
     /// Returns the Smithy shape ID of this protocol.
-    fn protocol_id(&self) -> &ShapeId;
+    fn protocol_id(&self) -> &ShapeId<'static>;
 
     /// Serializes an operation input into a request message.
     fn serialize_request(
@@ -225,7 +225,7 @@ pub trait ClientProtocol<
 >: Send + Sync + std::fmt::Debug
 {
     /// Returns the Smithy shape ID of this protocol.
-    fn protocol_id(&self) -> &ShapeId;
+    fn protocol_id(&self) -> &ShapeId<'static>;
 
     /// Serializes an operation input into a request message.
     fn serialize_request(
@@ -281,7 +281,7 @@ impl<P> ClientProtocol<P::Request, P::Response> for P
 where
     P: ClientProtocolInner,
 {
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         <Self as ClientProtocolInner>::protocol_id(self)
     }
 
@@ -474,13 +474,14 @@ mod tests {
     #[derive(Debug)]
     struct StubProtocol;
 
-    static STUB_ID: ShapeId = ShapeId::from_static("test#StubProtocol", "test", "StubProtocol");
+    static STUB_ID: ShapeId<'static> =
+        ShapeId::from_static("test#StubProtocol", "test", "StubProtocol");
 
     impl ClientProtocolInner for StubProtocol {
         type Request = Request;
         type Response = Response;
 
-        fn protocol_id(&self) -> &ShapeId {
+        fn protocol_id(&self) -> &ShapeId<'static> {
             &STUB_ID
         }
         fn serialize_request(
@@ -599,17 +600,17 @@ mod tests {
     /// `deserialize_error_response` default forwarding can be asserted.
     #[derive(Debug, Default)]
     struct RecordingProtocol {
-        last_schema_id: std::sync::Mutex<Option<ShapeId>>,
+        last_schema_id: std::sync::Mutex<Option<ShapeId<'static>>>,
     }
 
-    static REC_ID: ShapeId =
+    static REC_ID: ShapeId<'static> =
         ShapeId::from_static("test#RecordingProtocol", "test", "RecordingProtocol");
 
     impl ClientProtocolInner for RecordingProtocol {
         type Request = Request;
         type Response = Response;
 
-        fn protocol_id(&self) -> &ShapeId {
+        fn protocol_id(&self) -> &ShapeId<'static> {
             &REC_ID
         }
         fn serialize_request(

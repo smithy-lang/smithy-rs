@@ -98,7 +98,8 @@ impl fmt::Debug for RegistryEntry {
 /// argument registry override entries with the same shape ID in `self`.
 #[derive(Default)]
 pub struct TypeRegistry {
-    entries: HashMap<ShapeId, RegistryEntry>,
+    // TODO(schema-lifetime): see `TraitMap` — same caveat applies here.
+    entries: HashMap<ShapeId<'static>, RegistryEntry>,
 }
 
 impl TypeRegistry {
@@ -115,13 +116,13 @@ impl TypeRegistry {
     }
 
     /// Look up the static schema for `id`, or `None` if not registered.
-    pub fn schema_for(&self, id: &ShapeId) -> Option<&'static Schema> {
+    pub fn schema_for(&self, id: &ShapeId<'static>) -> Option<&'static Schema> {
         self.entries.get(id).map(|e| e.schema)
     }
 
     /// Look up the entry (schema + deserialize fn) for `id`, or `None`
     /// if not registered.
-    pub fn entry_for(&self, id: &ShapeId) -> Option<&RegistryEntry> {
+    pub fn entry_for(&self, id: &ShapeId<'static>) -> Option<&RegistryEntry> {
         self.entries.get(id)
     }
 
@@ -196,12 +197,12 @@ impl fmt::Debug for TypeRegistry {
 /// Builder for [`TypeRegistry`].
 #[derive(Default)]
 pub struct TypeRegistryBuilder {
-    entries: HashMap<ShapeId, RegistryEntry>,
+    entries: HashMap<ShapeId<'static>, RegistryEntry>,
 }
 
 impl TypeRegistryBuilder {
     /// Insert an explicit `(ShapeId, RegistryEntry)` pair.
-    pub fn insert(mut self, id: ShapeId, entry: RegistryEntry) -> Self {
+    pub fn insert(mut self, id: ShapeId<'static>, entry: RegistryEntry) -> Self {
         self.entries.insert(id, entry);
         self
     }
@@ -228,11 +229,11 @@ impl TypeRegistryBuilder {
 /// Iterator over the entries of a [`TypeRegistry`]. Returned by
 /// [`TypeRegistry::iter`].
 pub struct Iter<'a> {
-    inner: hash_map::Iter<'a, ShapeId, RegistryEntry>,
+    inner: hash_map::Iter<'a, ShapeId<'static>, RegistryEntry>,
 }
 
 impl<'a> Iterator for Iter<'a> {
-    type Item = (&'a ShapeId, &'a RegistryEntry);
+    type Item = (&'a ShapeId<'static>, &'a RegistryEntry);
 
     fn next(&mut self) -> Option<Self::Item> {
         self.inner.next()

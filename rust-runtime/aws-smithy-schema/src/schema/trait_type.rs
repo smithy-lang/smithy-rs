@@ -13,7 +13,9 @@ use std::fmt;
 /// validation, and other behaviors.
 pub trait Trait: Any + Send + Sync + fmt::Debug {
     /// Returns the Shape ID of this trait.
-    fn trait_id(&self) -> &ShapeId;
+    // TODO(schema-lifetime): relax to `&ShapeId<'_>` in task 5 so traits
+    // can be parameterized over arbitrary lifetimes.
+    fn trait_id(&self) -> &ShapeId<'static>;
 
     /// Returns this trait as `&dyn Any` for downcasting.
     fn as_any(&self) -> &dyn Any;
@@ -23,19 +25,19 @@ pub trait Trait: Any + Send + Sync + fmt::Debug {
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Will be used by generated code
 pub struct AnnotationTrait {
-    id: ShapeId,
+    id: ShapeId<'static>,
 }
 
 #[allow(dead_code)]
 impl AnnotationTrait {
     /// Creates a new annotation trait.
-    pub fn new(id: ShapeId) -> Self {
+    pub fn new(id: ShapeId<'static>) -> Self {
         Self { id }
     }
 }
 
 impl Trait for AnnotationTrait {
-    fn trait_id(&self) -> &ShapeId {
+    fn trait_id(&self) -> &ShapeId<'static> {
         &self.id
     }
 
@@ -48,14 +50,14 @@ impl Trait for AnnotationTrait {
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Will be used by generated code
 pub struct StringTrait {
-    id: ShapeId,
+    id: ShapeId<'static>,
     value: String,
 }
 
 #[allow(dead_code)]
 impl StringTrait {
     /// Creates a new string-valued trait.
-    pub fn new(id: ShapeId, value: impl Into<String>) -> Self {
+    pub fn new(id: ShapeId<'static>, value: impl Into<String>) -> Self {
         Self {
             id,
             value: value.into(),
@@ -69,7 +71,7 @@ impl StringTrait {
 }
 
 impl Trait for StringTrait {
-    fn trait_id(&self) -> &ShapeId {
+    fn trait_id(&self) -> &ShapeId<'static> {
         &self.id
     }
 
@@ -85,14 +87,14 @@ impl Trait for StringTrait {
 #[derive(Debug, Clone)]
 #[allow(dead_code)] // Will be used by generated code
 pub struct DocumentTrait {
-    id: ShapeId,
+    id: ShapeId<'static>,
     value: aws_smithy_types::Document,
 }
 
 #[allow(dead_code)]
 impl DocumentTrait {
     /// Creates a new document-valued trait.
-    pub fn new(id: ShapeId, value: aws_smithy_types::Document) -> Self {
+    pub fn new(id: ShapeId<'static>, value: aws_smithy_types::Document) -> Self {
         Self { id, value }
     }
 
@@ -103,7 +105,7 @@ impl DocumentTrait {
 }
 
 impl Trait for DocumentTrait {
-    fn trait_id(&self) -> &ShapeId {
+    fn trait_id(&self) -> &ShapeId<'static> {
         &self.id
     }
 

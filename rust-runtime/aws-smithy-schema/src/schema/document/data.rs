@@ -89,7 +89,7 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
     ///
     /// Used for diagnostics and to disambiguate documents that travel
     /// through APIs accepting any protocol.
-    fn protocol_id(&self) -> &ShapeId;
+    fn protocol_id(&self) -> &ShapeId<'static>;
 
     /// Resolves a wire-level member name to the index of the matching
     /// member in `schema.members()`.
@@ -169,7 +169,12 @@ pub struct Document {
     /// reverse conversion via a type registry can find the right schema)
     /// or when a `Document` is parsed from a payload that carries a
     /// discriminator field (`__type` for JSON).
-    discriminator: Option<ShapeId>,
+    // TODO(schema-lifetime): this is what blocks the `__type` lift in
+    // `JsonDeserializer::read_document`. Will be relaxed to `ShapeId<'a>`
+    // when `Document` itself gains a lifetime parameter, allowing
+    // wire-parsed discriminators to live in this slot without heap
+    // allocation.
+    discriminator: Option<ShapeId<'static>>,
     /// Protocol context for deserialize-side documents. `None` for
     /// serialize-side documents.
     settings: Option<Arc<dyn DocumentSettings>>,
@@ -319,13 +324,13 @@ impl Document {
     /// the reverse conversion. The SEP requires that documents
     /// constructed from a typed shape preserve this information so the
     /// transformation can round-trip.
-    pub fn with_discriminator(mut self, id: ShapeId) -> Self {
+    pub fn with_discriminator(mut self, id: ShapeId<'static>) -> Self {
         self.discriminator = Some(id);
         self
     }
 
     /// Returns the shape-id discriminator if one is attached.
-    pub fn discriminator(&self) -> Option<&ShapeId> {
+    pub fn discriminator(&self) -> Option<&ShapeId<'static>> {
         self.discriminator.as_ref()
     }
 
@@ -1193,11 +1198,11 @@ mod tests {
     /// required `protocol_id`, exercising every default method.
     #[derive(Debug)]
     struct DefaultSettings {
-        protocol: ShapeId,
+        protocol: ShapeId<'static>,
     }
 
     impl DocumentSettings for DefaultSettings {
-        fn protocol_id(&self) -> &ShapeId {
+        fn protocol_id(&self) -> &ShapeId<'static> {
             &self.protocol
         }
     }
@@ -1430,11 +1435,11 @@ mod tests {
     /// `JsonDocumentSettings` will do in Phase 7.
     #[derive(Debug)]
     struct TestSettings {
-        protocol: ShapeId,
+        protocol: ShapeId<'static>,
     }
 
     impl DocumentSettings for TestSettings {
-        fn protocol_id(&self) -> &ShapeId {
+        fn protocol_id(&self) -> &ShapeId<'static> {
             &self.protocol
         }
 
