@@ -1,6 +1,6 @@
 [package]
 name = "aws-smithy-http-server-typescript"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Smithy Rust Server <smithy-rs-server@amazon.com>"]
 edition = "2021"
 license = "Apache-2.0"
@@ -11,7 +11,7 @@ description = """
 Typescript server runtime for Smithy Rust Server Framework.
 """
 publish = false
-rust-version = "1.91.1"
+rust-version = "1.94.1"
 
 [dependencies]
 
