@@ -28,6 +28,7 @@ pub mod date_time;
 pub mod endpoint;
 pub mod error;
 pub mod event_stream;
+pub mod extensions;
 pub mod primitive;
 pub mod retry;
 pub mod timeout;

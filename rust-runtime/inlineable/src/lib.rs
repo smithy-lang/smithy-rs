@@ -18,6 +18,8 @@ mod client_idempotency_token;
 mod constrained;
 #[allow(dead_code)]
 mod ec2_query_errors;
+#[allow(dead_code)]
+mod eq_ignore;
 #[allow(unused)]
 mod event_receiver;
 #[allow(dead_code)]
