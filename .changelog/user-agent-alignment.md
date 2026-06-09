@@ -6,4 +6,4 @@ breaking: false
 new_feature: true
 bug_fix: false
 ---
-Add the `AppName` to the `User-Agent` header.
+Update the `User-Agent` header to contain the same information as the `x-amz-user-agent` header (including `AppName`, environment metadata, business metrics, etc.)
