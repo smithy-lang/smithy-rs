@@ -268,7 +268,7 @@ pub(crate) type MakeStack =
 
 /// Which semaphore bound a connect attempt at the cap, identifying what a
 /// reclaim must free to relieve it. Acquire order is per-host then global
-/// (§8), so a per-host failure yields `PerHost`, and a failure on the
+/// so a per-host failure yields `PerHost`, and a failure on the
 /// global semaphore while already holding the per-host permit yields
 /// `Global`.
 #[derive(Debug, Clone)]
@@ -492,6 +492,7 @@ where
                         shared.global_sem.clone(),
                         per_host_sem,
                         counters.clone(),
+                        shared.reclaim_handle(partition_id),
                     );
 
                     let pool_hooks = shared.hooks.clone();

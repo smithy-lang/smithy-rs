@@ -103,6 +103,10 @@ pub(crate) struct ConnectionLimit<C> {
     global: Option<Arc<Semaphore>>,
     per_host: Option<Arc<Semaphore>>,
     counters: Arc<super::stats::ConnectionCounters>,
+    /// Cross-partition active-reclaim handle. `None` when no reclaim peer
+    /// exists or the pool is mid-teardown; the cap path is then a plain
+    /// blocking acquire.
+    reclaim: Option<super::PeerReclaimHandle>,
 }
 
 impl<C> ConnectionLimit<C> {
@@ -111,12 +115,14 @@ impl<C> ConnectionLimit<C> {
         global: Option<Arc<Semaphore>>,
         per_host: Option<Arc<Semaphore>>,
         counters: Arc<super::stats::ConnectionCounters>,
+        reclaim: Option<super::PeerReclaimHandle>,
     ) -> Self {
         Self {
             inner,
             global,
             per_host,
             counters,
+            reclaim,
         }
     }
 }
@@ -128,6 +134,7 @@ impl<C: Clone> Clone for ConnectionLimit<C> {
             global: self.global.clone(),
             per_host: self.per_host.clone(),
             counters: self.counters.clone(),
+            reclaim: self.reclaim.clone(),
         }
     }
 }
@@ -152,17 +159,28 @@ where
         let global = self.global.clone();
         let per_host = self.per_host.clone();
         let counters = self.counters.clone();
+        let reclaim = self.reclaim.clone();
         Box::pin(async move {
-            // Acquire per-host permit first, then global. This ordering
-            // prevents deadlock: a request never holds a global permit
-            // while waiting on a per-host permit (which could starve
-            // other hosts' requests that need global permits).
-            let per_host_permit = match per_host {
-                Some(sem) => Some(sem.acquire_owned().await.map_err(|_| "pool closed")?),
+            // Per-host before global: never hold a global permit while
+            // waiting on a per-host permit.
+            let per_host_permit = match &per_host {
+                Some(sem) => Some(
+                    acquire_or_reclaim(sem, reclaim.as_ref(), || {
+                        // `send_request` validated the URI has scheme+authority
+                        // before dispatching, so this cannot fail here.
+                        let key = super::PoolKey::from_uri(&ctx.uri)
+                            .expect("connect URI has scheme+authority");
+                        super::BindingConstraint::PerHost(key)
+                    })
+                    .await?,
+                ),
                 None => None,
             };
-            let global_permit = match global {
-                Some(sem) => Some(sem.acquire_owned().await.map_err(|_| "pool closed")?),
+            let global_permit = match &global {
+                Some(sem) => Some(
+                    acquire_or_reclaim(sem, reclaim.as_ref(), || super::BindingConstraint::Global)
+                        .await?,
+                ),
                 None => None,
             };
             let permit = Arc::new(ConnectionPermit::new(global_permit, per_host_permit));
@@ -190,6 +208,31 @@ where
                 establishing,
             })
         })
+    }
+}
+
+/// Acquire one owned permit. Fast path is `try_acquire_owned`. On
+/// `NoPermits`, free one peer's idle connection for `constraint` (inline,
+/// best-effort) then blocking-acquire — the blocking acquire is the
+/// authoritative take regardless of whether reclaim freed a permit.
+/// `constraint` is built only on the cap-bound branch.
+async fn acquire_or_reclaim(
+    sem: &Arc<Semaphore>,
+    reclaim: Option<&super::PeerReclaimHandle>,
+    constraint: impl FnOnce() -> super::BindingConstraint,
+) -> Result<tokio::sync::OwnedSemaphorePermit, BoxError> {
+    match sem.clone().try_acquire_owned() {
+        Ok(permit) => Ok(permit),
+        Err(tokio::sync::TryAcquireError::NoPermits) => {
+            if let Some(reclaim) = reclaim {
+                reclaim.try_free_under_load(&constraint());
+            }
+            sem.clone()
+                .acquire_owned()
+                .await
+                .map_err(|_| "pool closed".into())
+        }
+        Err(tokio::sync::TryAcquireError::Closed) => Err("pool closed".into()),
     }
 }
 
@@ -586,6 +629,7 @@ mod tests {
             None,
             None,
             Arc::new(super::super::stats::ConnectionCounters::default()),
+            None,
         );
         let sleep = SharedAsyncSleep::new(TokioSleep::new());
         let ctx = ConnectCtx::new(
@@ -622,6 +666,7 @@ mod tests {
             None,
             None,
             Arc::new(super::super::stats::ConnectionCounters::default()),
+            None,
         );
         let ctx = ConnectCtx::new("http://example.com".parse().unwrap(), None);
         let fut = svc.call(ctx);

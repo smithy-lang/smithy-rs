@@ -1714,6 +1714,179 @@ async fn partition_spawners_are_isolated() {
 }
 
 // ---------------------------------------------------------------------------
+// Test implementations: cross-partition active reclaim (Never policy)
+// ---------------------------------------------------------------------------
+
+/// Under cap pressure, a starved partition reclaims an over-supplied peer's
+/// idle connection (freeing its permit) and connects locally — rather than
+/// waiting for passive idle eviction.
+///
+/// Setup distinguishes *active* reclaim from passive eviction: the pool's
+/// idle timeout is set very long, so the eviction tick will not fire during
+/// the test. P1 establishes an idle connection holding the single global
+/// permit; P0 (same authority, same NIC group) then requests, finds the cap
+/// bound, reclaims P1's *non-expired* idle, and connects on a fresh
+/// connection. Proven via the `ConnectionEventListener`:
+///   - P1's connection closes with `CloseReason::Reclaimed` (not
+///     `IdleTimeout` — the tick never ran),
+///   - P0's connection is freshly created (distinct `conn_id`),
+///   - the server accepted two connections (P1's reclaimed, P0's new),
+///   - P0 completed well under the idle timeout.
+#[tokio::test]
+async fn v2_cross_partition_reclaim_frees_peer_idle() {
+    use aws_smithy_http_client::pool::{
+        CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
+        ConnectionFailedEvent, ConnectionReusedEvent, Partition, PartitionId, TokioDriverSpawner,
+    };
+    use std::sync::{Arc, Mutex};
+
+    #[derive(Debug, Clone, Default)]
+    struct RecordingListener {
+        created: Arc<Mutex<Vec<(u64, String)>>>,
+        closed: Arc<Mutex<Vec<(u64, String, CloseReason)>>>,
+    }
+    impl ConnectionEventListener for RecordingListener {
+        fn on_created(&self, event: &ConnectionCreatedEvent) {
+            self.created.lock().unwrap().push((
+                event.conn_id().to_string().parse().unwrap(),
+                event.authority().as_str().to_string(),
+            ));
+        }
+        fn on_reused(&self, _event: &ConnectionReusedEvent) {}
+        fn on_closed(&self, event: &ConnectionClosedEvent) {
+            self.closed.lock().unwrap().push((
+                event.conn_id().to_string().parse().unwrap(),
+                event.authority().as_str().to_string(),
+                event.reason(),
+            ));
+        }
+        fn on_connection_failed(&self, _event: &ConnectionFailedEvent) {}
+    }
+
+    // One endpoint, two connections total: P1's (later reclaimed) and P0's.
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p1",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p0",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let listener = Arc::new(RecordingListener::default());
+
+    // Two partitions sharing one NIC group (so they are reclaim peers),
+    // global cap of 1 (so the second partition is cap-bound), and a long
+    // idle timeout so passive eviction never fires during the test.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .connection_event_listener(listener.clone() as Arc<dyn ConnectionEventListener>)
+        .max_connections(1)
+        .pool_idle_timeout(Duration::from_secs(3600))
+        .partitions([p0, p1])
+        .build_http();
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let client1 = PoolClient::from_partition(&pool, PartitionId::from_index(1)).into_shared();
+
+    // P1 establishes a connection and returns it idle to its cache, holding
+    // the single global permit.
+    let (_, _, meta1) = send_with_capture(&client1, &url).await;
+    let p1_conn_id: u64 = meta1
+        .expect("p1 metadata")
+        .connection_id()
+        .expect("p1 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // P0 requests the same authority. The global permit is held by P1's
+    // idle connection, so P0 is cap-bound; it reclaims P1's idle inline,
+    // freeing the permit, then connects locally. Bounded so a hang (failed
+    // reclaim → indefinite block) surfaces as a test timeout rather than
+    // a stall.
+    let started = std::time::Instant::now();
+    let (status, body, meta0) =
+        tokio::time::timeout(Duration::from_secs(5), send_with_capture(&client0, &url))
+            .await
+            .expect("p0 must not block indefinitely — reclaim should free a permit");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"p0");
+    let p0_conn_id: u64 = meta0
+        .expect("p0 metadata")
+        .connection_id()
+        .expect("p0 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // P0 completed promptly — far under the 3600s idle timeout, so this was
+    // active reclaim, not passive eviction.
+    assert!(
+        started.elapsed() < Duration::from_secs(60),
+        "p0 should complete promptly via reclaim, took {:?}",
+        started.elapsed()
+    );
+
+    // P0 ran on a *fresh local* connection, not P1's (that is reclaim, not
+    // borrow — borrow would reuse P1's exact connection).
+    assert_ne!(
+        p0_conn_id, p1_conn_id,
+        "reclaim gives P0 its own fresh connection, distinct from P1's"
+    );
+
+    // The server accepted two connections: P1's (reclaimed) and P0's (new).
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        2,
+        "expected P1's connection + P0's fresh connection"
+    );
+
+    // The listener proves the mechanism directly: P1's connection closed
+    // with `Reclaimed` (not `IdleTimeout` — the tick never ran), and P0's
+    // connection was created fresh.
+    let closed = listener.closed.lock().unwrap();
+    let reclaimed: Vec<_> = closed
+        .iter()
+        .filter(|(_, _, reason)| matches!(reason, CloseReason::Reclaimed))
+        .collect();
+    assert_eq!(
+        reclaimed.len(),
+        1,
+        "exactly one connection should close with Reclaimed, got: {closed:?}"
+    );
+    assert_eq!(
+        reclaimed[0].0, p1_conn_id,
+        "the reclaimed connection must be P1's"
+    );
+    assert!(
+        closed
+            .iter()
+            .all(|(_, _, reason)| !matches!(reason, CloseReason::IdleTimeout)),
+        "no IdleTimeout close — the long idle timeout means reclaim, not passive eviction"
+    );
+
+    let created = listener.created.lock().unwrap();
+    assert!(
+        created.iter().any(|(id, _)| *id == p0_conn_id),
+        "P0's fresh connection should fire on_created"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Test implementations: stats read API
 // ---------------------------------------------------------------------------
 
