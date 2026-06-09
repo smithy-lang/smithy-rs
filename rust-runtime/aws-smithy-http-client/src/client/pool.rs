@@ -266,6 +266,114 @@ type RetainerSlot = Arc<Mutex<Vec<BoxedRetainer>>>;
 pub(crate) type MakeStack =
     Arc<dyn Fn(&http_1x::Uri, &SharedPoolState) -> Box<dyn PoolEntry> + Send + Sync>;
 
+/// Which semaphore bound a connect attempt at the cap, identifying what a
+/// reclaim must free to relieve it. Acquire order is per-host then global
+/// (§8), so a per-host failure yields `PerHost`, and a failure on the
+/// global semaphore while already holding the per-host permit yields
+/// `Global`.
+#[derive(Debug, Clone)]
+pub(crate) enum BindingConstraint {
+    /// The global `max_connections` semaphore is exhausted. Any
+    /// over-supplied peer's idle connection frees a fungible permit.
+    Global,
+    /// The per-host `max_connections_per_host` semaphore for this key is
+    /// exhausted. Only a peer's idle connection *to the same host* frees
+    /// the relevant permit.
+    PerHost(PoolKey),
+}
+
+/// Handle for cross-partition active reclaim, held by `ConnectionLimit`.
+///
+/// At a cap-bound connect, the requesting partition uses this to free one
+/// over-supplied peer's idle connection (dropping it returns its permit to
+/// the bound semaphore) before blocking-acquiring. Connection-shaped and
+/// NIC-blind: the freed *permit* is what matters; P0 then connects on its
+/// own NIC. Candidates are narrowed by the (advisory) stats index and
+/// confirmed by the authoritative cache pop.
+#[derive(Clone)]
+pub(crate) struct PeerReclaimHandle {
+    /// `Weak` to avoid a cycle: the registry transitively owns the
+    /// partitions whose `ConnectionLimit`s hold this handle.
+    registry: std::sync::Weak<partition::PartitionRegistry>,
+    /// Owned (Arc) so the handle does not borrow `SharedPoolState`.
+    stats_index: Arc<StatsIndex>,
+    /// The requesting partition — excluded from its own candidate walk.
+    self_partition: PartitionId,
+}
+
+impl PeerReclaimHandle {
+    /// Free one over-supplied peer's idle connection to relieve
+    /// `constraint`, returning `true` if a permit was freed. Best-effort:
+    /// `false` if the pool is gone, there are no NIC-group peers, or no
+    /// peer holds reclaimable idle (P0 then just blocks on the permit).
+    pub(crate) fn try_free_under_load(&self, constraint: &BindingConstraint) -> bool {
+        let registry = match self.registry.upgrade() {
+            Some(r) => r,
+            None => return false, // pool dropped → nothing to reclaim
+        };
+        let peers = registry.nic_group_peers(self.self_partition);
+        if peers.is_empty() {
+            return false; // alone in the NIC group (e.g. single-partition default)
+        }
+        match constraint {
+            BindingConstraint::PerHost(key) => {
+                // Candidates = peers with idle to this authority (index
+                // narrows; cache pop confirms). Round-robin start offset.
+                let authority = Authority::new(key.authority.as_str());
+                let mut candidates: Vec<PartitionId> = self
+                    .stats_index
+                    .idle_partitions_for(&authority)
+                    .into_iter()
+                    .map(|(p, _idle)| p)
+                    .filter(|p| *p != self.self_partition && peers.contains(p))
+                    .collect();
+                self.rotate(&mut candidates);
+                candidates
+                    .into_iter()
+                    .any(|peer| registry.try_reclaim_on(peer, key))
+            }
+            BindingConstraint::Global => {
+                // Fungible permit: any same-NIC-group peer's idle (any
+                // authority) relieves the global cap. Narrow to peers that
+                // the index shows holding idle.
+                let mut candidates: Vec<PartitionId> = self
+                    .stats_index
+                    .idle_cells()
+                    .into_iter()
+                    .map(|(_authority, p)| p)
+                    .filter(|p| *p != self.self_partition && peers.contains(p))
+                    .collect();
+                candidates.sort_unstable_by_key(|p| p.as_u64());
+                candidates.dedup();
+                self.rotate(&mut candidates);
+                candidates
+                    .into_iter()
+                    .any(|peer| registry.try_reclaim_any(peer))
+            }
+        }
+    }
+
+    /// Rotate the candidate vec by the partition's advisory `peer_cursor`,
+    /// so concurrent reclaims from this partition do not all probe the
+    /// lowest-numbered candidate first. No-op if the registry or partition
+    /// is gone, or the candidate set is empty.
+    fn rotate(&self, candidates: &mut [PartitionId]) {
+        if candidates.len() < 2 {
+            return;
+        }
+        if let Some(registry) = self.registry.upgrade() {
+            if let Some(state) = registry.partition_opt(self.self_partition) {
+                let n = candidates.len();
+                let start = state
+                    .peer_cursor
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    % n;
+                candidates.rotate_left(start);
+            }
+        }
+    }
+}
+
 /// Connection-lifecycle machinery shared across every partition: event
 /// hooks, the global connection budget, and the per-host budgets. One
 /// instance per pool, held behind `Arc` on `ConnectionPool`.
@@ -274,7 +382,15 @@ pub(crate) struct SharedPoolState {
     pub(crate) global_sem: Option<Arc<Semaphore>>,
     max_connections_per_host: Option<usize>,
     per_host_sems: Mutex<HashMap<PoolKey, Arc<Semaphore>>>,
-    stats_index: StatsIndex,
+    stats_index: Arc<StatsIndex>,
+    /// Late-bound back-reference to the registry, for cross-partition
+    /// reclaim. `Weak` (not `Arc`): the registry transitively owns the
+    /// partitions whose `ConnectionLimit`s reach back through here — a
+    /// strong reference would be a cycle (pool never drops). Set once,
+    /// immediately after the registry is built (`build_pool`), because the
+    /// registry does not exist when `SharedPoolState` is constructed.
+    /// Upgrade-or-skip: a dropped pool makes reclaim a correct no-op.
+    registry: OnceLock<std::sync::Weak<partition::PartitionRegistry>>,
 }
 
 impl SharedPoolState {
@@ -284,8 +400,28 @@ impl SharedPoolState {
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
-            stats_index: StatsIndex::default(),
+            stats_index: Arc::new(StatsIndex::default()),
+            registry: OnceLock::new(),
         }
+    }
+
+    /// Bind the registry back-reference. Called once in `build_pool`
+    /// right after the registry is constructed. Idempotent-safe: a second
+    /// call is ignored (the first binding wins).
+    pub(crate) fn set_registry(&self, registry: &Arc<partition::PartitionRegistry>) {
+        let _ = self.registry.set(Arc::downgrade(registry));
+    }
+
+    /// A reclaim handle for the given requesting partition, if the
+    /// registry is bound and still alive. `None` when no registry is set
+    /// or the pool has been dropped (reclaim is then a no-op).
+    pub(crate) fn reclaim_handle(&self, self_partition: PartitionId) -> Option<PeerReclaimHandle> {
+        let registry = self.registry.get()?.clone();
+        Some(PeerReclaimHandle {
+            registry,
+            stats_index: self.stats_index.clone(),
+            self_partition,
+        })
     }
 
     /// The shared per-host semaphore for `key`, created on first request
@@ -628,6 +764,11 @@ where
         partitions,
         make_stack_for,
     ));
+
+    // Late-bind the registry back-reference for cross-partition reclaim.
+    // Done here, after the registry exists, because `SharedPoolState` is
+    // built before it (the `make_stack` closures capture `shared`).
+    shared.set_registry(&registry);
 
     ConnectionPool {
         config,

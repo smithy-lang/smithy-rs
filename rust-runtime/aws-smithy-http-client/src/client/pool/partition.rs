@@ -286,6 +286,12 @@ pub(crate) struct PartitionState {
     /// Builds a host entry on first touch, capturing this partition's
     /// connector; shared budget/hooks arrive via `&SharedPoolState`.
     pub(crate) make_stack: super::MakeStack,
+    /// Round-robin cursor over reclaim/borrow candidate peers. Advisory
+    /// (`Relaxed` `fetch_add`): rotates the starting offset into the
+    /// candidate set so concurrent cap-bound reclaims from this partition
+    /// do not all probe the lowest-numbered peer first. No correctness
+    /// invariant rides it — `try_reclaim_one` is the authoritative gate.
+    pub(crate) peer_cursor: std::sync::atomic::AtomicUsize,
 }
 
 impl std::fmt::Debug for PartitionState {
@@ -361,6 +367,7 @@ impl PartitionRegistry {
                 nic: p.nic,
                 authorities: std::sync::Mutex::new(std::collections::HashMap::new()),
                 make_stack,
+                peer_cursor: std::sync::atomic::AtomicUsize::new(0),
             });
             if by_id.insert(p.id, state).is_some() {
                 panic!("duplicate PartitionId declared: {:?}", p.id);
@@ -393,6 +400,62 @@ impl PartitionRegistry {
     /// Iterate all declared partitions.
     pub(crate) fn partitions(&self) -> impl Iterator<Item = &std::sync::Arc<PartitionState>> {
         self.by_id.values()
+    }
+
+    /// Resolve a partition by id without panicking. `None` if not declared.
+    pub(crate) fn partition_opt(&self, id: PartitionId) -> Option<&std::sync::Arc<PartitionState>> {
+        self.by_id.get(&id)
+    }
+
+    /// Partition ids sharing `id`'s NIC group, excluding `id` itself.
+    ///
+    /// Reclaim is NIC-blind for the freed *permit* (P0 connects on its own
+    /// NIC), but candidate peers are still drawn from the same NIC group:
+    /// the registry only groups by NIC, and a freed permit from any
+    /// same-group peer is equivalent. Empty if `id` is alone in its group
+    /// (e.g. the single-partition default).
+    pub(crate) fn nic_group_peers(&self, id: PartitionId) -> Vec<PartitionId> {
+        let nic = match self.by_id.get(&id) {
+            Some(state) => &state.nic,
+            None => return Vec::new(),
+        };
+        self.by_nic
+            .get(nic)
+            .map(|ids| ids.iter().copied().filter(|p| *p != id).collect())
+            .unwrap_or_default()
+    }
+
+    /// Attempt to reclaim one idle connection from `peer`'s entry for
+    /// `key`, freeing its permit. Returns `true` if one was freed. The
+    /// peer's `authorities` lock is held only for the `try_reclaim_one`
+    /// call (which pops + drops under the cache lock, releasing it before
+    /// the drop). No-op `false` if the peer or entry is absent.
+    pub(crate) fn try_reclaim_on(&self, peer: PartitionId, key: &super::PoolKey) -> bool {
+        let state = match self.by_id.get(&peer) {
+            Some(s) => s,
+            None => return false,
+        };
+        let auth = state.authorities.lock().expect("authorities poisoned");
+        match auth.get(key) {
+            Some(entry) => entry.try_reclaim_one(),
+            None => false,
+        }
+    }
+
+    /// Attempt to reclaim one idle connection from *any* of `peer`'s
+    /// entries, freeing its permit. Returns `true` at the first entry that
+    /// yields. Drives the `Global` constraint, where the freed permit is
+    /// fungible across authorities — so the specific authority does not
+    /// matter, and this sidesteps reconstructing a `PoolKey` (scheme +
+    /// authority) from the authority-only stats index. No-op `false` if
+    /// the peer is absent or holds no reclaimable idle.
+    pub(crate) fn try_reclaim_any(&self, peer: PartitionId) -> bool {
+        let state = match self.by_id.get(&peer) {
+            Some(s) => s,
+            None => return false,
+        };
+        let auth = state.authorities.lock().expect("authorities poisoned");
+        auth.values().any(|entry| entry.try_reclaim_one())
     }
 }
 
