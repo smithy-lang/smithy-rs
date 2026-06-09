@@ -238,6 +238,75 @@ impl StatsIndex {
             .unwrap_or(0)
     }
 
+    /// Partitions with at least one idle connection to `authority`, as
+    /// `(partition, idle_count)`. Advisory: a relaxed snapshot that
+    /// *narrows* reclaim/borrow candidates — the cache pop is the
+    /// authoritative confirmation. Prunes dead `Weak`s under the lock,
+    /// same as [`Self::snapshot`].
+    pub(crate) fn idle_partitions_for(&self, authority: &Authority) -> Vec<(PartitionId, usize)> {
+        let handles: Vec<(PartitionId, Arc<ConnectionCounters>)> = {
+            let mut idx = self.inner.lock().expect("stats index poisoned");
+            match idx.get_mut(authority) {
+                Some(a) => {
+                    let mut live = Vec::new();
+                    a.by_partition.retain(|partition, weak| {
+                        if let Some(strong) = weak.upgrade() {
+                            live.push((*partition, strong));
+                            true
+                        } else {
+                            false
+                        }
+                    });
+                    if a.by_partition.is_empty() {
+                        idx.remove(authority);
+                    }
+                    live
+                }
+                None => Vec::new(),
+            }
+        }; // lock released before loading atomics
+        handles
+            .into_iter()
+            .filter_map(|(p, c)| {
+                let established = c.established.load(Ordering::Relaxed);
+                let active = c.active.load(Ordering::Relaxed);
+                let idle = established.saturating_sub(active);
+                (idle > 0).then_some((p, idle))
+            })
+            .collect()
+    }
+
+    /// All `(authority, partition)` cells with at least one idle
+    /// connection. Drives `Global`-constraint reclaim, where a freed
+    /// permit is fungible across authorities. Advisory/narrowing, same
+    /// contract as [`Self::idle_partitions_for`].
+    pub(crate) fn idle_cells(&self) -> Vec<(Authority, PartitionId)> {
+        let handles: Vec<(Authority, PartitionId, Arc<ConnectionCounters>)> = {
+            let mut idx = self.inner.lock().expect("stats index poisoned");
+            let mut live = Vec::new();
+            idx.retain(|authority, a| {
+                a.by_partition.retain(|partition, weak| {
+                    if let Some(strong) = weak.upgrade() {
+                        live.push((authority.clone(), *partition, strong));
+                        true
+                    } else {
+                        false
+                    }
+                });
+                !a.by_partition.is_empty()
+            });
+            live
+        }; // lock released before loading atomics
+        handles
+            .into_iter()
+            .filter_map(|(authority, p, c)| {
+                let established = c.established.load(Ordering::Relaxed);
+                let active = c.active.load(Ordering::Relaxed);
+                (established.saturating_sub(active) > 0).then_some((authority, p))
+            })
+            .collect()
+    }
+
     /// Snapshot one authority's per-partition counters.
     ///
     /// Under the lock: upgrades each `Weak`, prunes dead entries (removing the
