@@ -38,7 +38,7 @@ use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
 
 // -- AllTypes: every Smithy simple type + a typed list and map --------
 
-const ALL_TYPES_ID: ShapeId = shape_id!("smithy.example", "AllTypes");
+const ALL_TYPES_ID: ShapeId<'static> = shape_id!("smithy.example", "AllTypes");
 
 // Every member is optional so the same struct can drive both
 // "everything populated" and "everything absent" tests.
@@ -317,7 +317,7 @@ fn round_trip_preserves_struct_discriminator() {
 
 // -- Sparse list of strings -----------------------------------------------
 
-const SPARSE_LIST_HOLDER_ID: ShapeId = shape_id!("smithy.example", "SparseListHolder");
+const SPARSE_LIST_HOLDER_ID: ShapeId<'static> = shape_id!("smithy.example", "SparseListHolder");
 static M_SPARSE_LIST: Schema = Schema::new_member(
     shape_id!("smithy.example", "SparseListHolder", "values"),
     ShapeType::List,
@@ -390,7 +390,7 @@ fn round_trip_sparse_list_preserves_null_positions() {
 
 // `struct Item { id: String, count: i32 }` used as element / value type.
 
-const ITEM_ID: ShapeId = shape_id!("smithy.example", "Item");
+const ITEM_ID: ShapeId<'static> = shape_id!("smithy.example", "Item");
 static M_ITEM_ID: Schema = Schema::new_member(
     shape_id!("smithy.example", "Item", "id"),
     ShapeType::String,

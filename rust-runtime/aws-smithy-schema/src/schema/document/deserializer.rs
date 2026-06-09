@@ -264,9 +264,9 @@ mod tests {
 
     // -- Test schemas ----------------------------------------------------
 
-    const PERSON_ID: ShapeId = shape_id!("smithy.example", "Person");
-    const PERSON_NAME_ID: ShapeId = shape_id!("smithy.example", "Person", "name");
-    const PERSON_AGE_ID: ShapeId = shape_id!("smithy.example", "Person", "age");
+    const PERSON_ID: ShapeId<'static> = shape_id!("smithy.example", "Person");
+    const PERSON_NAME_ID: ShapeId<'static> = shape_id!("smithy.example", "Person", "name");
+    const PERSON_AGE_ID: ShapeId<'static> = shape_id!("smithy.example", "Person", "age");
 
     static PERSON_NAME_MEMBER: Schema =
         Schema::new_member(PERSON_NAME_ID, ShapeType::String, "name", 0);

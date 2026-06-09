@@ -83,7 +83,9 @@ use schema::traits as trait_types;
 
 #[derive(Debug)]
 pub struct Schema {
-    id: ShapeId,
+    // TODO(schema-lifetime): relax to `ShapeId<'a>` when `Schema` itself
+    // gains a lifetime parameter (task 2 of the schema-lifetime relax plan).
+    id: ShapeId<'static>,
     shape_type: ShapeType,
     /// Member name if this is a member schema.
     member_name: Option<&'static str>,
@@ -178,7 +180,7 @@ enum SchemaMembers {
 impl Schema {
     /// Default values for all trait fields (should only be used by constructors as a spread source).
     const EMPTY_TRAITS: Self = Self {
-        id: ShapeId::from_static("", "", ""),
+        id: ShapeId::<'static>::from_static("", "", ""),
         shape_type: ShapeType::Boolean,
         member_name: None,
         member_index: None,
@@ -210,7 +212,7 @@ impl Schema {
     };
 
     /// Creates a schema for a simple type (no members).
-    pub const fn new(id: ShapeId, shape_type: ShapeType) -> Self {
+    pub const fn new(id: ShapeId<'static>, shape_type: ShapeType) -> Self {
         Self {
             id,
             shape_type,
@@ -220,7 +222,7 @@ impl Schema {
 
     /// Creates a schema for a structure or union type.
     pub const fn new_struct(
-        id: ShapeId,
+        id: ShapeId<'static>,
         shape_type: ShapeType,
         members: &'static [&'static Schema],
     ) -> Self {
@@ -233,7 +235,7 @@ impl Schema {
     }
 
     /// Creates a schema for a list type.
-    pub const fn new_list(id: ShapeId, member: &'static Schema) -> Self {
+    pub const fn new_list(id: ShapeId<'static>, member: &'static Schema) -> Self {
         Self {
             id,
             shape_type: ShapeType::List,
@@ -243,7 +245,11 @@ impl Schema {
     }
 
     /// Creates a schema for a map type.
-    pub const fn new_map(id: ShapeId, key: &'static Schema, value: &'static Schema) -> Self {
+    pub const fn new_map(
+        id: ShapeId<'static>,
+        key: &'static Schema,
+        value: &'static Schema,
+    ) -> Self {
         Self {
             id,
             shape_type: ShapeType::Map,
@@ -254,7 +260,7 @@ impl Schema {
 
     /// Creates a member schema wrapping a target schema.
     pub const fn new_member(
-        id: ShapeId,
+        id: ShapeId<'static>,
         shape_type: ShapeType,
         member_name: &'static str,
         member_index: usize,
@@ -269,7 +275,7 @@ impl Schema {
     }
 
     /// Returns the Shape ID of this schema.
-    pub fn shape_id(&self) -> &ShapeId {
+    pub fn shape_id(&self) -> &ShapeId<'static> {
         &self.id
     }
 
@@ -697,13 +703,13 @@ mod test {
     // Simple test trait implementation
     #[derive(Debug)]
     struct TestTrait {
-        id: crate::ShapeId,
+        id: crate::ShapeId<'static>,
         #[allow(dead_code)]
         value: String,
     }
 
     impl Trait for TestTrait {
-        fn trait_id(&self) -> &crate::ShapeId {
+        fn trait_id(&self) -> &crate::ShapeId<'static> {
             &self.id
         }
 
