@@ -131,6 +131,40 @@ async fn test_crc32_checksum_on_streaming_response() {
     assert_eq!(body, "Hello world");
 }
 
+// GetObject is a streaming operation: the response body is handed to the caller rather than read
+// by the orchestrator, so the validation outcome is only resolved once the caller drains the body.
+// The outcome rides on the output's extensions.
+#[tokio::test]
+async fn test_validation_outcome_recorded_on_streaming_output() {
+    use aws_sdk_s3::operation::ProvideExtensions;
+    use aws_smithy_checksums::body::validate::{
+        ResponseChecksumValidationResult, ValidationOutcome,
+    };
+    use aws_smithy_checksums::ChecksumAlgorithm;
+
+    let res = test_checksum_on_streaming_response("x-amz-checksum-crc32", "i9aeUg==").await;
+
+    let validation = res
+        .extensions()
+        .get::<ResponseChecksumValidationResult>()
+        .expect("validation result handle is attached to the output")
+        .clone();
+
+    // Body has not been consumed yet, so the outcome is unresolved.
+    assert_eq!(validation.outcome(), None);
+
+    let body = collect_body_into_string(res.body.into_inner()).await;
+    assert_eq!(body, "Hello world");
+
+    // Draining the body drives validation to completion.
+    assert_eq!(
+        validation.outcome(),
+        Some(ValidationOutcome::Validated {
+            algorithm: ChecksumAlgorithm::Crc32,
+        }),
+    );
+}
+
 #[tokio::test]
 async fn test_crc32c_checksum_on_streaming_response() {
     let res = test_checksum_on_streaming_response("x-amz-checksum-crc32c", "crUfeA==").await;

@@ -141,21 +141,6 @@ class OutputExtensionsDecorator : ClientCodegenDecorator {
                         )
                     }
 
-                    is BuilderSection.AdditionalMethods -> {
-                        rust(
-                            """
-                            ##[allow(dead_code)]
-                            pub(crate) fn _insert_extension<T: ::std::any::Any + ::std::clone::Clone + ::std::fmt::Debug + ::std::marker::Send + ::std::marker::Sync + 'static>(
-                                mut self,
-                                value: T,
-                            ) -> Self {
-                                self._extensions.get_mut().insert(value);
-                                self
-                            }
-                            """,
-                        )
-                    }
-
                     is BuilderSection.AdditionalDebugFields -> {
                         rust("""${section.formatterName}.field("_extensions", &self._extensions);""")
                     }
@@ -163,6 +148,8 @@ class OutputExtensionsDecorator : ClientCodegenDecorator {
                     is BuilderSection.AdditionalFieldsInBuild -> {
                         rust("_extensions: self._extensions,")
                     }
+
+                    else -> {}
                 }
             }
     }
