@@ -159,6 +159,10 @@ pub trait ProvideExtensions {
     fn extensions(&self) -> &Extensions;
 }
 
+impl crate::config_bag::Storable for Extensions {
+    type Storer = crate::config_bag::StoreReplace<Self>;
+}
+
 #[cfg(test)]
 mod tests {
     use super::Extensions;

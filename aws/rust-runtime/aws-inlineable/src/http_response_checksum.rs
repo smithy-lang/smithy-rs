@@ -7,6 +7,9 @@
 
 //! Interceptor for handling Smithy `@httpChecksum` response checksumming
 
+use aws_smithy_checksums::body::validate::{
+    NotValidatedReason, ResponseChecksumValidationResult, ValidationOutcome,
+};
 use aws_smithy_checksums::ChecksumAlgorithm;
 use aws_smithy_runtime::client::sdk_feature::SmithySdkFeature;
 use aws_smithy_runtime_api::box_error::BoxError;
@@ -19,6 +22,7 @@ use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::checksum_config::ResponseChecksumValidation;
 use aws_smithy_types::config_bag::{ConfigBag, Layer, Storable, StoreReplace};
+use aws_smithy_types::extensions::Extensions;
 use std::{fmt, mem};
 
 #[derive(Debug)]
@@ -133,22 +137,43 @@ where
         };
 
         if validation_enabled {
+            // Install a handle so the operation output can carry the validation outcome. The
+            // outcome is filled below (immediately for the no-validation paths) or by the wrapped
+            // body on clean EOF (for the validated path). The handle is placed into the shared
+            // `Extensions` in the config bag; the generated deserializer lifts that `Extensions`
+            // onto the operation output.
+            let validation_result = ResponseChecksumValidationResult::new();
+            let mut extensions = cfg.load::<Extensions>().cloned().unwrap_or_default();
+            extensions.insert(validation_result.clone());
+            cfg.interceptor_state().store_put(extensions);
+
             let response = context.response_mut();
-            let maybe_checksum_headers = check_headers_for_precalculated_checksum(
+            match check_headers_for_precalculated_checksum(
                 response.headers(),
                 self.response_algorithms,
-            );
+            ) {
+                PrecalculatedChecksum::Found(checksum_algorithm, precalculated_checksum) => {
+                    let mut body = SdkBody::taken();
+                    mem::swap(&mut body, response.body_mut());
 
-            if let Some((checksum_algorithm, precalculated_checksum)) = maybe_checksum_headers {
-                let mut body = SdkBody::taken();
-                mem::swap(&mut body, response.body_mut());
-
-                let mut body = wrap_body_with_checksum_validator(
-                    body,
-                    checksum_algorithm,
-                    precalculated_checksum,
-                );
-                mem::swap(&mut body, response.body_mut());
+                    let mut body = wrap_body_with_checksum_validator(
+                        body,
+                        checksum_algorithm,
+                        precalculated_checksum,
+                        validation_result,
+                    );
+                    mem::swap(&mut body, response.body_mut());
+                }
+                PrecalculatedChecksum::PartLevelChecksum => {
+                    validation_result.set(ValidationOutcome::NotValidated {
+                        reason: NotValidatedReason::PartLevelChecksum,
+                    });
+                }
+                PrecalculatedChecksum::None => {
+                    validation_result.set(ValidationOutcome::NotValidated {
+                        reason: NotValidatedReason::NoChecksum,
+                    });
+                }
             }
         }
 
@@ -156,23 +181,38 @@ where
     }
 }
 
-/// Given an `SdkBody`, a `aws_smithy_checksums::ChecksumAlgorithm`, and a pre-calculated checksum,
-/// return an `SdkBody` where the body will processed with the checksum algorithm and checked
-/// against the pre-calculated checksum.
+/// Given an `SdkBody`, a `aws_smithy_checksums::ChecksumAlgorithm`, a pre-calculated checksum, and
+/// a [`ResponseChecksumValidationResult`] handle, return an `SdkBody` where the body will be
+/// processed with the checksum algorithm and checked against the pre-calculated checksum. On clean
+/// end-of-stream the handle is populated with `Validated { algorithm }`.
 pub(crate) fn wrap_body_with_checksum_validator(
     body: SdkBody,
     checksum_algorithm: ChecksumAlgorithm,
     precalculated_checksum: bytes::Bytes,
+    validation_result: ResponseChecksumValidationResult,
 ) -> SdkBody {
     use aws_smithy_checksums::body::validate;
 
     body.map(move |body: SdkBody| {
-        SdkBody::from_body_1_x(validate::ChecksumBody::new(
-            body,
-            checksum_algorithm.into_impl(),
-            precalculated_checksum.clone(),
-        ))
+        SdkBody::from_body_1_x(
+            validate::ChecksumBody::new(
+                body,
+                checksum_algorithm.into_impl(),
+                precalculated_checksum.clone(),
+            )
+            .with_validation_result(validation_result.clone(), checksum_algorithm),
+        )
     })
+}
+
+/// The result of scanning response headers for a usable precalculated checksum.
+pub(crate) enum PrecalculatedChecksum {
+    /// A usable checksum header was found.
+    Found(ChecksumAlgorithm, bytes::Bytes),
+    /// A checksum header was present but is a part-level (composite) checksum the SDK can't validate.
+    PartLevelChecksum,
+    /// No checksum header was present for any supported algorithm.
+    None,
 }
 
 /// Given a `HeaderMap`, extract any checksum included in the headers as `Some(Bytes)`.
@@ -181,7 +221,7 @@ pub(crate) fn wrap_body_with_checksum_validator(
 pub(crate) fn check_headers_for_precalculated_checksum(
     headers: &Headers,
     response_algorithms: &[&str],
-) -> Option<(ChecksumAlgorithm, bytes::Bytes)> {
+) -> PrecalculatedChecksum {
     let checksum_algorithms_to_check =
         aws_smithy_checksums::http::CHECKSUM_ALGORITHMS_IN_PRIORITY_ORDER
             .into_iter()
@@ -212,7 +252,7 @@ pub(crate) fn check_headers_for_precalculated_checksum(
                       "This checksum is a part-level checksum which can't be validated by the Rust SDK. Disable checksum validation for this request to fix this warning.",
                   );
 
-                return None;
+                return PrecalculatedChecksum::PartLevelChecksum;
             }
 
             let precalculated_checksum = match aws_smithy_types::base64::decode(
@@ -221,15 +261,15 @@ pub(crate) fn check_headers_for_precalculated_checksum(
                 Ok(decoded_checksum) => decoded_checksum.into(),
                 Err(_) => {
                     tracing::error!("Checksum received from server could not be base64 decoded. No checksum validation will be performed.");
-                    return None;
+                    return PrecalculatedChecksum::None;
                 }
             };
 
-            return Some((checksum_algorithm, precalculated_checksum));
+            return PrecalculatedChecksum::Found(checksum_algorithm, precalculated_checksum);
         }
     }
 
-    None
+    PrecalculatedChecksum::None
 }
 
 fn is_part_level_checksum(checksum: &str) -> bool {
@@ -280,6 +320,7 @@ mod tests {
                 sdk_body,
                 checksum_algorithm,
                 precalculated_checksum.clone(),
+                aws_smithy_checksums::body::validate::ResponseChecksumValidationResult::new(),
             )
         });
 

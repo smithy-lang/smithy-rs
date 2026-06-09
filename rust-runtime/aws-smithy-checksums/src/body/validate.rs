@@ -7,6 +7,7 @@
 //! error if it doesn't match.
 
 use crate::http::HttpChecksum;
+use crate::ChecksumAlgorithm;
 
 use aws_smithy_types::body::SdkBody;
 
@@ -15,7 +16,70 @@ use pin_project_lite::pin_project;
 
 use std::fmt::Display;
 use std::pin::Pin;
+use std::sync::{Arc, OnceLock};
 use std::task::{Context, Poll};
+
+/// Whether a response body was validated against a checksum, and with which algorithm.
+///
+/// A checksum *mismatch* is not represented here: a mismatch surfaces as an error while reading
+/// the body. This type distinguishes a body that was validated and matched from one that was not
+/// validated, and records why validation did not happen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ValidationOutcome {
+    /// The response body was validated against a checksum and matched.
+    Validated {
+        /// The algorithm used to validate the response body.
+        algorithm: ChecksumAlgorithm,
+    },
+    /// The response body was not validated.
+    NotValidated {
+        /// Why validation did not happen.
+        reason: NotValidatedReason,
+    },
+}
+
+/// The reason response checksum validation did not occur.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NotValidatedReason {
+    /// The response carried no checksum header for any supported algorithm.
+    NoChecksum,
+    /// The response checksum was a part-level (composite, `<base64>-<N>`) checksum, which the
+    /// SDK cannot validate against the response bytes.
+    PartLevelChecksum,
+}
+
+/// A shared, late-populated handle to a response's [`ValidationOutcome`].
+///
+/// Response checksum validation runs lazily as the response body is consumed, after the operation
+/// has already returned its output. This handle is installed before body consumption and filled
+/// when the body reaches end-of-stream, so a caller holding it can learn the outcome once the body
+/// has been fully read. Until then, [`outcome`](Self::outcome) returns `None`.
+///
+/// The handle is cheap to clone (it is reference-counted) and is the value stored on an operation
+/// output's extensions.
+#[derive(Clone, Debug, Default)]
+pub struct ResponseChecksumValidationResult(Arc<OnceLock<ValidationOutcome>>);
+
+impl ResponseChecksumValidationResult {
+    /// Create a new, unpopulated handle.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns the validation outcome, or `None` if the response body has not yet been fully
+    /// consumed (validation is only resolved at end-of-stream).
+    pub fn outcome(&self) -> Option<ValidationOutcome> {
+        self.0.get().cloned()
+    }
+
+    /// Record the validation outcome. The first write wins; subsequent writes are ignored (the
+    /// outcome for a given response is resolved exactly once).
+    pub fn set(&self, outcome: ValidationOutcome) {
+        let _ = self.0.set(outcome);
+    }
+}
 
 pin_project! {
     /// A body-wrapper that will calculate the `InnerBody`'s checksum and emit an error if it
@@ -25,6 +89,8 @@ pin_project! {
         inner: InnerBody,
         checksum: Option<Box<dyn HttpChecksum>>,
         precalculated_checksum: Bytes,
+        // When present, the validation outcome is recorded into this handle on clean EOF.
+        validation_result: Option<(ResponseChecksumValidationResult, ChecksumAlgorithm)>,
     }
 }
 
@@ -40,7 +106,20 @@ impl ChecksumBody<SdkBody> {
             inner: body,
             checksum: Some(checksum),
             precalculated_checksum,
+            validation_result: None,
         }
+    }
+
+    /// Attach a [`ResponseChecksumValidationResult`] handle that will be populated with
+    /// `Validated { algorithm }` when the body is fully read and the checksum matches. On a
+    /// mismatch the handle is left unset (the mismatch surfaces as a body error instead).
+    pub fn with_validation_result(
+        mut self,
+        result: ResponseChecksumValidationResult,
+        algorithm: ChecksumAlgorithm,
+    ) -> Self {
+        self.validation_result = Some((result, algorithm));
+        self
     }
 
     fn poll_inner(
@@ -84,6 +163,11 @@ impl ChecksumBody<SdkBody> {
 
                 let actual_checksum = checksum.finalize();
                 if *this.precalculated_checksum == actual_checksum {
+                    // Record a positive validation outcome (if a handle is attached) now that the
+                    // whole body has been read and matched.
+                    if let Some((result, algorithm)) = this.validation_result.take() {
+                        result.set(ValidationOutcome::Validated { algorithm });
+                    }
                     Poll::Ready(None)
                 } else {
                     // So many parens it's starting to look like LISP
@@ -204,5 +288,57 @@ mod tests {
             .expect("Doesn't cause IO errors");
         // Verify data is complete and unaltered
         assert_eq!(input_text, output_text);
+    }
+
+    #[tokio::test]
+    async fn test_validation_result_populated_on_match() {
+        use crate::body::validate::{ResponseChecksumValidationResult, ValidationOutcome};
+
+        let input_text = "This is some test text for an SdkBody";
+        let actual_checksum = calculate_crc32_checksum(input_text);
+        let http_checksum = "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl();
+        let result = ResponseChecksumValidationResult::new();
+        let mut body = ChecksumBody::new(SdkBody::from(input_text), http_checksum, actual_checksum)
+            .with_validation_result(result.clone(), ChecksumAlgorithm::Crc32);
+
+        // Outcome is unresolved until the body is fully drained.
+        assert_eq!(result.outcome(), None);
+
+        while let Some(buf) = body.frame().await {
+            let _ = buf.unwrap();
+        }
+
+        assert_eq!(
+            result.outcome(),
+            Some(ValidationOutcome::Validated {
+                algorithm: ChecksumAlgorithm::Crc32
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn test_validation_result_unset_on_mismatch() {
+        use crate::body::validate::ResponseChecksumValidationResult;
+
+        let input_text = "This is some test text for an SdkBody";
+        let non_matching_checksum = Bytes::copy_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+        let http_checksum = "crc32".parse::<ChecksumAlgorithm>().unwrap().into_impl();
+        let result = ResponseChecksumValidationResult::new();
+        let mut body = ChecksumBody::new(
+            SdkBody::from(input_text),
+            http_checksum,
+            non_matching_checksum,
+        )
+        .with_validation_result(result.clone(), ChecksumAlgorithm::Crc32);
+
+        // Drain until the mismatch error surfaces.
+        while let Some(data) = body.frame().await {
+            if data.is_err() {
+                break;
+            }
+        }
+
+        // A mismatch leaves the outcome unset (it surfaces as a body error, not a verdict).
+        assert_eq!(result.outcome(), None);
     }
 }

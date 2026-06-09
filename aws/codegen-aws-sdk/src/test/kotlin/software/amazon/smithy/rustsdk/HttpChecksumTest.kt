@@ -429,13 +429,38 @@ internal class HttpChecksumTest {
                         .validation_mode($moduleName::types::ValidationMode::Enabled)
                         .send()
                         .await;
-                    assert!(res.is_ok())
+                    let output = res.expect("response checksum should validate");
+
+                    // The validation outcome is recorded onto the output's extensions. For this
+                    // (non-streaming) operation the orchestrator reads the response body to
+                    // completion before deserialization even though the output models no body
+                    // member, so the `ChecksumBody` has already reached EOF and resolved the
+                    // outcome by the time `send()` returns.
+                    use #{ProvideExtensions};
+                    let outcome = #{ProvideExtensions}::extensions(&output)
+                        .get::<#{ResponseChecksumValidationResult}>()
+                        .expect("validation result handle is attached to the output")
+                        .outcome();
+                    assert_eq!(
+                        outcome,
+                        #{Some}(#{ValidationOutcome}::Validated {
+                            algorithm: "$algoLower".parse::<#{ChecksumAlgorithm}>().unwrap(),
+                        }),
+                    );
                 }
                 """,
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
                 "http_1x" to CargoDependency.Http1x.toType(),
+                "ProvideExtensions" to
+                    RuntimeType.smithyTypes(rc).resolve("extensions::ProvideExtensions"),
+                "ResponseChecksumValidationResult" to
+                    RuntimeType.smithyChecksums(rc).resolve("body::validate::ResponseChecksumValidationResult"),
+                "ValidationOutcome" to
+                    RuntimeType.smithyChecksums(rc).resolve("body::validate::ValidationOutcome"),
+                "ChecksumAlgorithm" to
+                    RuntimeType.smithyChecksums(rc).resolve("ChecksumAlgorithm"),
             )
         }
     }
@@ -702,11 +727,58 @@ internal class HttpChecksumTest {
                     assert!(sdk_metrics.contains(&"c"));
                     assert!(!sdk_metrics.contains(&"b"));
                 }
+
+                // When validation is enabled but the response carries no checksum header for any
+                // supported algorithm, the operation still succeeds and the recorded validation
+                // outcome is `NotValidated { NoChecksum }`. (As above, the orchestrator reads the
+                // response body to completion for this non-streaming operation, so the outcome is
+                // resolved by the time `send()` returns.)
+                ##[::tokio::test]
+                async fn response_no_checksum_header_is_not_validated() {
+                    let (http_client, _rx) = #{capture_request}(Some(
+                        #{http_1x}::Response::builder()
+                            .body(SdkBody::from("Hello world"))
+                            .unwrap(),
+                    ));
+                    let config = $moduleName::Config::builder()
+                        .region(Region::from_static("doesntmatter"))
+                        .with_test_defaults()
+                        .http_client(http_client)
+                        .build();
+
+                    let client = $moduleName::Client::from_conf(config);
+                    let output = client
+                        .http_checksum_operation()
+                        .body(Blob::new(b"Doesn't matter."))
+                        .validation_mode($moduleName::types::ValidationMode::Enabled)
+                        .send()
+                        .await
+                        .expect("request should succeed when no checksum header is present");
+
+                    let outcome = #{ProvideExtensions}::extensions(&output)
+                        .get::<#{ResponseChecksumValidationResult}>()
+                        .expect("validation result handle is attached to the output")
+                        .outcome();
+                    assert_eq!(
+                        outcome,
+                        #{Some}(#{ValidationOutcome}::NotValidated {
+                            reason: #{NotValidatedReason}::NoChecksum,
+                        }),
+                    );
+                }
                 """,
                 *preludeScope,
                 "tokio" to CargoDependency.Tokio.toType(),
                 "capture_request" to RuntimeType.captureRequest(rc),
                 "http_1x" to CargoDependency.Http1x.toType(),
+                "ProvideExtensions" to
+                    RuntimeType.smithyTypes(rc).resolve("extensions::ProvideExtensions"),
+                "ResponseChecksumValidationResult" to
+                    RuntimeType.smithyChecksums(rc).resolve("body::validate::ResponseChecksumValidationResult"),
+                "ValidationOutcome" to
+                    RuntimeType.smithyChecksums(rc).resolve("body::validate::ValidationOutcome"),
+                "NotValidatedReason" to
+                    RuntimeType.smithyChecksums(rc).resolve("body::validate::NotValidatedReason"),
             )
         }
     }

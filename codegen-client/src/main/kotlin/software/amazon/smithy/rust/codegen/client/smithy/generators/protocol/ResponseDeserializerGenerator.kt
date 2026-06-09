@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
+import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
@@ -179,13 +180,14 @@ class ResponseDeserializerGenerator(
                     #{Ok}(output)
                 })();
 
-                #{Some}(#{type_erase_result}(result))
+                #{Some}(#{type_erase_result}(#{lift_extensions}))
             }
             """,
             *codegenScope,
             "ConcreteOutput" to outputSymbol,
             "E" to errorSymbol,
             "ByteStream" to RuntimeType.byteStream(runtimeConfig),
+            "lift_extensions" to liftExtensions("result"),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
@@ -274,7 +276,7 @@ class ResponseDeserializerGenerator(
                     #{Ok}(output)
                 })();
 
-                #{Some}(#{type_erase_result}(result))
+                #{Some}(#{type_erase_result}(#{lift_extensions}))
             }
             """,
             *codegenScope,
@@ -284,6 +286,7 @@ class ResponseDeserializerGenerator(
             "EventReceiver" to RuntimeType.eventReceiver(runtimeConfig),
             "Receiver" to RuntimeType.eventStreamReceiver(runtimeConfig),
             "unmarshaller" to unmarshallerCtor,
+            "lift_extensions" to liftExtensions("result"),
             "MutateOutput" to
                 writable {
                     writeCustomizations(
@@ -312,7 +315,7 @@ class ResponseDeserializerGenerator(
         val successCode = httpBindingResolver.httpTrait(operationShape).code
         rustTemplate(
             """
-            fn deserialize_streaming(&self, response: &mut #{HttpResponse}) -> #{Option}<#{OutputOrError}> {
+            fn deserialize_streaming_with_config(&self, response: &mut #{HttpResponse}, _cfg: &#{ConfigBag}) -> #{Option}<#{OutputOrError}> {
                 ##[allow(unused_mut)]
                 let mut force_error = false;
                 #{BeforeParseResponse}
@@ -321,17 +324,43 @@ class ResponseDeserializerGenerator(
                 if (!response.status().is_success() && response.status().as_u16() != $successCode) || force_error {
                     return #{None};
                 }
-                #{Some}(#{type_erase_result}(#{parse_streaming_response}(response)))
+                let result = #{parse_streaming_response}(response);
+                #{Some}(#{type_erase_result}(#{lift_extensions}))
             }
             """,
             *codegenScope,
             "parse_streaming_response" to parserGenerator.parseStreamingResponseFn(operationShape, customizations),
+            "lift_extensions" to liftExtensions("result"),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
                 },
         )
     }
+
+    /**
+     * Lifts the [`Extensions`] accumulated in the config bag (by interceptors) onto a concrete
+     * operation output, before it is type-erased. Produces an expression of the same
+     * `Result<ConcreteOutput, E>` type as [resultExpr], with the output's extensions replaced.
+     *
+     * `_cfg` and [resultExpr] must be in scope. Relies on the synthetic `_set_extensions`
+     * inherent method present on every operation output (see `OutputExtensionsDecorator`).
+     */
+    private fun liftExtensions(resultExpr: String): Writable =
+        writable {
+            rustTemplate(
+                """
+                $resultExpr.map(|mut output| {
+                    if let #{Some}(extensions) = _cfg.load::<#{Extensions}>() {
+                        output._set_extensions(extensions.clone());
+                    }
+                    output
+                })
+                """,
+                *preludeScope,
+                "Extensions" to RuntimeType.smithyTypes(runtimeConfig).resolve("extensions::Extensions"),
+            )
+        }
 
     private fun RustWriter.deserializeStreamingError(
         operationShape: OperationShape,
@@ -413,18 +442,22 @@ class ResponseDeserializerGenerator(
                 let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
                 let body = response.body().bytes().expect("body loaded");
-                let output = #{ConcreteOutput}::deserialize_with_response(
+                let mut output = #{ConcreteOutput}::deserialize_with_response(
                     &mut *deser,
                     response.headers(),
                     response.status().into(),
                     body,
                 ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                if let #{Some}(extensions) = _cfg.load::<#{Extensions}>() {
+                    output._set_extensions(extensions.clone());
+                }
                 #{Ok}(#{Output}::erase(output))
             }
             """,
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
             "ConcreteOutput" to outputSymbol,
+            "Extensions" to RuntimeType.smithyTypes(runtimeConfig).resolve("extensions::Extensions"),
         )
     }
 
@@ -550,11 +583,12 @@ class ResponseDeserializerGenerator(
             } else {
                 #{parse_response}(status, headers, body)
             };
-            #{type_erase_result}(parse_result)
+            #{type_erase_result}(#{lift_extensions})
             """,
             *codegenScope,
             "parse_error" to parserGenerator.parseErrorFn(operationShape, customizations),
             "parse_response" to parserGenerator.parseResponseFn(operationShape, customizations),
+            "lift_extensions" to liftExtensions("parse_result"),
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))

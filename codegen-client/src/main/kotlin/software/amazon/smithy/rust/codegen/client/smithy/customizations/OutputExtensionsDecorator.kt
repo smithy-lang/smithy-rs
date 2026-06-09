@@ -33,9 +33,10 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
  * output's derived `PartialEq` (`Extensions` has no meaningful equality), while the
  * output keeps its blanket derives.
  *
- * This decorator only provides the container and accessor. Population is the
- * responsibility of feature-specific decorators, which contribute a `MutateOutput`
- * customization that reads from the config bag and calls `_insert_extension`.
+ * This decorator only provides the container and accessor. Population is generic: the
+ * generated response deserializer lifts the `Extensions` accumulated in the config bag
+ * onto the output via `_set_extensions`. Feature-specific interceptors contribute by
+ * inserting their typed handles into the config-bag `Extensions`.
  */
 class OutputExtensionsDecorator : ClientCodegenDecorator {
     override val name: String = "OutputExtensions"
@@ -98,6 +99,16 @@ class OutputExtensionsDecorator : ClientCodegenDecorator {
                             impl #{ProvideExtensions} for ${section.structName} {
                                 fn extensions(&self) -> &#{Extensions} {
                                     self._extensions.get()
+                                }
+                            }
+
+                            impl ${section.structName} {
+                                /// Replaces this output's extensions. Used by the generated response
+                                /// deserializer to lift extensions accumulated in the config bag onto
+                                /// the output.
+                                ##[allow(dead_code)]
+                                pub(crate) fn _set_extensions(&mut self, extensions: #{Extensions}) {
+                                    *self._extensions.get_mut() = extensions;
                                 }
                             }
                             """,
