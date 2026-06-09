@@ -392,9 +392,6 @@ mod test {
     use crate::date_time::Format;
     use crate::DateTime;
     use proptest::proptest;
-    use std::time::SystemTime;
-    use time::format_description::well_known::Rfc3339;
-    use time::OffsetDateTime;
 
     #[test]
     fn test_display_date_time() {
@@ -621,9 +618,12 @@ mod test {
     }
 
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
-    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86", target_os = "windows")))]
     #[test]
     fn system_time_conversions() {
+        use std::time::SystemTime;
+        use time::format_description::well_known::Rfc3339;
+        use time::OffsetDateTime;
         // Check agreement
         let date_time = DateTime::from_str("1000-01-02T01:23:10.123Z", Format::DateTime).unwrap();
         let off_date_time = OffsetDateTime::parse("1000-01-02T01:23:10.123Z", &Rfc3339).unwrap();

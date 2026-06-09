@@ -7,7 +7,7 @@
 
 ARG base_image=public.ecr.aws/amazonlinux/amazonlinux:2023
 ARG rust_stable_version=1.94.1
-ARG rust_nightly_version=nightly-2025-10-18
+ARG rust_nightly_version=nightly-2026-03-20
 
 FROM ${base_image} AS bare_base_image
 RUN yum -y updateinfo && yum clean all && rm -rf /var/cache/yum
@@ -84,6 +84,7 @@ RUN yum -y install --allowerasing \
     rustup component add clippy; \
     rustup toolchain install ${rust_nightly_version} --component clippy; \
     rustup target add x86_64-unknown-linux-musl; \
+    rustup target add aarch64-unknown-linux-musl; \
     rustup target add wasm32-unknown-unknown; \
     rustup target add wasm32-wasip1; \
     rustup target add wasm32-wasip2; \
@@ -129,7 +130,7 @@ ARG cargo_deny_version=0.16.4
 ARG cargo_udeps_version=0.1.56
 ARG cargo_hack_version=0.6.27
 ARG cargo_minimal_versions_version=0.1.27
-ARG cargo_check_external_types_version=0.4.0
+ARG cargo_check_external_types_version=0.5.0
 ARG maturin_version=1.5.1
 ARG wasm_pack_version=0.13.1
 ARG cargo_wasmtime_version=38.0.4
