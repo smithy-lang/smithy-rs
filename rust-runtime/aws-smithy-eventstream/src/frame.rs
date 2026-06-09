@@ -69,10 +69,7 @@ impl DeferredSigner {
     }
 
     fn acquire(&mut self) -> &mut (dyn SignMessage + Send + Sync) {
-        // Can't use `if let Some(signer) = &mut self.signer` because the borrow checker isn't smart enough
-        if self.signer.is_some() {
-            self.signer.as_mut().unwrap().as_mut()
-        } else {
+        if self.signer.is_none() {
             self.signer = Some(
                 self.rx
                     .take()
@@ -82,8 +79,8 @@ impl DeferredSigner {
                     // event streams or tests that don't configure signing).
                     .unwrap_or_else(|_| Box::new(NoOpSigner {}) as _),
             );
-            self.acquire()
         }
+        self.signer.as_mut().unwrap().as_mut()
     }
 }
 

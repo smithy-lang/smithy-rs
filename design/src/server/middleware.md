@@ -49,7 +49,7 @@ The `Service` trait can be thought of as an asynchronous function from a request
 
 Middleware in `tower` typically conforms to the following pattern, a `Service` implementation of the form
 
-```rust
+```rust,ignore
 pub struct NewService<S> {
     inner: S,
     /* auxillary data */

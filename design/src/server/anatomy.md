@@ -187,7 +187,7 @@ let operation = GetPokemonSpecies::from_handler(get_pokemon_service);
 
 Alternatively, `from_service` constructor:
 
-```rust
+```rust,ignore
 # extern crate pokemon_service_server_sdk;
 # extern crate aws_smithy_http_server;
 # extern crate tower;
@@ -230,7 +230,7 @@ To summarize a _model service_ constructed can be constructed from a `Handler` o
 
 A [Smithy protocol](https://awslabs.github.io/smithy/2.0/spec/protocol-traits.html#serialization-and-protocol-traits) specifies the serialization/deserialization scheme - how a HTTP request is transformed into a modelled input and a modelled output to a HTTP response. The is formalized using the [`FromRequest`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromRequest.html) and [`IntoResponse`](https://github.com/smithy-lang/smithy-rs/blob/4c5cbc39384f0d949d7693eb87b5853fe72629cd/rust-runtime/aws-smithy-http-server/src/response.rs#L40-L44) traits:
 
-```rust
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate http;
 # use aws_smithy_http_server::body::BoxBody;
@@ -357,7 +357,7 @@ Different protocols supported by Smithy enjoy different routing mechanisms, for 
 
 Despite their differences, all routing mechanisms satisfy a common interface. This is formalized using the [Router](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/routing/trait.Router.html) trait:
 
-```rust
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate http;
 /// An interface for retrieving an inner [`Service`] given a [`http::Request`].
@@ -673,7 +673,7 @@ stateDiagram-v2
 
 An additional omitted detail is that we provide an "escape hatch" allowing `Handler`s and `OperationService`s to accept data that isn't modelled. In addition to accepting `Op::Input` they can accept additional arguments which implement the [`FromParts`](https://docs.rs/aws-smithy-http-server/latest/aws_smithy_http_server/request/trait.FromParts.html) trait:
 
-```rust
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate http;
 # use http::request::Parts;
@@ -709,7 +709,7 @@ pub struct Parts {
 
 This is commonly used to access types stored within [`Extensions`](https://docs.rs/http/0.2.8/http/struct.Extensions.html) which have been inserted by a middleware. An `Extension` struct implements `FromParts` to support this use case:
 
-```rust
+```rust,ignore
 # extern crate aws_smithy_http_server;
 # extern crate http;
 # extern crate thiserror;
