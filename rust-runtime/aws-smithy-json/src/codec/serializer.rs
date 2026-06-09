@@ -5,7 +5,7 @@
 
 //! JSON serializer implementation.
 
-use aws_smithy_schema::document::Document;
+use aws_smithy_schema::document::{Document, DocumentInner};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
@@ -86,16 +86,113 @@ impl JsonSerializer {
     }
 
     fn write_json_value(&mut self, doc: &Document) -> Result<(), SerdeError> {
+        use crate::escape::escape_string;
         use crate::serialize::JsonValueWriter;
-        // Bridge to the legacy `aws_smithy_types::Document` for the JSON
-        // emission path. Rich variants (Blob, Timestamp, BigInteger,
-        // BigDecimal) and discriminator-tagged structures are handled in
-        // Phase 7 (`JsonDocumentSettings`) per the
-        // `Document Types & Type Registries` plan; for now, those return
-        // a `TypeMismatch` error.
-        let legacy = aws_smithy_types::Document::try_from(doc.clone())?;
-        let writer = JsonValueWriter::new(&mut self.output);
-        writer.document(&legacy);
+        use aws_smithy_types::base64;
+
+        // Walk `DocumentInner` directly so blob (base64), timestamp
+        // (codec-default format), bignum, and discriminator-tagged
+        // structures all serialize correctly. The previous bridge to
+        // `aws_smithy_types::Document` (the legacy document type) only
+        // supported the JSON-typed subset and errored on the rich
+        // variants the schema-serde path produces.
+        //
+        // Per the SEP § Document Types rule 8, the document is
+        // protocol-agnostic on the serialization side: it carries no
+        // per-member format trait (the schema is the carrier of those
+        // traits, and a `Document` value erases the schema). Thus
+        // timestamp serialization here uses the codec's default format
+        // unconditionally — schema-typed members go through the
+        // dedicated `write_timestamp` path and inspect
+        // `@timestampFormat` themselves, not via `write_document`.
+        match doc.inner() {
+            DocumentInner::Null => self.output.push_str("null"),
+            DocumentInner::Boolean(b) => self.output.push_str(if *b { "true" } else { "false" }),
+            DocumentInner::Number(n) => {
+                let writer = JsonValueWriter::new(&mut self.output);
+                writer.number(*n);
+            }
+            DocumentInner::String(s) => {
+                self.output.push('"');
+                self.output.push_str(&escape_string(s));
+                self.output.push('"');
+            }
+            DocumentInner::Blob(b) => {
+                let encoded = base64::encode(b);
+                self.output.push('"');
+                self.output.push_str(&encoded);
+                self.output.push('"');
+            }
+            DocumentInner::Timestamp(ts) => {
+                let format = self.settings.default_timestamp_format;
+                let formatted = ts.fmt(format).map_err(|e| SerdeError::WriteFailed {
+                    message: format!("failed to format timestamp: {e}"),
+                })?;
+                match format {
+                    TimestampFormat::EpochSeconds => self.output.push_str(&formatted),
+                    _ => {
+                        self.output.push('"');
+                        self.output.push_str(&formatted);
+                        self.output.push('"');
+                    }
+                }
+            }
+            DocumentInner::BigInteger(bi) => {
+                // Big integers serialize as raw JSON numbers (no quotes,
+                // no scientific notation) so receivers with arbitrary-
+                // precision parsers can recover the exact value.
+                self.output.push_str(bi.as_ref());
+            }
+            DocumentInner::BigDecimal(bd) => {
+                self.output.push_str(bd.as_ref());
+            }
+            DocumentInner::List(items) => {
+                self.output.push('[');
+                let mut first = true;
+                for item in items {
+                    if !first {
+                        self.output.push(',');
+                    }
+                    first = false;
+                    self.write_json_value(item)?;
+                }
+                self.output.push(']');
+            }
+            DocumentInner::Map(entries) => {
+                self.output.push('{');
+                let mut first = true;
+                // If the document carries a discriminator (i.e. it
+                // represents a typed shape), emit it as a `__type`
+                // field per the SEP § Typed Document Serialization. The
+                // SEP requires the absolute shape id — `ShapeId::as_str`
+                // already returns the FQN form `namespace#name`.
+                if let Some(id) = doc.discriminator() {
+                    self.output.push_str("\"__type\":\"");
+                    self.output.push_str(&escape_string(id.as_str()));
+                    self.output.push('"');
+                    first = false;
+                }
+                for (key, value) in entries {
+                    if !first {
+                        self.output.push(',');
+                    }
+                    first = false;
+                    self.output.push('"');
+                    self.output.push_str(&escape_string(key));
+                    self.output.push_str("\":");
+                    self.write_json_value(value)?;
+                }
+                self.output.push('}');
+            }
+            // `DocumentInner` is `#[non_exhaustive]`. Future variants
+            // need a deliberate decision in this serializer rather than
+            // a silent no-op.
+            other => {
+                return Err(SerdeError::custom(format!(
+                    "JSON write_document: unsupported DocumentInner variant {other:?}"
+                )));
+            }
+        }
         Ok(())
     }
 }
