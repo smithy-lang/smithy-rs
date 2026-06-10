@@ -648,8 +648,10 @@ mod tls_h2 {
         );
     }
 
-    /// s2n-tls + ALPN h2: v2 pool should route to H2 (currently broken — opens
-    /// new connection per request because Connected never signals negotiated_h2).
+    /// s2n-tls + ALPN h2: the v2 pool routes to H2 and multiplexes. Three
+    /// sequential requests share one connection because `S2nTlsConn::connected()`
+    /// reports the negotiated protocol from the TLS `application_protocol`, so the
+    /// Negotiate layer selects the H2 leg.
     #[cfg(feature = "s2n-tls")]
     #[tokio::test]
     async fn s2n_tls_alpn_h2_multiplexing() {
@@ -675,7 +677,7 @@ mod tls_h2 {
         let (status, _) = send_request(&client, &url).await.unwrap();
         assert_eq!(status, 200);
 
-        // This assertion will FAIL until s2n-tls signals negotiated_h2()
+        // All three requests multiplex on one H2 connection.
         assert_eq!(
             server.connection_count(),
             1,
