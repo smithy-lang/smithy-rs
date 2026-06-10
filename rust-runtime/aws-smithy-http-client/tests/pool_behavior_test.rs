@@ -2076,6 +2076,84 @@ async fn v2_cross_partition_borrow_respects_nic_boundary() {
 }
 
 // ---------------------------------------------------------------------------
+// Test implementations: cross-partition concurrency stress (TSan target)
+// ---------------------------------------------------------------------------
+
+/// Drives concurrent cross-partition borrow, reclaim, and eviction against
+/// a shared authority under a binding cap. The assertion is intentionally
+/// weak (every request completes); the value is the interleaving:
+/// concurrent `try_borrow_on` / `try_reclaim_on` touch a peer's
+/// `authorities` and cache locks while that peer serves its own requests
+/// and the eviction task runs `retain` on the same caches. `additional-ci`
+/// additionally runs it under ThreadSanitizer.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn v2_cross_partition_concurrency_stress() {
+    use aws_smithy_http_client::pool::{
+        CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
+    };
+
+    const PARTITIONS: usize = 4;
+    const ROUNDS: usize = 8;
+    const REQUESTS_PER_ROUND: usize = 16;
+
+    // Single loopback endpoint serving many keep-alive requests. The
+    // cross-partition contention comes from multiple partitions sharing
+    // one authority under a binding cap, not from IP spread.
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..512)
+                .map(|_| ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    // No NIC binding (the common case): all partitions land in the single
+    // implicit NIC group, so they are borrow + reclaim peers. A small
+    // global cap forces cross-partition contention; a short idle timeout
+    // makes the eviction task churn concurrently with borrow/reclaim.
+    let parts = (0..PARTITIONS)
+        .map(|i| Partition::new(PartitionId::from_index(i), TokioDriverSpawner::current()));
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
+        .max_connections(PARTITIONS) // bind the cap below the offered load
+        .pool_idle_timeout(Duration::from_millis(20))
+        .partitions(parts)
+        .build_http();
+
+    let clients: Vec<SharedHttpClient> = (0..PARTITIONS)
+        .map(|i| PoolClient::from_partition(&pool, PartitionId::from_index(i)).into_shared())
+        .collect();
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+    for _ in 0..ROUNDS {
+        let mut tasks = tokio::task::JoinSet::new();
+        for r in 0..REQUESTS_PER_ROUND {
+            // Spread requests across partitions so borrow/reclaim peers
+            // are all live at once.
+            let client = clients[r % PARTITIONS].clone();
+            let url = url.clone();
+            tasks.spawn(async move { send_and_read_body(&client, &url).await });
+        }
+        while let Some(result) = tasks.join_next().await {
+            let (status, _) = result
+                .expect("task should not panic")
+                .expect("request should succeed under cross-partition contention");
+            assert_eq!(status, 200);
+        }
+        // Let the eviction tick fire between rounds so the next round
+        // races fresh connects against reclaim/borrow on partly-evicted
+        // caches.
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Test implementations: stats read API
 // ---------------------------------------------------------------------------
 
