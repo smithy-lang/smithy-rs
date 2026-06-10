@@ -585,6 +585,36 @@ mod tests {
     }
 
     #[test]
+    fn observe_protocol_latches_monotonically_to_mixed() {
+        // First observation sets the protocol from UNSET.
+        let c = Arc::new(ConnectionCounters::default());
+        assert_eq!(c.protocol(), PROTO_UNSET);
+        c.observe_protocol(PROTO_H1);
+        assert_eq!(c.protocol(), PROTO_H1);
+
+        // Same protocol again is a no-op (stays H1, does not advance to MIXED).
+        c.observe_protocol(PROTO_H1);
+        assert_eq!(c.protocol(), PROTO_H1);
+
+        // A different protocol latches to MIXED.
+        c.observe_protocol(PROTO_H2);
+        assert_eq!(c.protocol(), PROTO_MIXED);
+
+        // MIXED is terminal: observing either protocol again cannot un-mix it.
+        c.observe_protocol(PROTO_H1);
+        assert_eq!(c.protocol(), PROTO_MIXED);
+        c.observe_protocol(PROTO_H2);
+        assert_eq!(c.protocol(), PROTO_MIXED);
+
+        // The symmetric first-observation path: H2 first, then H1 → MIXED.
+        let c = Arc::new(ConnectionCounters::default());
+        c.observe_protocol(PROTO_H2);
+        assert_eq!(c.protocol(), PROTO_H2);
+        c.observe_protocol(PROTO_H1);
+        assert_eq!(c.protocol(), PROTO_MIXED);
+    }
+
+    #[test]
     fn idle_is_established_minus_active_saturating() {
         let s = PartitionStats {
             established: 3,
