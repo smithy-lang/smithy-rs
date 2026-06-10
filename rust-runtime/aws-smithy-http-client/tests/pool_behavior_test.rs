@@ -1983,6 +1983,96 @@ async fn v2_cross_partition_borrow_reuses_peer_connection() {
     );
 }
 
+/// Storage residency under borrow: a borrowed connection never changes
+/// partitions. When P0 borrows P1's connection under `PreferLocal`, the
+/// connection stays resident in P1's storage — `stats()` shows P1 owning the
+/// one established connection and P0 owning zero, even though P0's request
+/// was served. Borrow dispatches *through* the peer's connection; it does
+/// not migrate it (connections never move). This is the wiring counterpart
+/// to the borrow test's `conn_id` equality: the id matches because the
+/// connection is P1's, and the residency confirms it stayed P1's.
+#[tokio::test]
+async fn v2_borrowed_connection_stays_resident_in_peer() {
+    use aws_smithy_http_client::pool::{
+        Authority, CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
+    };
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p1",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p0",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    // Same setup as the borrow test: two same-NIC partitions, cap 1, long
+    // idle timeout. The borrow is forced by P1 holding the only permit.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
+        .max_connections(1)
+        .pool_idle_timeout(Duration::from_secs(3600))
+        .partitions([p0, p1])
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let authority = Authority::from_host(format!("127.0.0.1:{port}"));
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let client1 = PoolClient::from_partition(&pool, PartitionId::from_index(1)).into_shared();
+
+    // P1 establishes and returns its connection idle (holding the permit).
+    let _ = send_with_capture(&client1, &url).await;
+
+    // P0 borrows P1's connection (cap-bound, PreferLocal) and its request
+    // completes through it. send_with_capture drains the body, so all active
+    // counts settle before we read stats.
+    let (status, _, _) =
+        tokio::time::timeout(Duration::from_secs(5), send_with_capture(&client0, &url))
+            .await
+            .expect("p0 must not block — borrow should reuse P1's connection");
+    assert_eq!(status, 200);
+
+    // Residency: the single established connection lives in P1's cell. P0
+    // borrowed rather than created, so its cell holds zero established.
+    let stats = pool.stats(&authority);
+    let p1_stats = stats
+        .get(PartitionId::from_index(1))
+        .expect("P1 owns the established connection");
+    assert_eq!(
+        p1_stats.established, 1,
+        "the connection is resident in P1's storage"
+    );
+    assert_eq!(
+        stats
+            .get(PartitionId::from_index(0))
+            .map(|s| s.established)
+            .unwrap_or(0),
+        0,
+        "P0 borrowed P1's connection; it added nothing to P0's established"
+    );
+
+    // Exactly one connection exists across both partitions.
+    let total_established: usize = stats.iter().map(|(_, s)| s.established).sum();
+    assert_eq!(
+        total_established, 1,
+        "one connection total — borrow does not create or duplicate"
+    );
+}
+
 /// Borrow is NIC-bounded: a peer on a different NIC is not a borrow
 /// candidate. With `PreferLocal` but P0 and P1 on different NICs, P0
 /// cannot borrow P1's connection — nor reclaim its permit (reclaim
