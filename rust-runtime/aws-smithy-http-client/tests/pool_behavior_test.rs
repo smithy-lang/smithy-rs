@@ -1887,6 +1887,195 @@ async fn v2_cross_partition_reclaim_frees_peer_idle() {
 }
 
 // ---------------------------------------------------------------------------
+// Test implementations: cross-partition borrow (PreferLocal policy)
+// ---------------------------------------------------------------------------
+
+/// Under cap pressure with `PreferLocal`, a starved partition borrows a
+/// same-NIC peer's idle connection and dispatches its request through it —
+/// no new connection, no permit. This is the opposite disposition from
+/// reclaim: the connection stays the peer's (P0 runs on P1's exact
+/// connection), proven by `p0_conn_id == p1_conn_id` and a single TCP
+/// accept (P1's connection serves both requests via keep-alive).
+#[tokio::test]
+async fn v2_cross_partition_borrow_reuses_peer_connection() {
+    use aws_smithy_http_client::pool::{
+        CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
+    };
+
+    // One endpoint, ONE connection serving TWO requests (P1's, then P0's
+    // borrowed request via the keep-alive loop).
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p1",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p0",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    // Two partitions, same NIC group (borrow peers), global cap 1, long
+    // idle timeout so the eviction tick never interferes.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
+        .interface("eth-test");
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
+        .max_connections(1)
+        .pool_idle_timeout(Duration::from_secs(3600))
+        .partitions([p0, p1])
+        .build_http();
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let client1 = PoolClient::from_partition(&pool, PartitionId::from_index(1)).into_shared();
+
+    // P1 establishes a connection, drains it, and returns it idle to its
+    // cache holding the single global permit.
+    let (_, _, meta1) = send_with_capture(&client1, &url).await;
+    let p1_conn_id: u64 = meta1
+        .expect("p1 metadata")
+        .connection_id()
+        .expect("p1 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // P0 requests the same authority. The permit is held by P1's idle
+    // connection, so P0 is cap-bound; under PreferLocal it borrows P1's
+    // connection and dispatches through it. Bounded so a hang surfaces as
+    // a failure.
+    let (status, body, meta0) =
+        tokio::time::timeout(Duration::from_secs(5), send_with_capture(&client0, &url))
+            .await
+            .expect("p0 must not block — borrow should reuse P1's connection");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"p0");
+    let p0_conn_id: u64 = meta0
+        .expect("p0 metadata")
+        .connection_id()
+        .expect("p0 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // The direct proof of borrow: P0 ran on P1's *exact* connection.
+    assert_eq!(
+        p0_conn_id, p1_conn_id,
+        "PreferLocal borrow dispatches P0's request through P1's connection"
+    );
+
+    // One TCP accept total — P1's connection served both requests. A fresh
+    // local connection for P0 (reclaim, or no borrow) would be 2.
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "borrow reuses the peer's connection; no new connection is opened"
+    );
+}
+
+/// Borrow is NIC-bounded: a peer on a different NIC is not a borrow
+/// candidate. With `PreferLocal` but P0 and P1 on different NICs, P0
+/// cannot borrow P1's connection — nor reclaim its permit (reclaim
+/// candidates are also drawn from the NIC group). P0's cap-bound wait is
+/// instead released when P1's idle connection is evicted (scenario B), and
+/// P0 then connects locally. Proven by `p0_conn_id != p1_conn_id` and two
+/// TCP accepts — the opposite of the same-NIC borrow case, which reuses
+/// P1's exact connection.
+#[tokio::test]
+async fn v2_cross_partition_borrow_respects_nic_boundary() {
+    use aws_smithy_http_client::pool::{
+        CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
+    };
+
+    // One endpoint, two connections: P1's, then P0's fresh local one.
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p1",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"p0",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    // Two partitions on DIFFERENT NICs — not borrow peers (and not reclaim
+    // peers). A short idle timeout lets P0's cap-bound wait be released by
+    // eviction of P1's idle connection, rather than hanging.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
+        .interface("eth-zero");
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
+        .interface("eth-one");
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
+        .max_connections(1)
+        .pool_idle_timeout(Duration::from_millis(150))
+        .partitions([p0, p1])
+        .build_http();
+
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+    let client0 = PoolClient::from_partition(&pool, PartitionId::from_index(0)).into_shared();
+    let client1 = PoolClient::from_partition(&pool, PartitionId::from_index(1)).into_shared();
+
+    let (_, _, meta1) = send_with_capture(&client1, &url).await;
+    let p1_conn_id: u64 = meta1
+        .expect("p1 metadata")
+        .connection_id()
+        .expect("p1 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // P0 is cap-bound and cannot borrow across the NIC boundary; it waits
+    // for P1's idle to be evicted, then connects locally. Bounded so a true
+    // hang still surfaces as a failure.
+    let (status, body, meta0) =
+        tokio::time::timeout(Duration::from_secs(5), send_with_capture(&client0, &url))
+            .await
+            .expect("p0 should proceed once P1's idle is evicted");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"p0");
+    let p0_conn_id: u64 = meta0
+        .expect("p0 metadata")
+        .connection_id()
+        .expect("p0 conn id")
+        .to_string()
+        .parse()
+        .unwrap();
+
+    // P1 is on a different NIC → not a borrow candidate. P0 does NOT run on
+    // P1's connection; it gets its own.
+    assert_ne!(
+        p0_conn_id, p1_conn_id,
+        "no borrow across NICs — P0 runs on its own connection"
+    );
+
+    // Two TCP accepts: P1's connection plus P0's fresh local one.
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        2,
+        "NIC boundary blocks borrow; P0 opens its own connection"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // Test implementations: stats read API
 // ---------------------------------------------------------------------------
 

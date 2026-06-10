@@ -161,11 +161,12 @@ where
         let counters = self.counters.clone();
         let reclaim = self.reclaim.clone();
         Box::pin(async move {
+            let mode = ctx.mode;
             // Per-host before global: never hold a global permit while
             // waiting on a per-host permit.
             let per_host_permit = match &per_host {
                 Some(sem) => Some(
-                    acquire_or_reclaim(sem, reclaim.as_ref(), || {
+                    acquire_or_reclaim(sem, reclaim.as_ref(), mode, || {
                         // `send_request` validated the URI has scheme+authority
                         // before dispatching, so this cannot fail here.
                         let key = super::PoolKey::from_uri(&ctx.uri)
@@ -178,8 +179,10 @@ where
             };
             let global_permit = match &global {
                 Some(sem) => Some(
-                    acquire_or_reclaim(sem, reclaim.as_ref(), || super::BindingConstraint::Global)
-                        .await?,
+                    acquire_or_reclaim(sem, reclaim.as_ref(), mode, || {
+                        super::BindingConstraint::Global
+                    })
+                    .await?,
                 ),
                 None => None,
             };
@@ -212,18 +215,24 @@ where
 }
 
 /// Acquire one owned permit. Fast path is `try_acquire_owned`. On
-/// `NoPermits`, free one peer's idle connection for `constraint` (inline,
-/// best-effort) then blocking-acquire — the blocking acquire is the
-/// authoritative take regardless of whether reclaim freed a permit.
-/// `constraint` is built only on the cap-bound branch.
+/// `NoPermits`: under [`AcquireMode::NonBlocking`] return [`CapBound`]
+/// immediately (the caller will try a peer borrow); under
+/// [`AcquireMode::Blocking`] free one peer's idle connection for
+/// `constraint` (inline, best-effort) then blocking-acquire — the blocking
+/// acquire is the authoritative take regardless of whether reclaim freed a
+/// permit. `constraint` is built only on the blocking cap-bound branch.
 async fn acquire_or_reclaim(
     sem: &Arc<Semaphore>,
     reclaim: Option<&super::PeerReclaimHandle>,
+    mode: super::connection::AcquireMode,
     constraint: impl FnOnce() -> super::BindingConstraint,
 ) -> Result<tokio::sync::OwnedSemaphorePermit, BoxError> {
     match sem.clone().try_acquire_owned() {
         Ok(permit) => Ok(permit),
         Err(tokio::sync::TryAcquireError::NoPermits) => {
+            if mode == super::connection::AcquireMode::NonBlocking {
+                return Err(super::connection::CapBound.into());
+            }
             if let Some(reclaim) = reclaim {
                 reclaim.try_free_under_load(&constraint());
             }

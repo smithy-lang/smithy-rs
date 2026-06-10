@@ -457,6 +457,22 @@ impl PartitionRegistry {
         let auth = state.authorities.lock().expect("authorities poisoned");
         auth.values().any(|entry| entry.try_reclaim_one())
     }
+
+    /// Attempt to borrow one idle connection from `peer`'s entry for
+    /// `key`, as a dispatchable handle that returns to `peer`'s pool on
+    /// drop. Returns `None` if the peer or entry is absent, or holds no
+    /// borrowable idle. The peer's `authorities` lock is held only to
+    /// check out the handle (the handle re-pools on drop, independent of
+    /// the lock); dispatch happens after the lock is released.
+    pub(crate) fn try_borrow_on(
+        &self,
+        peer: PartitionId,
+        key: &super::PoolKey,
+    ) -> Option<Box<dyn super::DispatchConn>> {
+        let state = self.by_id.get(&peer)?;
+        let auth = state.authorities.lock().expect("authorities poisoned");
+        auth.get(key)?.try_borrow_one()
+    }
 }
 
 #[cfg(test)]
