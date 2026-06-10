@@ -2360,3 +2360,144 @@ async fn v2_stats_pruned_after_eviction() {
         "eviction should have decremented established and pruned the cell"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Test implementations: at-the-limit scenarios
+// ---------------------------------------------------------------------------
+
+/// A request blocked at the connection cap proceeds once an in-flight
+/// request releases its permit. With `max_connections(1)`, the first
+/// request pins the only permit by holding its response; a second request
+/// cannot acquire and stays pending until the first is released, then
+/// completes.
+#[tokio::test]
+async fn v2_cap_bound_request_waits_then_proceeds() {
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..2)
+                .map(|_| ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .max_connections(1)
+        .build_http();
+    let client = PoolClient::new(&pool).into_shared();
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+    // First request holds the only permit: the response is kept, body
+    // undrained, so the connection stays checked out.
+    let held = send_to(&client, &url)
+        .await
+        .expect("first request succeeds");
+    assert_eq!(held.status().as_u16(), 200);
+
+    // Second request cannot acquire a permit; it must not complete while the
+    // first is held.
+    let mut second = tokio::spawn({
+        let client = client.clone();
+        let url = url.clone();
+        async move { send_and_read_body(&client, &url).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut second)
+            .await
+            .is_err(),
+        "second request must stay pending while the cap is held"
+    );
+
+    // Release the permit by dropping the first response (its body guard
+    // drops, returning the connection to the pool).
+    drop(held);
+
+    // The second request now acquires the freed permit and completes.
+    let (status, body) = tokio::time::timeout(Duration::from_secs(5), second)
+        .await
+        .expect("second request completes after permit release")
+        .expect("spawned task does not panic")
+        .expect("second request succeeds");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"ok");
+
+    // At most two connections: dropping the first response with its body
+    // undrained closes that H1 connection (an unconsumed body cannot be
+    // reused), so the second request may open a fresh one. The scenario
+    // under test is the permit wait-then-proceed, not connection reuse.
+    assert!(harness.tcp_accepted_count() <= 2);
+}
+
+/// A host saturated at its per-host cap does not block requests to a
+/// different host. With `max_connections_per_host(1)` and global headroom,
+/// holding host X's only permit leaves a request to X pending while a
+/// request to host Y proceeds — the per-host-before-global acquire order.
+#[tokio::test]
+async fn v2_per_host_cap_isolates_hosts() {
+    // Two distinct authorities, same loopback endpoint (the per-host cap is
+    // keyed by authority, so distinct hostnames are distinct hosts even on
+    // one listener).
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            (0..4)
+                .map(|_| ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"ok",
+                })
+                .collect(),
+        )
+        .dns("host-x.test", vec![IP1])
+        .dns("host-y.test", vec![IP1])
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .max_connections_per_host(1)
+        .build_http();
+    let client = PoolClient::new(&pool).into_shared();
+    let port = harness.endpoints[0].port();
+    let url_x = format!("http://host-x.test:{port}/");
+    let url_y = format!("http://host-y.test:{port}/");
+
+    // Pin host X at its per-host cap by holding the response.
+    let held_x = send_to(&client, &url_x).await.expect("x request succeeds");
+    assert_eq!(held_x.status().as_u16(), 200);
+
+    // A second request to X is blocked on X's per-host permit.
+    let mut x2 = tokio::spawn({
+        let client = client.clone();
+        let url_x = url_x.clone();
+        async move { send_and_read_body(&client, &url_x).await }
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(200), &mut x2)
+            .await
+            .is_err(),
+        "second X request must wait on X's saturated per-host cap"
+    );
+
+    // A request to host Y proceeds: Y's per-host cap is independent and
+    // global has headroom.
+    let (status, body) =
+        tokio::time::timeout(Duration::from_secs(5), send_and_read_body(&client, &url_y))
+            .await
+            .expect("Y request must not be blocked by X's saturation")
+            .expect("y request succeeds");
+    assert_eq!(status, 200);
+    assert_eq!(body, b"ok");
+
+    // Release X and let its waiter finish so the spawned task is not leaked.
+    drop(held_x);
+    let _ = tokio::time::timeout(Duration::from_secs(5), x2)
+        .await
+        .expect("x2 completes after release")
+        .expect("x2 task does not panic")
+        .expect("x2 succeeds");
+}
