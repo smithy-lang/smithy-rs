@@ -1274,12 +1274,12 @@ mod tests {
     //! Unit tests for H2 active-stream tracking.
     //!
     //! The test harness (`ConnectionTestHarness`) is plain HTTP only, without
-    //! ALPN, so we cannot exercise the full H2 pipeline end-to-end yet
-    //! (tracked in bosun.md as the "H2 test coverage gap"). These tests
-    //! verify the atomic transitions directly, which is the architectural
-    //! correctness property we need: an in-flight H2 connection must not be
-    //! evicted by the retain predicate, and the connection's `idle_at` must
-    //! be stamped only on the `active_streams` 1 → 0 transition.
+    //! ALPN, so the full H2 pipeline is not exercised end-to-end here. These
+    //! tests verify the atomic transitions directly, which is the
+    //! architectural correctness property we need: an in-flight H2 connection
+    //! must not be evicted by the retain predicate, and the connection's
+    //! `idle_at` must be stamped only on the `active_streams` 1 → 0
+    //! transition.
     use super::*;
     use std::future::Future;
     use std::sync::atomic::{AtomicUsize, Ordering};

@@ -1155,6 +1155,25 @@ async fn eviction_task(
 ///
 /// The HTTP/1 connection sends request URIs as-is, so request-target
 /// form selection is the caller's responsibility.
+/// Recognize hyper-util's `Singleton` coalescing-cancel sentinel by its
+/// `Display`. The error type (`SingletonError`) and its inner `Canceled`
+/// are upstream-private and not downcastable, so the chain is matched by
+/// string. Deliberately narrow: only the exact "singleton connection
+/// canceled" message re-enters a checkout; any other error propagates.
+/// The string match is exercised by the multi-threaded concurrency test,
+/// which fails if the upstream message changes; if upstream stops
+/// producing the sentinel, this becomes inert.
+fn is_singleton_canceled(err: &(dyn std::error::Error + 'static)) -> bool {
+    let mut e = Some(err);
+    while let Some(cur) = e {
+        if cur.to_string() == "singleton connection canceled" {
+            return true;
+        }
+        e = cur.source();
+    }
+    false
+}
+
 fn rewrite_h1_request_target(req: &mut http_1x::Request<SdkBody>, is_proxied: bool) {
     use http_1x::{uri::Parts, Method, Uri};
     if req.method() == Method::CONNECT {
@@ -1489,7 +1508,22 @@ where
                     std::future::poll_fn(|cx| svc.poll_ready(cx))
                         .await
                         .map_err(Into::into)?;
-                    let mut checkout = svc.call(ctx.clone()).await.map_err(Into::into)?;
+                    let mut checkout = match svc.call(ctx.clone()).await {
+                        Ok(c) => c,
+                        Err(e) => {
+                            let e: BoxError = e.into();
+                            // A coalesced waiter whose `Singleton` maker
+                            // bounced to the H1 fallback resolves `Canceled`
+                            // without being reused or connected. Nothing was
+                            // established, so re-enter the checkout (the
+                            // retry becomes a maker or reuses the made
+                            // connection) rather than fail.
+                            if is_singleton_canceled(&*e) {
+                                continue;
+                            }
+                            return Err(e);
+                        }
+                    };
                     if std::future::poll_fn(|cx| checkout.poll_ready(cx))
                         .await
                         .is_ok()
@@ -1526,9 +1560,13 @@ where
                             let resp = conn.call(req).await.map_err(Into::into)?;
                             Ok(erase_body(resp))
                         }
+                        // Cap-bound: the cap is full (no connect was
+                        // attempted under `NonBlocking`). Borrow a peer's
+                        // idle connection, else fall back to the
+                        // authoritative blocking acquire. A genuine connect
+                        // error (a permit was free but the connect failed)
+                        // is not `CapBound` and propagates.
                         Err(err) if connection::CapBound::is(&*err) => {
-                            // Cap-bound locally. Try to borrow a same-NIC
-                            // peer's idle connection to this authority.
                             let key = PoolKey::from_uri(&ctx.uri)
                                 .ok_or("request URI must have scheme and authority")?;
                             if let Some(mut borrowed) = handle.try_borrow(&key) {
