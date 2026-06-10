@@ -273,20 +273,57 @@ async fn v2_connection_reuse() {
 
 #[tokio::test]
 async fn v2_idle_timeout_eviction() {
-    // v2 does not yet implement idle timeout eviction (Phase 4).
-    //
-    // The v1 version of this test passes because the legacy client has
-    // built-in idle eviction. For v2, calling idle_timeout_eviction()
-    // also produces 2 connections — but NOT because of idle eviction.
-    // The response body is never consumed by the test (HttpResponse wraps
-    // a lazy SdkBody). The CachedConnection is held inside the response
-    // body's guard until the HttpResponse is dropped. Since the first
-    // response is still alive during the sleep, the connection never
-    // returns to Cache, and the second request opens a new connection.
-    //
-    // Real idle eviction tests (consume body → return to pool → sleep
-    // past timeout → verify new connection) will be added in Phase 4
-    // alongside the background eviction task.
+    // An idle connection is evicted after the pool idle timeout, so a request
+    // arriving after the timeout opens a fresh connection. The body of the
+    // first response is fully consumed, so its connection returns to the pool
+    // and idles (the eviction target) rather than staying checked out.
+    let idle_timeout = Duration::from_millis(100);
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"first",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"second",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .pool_idle_timeout(idle_timeout)
+        .build_http();
+    let client = PoolClient::new(&pool).into_shared();
+    let url = format!("http://127.0.0.1:{}/", harness.endpoints[0].port());
+
+    // First request: body consumed, connection returns to the pool idle. This
+    // also lazily spawns the eviction task (pool_idle_timeout is set).
+    let (status, _) = send_and_read_body(&client, &url)
+        .await
+        .expect("first request should succeed");
+    assert_eq!(status, 200);
+    assert_eq!(harness.tcp_accepted_count(), 1);
+
+    // Wait past the idle timeout so the eviction task drops the idle connection.
+    tokio::time::sleep(idle_timeout * 3).await;
+
+    // The next request cannot reuse the evicted connection and opens a new one.
+    let (status, _) = send_and_read_body(&client, &url)
+        .await
+        .expect("second request should succeed after idle eviction");
+    assert_eq!(status, 200);
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        2,
+        "the idle connection was evicted, so the second request reconnects"
+    );
 }
 
 #[tokio::test]
