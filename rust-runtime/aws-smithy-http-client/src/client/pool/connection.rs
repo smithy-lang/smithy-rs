@@ -358,6 +358,54 @@ pub(crate) struct ConnectCtx {
     /// means no connect timeout; cached connections skip the connector
     /// entirely so this is automatically a no-op on cache hit.
     pub(crate) connect_timeout: Option<TimeoutContext>,
+    /// How the connect path behaves when a permit cannot be acquired.
+    pub(crate) mode: AcquireMode,
+}
+
+/// Behavior of the connect path when the connection cap is reached.
+///
+/// Selected per request (carried on [`ConnectCtx`]) because the same
+/// partition stack is exercised twice under `PreferLocal`: once
+/// `NonBlocking` to probe for local capacity, then `Blocking` as the
+/// fallback after a peer-borrow miss.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(crate) enum AcquireMode {
+    /// Block on the semaphore until a permit is free (active reclaim, then
+    /// FIFO wait). The authoritative take.
+    #[default]
+    Blocking,
+    /// Return [`CapBound`] immediately on `NoPermits` instead of blocking,
+    /// so the caller can try borrowing a peer's connection first.
+    NonBlocking,
+}
+
+/// Sentinel error from the connect path under [`AcquireMode::NonBlocking`]:
+/// the connection cap is reached and no permit is available. Distinct from
+/// any real connect failure, and distinct from negotiate's internal
+/// `UseOther` sentinel, so it propagates verbatim up the stack.
+#[derive(Debug)]
+pub(crate) struct CapBound;
+
+impl std::fmt::Display for CapBound {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("connection cap reached (non-blocking acquire)")
+    }
+}
+
+impl std::error::Error for CapBound {}
+
+impl CapBound {
+    /// Whether `err` is a `CapBound` sentinel anywhere in its chain.
+    pub(crate) fn is(err: &(dyn std::error::Error + 'static)) -> bool {
+        let mut e: Option<&(dyn std::error::Error + 'static)> = Some(err);
+        while let Some(cur) = e {
+            if cur.is::<CapBound>() {
+                return true;
+            }
+            e = cur.source();
+        }
+        false
+    }
 }
 
 impl ConnectCtx {
@@ -365,7 +413,14 @@ impl ConnectCtx {
         Self {
             uri,
             connect_timeout,
+            mode: AcquireMode::Blocking,
         }
+    }
+
+    /// Set the acquire mode (defaults to [`AcquireMode::Blocking`]).
+    pub(crate) fn with_mode(mut self, mode: AcquireMode) -> Self {
+        self.mode = mode;
+        self
     }
 }
 

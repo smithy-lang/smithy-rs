@@ -197,6 +197,25 @@ mod internal {
         pub fn try_pop_idle(&self) -> Option<M::Response> {
             self.shared.lock().unwrap().services.pop()
         }
+
+        // SDK MODIFICATION: added `try_checkout_idle` so a caller can take an
+        // idle cached service for one use and have it return to the pool on
+        // drop, without going through `Service::call` (which may also start a
+        // new connection when none is idle).
+        /// Take one idle cached service, if any, wrapped so it returns to the
+        /// pool on drop.
+        ///
+        /// Unlike [`Self::try_pop_idle`], which hands back the raw service
+        /// (dropping it drops the service), this returns the same
+        /// [`Cached`] wrapper [`Service::call`] produces: dropping it
+        /// re-inserts the service into the pool. Unlike [`Service::call`],
+        /// it never starts a new connection — it returns `None` when no
+        /// service is idle. Serialized against [`Self::retain`] and
+        /// [`Self::try_pop_idle`] by the shared `Mutex`.
+        pub fn try_checkout_idle(&self) -> Option<Cached<M::Response>> {
+            let inner = self.shared.lock().unwrap().services.pop()?;
+            Some(Cached::new(inner, Arc::downgrade(&self.shared)))
+        }
     }
 
     impl<M, Dst, Ev> Service<Dst> for Cache<M, Dst, Ev>

@@ -219,6 +219,29 @@ impl PoolKey {
     }
 }
 
+/// Type-erased, single-use handle to a checked-out connection that can
+/// dispatch one request.
+///
+/// A borrowed peer connection crosses the peer's `dyn PoolEntry` boundary
+/// as one of these: the concrete checkout type (`H1Checkout`, holding the
+/// peer's `CachedConnection`) carries upstream-unnameable parameters, so
+/// it is boxed. Dispatching consumes the handle; the response body holds
+/// the underlying connection alive and returns it to *the peer's* pool on
+/// drop (it was never the borrower's). Boxed only on the actual-borrow
+/// path — the common local path dispatches through the concrete checkout
+/// with no erasure.
+pub(crate) trait DispatchConn: Send {
+    /// Liveness check before dispatch. `Err` means the connection is dead;
+    /// the caller drops the handle and falls back.
+    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<(), BoxError>>;
+
+    /// Dispatch one request, erasing the response body to `SdkBody`.
+    fn dispatch(
+        self: Box<Self>,
+        req: http_1x::Request<SdkBody>,
+    ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>>;
+}
+
 /// Type-erased handle to one Negotiate leg's eviction interface.
 ///
 /// Each `TypedPoolEntry` holds at most two of these (one for its H1 cache,
@@ -239,6 +262,13 @@ pub(crate) struct BoxedRetainer {
     /// simply-reclaimable idle (an idle H2 connection still multiplexes),
     /// so its `reclaim_fn` is a no-op returning `false`.
     reclaim_fn: Box<dyn Fn() -> bool + Send + Sync + 'static>,
+    /// Take one idle connection wrapped as a dispatchable handle that
+    /// returns to *this* (the owner's) pool on drop — cross-partition
+    /// borrow. Returns `None` if no idle connection is available. The H1
+    /// cache leg checks out an idle connection; the H2 singleton leg is a
+    /// no-op returning `None` (H2 borrow is not supported — an idle H2
+    /// connection still multiplexes on its owner).
+    borrow_fn: Box<dyn Fn() -> Option<Box<dyn DispatchConn>> + Send + Sync + 'static>,
 }
 
 impl BoxedRetainer {
@@ -252,6 +282,10 @@ impl BoxedRetainer {
 
     fn reclaim_one(&self) -> bool {
         (self.reclaim_fn)()
+    }
+
+    fn borrow_one(&self) -> Option<Box<dyn DispatchConn>> {
+        (self.borrow_fn)()
     }
 }
 
@@ -374,6 +408,75 @@ impl PeerReclaimHandle {
     }
 }
 
+/// Handle for cross-partition borrow (`PreferLocal`), held by the pool
+/// entry under a binding cap.
+///
+/// At a cap-bound local checkout (`AcquireMode::NonBlocking` returned
+/// `CapBound`), the requesting partition uses this to borrow one peer's
+/// idle connection and dispatch its request through it — no permit moves,
+/// no cold start. Response-shaped and NIC-*bounded*: the borrowed
+/// connection physically lives on the peer's NIC, so candidates are drawn
+/// only from the same NIC group (unlike reclaim, which frees a fungible
+/// permit and is NIC-blind). Always keyed to the requested authority (the
+/// borrowed connection must already be connected to that host).
+#[derive(Clone)]
+pub(crate) struct PeerBorrowHandle {
+    /// `Weak` to avoid a cycle: the registry transitively owns the
+    /// partitions whose entries hold this handle.
+    registry: std::sync::Weak<partition::PartitionRegistry>,
+    /// Owned (Arc) so the handle does not borrow `SharedPoolState`.
+    stats_index: Arc<StatsIndex>,
+    /// The requesting partition — excluded from its own candidate walk.
+    self_partition: PartitionId,
+}
+
+impl PeerBorrowHandle {
+    /// Borrow one same-NIC-group peer's idle connection to `key`'s
+    /// authority, as a dispatchable handle. `None` if the pool is gone,
+    /// there are no NIC-group peers, or no peer holds idle to this
+    /// authority (the caller then falls back to a blocking local acquire).
+    pub(crate) fn try_borrow(&self, key: &PoolKey) -> Option<Box<dyn DispatchConn>> {
+        let registry = self.registry.upgrade()?;
+        let peers = registry.nic_group_peers(self.self_partition);
+        if peers.is_empty() {
+            return None; // alone in the NIC group (e.g. single-partition default)
+        }
+        // Candidates = peers with idle to this authority (index narrows;
+        // the cache checkout confirms). Round-robin start offset.
+        let authority = Authority::new(key.authority.as_str());
+        let mut candidates: Vec<PartitionId> = self
+            .stats_index
+            .idle_partitions_for(&authority)
+            .into_iter()
+            .map(|(p, _idle)| p)
+            .filter(|p| *p != self.self_partition && peers.contains(p))
+            .collect();
+        self.rotate(&mut candidates);
+        candidates
+            .into_iter()
+            .find_map(|peer| registry.try_borrow_on(peer, key))
+    }
+
+    /// Rotate the candidate vec by the partition's advisory `peer_cursor`
+    /// (shared with reclaim), so concurrent borrows from this partition do
+    /// not all probe the lowest-numbered candidate first.
+    fn rotate(&self, candidates: &mut [PartitionId]) {
+        if candidates.len() < 2 {
+            return;
+        }
+        if let Some(registry) = self.registry.upgrade() {
+            if let Some(state) = registry.partition_opt(self.self_partition) {
+                let n = candidates.len();
+                let start = state
+                    .peer_cursor
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+                    % n;
+                candidates.rotate_left(start);
+            }
+        }
+    }
+}
+
 /// Connection-lifecycle machinery shared across every partition: event
 /// hooks, the global connection budget, and the per-host budgets. One
 /// instance per pool, held behind `Arc` on `ConnectionPool`.
@@ -418,6 +521,19 @@ impl SharedPoolState {
     pub(crate) fn reclaim_handle(&self, self_partition: PartitionId) -> Option<PeerReclaimHandle> {
         let registry = self.registry.get()?.clone();
         Some(PeerReclaimHandle {
+            registry,
+            stats_index: self.stats_index.clone(),
+            self_partition,
+        })
+    }
+
+    /// A borrow handle for the given requesting partition, if the registry
+    /// is bound and still alive. `None` when no registry is set or the
+    /// pool has been dropped (borrow is then unavailable; the caller
+    /// blocks locally).
+    pub(crate) fn borrow_handle(&self, self_partition: PartitionId) -> Option<PeerBorrowHandle> {
+        let registry = self.registry.get()?.clone();
+        Some(PeerBorrowHandle {
             registry,
             stats_index: self.stats_index.clone(),
             self_partition,
@@ -472,6 +588,7 @@ where
               -> MakeStack {
             let connector = connector.clone();
             let spawner = spawner.clone();
+            let cross_partition_policy = cross_partition_policy;
             Arc::new(
                 move |uri: &http_1x::Uri, shared: &SharedPoolState| -> Box<dyn PoolEntry> {
                     let authority = Authority::new(
@@ -534,6 +651,7 @@ where
                                         Arc::new(std::sync::Mutex::new(cache.clone()));
                                     let cache_for_empty = cache_for_retain.clone();
                                     let cache_for_reclaim = cache_for_retain.clone();
+                                    let cache_for_borrow = cache_for_retain.clone();
                                     retainers.lock().expect("retainer slot poisoned").push(
                                         BoxedRetainer {
                                             retain_fn: Box::new({
@@ -627,6 +745,33 @@ where
                                                         }
                                                         None => false,
                                                     }
+                                                }
+                                            }),
+                                            borrow_fn: Box::new({
+                                                let listener = pool_hooks.listener.clone();
+                                                let counters = counters.clone();
+                                                move || {
+                                                    // Take an idle connection wrapped so it
+                                                    // returns to THIS (the owner's) cache on
+                                                    // drop — the borrower dispatches one
+                                                    // request through it but never owns it.
+                                                    // `None` if no idle connection is
+                                                    // available (borrower falls through to
+                                                    // the next peer or to a blocking local
+                                                    // acquire).
+                                                    let cached = cache_for_borrow
+                                                        .lock()
+                                                        .expect("borrow cache lock poisoned")
+                                                        .try_checkout_idle()?;
+                                                    let checkout = H1Checkout::<()>::new(
+                                                        CachedConnection::new(
+                                                            cached,
+                                                            listener.clone(),
+                                                            counters.clone(),
+                                                        ),
+                                                    );
+                                                    Some(Box::new(checkout)
+                                                        as Box<dyn DispatchConn>)
                                                 }
                                             }),
                                         },
@@ -732,6 +877,11 @@ where
                                             // not simply-reclaimable like an H1 cache entry.
                                             // Reclaim skips the H2 leg.
                                             reclaim_fn: Box::new(|| false),
+                                            // H2 borrow is unsupported: an idle H2
+                                            // connection still multiplexes on its owner,
+                                            // so there is no idle connection to hand to a
+                                            // borrower. Borrow skips the H2 leg.
+                                            borrow_fn: Box::new(|| None),
                                         },
                                     );
                                     singleton.map_response({
@@ -752,6 +902,12 @@ where
                         stack,
                         retainers,
                         counters,
+                        borrow: match cross_partition_policy {
+                            partition::CrossPartitionPolicy::PreferLocal => {
+                                shared.borrow_handle(partition_id)
+                            }
+                            partition::CrossPartitionPolicy::Never => None,
+                        },
                     })
                 },
             )
@@ -1109,6 +1265,35 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
     }
 }
 
+impl<UnusedH2Phantom> DispatchConn for H1Checkout<UnusedH2Phantom>
+where
+    UnusedH2Phantom: Send + Sync + 'static,
+{
+    fn poll_ready(&mut self, cx: &mut std::task::Context<'_>) -> Poll<Result<(), BoxError>> {
+        Service::poll_ready(self, cx)
+    }
+
+    fn dispatch(
+        mut self: Box<Self>,
+        req: http_1x::Request<SdkBody>,
+    ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
+        // `H1Checkout::call` produces `CheckoutResponse<…>` whose body is
+        // the internal `GuardedBody`; erase it to `SdkBody` at this
+        // boundary, exactly as `TypedPoolEntry::send` does for the local
+        // path. The guard inside lives on in `SdkBody` until the body is
+        // drained, returning the connection to the peer's pool.
+        let fut = Service::call(&mut *self, req);
+        Box::pin(async move {
+            let resp = fut.await?;
+            let (parts, body) = resp.into_parts();
+            Ok(http_1x::Response::from_parts(
+                parts,
+                SdkBody::from_body_1_x(body),
+            ))
+        })
+    }
+}
+
 /// Tower `Service` wrapper for an H2 pool checkout.
 ///
 /// Symmetric to `H1Checkout`. The `Singleton` type parameter is the
@@ -1220,6 +1405,14 @@ pub(crate) trait PoolEntry: Send + Sync {
     /// [`CloseReason::Reclaimed`] for the freed connection. Best-effort:
     /// returns `false` if the entry has no reclaimable idle.
     fn try_reclaim_one(&self) -> bool;
+
+    /// Take one idle connection as a dispatchable handle that returns to
+    /// this entry's pool on drop, for cross-partition borrow. The borrower
+    /// dispatches one request through it; the connection stays this
+    /// entry's (no permit moves). Returns `None` if no idle connection is
+    /// available. Best-effort — only the H1 cache leg yields a handle (H2
+    /// idle still multiplexes on its owner, so the H2 leg returns `None`).
+    fn try_borrow_one(&self) -> Option<Box<dyn DispatchConn>>;
 }
 
 /// Concrete PoolEntry wrapping a Negotiate stack.
@@ -1237,6 +1430,11 @@ struct TypedPoolEntry<S> {
     // active write-handle; read API added in a later change
     #[allow(dead_code)]
     counters: Arc<ConnectionCounters>,
+    /// Cross-partition borrow handle. `Some` only under
+    /// `CrossPartitionPolicy::PreferLocal`; `None` under `Never` (and for
+    /// the single-partition default, where it would have no NIC-group
+    /// peers anyway). Drives the `send` cap-bound borrow branch.
+    borrow: Option<PeerBorrowHandle>,
 }
 
 impl<S, Conn, PoolUnnameable> PoolEntry for TypedPoolEntry<S>
@@ -1257,9 +1455,15 @@ where
         req: http_1x::Request<SdkBody>,
     ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
         let mut svc = self.stack.clone();
+        let borrow = self.borrow.clone();
         Box::pin(async move {
-            // Checkout loop. Pops past stale idle entries (poisoned or dead).
-            // Converges because:
+            // Local checkout. The post-checkout `poll_ready` is the
+            // reactive health check: the composable pool has no proactive
+            // checkout-time health check, so a popped idle connection may
+            // be dead (server closed it, driver gone). `poll_ready` Err
+            // identifies that; the loop discards it and pops the next,
+            // until a live connection is checked out or the connect path
+            // is reached. Converges because:
             //   - Cache idle set is bounded; each post-checkout `poll_ready`
             //     Err flips `is_closed` so `Cached::Drop` skips reinsertion,
             //     shrinking the set by one.
@@ -1267,33 +1471,102 @@ where
             //     the next `call` to run a fresh handshake; a handshake
             //     failure surfaces as an error from `svc.call` (not the
             //     inner `poll_ready`), which we propagate.
-            let mut conn = loop {
-                std::future::poll_fn(|cx| svc.poll_ready(cx))
-                    .await
-                    .map_err(Into::into)?;
-                let mut checkout = svc.call(ctx.clone()).await.map_err(Into::into)?;
-                if std::future::poll_fn(|cx| checkout.poll_ready(cx))
-                    .await
-                    .is_ok()
-                {
-                    break checkout;
+            // Under `AcquireMode::NonBlocking`, a cache miss at the connect
+            // path returns `CapBound` instead of blocking — surfaced here
+            // so the caller can try a peer borrow before committing to wait.
+            async fn local_checkout<S, Conn, PoolUnnameable>(
+                svc: &mut S,
+                ctx: ConnectCtx,
+            ) -> Result<Conn, BoxError>
+            where
+                S: Service<ConnectCtx, Response = Conn>,
+                S::Error: Into<BoxError>,
+                Conn:
+                    Service<http_1x::Request<SdkBody>, Response = CheckoutResponse<PoolUnnameable>>,
+                Conn::Error: Into<BoxError>,
+            {
+                loop {
+                    std::future::poll_fn(|cx| svc.poll_ready(cx))
+                        .await
+                        .map_err(Into::into)?;
+                    let mut checkout = svc.call(ctx.clone()).await.map_err(Into::into)?;
+                    if std::future::poll_fn(|cx| checkout.poll_ready(cx))
+                        .await
+                        .is_ok()
+                    {
+                        return Ok(checkout);
+                    }
+                    // drop `checkout` → pool cleanup (H1: discard via
+                    // CachedConnection::Drop; H2: Singleton already cleared).
                 }
-                // drop `checkout` → triggers pool cleanup (H1: discard via
-                // CachedConnection::Drop; H2: Singleton already cleared
-                // state).
-            };
+            }
 
-            // Dispatch the request; convert the body into `SdkBody` at the
-            // boundary so consumers (and `dyn PoolEntry`) don't see our
-            // internal `GuardedBody<...>` type. The guard inside
-            // `GuardedBody` lives on inside `SdkBody` until the body is
-            // fully drained.
-            let resp = conn.call(req).await.map_err(Into::into)?;
-            let (parts, body) = resp.into_parts();
-            Ok(http_1x::Response::from_parts(
-                parts,
-                SdkBody::from_body_1_x(body),
-            ))
+            // Erase a checkout's `CheckoutResponse` body to `SdkBody` at the
+            // `dyn PoolEntry` boundary so consumers never see the internal
+            // `GuardedBody<...>`. The guard inside lives on in `SdkBody`
+            // until the body drains, returning the connection to its pool.
+            fn erase_body<PoolUnnameable>(
+                resp: CheckoutResponse<PoolUnnameable>,
+            ) -> http_1x::Response<SdkBody>
+            where
+                PoolUnnameable: Send + Sync + 'static,
+            {
+                let (parts, body) = resp.into_parts();
+                http_1x::Response::from_parts(parts, SdkBody::from_body_1_x(body))
+            }
+
+            match &borrow {
+                // PreferLocal: probe locally without blocking; on a
+                // cap-bound miss, borrow a peer's idle connection before
+                // falling back to a blocking local acquire.
+                Some(handle) => {
+                    let probe = ctx.clone().with_mode(connection::AcquireMode::NonBlocking);
+                    match local_checkout(&mut svc, probe).await {
+                        Ok(mut conn) => {
+                            let resp = conn.call(req).await.map_err(Into::into)?;
+                            Ok(erase_body(resp))
+                        }
+                        Err(err) if connection::CapBound::is(&*err) => {
+                            // Cap-bound locally. Try to borrow a same-NIC
+                            // peer's idle connection to this authority.
+                            let key = PoolKey::from_uri(&ctx.uri)
+                                .ok_or("request URI must have scheme and authority")?;
+                            if let Some(mut borrowed) = handle.try_borrow(&key) {
+                                // Single-shot liveness check. On death,
+                                // fall through to the authoritative local
+                                // acquire rather than walk further peers.
+                                if std::future::poll_fn(|cx| borrowed.poll_ready(cx))
+                                    .await
+                                    .is_ok()
+                                {
+                                    // Dispatch through the peer's connection;
+                                    // its driver stays on the peer's runtime,
+                                    // and the connection returns to the peer's
+                                    // pool when the body drains.
+                                    return borrowed.dispatch(req).await;
+                                }
+                                // Dead borrowed connection drops here:
+                                // `CachedConnection::Drop` discards it from
+                                // the peer's pool and balances the peer's
+                                // `active`.
+                            }
+                            // Borrow miss → authoritative blocking local
+                            // acquire (today's wait; includes reclaim).
+                            let mut conn = local_checkout(&mut svc, ctx).await?;
+                            let resp = conn.call(req).await.map_err(Into::into)?;
+                            Ok(erase_body(resp))
+                        }
+                        Err(err) => Err(err),
+                    }
+                }
+                // Never (and single-partition default): blocking local
+                // acquire, unchanged.
+                None => {
+                    let mut conn = local_checkout(&mut svc, ctx).await?;
+                    let resp = conn.call(req).await.map_err(Into::into)?;
+                    Ok(erase_body(resp))
+                }
+            }
         })
     }
 
@@ -1315,6 +1588,14 @@ where
         // pops an idle connection; the H2 leg is a no-op (no
         // simply-reclaimable idle).
         retainers.iter().any(|r| r.reclaim_one())
+    }
+
+    fn try_borrow_one(&self) -> Option<Box<dyn DispatchConn>> {
+        let retainers = self.retainers.lock().expect("retainer slot poisoned");
+        // Return the first leg that yields a borrowable handle. The H1
+        // cache leg checks out an idle connection; the H2 leg is a no-op
+        // returning `None`.
+        retainers.iter().find_map(|r| r.borrow_one())
     }
 }
 
@@ -1353,6 +1634,9 @@ mod tests {
         }
         fn try_reclaim_one(&self) -> bool {
             false
+        }
+        fn try_borrow_one(&self) -> Option<Box<dyn DispatchConn>> {
+            None
         }
     }
 
