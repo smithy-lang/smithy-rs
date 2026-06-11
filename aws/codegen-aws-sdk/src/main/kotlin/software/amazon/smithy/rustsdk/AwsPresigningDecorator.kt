@@ -439,7 +439,7 @@ private class PresignedSchemaCustomization(
                     rustTemplate(
                         """
                         /// The schema for this operation's presigned input shape.
-                        pub const PRESIGNED_INPUT_SCHEMA: &'static #{Schema} = &PRESIGNED_SCHEMA;
+                        pub const PRESIGNED_INPUT_SCHEMA: &'static #{Schema}<'static> = &PRESIGNED_SCHEMA;
                         """,
                         "Schema" to RuntimeType.smithySchema(codegenContext.runtimeConfig).resolve("Schema"),
                     )

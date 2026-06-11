@@ -148,7 +148,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -174,7 +174,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -188,7 +188,7 @@ class SchemaGenerator(
             """
             impl ${symbol.name} {
                 /// The schema for this shape.
-                pub const SCHEMA: &'static #{Schema} = &${schemaPrefix}_SCHEMA;
+                pub const SCHEMA: &'static #{Schema}<'static> = &${schemaPrefix}_SCHEMA;
             }
             """,
             *codegenScope,
@@ -2010,7 +2010,7 @@ class SchemaGenerator(
                 val valueAggChain = emitAggregateMemberChain(writer, "${prefix}_VALUE", valueTarget, codegenScope)
                 writer.rustTemplate(
                     """
-                    static ${prefix}_KEY: #{Schema} = #{Schema}::new_member(
+                    static ${prefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedKeyId",
                             "${target.key.id.namespace}",
@@ -2020,7 +2020,7 @@ class SchemaGenerator(
                         "key",
                         0,
                     )$keyTraitChain$keyAggChain;
-                    static ${prefix}_VALUE: #{Schema} = #{Schema}::new_member(
+                    static ${prefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedValueId",
                             "${target.value.id.namespace}",
@@ -2043,7 +2043,7 @@ class SchemaGenerator(
                     emitAggregateMemberChain(writer, "${prefix}_MEMBER", listMemberTarget, codegenScope)
                 writer.rustTemplate(
                     """
-                    static ${prefix}_MEMBER: #{Schema} = #{Schema}::new_member(
+                    static ${prefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedListMemberId",
                             "${target.member.id.namespace}",
@@ -2156,7 +2156,7 @@ class SchemaGenerator(
                             #{insertions}
                             map
                         });
-                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                        static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
                             ${schemaPrefix}_SCHEMA_ID,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
@@ -2170,7 +2170,7 @@ class SchemaGenerator(
                 } else {
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                        static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
                             ${schemaPrefix}_SCHEMA_ID,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
@@ -2184,7 +2184,7 @@ class SchemaGenerator(
             is ListShape -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_list(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_list(
                         ${schemaPrefix}_SCHEMA_ID,
                         &${schemaPrefix}_MEMBER,
                     );
@@ -2196,7 +2196,7 @@ class SchemaGenerator(
             is MapShape -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_map(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_map(
                         ${schemaPrefix}_SCHEMA_ID,
                         &${schemaPrefix}_KEY,
                         &${schemaPrefix}_VALUE,
@@ -2209,7 +2209,7 @@ class SchemaGenerator(
             else -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new(
                         ${schemaPrefix}_SCHEMA_ID,
                         #{ShapeType}::${shapeTypeVariant(shape)},
                     );
@@ -2250,7 +2250,7 @@ class SchemaGenerator(
 
                     writer.rustTemplate(
                         """
-                        static $memberConstName: #{Schema} = #{Schema}::new_member(
+                        static $memberConstName: #{Schema}<'static> = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
@@ -2270,7 +2270,7 @@ class SchemaGenerator(
                     val synthIdx = baseIndex + i
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema} = #{Schema}::new_member(
+                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema}<'static> = #{Schema}::new_member(
                             #{ShapeId}::from_static(
                                 "synthetic##${synth.schemaMemberName}",
                                 "synthetic",
@@ -2292,7 +2292,7 @@ class SchemaGenerator(
                 val traitChain = memberTraitChain(shape.member)
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_MEMBER: #{Schema} = #{Schema}::new_member(
+                    static ${schemaPrefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedMemberId",
                             "${shape.member.id.namespace}",
@@ -2316,7 +2316,7 @@ class SchemaGenerator(
                 val valueTraitChain = memberTraitChain(shape.value)
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_KEY: #{Schema} = #{Schema}::new_member(
+                    static ${schemaPrefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedKeyId",
                             "${shape.key.id.namespace}",
@@ -2327,7 +2327,7 @@ class SchemaGenerator(
                         0,
                     )$keyTraitChain;
 
-                    static ${schemaPrefix}_VALUE: #{Schema} = #{Schema}::new_member(
+                    static ${schemaPrefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
                         #{ShapeId}::from_static(
                             "$escapedValueId",
                             "${shape.value.id.namespace}",
