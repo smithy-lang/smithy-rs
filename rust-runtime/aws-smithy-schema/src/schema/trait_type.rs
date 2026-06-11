@@ -13,8 +13,13 @@ use std::fmt;
 /// validation, and other behaviors.
 pub trait Trait: Any + Send + Sync + fmt::Debug {
     /// Returns the Shape ID of this trait.
-    // TODO(schema-lifetime): relax to `&ShapeId<'_>` in task 5 so traits
-    // can be parameterized over arbitrary lifetimes.
+    ///
+    /// Returns `&ShapeId<'static>` rather than `&ShapeId<'_>` because the
+    /// `Any` supertrait forces all `Trait` implementors to be `'static`.
+    /// The cosmetic relaxation to `&ShapeId<'_>` proposed in design doc §6.3
+    /// is not viable as long as `Any` is required (which it is, for the
+    /// `Schema::with_traits(LazyLock<TraitMap>)` downcast fallback). See
+    /// design doc §10.6 for the full analysis.
     fn trait_id(&self) -> &ShapeId<'static>;
 
     /// Returns this trait as `&dyn Any` for downcasting.
