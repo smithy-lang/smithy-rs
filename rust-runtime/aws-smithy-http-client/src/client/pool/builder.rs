@@ -443,3 +443,75 @@ pub(super) fn get_non_default_port(uri: &http_1x::Uri) -> Option<http_1x::uri::P
         _ => uri.port(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::client::pool::PartitionId;
+
+    #[test]
+    fn builder_defaults() {
+        let b = Builder::default();
+        assert_eq!(b.pool_idle_timeout, None);
+        assert!(b.tcp_nodelay, "tcp_nodelay defaults to true");
+        assert_eq!(b.max_connections, None);
+        assert_eq!(b.max_connections_per_host, None);
+        assert!(b.proxy_config.is_none());
+        assert!(b.connection_event_listener.is_none());
+        assert_eq!(b.cross_partition_policy, CrossPartitionPolicy::Never);
+        assert!(b.dns_resolver.is_none());
+        assert!(b.partitions.is_empty());
+    }
+
+    /// `tls_provider` transitions the type-state while preserving every
+    /// configured field. Guards the hand-written field-by-field move in
+    /// `tls_provider` against a dropped field on a future edit.
+    #[test]
+    fn tls_provider_preserves_all_config() {
+        let b = Builder::default()
+            .pool_idle_timeout(Duration::from_secs(30))
+            .tcp_nodelay(false)
+            .max_connections(100)
+            .max_connections_per_host(10)
+            .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
+            .partitions([Partition::new(
+                PartitionId::from_index(0),
+                crate::client::pool::TokioDriverSpawner::from_handle(
+                    // a handle is only needed to construct the spawner; no
+                    // runtime work happens here.
+                    tokio::runtime::Builder::new_current_thread()
+                        .build()
+                        .unwrap()
+                        .handle()
+                        .clone(),
+                ),
+            )]);
+
+        let provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc);
+        let b = b.tls_provider(provider);
+
+        assert_eq!(b.pool_idle_timeout, Some(Duration::from_secs(30)));
+        assert!(!b.tcp_nodelay);
+        assert_eq!(b.max_connections, Some(100));
+        assert_eq!(b.max_connections_per_host, Some(10));
+        assert_eq!(b.cross_partition_policy, CrossPartitionPolicy::PreferLocal);
+        assert_eq!(b.partitions.len(), 1);
+    }
+
+    #[test]
+    fn non_default_port_elided_per_scheme() {
+        let cases = [
+            ("https://example.com/", None), // 443 elided
+            ("http://example.com/", None),  // 80 elided
+            ("https://example.com:8443/", Some(8443)),
+            ("http://example.com:8080/", Some(8080)),
+            ("https://example.com:80/", Some(80)), // 80 is non-default for https
+            ("http://example.com:443/", Some(443)), // 443 is non-default for http
+        ];
+        for (uri, expected) in cases {
+            let uri: http_1x::Uri = uri.parse().unwrap();
+            let port = get_non_default_port(&uri).map(|p| p.as_u16());
+            assert_eq!(port, expected, "uri = {uri}");
+        }
+    }
+}

@@ -1702,6 +1702,73 @@ mod tests {
         })
     }
 
+    /// A `make_stack_for` stub that produces `NullPoolEntry` stacks — enough
+    /// to exercise registry indexing without standing up real connectors.
+    fn null_make_stack_for(
+    ) -> impl Fn(partition::PartitionId, &Arc<dyn partition::DriverSpawner>) -> MakeStack {
+        |_id, _spawner| Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
+    }
+
+    /// The registry's default partition is the first declared.
+    #[tokio::test]
+    async fn registry_default_partition_is_first_declared() {
+        let partitions = vec![
+            partition::Partition::new(
+                partition::PartitionId::from_index(7),
+                partition::TokioDriverSpawner::current(),
+            ),
+            partition::Partition::new(
+                partition::PartitionId::from_index(3),
+                partition::TokioDriverSpawner::current(),
+            ),
+        ];
+        let registry = partition::PartitionRegistry::build(partitions, null_make_stack_for());
+        assert_eq!(
+            registry.default_partition().id,
+            partition::PartitionId::from_index(7),
+            "first declared partition is the default"
+        );
+        // Both declared partitions resolve.
+        assert!(registry
+            .partition_opt(partition::PartitionId::from_index(3))
+            .is_some());
+        assert!(registry
+            .partition_opt(partition::PartitionId::from_index(99))
+            .is_none());
+    }
+
+    /// Declaring the same `PartitionId` twice is a programming error and panics.
+    #[tokio::test]
+    #[should_panic(expected = "duplicate PartitionId")]
+    async fn registry_build_panics_on_duplicate_partition_id() {
+        let partitions = vec![
+            partition::Partition::new(
+                partition::PartitionId::from_index(0),
+                partition::TokioDriverSpawner::current(),
+            ),
+            partition::Partition::new(
+                partition::PartitionId::from_index(0),
+                partition::TokioDriverSpawner::current(),
+            ),
+        ];
+        let _ = partition::PartitionRegistry::build(partitions, null_make_stack_for());
+    }
+
+    /// The default (no-topology) path normalizes to a single anonymous
+    /// partition that the registry indexes and resolves via `Client::new`.
+    #[tokio::test]
+    async fn registry_anonymous_default_when_no_partitions_declared() {
+        let partitions = partition::normalize_partitions(Vec::new(), || {
+            Arc::new(partition::TokioDriverSpawner::current())
+        });
+        let registry = partition::PartitionRegistry::build(partitions, null_make_stack_for());
+        assert_eq!(
+            registry.default_partition().id,
+            partition::PartitionId::default(),
+            "no-topology default is the anonymous partition"
+        );
+    }
+
     /// Without a `pool_idle_timeout`, `maybe_spawn_eviction_task` is a no-op.
     #[tokio::test]
     async fn eviction_task_no_spawn_without_timeout() {

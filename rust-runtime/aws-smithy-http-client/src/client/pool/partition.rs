@@ -224,6 +224,7 @@ impl DriverSpawner for TokioDriverSpawner {
 /// Connections bound to different NICs are never shared regardless
 /// of policy.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[non_exhaustive]
 pub enum CrossPartitionPolicy {
     /// At capacity with no local idle, the request waits for a permit.
     /// Peer partitions are not consulted.
@@ -496,6 +497,33 @@ mod tests {
     #[test]
     fn cross_partition_policy_default_is_never() {
         assert_eq!(CrossPartitionPolicy::default(), CrossPartitionPolicy::Never);
+    }
+
+    #[tokio::test]
+    async fn normalize_partitions_synthesizes_anonymous_when_empty() {
+        // Empty input → exactly one anonymous partition on the supplied spawner.
+        let parts = normalize_partitions(Vec::new(), || {
+            std::sync::Arc::new(TokioDriverSpawner::current()) as std::sync::Arc<dyn DriverSpawner>
+        });
+        assert_eq!(parts.len(), 1);
+        assert_eq!(parts[0].id, PartitionId::default());
+        assert!(parts[0].nic.is_none());
+    }
+
+    #[tokio::test]
+    async fn normalize_partitions_passes_declared_set_through_untouched() {
+        // Non-empty input is returned unchanged, and the anonymous-spawner
+        // closure is never invoked.
+        let declared = vec![
+            Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current()),
+            Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current()),
+        ];
+        let parts = normalize_partitions(declared, || {
+            panic!("anonymous spawner must not be called when partitions are declared")
+        });
+        assert_eq!(parts.len(), 2);
+        assert_eq!(parts[0].id, PartitionId::from_index(0));
+        assert_eq!(parts[1].id, PartitionId::from_index(1));
     }
 
     #[tokio::test]
