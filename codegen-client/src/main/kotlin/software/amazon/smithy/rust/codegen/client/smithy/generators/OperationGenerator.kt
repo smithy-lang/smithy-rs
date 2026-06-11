@@ -96,9 +96,9 @@ open class OperationGenerator(
                 rustTemplate(
                     """
                     /// The schema for this operation's input shape.
-                    pub const INPUT_SCHEMA: &'static #{Schema} = #{InputType}::SCHEMA;
+                    pub const INPUT_SCHEMA: &'static #{Schema}<'static> = #{InputType}::SCHEMA;
                     /// The schema for this operation's output shape.
-                    pub const OUTPUT_SCHEMA: &'static #{Schema} = #{OutputType}::SCHEMA;
+                    pub const OUTPUT_SCHEMA: &'static #{Schema}<'static> = #{OutputType}::SCHEMA;
                     """,
                     "Schema" to RuntimeType.smithySchema(runtimeConfig).resolve("Schema"),
                     "InputType" to inputType,
