@@ -170,6 +170,37 @@ enum SchemaMembers<'a> {
     },
 }
 
+// ---------- Variance assertions ----------
+//
+// `Schema<'a>` and `ShapeId<'a>` must remain **covariant** in `'a`. Covariance
+// is what lets `&'static Schema<'static>` (the codegen-emitted form) coerce
+// implicitly into `&Schema<'_>` at call sites — without it, every call would
+// need an explicit lifetime annotation.
+//
+// Today both types are covariant by construction: every field is of the form
+// `&'a T` or contains another covariant `'a`-parameterized type. There is no
+// `&'a mut T`, no `fn(&'a T)`, and no interior mutability tying `'a` invariantly.
+//
+// These assertion functions make the covariance requirement *load-bearing on
+// the build*. If a future field changes that property — e.g. someone adds a
+// `RefCell` holding a `&'a` reference, an `fn(&'a Self)` field, or a `*mut T`
+// with `'a` — the function bodies will fail to type-check and the build breaks
+// before any downstream code is affected.
+//
+// Compile-time only; zero runtime cost.
+
+#[doc(hidden)]
+#[allow(dead_code)]
+fn _assert_schema_covariant<'a, 'b: 'a>(s: &'b Schema<'b>) -> &'a Schema<'a> {
+    s
+}
+
+#[doc(hidden)]
+#[allow(dead_code)]
+fn _assert_shape_id_covariant<'a, 'b: 'a>(id: ShapeId<'b>) -> ShapeId<'a> {
+    id
+}
+
 impl<'a> Schema<'a> {
     /// Default values for all trait fields (should only be used by constructors as a spread source).
     ///
