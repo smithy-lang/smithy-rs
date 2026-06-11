@@ -1095,7 +1095,7 @@ pin_project! {
     /// fully dropped. Body streaming continues through the held inner
     /// `Incoming`; when the `GuardedBody` is dropped the guard drops, which
     /// for H1 triggers `CachedConnection::Drop` (return-to-pool or `discard`
-    /// if poisoned), and for H2 simply drops the singleton clone (no-op on
+    /// if poisoned), and for H2 drops the singleton clone (no-op on
     /// singleton state).
     ///
     /// The H2 variant carries a generic type parameter because
