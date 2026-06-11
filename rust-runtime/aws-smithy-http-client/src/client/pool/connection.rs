@@ -98,6 +98,7 @@ pub enum CloseReason {
 
 /// Timing breakdown for connection establishment.
 #[derive(Clone, Copy, Debug)]
+#[non_exhaustive]
 pub struct ConnectionTiming {
     /// TCP connect + TLS handshake combined. Measured from connector call
     /// start to connected IO stream returned.
@@ -117,6 +118,7 @@ impl ConnectionTiming {
 
 /// Emitted when a new connection is established (TCP + TLS + HTTP handshake).
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ConnectionCreatedEvent {
     conn_id: ConnectionId,
     authority: Authority,
@@ -170,6 +172,7 @@ impl ConnectionCreatedEvent {
 
 /// Emitted when an existing idle connection is checked out from the pool.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct ConnectionReusedEvent {
     conn_id: ConnectionId,
     authority: Authority,
@@ -192,6 +195,7 @@ impl ConnectionReusedEvent {
 }
 
 /// Emitted when a connection is removed from the pool.
+#[non_exhaustive]
 pub struct ConnectionClosedEvent {
     conn_id: ConnectionId,
     authority: Authority,
@@ -260,6 +264,7 @@ impl ConnectionClosedEvent {
 }
 
 /// Emitted when a connection attempt fails before completing the handshake.
+#[non_exhaustive]
 pub struct ConnectionFailedEvent {
     authority: Authority,
     remote_addr: Option<SocketAddr>,
