@@ -44,14 +44,14 @@ impl ClientProtocolInner for RpcV2CborProtocol {
     type Request = Request;
     type Response = Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         self.inner.protocol_id()
     }
 
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
@@ -62,7 +62,7 @@ impl ClientProtocolInner for RpcV2CborProtocol {
     fn deserialize_response<'a>(
         &self,
         response: &'a Response,
-        output_schema: &Schema,
+        output_schema: &Schema<'_>,
         cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         self.inner

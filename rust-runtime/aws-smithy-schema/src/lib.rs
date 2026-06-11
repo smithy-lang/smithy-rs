@@ -400,24 +400,20 @@ impl<'a> Schema<'a> {
 
     /// Sets the original (pre-synthesis) shape name for synthetic operation
     /// input/output shapes. See [`Schema::original_name`] for semantics.
-    pub const fn with_original_name(mut self, name: &'static str) -> Self {
+    pub const fn with_original_name(mut self, name: &'a str) -> Self {
         self.original_name = Some(name);
         self
     }
 
     /// Attaches key and value member schemas to a map member schema.
     /// Used by the XML codec to resolve `<key>` and `<value>` element names.
-    pub const fn with_map_members(
-        mut self,
-        key: &'static Schema<'static>,
-        value: &'static Schema<'static>,
-    ) -> Self {
+    pub const fn with_map_members(mut self, key: &'a Schema<'a>, value: &'a Schema<'a>) -> Self {
         self.members = SchemaMembers::Map { key, value };
         self
     }
 
     /// Sets the list member schema on a member schema that targets a list.
-    pub const fn with_list_member(mut self, member: &'static Schema<'static>) -> Self {
+    pub const fn with_list_member(mut self, member: &'a Schema<'a>) -> Self {
         self.members = SchemaMembers::List { member };
         self
     }
@@ -427,6 +423,23 @@ impl<'a> Schema<'a> {
         self.sensitive = Some(trait_types::SensitiveTrait);
         self
     }
+
+    // -- Trait-wrapper setters --
+    //
+    // The setters below construct typed trait wrappers (`JsonNameTrait`,
+    // `XmlNameTrait`, `HttpHeaderTrait`, etc.) and so take `&'static str`
+    // for their string parameters. The trait wrappers themselves are pinned
+    // to `&'static str` to preserve the zero-allocation `Headers::insert`
+    // fast path in the HTTP binder; see design doc §10.6 for the full
+    // analysis. Runtime-built schemas can still attach `'static`
+    // codegen-emitted trait wrappers via these setters; only direct
+    // construction with non-`'static` strings is unavailable.
+    //
+    // TODO(schema-lifetime): if a future use case demands runtime-string
+    // trait wrappers, follow one of the three restoration paths in
+    // design doc §10.6 (pinning the binder, parallel `value_static()`
+    // accessor, or packed `HttpBindingKind` enum) and relax these setters
+    // to take `&'a str`.
 
     /// Sets the `@jsonName` trait.
     pub const fn with_json_name(mut self, value: &'static str) -> Self {
@@ -564,7 +577,11 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the fallback trait map for unknown/custom traits.
-    pub const fn with_traits(mut self, traits: &'static std::sync::LazyLock<TraitMap>) -> Self {
+    ///
+    /// The schema must outlive the `LazyLock` it references. For codegen-emitted
+    /// schemas this is always `'static` to `'static`. Runtime-built schemas
+    /// must arrange the lifetimes via standard borrow-check discipline.
+    pub const fn with_traits(mut self, traits: &'a std::sync::LazyLock<TraitMap>) -> Self {
         self.traits = Some(traits);
         self
     }
