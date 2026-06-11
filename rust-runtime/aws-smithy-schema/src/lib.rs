@@ -9,8 +9,61 @@
 
 //! Runtime schema types for Smithy shapes.
 //!
-//! This module provides the core types for representing Smithy schemas at runtime,
-//! enabling protocol-agnostic serialization and deserialization.
+//! This crate provides the core types for representing Smithy schemas at
+//! runtime, enabling protocol-agnostic serialization and deserialization.
+//! The two central types are [`Schema`] (a runtime descriptor of a Smithy
+//! shape) and [`ShapeId`] (a Smithy shape identifier). Both are parameterized
+//! over a lifetime `'a` that names the data their string fields and member
+//! references borrow from.
+//!
+//! # Construction patterns
+//!
+//! ## `Schema<'static>` — the codegen-emitted form
+//!
+//! Generated SDK code emits every schema as a `static` of type
+//! `Schema<'static>`, built at compile time via `const fn` constructors and
+//! `with_*` setters. The Smithy prelude entries in this crate
+//! ([`prelude::STRING`], [`prelude::INTEGER`], etc.) follow the same pattern.
+//! Because the entire schema graph lives in the binary's data segment, there
+//! is no startup cost and no heap allocation on the hot serde path.
+//!
+//! ```
+//! use aws_smithy_schema::{shape_id, Schema, ShapeId, ShapeType};
+//!
+//! const SHAPE_ID: ShapeId<'static> = shape_id!("ns", "MyShape");
+//! const MY_SHAPE_SCHEMA: Schema<'static> = Schema::new(SHAPE_ID, ShapeType::String);
+//! assert_eq!(MY_SHAPE_SCHEMA.shape_id().as_str(), "ns#MyShape");
+//! ```
+//!
+//! ## `Schema<'a>` — runtime construction
+//!
+//! Hand-written code may construct schemas at any lifetime; this is the path
+//! used by test fixtures and (in the future) by dynamic clients that load a
+//! Smithy model at runtime. Every value referenced by the schema must outlive
+//! the schema itself; the borrow checker enforces this. See
+//! [`Schema::new_struct`] for a worked example.
+//!
+//! # Trait maps and the `LazyLock` discipline
+//!
+//! The serde traits a schema cares about ([`@jsonName`][traits::JsonNameTrait],
+//! HTTP bindings, etc.) are stored as inline typed `Option` fields on the
+//! schema and accessed via direct field reads. Unknown or custom traits go
+//! through a fallback [`TraitMap`] reachable from [`Schema::with_traits`].
+//!
+//! [`Schema::with_traits`] accepts an `&'a std::sync::LazyLock<TraitMap>`, so
+//! the `LazyLock` must outlive any schema that references it. Codegen places
+//! both in statics (the `LazyLock` is `'static`, the schema is
+//! `Schema<'static>`); runtime-constructed schemas must arrange the lifetimes
+//! manually using standard borrow-check discipline.
+//!
+//! # Variance
+//!
+//! `Schema<'a>` and `ShapeId<'a>` are covariant in `'a`. Covariance is what
+//! lets a `&'static Schema<'static>` (the codegen form) coerce implicitly
+//! into a `&Schema<'_>` argument at any call site, with no annotation needed
+//! at the call site. Compile-time assertion functions in this crate enforce
+//! covariance; if a future field change would break it, the build fails
+//! before any downstream code is affected.
 
 mod schema {
     pub mod shape_id;
@@ -251,6 +304,32 @@ impl<'a> Schema<'a> {
     }
 
     /// Creates a schema for a structure or union type.
+    ///
+    /// `id` and `members` are borrowed for `'a`, so both must outlive the
+    /// returned schema. For codegen-emitted schemas this is always `'static`
+    /// to `'static`. Hand-written runtime construction can use any lifetime
+    /// — typically the surrounding function body's:
+    ///
+    /// ```
+    /// use aws_smithy_schema::{Schema, ShapeId, ShapeType};
+    ///
+    /// let id = ShapeId::from_static("ns#Foo", "ns", "Foo");
+    /// let member_x = Schema::new_member(
+    ///     ShapeId::from_static("smithy.api#String", "smithy.api", "String"),
+    ///     ShapeType::String,
+    ///     "x",
+    ///     0,
+    /// );
+    /// let members: [&Schema<'_>; 1] = [&member_x];
+    /// let schema = Schema::new_struct(id, ShapeType::Structure, &members);
+    ///
+    /// assert_eq!(schema.shape_id().as_str(), "ns#Foo");
+    /// assert_eq!(schema.shape_type(), ShapeType::Structure);
+    /// ```
+    ///
+    /// `id`, `member_x`, `members`, and `schema` all share the surrounding
+    /// scope's lifetime; the borrow checker enforces that `members[0]`
+    /// outlives `schema`.
     pub const fn new_struct(
         id: ShapeId<'a>,
         shape_type: ShapeType,
