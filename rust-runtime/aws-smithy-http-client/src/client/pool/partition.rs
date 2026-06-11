@@ -262,23 +262,19 @@ impl Partition {
         self.nic = Some(nic.into());
         self
     }
-
-    // used by pool build validation (later step)
-    #[allow(dead_code)]
-    pub(crate) fn id(&self) -> PartitionId {
-        self.id
-    }
 }
 
 /// Pool-owned state for one declared partition. Resolved once at pool
 /// build time and referenced by [`Client`](super::Client) handles.
 pub(crate) struct PartitionState {
     pub(crate) id: PartitionId,
-    // captured into make_stack via the factory; field retained for later NIC/runtime use
+    // Captured into `make_stack` by the build factory; the field is retained
+    // on the state but read through the captured closure, not directly.
     #[allow(dead_code)]
     pub(crate) spawner: std::sync::Arc<dyn DriverSpawner>,
-    // used by socket bind (later step)
-    #[allow(dead_code)]
+    /// Network interface this partition's connections bind to, and the
+    /// boundary for cross-partition borrow and reclaim (peers in the same
+    /// NIC group only).
     pub(crate) nic: Option<String>,
     /// Per-host connection storage for this partition. Keyed by
     /// (scheme, authority); entries built lazily on first request.
@@ -335,8 +331,8 @@ pub(crate) fn normalize_partitions(
 #[derive(Debug)]
 pub(crate) struct PartitionRegistry {
     by_id: std::collections::HashMap<PartitionId, std::sync::Arc<PartitionState>>,
-    // used by cross-partition borrow (later step)
-    #[allow(dead_code)]
+    /// Partition ids grouped by NIC, for the cross-partition borrow and
+    /// reclaim peer walk (candidates are drawn from the requester's NIC group).
     by_nic: std::collections::HashMap<Option<String>, Vec<PartitionId>>,
     default_partition: PartitionId,
 }
