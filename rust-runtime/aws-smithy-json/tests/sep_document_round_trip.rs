@@ -56,44 +56,44 @@ use aws_smithy_types::{Blob, DateTime};
 
 // -- Test fixture: `OmniWidget` schema and typed shape ----------------
 
-const OMNI_WIDGET_ID: ShapeId = shape_id!("smithy.example", "OmniWidget");
+const OMNI_WIDGET_ID: ShapeId<'static> = shape_id!("smithy.example", "OmniWidget");
 
-static M_VALUE_STRING: Schema = Schema::new_member(
+static M_VALUE_STRING: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_string"),
     ShapeType::String,
     "value_string",
     0,
 );
 
-static M_VALUE_BLOB: Schema = Schema::new_member(
+static M_VALUE_BLOB: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_blob"),
     ShapeType::Blob,
     "value_blob",
     1,
 );
 
-static M_VALUE_TIMESTAMP_DEFAULT: Schema = Schema::new_member(
+static M_VALUE_TIMESTAMP_DEFAULT: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_timestamp_default"),
     ShapeType::Timestamp,
     "value_timestamp_default",
     2,
 );
 
-static M_VALUE_LIST_STRINGS: Schema = Schema::new_member(
+static M_VALUE_LIST_STRINGS: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_list_strings"),
     ShapeType::List,
     "value_list_strings",
     3,
 );
 
-static M_VALUE_MAP_STRINGS: Schema = Schema::new_member(
+static M_VALUE_MAP_STRINGS: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_map_strings"),
     ShapeType::Map,
     "value_map_strings",
     4,
 );
 
-static M_VALUE_STRUCT: Schema = Schema::new_member(
+static M_VALUE_STRUCT: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_struct"),
     ShapeType::Structure,
     "value_struct",
@@ -106,14 +106,14 @@ static M_VALUE_STRUCT: Schema = Schema::new_member(
 // call site via `write_null` / `is_null`. We pick a member-element
 // schema of `prelude::STRING` for the same reason as the dense list
 // above.
-static M_VALUE_SPARSE_LIST: Schema = Schema::new_member(
+static M_VALUE_SPARSE_LIST: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "OmniWidget", "value_sparse_list"),
     ShapeType::List,
     "value_sparse_list",
     6,
 );
 
-static OMNI_WIDGET_SCHEMA: Schema = Schema::new_struct(
+static OMNI_WIDGET_SCHEMA: Schema<'static> = Schema::new_struct(
     OMNI_WIDGET_ID,
     ShapeType::Structure,
     &[
@@ -128,16 +128,16 @@ static OMNI_WIDGET_SCHEMA: Schema = Schema::new_struct(
 );
 
 // Nested struct for the `value_struct` member.
-const NESTED_ID: ShapeId = shape_id!("smithy.example", "Nested");
+const NESTED_ID: ShapeId<'static> = shape_id!("smithy.example", "Nested");
 
-static M_INNER_STRING: Schema = Schema::new_member(
+static M_INNER_STRING: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "Nested", "inner_string"),
     ShapeType::String,
     "inner_string",
     0,
 );
 
-static NESTED_SCHEMA: Schema =
+static NESTED_SCHEMA: Schema<'static> =
     Schema::new_struct(NESTED_ID, ShapeType::Structure, &[&M_INNER_STRING]);
 
 #[derive(Debug, Default, Clone, PartialEq)]
@@ -793,9 +793,9 @@ fn sep_write_document_no_discriminator_omits_type() {
 // form (without) genuinely differ. So these tests sit outside the
 // matrix and exercise each contract in isolation.
 
-const ALIAS_HOLDER_ID: ShapeId = shape_id!("smithy.example", "AliasHolder");
+const ALIAS_HOLDER_ID: ShapeId<'static> = shape_id!("smithy.example", "AliasHolder");
 
-static M_ALTERNATE_NAME: Schema = Schema::new_member(
+static M_ALTERNATE_NAME: Schema<'static> = Schema::new_member(
     shape_id!("smithy.example", "AliasHolder", "alternate_name"),
     ShapeType::String,
     "alternate_name",
@@ -803,7 +803,7 @@ static M_ALTERNATE_NAME: Schema = Schema::new_member(
 )
 .with_json_name("AlternateName");
 
-static ALIAS_HOLDER_SCHEMA: Schema =
+static ALIAS_HOLDER_SCHEMA: Schema<'static> =
     Schema::new_struct(ALIAS_HOLDER_ID, ShapeType::Structure, &[&M_ALTERNATE_NAME]);
 
 #[derive(Debug, Default, Clone, PartialEq)]

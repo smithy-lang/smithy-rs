@@ -54,14 +54,14 @@ pub type DeserializeFn = fn(&mut dyn ShapeDeserializer) -> Result<TypeErasedBox,
 /// with a [`DeserializeFn`] that constructs the typed value.
 #[derive(Clone, Copy)]
 pub struct RegistryEntry {
-    schema: &'static Schema,
+    schema: &'static Schema<'static>,
     deserialize: DeserializeFn,
 }
 
 impl RegistryEntry {
     /// Build a `RegistryEntry` from a static schema reference and a
     /// type-erased deserialize function.
-    pub const fn new(schema: &'static Schema, deserialize: DeserializeFn) -> Self {
+    pub const fn new(schema: &'static Schema<'static>, deserialize: DeserializeFn) -> Self {
         Self {
             schema,
             deserialize,
@@ -69,7 +69,7 @@ impl RegistryEntry {
     }
 
     /// The static schema for this entry's shape.
-    pub fn schema(&self) -> &'static Schema {
+    pub fn schema(&self) -> &'static Schema<'static> {
         self.schema
     }
 
@@ -116,7 +116,7 @@ impl TypeRegistry {
     }
 
     /// Look up the static schema for `id`, or `None` if not registered.
-    pub fn schema_for(&self, id: &ShapeId<'static>) -> Option<&'static Schema> {
+    pub fn schema_for(&self, id: &ShapeId<'static>) -> Option<&'static Schema<'static>> {
         self.entries.get(id).map(|e| e.schema)
     }
 
@@ -211,7 +211,11 @@ impl TypeRegistryBuilder {
     /// function. The shape ID is taken from the schema.
     ///
     /// This is the form generated code typically uses.
-    pub fn insert_shape(mut self, schema: &'static Schema, deserialize: DeserializeFn) -> Self {
+    pub fn insert_shape(
+        mut self,
+        schema: &'static Schema<'static>,
+        deserialize: DeserializeFn,
+    ) -> Self {
         let id = *schema.shape_id();
         self.entries
             .insert(id, RegistryEntry::new(schema, deserialize));
@@ -260,25 +264,25 @@ mod tests {
 
     // -- Schemas used across tests --------------------------------------------------------------
 
-    static M_FOO_NAME: Schema = Schema::new_member(
+    static M_FOO_NAME: Schema<'static> = Schema::new_member(
         shape_id!("smithy.example", "Foo", "name"),
         ShapeType::String,
         "name",
         0,
     );
-    static FOO_SCHEMA: Schema = Schema::new_struct(
+    static FOO_SCHEMA: Schema<'static> = Schema::new_struct(
         shape_id!("smithy.example", "Foo"),
         ShapeType::Structure,
         &[&M_FOO_NAME],
     );
 
-    static M_BAR_VALUE: Schema = Schema::new_member(
+    static M_BAR_VALUE: Schema<'static> = Schema::new_member(
         shape_id!("smithy.example", "Bar", "value"),
         ShapeType::Integer,
         "value",
         0,
     );
-    static BAR_SCHEMA: Schema = Schema::new_struct(
+    static BAR_SCHEMA: Schema<'static> = Schema::new_struct(
         shape_id!("smithy.example", "Bar"),
         ShapeType::Structure,
         &[&M_BAR_VALUE],

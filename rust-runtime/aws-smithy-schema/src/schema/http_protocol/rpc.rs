@@ -55,7 +55,7 @@ where
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
@@ -85,7 +85,7 @@ where
     fn deserialize_response<'a>(
         &self,
         response: &'a Response,
-        _output_schema: &Schema,
+        _output_schema: &Schema<'_>,
         _cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         // See `HttpBindingProtocol::deserialize_response` for the rationale
@@ -130,7 +130,7 @@ mod tests {
     impl ShapeSerializer for TestSerializer {
         fn write_struct(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             value: &dyn SerializableStruct,
         ) -> Result<(), SerdeError> {
             self.output.push(b'{');
@@ -140,75 +140,75 @@ mod tests {
         }
         fn write_list(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_map(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+        fn write_boolean(&mut self, _: &Schema<'_>, _: bool) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+        fn write_byte(&mut self, _: &Schema<'_>, _: i8) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+        fn write_short(&mut self, _: &Schema<'_>, _: i16) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+        fn write_integer(&mut self, _: &Schema<'_>, _: i32) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+        fn write_long(&mut self, _: &Schema<'_>, _: i64) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+        fn write_float(&mut self, _: &Schema<'_>, _: f32) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+        fn write_double(&mut self, _: &Schema<'_>, _: f64) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_big_integer(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::BigInteger,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_big_decimal(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::BigDecimal,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_string(&mut self, _: &Schema, v: &str) -> Result<(), SerdeError> {
+        fn write_string(&mut self, _: &Schema<'_>, v: &str) -> Result<(), SerdeError> {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::DateTime,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_document(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &crate::document::Document,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+        fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
             Ok(())
         }
     }
@@ -220,70 +220,76 @@ mod tests {
     impl ShapeDeserializer for TestDeserializer<'_> {
         fn read_struct(
             &mut self,
-            _: &Schema,
-            _: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            _: &Schema<'_>,
+            _: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn read_list(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn read_map(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn read_boolean(&mut self, _: &Schema) -> Result<bool, SerdeError> {
+        fn read_boolean(&mut self, _: &Schema<'_>) -> Result<bool, SerdeError> {
             Ok(false)
         }
-        fn read_byte(&mut self, _: &Schema) -> Result<i8, SerdeError> {
+        fn read_byte(&mut self, _: &Schema<'_>) -> Result<i8, SerdeError> {
             Ok(0)
         }
-        fn read_short(&mut self, _: &Schema) -> Result<i16, SerdeError> {
+        fn read_short(&mut self, _: &Schema<'_>) -> Result<i16, SerdeError> {
             Ok(0)
         }
-        fn read_integer(&mut self, _: &Schema) -> Result<i32, SerdeError> {
+        fn read_integer(&mut self, _: &Schema<'_>) -> Result<i32, SerdeError> {
             Ok(0)
         }
-        fn read_long(&mut self, _: &Schema) -> Result<i64, SerdeError> {
+        fn read_long(&mut self, _: &Schema<'_>) -> Result<i64, SerdeError> {
             Ok(0)
         }
-        fn read_float(&mut self, _: &Schema) -> Result<f32, SerdeError> {
+        fn read_float(&mut self, _: &Schema<'_>) -> Result<f32, SerdeError> {
             Ok(0.0)
         }
-        fn read_double(&mut self, _: &Schema) -> Result<f64, SerdeError> {
+        fn read_double(&mut self, _: &Schema<'_>) -> Result<f64, SerdeError> {
             Ok(0.0)
         }
         fn read_big_integer(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
         ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigInteger::from_str("0").unwrap())
         }
         fn read_big_decimal(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
         ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigDecimal::from_str("0").unwrap())
         }
-        fn read_string(&mut self, _: &Schema) -> Result<String, SerdeError> {
+        fn read_string(&mut self, _: &Schema<'_>) -> Result<String, SerdeError> {
             Ok(String::from_utf8_lossy(self.input).into_owned())
         }
-        fn read_blob(&mut self, _: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
+        fn read_blob(&mut self, _: &Schema<'_>) -> Result<aws_smithy_types::Blob, SerdeError> {
             Ok(aws_smithy_types::Blob::new(vec![]))
         }
-        fn read_timestamp(&mut self, _: &Schema) -> Result<aws_smithy_types::DateTime, SerdeError> {
+        fn read_timestamp(
+            &mut self,
+            _: &Schema<'_>,
+        ) -> Result<aws_smithy_types::DateTime, SerdeError> {
             Ok(aws_smithy_types::DateTime::from_secs(0))
         }
-        fn read_document(&mut self, _: &Schema) -> Result<crate::document::Document, SerdeError> {
+        fn read_document(
+            &mut self,
+            _: &Schema<'_>,
+        ) -> Result<crate::document::Document, SerdeError> {
             Ok(crate::document::Document::null())
         }
         fn is_null(&self) -> bool {
@@ -308,7 +314,7 @@ mod tests {
         }
     }
 
-    static TEST_SCHEMA: Schema =
+    static TEST_SCHEMA: Schema<'static> =
         Schema::new(crate::shape_id!("test", "TestStruct"), ShapeType::Structure);
 
     struct EmptyStruct;
@@ -318,14 +324,14 @@ mod tests {
         }
     }
 
-    static NAME_MEMBER: Schema = Schema::new_member(
+    static NAME_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "TestStruct"),
         ShapeType::String,
         "name",
         0,
     );
-    static MEMBERS: &[&Schema] = &[&NAME_MEMBER];
-    static STRUCT_WITH_MEMBER: Schema = Schema::new_struct(
+    static MEMBERS: &[&Schema<'_>] = &[&NAME_MEMBER];
+    static STRUCT_WITH_MEMBER: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "TestStruct"),
         ShapeType::Structure,
         MEMBERS,

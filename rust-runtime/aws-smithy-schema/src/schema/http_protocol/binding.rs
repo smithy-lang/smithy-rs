@@ -65,7 +65,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
         &self,
         body: <C as Codec>::Serializer,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         _cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
@@ -303,9 +303,9 @@ pub fn percent_encode_into(input: &str, out: &mut String) {
 /// `path.replace(&format!("{{{name}}}"), ...)` per label — multiple
 /// String allocations per label and quadratic full-string scans. Top
 /// hot path on PutObject SER (~25% of bench loop pre-fix).
-fn append_uri_with_labels(
+fn append_uri_with_labels<'sc>(
     template: &str,
-    labels: &[(Cow<'static, str>, String)],
+    labels: &[(Cow<'sc, str>, String)],
     out: &mut String,
 ) {
     let mut rem = template;
@@ -370,12 +370,12 @@ struct HttpBindingSerializer<'a, S> {
     /// a late flush loop. The borrow ends when the binder is dropped at the
     /// end of `serialize_request_with_body`'s binder-scope.
     headers: &'a mut Headers,
-    query_params: Vec<(Cow<'static, str>, String)>,
-    labels: Vec<(Cow<'static, str>, String)>,
+    query_params: Vec<(Cow<'a, str>, String)>,
+    labels: Vec<(Cow<'a, str>, String)>,
     /// When set, member schemas are resolved from this schema by name to find
     /// HTTP binding traits. This allows the protocol to override bindings
     /// (e.g., for presigning where body members become query params).
-    input_schema: Option<&'a Schema>,
+    input_schema: Option<&'a Schema<'a>>,
     /// True for the top-level input struct in serialize_request.
     /// Cleared after the first write_struct so nested structs delegate directly.
     is_top_level: bool,
@@ -464,7 +464,7 @@ impl VisitedMembers {
 }
 
 impl<'a, S> HttpBindingSerializer<'a, S> {
-    fn new(body: S, input_schema: Option<&'a Schema>, headers: &'a mut Headers) -> Self {
+    fn new(body: S, input_schema: Option<&'a Schema<'a>>, headers: &'a mut Headers) -> Self {
         Self {
             body,
             headers,
@@ -488,7 +488,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     /// HTTP-bound members are always struct members and so always have an
     /// index. The `unwrap_or(true)` fallback for schemas without an index
     /// keeps the helper conservative — it routes when it can't dedupe.
-    fn should_route_binding(&mut self, schema: &Schema) -> bool {
+    fn should_route_binding(&mut self, schema: &Schema<'_>) -> bool {
         schema
             .member_index()
             .map(|idx| self.visited_bound_members.insert(idx))
@@ -498,7 +498,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     /// Resolve the effective member schema: if an input_schema override is set,
     /// look up the member by name there (to get the correct HTTP bindings).
     /// Otherwise use the schema as-is.
-    fn resolve_member<'s>(&self, schema: &'s Schema) -> &'s Schema
+    fn resolve_member<'s>(&self, schema: &'s Schema<'s>) -> &'s Schema<'s>
     where
         'a: 's,
     {
@@ -511,12 +511,31 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             schema
         }
     }
+
+    /// Like [`resolve_member`] but only succeeds when the member can be
+    /// resolved through `input_schema`. Returns the member with the
+    /// binder's `'a` data lifetime so callers can push into `'a`-bound
+    /// collections (e.g. `labels: Vec<(Cow<'a, str>, String)>`) without
+    /// allocating, even when the trait-method schema parameter's
+    /// anonymous lifetime is unrelated to `'a`.
+    fn resolve_to_input_schema(&self, schema: &Schema<'_>) -> Option<&'a Schema<'a>> {
+        let input_schema = self.input_schema?;
+        if let Some(idx) = schema.member_index() {
+            if let Some(s) = input_schema.member_schema_by_index(idx) {
+                return Some(s);
+            }
+        }
+        if let Some(name) = schema.member_name() {
+            return input_schema.member_schema(name);
+        }
+        None
+    }
 }
 
 impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_struct(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         if self.is_top_level {
@@ -584,7 +603,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
@@ -630,7 +649,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
@@ -676,7 +695,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_map(schema, write_entries)
     }
 
-    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
@@ -684,7 +703,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_boolean(schema, value)
     }
 
-    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
@@ -692,7 +711,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_byte(schema, value)
     }
 
-    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
@@ -700,7 +719,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_short(schema, value)
     }
 
-    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
@@ -708,7 +727,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_integer(schema, value)
     }
 
-    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &value.to_string());
@@ -716,7 +735,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_long(schema, value)
     }
 
-    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &format_float_f32(value));
@@ -724,7 +743,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_float(schema, value)
     }
 
-    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             return self.add_binding(binding, schema, &format_float_f64(value));
@@ -734,7 +753,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_big_integer(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &aws_smithy_types::BigInteger,
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
@@ -746,7 +765,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_big_decimal(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &aws_smithy_types::BigDecimal,
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
@@ -756,7 +775,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_big_decimal(schema, value)
     }
 
-    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if let Some(binding) = http_string_binding(schema) {
             // @mediaType on a header: base64-encode the value
@@ -787,7 +806,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
         self.body.write_string(schema, value)
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
         if schema.http_header().is_some() {
             if !self.should_route_binding(schema) {
@@ -820,7 +839,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_timestamp(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &aws_smithy_types::DateTime,
     ) -> Result<(), SerdeError> {
         let schema = self.resolve_member(schema);
@@ -854,13 +873,13 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 
     fn write_document(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &crate::document::Document,
     ) -> Result<(), SerdeError> {
         self.body.write_document(schema, value)
     }
 
-    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.body.write_null(schema)
     }
 }
@@ -873,7 +892,7 @@ enum HttpBinding {
 }
 
 /// Determine the HTTP binding for a member schema, if any.
-fn http_string_binding(schema: &Schema) -> Option<HttpBinding> {
+fn http_string_binding(schema: &Schema<'_>) -> Option<HttpBinding> {
     if let Some(h) = schema.http_header() {
         return Some(HttpBinding::Header(h.value()));
     }
@@ -890,7 +909,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     fn add_binding(
         &mut self,
         binding: HttpBinding,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &str,
     ) -> Result<(), SerdeError> {
         // Dedupe per-member: see `should_route_binding`. Without this, a
@@ -908,10 +927,24 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
                     .push((Cow::Borrowed(name), value.to_string()));
             }
             HttpBinding::Label => {
-                let name = schema
-                    .member_name()
-                    .ok_or_else(|| SerdeError::custom("httpLabel on non-member schema"))?;
-                self.labels.push((Cow::Borrowed(name), value.to_string()));
+                // Prefer the `'a`-lifetime member from `input_schema` so the
+                // pushed `Cow<'a, str>` can be `Borrowed` (zero-alloc). The
+                // trait method's `&Schema<'_>` schema has an anonymous
+                // lifetime not bounded by `'a`, so we'd otherwise have to
+                // allocate. Falls back to allocation when no `input_schema`
+                // is available.
+                let cow_name = if let Some(resolved) = self.resolve_to_input_schema(schema) {
+                    let name = resolved
+                        .member_name()
+                        .ok_or_else(|| SerdeError::custom("httpLabel on non-member schema"))?;
+                    Cow::Borrowed(name)
+                } else {
+                    let name = schema
+                        .member_name()
+                        .ok_or_else(|| SerdeError::custom("httpLabel on non-member schema"))?;
+                    Cow::Owned(name.to_string())
+                };
+                self.labels.push((cow_name, value.to_string()));
             }
         }
         Ok(())
@@ -963,41 +996,41 @@ impl ListElementCollector {
 }
 
 impl ShapeSerializer for ListElementCollector {
-    fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_boolean(&mut self, _: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, _: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_byte(&mut self, _: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, _: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_short(&mut self, _: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, _: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_integer(&mut self, _: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, _: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_long(&mut self, _: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, _: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         self.push(value.to_string());
         Ok(())
     }
-    fn write_float(&mut self, _: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, _: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         self.push(format_float_f32(value));
         Ok(())
     }
-    fn write_double(&mut self, _: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, _: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         self.push(format_float_f64(value));
         Ok(())
     }
     fn write_timestamp(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &aws_smithy_types::DateTime,
     ) -> Result<(), SerdeError> {
         let format = match schema.timestamp_format() {
@@ -1025,50 +1058,54 @@ impl ShapeSerializer for ListElementCollector {
         );
         Ok(())
     }
-    fn write_blob(&mut self, _schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
         self.push(aws_smithy_types::base64::encode(value));
         Ok(())
     }
     // Remaining methods are no-ops for list element collection
-    fn write_struct(&mut self, _: &Schema, _: &dyn SerializableStruct) -> Result<(), SerdeError> {
+    fn write_struct(
+        &mut self,
+        _: &Schema<'_>,
+        _: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_list(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_map(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_big_integer(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &aws_smithy_types::BigInteger,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_big_decimal(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &aws_smithy_types::BigDecimal,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_document(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &crate::document::Document,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
         Ok(())
     }
 }
@@ -1122,7 +1159,7 @@ impl MapEntryCollector {
 }
 
 impl ShapeSerializer for MapEntryCollector {
-    fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         if let Some(key) = self.pending_key.take() {
             self.entries
                 .push((format!("{}{}", self.prefix, key), value.to_string()));
@@ -1134,12 +1171,16 @@ impl ShapeSerializer for MapEntryCollector {
 
     // All other methods are no-ops — maps in HTTP bindings only have string keys/values.
     // Exception: write_list handles Map<String, List<String>> for @httpQueryParams.
-    fn write_struct(&mut self, _: &Schema, _: &dyn SerializableStruct) -> Result<(), SerdeError> {
+    fn write_struct(
+        &mut self,
+        _: &Schema<'_>,
+        _: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_list(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Map<String, List<String>>: each list element becomes a separate entry
@@ -1155,64 +1196,64 @@ impl ShapeSerializer for MapEntryCollector {
     }
     fn write_map(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, _: &Schema<'_>, _: bool) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, _: &Schema<'_>, _: i8) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, _: &Schema<'_>, _: i16) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, _: &Schema<'_>, _: i32) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, _: &Schema<'_>, _: i64) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, _: &Schema<'_>, _: f32) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, _: &Schema<'_>, _: f64) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_big_integer(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &aws_smithy_types::BigInteger,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_big_decimal(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &aws_smithy_types::BigDecimal,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_timestamp(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &aws_smithy_types::DateTime,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
     fn write_document(
         &mut self,
-        _: &Schema,
+        _: &Schema<'_>,
         _: &crate::document::Document,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
-    fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
         Ok(())
     }
 }
@@ -1232,7 +1273,7 @@ where
     fn serialize_request(
         &self,
         input: &dyn SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
@@ -1243,7 +1284,7 @@ where
     fn deserialize_response<'a>(
         &self,
         response: &'a Response,
-        _output_schema: &Schema,
+        _output_schema: &Schema<'_>,
         _cfg: &ConfigBag,
     ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
         // For non-streaming responses the orchestrator has already loaded
@@ -1338,7 +1379,7 @@ mod tests {
     impl ShapeSerializer for TestSerializer {
         fn write_struct(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             value: &dyn SerializableStruct,
         ) -> Result<(), SerdeError> {
             self.output.push(b'{');
@@ -1348,75 +1389,75 @@ mod tests {
         }
         fn write_list(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_map(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+        fn write_boolean(&mut self, _: &Schema<'_>, _: bool) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+        fn write_byte(&mut self, _: &Schema<'_>, _: i8) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+        fn write_short(&mut self, _: &Schema<'_>, _: i16) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+        fn write_integer(&mut self, _: &Schema<'_>, _: i32) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+        fn write_long(&mut self, _: &Schema<'_>, _: i64) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+        fn write_float(&mut self, _: &Schema<'_>, _: f32) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+        fn write_double(&mut self, _: &Schema<'_>, _: f64) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_big_integer(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::BigInteger,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_big_decimal(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::BigDecimal,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_string(&mut self, _: &Schema, v: &str) -> Result<(), SerdeError> {
+        fn write_string(&mut self, _: &Schema<'_>, v: &str) -> Result<(), SerdeError> {
             self.output.extend_from_slice(v.as_bytes());
             Ok(())
         }
-        fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_timestamp(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &aws_smithy_types::DateTime,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn write_document(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &crate::document::Document,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+        fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
             Ok(())
         }
     }
@@ -1428,70 +1469,76 @@ mod tests {
     impl ShapeDeserializer for TestDeserializer<'_> {
         fn read_struct(
             &mut self,
-            _: &Schema,
-            _: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+            _: &Schema<'_>,
+            _: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn read_list(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
         fn read_map(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
             _: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
-        fn read_boolean(&mut self, _: &Schema) -> Result<bool, SerdeError> {
+        fn read_boolean(&mut self, _: &Schema<'_>) -> Result<bool, SerdeError> {
             Ok(false)
         }
-        fn read_byte(&mut self, _: &Schema) -> Result<i8, SerdeError> {
+        fn read_byte(&mut self, _: &Schema<'_>) -> Result<i8, SerdeError> {
             Ok(0)
         }
-        fn read_short(&mut self, _: &Schema) -> Result<i16, SerdeError> {
+        fn read_short(&mut self, _: &Schema<'_>) -> Result<i16, SerdeError> {
             Ok(0)
         }
-        fn read_integer(&mut self, _: &Schema) -> Result<i32, SerdeError> {
+        fn read_integer(&mut self, _: &Schema<'_>) -> Result<i32, SerdeError> {
             Ok(0)
         }
-        fn read_long(&mut self, _: &Schema) -> Result<i64, SerdeError> {
+        fn read_long(&mut self, _: &Schema<'_>) -> Result<i64, SerdeError> {
             Ok(0)
         }
-        fn read_float(&mut self, _: &Schema) -> Result<f32, SerdeError> {
+        fn read_float(&mut self, _: &Schema<'_>) -> Result<f32, SerdeError> {
             Ok(0.0)
         }
-        fn read_double(&mut self, _: &Schema) -> Result<f64, SerdeError> {
+        fn read_double(&mut self, _: &Schema<'_>) -> Result<f64, SerdeError> {
             Ok(0.0)
         }
         fn read_big_integer(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
         ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigInteger::from_str("0").unwrap())
         }
         fn read_big_decimal(
             &mut self,
-            _: &Schema,
+            _: &Schema<'_>,
         ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
             use std::str::FromStr;
             Ok(aws_smithy_types::BigDecimal::from_str("0").unwrap())
         }
-        fn read_string(&mut self, _: &Schema) -> Result<String, SerdeError> {
+        fn read_string(&mut self, _: &Schema<'_>) -> Result<String, SerdeError> {
             Ok(String::from_utf8_lossy(self.input).into_owned())
         }
-        fn read_blob(&mut self, _: &Schema) -> Result<aws_smithy_types::Blob, SerdeError> {
+        fn read_blob(&mut self, _: &Schema<'_>) -> Result<aws_smithy_types::Blob, SerdeError> {
             Ok(aws_smithy_types::Blob::new(vec![]))
         }
-        fn read_timestamp(&mut self, _: &Schema) -> Result<aws_smithy_types::DateTime, SerdeError> {
+        fn read_timestamp(
+            &mut self,
+            _: &Schema<'_>,
+        ) -> Result<aws_smithy_types::DateTime, SerdeError> {
             Ok(aws_smithy_types::DateTime::from_secs(0))
         }
-        fn read_document(&mut self, _: &Schema) -> Result<crate::document::Document, SerdeError> {
+        fn read_document(
+            &mut self,
+            _: &Schema<'_>,
+        ) -> Result<crate::document::Document, SerdeError> {
             Ok(crate::document::Document::null())
         }
         fn is_null(&self) -> bool {
@@ -1516,7 +1563,7 @@ mod tests {
         }
     }
 
-    static TEST_SCHEMA: Schema =
+    static TEST_SCHEMA: Schema<'static> =
         Schema::new(crate::shape_id!("test", "TestStruct"), ShapeType::Structure);
 
     struct EmptyStruct;
@@ -1526,14 +1573,14 @@ mod tests {
         }
     }
 
-    static NAME_MEMBER: Schema = Schema::new_member(
+    static NAME_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "TestStruct"),
         ShapeType::String,
         "name",
         0,
     );
-    static MEMBERS: &[&Schema] = &[&NAME_MEMBER];
-    static STRUCT_WITH_MEMBER: Schema = Schema::new_struct(
+    static MEMBERS: &[&Schema<'_>] = &[&NAME_MEMBER];
+    static STRUCT_WITH_MEMBER: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "TestStruct"),
         ShapeType::Structure,
         MEMBERS,
@@ -1605,7 +1652,7 @@ mod tests {
         impl ShapeSerializer for PanicSerializer {
             fn write_struct(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &dyn SerializableStruct,
             ) -> Result<(), SerdeError> {
                 WRITE_CALLS.fetch_add(1, Ordering::SeqCst);
@@ -1613,74 +1660,74 @@ mod tests {
             }
             fn write_list(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_list() called");
             }
             fn write_map(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_map() called");
             }
-            fn write_boolean(&mut self, _: &Schema, _: bool) -> Result<(), SerdeError> {
+            fn write_boolean(&mut self, _: &Schema<'_>, _: bool) -> Result<(), SerdeError> {
                 panic!("body codec write_boolean() called");
             }
-            fn write_byte(&mut self, _: &Schema, _: i8) -> Result<(), SerdeError> {
+            fn write_byte(&mut self, _: &Schema<'_>, _: i8) -> Result<(), SerdeError> {
                 panic!("body codec write_byte() called");
             }
-            fn write_short(&mut self, _: &Schema, _: i16) -> Result<(), SerdeError> {
+            fn write_short(&mut self, _: &Schema<'_>, _: i16) -> Result<(), SerdeError> {
                 panic!("body codec write_short() called");
             }
-            fn write_integer(&mut self, _: &Schema, _: i32) -> Result<(), SerdeError> {
+            fn write_integer(&mut self, _: &Schema<'_>, _: i32) -> Result<(), SerdeError> {
                 panic!("body codec write_integer() called");
             }
-            fn write_long(&mut self, _: &Schema, _: i64) -> Result<(), SerdeError> {
+            fn write_long(&mut self, _: &Schema<'_>, _: i64) -> Result<(), SerdeError> {
                 panic!("body codec write_long() called");
             }
-            fn write_float(&mut self, _: &Schema, _: f32) -> Result<(), SerdeError> {
+            fn write_float(&mut self, _: &Schema<'_>, _: f32) -> Result<(), SerdeError> {
                 panic!("body codec write_float() called");
             }
-            fn write_double(&mut self, _: &Schema, _: f64) -> Result<(), SerdeError> {
+            fn write_double(&mut self, _: &Schema<'_>, _: f64) -> Result<(), SerdeError> {
                 panic!("body codec write_double() called");
             }
             fn write_big_integer(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &aws_smithy_types::BigInteger,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_big_integer() called");
             }
             fn write_big_decimal(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &aws_smithy_types::BigDecimal,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_big_decimal() called");
             }
-            fn write_string(&mut self, _: &Schema, _: &str) -> Result<(), SerdeError> {
+            fn write_string(&mut self, _: &Schema<'_>, _: &str) -> Result<(), SerdeError> {
                 panic!("body codec write_string() called");
             }
-            fn write_blob(&mut self, _: &Schema, _: &[u8]) -> Result<(), SerdeError> {
+            fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
                 panic!("body codec write_blob() called");
             }
             fn write_timestamp(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &aws_smithy_types::DateTime,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_timestamp() called");
             }
             fn write_document(
                 &mut self,
-                _: &Schema,
+                _: &Schema<'_>,
                 _: &crate::document::Document,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_document() called");
             }
-            fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+            fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
                 panic!("body codec write_null() called");
             }
         }
@@ -1701,15 +1748,15 @@ mod tests {
         // Header-only struct: one `@httpHeader` member, marked
         // `with_no_body_members()`. The runtime should never touch the body
         // codec.
-        static HEADER_MEMBER: Schema = Schema::new_member(
+        static HEADER_MEMBER: Schema<'static> = Schema::new_member(
             crate::shape_id!("test", "HeaderOnlyStruct"),
             ShapeType::String,
             "x_header",
             0,
         )
         .with_http_header("X-Header");
-        static HEADER_MEMBERS: &[&Schema] = &[&HEADER_MEMBER];
-        static HEADER_ONLY_SCHEMA: Schema = Schema::new_struct(
+        static HEADER_MEMBERS: &[&Schema<'_>] = &[&HEADER_MEMBER];
+        static HEADER_ONLY_SCHEMA: Schema<'static> = Schema::new_struct(
             crate::shape_id!("test", "HeaderOnlyStruct"),
             ShapeType::Structure,
             HEADER_MEMBERS,
@@ -1849,7 +1896,7 @@ mod tests {
 
     // -- @httpHeader tests --
 
-    static HEADER_MEMBER: Schema = Schema::new_member(
+    static HEADER_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::String,
         "xToken",
@@ -1857,7 +1904,7 @@ mod tests {
     )
     .with_http_header("X-Token");
 
-    static HEADER_SCHEMA: Schema = Schema::new_struct(
+    static HEADER_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&HEADER_MEMBER],
@@ -1883,7 +1930,7 @@ mod tests {
         assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
     }
 
-    static INT_HEADER_MEMBER: Schema = Schema::new_member(
+    static INT_HEADER_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::Integer,
         "retryCount",
@@ -1891,7 +1938,7 @@ mod tests {
     )
     .with_http_header("X-Retry-Count");
 
-    static INT_HEADER_SCHEMA: Schema = Schema::new_struct(
+    static INT_HEADER_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&INT_HEADER_MEMBER],
@@ -1917,7 +1964,7 @@ mod tests {
         assert_eq!(request.headers().get("X-Retry-Count").unwrap(), "3");
     }
 
-    static BOOL_HEADER_MEMBER: Schema = Schema::new_member(
+    static BOOL_HEADER_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::Boolean,
         "verbose",
@@ -1925,7 +1972,7 @@ mod tests {
     )
     .with_http_header("X-Verbose");
 
-    static BOOL_HEADER_SCHEMA: Schema = Schema::new_struct(
+    static BOOL_HEADER_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&BOOL_HEADER_MEMBER],
@@ -1953,11 +2000,11 @@ mod tests {
 
     // -- @httpQuery tests --
 
-    static QUERY_MEMBER: Schema =
+    static QUERY_MEMBER: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "color", 0)
             .with_http_query("color");
 
-    static QUERY_SCHEMA: Schema = Schema::new_struct(
+    static QUERY_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&QUERY_MEMBER],
@@ -1983,11 +2030,11 @@ mod tests {
         assert_eq!(request.uri(), "https://example.com/things?color=blue");
     }
 
-    static INT_QUERY_MEMBER: Schema =
+    static INT_QUERY_MEMBER: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Integer, "size", 0)
             .with_http_query("size");
 
-    static INT_QUERY_SCHEMA: Schema = Schema::new_struct(
+    static INT_QUERY_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&INT_QUERY_MEMBER],
@@ -2015,13 +2062,13 @@ mod tests {
 
     // -- Multiple @httpQuery params --
 
-    static Q1: Schema =
+    static Q1: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "a", 0)
             .with_http_query("a");
-    static Q2: Schema =
+    static Q2: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "b", 1)
             .with_http_query("b");
-    static MULTI_QUERY_SCHEMA: Schema = Schema::new_struct(
+    static MULTI_QUERY_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&Q1, &Q2],
@@ -2071,7 +2118,7 @@ mod tests {
 
     // -- @httpLabel tests --
 
-    static LABEL_MEMBER: Schema = Schema::new_member(
+    static LABEL_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::String,
         "bucketName",
@@ -2079,7 +2126,7 @@ mod tests {
     )
     .with_http_label();
 
-    static LABEL_SCHEMA: Schema = Schema::new_struct(
+    static LABEL_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&LABEL_MEMBER],
@@ -2124,7 +2171,7 @@ mod tests {
         assert!(request.uri().contains("my%20bucket%2Fname"));
     }
 
-    static INT_LABEL_MEMBER: Schema = Schema::new_member(
+    static INT_LABEL_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::Integer,
         "itemId",
@@ -2132,7 +2179,7 @@ mod tests {
     )
     .with_http_label();
 
-    static INT_LABEL_SCHEMA: Schema = Schema::new_struct(
+    static INT_LABEL_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&INT_LABEL_MEMBER],
@@ -2160,22 +2207,22 @@ mod tests {
 
     // -- Combined: @httpHeader + @httpQuery + @httpLabel + body --
 
-    static COMBINED_LABEL: Schema =
+    static COMBINED_LABEL: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "id", 0)
             .with_http_label();
-    static COMBINED_HEADER: Schema =
+    static COMBINED_HEADER: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "token", 1)
             .with_http_header("X-Token");
-    static COMBINED_QUERY: Schema = Schema::new_member(
+    static COMBINED_QUERY: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::String,
         "filter",
         2,
     )
     .with_http_query("filter");
-    static COMBINED_BODY: Schema =
+    static COMBINED_BODY: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::String, "data", 3);
-    static COMBINED_SCHEMA: Schema = Schema::new_struct(
+    static COMBINED_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[
@@ -2221,11 +2268,11 @@ mod tests {
 
     // -- @httpPrefixHeaders tests --
 
-    static PREFIX_MEMBER: Schema =
+    static PREFIX_MEMBER: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Map, "metadata", 0)
             .with_http_prefix_headers("X-Meta-");
 
-    static PREFIX_SCHEMA: Schema = Schema::new_struct(
+    static PREFIX_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&PREFIX_MEMBER],
@@ -2260,11 +2307,11 @@ mod tests {
 
     // -- @httpQueryParams tests --
 
-    static QUERY_PARAMS_MEMBER: Schema =
+    static QUERY_PARAMS_MEMBER: Schema<'static> =
         Schema::new_member(crate::shape_id!("test", "S"), ShapeType::Map, "params", 0)
             .with_http_query_params();
 
-    static QUERY_PARAMS_SCHEMA: Schema = Schema::new_struct(
+    static QUERY_PARAMS_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&QUERY_PARAMS_MEMBER],
@@ -2298,7 +2345,7 @@ mod tests {
 
     // -- Timestamp in header defaults to http-date --
 
-    static TS_HEADER_MEMBER: Schema = Schema::new_member(
+    static TS_HEADER_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::Timestamp,
         "ifModified",
@@ -2306,7 +2353,7 @@ mod tests {
     )
     .with_http_header("If-Modified-Since");
 
-    static TS_HEADER_SCHEMA: Schema = Schema::new_struct(
+    static TS_HEADER_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&TS_HEADER_MEMBER],
@@ -2336,7 +2383,7 @@ mod tests {
 
     // -- Timestamp in query defaults to date-time --
 
-    static TS_QUERY_MEMBER: Schema = Schema::new_member(
+    static TS_QUERY_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::Timestamp,
         "since",
@@ -2344,7 +2391,7 @@ mod tests {
     )
     .with_http_query("since");
 
-    static TS_QUERY_SCHEMA: Schema = Schema::new_struct(
+    static TS_QUERY_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&TS_QUERY_MEMBER],
@@ -2375,20 +2422,20 @@ mod tests {
 
     // -- Unbound members go to body, bound members do not --
 
-    static BOUND_MEMBER: Schema = Schema::new_member(
+    static BOUND_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::String,
         "headerVal",
         0,
     )
     .with_http_header("X-Val");
-    static UNBOUND_MEMBER: Schema = Schema::new_member(
+    static UNBOUND_MEMBER: Schema<'static> = Schema::new_member(
         crate::shape_id!("test", "S"),
         ShapeType::String,
         "bodyVal",
         1,
     );
-    static MIXED_SCHEMA: Schema = Schema::new_struct(
+    static MIXED_SCHEMA: Schema<'static> = Schema::new_struct(
         crate::shape_id!("test", "S"),
         ShapeType::Structure,
         &[&BOUND_MEMBER, &UNBOUND_MEMBER],
