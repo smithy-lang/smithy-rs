@@ -56,7 +56,11 @@ impl AwsJsonRpcProtocol {
         )
     }
 
-    fn new(protocol_id: ShapeId, content_type: &'static str, target_prefix: String) -> Self {
+    fn new(
+        protocol_id: ShapeId<'static>,
+        content_type: &'static str,
+        target_prefix: String,
+    ) -> Self {
         let codec = JsonCodec::new(
             JsonCodecSettings::builder()
                 .use_json_name(false)
@@ -74,14 +78,14 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
     type Request = aws_smithy_runtime_api::http::Request;
     type Response = aws_smithy_runtime_api::http::Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         self.inner.protocol_id()
     }
 
     fn serialize_request(
         &self,
         input: &dyn aws_smithy_schema::serde::SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
@@ -100,7 +104,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
     fn deserialize_response<'a>(
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
-        output_schema: &Schema,
+        output_schema: &Schema<'_>,
         cfg: &ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,

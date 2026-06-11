@@ -17,7 +17,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::date_time::Format as TimestampFormat;
 use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 
-static PROTOCOL_ID: ShapeId = shape_id!("aws.protocols", "restXml");
+static PROTOCOL_ID: ShapeId<'static> = shape_id!("aws.protocols", "restXml");
 
 /// AWS REST XML protocol (`aws.protocols#restXml`).
 #[derive(Debug)]
@@ -148,14 +148,14 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
     type Request = aws_smithy_runtime_api::http::Request;
     type Response = aws_smithy_runtime_api::http::Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         self.inner.protocol_id()
     }
 
     fn serialize_request(
         &self,
         input: &dyn aws_smithy_schema::serde::SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
@@ -198,7 +198,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
     fn deserialize_response<'a>(
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
-        output_schema: &Schema,
+        output_schema: &Schema<'_>,
         cfg: &ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
@@ -341,9 +341,9 @@ mod tests {
 
     use aws_smithy_schema::traits::HttpTrait;
 
-    static NAME_MEMBER: Schema =
+    static NAME_MEMBER: Schema<'static> =
         Schema::new_member(shape_id!("test", "Op$name"), ShapeType::String, "name", 0);
-    static OP_SCHEMA: Schema = Schema::new_struct(
+    static OP_SCHEMA: Schema<'static> = Schema::new_struct(
         shape_id!("test", "OpRequest"),
         ShapeType::Structure,
         &[&NAME_MEMBER],

@@ -41,7 +41,11 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     /// Resolves a JSON field name to a member schema.
-    fn resolve_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
+    fn resolve_member<'s>(
+        &self,
+        schema: &'s Schema<'s>,
+        field_name: &str,
+    ) -> Option<&'s Schema<'s>> {
         self.settings.field_to_member(schema, field_name)
     }
 
@@ -109,8 +113,8 @@ impl<'a> JsonDeserializer<'a> {
 impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     fn read_struct(
         &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
@@ -183,7 +187,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_list(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
@@ -220,7 +224,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
@@ -273,7 +277,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(())
     }
 
-    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
         if rem.starts_with(b"true") {
@@ -289,7 +293,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i8::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for byte".into(),
@@ -297,7 +301,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i16::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for short".into(),
@@ -305,7 +309,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i32::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for integer".into(),
@@ -313,19 +317,19 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         self.read_integer_value()
     }
 
-    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         self.read_float_value().map(|f| f as f32)
     }
 
-    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         self.read_float_value()
     }
 
-    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         self.skip_whitespace();
         match self.remaining().first() {
@@ -348,7 +352,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         self.skip_whitespace();
         match self.remaining().first() {
@@ -371,7 +375,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.skip_whitespace();
         let pos = self.position;
         let input = self.input;
@@ -416,7 +420,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         let s = self.read_string(_schema)?;
         let decoded =
             aws_smithy_types::base64::decode(&s).map_err(|e| SerdeError::InvalidInput {
@@ -425,7 +429,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(Blob::new(decoded))
     }
 
-    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+    fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -457,7 +461,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+    fn read_blob_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<Blob>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -489,7 +493,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+    fn read_integer_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i32>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -521,7 +525,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+    fn read_long_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i64>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -555,7 +559,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_string_string_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
@@ -596,7 +600,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_timestamp(&mut self, schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
         match rem.first() {
@@ -661,7 +665,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -1061,7 +1065,7 @@ impl<'a> JsonDeserializer<'a> {
 mod tests {
     use super::*;
 
-    fn dummy_schema() -> &'static aws_smithy_schema::Schema {
+    fn dummy_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::STRING
     }
 
@@ -1144,25 +1148,25 @@ mod tests {
             age: i32,
         }
 
-        static FIRST_NAME: Schema = Schema::new_member(
+        static FIRST_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
             "firstName",
             0,
         );
-        static LAST_NAME: Schema = Schema::new_member(
+        static LAST_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
             "lastName",
             1,
         );
-        static AGE: Schema = Schema::new_member(
+        static AGE: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Integer,
             "age",
             2,
         );
-        static PERSON_SCHEMA: Schema = Schema::new_struct(
+        static PERSON_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Structure,
             &[&FIRST_NAME, &LAST_NAME, &AGE],
@@ -1170,7 +1174,7 @@ mod tests {
 
         fn consume_person(
             person: &mut Person,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1378,99 +1382,99 @@ mod tests {
         }
 
         // Address members & schema
-        static ADDR_STREET: Schema = Schema::new_member(
+        static ADDR_STREET: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "street",
             0,
         );
-        static ADDR_CITY: Schema = Schema::new_member(
+        static ADDR_CITY: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "city",
             1,
         );
-        static ADDR_ZIP: Schema = Schema::new_member(
+        static ADDR_ZIP: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Integer,
             "zip",
             2,
         );
-        static ADDRESS_SCHEMA: Schema = Schema::new_struct(
+        static ADDRESS_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Structure,
             &[&ADDR_STREET, &ADDR_CITY, &ADDR_ZIP],
         );
 
         // Company members & schema
-        static COMP_NAME: Schema = Schema::new_member(
+        static COMP_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::String,
             "name",
             0,
         );
-        static COMP_EMPLOYEES: Schema = Schema::new_member(
+        static COMP_EMPLOYEES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::List,
             "employees",
             1,
         );
-        static COMP_METADATA: Schema = Schema::new_member(
+        static COMP_METADATA: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Map,
             "metadata",
             2,
         );
-        static COMP_ACTIVE: Schema = Schema::new_member(
+        static COMP_ACTIVE: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Boolean,
             "active",
             3,
         );
-        static COMPANY_SCHEMA: Schema = Schema::new_struct(
+        static COMPANY_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Structure,
             &[&COMP_NAME, &COMP_EMPLOYEES, &COMP_METADATA, &COMP_ACTIVE],
         );
 
         // User members & schema
-        static USER_ID: Schema = Schema::new_member(
+        static USER_ID: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Long,
             "id",
             0,
         );
-        static USER_NAME: Schema = Schema::new_member(
+        static USER_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::String,
             "name",
             1,
         );
-        static USER_SCORES: Schema = Schema::new_member(
+        static USER_SCORES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "scores",
             2,
         );
-        static USER_ADDRESS: Schema = Schema::new_member(
+        static USER_ADDRESS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
             "address",
             3,
         );
-        static USER_COMPANIES: Schema = Schema::new_member(
+        static USER_COMPANIES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "companies",
             4,
         );
-        static USER_TAGS: Schema = Schema::new_member(
+        static USER_TAGS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Map,
             "tags",
             5,
         );
-        static USER_SCHEMA: Schema = Schema::new_struct(
+        static USER_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
             &[
@@ -1485,7 +1489,7 @@ mod tests {
 
         fn consume_address(
             addr: &mut Address,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1499,7 +1503,7 @@ mod tests {
 
         fn consume_company(
             comp: &mut Company,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1528,7 +1532,7 @@ mod tests {
 
         fn consume_user(
             user: &mut User,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1632,21 +1636,21 @@ mod tests {
     fn test_json_name_deserialization() {
         use aws_smithy_schema::Schema;
 
-        static FOO_MEMBER: Schema = Schema::new_member(
+        static FOO_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,
             "foo",
             0,
         );
         // "bar" member has @jsonName("Baz")
-        static BAR_MEMBER: Schema = Schema::new_member(
+        static BAR_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Integer,
             "bar",
             1,
         )
         .with_json_name("Baz");
-        static STRUCT_SCHEMA: Schema = Schema::new_struct(
+        static STRUCT_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Structure,
             &[&FOO_MEMBER, &BAR_MEMBER],
@@ -1690,7 +1694,7 @@ mod tests {
         assert_eq!(bar, None); // "Baz" not recognized without jsonName
     }
 
-    fn timestamp_schema() -> &'static aws_smithy_schema::Schema {
+    fn timestamp_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::TIMESTAMP
     }
 
@@ -1746,14 +1750,14 @@ mod tests {
     fn test_skip_value_empty_array() {
         // Regression: skip_value failed on [] because json_token_iter can't parse ']' as a value start
         use aws_smithy_schema::ShapeType;
-        static KNOWN_MEMBER: Schema = Schema::new_member(
+        static KNOWN_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::String,
             "known",
             0,
         );
-        static MEMBERS: &[&Schema] = &[&KNOWN_MEMBER];
-        static TEST_SCHEMA: Schema = Schema::new_struct(
+        static MEMBERS: &[&Schema<'_>] = &[&KNOWN_MEMBER];
+        static TEST_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::Structure,
             MEMBERS,
@@ -1776,14 +1780,14 @@ mod tests {
     #[test]
     fn test_skip_value_nested_objects() {
         use aws_smithy_schema::ShapeType;
-        static D_MEMBER: Schema = Schema::new_member(
+        static D_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::String,
             "d",
             0,
         );
-        static MEMBERS: &[&Schema] = &[&D_MEMBER];
-        static TEST_SCHEMA: Schema = Schema::new_struct(
+        static MEMBERS: &[&Schema<'_>] = &[&D_MEMBER];
+        static TEST_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::Structure,
             MEMBERS,
@@ -1859,13 +1863,13 @@ mod tests {
         // to `remaining()` panic with an out-of-range slice index.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "m",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1888,13 +1892,13 @@ mod tests {
         // input was shorter than `true`.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "known",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1922,13 +1926,13 @@ mod tests {
         // that there are enough bytes to advance past.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "known",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1958,13 +1962,13 @@ mod tests {
         // catch it. This mirrors the fix for `read_list`.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "m",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -2026,14 +2030,14 @@ mod tests {
     /// schema. This is the minimum schema needed to exercise the depth guard
     /// through `read_struct`'s consumer-callback path (without it, unknown
     /// members go through `skip_value` which is iterative).
-    fn recursive_struct_schema() -> &'static Schema {
-        static MEMBER_A: Schema = Schema::new_member(
+    fn recursive_struct_schema() -> &'static Schema<'static> {
+        static MEMBER_A: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Rec"),
             aws_smithy_schema::ShapeType::Structure,
             "a",
             0,
         );
-        static RECURSIVE: Schema = Schema::new_struct(
+        static RECURSIVE: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Rec"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER_A],
@@ -2043,7 +2047,7 @@ mod tests {
 
     /// Consumer that re-enters `read_struct` to exercise the depth guard.
     fn recursive_struct_consumer(
-        _member: &Schema,
+        _member: &Schema<'_>,
         deser: &mut dyn ShapeDeserializer,
     ) -> Result<(), SerdeError> {
         deser.read_struct(recursive_struct_schema(), &mut recursive_struct_consumer)

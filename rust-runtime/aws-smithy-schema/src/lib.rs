@@ -82,17 +82,15 @@ pub mod registry {
 use schema::traits as trait_types;
 
 #[derive(Debug)]
-pub struct Schema {
-    // TODO(schema-lifetime): relax to `ShapeId<'a>` when `Schema` itself
-    // gains a lifetime parameter (task 2 of the schema-lifetime relax plan).
-    id: ShapeId<'static>,
+pub struct Schema<'a> {
+    id: ShapeId<'a>,
     shape_type: ShapeType,
     /// Member name if this is a member schema.
-    member_name: Option<&'static str>,
+    member_name: Option<&'a str>,
     /// Member index for position-based lookup in generated code.
     member_index: Option<usize>,
     /// Shape-type-specific member data.
-    members: SchemaMembers,
+    members: SchemaMembers<'a>,
 
     /// The pre-synthesis shape name for synthetic operation input/output
     /// shapes.
@@ -108,7 +106,7 @@ pub struct Schema {
     /// element name when no `@xmlName` overrides it. Distinct from `xml_name`,
     /// which carries an `@xmlName` trait value. Other consumers (logging,
     /// future protocols) may also read this field.
-    original_name: Option<&'static str>,
+    original_name: Option<&'a str>,
 
     // -- Known serde trait fields (const-constructable) --
     // IMPORTANT: These fields and their `with_*` setters must stay in sync with
@@ -158,111 +156,113 @@ pub struct Schema {
     media_type: Option<trait_types::MediaTypeTrait>,
 
     /// Fallback for unknown/custom traits. `None` in const contexts (no allocation).
-    traits: Option<&'static std::sync::LazyLock<TraitMap>>,
+    traits: Option<&'a std::sync::LazyLock<TraitMap>>,
 }
 
 /// Shape-type-specific member references.
 #[derive(Debug)]
-enum SchemaMembers {
+enum SchemaMembers<'a> {
     /// No members (simple types).
     None,
     /// Structure or union members.
-    Struct { members: &'static [&'static Schema] },
+    Struct { members: &'a [&'a Schema<'a>] },
     /// List member schema.
-    List { member: &'static Schema },
+    List { member: &'a Schema<'a> },
     /// Map key and value schemas.
     Map {
-        key: &'static Schema,
-        value: &'static Schema,
+        key: &'a Schema<'a>,
+        value: &'a Schema<'a>,
     },
 }
 
-impl Schema {
+impl<'a> Schema<'a> {
     /// Default values for all trait fields (should only be used by constructors as a spread source).
-    const EMPTY_TRAITS: Self = Self {
-        id: ShapeId::<'static>::from_static("", "", ""),
-        shape_type: ShapeType::Boolean,
-        member_name: None,
-        member_index: None,
-        members: SchemaMembers::None,
-        original_name: None,
-        sensitive: None,
-        json_name: None,
-        timestamp_format: None,
-        xml_name: None,
-        xml_attribute: None,
-        xml_flattened: None,
-        xml_unwrapped_output: false,
-        has_body_members: true,
-        xml_namespace: None,
-        http_header: None,
-        http_label: None,
-        http_payload: None,
-        http_prefix_headers: None,
-        http_query: None,
-        http_query_params: None,
-        http_response_code: None,
-        http: None,
-        streaming: None,
-        event_header: None,
-        event_payload: None,
-        host_label: None,
-        media_type: None,
-        traits: None,
-    };
+    ///
+    /// Implemented as a `const fn` rather than a `const` so it can be
+    /// parameterized over the schema lifetime — `const` items cannot
+    /// have lifetime parameters in stable Rust.
+    const fn empty_traits() -> Schema<'a> {
+        Schema {
+            id: ShapeId::<'a>::from_static("", "", ""),
+            shape_type: ShapeType::Boolean,
+            member_name: None,
+            member_index: None,
+            members: SchemaMembers::None,
+            original_name: None,
+            sensitive: None,
+            json_name: None,
+            timestamp_format: None,
+            xml_name: None,
+            xml_attribute: None,
+            xml_flattened: None,
+            xml_unwrapped_output: false,
+            has_body_members: true,
+            xml_namespace: None,
+            http_header: None,
+            http_label: None,
+            http_payload: None,
+            http_prefix_headers: None,
+            http_query: None,
+            http_query_params: None,
+            http_response_code: None,
+            http: None,
+            streaming: None,
+            event_header: None,
+            event_payload: None,
+            host_label: None,
+            media_type: None,
+            traits: None,
+        }
+    }
 
     /// Creates a schema for a simple type (no members).
-    pub const fn new(id: ShapeId<'static>, shape_type: ShapeType) -> Self {
+    pub const fn new(id: ShapeId<'a>, shape_type: ShapeType) -> Self {
         Self {
             id,
             shape_type,
-            ..Self::EMPTY_TRAITS
+            ..Self::empty_traits()
         }
     }
 
     /// Creates a schema for a structure or union type.
     pub const fn new_struct(
-        id: ShapeId<'static>,
+        id: ShapeId<'a>,
         shape_type: ShapeType,
-        members: &'static [&'static Schema],
+        members: &'a [&'a Schema<'a>],
     ) -> Self {
         Self {
             id,
             shape_type,
             members: SchemaMembers::Struct { members },
-            ..Self::EMPTY_TRAITS
+            ..Self::empty_traits()
         }
     }
 
     /// Creates a schema for a list type.
-    pub const fn new_list(id: ShapeId<'static>, member: &'static Schema) -> Self {
+    pub const fn new_list(id: ShapeId<'a>, member: &'a Schema<'a>) -> Self {
         Self {
             id,
             shape_type: ShapeType::List,
             members: SchemaMembers::List { member },
-            ..Self::EMPTY_TRAITS
+            ..Self::empty_traits()
         }
     }
 
     /// Creates a schema for a map type.
-    pub const fn new_map(
-        id: ShapeId<'static>,
-        key: &'static Schema,
-        value: &'static Schema,
-    ) -> Self {
+    pub const fn new_map(id: ShapeId<'a>, key: &'a Schema<'a>, value: &'a Schema<'a>) -> Self {
         Self {
             id,
             shape_type: ShapeType::Map,
             members: SchemaMembers::Map { key, value },
-            ..Self::EMPTY_TRAITS
+            ..Self::empty_traits()
         }
     }
 
     /// Creates a member schema wrapping a target schema.
     pub const fn new_member(
-        id: ShapeId<'static>,
+        id: ShapeId<'a>,
         shape_type: ShapeType,
-        member_name: &'static str,
+        member_name: &'a str,
         member_index: usize,
     ) -> Self {
         Self {
@@ -270,12 +270,18 @@ impl Schema {
             shape_type,
             member_name: Some(member_name),
             member_index: Some(member_index),
-            ..Self::EMPTY_TRAITS
+            ..Self::empty_traits()
         }
     }
 
     /// Returns the Shape ID of this schema.
-    pub fn shape_id(&self) -> &ShapeId<'static> {
+    ///
+    /// The returned reference's outer lifetime is the receiver's; the
+    /// inner `ShapeId<'a>` carries the data's lifetime, which is
+    /// `'static` for codegen-emitted schemas (preserving the
+    /// `&'static str` accessor guarantees that downstream
+    /// optimizations rely on).
+    pub fn shape_id(&self) -> &ShapeId<'a> {
         &self.id
     }
 
@@ -406,13 +412,17 @@ impl Schema {
 
     /// Attaches key and value member schemas to a map member schema.
     /// Used by the XML codec to resolve `<key>` and `<value>` element names.
-    pub const fn with_map_members(mut self, key: &'static Schema, value: &'static Schema) -> Self {
+    pub const fn with_map_members(
+        mut self,
+        key: &'static Schema<'static>,
+        value: &'static Schema<'static>,
+    ) -> Self {
         self.members = SchemaMembers::Map { key, value };
         self
     }
 
     /// Sets the list member schema on a member schema that targets a list.
-    pub const fn with_list_member(mut self, member: &'static Schema) -> Self {
+    pub const fn with_list_member(mut self, member: &'static Schema<'static>) -> Self {
         self.members = SchemaMembers::List { member };
         self
     }
@@ -566,10 +576,12 @@ impl Schema {
 
     /// Returns the member name if this is a member schema.
     ///
-    /// Returns `Option<&'static str>` so callers can store the name in
+    /// Returns `Option<&'a str>` (the schema's data lifetime, not the
+    /// receiver's). For `Schema<'static>` (codegen-emitted) this is
+    /// `Option<&'static str>` and callers can store the name in
     /// `Cow::Borrowed` or other `'static`-lifetime contexts without
     /// allocating, matching the underlying field type.
-    pub fn member_name(&self) -> Option<&'static str> {
+    pub fn member_name(&self) -> Option<&'a str> {
         self.member_name
     }
 
@@ -591,7 +603,7 @@ impl Schema {
     }
 
     /// Returns the member schema by name (for structures and unions).
-    pub fn member_schema(&self, name: &str) -> Option<&Schema> {
+    pub fn member_schema(&self, name: &str) -> Option<&Schema<'_>> {
         match &self.members {
             SchemaMembers::Struct { members } => members
                 .iter()
@@ -605,7 +617,7 @@ impl Schema {
     ///
     /// This is an optimization for generated code to avoid string lookups.
     /// Consumer code should not rely on specific position values as they may change.
-    pub fn member_schema_by_index(&self, index: usize) -> Option<&Schema> {
+    pub fn member_schema_by_index(&self, index: usize) -> Option<&Schema<'_>> {
         match &self.members {
             SchemaMembers::Struct { members } => members.get(index).copied(),
             _ => None,
@@ -613,7 +625,7 @@ impl Schema {
     }
 
     /// Returns the member schemas (for structures and unions).
-    pub fn members(&self) -> &[&Schema] {
+    pub fn members(&self) -> &[&Schema<'_>] {
         match &self.members {
             SchemaMembers::Struct { members } => members,
             _ => &[],
@@ -621,7 +633,7 @@ impl Schema {
     }
 
     /// Returns the member schema for collections (list member or map value).
-    pub fn member(&self) -> Option<&Schema> {
+    pub fn member(&self) -> Option<&Schema<'_>> {
         match &self.members {
             SchemaMembers::List { member } => Some(member),
             SchemaMembers::Map { value, .. } => Some(value),
@@ -629,11 +641,18 @@ impl Schema {
         }
     }
 
-    /// Like [`member`](Self::member) but returns the `'static` borrow that
-    /// codegen actually stores. Needed when callers (e.g. the XML codec)
-    /// must hold a reference to a value/element member schema across nested
-    /// callbacks without inheriting the parent borrow's lifetime.
-    pub fn member_static(&self) -> Option<&'static Schema> {
+    /// Like [`member`](Self::member) but returns the `'a` (data-lifetime)
+    /// borrow that codegen actually stores. Needed when callers (e.g. the
+    /// XML codec) must hold a reference to a value/element member schema
+    /// across nested callbacks without inheriting the parent `&self`
+    /// borrow's lifetime.
+    ///
+    /// For `Schema<'static>` (codegen) this returns `Option<&'static
+    /// Schema<'static>>`, matching the original `_static` semantics.
+    // TODO(schema-lifetime): the function name `_static` is now misleading
+    // (the lifetime is `'a`, not `'static` literally). Rename to
+    // `member_data_lifetime` or similar in a follow-up.
+    pub fn member_static(&self) -> Option<&'a Schema<'a>> {
         match &self.members {
             SchemaMembers::List { member } => Some(*member),
             SchemaMembers::Map { value, .. } => Some(*value),
@@ -642,16 +661,17 @@ impl Schema {
     }
 
     /// Returns the key schema for maps.
-    pub fn key(&self) -> Option<&Schema> {
+    pub fn key(&self) -> Option<&Schema<'_>> {
         match &self.members {
             SchemaMembers::Map { key, .. } => Some(key),
             _ => None,
         }
     }
 
-    /// Like [`key`](Self::key) but returns the `'static` borrow that codegen
-    /// stores. See [`member_static`](Self::member_static).
-    pub fn key_static(&self) -> Option<&'static Schema> {
+    /// Like [`key`](Self::key) but returns the `'a` (data-lifetime) borrow
+    /// that codegen stores. See [`member_static`](Self::member_static).
+    // TODO(schema-lifetime): rename — `'static` is no longer literal here.
+    pub fn key_static(&self) -> Option<&'a Schema<'a>> {
         match &self.members {
             SchemaMembers::Map { key, .. } => Some(*key),
             _ => None,

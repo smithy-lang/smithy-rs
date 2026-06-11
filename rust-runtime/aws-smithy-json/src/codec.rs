@@ -34,7 +34,7 @@ enum JsonFieldMapper {
 
 impl JsonFieldMapper {
     /// Returns the JSON wire name for a member schema.
-    fn member_to_field<'a>(&self, member: &'a Schema) -> Option<&'a str> {
+    fn member_to_field<'a>(&self, member: &'a Schema<'a>) -> Option<&'a str> {
         let name = member.member_name()?;
         match self {
             JsonFieldMapper::UseMemberName => Some(name),
@@ -48,7 +48,11 @@ impl JsonFieldMapper {
     }
 
     /// Resolves a JSON wire field name to a member schema within a struct schema.
-    fn field_to_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
+    fn field_to_member<'s>(
+        &self,
+        schema: &'s Schema<'s>,
+        field_name: &str,
+    ) -> Option<&'s Schema<'s>> {
         match self {
             JsonFieldMapper::UseMemberName => schema.member_schema(field_name),
             JsonFieldMapper::UseJsonName => {
@@ -102,7 +106,7 @@ pub struct JsonCodecSettings {
     /// `DocumentSettings` for diagnostics on coercion failures.
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
     /// awsJson1_1, restJson1) override this to their own shape id.
-    protocol_id: ShapeId,
+    protocol_id: ShapeId<'static>,
 }
 
 impl JsonCodecSettings {
@@ -124,16 +128,16 @@ impl JsonCodecSettings {
     }
 
     /// Returns the JSON wire name for a member schema.
-    pub(crate) fn member_to_field<'a>(&self, member: &'a Schema) -> Option<&'a str> {
+    pub(crate) fn member_to_field<'a>(&self, member: &'a Schema<'a>) -> Option<&'a str> {
         self.field_mapper.member_to_field(member)
     }
 
     /// Resolves a JSON wire field name to a member schema.
     pub(crate) fn field_to_member<'s>(
         &self,
-        schema: &'s Schema,
+        schema: &'s Schema<'s>,
         field_name: &str,
-    ) -> Option<&'s Schema> {
+    ) -> Option<&'s Schema<'s>> {
         self.field_mapper.field_to_member(schema, field_name)
     }
 }
@@ -152,7 +156,7 @@ impl Default for JsonCodecSettings {
 /// Sentinel protocol id used by `JsonCodecSettings` when none is
 /// supplied — surfaces in `DocumentSettings` diagnostics. AWS
 /// protocols override this with their own ids.
-const DEFAULT_JSON_CODEC_ID: ShapeId = shape_id!("aws.smithy.json", "JsonCodec");
+const DEFAULT_JSON_CODEC_ID: ShapeId<'static> = shape_id!("aws.smithy.json", "JsonCodec");
 
 /// Builder for [`JsonCodecSettings`].
 #[derive(Debug, Clone)]
@@ -160,7 +164,7 @@ pub struct JsonCodecSettingsBuilder {
     use_json_name: bool,
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
-    protocol_id: ShapeId,
+    protocol_id: ShapeId<'static>,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -198,7 +202,7 @@ impl JsonCodecSettingsBuilder {
     /// diagnostics. Defaults to `aws.smithy.json#JsonCodec`. AWS
     /// protocols (awsJson1_0, awsJson1_1, restJson1) supply their own
     /// shape id so coercion errors point at the originating protocol.
-    pub fn protocol_id(mut self, value: ShapeId) -> Self {
+    pub fn protocol_id(mut self, value: ShapeId<'static>) -> Self {
         self.protocol_id = value;
         self
     }
@@ -220,7 +224,7 @@ impl JsonCodecSettingsBuilder {
 }
 
 impl DocumentSettings for JsonCodecSettings {
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         &self.protocol_id
     }
 
@@ -230,7 +234,7 @@ impl DocumentSettings for JsonCodecSettings {
     ///
     /// Falls back to `None` if no member matches — matching the JSON
     /// "ignore unknown fields" convention.
-    fn member_index_for(&self, schema: &Schema, wire_name: &str) -> Option<usize> {
+    fn member_index_for(&self, schema: &Schema<'_>, wire_name: &str) -> Option<usize> {
         // `field_to_member` honors @jsonName per `JsonFieldMapper`.
         // `Schema::member_index` is `Option<usize>`, returning `Some`
         // for member schemas (which is what `field_to_member` always
@@ -439,19 +443,19 @@ mod tests {
         use aws_smithy_schema::ShapeType;
 
         // Build a tiny struct schema with two members.
-        static M_FIRST: Schema = Schema::new_member(
+        static M_FIRST: Schema<'static> = Schema::new_member(
             shape_id!("com.example", "MyStruct", "first"),
             ShapeType::String,
             "first",
             0,
         );
-        static M_SECOND: Schema = Schema::new_member(
+        static M_SECOND: Schema<'static> = Schema::new_member(
             shape_id!("com.example", "MyStruct", "second"),
             ShapeType::Integer,
             "second",
             1,
         );
-        static MY_STRUCT: Schema = Schema::new_struct(
+        static MY_STRUCT: Schema<'static> = Schema::new_struct(
             shape_id!("com.example", "MyStruct"),
             ShapeType::Structure,
             &[&M_FIRST, &M_SECOND],
@@ -468,14 +472,14 @@ mod tests {
         use aws_smithy_schema::ShapeType;
 
         // Member's wire name is "first_json" via @jsonName.
-        static M_FIRST: Schema = Schema::new_member(
+        static M_FIRST: Schema<'static> = Schema::new_member(
             shape_id!("com.example", "MyStruct", "first"),
             ShapeType::String,
             "first",
             0,
         )
         .with_json_name("first_json");
-        static MY_STRUCT: Schema = Schema::new_struct(
+        static MY_STRUCT: Schema<'static> = Schema::new_struct(
             shape_id!("com.example", "MyStruct"),
             ShapeType::Structure,
             &[&M_FIRST],

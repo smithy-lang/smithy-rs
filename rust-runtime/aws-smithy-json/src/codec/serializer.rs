@@ -48,7 +48,7 @@ impl JsonSerializer {
     /// Handles comma separators and member names before writing a value.
     /// When inside a map (map_depth > 0), restores expecting_map_key after
     /// the value so the next write_string is treated as a map key.
-    fn prefix(&mut self, schema: &Schema) {
+    fn prefix(&mut self, schema: &Schema<'_>) {
         if self.needs_comma {
             self.output.push(',');
         }
@@ -67,12 +67,12 @@ impl JsonSerializer {
     }
 
     /// Resolves the JSON field name for a member schema.
-    fn field_name<'a>(&self, schema: &'a Schema) -> Option<&'a str> {
+    fn field_name<'a>(&self, schema: &'a Schema<'a>) -> Option<&'a str> {
         self.settings.member_to_field(schema)
     }
 
     /// Gets the timestamp format to use, respecting @timestampFormat trait.
-    fn get_timestamp_format(&self, schema: &Schema) -> TimestampFormat {
+    fn get_timestamp_format(&self, schema: &Schema<'_>) -> TimestampFormat {
         if let Some(ts_trait) = schema.timestamp_format() {
             return match ts_trait.format() {
                 aws_smithy_schema::traits::TimestampFormat::EpochSeconds => {
@@ -206,7 +206,7 @@ impl aws_smithy_schema::codec::FinishSerializer for JsonSerializer {
 impl ShapeSerializer for JsonSerializer {
     fn write_struct(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
@@ -229,7 +229,7 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
@@ -251,7 +251,7 @@ impl ShapeSerializer for JsonSerializer {
 
     fn write_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.prefix(schema);
@@ -273,13 +273,13 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push_str(if value { "true" } else { "false" });
         Ok(())
     }
 
-    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
@@ -287,7 +287,7 @@ impl ShapeSerializer for JsonSerializer {
         })
     }
 
-    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
@@ -295,7 +295,7 @@ impl ShapeSerializer for JsonSerializer {
         })
     }
 
-    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
@@ -303,7 +303,7 @@ impl ShapeSerializer for JsonSerializer {
         })
     }
 
-    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
@@ -311,7 +311,7 @@ impl ShapeSerializer for JsonSerializer {
         })
     }
 
-    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
@@ -331,7 +331,7 @@ impl ShapeSerializer for JsonSerializer {
         }
     }
 
-    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
         if value.is_nan() {
@@ -351,19 +351,27 @@ impl ShapeSerializer for JsonSerializer {
         }
     }
 
-    fn write_big_integer(&mut self, schema: &Schema, value: &BigInteger) -> Result<(), SerdeError> {
+    fn write_big_integer(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &BigInteger,
+    ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push_str(value.as_ref());
         Ok(())
     }
 
-    fn write_big_decimal(&mut self, schema: &Schema, value: &BigDecimal) -> Result<(), SerdeError> {
+    fn write_big_decimal(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &BigDecimal,
+    ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push_str(value.as_ref());
         Ok(())
     }
 
-    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         use crate::escape::escape_string;
         if self.expecting_map_key {
             // Map key: comma before (if not first entry), then "key":
@@ -385,7 +393,7 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
         use aws_smithy_types::base64;
         self.prefix(schema);
         let encoded = base64::encode(value);
@@ -395,7 +403,7 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_timestamp(&mut self, schema: &Schema, value: &DateTime) -> Result<(), SerdeError> {
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         self.prefix(schema);
         let format = self.get_timestamp_format(schema);
         let formatted = value.fmt(format).map_err(|e| SerdeError::WriteFailed {
@@ -417,13 +425,13 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_document(&mut self, schema: &Schema, value: &Document) -> Result<(), SerdeError> {
+    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.write_json_value(value)?;
         Ok(())
     }
 
-    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.output.push_str("null");
         Ok(())
@@ -490,31 +498,31 @@ mod tests {
     fn test_write_full_object() {
         use aws_smithy_schema::serde::SerializableStruct;
 
-        static ACTIVE_MEMBER: Schema = Schema::new_member(
+        static ACTIVE_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Boolean,
             "active",
             0,
         );
-        static NAME_MEMBER: Schema = Schema::new_member(
+        static NAME_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::String,
             "name",
             1,
         );
-        static COUNT_MEMBER: Schema = Schema::new_member(
+        static COUNT_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Integer,
             "count",
             2,
         );
-        static PRICE_MEMBER: Schema = Schema::new_member(
+        static PRICE_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::Float,
             "price",
             3,
         );
-        static ITEMS_MEMBER: Schema = Schema::new_member(
+        static ITEMS_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Struct"),
             aws_smithy_schema::ShapeType::List,
             "items",
@@ -555,79 +563,79 @@ mod tests {
         use aws_smithy_schema::serde::SerializableStruct;
 
         // Member schemas
-        static ID: Schema = Schema::new_member(
+        static ID: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Long,
             "id",
             0,
         );
-        static NAME: Schema = Schema::new_member(
+        static NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::String,
             "name",
             1,
         );
-        static SCORES: Schema = Schema::new_member(
+        static SCORES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "scores",
             2,
         );
-        static ADDRESS: Schema = Schema::new_member(
+        static ADDRESS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
             "address",
             3,
         );
-        static COMPANIES: Schema = Schema::new_member(
+        static COMPANIES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "companies",
             4,
         );
-        static TAGS: Schema = Schema::new_member(
+        static TAGS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Map,
             "tags",
             5,
         );
-        static STREET: Schema = Schema::new_member(
+        static STREET: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "street",
             0,
         );
-        static CITY: Schema = Schema::new_member(
+        static CITY: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "city",
             1,
         );
-        static ZIP: Schema = Schema::new_member(
+        static ZIP: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Integer,
             "zip",
             2,
         );
-        static COMP_NAME: Schema = Schema::new_member(
+        static COMP_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::String,
             "name",
             0,
         );
-        static EMPLOYEES: Schema = Schema::new_member(
+        static EMPLOYEES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::List,
             "employees",
             1,
         );
-        static METADATA: Schema = Schema::new_member(
+        static METADATA: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Map,
             "metadata",
             2,
         );
-        static ACTIVE: Schema = Schema::new_member(
+        static ACTIVE: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Boolean,
             "active",
@@ -735,14 +743,14 @@ mod tests {
     fn test_json_name_serialization() {
         use aws_smithy_schema::serde::SerializableStruct;
 
-        static FOO_MEMBER: Schema = Schema::new_member(
+        static FOO_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,
             "foo",
             0,
         );
         // bar has @jsonName("Baz")
-        static BAR_MEMBER: Schema = Schema::new_member(
+        static BAR_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Integer,
             "bar",
@@ -784,14 +792,14 @@ mod tests {
         // flag must not leak into the struct's member serialization.
         use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
 
-        static INNER_NAME: Schema = Schema::new_member(
+        static INNER_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Inner"),
             ShapeType::String,
             "name",
             0,
         );
-        static INNER_MEMBERS: &[&Schema] = &[&INNER_NAME];
-        static INNER_SCHEMA: Schema = Schema::new_struct(
+        static INNER_MEMBERS: &[&Schema<'_>] = &[&INNER_NAME];
+        static INNER_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Inner"),
             ShapeType::Structure,
             INNER_MEMBERS,
@@ -807,7 +815,7 @@ mod tests {
             }
         }
 
-        static MAP_SCHEMA: Schema = Schema::new(
+        static MAP_SCHEMA: Schema<'static> = Schema::new(
             aws_smithy_schema::shape_id!("test", "MyMap"),
             ShapeType::Map,
         );
