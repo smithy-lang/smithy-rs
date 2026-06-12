@@ -423,10 +423,9 @@ impl PartitionRegistry {
     }
 
     /// Attempt to reclaim one idle connection from `peer`'s entry for
-    /// `key`, freeing its permit. Returns `true` if one was freed. The
-    /// peer's `authorities` lock is held only for the `try_reclaim_one`
-    /// call (which pops + drops under the cache lock, releasing it before
-    /// the drop). No-op `false` if the peer or entry is absent.
+    /// `key`, freeing its permit. Returns `true` if one was freed. The idle
+    /// connection is popped under the cache lock and dropped after the lock
+    /// is released. No-op `false` if the peer or entry is absent.
     pub(crate) fn try_reclaim_on(&self, peer: PartitionId, key: &super::PoolKey) -> bool {
         let state = match self.by_id.get(&peer) {
             Some(s) => s,

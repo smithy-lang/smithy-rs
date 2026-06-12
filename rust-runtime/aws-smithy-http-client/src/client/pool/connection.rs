@@ -358,6 +358,8 @@ impl TimeoutContext {
 /// → TCP connector) to the layers that need them.
 #[derive(Clone, Debug)]
 pub(crate) struct ConnectCtx {
+    /// Target URI: its authority is the pool key, and the full URI is
+    /// passed to the TCP connector.
     pub(crate) uri: http_1x::Uri,
     /// Bounds new-connection establishment (TCP + TLS handshake). `None`
     /// means no connect timeout; cached connections skip the connector
@@ -504,7 +506,6 @@ pub(crate) struct ConnectionInfo {
     /// The authority (host:port) this connection is for. Populated from the
     /// URI at handshake time.
     pub(crate) authority: Authority,
-    // Future: tls_info, timing (tcp_connect_duration, tls_handshake_duration)
 }
 
 /// A one-shot "this connection is dead, don't reuse it" flag.
@@ -623,13 +624,13 @@ impl<S> ManagedConnection<S> {
     }
 
     /// Connection info (remote/local addresses).
-    #[allow(dead_code)] // future telemetry / debugging
+    #[allow(dead_code)] // accessor for telemetry/debugging consumers
     pub(crate) fn info(&self) -> &ConnectionInfo {
         &self.info
     }
 
     /// When this connection was established.
-    #[allow(dead_code)] // future max-lifetime eviction
+    #[allow(dead_code)] // accessor for connection age (telemetry/debugging)
     pub(crate) fn created_at(&self) -> Instant {
         self.created_at
     }
@@ -877,25 +878,6 @@ impl<S> Drop for CachedConnection<S> {
     }
 }
 
-/// Per-host shared slot that bridges H2 handshake completion to H2 checkout.
-///
-/// `H2ConnectAndHandshake` calls [`Self::publish`] with a fresh
-/// `ConnectionMetadata` every time a new H2 connection is established.
-/// `SingletonConnection::metadata` reads the current value through
-/// [`Self::current`].
-///
-/// Necessary because `hyper_util::client::pool::singleton::Singled<…>` is
-/// opaque to us; we can't reach through it to the underlying
-/// `ManagedConnection` to build its metadata at checkout time. The
-/// handshake side has direct access, so it publishes and the checkout
-/// side reads.
-///
-/// Last-writer-wins is correct. Singleton holds at most one live H2
-/// connection per host at a time: on `Singled::poll_ready` error (or a
-/// `Singleton::retain` predicate returning false), its state transitions
-/// from `Made(svc)` back to `Empty`, dropping the old service. The next
-/// request's `call` runs a fresh handshake through `H2ConnectAndHandshake`,
-/// which publishes new metadata, overwriting whatever was there before.
 /// State an H2 checkout (`SingletonConnection`) needs but cannot reach
 /// through the opaque `Singled<…>` to read from the underlying
 /// `ManagedConnection`. Published by the H2 handshake on each new
@@ -936,6 +918,8 @@ impl H2ConnectionRef {
         Self::default()
     }
 
+    /// Replace the current state with a freshly-handshaked connection's
+    /// state (last-writer-wins).
     pub(crate) fn publish(&self, state: H2ConnectionState) {
         *self.inner.lock().unwrap() = Some(state);
     }
@@ -1095,8 +1079,9 @@ pin_project! {
     /// fully dropped. Body streaming continues through the held inner
     /// `Incoming`; when the `GuardedBody` is dropped the guard drops, which
     /// for H1 triggers `CachedConnection::Drop` (return-to-pool or `discard`
-    /// if poisoned), and for H2 drops the singleton clone (no-op on
-    /// singleton state).
+    /// if poisoned), and for H2 releases the stream's `DispatchGuard`
+    /// (decrementing `active_streams`, and stamping `idle_at` on the final
+    /// release).
     ///
     /// The H2 variant carries a generic type parameter because
     /// `SingletonConnection<T>`'s inner `T` is `hyper_util::client::pool::
@@ -1157,26 +1142,19 @@ impl<H2Unnameable> hyper::body::Body for GuardedBody<H2Unnameable> {
 /// consumers above the Negotiate composition point work with.
 pub(crate) type CheckoutResponse<PoolUnnameable> = http_1x::Response<GuardedBody<PoolUnnameable>>;
 
-/// Wire-level IO wrapper that carries TCP connect timing.
+/// Wire-level IO wrapper sitting below TLS in the connector stack. Pure
+/// passthrough; never modifies data or buffers.
 ///
-/// Sits below TLS in the connector stack. Pure passthrough; never
-/// modifies data or buffers.
+/// TODO(pool): instrument TCP-connect vs. TLS-handshake timing separately
+/// here (this wrapper is the seam below TLS where the TCP-only duration is
+/// observable); surface the split on `ConnectionTiming`.
 pub(crate) struct TransportIo<IO> {
     inner: IO,
-    tcp_connect_duration: Duration,
 }
 
 impl<IO> TransportIo<IO> {
-    fn new(inner: IO, tcp_connect_duration: Duration) -> Self {
-        Self {
-            inner,
-            tcp_connect_duration,
-        }
-    }
-
-    /// Duration of the TCP connect (3-way handshake).
-    pub(crate) fn tcp_connect_duration(&self) -> Duration {
-        self.tcp_connect_duration
+    fn new(inner: IO) -> Self {
+        Self { inner }
     }
 }
 
@@ -1224,11 +1202,10 @@ impl<IO: hyper_util::client::legacy::connect::Connection>
     }
 }
 
-/// Wraps a TCP connector to stamp the connect duration on the resulting IO.
+/// Wraps a TCP connector with the [`TransportIo`] seam below the TLS layer.
 ///
-/// The output `TransportIo<C::Response>` carries the TCP connect timing.
-/// Passed to the TLS connector which layers encryption on top without
-/// losing access to the transport-level timing.
+/// The wrapper is the point at which transport-level (TCP) timing and byte
+/// accounting can be observed independently of the TLS handshake above it.
 pub(crate) struct TimingConnector<C> {
     inner: C,
 }
@@ -1265,11 +1242,10 @@ where
     }
 
     fn call(&mut self, uri: http_1x::Uri) -> Self::Future {
-        let start = Instant::now();
         let fut = self.inner.call(uri);
         Box::pin(async move {
             let io = fut.await.map_err(Into::into)?;
-            Ok(TransportIo::new(io, start.elapsed()))
+            Ok(TransportIo::new(io))
         })
     }
 }

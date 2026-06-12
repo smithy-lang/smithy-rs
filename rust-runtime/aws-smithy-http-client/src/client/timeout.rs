@@ -227,10 +227,9 @@ impl TimeoutKind {
 
 /// Wrap `fut` in a `MaybeTimeoutFuture` if `timeout` is set.
 ///
-/// Used by the v2 pool layers to apply per-operation `connect_timeout` /
-/// `read_timeout` without building Tower services for each. Passes
-/// `sleep_impl` by reference so the helper can be used without cloning
-/// the sleep impl into a dedicated service.
+/// Applies per-operation `connect_timeout` / `read_timeout` without
+/// requiring a dedicated Tower service per request. Takes `sleep_impl` by
+/// reference to avoid cloning it into a dedicated service.
 pub(crate) fn maybe_timeout_future<F, T, E>(
     fut: F,
     timeout: Option<Duration>,

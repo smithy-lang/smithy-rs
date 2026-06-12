@@ -150,7 +150,7 @@ pub(crate) struct PoolConfig {
     pub(crate) max_connections_per_host: Option<usize>,
 
     /// How long an idle connection may stay in the pool before being
-    /// evicted. `None` = no eviction (hyper-util's default behavior).
+    /// evicted. `None` = no eviction.
     pub(crate) pool_idle_timeout: Option<std::time::Duration>,
 
     /// Optional listener for connection lifecycle events.
@@ -171,6 +171,8 @@ pub struct SharedPool {
     pub(crate) inner: Arc<SharedPoolInner>,
 }
 
+/// Interior of [`SharedPool`]: the connection pool plus the optional proxy
+/// matcher consulted per request to decide proxy vs. direct routing.
 pub(crate) struct SharedPoolInner {
     pub(crate) pool: Arc<ConnectionPool>,
     pub(crate) proxy_matcher: Option<Arc<ProxyMatcher>>,
@@ -259,7 +261,7 @@ pub(crate) struct BoxedRetainer {
     /// Pop one idle connection and drop it to free its permit (active
     /// reclaim). Returns `true` if a connection was freed. The H1 cache
     /// leg pops from its idle Vec; the H2 singleton leg has no
-    /// simply-reclaimable idle (an idle H2 connection still multiplexes),
+    /// reclaimable idle (an idle H2 connection still multiplexes),
     /// so its `reclaim_fn` is a no-op returning `false`.
     reclaim_fn: Box<dyn Fn() -> bool + Send + Sync + 'static>,
     /// Take one idle connection wrapped as a dispatchable handle that
@@ -339,7 +341,7 @@ impl PeerReclaimHandle {
     /// Free one over-supplied peer's idle connection to relieve
     /// `constraint`, returning `true` if a permit was freed. Best-effort:
     /// `false` if the pool is gone, there are no NIC-group peers, or no
-    /// peer holds reclaimable idle (P0 then just blocks on the permit).
+    /// peer holds reclaimable idle (P0 then blocks on the permit).
     pub(crate) fn try_free_under_load(&self, constraint: &BindingConstraint) -> bool {
         let registry = match self.registry.upgrade() {
             Some(r) => r,
@@ -560,6 +562,15 @@ impl SharedPoolState {
     }
 }
 
+/// Assemble a [`ConnectionPool`] from a TCP/TLS connector, pool
+/// configuration, the declared partitions, and the cross-partition policy.
+///
+/// Builds the shared state (budget semaphores, hooks, stats index) and a
+/// per-partition stack factory: on first touch of an authority, a partition
+/// lazily builds its `Negotiate(ConnectionLimit, Cache/Singleton)` stack,
+/// registering that cell's counters into the stats index and binding it to
+/// the shared budget. The connector is captured per partition so each can
+/// carry its own NIC binding.
 pub(crate) fn build_pool<C, IO>(
     connector: C,
     config: PoolConfig,
@@ -874,7 +885,7 @@ where
                                                     .is_empty()
                                             }),
                                             // An idle H2 connection still multiplexes; it is
-                                            // not simply-reclaimable like an H1 cache entry.
+                                            // not directly reclaimable like an H1 cache entry.
                                             // Reclaim skips the H2 leg.
                                             reclaim_fn: Box::new(|| false),
                                             // H2 borrow is unsupported: an idle H2
@@ -933,7 +944,6 @@ where
         eviction_spawned: AtomicBool::new(false),
         drop_notifier: OnceLock::new(),
         registry,
-        cross_partition_policy,
     }
 }
 
@@ -951,10 +961,6 @@ pub(crate) struct ConnectionPool {
 
     /// Immutable partition registry, resolved at build time.
     registry: Arc<partition::PartitionRegistry>,
-
-    // used by cross-partition checkout
-    #[allow(dead_code)]
-    cross_partition_policy: partition::CrossPartitionPolicy,
 
     /// Latches `true` once the eviction task has been spawned. Subsequent
     /// `send_request` calls observe the latch and skip the spawn path.
@@ -993,7 +999,7 @@ impl ConnectionPool {
     ///
     /// Takes `self: &Arc<Self>` so the lazy eviction task can hold a
     /// `Weak<Self>` as a fallback exit signal (primary exit is the drop
-    /// of `drop_notifier`; the `Weak` just insulates the task against a
+    /// of `drop_notifier`; the `Weak` insulates the task against a
     /// missed drop signal).
     pub(crate) async fn send_request(
         self: &Arc<Self>,
@@ -1004,9 +1010,8 @@ impl ConnectionPool {
         let key =
             PoolKey::from_uri(&ctx.uri).ok_or("request URI must have scheme and authority")?;
 
-        // Lazily spawn the idle-eviction task on first use. Matches the
-        // legacy hyper-util pool's approach: no task if the pool is never
-        // used, no task if `pool_idle_timeout` is `None` or zero.
+        // Lazily spawn the idle-eviction task on first use: no task if the
+        // pool is never used, and no task if `pool_idle_timeout` is `None` or zero.
         self.maybe_spawn_eviction_task();
 
         // Dispatch the request through the per-host entry. The lock is
@@ -1146,15 +1151,6 @@ async fn eviction_task(
     tracing::trace!("pool eviction task exiting");
 }
 
-/// Rewrite an HTTP/1.1 request's URI to the appropriate request-target
-/// form for dispatch:
-///
-/// - `CONNECT` → authority-form (`host:port`)
-/// - proxied non-CONNECT → absolute-form (full URL with scheme + authority)
-/// - direct non-CONNECT → origin-form (path + query only)
-///
-/// The HTTP/1 connection sends request URIs as-is, so request-target
-/// form selection is the caller's responsibility.
 /// Recognize hyper-util's `Singleton` coalescing-cancel sentinel by its
 /// `Display`. The error type (`SingletonError`) and its inner `Canceled`
 /// are upstream-private and not downcastable, so the chain is matched by
@@ -1174,10 +1170,19 @@ fn is_singleton_canceled(err: &(dyn std::error::Error + 'static)) -> bool {
     false
 }
 
+/// Rewrite an HTTP/1.1 request's URI to the appropriate request-target
+/// form for dispatch:
+///
+/// - `CONNECT` → authority-form (`host:port`)
+/// - proxied non-CONNECT → absolute-form (full URL with scheme + authority)
+/// - direct non-CONNECT → origin-form (path + query only)
+///
+/// The HTTP/1 connection sends request URIs as-is, so request-target
+/// form selection is the caller's responsibility.
 fn rewrite_h1_request_target(req: &mut http_1x::Request<SdkBody>, is_proxied: bool) {
     use http_1x::{uri::Parts, Method, Uri};
     if req.method() == Method::CONNECT {
-        // Authority-form: keep just the authority component.
+        // Authority-form: retain only the authority component.
         if let Some(auth) = req.uri().authority().cloned() {
             let mut parts = Parts::default();
             parts.authority = Some(auth);
@@ -1266,7 +1271,7 @@ impl<UnusedH2Phantom> Service<http_1x::Request<SdkBody>> for H1Checkout<UnusedH2
         // HTTP/1.1 request-target form depends on whether we're talking to
         // a proxy or directly to the origin. CONNECT always uses
         // authority-form; otherwise proxied = absolute-form, direct =
-        // origin-form. Matches `hyper-util`'s legacy client behavior.
+        // origin-form (path + query only; RFC 7230 §5.3.1).
         rewrite_h1_request_target(&mut req, conn.is_proxied());
         Box::pin(async move {
             let send_fut = conn.call(req);
@@ -1391,12 +1396,13 @@ where
 ///
 /// Each host has one of these, wrapping the unnameable Negotiate stack.
 /// Dyn erasure is structural: hosts have different Negotiate compositions
-/// with different unnameable inner types, so `ConnectionPool::hosts` can't
-/// hold a concrete type.
-///
-/// `send` performs checkout, health filtering, request dispatch, and
-/// body-guard setup atomically for a single request.
+/// with different unnameable inner types, so the per-partition `authorities`
+/// map cannot hold a single concrete type.
 pub(crate) trait PoolEntry: Send + Sync {
+    /// Dispatch a single request through this host's Negotiate stack:
+    /// checkout (connecting if needed), post-checkout health filtering,
+    /// dispatch, and body-guard setup. The returned response body holds
+    /// the connection checked out until it is drained or dropped.
     fn send(
         &mut self,
         ctx: ConnectCtx,
@@ -1446,7 +1452,7 @@ struct TypedPoolEntry<S> {
     /// Empty until the first request against this host; safe to iterate
     /// at any point (no leg = no-op retain, trivially empty).
     retainers: RetainerSlot,
-    // active write-handle; read API added in a later change
+    // Write handle for this cell's counters; the read path is `StatsIndex`.
     #[allow(dead_code)]
     counters: Arc<ConnectionCounters>,
     /// Cross-partition borrow handle. `Some` only under
@@ -1589,7 +1595,7 @@ where
                                 // `active`.
                             }
                             // Borrow miss → authoritative blocking local
-                            // acquire (today's wait; includes reclaim).
+                            // acquire (blocks on the permit; includes reclaim).
                             let mut conn = local_checkout(&mut svc, ctx).await?;
                             let resp = conn.call(req).await.map_err(Into::into)?;
                             Ok(erase_body(resp))
@@ -1624,7 +1630,7 @@ where
         let retainers = self.retainers.lock().expect("retainer slot poisoned");
         // Stop at the first leg that frees a connection. The H1 cache leg
         // pops an idle connection; the H2 leg is a no-op (no
-        // simply-reclaimable idle).
+        // reclaimable idle).
         retainers.iter().any(|r| r.reclaim_one())
     }
 
@@ -1696,7 +1702,6 @@ mod tests {
             config,
             shared,
             registry,
-            cross_partition_policy: CrossPartitionPolicy::default(),
             eviction_spawned: AtomicBool::new(false),
             drop_notifier: OnceLock::new(),
         })

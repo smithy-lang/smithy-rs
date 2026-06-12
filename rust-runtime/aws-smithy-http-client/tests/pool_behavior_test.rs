@@ -699,7 +699,8 @@ async fn connection_reuse_after_body_consumed(make: &dyn MakeClient) {
     );
 }
 
-/// Active connections are not evicted by idle timeout.
+/// Back-to-back requests reuse one connection despite a short idle timeout:
+/// each re-checkout beats the eviction tick, so no reconnect occurs.
 async fn active_connection_survives_idle_timeout(make: &dyn MakeClient) {
     let harness = ConnectionTestHarness::builder()
         .endpoint(

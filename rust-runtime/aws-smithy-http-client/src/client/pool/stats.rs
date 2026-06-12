@@ -104,6 +104,8 @@ impl Drop for EstablishedGuard {
 }
 
 impl ConnectionCounters {
+    /// Increment the active (checked-out) count. Paired with exactly one
+    /// [`decr_active`](Self::decr_active) via an RAII checkout guard.
     pub(crate) fn incr_active(&self) {
         self.active.fetch_add(1, Ordering::Relaxed);
     }
@@ -129,9 +131,8 @@ impl ConnectionCounters {
     ///
     /// The sole purpose of this tag is to keep `capacity_hint` from overstating:
     /// `capacity_hint` returns `Some` only for a cell known to be uniformly one
-    /// protocol it can reason about (HTTP/1). Accurate per-connection protocol and
-    /// stream-limit accounting (per-connection indexing) is future work that would
-    /// make this cell-level latch unnecessary.
+    /// protocol it can reason about (HTTP/1). Per-connection protocol and
+    /// stream-limit accounting would supersede this cell-level latch.
     pub(crate) fn observe_protocol(&self, proto: u8) {
         let mut cur = self.protocol.load(Ordering::Relaxed);
         loop {
@@ -153,6 +154,9 @@ impl ConnectionCounters {
         }
     }
 
+    /// Current protocol tag for this cell: `PROTO_UNSET` before the first
+    /// handshake, `PROTO_H1`/`PROTO_H2` for a uniform cell, or the internal
+    /// mixed marker once a cell has seen both.
     pub(crate) fn protocol(&self) -> u8 {
         self.protocol.load(Ordering::Relaxed)
     }
@@ -356,7 +360,7 @@ impl StatsIndex {
 ///
 /// Plain `usize` values from relaxed loads; cheap and `Copy`. Each field is loaded
 /// independently and may be transiently inconsistent with the others.
-/// `#[non_exhaustive]` permits future additions (e.g. per-connection stream depth).
+/// `#[non_exhaustive]` allows fields to be added without a breaking change.
 #[non_exhaustive]
 #[derive(Debug, Clone, Copy)]
 pub struct PartitionStats {

@@ -12,14 +12,18 @@ use std::sync::{Arc, Mutex};
 
 /// Opaque identifier for a physical connection within a pool.
 ///
-/// Unique for the pool's lifetime. All requests dispatched on the same
+/// Distinct within a pool's lifetime under normal operation (backed by a
+/// monotonic 64-bit counter). All requests dispatched on the same
 /// connection (including H2 multiplexed requests) share the same id.
 /// Useful for correlating requests with connection lifecycle tracing events.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ConnectionId(u64);
 
 impl ConnectionId {
-    /// Create a new connection id.
+    /// Create a connection id from a raw numeric value.
+    ///
+    /// For HTTP client/pool implementations that assign connection
+    /// identifiers; the value should be distinct per live connection.
     pub fn new(id: u64) -> Self {
         Self(id)
     }
@@ -88,7 +92,8 @@ impl ConnectionMetadata {
 
     /// Get the connection id, if one was assigned by the HTTP client.
     ///
-    /// Present for the v2 HTTP client; `None` for the v1 client.
+    /// `Some` when the HTTP client assigns pool-level connection identifiers;
+    /// `None` for clients that do not track connection identity.
     pub fn connection_id(&self) -> Option<ConnectionId> {
         self.connection_id
     }
@@ -187,13 +192,13 @@ impl ConnectionMetadataBuilder {
         self
     }
 
-    /// Set the connection id.
+    /// Set the [`ConnectionId`] the HTTP client assigned to this connection.
     pub fn connection_id(mut self, id: ConnectionId) -> Self {
         self.connection_id = Some(id);
         self
     }
 
-    /// Set the connection id.
+    /// Set the [`ConnectionId`] the HTTP client assigned to this connection.
     pub fn set_connection_id(&mut self, id: Option<ConnectionId>) -> &mut Self {
         self.connection_id = id;
         self

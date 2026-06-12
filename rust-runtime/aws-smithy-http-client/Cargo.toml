@@ -163,6 +163,16 @@ name = "custom-dns"
 required-features = ["rustls-ring"]
 doc-scrape-examples = true
 
+[[example]]
+name = "pool-basic"
+required-features = ["rustls-aws-lc"]
+doc-scrape-examples = true
+
+[[example]]
+name = "pool-partitioned"
+required-features = ["rustls-aws-lc"]
+doc-scrape-examples = true
+
 [package.metadata.smithy-rs-release-tooling]
 stable = true
 
