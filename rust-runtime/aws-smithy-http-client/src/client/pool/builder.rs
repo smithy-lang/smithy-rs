@@ -426,9 +426,8 @@ impl Builder<TlsProviderSelected> {
 }
 
 /// Build the proxy URL matcher from a `ProxyConfig`, returning `None` when
-/// no proxy is configured. Wrapped in `Arc` so each `PooledConnector`
-/// constructed by `http_connector` can share the (immutable) matcher
-/// without per-call allocation.
+/// no proxy is configured. Wrapped in `Arc` for shared ownership: the pool
+/// stores it once and each `PooledConnector` clones the handle.
 pub(super) fn proxy_matcher_from(proxy_config: &Option<ProxyConfig>) -> Option<Arc<ProxyMatcher>> {
     proxy_config
         .as_ref()

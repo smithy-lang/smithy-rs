@@ -512,8 +512,8 @@ fn new_tokio_hyper_builder(
 impl<C> Adapter<C> {
     /// Add proxy authentication header to the request if needed.
     ///
-    /// Delegates to the shared [`proxy::add_proxy_auth_header`] helper —
-    /// the v2 HTTP client uses the same logic.
+    /// Inject the `Proxy-Authorization` header when proxy credentials apply,
+    /// via the shared [`proxy::add_proxy_auth_header`] helper.
     fn add_proxy_auth_header(&self, request: &mut http_1x::Request<SdkBody>) {
         if let Some(matcher) = self.proxy_matcher.as_ref() {
             proxy::add_proxy_auth_header(request, matcher);

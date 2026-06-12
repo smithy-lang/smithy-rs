@@ -62,24 +62,28 @@ impl PoolHooks {
         )
     }
 
+    /// Fire the listener's connection-created callback, if a listener is set.
     pub(crate) fn on_created(&self, event: &ConnectionCreatedEvent) {
         if let Some(ref l) = self.listener {
             l.on_created(event);
         }
     }
 
+    /// Fire the listener's connection-failed callback, if a listener is set.
     pub(crate) fn on_connection_failed(&self, event: &ConnectionFailedEvent) {
         if let Some(ref l) = self.listener {
             l.on_connection_failed(event);
         }
     }
 
+    /// Fire the listener's connection-reused callback, if a listener is set.
     pub(crate) fn on_reused(&self, event: &super::connection::ConnectionReusedEvent) {
         if let Some(ref l) = self.listener {
             l.on_reused(event);
         }
     }
 
+    /// Fire the listener's connection-closed callback, if a listener is set.
     pub(crate) fn on_closed(&self, event: &super::connection::ConnectionClosedEvent) {
         if let Some(ref l) = self.listener {
             l.on_closed(event);
@@ -475,12 +479,13 @@ pub(crate) struct H2ConnectAndHandshake<C> {
 }
 
 impl<C> H2ConnectAndHandshake<C> {
-    /// Create an H2 handshake service that publishes every newly established
-    /// connection's `ConnectionMetadata` into `h2_ref`. The same ref is held
-    /// on the read side by `SingletonConnection` (clones of the ref share
-    /// the underlying slot), so the H2 checkout path can expose connection
-    /// metadata and poison support to the adapter layer even though
-    /// `Singled<…>` itself is opaque.
+    /// Create an H2 handshake service that publishes each newly established
+    /// connection's state — `ConnectionMetadata` plus the shared
+    /// `active_streams` counter and `idle_at` timestamp — into `h2_ref`. The
+    /// same ref is held on the read side by `SingletonConnection` (clones of
+    /// the ref share the underlying slot), so the H2 checkout path can expose
+    /// connection metadata and poison support to the adapter layer, and track
+    /// stream occupancy, even though `Singled<…>` itself is opaque.
     pub(crate) fn new(
         connector: C,
         h2_ref: super::connection::H2ConnectionRef,

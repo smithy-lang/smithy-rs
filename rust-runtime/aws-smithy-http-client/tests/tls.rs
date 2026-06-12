@@ -39,7 +39,7 @@ struct TestServer {
 impl TestServer {
     /// Return the number of active connections to this server
     fn conn_count(&self) -> usize {
-        // 1 reference for the struct MockProxyServer, 1 reference for the
+        // 1 reference for the struct TestServer, 1 reference for the
         // socket task.
         Arc::strong_count(&self.conn_count)
             .checked_sub(2)

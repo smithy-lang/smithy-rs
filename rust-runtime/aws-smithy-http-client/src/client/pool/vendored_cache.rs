@@ -362,8 +362,8 @@ mod internal {
         // synthetic `poll_ready` error.
         /// Prevent this cached service from being returned to the pool.
         ///
-        /// Consumes self — the normal `Drop` then runs, sees `is_closed`,
-        /// and skips reinsertion.
+        /// Consumes `self`; the inner service is dropped without
+        /// reinsertion, regardless of whether it is still healthy.
         pub fn discard(mut self) {
             self.is_closed = true;
         }
