@@ -46,7 +46,9 @@ num-integer = "0.1.46"
 pin-project-lite = "0.2.14"
 pin-utils = "0.1.0"
 ryu = "1.0.22"
-time = { version = "0.3.4", features = ["parsing"] }
+# Upper bound excludes the broken 0.3.48, which has an E0119 coherence regression
+# (https://github.com/time-rs/time/issues/783). Relax to "0.3.4" once 0.3.49 ships.
+time = { version = ">=0.3.4, <0.3.48", features = ["parsing"] }
 
 # ByteStream internals
 futures-core = { version = "0.3.31", optional = true }
