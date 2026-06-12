@@ -277,14 +277,14 @@ class JsonParserGenerator(
                     rustBlock("${jsonName(member).dq()} =>") {
                         when (codegenTarget) {
                             CodegenTarget.CLIENT -> {
-                                withBlock("builder = builder.${member.setterName()}(", ");") {
+                                withBlock("builder = builder.${member.setterName(symbolProvider)}(", ");") {
                                     deserializeMember(member)
                                 }
                             }
 
                             CodegenTarget.SERVER -> {
                                 if (symbolProvider.toSymbol(member).isOptional()) {
-                                    withBlock("builder = builder.${member.setterName()}(", ");") {
+                                    withBlock("builder = builder.${member.setterName(symbolProvider)}(", ");") {
                                         deserializeMember(member)
                                     }
                                 } else {
@@ -293,7 +293,7 @@ class JsonParserGenerator(
                                     rust(
                                         """
                                         {
-                                            builder = builder.${member.setterName()}(v);
+                                            builder = builder.${member.setterName(symbolProvider)}(v);
                                         }
                                         """,
                                     )
