@@ -57,17 +57,19 @@ pub use rule::{MockResponse, Rule, RuleBuilder, RuleMode};
 #[macro_export]
 macro_rules! mock {
     ($operation: expr) => {
-        #[allow(unreachable_code)]
         {
-            $crate::RuleBuilder::new_from_mock(
-                // We don't actually want to run this code, so we put it in a closure. The closure
-                // has the types we want which makes this whole thing type-safe (and the IDE can even
-                // figure out the right input/output types in inference!)
-                // The code generated here is:
-                // `Client::list_buckets(todo!())`
-                || $operation(todo!()).as_input().clone().build().unwrap(),
-                || $operation(todo!()).send(),
-            )
+            #[allow(unreachable_code)]
+            {
+                $crate::RuleBuilder::new_from_mock(
+                    // We don't actually want to run this code, so we put it in a closure. The closure
+                    // has the types we want which makes this whole thing type-safe (and the IDE can even
+                    // figure out the right input/output types in inference!)
+                    // The code generated here is:
+                    // `Client::list_buckets(todo!())`
+                    || $operation(todo!()).as_input().clone().build().unwrap(),
+                    || $operation(todo!()).send(),
+                )
+            }
         }
     };
 }
