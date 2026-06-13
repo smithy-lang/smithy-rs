@@ -484,9 +484,6 @@ mod tests {
     // -- Round-trip with the serializer ---------------------------------
 
     #[test]
-    // TODO(schema-lifetime): re-enable when Document gains a lifetime
-    // parameter — depends on discriminator capture in write_struct.
-    #[ignore]
     fn round_trip_through_document() {
         let original = Person {
             name: Some("Iago".into()),

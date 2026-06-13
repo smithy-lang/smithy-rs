@@ -59,12 +59,54 @@ macro_rules! shape_id {
 /// `ShapeId<'a>` is **covariant** in `'a` because every field is of the
 /// form `&'a str`. This means a `ShapeId<'static>` (codegen-emitted) is
 /// usable everywhere a `ShapeId<'a>` is expected, regardless of `'a`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+///
+/// # Equality, hashing, and borrow
+///
+/// Two `ShapeId`s compare equal when their fully qualified names
+/// ([`Self::as_str`]) compare equal. The other fields are determined by
+/// the FQN for any `ShapeId` constructed via the [`shape_id!`] macro or
+/// [`Self::from_static`] with consistent parts, so this is the same
+/// equality you would get from comparing every field.
+///
+/// FQN-based equality lets [`ShapeId`] act as `Borrow<str>`: a
+/// `HashMap<ShapeId<'static>, V>` can be looked up by `&str` (or by
+/// any `&ShapeId<'_>` via [`Self::as_str`]) without going through
+/// the `'static`-bound storage key. This is what the cross-lifetime
+/// lookup APIs on `TypeRegistry` and `TraitMap` rely on.
+#[derive(Debug, Clone, Copy)]
 pub struct ShapeId<'a> {
     fqn: &'a str,
     namespace: &'a str,
     shape_name: &'a str,
     member_name: Option<&'a str>,
+}
+
+impl PartialEq for ShapeId<'_> {
+    /// Two `ShapeId`s are equal iff their fully qualified names match.
+    /// See the type-level docs for why this is sound.
+    fn eq(&self, other: &Self) -> bool {
+        self.fqn == other.fqn
+    }
+}
+
+impl Eq for ShapeId<'_> {}
+
+impl std::hash::Hash for ShapeId<'_> {
+    /// Hashes the fully qualified name so that `hash(id)` agrees with
+    /// `hash(id.as_str())` — required for the `Borrow<str>` impl.
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.fqn.hash(state);
+    }
+}
+
+impl std::borrow::Borrow<str> for ShapeId<'_> {
+    /// Borrows the fully qualified name. Combined with the FQN-based
+    /// `Hash`/`Eq` impls, this lets `HashMap<ShapeId<'static>, V>::get`
+    /// accept `&str` keys, enabling cross-lifetime lookup against a
+    /// `'static`-keyed table.
+    fn borrow(&self) -> &str {
+        self.fqn
+    }
 }
 
 impl<'a> ShapeId<'a> {
@@ -196,5 +238,53 @@ mod tests {
         assert_eq!(id.as_str(), "ns#Foo");
         assert_eq!(id.namespace(), "ns");
         assert_eq!(id.shape_name(), "Foo");
+    }
+
+    /// `ShapeId<'static>` and a runtime `ShapeId<'a>` with the same FQN
+    /// must compare equal and hash identically. This is what makes
+    /// cross-lifetime lookup against a `'static`-keyed table sound.
+    #[test]
+    fn equality_across_lifetimes() {
+        let static_id: ShapeId<'static> = shape_id!("ns", "Foo");
+        let owned_fqn = String::from("ns#Foo");
+        let owned_ns = String::from("ns");
+        let owned_name = String::from("Foo");
+        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+
+        assert_eq!(static_id, runtime_id);
+
+        // Hash agreement.
+        let mut h1 = std::collections::hash_map::DefaultHasher::new();
+        let mut h2 = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(&static_id, &mut h1);
+        std::hash::Hash::hash(&runtime_id, &mut h2);
+        assert_eq!(
+            std::hash::Hasher::finish(&h1),
+            std::hash::Hasher::finish(&h2),
+        );
+    }
+
+    /// `Borrow<str>` plus FQN-only `Hash`/`Eq` lets us look up a
+    /// `HashMap<ShapeId<'static>, V>` with a bare `&str` key.
+    #[test]
+    fn hash_map_lookup_by_str_and_runtime_id() {
+        use std::collections::HashMap;
+
+        let static_id: ShapeId<'static> = shape_id!("ns", "Foo");
+        let mut map: HashMap<ShapeId<'static>, u32> = HashMap::new();
+        map.insert(static_id, 42);
+
+        // Lookup by `&str` (cross-lifetime).
+        assert_eq!(map.get("ns#Foo"), Some(&42));
+
+        // Lookup by a runtime-built `ShapeId<'_>` (cross-lifetime).
+        let owned_fqn = String::from("ns#Foo");
+        let owned_ns = String::from("ns");
+        let owned_name = String::from("Foo");
+        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        assert_eq!(map.get(runtime_id.as_str()), Some(&42));
+
+        // Negative case.
+        assert_eq!(map.get("ns#Bar"), None);
     }
 }

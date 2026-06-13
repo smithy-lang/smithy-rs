@@ -9,6 +9,7 @@ use aws_smithy_schema::document::{Document, DocumentSettings};
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
+use aws_smithy_schema::ShapeId;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
 use crate::codec::JsonCodecSettings;
@@ -107,6 +108,91 @@ impl<'a> JsonDeserializer<'a> {
                 })?,
             ))
         }
+    }
+
+    /// Parse a JSON quoted string *value* directly from bytes, advancing
+    /// past it. Assumes the current position is at the opening `"`.
+    ///
+    /// Same scanning shape as [`Self::parse_key`]; kept as a separate
+    /// function so callers can distinguish key-parsing from
+    /// value-parsing at the type level (e.g. for the `__type`
+    /// discriminator lift, which only borrows from input when the
+    /// value has no escape sequences).
+    fn parse_string_value(&mut self) -> Result<std::borrow::Cow<'a, str>, SerdeError> {
+        let start = self.position + 1;
+        self.position += 1;
+        let input = self.input;
+        let remaining = &input[start..];
+        let mut i = 0;
+        let mut has_escapes = false;
+        let mut found_end = false;
+        while i < remaining.len() {
+            match remaining[i] {
+                b'"' => {
+                    found_end = true;
+                    break;
+                }
+                b'\\' => {
+                    has_escapes = true;
+                    i += 2;
+                }
+                _ => i += 1,
+            }
+        }
+        if !found_end {
+            return Err(SerdeError::InvalidInput {
+                message: "unterminated string value".into(),
+            });
+        }
+        self.position = start + i + 1;
+        let value_bytes = &input[start..start + i];
+        if has_escapes {
+            let raw = std::str::from_utf8(value_bytes).map_err(|e| SerdeError::InvalidInput {
+                message: e.to_string(),
+            })?;
+            Ok(std::borrow::Cow::Owned(
+                crate::escape::unescape_string(raw)
+                    .map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?
+                    .into_owned(),
+            ))
+        } else {
+            Ok(std::borrow::Cow::Borrowed(
+                std::str::from_utf8(value_bytes).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })?,
+            ))
+        }
+    }
+
+    /// Parse `s` as an absolute Smithy shape ID of the form
+    /// `namespace#ShapeName` (no member component) and build a
+    /// [`ShapeId`] borrowing the namespace and name segments out of
+    /// `s`.
+    ///
+    /// Returns `None` for relative names (no `#`) — relative resolution
+    /// against [`JsonCodecSettings::default_namespace`] is not yet
+    /// implemented because it requires an allocation whose lifetime
+    /// can't naturally live inside `Document<'a>`. Callers fall back
+    /// to leaving the `__type` key in the resulting map.
+    ///
+    /// Returns `None` for malformed inputs (multiple `#`, member
+    /// segments via `$`, empty namespace or name) — same fall-back
+    /// behavior so a stray `__type: "garbage"` doesn't poison the
+    /// surrounding document parse.
+    fn parse_absolute_shape_id(s: &str) -> Option<ShapeId<'_>> {
+        let (namespace, shape_name) = s.split_once('#')?;
+        // No member component, no nested `#`, both segments non-empty.
+        if namespace.is_empty()
+            || shape_name.is_empty()
+            || shape_name.contains('#')
+            || shape_name.contains('$')
+            || namespace.contains('$')
+        {
+            return None;
+        }
+        Some(ShapeId::from_static(s, namespace, shape_name))
     }
 }
 
@@ -750,8 +836,8 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 }
 
 impl<'a> JsonDeserializer<'a> {
-    /// Reads a document from the JSON input stream and returns it with
-    /// `'static` lifetime.
+    /// Reads a document from the JSON input stream and returns it tied
+    /// to the deserializer's input lifetime.
     ///
     /// This is the actual implementation backing the `ShapeDeserializer`
     /// trait method [`Self::read_document`]. It is split out as an
@@ -761,18 +847,35 @@ impl<'a> JsonDeserializer<'a> {
     /// (`fn read_document(&mut self, _) -> Result<Document<'_>, _>`)
     /// where the `'_` defaults to the lifetime of `&self`.
     ///
-    /// The returned `Document<'static>` is widened to `Document<'_>`
-    /// in the trait method via covariance.
+    /// The returned `Document<'a>` widens to `Document<'_>` in the
+    /// trait method via covariance.
+    ///
+    /// # `__type` discriminator lift
+    ///
+    /// When the parsed JSON document is a top-level object that
+    /// contains a `__type` key whose value is an absolute Smithy shape
+    /// ID (`namespace#ShapeName`), the lift extracts that ID into the
+    /// resulting [`Document::discriminator`] and drops the key from
+    /// the result map. The discriminator's component strings borrow
+    /// from the deserializer's input slice (lifetime `'a`).
+    ///
+    /// Falls back to inserting `__type` into the result map normally
+    /// when the value is not a string, contains JSON escape sequences,
+    /// or is a relative shape name (no `#`). Relative resolution
+    /// against a default namespace is not yet implemented because it
+    /// would require allocating an FQN string whose lifetime can't
+    /// fit inside `Document<'a>`.
     pub fn read_document_owned(
         &mut self,
         _schema: &Schema<'_>,
-    ) -> Result<Document<'static>, SerdeError> {
+    ) -> Result<Document<'a>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
         }
         self.skip_whitespace();
-        let result: Result<Document<'static>, SerdeError> = match self.remaining().first() {
+        let mut discriminator: Option<ShapeId<'a>> = None;
+        let result: Result<Document<'a>, SerdeError> = match self.remaining().first() {
             Some(b'"') => Ok(Document::string(self.read_string(_schema)?)),
             Some(b't') | Some(b'f') => Ok(Document::boolean(self.read_boolean(_schema)?)),
             Some(b'n') => {
@@ -799,7 +902,7 @@ impl<'a> JsonDeserializer<'a> {
                             message: "expected object key in document".into(),
                         });
                     }
-                    let key = self.parse_key()?.into_owned();
+                    let key = self.parse_key()?;
                     self.skip_whitespace();
                     if self.remaining().first() != Some(&b':') {
                         return Err(SerdeError::InvalidInput {
@@ -807,8 +910,52 @@ impl<'a> JsonDeserializer<'a> {
                         });
                     }
                     self.advance_by(1);
-                    let value = self.read_document_owned(_schema)?;
-                    map.insert(key, value);
+                    self.skip_whitespace();
+                    // `__type` lift: if the key is the well-known
+                    // discriminator marker and we haven't yet captured
+                    // one, try to parse the value as an absolute
+                    // shape ID borrowed from the input slice. On any
+                    // failure (value isn't a string, value contains
+                    // escape sequences, value is a relative shape
+                    // name, value is malformed), fall through to the
+                    // normal "insert into the map" path so the caller
+                    // can post-process if it wants to.
+                    let lifted = if discriminator.is_none()
+                        && key == "__type"
+                        && self.remaining().first() == Some(&b'"')
+                    {
+                        // Snapshot position so we can rewind on the
+                        // fall-through path. `parse_string_value`
+                        // advances `self.position`.
+                        let start_pos = self.position;
+                        match self.parse_string_value()? {
+                            std::borrow::Cow::Borrowed(s) => {
+                                if let Some(id) = Self::parse_absolute_shape_id(s) {
+                                    discriminator = Some(id);
+                                    true
+                                } else {
+                                    // Relative or malformed — rewind
+                                    // and let the standard path read
+                                    // the value into the map.
+                                    self.position = start_pos;
+                                    false
+                                }
+                            }
+                            std::borrow::Cow::Owned(_) => {
+                                // Escape sequences — can't borrow into
+                                // ShapeId<'a>. Rewind and fall through.
+                                self.position = start_pos;
+                                false
+                            }
+                        }
+                    } else {
+                        false
+                    };
+                    if !lifted {
+                        let key = key.into_owned();
+                        let value = self.read_document_owned(_schema)?;
+                        map.insert(key, value);
+                    }
                 }
                 Ok(Document::map(map))
             }
@@ -889,14 +1036,20 @@ impl<'a> JsonDeserializer<'a> {
         // so wrapping just the top-level produced Document propagates settings
         // through the tree.
         //
-        // Note: this implementation does not lift a top-level `__type` field
-        // into [`Document::with_discriminator`]. That lift is part of Phase 4
-        // of the schema-lifetime work; a wire-parsed `__type` value would
-        // need to land in the document's discriminator slot with a lifetime
-        // tied to the input slice, which is a separate refactor from the
-        // current Phase 3 (`Document<'a>` parameterization).
+        // If we extracted a `__type` discriminator from the JSON object's
+        // top-level keys (the absolute-shape-id case), attach it here.
+        // The discriminator's component strings are borrowed slices of
+        // the deserializer's input bytes (lifetime `'a`), so the
+        // resulting `Document<'a>` carries the input lifetime as
+        // expected.
         let settings: Arc<dyn DocumentSettings> = self.settings.clone();
-        result.map(|doc| doc.with_settings(settings))
+        result.map(|doc| {
+            let doc = doc.with_settings(settings);
+            match discriminator {
+                Some(id) => doc.with_discriminator(id),
+                None => doc,
+            }
+        })
     }
 
     fn skip_whitespace(&mut self) {
@@ -2283,5 +2436,164 @@ mod tests {
             .as_timestamp()
             .expect("epoch-seconds number should decode to timestamp");
         assert_eq!(ts.secs(), 1577836800);
+    }
+
+    // -- `__type` discriminator lift -----------------------------------------------------------
+
+    #[test]
+    fn read_document_lifts_absolute_type_into_discriminator() {
+        // An absolute `__type` value parses into a `ShapeId` borrowing
+        // its component strings from the input bytes, lands in the
+        // resulting Document's discriminator slot, and is dropped from
+        // the result map.
+        let input = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let doc = deser
+            .read_document_owned(dummy_schema())
+            .expect("parse succeeds");
+
+        let id = doc
+            .discriminator()
+            .expect("absolute __type lifted into discriminator");
+        assert_eq!(id.as_str(), "smithy.example#Bird");
+        assert_eq!(id.namespace(), "smithy.example");
+        assert_eq!(id.shape_name(), "Bird");
+
+        let map = doc.as_map().expect("top-level is map");
+        assert!(
+            !map.contains_key("__type"),
+            "__type must be dropped from result map after lift"
+        );
+        assert_eq!(map.get("name").and_then(Document::as_string), Some("Iago"));
+    }
+
+    #[test]
+    fn read_document_relative_type_stays_in_map() {
+        // Relative `__type` (no `#`) is not yet resolved against a
+        // default namespace — it stays in the map as a regular key,
+        // and the discriminator remains None.
+        let input = br#"{"__type":"Bird","name":"Iago"}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let doc = deser
+            .read_document_owned(dummy_schema())
+            .expect("parse succeeds");
+
+        assert!(
+            doc.discriminator().is_none(),
+            "relative __type must not be lifted (no default-namespace resolution yet)"
+        );
+        let map = doc.as_map().expect("top-level is map");
+        assert_eq!(
+            map.get("__type").and_then(Document::as_string),
+            Some("Bird")
+        );
+    }
+
+    #[test]
+    fn read_document_lift_only_for_top_level_object() {
+        // A `__type` key that appears INSIDE a nested object is also
+        // lifted into THAT nested object's discriminator (the lift is
+        // local to whatever JSON object is currently being parsed,
+        // not just the outermost one).
+        let input = br#"{"outer":{"__type":"smithy.example#Inner"}}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let doc = deser
+            .read_document_owned(dummy_schema())
+            .expect("parse succeeds");
+
+        // Outer object has no discriminator.
+        assert!(doc.discriminator().is_none());
+        // Inner object does.
+        let inner = doc
+            .as_map()
+            .and_then(|m| m.get("outer"))
+            .expect("outer key present");
+        let id = inner
+            .discriminator()
+            .expect("inner __type lifted into nested discriminator");
+        assert_eq!(id.as_str(), "smithy.example#Inner");
+        assert!(inner
+            .as_map()
+            .map(|m| !m.contains_key("__type"))
+            .unwrap_or(false));
+    }
+
+    #[test]
+    fn read_document_first_absolute_type_wins() {
+        // If a JSON object somehow contains two `__type` keys (a
+        // protocol violation, but parsers shouldn't crash), the first
+        // is lifted and the second falls through to the standard
+        // map-insert path.
+        let input = br#"{"__type":"smithy.example#A","__type":"smithy.example#B","x":1}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let doc = deser
+            .read_document_owned(dummy_schema())
+            .expect("parse succeeds");
+        let id = doc.discriminator().expect("first lift wins");
+        assert_eq!(id.as_str(), "smithy.example#A");
+        // Second `__type` lands in the map as a string value.
+        let map = doc.as_map().expect("top-level is map");
+        assert_eq!(
+            map.get("__type").and_then(Document::as_string),
+            Some("smithy.example#B")
+        );
+    }
+
+    #[test]
+    fn read_document_malformed_type_stays_in_map() {
+        // `__type` whose value isn't a well-formed absolute shape ID
+        // (member-component, multiple `#`, empty parts) stays in the
+        // map as a regular string entry and discriminator is None.
+        for malformed in [
+            "\"smithy.example#Foo$bar\"", // member component not allowed
+            "\"smithy.example#\"",        // empty shape name
+            "\"#smithy.example\"",        // empty namespace
+            "\"no#hash#twice\"",          // multiple `#`
+        ] {
+            let body = format!(r#"{{"__type":{malformed}}}"#);
+            let mut deser =
+                JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
+            let doc = deser
+                .read_document_owned(dummy_schema())
+                .expect("parse succeeds");
+            assert!(
+                doc.discriminator().is_none(),
+                "malformed __type {malformed} must not be lifted"
+            );
+            let map = doc.as_map().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "malformed __type {malformed} must remain in map"
+            );
+        }
+    }
+
+    #[test]
+    fn read_document_non_string_type_stays_in_map() {
+        // `__type` with a non-string value (number, object, array,
+        // bool, null) stays in the map.
+        for non_string in [
+            r#"42"#,
+            r#"true"#,
+            r#"null"#,
+            r#"["a"]"#,
+            r#"{"nested":true}"#,
+        ] {
+            let body = format!(r#"{{"__type":{non_string}}}"#);
+            let mut deser =
+                JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
+            let doc = deser
+                .read_document_owned(dummy_schema())
+                .expect("parse succeeds");
+            assert!(
+                doc.discriminator().is_none(),
+                "non-string __type {non_string} must not be lifted"
+            );
+            let map = doc.as_map().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "non-string __type {non_string} must remain in map"
+            );
+        }
     }
 }

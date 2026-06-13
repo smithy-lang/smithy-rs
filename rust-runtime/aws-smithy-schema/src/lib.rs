@@ -840,7 +840,7 @@ impl<'a> Schema<'a> {
 
 #[cfg(test)]
 mod test {
-    use crate::{shape_id, Schema, ShapeType, Trait, TraitMap};
+    use crate::{shape_id, Schema, ShapeId, ShapeType, Trait, TraitMap};
 
     // Simple test trait implementation
     #[derive(Debug)]
@@ -920,6 +920,32 @@ mod test {
 
         let retrieved = map.get(&trait_id);
         assert!(retrieved.is_some());
+    }
+
+    /// `TraitMap::get` and `contains` accept any `&ShapeId<'_>`.
+    /// `get_fqn` / `contains_fqn` accept `&str`. All resolve against the
+    /// `'static`-keyed table by fully qualified name.
+    #[test]
+    fn test_trait_map_cross_lifetime_lookup() {
+        let mut map = TraitMap::new();
+        let trait_id = shape_id!("smithy.api", "required");
+        map.insert(Box::new(TestTrait {
+            id: trait_id,
+            value: "test".to_string(),
+        }));
+
+        // `&str` lookup.
+        assert!(map.contains_fqn("smithy.api#required"));
+        assert!(map.get_fqn("smithy.api#required").is_some());
+        assert!(!map.contains_fqn("smithy.api#missing"));
+
+        // Runtime-built ShapeId lookup.
+        let owned_fqn = String::from("smithy.api#required");
+        let owned_ns = String::from("smithy.api");
+        let owned_name = String::from("required");
+        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        assert!(map.contains(&runtime_id));
+        assert!(map.get(&runtime_id).is_some());
     }
 
     #[test]
