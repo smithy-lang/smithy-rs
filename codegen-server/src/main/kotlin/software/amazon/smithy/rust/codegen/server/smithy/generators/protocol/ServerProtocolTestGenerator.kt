@@ -478,9 +478,9 @@ class ServerProtocolTestGenerator(
                 val sanitizedBody = escape(body.replace("\u000c", "\\u{000c}")).dq()
 
                 val encodedBodyTemplate = """
-                #{Bytes}::copy_from_slice(
-                    &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
-                )
+                    #{Bytes}::copy_from_slice(
+                        &#{decode_body_data}($sanitizedBody.as_bytes(), #{MediaType}::from(${(bodyMediaType ?: "unknown").dq()}))
+                    )
                 """
 
                 requestBodyConstructor(encodedBodyTemplate, needsSync)
@@ -490,8 +490,8 @@ class ServerProtocolTestGenerator(
 
         rustTemplate(
             """
-             .body(#{BodyCode}).unwrap();
-             """,
+            .body(#{BodyCode}).unwrap();
+            """,
             *codegenScope,
             "BodyCode" to bodyCode,
         )
@@ -605,14 +605,19 @@ class ServerProtocolTestGenerator(
             let (sender, mut receiver) = #{Tokio}::sync::mpsc::channel(1);
             let config = crate::service::${serviceName}Config::builder().build();
             let service = crate::service::$serviceName::builder::<#{BodyType}, _, _, _>(config)
-                .$operationName(move |input: $inputT| {
-                    let sender = sender.clone();
-                    async move {
-                        let result = { #{Body:W} };
-                        sender.send(()).await.expect("receiver dropped early");
-                        result
+                .$operationName(
+                    // Rust 1.94+ flags the moved `sender` as "value captured is never read"
+                    // since `send()` only borrows it.
+                    ##[allow(unused_assignments)]
+                    move |input: $inputT| {
+                        let sender = sender.clone();
+                        async move {
+                            let result = { #{Body:W} };
+                            sender.send(()).await.expect("receiver dropped early");
+                            result
+                        }
                     }
-                })
+                )
                 .build_unchecked();
             let http_response = #{Tower}::ServiceExt::oneshot(service, http_request)
                 .await
