@@ -117,6 +117,14 @@ class SchemaGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
 
+    // Used to decide whether a nested aggregate target reaches back to its
+    // containing aggregate (a true recursive cycle in the schema graph).
+    // For non-recursive cases the runtime serializer emissions can reference
+    // the resolved sub-schema (`<PARENT>_MEMBER` / `<PARENT>_VALUE`) instead
+    // of `prelude::DOCUMENT`, letting the codec see the inner aggregate's
+    // member traits (e.g. `@xmlName` on map keys/values).
+    private val recursiveClassifier = RecursiveShapeClassifier(model)
+
     /** Sanitize a member name for use in Rust constant names (strips r# raw identifier prefix). */
     private fun constantName(memberName: String): String = memberName.removePrefix("r#").removePrefix("#").uppercase()
 
@@ -372,7 +380,7 @@ class SchemaGenerator(
                         }
                     }
                 helperExpr ?: run {
-                    val elementWrite = elementWriteExpr(elementTarget, "item")
+                    val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                     if (isSparse) {
                         """
                         ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -408,7 +416,7 @@ class SchemaGenerator(
                     "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
                 } else {
                     val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
-                    val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                    val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                     if (isSparse) {
                         """
                         ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -545,7 +553,7 @@ class SchemaGenerator(
             is ListShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
+                val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                 if (isSparse) {
                     """
                     ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -575,7 +583,7 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                 if (isSparse) {
                     """
                     ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -608,8 +616,19 @@ class SchemaGenerator(
         }
     }
 
-    /** Returns a write expression for a list element (no member name needed). */
+    /**
+     * Returns a write expression for a list element (no member name needed).
+     *
+     * [containingAggregate] is the list whose elements we're writing.
+     * [parentRef] is the Rust schema constant name for that containing list,
+     * used to derive the inner element's schema constant
+     * (`<parent>_MEMBER`) when the element is itself a nested aggregate.
+     * `null` means we're past a recursive boundary upstream — every nested
+     * aggregate from here down falls back to `prelude::DOCUMENT`.
+     */
     private fun elementWriteExpr(
+        containingAggregate: Shape,
+        parentRef: String?,
         target: Shape,
         varName: String,
     ): String {
@@ -644,12 +663,23 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueWrite = mapValueWriteExpr(valueTarget, "value")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
-                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                // We're writing a list element that is itself a map. The map's
+                // schema at this position is the containing list's `_MEMBER`
+                // chain — unless we're in placeholder mode upstream
+                // (parentRef == null) or this target closes a cycle back to
+                // the containing list.
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val valueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -662,7 +692,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -675,11 +705,18 @@ class SchemaGenerator(
 
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -691,7 +728,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }
@@ -710,8 +747,19 @@ class SchemaGenerator(
         }
     }
 
-    /** Returns a write expression for a map value. */
+    /**
+     * Returns a write expression for a map value.
+     *
+     * [containingAggregate] is the map whose values we're writing.
+     * [parentRef] is the Rust schema constant name for that containing map,
+     * used to derive the inner value's schema constant (`<parent>_VALUE`)
+     * when the value is itself a nested aggregate. `null` means we're past
+     * a recursive boundary upstream — every nested aggregate from here down
+     * falls back to `prelude::DOCUMENT`.
+     */
     private fun mapValueWriteExpr(
+        containingAggregate: Shape,
+        parentRef: String?,
         target: Shape,
         varName: String,
     ): String {
@@ -746,11 +794,22 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val innerValueWrite = mapValueWriteExpr(valueTarget, "value")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                // We're writing a map value that is itself a map. Its schema
+                // at this position is the containing map's `_VALUE` chain —
+                // unless we're already in placeholder mode or this target
+                // closes a cycle back to the containing map.
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&$prelude::DOCUMENT"
+                val innerValueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             match value {
@@ -763,7 +822,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             $innerValueWrite
@@ -776,11 +835,18 @@ class SchemaGenerator(
 
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&$prelude::DOCUMENT"
+                val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -792,7 +858,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }

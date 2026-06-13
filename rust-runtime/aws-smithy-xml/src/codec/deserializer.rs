@@ -46,15 +46,6 @@ pub struct XmlDeserializer<'a> {
     /// directly without re-parsing `input`; aggregate reads error.
     text: Option<Cow<'a, str>>,
     settings: Arc<XmlCodecSettings>,
-    /// Optional schema override consulted by the next aggregate read
-    /// (`read_struct` / `read_list` / `read_map`) when codegen passes a
-    /// shapeless placeholder schema (e.g. `prelude::DOCUMENT`) for an
-    /// inner aggregate. Used to thread the outer aggregate's
-    /// `value_schema` / `member_schema` (with its own
-    /// `with_map_members`/`with_list_member` chain) into nested reads so
-    /// nested element-name overrides (`@xmlName` on inner key/value) can
-    /// be honored.
-    schema_override: Option<&'a Schema<'a>>,
     /// Aggregate nesting depth. Incremented at the top of each
     /// `read_struct` / `read_list` / `read_map` and decremented before
     /// they return so sibling reads on the same deserializer don't
@@ -70,7 +61,6 @@ impl<'a> XmlDeserializer<'a> {
             input,
             text: None,
             settings,
-            schema_override: None,
             depth: 0,
         }
     }
@@ -85,7 +75,6 @@ impl<'a> XmlDeserializer<'a> {
             input: b"",
             text: Some(text),
             settings,
-            schema_override: None,
             depth: 0,
         }
     }
@@ -139,22 +128,15 @@ impl<'a> XmlDeserializer<'a> {
     }
 
     /// Run `f` against `self` after temporarily repointing it at a sub-slice
-    /// of the parent input. State (input, text, schema_override) is
-    /// saved on entry and restored on return so the deserializer can be
-    /// reused for sibling dispatches without per-iteration allocation.
-    fn dispatch_subslice<R>(
-        &mut self,
-        sub: &'a [u8],
-        schema_override: Option<&'a Schema<'a>>,
-        f: impl FnOnce(&mut Self) -> R,
-    ) -> R {
+    /// of the parent input. State (input, text) is saved on entry and
+    /// restored on return so the deserializer can be reused for sibling
+    /// dispatches without per-iteration allocation.
+    fn dispatch_subslice<R>(&mut self, sub: &'a [u8], f: impl FnOnce(&mut Self) -> R) -> R {
         let saved_input = std::mem::replace(&mut self.input, sub);
         let saved_text = self.text.take();
-        let saved_override = std::mem::replace(&mut self.schema_override, schema_override);
         let r = f(self);
         self.input = saved_input;
         self.text = saved_text;
-        self.schema_override = saved_override;
         r
     }
 
@@ -163,11 +145,9 @@ impl<'a> XmlDeserializer<'a> {
     fn dispatch_text<R>(&mut self, text: Cow<'a, str>, f: impl FnOnce(&mut Self) -> R) -> R {
         let saved_input = std::mem::replace(&mut self.input, b"");
         let saved_text = self.text.replace(text);
-        let saved_override = self.schema_override.take();
         let r = f(self);
         self.input = saved_input;
         self.text = saved_text;
-        self.schema_override = saved_override;
         r
     }
 
@@ -356,7 +336,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 drop(root);
                 let _ = doc;
                 if let Some(member) = Self::resolve_member(schema, &local) {
-                    self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
+                    self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 }
                 return Ok(());
             }
@@ -400,7 +380,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                     let el_local = child_scope.start_el().local();
                     let sub = Self::find_element_slice(input, el_local);
                     drop(child_scope);
-                    self.dispatch_subslice(sub, None, |this| consumer(member, this))?;
+                    self.dispatch_subslice(sub, |this| consumer(member, this))?;
                 } else if is_aggregate {
                     // Flattened aggregate: capture this sibling's slice; dispatch
                     // the merged group below.
@@ -468,7 +448,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 let el_local = child_scope.start_el().local();
                 let sub = Self::find_element_slice(input, el_local);
                 drop(child_scope);
-                self.dispatch_subslice(sub, None, |this| consumer(this))?;
+                self.dispatch_subslice(sub, |this| consumer(this))?;
             }
             Ok(())
         })();
@@ -485,22 +465,6 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         // IIFE: any `?` inside falls through to `leave_aggregate` below
         // (see `read_string_list` for rationale).
         let result = (|| -> Result<(), SerdeError> {
-            // If a parent aggregate read installed a `schema_override` on us, it
-            // takes priority. Codegen generates inner `read_map` calls reusing
-            // the outer `member` schema (closure variable shadowing) — so the
-            // arg here is the outer map's schema, not the inner's. The override
-            // carries the outer's `_VALUE` schema (which chains the inner map's
-            // `_KEY` / `_VALUE`) and is the right one for nested element-name
-            // resolution.
-            let effective_schema: &Schema<'_> = self
-                .schema_override
-                .map(|s| s as &Schema<'_>)
-                .unwrap_or(schema);
-            // Once we've read this override, clear it so it doesn't leak to
-            // sibling reads on the same deserializer.
-            self.schema_override = None;
-            let schema = effective_schema;
-
             let input = self.input;
             let mut doc = self.document()?;
             let mut root = doc
@@ -523,21 +487,6 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 .member()
                 .map(|v| v.shape_type().is_aggregate())
                 .unwrap_or(false);
-            // TODO(schema-lifetime): we used to capture `schema.member_static()`
-            // here so a nested aggregate read could recover its `_KEY`/`_VALUE`
-            // schema chain via `schema_override`. After parameterizing
-            // `Schema<'a>`, the trait method's `&Schema<'_>` schema has an
-            // anonymous lifetime that the compiler cannot bridge to the
-            // deserializer's `'a`. This forces dropping the override; nested
-            // aggregate map values currently lose access to the parent's
-            // schema chain. Tests covering that path are `#[ignore]`d.
-            //
-            // Restoration: `SchemaGenerator.kt` should emit the actual
-            // nested aggregate's schema instead of `prelude::DOCUMENT` for
-            // map/list values. See `.kiro/relax-schema-lifetimes-design.md`
-            // §10.5 for the full plan; this work is appropriately scoped
-            // adjacent to or following task 11.
-            let value_schema_static: Option<&Schema<'_>> = None;
 
             // Each child tag is an entry (e.g. <entry><key>k</key><value>v</value></entry>).
             while let Some(mut entry_scope) = root.next_tag() {
@@ -568,9 +517,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
                 drop(entry_scope);
                 if let Some(k) = key {
                     if let Some(slice) = value_slice {
-                        self.dispatch_subslice(slice, value_schema_static, |this| {
-                            consumer(k, this)
-                        })?;
+                        self.dispatch_subslice(slice, |this| consumer(k, this))?;
                     } else if let Some(t) = value_text {
                         // Re-borrow t as 'a — the text was extracted from `doc`
                         // which borrows `self.input: &'a [u8]`, so its lifetime
@@ -680,7 +627,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
     //   2. one `&mut dyn ShapeDeserializer` virtual call,
     //   3. and — because the consumer goes through `dispatch_subslice` —
     //      a fresh `Document::try_from` over the element's sub-slice plus
-    //      a save/restore of (`input`, `text`, `schema_override`).
+    //      a save/restore of (`input`, `text`).
     //
     // The overrides below walk the existing tokenizer once and extract
     // text inline via `decode::try_data`, eliminating all three costs.
@@ -788,15 +735,6 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         &mut self,
         schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
-        // Mirror the schema_override / key-name / value-name resolution
-        // used by `read_map` so the override is a behavioral drop-in.
-        let effective_schema: &Schema<'_> = self
-            .schema_override
-            .map(|s| s as &Schema<'_>)
-            .unwrap_or(schema);
-        self.schema_override = None;
-        let schema = effective_schema;
-
         let key_name = schema
             .key()
             .and_then(|k| k.xml_name().map(|t| t.value()))
@@ -1821,5 +1759,126 @@ mod tests {
             })
             .expect("empty-key entry should be preserved");
         assert_eq!(got.get("").map(String::as_str), Some("v1"));
+    }
+
+    /// Outer map whose value member targets a map with `@xmlName` on
+    /// the inner key/value. Mirrors the wire format produced by the
+    /// serializer's `map_value_is_inner_map_with_renamed_inner_key_value`
+    /// test and verifies the nested read uses the inner map's renamed
+    /// element names.
+    #[test]
+    fn read_map_value_is_inner_map_with_renamed_inner_key_value() {
+        let xml = b"<outerMap><entry><key>ok</key><value><entry><InnerKey>ik</InnerKey><InnerVal>iv</InnerVal></entry></value></entry></outerMap>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static INNER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        )
+        .with_xml_name("InnerKey");
+        static INNER_VAL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$value"),
+            ShapeType::String,
+            "value",
+            1,
+        )
+        .with_xml_name("InnerVal");
+
+        // The outer map's value member, with its target's _KEY/_VALUE
+        // chain attached. This is what codegen now emits at the inner
+        // `read_map` call site.
+        static OUTER_VALUE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterMap$value"),
+            ShapeType::Map,
+            "value",
+            1,
+        )
+        .with_map_members(&INNER_KEY, &INNER_VAL);
+
+        static OUTER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        );
+        static OUTER_MAP_SCHEMA: Schema<'static> =
+            Schema::new_map(shape_id!("test", "OuterMap"), &OUTER_KEY, &OUTER_VALUE);
+
+        let mut got: Vec<(String, Vec<(String, String)>)> = Vec::new();
+        deser
+            .read_map(&OUTER_MAP_SCHEMA, &mut |outer_key, d| {
+                let mut inner: Vec<(String, String)> = Vec::new();
+                d.read_map(&OUTER_VALUE, &mut |inner_key, d2| {
+                    let inner_val = d2.read_string(&INNER_VAL)?;
+                    inner.push((inner_key, inner_val));
+                    Ok(())
+                })?;
+                got.push((outer_key, inner));
+                Ok(())
+            })
+            .expect("nested map deserialization should succeed");
+
+        assert_eq!(
+            got,
+            vec![("ok".to_owned(), vec![("ik".to_owned(), "iv".to_owned())])]
+        );
+    }
+
+    /// List whose member targets a map with `@xmlName` on inner
+    /// key/value. Mirrors the serializer's
+    /// `list_member_is_inner_map_with_renamed_inner_key_value` wire
+    /// format.
+    #[test]
+    fn read_list_member_is_inner_map_with_renamed_inner_key_value() {
+        let xml = b"<items><member><entry><Attr>k1</Attr><Set>v1</Set></entry></member></items>";
+        let settings = Arc::new(XmlCodecSettings::default());
+        let mut deser = XmlDeserializer::new(xml, settings);
+
+        static INNER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        )
+        .with_xml_name("Attr");
+        static INNER_VAL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$value"),
+            ShapeType::String,
+            "value",
+            1,
+        )
+        .with_xml_name("Set");
+
+        // The list's member: target shape is InnerMap. Carries the
+        // chained inner map _KEY/_VALUE schemas.
+        static LIST_ITEM: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterList$member"),
+            ShapeType::Map,
+            "member",
+            0,
+        )
+        .with_map_members(&INNER_KEY, &INNER_VAL);
+
+        static OUTER_LIST_SCHEMA: Schema<'static> =
+            Schema::new_list(shape_id!("test", "OuterList"), &LIST_ITEM);
+
+        let mut got: Vec<Vec<(String, String)>> = Vec::new();
+        deser
+            .read_list(&OUTER_LIST_SCHEMA, &mut |d| {
+                let mut entries: Vec<(String, String)> = Vec::new();
+                d.read_map(&LIST_ITEM, &mut |inner_key, d2| {
+                    let inner_val = d2.read_string(&INNER_VAL)?;
+                    entries.push((inner_key, inner_val));
+                    Ok(())
+                })?;
+                got.push(entries);
+                Ok(())
+            })
+            .expect("list-of-map deserialization should succeed");
+
+        assert_eq!(got, vec![vec![("k1".to_owned(), "v1".to_owned())]]);
     }
 }

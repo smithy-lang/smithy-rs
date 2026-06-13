@@ -598,9 +598,11 @@ mod tests {
 
     /// Records the [`Schema`] id passed to `deserialize_response` so the
     /// `deserialize_error_response` default forwarding can be asserted.
+    /// Captures the FQN as a `String` so the fixture isn't tied to the
+    /// schema's data lifetime.
     #[derive(Debug, Default)]
     struct RecordingProtocol {
-        last_schema_id: std::sync::Mutex<Option<ShapeId<'static>>>,
+        last_schema_id: std::sync::Mutex<Option<String>>,
     }
 
     static REC_ID: ShapeId<'static> =
@@ -628,13 +630,11 @@ mod tests {
             output_schema: &Schema<'_>,
             _cfg: &ConfigBag,
         ) -> Result<Box<dyn ShapeDeserializer + 'a>, SerdeError> {
-            // TODO(schema-lifetime): restore once `last_schema_id` can hold a
-            // non-`'static` ShapeId — i.e. when this fixture (and the test
-            // model around it) gets parameterized over the schema's data
-            // lifetime. Today `last_schema_id: Mutex<Option<ShapeId<'static>>>`
-            // and `output_schema: &Schema<'1>` for any `'1`, so we can't
-            // soundly capture the shape id without additional plumbing.
-            let _ = output_schema;
+            *self
+                .last_schema_id
+                .lock()
+                .expect("RecordingProtocol mutex poisoned") =
+                Some(output_schema.shape_id().as_str().to_owned());
             // Return an Err so we don't have to construct a real deserializer;
             // the test only cares which schema was forwarded.
             Err(SerdeError::custom("recording stub"))
@@ -650,10 +650,6 @@ mod tests {
     }
 
     #[test]
-    // TODO(schema-lifetime): re-enable once the recording fixture above can
-    // capture a non-`'static` ShapeId. See the marker in
-    // `RecordingProtocol::deserialize_response`.
-    #[ignore]
     fn deserialize_error_response_default_forwards_with_prelude_document_schema() {
         let proto = RecordingProtocol::default();
         let response = Response::new(StatusCode::try_from(500).unwrap(), SdkBody::empty());
@@ -664,7 +660,12 @@ mod tests {
         // care about the result, only the schema observed.
         let _ = ClientProtocolInner::deserialize_error_response(&proto, &response, &cfg);
 
-        let observed = proto.last_schema_id.lock().unwrap().expect("captured");
-        assert_eq!(observed, *crate::prelude::DOCUMENT.shape_id());
+        let observed = proto
+            .last_schema_id
+            .lock()
+            .expect("RecordingProtocol mutex poisoned")
+            .clone()
+            .expect("schema id was captured");
+        assert_eq!(observed, crate::prelude::DOCUMENT.shape_id().as_str());
     }
 }

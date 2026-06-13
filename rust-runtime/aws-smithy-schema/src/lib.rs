@@ -764,17 +764,13 @@ impl<'a> Schema<'a> {
     }
 
     /// Like [`member`](Self::member) but returns the `'a` (data-lifetime)
-    /// borrow that codegen actually stores. Needed when callers (e.g. the
-    /// XML codec) must hold a reference to a value/element member schema
-    /// across nested callbacks without inheriting the parent `&self`
-    /// borrow's lifetime.
+    /// borrow that codegen actually stores. Use this when the caller must
+    /// hold a reference to a value/element member schema across nested
+    /// callbacks without inheriting the parent `&self` borrow's lifetime.
     ///
-    /// For `Schema<'static>` (codegen) this returns `Option<&'static
-    /// Schema<'static>>`, matching the original `_static` semantics.
-    // TODO(schema-lifetime): the function name `_static` is now misleading
-    // (the lifetime is `'a`, not `'static` literally). Rename to
-    // `member_data_lifetime` or similar in a follow-up.
-    pub fn member_static(&self) -> Option<&'a Schema<'a>> {
+    /// For `Schema<'static>` (codegen-emitted) this returns
+    /// `Option<&'static Schema<'static>>`.
+    pub fn member_borrowed(&self) -> Option<&'a Schema<'a>> {
         match &self.members {
             SchemaMembers::List { member } => Some(*member),
             SchemaMembers::Map { value, .. } => Some(*value),
@@ -791,9 +787,8 @@ impl<'a> Schema<'a> {
     }
 
     /// Like [`key`](Self::key) but returns the `'a` (data-lifetime) borrow
-    /// that codegen stores. See [`member_static`](Self::member_static).
-    // TODO(schema-lifetime): rename — `'static` is no longer literal here.
-    pub fn key_static(&self) -> Option<&'a Schema<'a>> {
+    /// that codegen stores. See [`member_borrowed`](Self::member_borrowed).
+    pub fn key_borrowed(&self) -> Option<&'a Schema<'a>> {
         match &self.members {
             SchemaMembers::Map { key, .. } => Some(*key),
             _ => None,

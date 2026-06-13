@@ -113,11 +113,6 @@ struct MapState {
     key_namespace: Option<(String, Option<String>)>,
     /// `@xmlNamespace` (uri, prefix) on the value member, if any.
     value_namespace: Option<(String, Option<String>)>,
-    /// Schema of this map's value member. Used by a nested inner `write_map`
-    /// (when codegen passes `prelude::DOCUMENT` for the inner aggregate)
-    /// to recover the inner map's own `_KEY` / `_VALUE` schemas through
-    /// `value_schema.key()` / `.value()`. `None` when the value is a scalar.
-    value_schema: Option<&'static Schema<'static>>,
     /// True when the next write is a key (odd writes), false for value (even writes).
     expecting_key: bool,
 }
@@ -694,24 +689,6 @@ impl ShapeSerializer for XmlSerializer {
 
         self.flush_start_tag();
 
-        // If we're being called as a value of an outer map and the schema we
-        // were given has no map members chained (e.g. codegen passed
-        // `prelude::DOCUMENT` for the inner aggregate), substitute in the
-        // outer map's saved `value_schema`, which carries the inner map's
-        // own `_KEY` / `_VALUE` chain (set up by the outer `write_map`).
-        // This is what lets nested-map element-name overrides (`@xmlName`
-        // on inner key / value) reach the runtime without making codegen
-        // recurse into the body emission path.
-        let effective_schema: &Schema<'_> = if schema.key().is_none() && schema.member().is_none() {
-            self.map_state
-                .as_ref()
-                .and_then(|s| s.value_schema)
-                .unwrap_or(schema)
-        } else {
-            schema
-        };
-        let schema = effective_schema;
-
         // Handle being called as a map value (nested maps)
         let in_map_value = if let Some(map_state) = &mut self.map_state {
             if !map_state.expecting_key {
@@ -766,22 +743,6 @@ impl ShapeSerializer for XmlSerializer {
                 v.xml_namespace()
                     .map(|ns| (ns.uri().to_owned(), ns.prefix().map(|p| p.to_owned())))
             }),
-            // TODO(schema-lifetime): we used to capture
-            // `schema.member_static()` here so a nested inner write_map
-            // (invoked by codegen with `prelude::DOCUMENT`) could recover the
-            // inner aggregate's `_KEY`/`_VALUE`/`_MEMBER` chain. After
-            // parameterizing `Schema<'a>`, the trait method's `&Schema<'_>`
-            // schema has an anonymous lifetime that cannot bridge to the
-            // `'static`-typed Frame field. Forced to drop the capture; nested
-            // map values targeting placeholder schemas lose their chain.
-            // Tests covering this path are `#[ignore]`d.
-            //
-            // Restoration: `SchemaGenerator.kt` should emit the actual
-            // nested aggregate's schema instead of `prelude::DOCUMENT` for
-            // map/list values. See `.kiro/relax-schema-lifetimes-design.md`
-            // §10.5 for the full plan; this work is appropriately scoped
-            // adjacent to or following task 11.
-            value_schema: None,
             expecting_key: true,
         });
 
@@ -1651,5 +1612,126 @@ mod tests {
         };
         let out = serialize(|ser| ser.write_struct(&OUTER_SCHEMA, &outer));
         assert_eq!(out, r#"<Outer><nested xsi:someName="v"></nested></Outer>"#);
+    }
+
+    /// Outer map whose value member targets a map shape with `@xmlName`
+    /// on the inner map's key and value. Verifies that element-name
+    /// overrides on inner key/value flow through the nested
+    /// `write_map` call when the inner-map schema is passed directly
+    /// (i.e., when the outer's value-member schema chains the inner
+    /// map's `_KEY`/`_VALUE`).
+    #[test]
+    fn map_value_is_inner_map_with_renamed_inner_key_value() {
+        // Inner map's renamed key and value member schemas.
+        static INNER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        )
+        .with_xml_name("InnerKey");
+        static INNER_VAL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$value"),
+            ShapeType::String,
+            "value",
+            1,
+        )
+        .with_xml_name("InnerVal");
+
+        // Outer map's value member: target shape is the inner Map.
+        // Codegen chains the inner map's key/value schemas onto this
+        // member schema, so `schema.key()` / `.member()` resolve to the
+        // renamed inner schemas inside the nested `write_map`.
+        static OUTER_VALUE: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterMap$value"),
+            ShapeType::Map,
+            "value",
+            1,
+        )
+        .with_map_members(&INNER_KEY, &INNER_VAL);
+
+        // Outer map's key (no rename) and the outer map member itself.
+        static OUTER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        );
+        static OUTER_MAP: Schema<'static> = Schema::new_member(
+            shape_id!("test", "S$outerMap"),
+            ShapeType::Map,
+            "outerMap",
+            0,
+        )
+        .with_map_members(&OUTER_KEY, &OUTER_VALUE);
+
+        let out = serialize(|ser| {
+            ser.write_map(&OUTER_MAP, &|ser| {
+                ser.write_string(&prelude::STRING, "ok")?;
+                // Nested write_map is called with the inner map's chained
+                // schema directly — no runtime substitution needed.
+                ser.write_map(&OUTER_VALUE, &|ser| {
+                    ser.write_string(&prelude::STRING, "ik")?;
+                    ser.write_string(&prelude::STRING, "iv")
+                })
+            })
+        });
+
+        assert_eq!(
+            out,
+            "<outerMap><entry><key>ok</key><value><entry><InnerKey>ik</InnerKey><InnerVal>iv</InnerVal></entry></value></entry></outerMap>"
+        );
+    }
+
+    /// List whose member targets a map shape with `@xmlName` on the
+    /// inner map's key and value. Mirrors the map-of-map case for
+    /// list-of-map nesting.
+    #[test]
+    fn list_member_is_inner_map_with_renamed_inner_key_value() {
+        static INNER_KEY: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$key"),
+            ShapeType::String,
+            "key",
+            0,
+        )
+        .with_xml_name("Attr");
+        static INNER_VAL: Schema<'static> = Schema::new_member(
+            shape_id!("test", "InnerMap$value"),
+            ShapeType::String,
+            "value",
+            1,
+        )
+        .with_xml_name("Set");
+
+        // The list's member target is the inner Map.
+        static LIST_ITEM: Schema<'static> = Schema::new_member(
+            shape_id!("test", "OuterList$member"),
+            ShapeType::Map,
+            "member",
+            0,
+        )
+        .with_map_members(&INNER_KEY, &INNER_VAL);
+
+        static OUTER_LIST: Schema<'static> =
+            Schema::new_member(shape_id!("test", "S$items"), ShapeType::List, "items", 0)
+                .with_list_member(&LIST_ITEM);
+
+        let out = serialize(|ser| {
+            ser.write_list(&OUTER_LIST, &|ser| {
+                // Each list element is a (single-entry) inner map.
+                ser.write_map(&LIST_ITEM, &|ser| {
+                    ser.write_string(&prelude::STRING, "k1")?;
+                    ser.write_string(&prelude::STRING, "v1")
+                })
+            })
+        });
+
+        // Wrapped list, single element. The element wrapper is `<member>`
+        // (the list's member element name); inside it is the inner map
+        // with renamed key/value.
+        assert_eq!(
+            out,
+            "<items><member><entry><Attr>k1</Attr><Set>v1</Set></entry></member></items>"
+        );
     }
 }
