@@ -489,11 +489,15 @@ impl<'a> Document<'a> {
     /// assert_eq!(bird_doc.discriminator().unwrap().as_str(), "com.example#Bird");
     /// ```
     pub fn from_struct(
-        schema: &Schema<'_>,
+        schema: &Schema<'a>,
         value: &dyn crate::serde::SerializableStruct,
     ) -> Result<Self, SerdeError> {
-        use crate::serde::ShapeSerializer;
-        let mut ser = super::DocumentShapeSerializer::new();
+        // Method resolution dispatches `ser.write_struct(schema, value)`
+        // to the inherent `DocumentShapeSerializer<'a>::write_struct`
+        // (with `'b: 'a` satisfied here by `'b = 'a`), which captures
+        // the schema's shape ID into the discriminator slot. The trait
+        // method does not capture; see the comment on the trait impl.
+        let mut ser = super::DocumentShapeSerializer::<'a>::default();
         ser.write_struct(schema, value)?;
         ser.finish()
     }
@@ -1837,9 +1841,6 @@ mod tests {
     }
 
     #[test]
-    // TODO(schema-lifetime): re-enable when Document gains a lifetime
-    // parameter — depends on discriminator capture in write_struct.
-    #[ignore]
     fn from_struct_attaches_discriminator() {
         let doc = Document::from_struct(&TINY_SCHEMA, &Tiny { flag: true }).unwrap();
         assert_eq!(

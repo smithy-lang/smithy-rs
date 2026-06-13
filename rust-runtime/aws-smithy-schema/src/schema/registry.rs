@@ -90,15 +90,23 @@ impl fmt::Debug for RegistryEntry {
 
 /// A runtime mapping of [`ShapeId`] to [`RegistryEntry`].
 ///
-/// Backed by a `HashMap<ShapeId, RegistryEntry>`. Construct via
+/// Backed by a `HashMap<ShapeId<'static>, RegistryEntry>`. Construct via
 /// [`TypeRegistry::builder`] for the most common pattern, or
 /// [`TypeRegistry::new`]/[`Default::default`] for an empty registry.
 ///
 /// Use [`TypeRegistry::compose`] to merge two registries; entries in the
 /// argument registry override entries with the same shape ID in `self`.
+///
+/// # Cross-lifetime lookup
+///
+/// Internal storage is keyed by `ShapeId<'static>` (codegen-emitted shapes
+/// always have static lifetime). The public `schema_for` / `entry_for`
+/// methods accept `&ShapeId<'_>` of any lifetime; lookup is by fully
+/// qualified name via `ShapeId`'s `Borrow<str>` impl. The companion
+/// `*_fqn` methods take `&str` directly — handy after extracting a
+/// `__type` field from a wire-format JSON document.
 #[derive(Default)]
 pub struct TypeRegistry {
-    // TODO(schema-lifetime): see `TraitMap` — same caveat applies here.
     entries: HashMap<ShapeId<'static>, RegistryEntry>,
 }
 
@@ -116,14 +124,37 @@ impl TypeRegistry {
     }
 
     /// Look up the static schema for `id`, or `None` if not registered.
-    pub fn schema_for(&self, id: &ShapeId<'static>) -> Option<&'static Schema<'static>> {
-        self.entries.get(id).map(|e| e.schema)
+    ///
+    /// Accepts a [`ShapeId`] of any lifetime — lookup is by fully
+    /// qualified name. `ShapeId<'static>` (codegen-emitted) and a
+    /// runtime-built `ShapeId<'_>` with the same FQN resolve to the
+    /// same entry.
+    pub fn schema_for(&self, id: &ShapeId<'_>) -> Option<&'static Schema<'static>> {
+        self.entries.get(id.as_str()).map(|e| e.schema)
+    }
+
+    /// Look up the static schema for the given fully qualified name
+    /// (e.g. `"smithy.example#Bird"`).
+    ///
+    /// Use this when you already have the FQN as a string slice — for
+    /// instance, after extracting a `__type` discriminator from a
+    /// JSON document.
+    pub fn schema_for_fqn(&self, fqn: &str) -> Option<&'static Schema<'static>> {
+        self.entries.get(fqn).map(|e| e.schema)
     }
 
     /// Look up the entry (schema + deserialize fn) for `id`, or `None`
     /// if not registered.
-    pub fn entry_for(&self, id: &ShapeId<'static>) -> Option<&RegistryEntry> {
-        self.entries.get(id)
+    ///
+    /// Accepts a [`ShapeId`] of any lifetime; see [`Self::schema_for`].
+    pub fn entry_for(&self, id: &ShapeId<'_>) -> Option<&RegistryEntry> {
+        self.entries.get(id.as_str())
+    }
+
+    /// Look up the entry for the given fully qualified name. See
+    /// [`Self::schema_for_fqn`].
+    pub fn entry_for_fqn(&self, fqn: &str) -> Option<&RegistryEntry> {
+        self.entries.get(fqn)
     }
 
     /// Deserialize the given `document` into the shape pointed to by its
@@ -136,7 +167,15 @@ impl TypeRegistry {
     /// On success, the returned [`TypeErasedBox`] carries an instance of the
     /// concrete data type that the registered [`DeserializeFn`] produces.
     /// Callers downcast via [`TypeErasedBox::downcast`].
-    pub fn deserialize_document(&self, document: &Document) -> Result<TypeErasedBox, SerdeError> {
+    ///
+    /// The document's lifetime is independent of the registry's storage —
+    /// runtime-parsed documents (e.g. with a `__type` discriminator
+    /// borrowed from input bytes) resolve against the `'static`-keyed
+    /// registry via FQN matching.
+    pub fn deserialize_document(
+        &self,
+        document: &Document<'_>,
+    ) -> Result<TypeErasedBox, SerdeError> {
         let id = document
             .discriminator()
             .ok_or_else(|| SerdeError::InvalidInput {
@@ -145,7 +184,7 @@ impl TypeRegistry {
             })?;
         let entry = self
             .entries
-            .get(id)
+            .get(id.as_str())
             .ok_or_else(|| SerdeError::UnknownMember {
                 member_name: id.to_string(),
             })?;
@@ -574,5 +613,60 @@ mod tests {
 
         let _ = format!("{registry:?}");
         let _ = format!("{entry:?}");
+    }
+
+    // -- Cross-lifetime lookup tests ----------------------------------------------------------
+
+    #[test]
+    fn schema_for_works_with_runtime_shape_id() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        // Build a runtime ShapeId<'_> with the same FQN as a registered
+        // 'static shape. The registry should resolve it via the
+        // FQN-based `Borrow<str>` lookup.
+        let owned_fqn = String::from("smithy.example#Foo");
+        let owned_ns = String::from("smithy.example");
+        let owned_name = String::from("Foo");
+        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+
+        let schema = registry.schema_for(&runtime_id).expect("found via FQN");
+        assert_eq!(schema.shape_id(), FOO_SCHEMA.shape_id());
+
+        // Negative case: same lifetime, different FQN.
+        let owned_other = String::from("smithy.example#Nope");
+        let runtime_miss: ShapeId<'_> = ShapeId::from_static(&owned_other, &owned_ns, &owned_name);
+        assert!(registry.schema_for(&runtime_miss).is_none());
+    }
+
+    #[test]
+    fn schema_for_fqn_returns_registered_schema() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        let foo = registry
+            .schema_for_fqn("smithy.example#Foo")
+            .expect("registered");
+        assert_eq!(foo.shape_id(), FOO_SCHEMA.shape_id());
+
+        assert!(registry.schema_for_fqn("smithy.example#Missing").is_none());
+    }
+
+    #[test]
+    fn entry_for_fqn_returns_registered_entry() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        let entry = registry
+            .entry_for_fqn("smithy.example#Foo")
+            .expect("registered");
+        assert!(std::ptr::fn_addr_eq(
+            entry.deserialize_fn(),
+            deserialize_foo as DeserializeFn
+        ));
     }
 }

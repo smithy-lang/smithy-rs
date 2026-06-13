@@ -300,9 +300,6 @@ fn round_trip_with_all_members_absent_yields_empty_struct() {
 }
 
 #[test]
-// TODO(schema-lifetime): re-enable when Document gains a lifetime parameter
-// — depends on discriminator capture in DocumentShapeSerializer::write_struct.
-#[ignore]
 fn round_trip_preserves_struct_discriminator() {
     let original = AllTypes {
         a_string: Some("anchor".into()),

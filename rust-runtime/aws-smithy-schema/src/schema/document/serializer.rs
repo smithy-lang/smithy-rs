@@ -42,7 +42,30 @@ use crate::{Schema, ShapeId};
 /// Builds a [`Document`] tree from a typed shape via the
 /// [`ShapeSerializer`] interface.
 ///
+/// The lifetime parameter `'a` is the schema-data lifetime of the
+/// resulting [`Document`]. For codegen-emitted schemas (which are
+/// `'static`), use `DocumentShapeSerializer::new()` to obtain a
+/// `DocumentShapeSerializer<'static>`. Runtime callers with shorter-
+/// lived schemas should use `DocumentShapeSerializer::default()` and
+/// let `'a` flow from context.
+///
 /// See the module-level documentation for an overview.
+///
+/// # Discriminator capture
+///
+/// Top-level discriminator capture (e.g. via [`Document::from_struct`]
+/// or via direct calls like `ser.write_struct(&MY_SCHEMA, ...)`) goes
+/// through the inherent [`DocumentShapeSerializer::write_struct`]
+/// method, which captures the schema's shape ID via a `'b: 'a` bound.
+///
+/// Nested discriminator capture (a struct member that is itself a
+/// struct, called through `value.serialize_members(&mut dyn
+/// ShapeSerializer)`) currently goes through the trait method and
+/// loses the discriminator, because the trait's `&Schema<'_>` has an
+/// anonymous per-call lifetime that cannot be bounded against the
+/// serializer's storage lifetime. Nested capture would require
+/// surgically parameterizing the [`ShapeSerializer`] / [`SerializableStruct`]
+/// traits over a lifetime — a separate piece of work.
 ///
 /// # Example
 ///
@@ -67,31 +90,24 @@ use crate::{Schema, ShapeId};
 /// let doc = ser.finish()?;
 /// ```
 #[derive(Debug, Default)]
-pub struct DocumentShapeSerializer {
+pub struct DocumentShapeSerializer<'a> {
     /// Stack of in-progress containers. Top is the active write target.
-    stack: Vec<Frame>,
+    stack: Vec<Frame<'a>>,
     /// Holds the root document once it is committed (i.e. once a write_*
     /// call returns with an empty stack).
-    finished: Option<Document<'static>>,
+    finished: Option<Document<'a>>,
 }
 
 /// An in-progress container on the serializer's frame stack.
-///
-/// All Documents stored on the stack are `Document<'static>` —
-/// `DocumentShapeSerializer` produces a serialize-side document tree
-/// from owned Rust data and never captures borrowed input, so
-/// `'static` is the natural internal lifetime. Callers that consume
-/// `Document<'a>` for shorter `'a` rely on the type's covariance to
-/// downgrade.
 #[derive(Debug)]
-enum Frame {
+enum Frame<'a> {
     Struct {
-        members: HashMap<String, Document<'static>>,
-        discriminator: Option<ShapeId<'static>>,
+        members: HashMap<String, Document<'a>>,
+        discriminator: Option<ShapeId<'a>>,
     },
-    List(Vec<Document<'static>>),
+    List(Vec<Document<'a>>),
     Map {
-        entries: HashMap<String, Document<'static>>,
+        entries: HashMap<String, Document<'a>>,
         /// `Some(k)` after a key has been written and we're awaiting the
         /// matching value; `None` when we are at an entry boundary
         /// (next write becomes the next key).
@@ -99,18 +115,25 @@ enum Frame {
     },
 }
 
-impl DocumentShapeSerializer {
-    /// Creates a fresh serializer with an empty frame stack.
+impl DocumentShapeSerializer<'static> {
+    /// Creates a fresh `'static`-lifetimed serializer with an empty
+    /// frame stack.
+    ///
+    /// This is the codegen entry point — generated schemas are all
+    /// `'static`, so `'static` is the natural default. For shorter-
+    /// lifetime construction, use [`DocumentShapeSerializer::default`].
     pub fn new() -> Self {
         Self::default()
     }
+}
 
+impl<'a> DocumentShapeSerializer<'a> {
     /// Consumes the serializer and returns the constructed [`Document`].
     ///
     /// Returns an error if no value has been written yet, if any frame
     /// is still open (caller forgot a closing callback), or if the
     /// serializer was driven into a malformed state.
-    pub fn finish(self) -> Result<Document<'static>, SerdeError> {
+    pub fn finish(self) -> Result<Document<'a>, SerdeError> {
         if !self.stack.is_empty() {
             return Err(SerdeError::custom(format!(
                 "DocumentShapeSerializer::finish called with {} unfinished container(s) on the stack",
@@ -124,13 +147,63 @@ impl DocumentShapeSerializer {
         })
     }
 
+    /// Inherent struct write that captures the schema's shape ID as the
+    /// frame's discriminator.
+    ///
+    /// Method resolution prefers this inherent method over the
+    /// [`ShapeSerializer::write_struct`] trait method when the receiver
+    /// is a concrete `&mut DocumentShapeSerializer<'a>` — so call sites
+    /// like
+    /// ```ignore
+    /// let mut ser = DocumentShapeSerializer::new();
+    /// ser.write_struct(&MY_SCHEMA, &my_value)?;
+    /// ```
+    /// hit this method (with `'b: 'a` satisfied trivially when the
+    /// schema is `'static` and `'a = 'static`).
+    ///
+    /// Indirect calls through `&mut dyn ShapeSerializer` (e.g., from
+    /// inside another struct's `serialize_members` callback) take the
+    /// trait method instead, which currently can't capture due to its
+    /// per-call anonymous schema lifetime — see the trait impl below.
+    pub fn write_struct<'b: 'a>(
+        &mut self,
+        schema: &Schema<'b>,
+        value: &dyn SerializableStruct,
+    ) -> Result<(), SerdeError> {
+        // `'b: 'a` lets us covariantly upcast `ShapeId<'b>` from the
+        // schema into `Option<ShapeId<'a>>` storage on the frame.
+        let discriminator = *schema.shape_id();
+        self.stack.push(Frame::Struct {
+            members: HashMap::new(),
+            discriminator: Some(discriminator),
+        });
+        // `value.serialize_members(self)` coerces `self` to `&mut dyn
+        // ShapeSerializer`. Nested struct writes from within that
+        // callback go through the trait method and lose discriminator
+        // capture. Top-level capture (this call) is preserved.
+        value.serialize_members(self)?;
+        let frame = self.stack.pop().expect("frame just pushed");
+        let (members, discriminator) = match frame {
+            Frame::Struct {
+                members,
+                discriminator,
+            } => (members, discriminator),
+            _ => {
+                return Err(SerdeError::custom(
+                    "DocumentShapeSerializer struct frame replaced by a different frame kind during serialization",
+                ));
+            }
+        };
+        let mut doc = Document::map(members);
+        if let Some(id) = discriminator {
+            doc = doc.with_discriminator(id);
+        }
+        self.commit_value(schema, doc)
+    }
+
     /// Routes a constructed [`Document`] into the active frame, or commits
     /// it as the root if the stack is empty.
-    fn commit_value(
-        &mut self,
-        schema: &Schema<'_>,
-        value: Document<'static>,
-    ) -> Result<(), SerdeError> {
+    fn commit_value(&mut self, schema: &Schema<'_>, value: Document<'a>) -> Result<(), SerdeError> {
         match self.stack.last_mut() {
             None => {
                 if self.finished.is_some() {
@@ -198,18 +271,25 @@ fn shape_kind_name(inner: &DocumentInner) -> &'static str {
     }
 }
 
-impl ShapeSerializer for DocumentShapeSerializer {
+impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
     fn write_struct(
         &mut self,
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        // TODO(schema-lifetime): once `Document` gains a lifetime parameter,
-        // restore `Some(*schema.shape_id())` here. The discriminator slot is
-        // currently `Option<ShapeId<'static>>` and the trait method receives
-        // `&Schema<'_>` for any lifetime, so we cannot soundly capture the
-        // shape ID without parameterizing `Document` first. See design doc
-        // §10.1 and the marker on `Document::discriminator`.
+        // TODO(schema-lifetime): the trait method's `&Schema<'_>` is
+        // fresh per call and not bounded against `Self`'s `'a`; we
+        // cannot soundly copy `*schema.shape_id()` (a `ShapeId<'_>`)
+        // into the `Option<ShapeId<'a>>` slot without proof that
+        // `'_ : 'a`. Concrete callers that need the discriminator
+        // should call the inherent [`Self::write_struct`] (which
+        // carries that bound) — method resolution prefers the inherent
+        // over this trait method for direct calls. Indirect calls
+        // through `&mut dyn ShapeSerializer` (e.g. `serialize_members`
+        // callbacks for a nested struct member) hit this method and
+        // lose the discriminator. Lifting that limitation requires
+        // parameterizing [`ShapeSerializer`] / [`SerializableStruct`]
+        // over a lifetime; deferred.
         let _ = schema;
         self.stack.push(Frame::Struct {
             members: HashMap::new(),
@@ -424,11 +504,6 @@ mod tests {
     // -- Struct ----------------------------------------------------------
 
     #[test]
-    // TODO(schema-lifetime): re-enable once `Document` gains a lifetime
-    // parameter so `write_struct` can capture the schema's `ShapeId<'_>`
-    // into a non-`'static`-typed discriminator slot. See the marker in
-    // `<DocumentShapeSerializer as ShapeSerializer>::write_struct`.
-    #[ignore]
     fn write_struct_produces_map_with_discriminator() {
         let mut ser = DocumentShapeSerializer::new();
         ser.write_struct(
@@ -548,8 +623,15 @@ mod tests {
     // -- Nested aggregates ----------------------------------------------
 
     #[test]
-    // TODO(schema-lifetime): re-enable when Document gains a lifetime
-    // parameter — depends on discriminator capture in write_struct.
+    // TODO(schema-lifetime): nested struct discriminator capture
+    // requires going through the inherent `write_struct<'b: 'a>` on
+    // `DocumentShapeSerializer<'a>`, but `value.serialize_members(self)`
+    // coerces `self` to `&mut dyn ShapeSerializer` and the nested
+    // `inner.write_struct(...)` resolves to the trait method, which
+    // cannot capture the discriminator without a `'_ : 'a` bound on
+    // the trait method. Lifting that limitation requires
+    // parameterizing `ShapeSerializer` / `SerializableStruct` over a
+    // lifetime — a separate piece of work.
     #[ignore]
     fn nested_struct_in_map_round_trips() {
         // map<String, Person> with a single entry
