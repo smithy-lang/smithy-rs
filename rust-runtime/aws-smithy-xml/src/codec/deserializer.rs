@@ -610,7 +610,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         DateTime::from_str(text.as_ref(), format).map_err(|e| SerdeError::custom(format!("{e}")))
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<SmithyDocument, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<SmithyDocument<'_>, SerdeError> {
         Err(SerdeError::custom(
             "document types are not supported by REST XML",
         ))

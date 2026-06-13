@@ -225,7 +225,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         self.decoder.timestamp().map_err(deser_err)
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "document types are not supported by rpcv2Cbor protocol".into(),
         })

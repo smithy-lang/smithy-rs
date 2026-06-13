@@ -927,7 +927,7 @@ impl ShapeSerializer for XmlSerializer {
     fn write_document(
         &mut self,
         _schema: &Schema<'_>,
-        _value: &Document,
+        _value: &Document<'_>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::custom(
             "document types are not supported by REST XML",

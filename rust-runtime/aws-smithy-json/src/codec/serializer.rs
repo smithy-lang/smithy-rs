@@ -461,7 +461,11 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
+    fn write_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &Document<'_>,
+    ) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.write_json_value(value)?;
         Ok(())

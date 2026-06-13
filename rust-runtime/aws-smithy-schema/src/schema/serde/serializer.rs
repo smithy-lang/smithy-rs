@@ -118,7 +118,11 @@ pub trait ShapeSerializer {
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError>;
 
     /// Writes a document value.
-    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError>;
+    fn write_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &Document<'_>,
+    ) -> Result<(), SerdeError>;
 
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError>;

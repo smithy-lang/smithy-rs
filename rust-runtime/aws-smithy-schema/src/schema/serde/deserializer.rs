@@ -130,7 +130,7 @@ pub trait ShapeDeserializer {
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError>;
 
     /// Reads a document value.
-    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError>;
+    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document<'_>, SerdeError>;
 
     /// Checks if the current value is null.
     ///
