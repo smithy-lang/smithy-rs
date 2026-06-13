@@ -26,6 +26,13 @@ pub struct JsonSerializer {
     // Nesting depth of write_map calls. When >0, prefix() restores expecting_map_key
     // after each value write so the next write_string is treated as a key.
     map_depth: usize,
+    // True when the current container is a struct/union (so a member schema's
+    // member_name should be emitted as a JSON field name). False when the
+    // current container is a list or map (so a member schema's member_name —
+    // typically the position name "member"/"value" — must NOT leak into the
+    // output as a spurious field key). Saved and restored across nested
+    // write_struct / write_list / write_map calls.
+    in_struct_context: bool,
 }
 
 impl JsonSerializer {
@@ -37,6 +44,13 @@ impl JsonSerializer {
             needs_comma: false,
             expecting_map_key: false,
             map_depth: 0,
+            // Top-level call sites typically pass a top-level (non-member)
+            // schema, so this default value rarely matters. It only affects
+            // behavior if the very first write_* call passes a member
+            // schema — in which case treating the first frame as struct
+            // context preserves backward compatibility with any caller
+            // relying on `,"name":` emission at the top level.
+            in_struct_context: true,
         }
     }
 
@@ -52,10 +66,17 @@ impl JsonSerializer {
         if self.needs_comma {
             self.output.push(',');
         }
-        if let Some(name) = self.field_name(schema) {
-            self.output.push('"');
-            self.output.push_str(&crate::escape::escape_string(name));
-            self.output.push_str("\":");
+        // Only emit a JSON field name when we are inside a struct/union
+        // body. For list elements and map values the schema may still be a
+        // member schema (e.g. an inner aggregate's `_VALUE` carrying
+        // `@xmlName` for the XML codec), but that member's name is a
+        // *position label* — not a JSON field key.
+        if self.in_struct_context {
+            if let Some(name) = self.field_name(schema) {
+                self.output.push('"');
+                self.output.push_str(&crate::escape::escape_string(name));
+                self.output.push_str("\":");
+            }
         }
         self.needs_comma = true;
         // Inside a map, after writing a value the next write_string should be a key.
@@ -214,16 +235,20 @@ impl ShapeSerializer for JsonSerializer {
         let saved_comma = self.needs_comma;
         let saved_depth = self.map_depth;
         let saved_map_key = self.expecting_map_key;
+        let saved_struct_context = self.in_struct_context;
         self.needs_comma = false;
         // Reset map state so struct members don't trigger map-key logic.
         // Restored after the struct body so an enclosing map resumes correctly.
         self.map_depth = 0;
         self.expecting_map_key = false;
+        // Mark the body as struct context so member-schema field names emit.
+        self.in_struct_context = true;
         value.serialize_members(self)?;
         self.output.push('}');
         self.needs_comma = saved_comma;
         self.map_depth = saved_depth;
         self.expecting_map_key = saved_map_key;
+        self.in_struct_context = saved_struct_context;
         Ok(())
     }
 
@@ -237,15 +262,20 @@ impl ShapeSerializer for JsonSerializer {
         let saved = self.needs_comma;
         let saved_depth = self.map_depth;
         let saved_map_key = self.expecting_map_key;
+        let saved_struct_context = self.in_struct_context;
         self.needs_comma = false;
         // Reset map state so list elements don't trigger map-key logic in prefix().
         self.map_depth = 0;
         self.expecting_map_key = false;
+        // Mark the body as non-struct so a nested member schema's
+        // member_name (e.g. "member") doesn't leak as a JSON field key.
+        self.in_struct_context = false;
         write_elements(self)?;
         self.output.push(']');
         self.needs_comma = saved;
         self.map_depth = saved_depth;
         self.expecting_map_key = saved_map_key;
+        self.in_struct_context = saved_struct_context;
         Ok(())
     }
 
@@ -259,17 +289,23 @@ impl ShapeSerializer for JsonSerializer {
         let saved_comma = self.needs_comma;
         let saved_map_key = self.expecting_map_key;
         let saved_depth = self.map_depth;
+        let saved_struct_context = self.in_struct_context;
         self.needs_comma = false;
         self.expecting_map_key = true;
         // Increment depth so prefix() knows to restore expecting_map_key after
         // each value write. write_string checks expecting_map_key *before* calling
         // prefix(), so the flag only affects the *next* write_string (the next key).
         self.map_depth += 1;
+        // Mark the body as non-struct so an inner aggregate's value-schema
+        // (a member schema with member_name "value") doesn't emit
+        // `"value":` before the actual value.
+        self.in_struct_context = false;
         write_entries(self)?;
         self.map_depth = saved_depth;
         self.output.push('}');
         self.needs_comma = saved_comma;
         self.expecting_map_key = saved_map_key;
+        self.in_struct_context = saved_struct_context;
         Ok(())
     }
 
@@ -829,5 +865,180 @@ mod tests {
         .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"key1":{"name":"Alice"}}"#);
+    }
+
+    /// Regression test: when a member schema (e.g. one with
+    /// `member_name = "value"`) is passed to `write_map` from inside
+    /// another map's value position, the inner `write_map` call must NOT
+    /// emit `"value":` before the inner `{...}`.
+    ///
+    /// Without context-aware prefix suppression, the output would be
+    /// `{"outer_k":"value":{"inner_k":"inner_v"}}` (invalid JSON).
+    /// With the fix, output is `{"outer_k":{"inner_k":"inner_v"}}`.
+    #[test]
+    fn map_value_with_value_member_schema_does_not_leak_member_name() {
+        static OUTER_VALUE: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "OuterMap", "value"),
+            ShapeType::Map,
+            "value",
+            1,
+        );
+
+        let outer_map_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "OuterMap"),
+            ShapeType::Map,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_map(&outer_map_schema, &|s| {
+            s.write_string(&aws_smithy_schema::prelude::STRING, "outer_k")?;
+            s.write_map(&OUTER_VALUE, &|s| {
+                s.write_string(&aws_smithy_schema::prelude::STRING, "inner_k")?;
+                s.write_string(&aws_smithy_schema::prelude::STRING, "inner_v")?;
+                Ok(())
+            })?;
+            Ok(())
+        })
+        .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"outer_k":{"inner_k":"inner_v"}}"#);
+    }
+
+    /// Regression test mirroring the map-of-map case for list-of-map: the
+    /// inner map is reached via a member schema whose member name is
+    /// "member" (the list's element position). That member name must not
+    /// leak into the JSON output.
+    #[test]
+    fn list_element_with_member_member_schema_does_not_leak_member_name() {
+        static OUTER_MEMBER: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "OuterList", "member"),
+            ShapeType::Map,
+            "member",
+            0,
+        );
+
+        let outer_list_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "OuterList"),
+            ShapeType::List,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_list(&outer_list_schema, &|s| {
+            s.write_map(&OUTER_MEMBER, &|s| {
+                s.write_string(&aws_smithy_schema::prelude::STRING, "k1")?;
+                s.write_string(&aws_smithy_schema::prelude::STRING, "v1")?;
+                Ok(())
+            })?;
+            Ok(())
+        })
+        .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"[{"k1":"v1"}]"#);
+    }
+
+    /// List-of-list with a member schema for the inner list element.
+    /// Verifies the suppression also applies to nested `write_list`.
+    #[test]
+    fn nested_list_with_member_member_schema_does_not_leak_member_name() {
+        static OUTER_MEMBER: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "OuterList", "member"),
+            ShapeType::List,
+            "member",
+            0,
+        );
+
+        let outer_list_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "OuterList"),
+            ShapeType::List,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_list(&outer_list_schema, &|s| {
+            s.write_list(&OUTER_MEMBER, &|s| {
+                s.write_integer(&aws_smithy_schema::prelude::INTEGER, 1)?;
+                s.write_integer(&aws_smithy_schema::prelude::INTEGER, 2)?;
+                Ok(())
+            })?;
+            Ok(())
+        })
+        .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"[[1,2]]"#);
+    }
+
+    /// Positive control: the parent struct context is correctly restored
+    /// after a non-struct child exits. A struct with `[string, map, string]`
+    /// members must emit field names for ALL three — the suppression
+    /// applied while writing the map's body must not bleed into the
+    /// sibling string member that follows.
+    #[test]
+    fn struct_context_restored_after_nested_aggregate_member() {
+        static A: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Outer"),
+            ShapeType::String,
+            "a",
+            0,
+        );
+        static B: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Outer"),
+            ShapeType::Map,
+            "b",
+            1,
+        );
+        static C: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Outer"),
+            ShapeType::String,
+            "c",
+            2,
+        );
+
+        struct Outer;
+        impl SerializableStruct for Outer {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&A, "1")?;
+                s.write_map(&B, &|s| {
+                    s.write_string(&aws_smithy_schema::prelude::STRING, "k")?;
+                    s.write_string(&aws_smithy_schema::prelude::STRING, "v")?;
+                    Ok(())
+                })?;
+                s.write_string(&C, "2")?;
+                Ok(())
+            }
+        }
+
+        let outer_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "Outer"),
+            ShapeType::Structure,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(&outer_schema, &Outer).unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"a":"1","b":{"k":"v"},"c":"2"}"#);
+    }
+
+    /// `@jsonName` is part of the same `field_name(schema)` resolution
+    /// pipeline that emits `member_name`, so context-aware suppression
+    /// must apply equally to it. A member schema in non-struct context
+    /// with `@jsonName` set must NOT emit the JSON name as a key.
+    #[test]
+    fn map_value_with_json_name_member_schema_does_not_leak_json_name() {
+        static OUTER_VALUE: Schema<'static> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "OuterMap", "value"),
+            ShapeType::String,
+            "value",
+            1,
+        )
+        .with_json_name("CustomName");
+
+        let outer_map_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "OuterMap"),
+            ShapeType::Map,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_map(&outer_map_schema, &|s| {
+            s.write_string(&aws_smithy_schema::prelude::STRING, "k")?;
+            s.write_string(&OUTER_VALUE, "v")?;
+            Ok(())
+        })
+        .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"k":"v"}"#);
     }
 }
