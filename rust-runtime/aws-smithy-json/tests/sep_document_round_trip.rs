@@ -343,8 +343,13 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     //     coercion (e.g. base64 string → blob) works on the read side.
     let document_from_serialization: Document = {
         let mut deser = codec.create_deserializer(&canonical_serialization);
+        // Use the inherent `read_document_owned` (returns
+        // `Document<'static>`) rather than the trait method, whose
+        // elided `Document<'_>` return type would tie the result to
+        // the deserializer's borrow and prevent escape from this
+        // block.
         deser
-            .read_document(&prelude::DOCUMENT)
+            .read_document_owned(&prelude::DOCUMENT)
             .unwrap_or_else(|e| panic!("[{label}] read_document failed: {e:?}"))
     };
 
@@ -507,7 +512,7 @@ fn assert_json_equivalent(
 /// struct level. The SEP normative tests for assertion 6 want to
 /// compare member content, not the typed-shape identity — strip
 /// discriminators first.
-fn strip_discriminators(doc: &Document) -> Document {
+fn strip_discriminators(doc: &Document<'_>) -> Document<'static> {
     use aws_smithy_schema::document::DocumentInner;
     match doc.inner() {
         DocumentInner::Null => Document::null(),

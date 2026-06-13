@@ -421,7 +421,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
             })
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "documents cannot be deserialized from strings".into(),
         })

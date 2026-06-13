@@ -289,7 +289,7 @@ mod tests {
         fn read_document(
             &mut self,
             _: &Schema<'_>,
-        ) -> Result<crate::document::Document, SerdeError> {
+        ) -> Result<crate::document::Document<'_>, SerdeError> {
             Ok(crate::document::Document::null())
         }
         fn is_null(&self) -> bool {

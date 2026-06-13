@@ -72,19 +72,26 @@ pub struct DocumentShapeSerializer {
     stack: Vec<Frame>,
     /// Holds the root document once it is committed (i.e. once a write_*
     /// call returns with an empty stack).
-    finished: Option<Document>,
+    finished: Option<Document<'static>>,
 }
 
 /// An in-progress container on the serializer's frame stack.
+///
+/// All Documents stored on the stack are `Document<'static>` —
+/// `DocumentShapeSerializer` produces a serialize-side document tree
+/// from owned Rust data and never captures borrowed input, so
+/// `'static` is the natural internal lifetime. Callers that consume
+/// `Document<'a>` for shorter `'a` rely on the type's covariance to
+/// downgrade.
 #[derive(Debug)]
 enum Frame {
     Struct {
-        members: HashMap<String, Document>,
+        members: HashMap<String, Document<'static>>,
         discriminator: Option<ShapeId<'static>>,
     },
-    List(Vec<Document>),
+    List(Vec<Document<'static>>),
     Map {
-        entries: HashMap<String, Document>,
+        entries: HashMap<String, Document<'static>>,
         /// `Some(k)` after a key has been written and we're awaiting the
         /// matching value; `None` when we are at an entry boundary
         /// (next write becomes the next key).
@@ -103,7 +110,7 @@ impl DocumentShapeSerializer {
     /// Returns an error if no value has been written yet, if any frame
     /// is still open (caller forgot a closing callback), or if the
     /// serializer was driven into a malformed state.
-    pub fn finish(self) -> Result<Document, SerdeError> {
+    pub fn finish(self) -> Result<Document<'static>, SerdeError> {
         if !self.stack.is_empty() {
             return Err(SerdeError::custom(format!(
                 "DocumentShapeSerializer::finish called with {} unfinished container(s) on the stack",
@@ -119,7 +126,11 @@ impl DocumentShapeSerializer {
 
     /// Routes a constructed [`Document`] into the active frame, or commits
     /// it as the root if the stack is empty.
-    fn commit_value(&mut self, schema: &Schema<'_>, value: Document) -> Result<(), SerdeError> {
+    fn commit_value(
+        &mut self,
+        schema: &Schema<'_>,
+        value: Document<'static>,
+    ) -> Result<(), SerdeError> {
         match self.stack.last_mut() {
             None => {
                 if self.finished.is_some() {
@@ -329,8 +340,15 @@ impl ShapeSerializer for DocumentShapeSerializer {
         self.commit_value(schema, Document::timestamp(*value))
     }
 
-    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
-        self.commit_value(schema, value.clone())
+    fn write_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &Document<'_>,
+    ) -> Result<(), SerdeError> {
+        // Walk-and-clone to coerce the input's anonymous lifetime into
+        // the serializer's `'static` storage lifetime. See the doc on
+        // `Document::to_static_owned` for why.
+        self.commit_value(schema, value.to_static_owned())
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {

@@ -159,25 +159,44 @@ pub trait DocumentSettings: std::fmt::Debug + Send + Sync {
 
 /// A protocol-agnostic representation of any value in the Smithy data model.
 ///
+/// `Document<'a>` is parameterized over the lifetime of any borrowed
+/// data it contains (currently just the optional `ShapeId`
+/// discriminator). Documents constructed from owned Rust data —
+/// [`Document::null`], [`Document::string`], [`Document::list`], etc. —
+/// produce `Document<'static>`; documents parsed from wire bytes that
+/// carry a discriminator (see the JSON `__type` lift) borrow their
+/// discriminator strings from the input slice.
+///
+/// The lifetime parameter is covariant: `Document<'static>` may be
+/// used anywhere `Document<'a>` is expected (a `'static` value is
+/// valid for any shorter lifetime).
+///
 /// See the module-level documentation for an overview.
 #[derive(Clone, Debug)]
-pub struct Document {
-    inner: DocumentInner,
+pub struct Document<'a> {
+    inner: DocumentInner<'a>,
     /// Optional shape-id discriminator for structure-typed documents.
     ///
     /// Set when a `Document` is constructed from a typed shape (so the
     /// reverse conversion via a type registry can find the right schema)
     /// or when a `Document` is parsed from a payload that carries a
     /// discriminator field (`__type` for JSON).
-    // TODO(schema-lifetime): this is what blocks the `__type` lift in
-    // `JsonDeserializer::read_document`. Will be relaxed to `ShapeId<'a>`
-    // when `Document` itself gains a lifetime parameter, allowing
-    // wire-parsed discriminators to live in this slot without heap
-    // allocation.
-    discriminator: Option<ShapeId<'static>>,
+    discriminator: Option<ShapeId<'a>>,
     /// Protocol context for deserialize-side documents. `None` for
     /// serialize-side documents.
     settings: Option<Arc<dyn DocumentSettings>>,
+}
+
+/// Compile-time assertion that [`Document<'a>`] is covariant in `'a`.
+///
+/// If a future field changes [`Document`] to be invariant (e.g. a
+/// `RefCell<&'a T>`, a `&'a mut T`, or `fn(&'a T)` callback), this
+/// function body fails to compile. Soundness invariant — covariance is
+/// what lets `Document<'static>` (the codegen-emitted form) be used
+/// where `Document<'a>` is expected.
+#[allow(dead_code)]
+fn _assert_document_covariant<'a, 'b: 'a>(d: Document<'b>) -> Document<'a> {
+    d
 }
 
 /// Inner value of a [`Document`].
@@ -186,9 +205,15 @@ pub struct Document {
 /// `byte`, `short`, `integer`, `long`, `float`, and `double`. Arbitrary-
 /// precision `bigInteger` and `bigDecimal` are separate variants because
 /// `Number` is bounded by `f64`/`i64`/`u64`.
+///
+/// The `'a` parameter propagates from [`Document<'a>`] for the recursive
+/// [`DocumentInner::List`] and [`DocumentInner::Map`] variants. All
+/// other variants store fully-owned data and could be `Document<'static>`
+/// for any practical purpose, but the parameter is unified for
+/// uniformity.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub enum DocumentInner {
+pub enum DocumentInner<'a> {
     /// A null value.
     ///
     /// Null is not a Smithy type proper; it appears in sparse lists and
@@ -210,13 +235,13 @@ pub enum DocumentInner {
     /// A timestamp.
     Timestamp(DateTime),
     /// An ordered list of documents.
-    List(Vec<Document>),
+    List(Vec<Document<'a>>),
     /// A string-keyed map of documents.
-    Map(HashMap<String, Document>),
+    Map(HashMap<String, Document<'a>>),
 }
 
-impl Document {
-    fn from_inner(inner: DocumentInner) -> Self {
+impl Document<'static> {
+    fn from_inner_static(inner: DocumentInner<'static>) -> Self {
         Self {
             inner,
             discriminator: None,
@@ -225,40 +250,35 @@ impl Document {
     }
 
     // -- Builders --------------------------------------------------------
+    //
+    // Factory methods that own all their input live on
+    // `impl Document<'static>` so call sites get unambiguous type
+    // inference. The resulting `Document<'static>` is covariant and
+    // can be used wherever a `Document<'a>` is expected.
 
     /// Constructs a null document.
     pub fn null() -> Self {
-        Self::from_inner(DocumentInner::Null)
+        Self::from_inner_static(DocumentInner::Null)
     }
 
     /// Constructs a boolean document.
     pub fn boolean(value: bool) -> Self {
-        Self::from_inner(DocumentInner::Boolean(value))
+        Self::from_inner_static(DocumentInner::Boolean(value))
     }
 
     /// Constructs a string document.
     pub fn string(value: impl Into<String>) -> Self {
-        Self::from_inner(DocumentInner::String(value.into()))
+        Self::from_inner_static(DocumentInner::String(value.into()))
     }
 
     /// Constructs a blob document.
     pub fn blob(value: impl Into<Vec<u8>>) -> Self {
-        Self::from_inner(DocumentInner::Blob(value.into()))
+        Self::from_inner_static(DocumentInner::Blob(value.into()))
     }
 
     /// Constructs a timestamp document.
     pub fn timestamp(value: DateTime) -> Self {
-        Self::from_inner(DocumentInner::Timestamp(value))
-    }
-
-    /// Constructs a list document from a `Vec` of documents.
-    pub fn list(elements: Vec<Document>) -> Self {
-        Self::from_inner(DocumentInner::List(elements))
-    }
-
-    /// Constructs a map document from a `HashMap` of documents.
-    pub fn map(entries: HashMap<String, Document>) -> Self {
-        Self::from_inner(DocumentInner::Map(entries))
+        Self::from_inner_static(DocumentInner::Timestamp(value))
     }
 
     // -- Numeric builders ------------------------------------------------
@@ -268,32 +288,32 @@ impl Document {
 
     /// Constructs a numeric document from a Smithy `byte` (`i8`).
     pub fn byte(value: i8) -> Self {
-        Self::from_inner(DocumentInner::Number(signed_to_number(value as i64)))
+        Self::from_inner_static(DocumentInner::Number(signed_to_number(value as i64)))
     }
 
     /// Constructs a numeric document from a Smithy `short` (`i16`).
     pub fn short(value: i16) -> Self {
-        Self::from_inner(DocumentInner::Number(signed_to_number(value as i64)))
+        Self::from_inner_static(DocumentInner::Number(signed_to_number(value as i64)))
     }
 
     /// Constructs a numeric document from a Smithy `integer` (`i32`).
     pub fn integer(value: i32) -> Self {
-        Self::from_inner(DocumentInner::Number(signed_to_number(value as i64)))
+        Self::from_inner_static(DocumentInner::Number(signed_to_number(value as i64)))
     }
 
     /// Constructs a numeric document from a Smithy `long` (`i64`).
     pub fn long(value: i64) -> Self {
-        Self::from_inner(DocumentInner::Number(signed_to_number(value)))
+        Self::from_inner_static(DocumentInner::Number(signed_to_number(value)))
     }
 
     /// Constructs a numeric document from a Smithy `float` (`f32`).
     pub fn float(value: f32) -> Self {
-        Self::from_inner(DocumentInner::Number(Number::Float(value as f64)))
+        Self::from_inner_static(DocumentInner::Number(Number::Float(value as f64)))
     }
 
     /// Constructs a numeric document from a Smithy `double` (`f64`).
     pub fn double(value: f64) -> Self {
-        Self::from_inner(DocumentInner::Number(Number::Float(value)))
+        Self::from_inner_static(DocumentInner::Number(Number::Float(value)))
     }
 
     /// Constructs a numeric document from a `Number` directly.
@@ -302,17 +322,43 @@ impl Document {
     /// produced a `Number`. For typical use cases, prefer the typed
     /// builders ([`Document::byte`], [`Document::integer`], etc.).
     pub fn number(value: Number) -> Self {
-        Self::from_inner(DocumentInner::Number(value))
+        Self::from_inner_static(DocumentInner::Number(value))
     }
 
     /// Constructs an arbitrary-precision integer document.
     pub fn big_integer(value: BigInteger) -> Self {
-        Self::from_inner(DocumentInner::BigInteger(value))
+        Self::from_inner_static(DocumentInner::BigInteger(value))
     }
 
     /// Constructs an arbitrary-precision decimal document.
     pub fn big_decimal(value: BigDecimal) -> Self {
-        Self::from_inner(DocumentInner::BigDecimal(value))
+        Self::from_inner_static(DocumentInner::BigDecimal(value))
+    }
+}
+
+impl<'a> Document<'a> {
+    fn from_inner(inner: DocumentInner<'a>) -> Self {
+        Self {
+            inner,
+            discriminator: None,
+            settings: None,
+        }
+    }
+
+    /// Constructs a list document from a `Vec` of documents.
+    ///
+    /// The list inherits the lifetime of its elements. Pass a
+    /// `Vec<Document<'static>>` to obtain a `Document<'static>`.
+    pub fn list(elements: Vec<Document<'a>>) -> Self {
+        Self::from_inner(DocumentInner::List(elements))
+    }
+
+    /// Constructs a map document from a `HashMap` of documents.
+    ///
+    /// The map inherits the lifetime of its values. Pass a
+    /// `HashMap<String, Document<'static>>` to obtain a `Document<'static>`.
+    pub fn map(entries: HashMap<String, Document<'a>>) -> Self {
+        Self::from_inner(DocumentInner::Map(entries))
     }
 
     // -- Discriminator + settings ---------------------------------------
@@ -324,13 +370,18 @@ impl Document {
     /// the reverse conversion. The SEP requires that documents
     /// constructed from a typed shape preserve this information so the
     /// transformation can round-trip.
-    pub fn with_discriminator(mut self, id: ShapeId<'static>) -> Self {
+    ///
+    /// The discriminator's lifetime is unified with the document's.
+    /// Codegen-emitted documents pass `ShapeId<'static>` (from the
+    /// schema's `shape_id()` accessor); wire-parsed documents may
+    /// borrow from input bytes.
+    pub fn with_discriminator(mut self, id: ShapeId<'a>) -> Self {
         self.discriminator = Some(id);
         self
     }
 
     /// Returns the shape-id discriminator if one is attached.
-    pub fn discriminator(&self) -> Option<&ShapeId<'static>> {
+    pub fn discriminator(&self) -> Option<&ShapeId<'a>> {
         self.discriminator.as_ref()
     }
 
@@ -365,10 +416,61 @@ impl Document {
     ///
     /// For the typical use case of "is this a string / what is its value"
     /// prefer the typed accessors (added in a follow-up commit).
-    pub fn inner(&self) -> &DocumentInner {
+    pub fn inner(&self) -> &DocumentInner<'a> {
         &self.inner
     }
 
+    /// Recursively rebuilds this Document with `'static` lifetime by
+    /// cloning every owned variant and dropping the discriminator.
+    ///
+    /// Used as a workaround in
+    /// [`DocumentShapeSerializer::write_document`] to coerce an input
+    /// `Document<'_>` (whose lifetime came from the trait method's
+    /// parameter, independent of the serializer's storage) into the
+    /// `Document<'static>` that the serializer's frame stack stores.
+    ///
+    /// The conversion drops the discriminator: turning `ShapeId<'a>`
+    /// into `ShapeId<'static>` would require the underlying string
+    /// slices to live forever, which the type system can't guarantee
+    /// for a generic `Document<'a>`. Callers that need to preserve a
+    /// discriminator on a typed document should use
+    /// [`Document::from_struct`] (which produces the document directly
+    /// from a typed value, and can attach the schema's
+    /// [`ShapeId`](ShapeId) statically) rather than constructing a
+    /// `Document` and writing it via `write_document`.
+    pub(crate) fn to_static_owned(&self) -> Document<'static> {
+        Document {
+            inner: self.inner.to_static_owned(),
+            discriminator: None,
+            settings: self.settings.clone(),
+        }
+    }
+}
+
+impl<'a> DocumentInner<'a> {
+    pub(crate) fn to_static_owned(&self) -> DocumentInner<'static> {
+        match self {
+            Self::Null => DocumentInner::Null,
+            Self::Boolean(b) => DocumentInner::Boolean(*b),
+            Self::Number(n) => DocumentInner::Number(*n),
+            Self::BigInteger(bi) => DocumentInner::BigInteger(bi.clone()),
+            Self::BigDecimal(bd) => DocumentInner::BigDecimal(bd.clone()),
+            Self::String(s) => DocumentInner::String(s.clone()),
+            Self::Blob(b) => DocumentInner::Blob(b.clone()),
+            Self::Timestamp(t) => DocumentInner::Timestamp(*t),
+            Self::List(items) => {
+                DocumentInner::List(items.iter().map(|d| d.to_static_owned()).collect())
+            }
+            Self::Map(m) => DocumentInner::Map(
+                m.iter()
+                    .map(|(k, v)| (k.clone(), v.to_static_owned()))
+                    .collect(),
+            ),
+        }
+    }
+}
+
+impl<'a> Document<'a> {
     // -- High-level entry points ----------------------------------------
 
     /// Constructs a [`Document`] tree from any
@@ -475,7 +577,7 @@ impl Document {
     }
 
     /// Returns the list elements if this is a `List` document.
-    pub fn as_list(&self) -> Option<&[Document]> {
+    pub fn as_list(&self) -> Option<&[Document<'a>]> {
         match &self.inner {
             DocumentInner::List(items) => Some(items.as_slice()),
             _ => None,
@@ -488,7 +590,7 @@ impl Document {
     /// [`Document::discriminator`] set) are also accessed via this
     /// method — the keys are the structure's Smithy member names (not
     /// the `@jsonName` / `@xmlName` overrides).
-    pub fn as_map(&self) -> Option<&HashMap<String, Document>> {
+    pub fn as_map(&self) -> Option<&HashMap<String, Document<'a>>> {
         match &self.inner {
             DocumentInner::Map(m) => Some(m),
             _ => None,
@@ -497,7 +599,7 @@ impl Document {
 
     /// Returns the document at the given member name if this is a `Map`
     /// document. `None` for any other variant or for a missing key.
-    pub fn member(&self, name: &str) -> Option<&Document> {
+    pub fn member(&self, name: &str) -> Option<&Document<'a>> {
         self.as_map().and_then(|m| m.get(name))
     }
 
@@ -699,7 +801,7 @@ impl Document {
 }
 
 /// Default value is [`Document::null`].
-impl Default for Document {
+impl Default for Document<'static> {
     fn default() -> Self {
         Self::null()
     }
@@ -709,7 +811,7 @@ impl Default for Document {
 /// metadata about how to interpret the data, not the data itself, and are
 /// intentionally excluded — a document parsed from a JSON response should
 /// compare equal to the same document constructed directly by user code.
-impl PartialEq for Document {
+impl<'a> PartialEq for Document<'a> {
     fn eq(&self, other: &Self) -> bool {
         self.inner == other.inner && self.discriminator == other.discriminator
     }
@@ -785,7 +887,12 @@ fn number_shape_type(n: &Number) -> ShapeType {
 /// range correctly) and `as` casts for the `Float` variant (after
 /// range-checking against the f64 bounds — the SEP says "ignore
 /// precision loss" so truncating fractional values is intentional).
-fn coerce_signed<T>(doc: &Document, min_f64: f64, max_f64: f64, name: &str) -> Result<T, SerdeError>
+fn coerce_signed<'a, T>(
+    doc: &Document<'a>,
+    min_f64: f64,
+    max_f64: f64,
+    name: &str,
+) -> Result<T, SerdeError>
 where
     T: TryFrom<i64> + TryFrom<u64>,
     f64: NarrowAs<T>,
@@ -868,7 +975,7 @@ where
 }
 
 /// Constructs a `TypeMismatch` error describing the actual variant.
-fn type_mismatch(expected: &str, found: &DocumentInner) -> SerdeError {
+fn type_mismatch(expected: &str, found: &DocumentInner<'_>) -> SerdeError {
     let found_name = match found {
         DocumentInner::Null => "null",
         DocumentInner::Boolean(_) => "boolean",
@@ -918,7 +1025,7 @@ fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> Serd
 /// document carries no discriminator and no [`DocumentSettings`];
 /// callers can attach a discriminator afterward via
 /// [`Document::with_discriminator`].
-impl From<aws_smithy_types::Document> for Document {
+impl From<aws_smithy_types::Document> for Document<'static> {
     fn from(value: aws_smithy_types::Document) -> Self {
         use aws_smithy_types::Document as Legacy;
         match value {
@@ -947,10 +1054,10 @@ impl From<aws_smithy_types::Document> for Document {
 ///
 /// Discriminator and [`DocumentSettings`] are silently dropped; the
 /// legacy type has no slot for them.
-impl TryFrom<Document> for aws_smithy_types::Document {
+impl<'a> TryFrom<Document<'a>> for aws_smithy_types::Document {
     type Error = SerdeError;
 
-    fn try_from(value: Document) -> Result<Self, Self::Error> {
+    fn try_from(value: Document<'a>) -> Result<Self, Self::Error> {
         use aws_smithy_types::Document as Legacy;
         match value.inner {
             DocumentInner::Null => Ok(Legacy::Null),

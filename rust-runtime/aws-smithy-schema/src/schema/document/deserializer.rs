@@ -65,25 +65,25 @@ use crate::Schema;
 #[derive(Debug)]
 pub struct DocumentShapeDeserializer<'a> {
     /// The document this deserializer is currently positioned at.
-    cursor: &'a Document,
+    cursor: &'a Document<'a>,
 }
 
 impl<'a> DocumentShapeDeserializer<'a> {
     /// Creates a deserializer positioned at the given document.
-    pub fn new(document: &'a Document) -> Self {
+    pub fn new(document: &'a Document<'a>) -> Self {
         Self { cursor: document }
     }
 }
 
 /// Builds a `TypeMismatch` error message for a read that expected one
 /// kind of value and found another.
-fn type_mismatch(expected: &str, found: &DocumentInner) -> SerdeError {
+fn type_mismatch(expected: &str, found: &DocumentInner<'_>) -> SerdeError {
     SerdeError::TypeMismatch {
         message: format!("expected {expected} document, got {}", kind_name(found),),
     }
 }
 
-fn kind_name(inner: &DocumentInner) -> &'static str {
+fn kind_name(inner: &DocumentInner<'_>) -> &'static str {
     match inner {
         DocumentInner::Null => "null",
         DocumentInner::Boolean(_) => "boolean",
@@ -235,7 +235,7 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
         self.cursor.as_timestamp()
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
         Ok(self.cursor.clone())
     }
 

@@ -665,140 +665,17 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        self.depth += 1;
-        if self.depth > self.settings.max_depth() {
-            return Err(SerdeError::custom("maximum nesting depth exceeded"));
-        }
-        self.skip_whitespace();
-        let result = match self.remaining().first() {
-            Some(b'"') => Ok(Document::string(self.read_string(_schema)?)),
-            Some(b't') | Some(b'f') => Ok(Document::boolean(self.read_boolean(_schema)?)),
-            Some(b'n') => {
-                if self.remaining().starts_with(b"null") {
-                    self.advance_by(4);
-                    Ok(Document::null())
-                } else {
-                    Err(SerdeError::InvalidInput {
-                        message: "unexpected token in document".into(),
-                    })
-                }
-            }
-            Some(b'{') => {
-                self.advance_by(1);
-                let mut map = std::collections::HashMap::new();
-                loop {
-                    self.skip_whitespace();
-                    if self.remaining().first() == Some(&b'}') {
-                        self.advance_by(1);
-                        break;
-                    }
-                    if self.remaining().first() != Some(&b'"') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected object key in document".into(),
-                        });
-                    }
-                    let key = self.parse_key()?.into_owned();
-                    self.skip_whitespace();
-                    if self.remaining().first() != Some(&b':') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected colon in document object".into(),
-                        });
-                    }
-                    self.advance_by(1);
-                    let value = self.read_document(_schema)?;
-                    map.insert(key, value);
-                }
-                Ok(Document::map(map))
-            }
-            Some(b'[') => {
-                self.advance_by(1);
-                let mut arr = Vec::new();
-                loop {
-                    self.skip_whitespace();
-                    match self.remaining().first() {
-                        Some(&b']') => {
-                            self.advance_by(1);
-                            break;
-                        }
-                        None => {
-                            return Err(SerdeError::InvalidInput {
-                                message: "unexpected end of input in document array".into(),
-                            })
-                        }
-                        _ => arr.push(self.read_document(_schema)?),
-                    }
-                }
-                Ok(Document::list(arr))
-            }
-            Some(c) if *c == b'-' || c.is_ascii_digit() => {
-                // Parse number — determine if integer or float
-                let rem = self.remaining();
-                let mut len = 0;
-                let mut is_float = false;
-                let mut is_negative = false;
-                for (i, &b) in rem.iter().enumerate() {
-                    if b == b'-' && i == 0 {
-                        is_negative = true;
-                        len += 1;
-                    } else if b.is_ascii_digit() || b == b'+' {
-                        len += 1;
-                    } else if b == b'.' || b == b'e' || b == b'E' {
-                        is_float = true;
-                        len += 1;
-                    } else {
-                        break;
-                    }
-                }
-                let pos = self.position;
-                self.advance_by(len);
-                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
-                    SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    }
-                })?;
-                if is_float {
-                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::Float(f)))
-                } else if is_negative {
-                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::NegInt(n)))
-                } else {
-                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::PosInt(n)))
-                }
-            }
-            _ => Err(SerdeError::InvalidInput {
-                message: "unexpected token in document".into(),
-            }),
-        };
-        if result.is_ok() {
-            self.depth -= 1;
-        }
-        // Attach the codec's settings to the produced Document so downstream
-        // accessors like [`Document::as_blob`] and [`Document::as_timestamp`]
-        // can perform JSON-specific coercion (base64-decoded blobs, format-aware
-        // timestamps). Recursive calls into `read_document` already attach
-        // settings to the nested values they return, so wrapping just the
-        // top-level produced Document propagates settings through the tree.
-        //
-        // Note: this implementation does not lift a top-level `__type` field
-        // into [`Document::with_discriminator`]. The discriminator slot stores
-        // a [`ShapeId`] whose components are `&'static str`, which precludes
-        // construction from a runtime-parsed wire string without either
-        // leaking memory or a broader `ShapeId` API change. Callers that need
-        // discriminator-driven dispatch (e.g. `TypeRegistry::deserialize_document`)
-        // currently supply the discriminator via the compile-time `shape_id!`
-        // macro before invoking the registry. Lifting `__type` automatically
-        // is tracked as a follow-up.
-        let settings: Arc<dyn DocumentSettings> = self.settings.clone();
-        result.map(|doc| doc.with_settings(settings))
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
+        // Delegate to the inherent method that returns `Document<'static>`.
+        // The trait method's elided `Document<'_>` lifetime ties to
+        // `&mut self` (per the 3rd elision rule), which would block
+        // recursive `self.read_document(...)` calls inside the body —
+        // each recursive return value would borrow `self` for the rest
+        // of the function. Going through `read_document_owned` makes
+        // every nested document `Document<'static>`, so no such borrow
+        // ties exist. The final `Document<'static>` then widens to
+        // `Document<'_>` via covariance when returned.
+        self.read_document_owned(_schema)
     }
 
     fn is_null(&self) -> bool {
@@ -873,6 +750,155 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 }
 
 impl<'a> JsonDeserializer<'a> {
+    /// Reads a document from the JSON input stream and returns it with
+    /// `'static` lifetime.
+    ///
+    /// This is the actual implementation backing the `ShapeDeserializer`
+    /// trait method [`Self::read_document`]. It is split out as an
+    /// inherent method so the body can recurse without each recursive
+    /// call's return value tying to `&mut self` via the trait method's
+    /// elided lifetime — an artifact of the trait signature
+    /// (`fn read_document(&mut self, _) -> Result<Document<'_>, _>`)
+    /// where the `'_` defaults to the lifetime of `&self`.
+    ///
+    /// The returned `Document<'static>` is widened to `Document<'_>`
+    /// in the trait method via covariance.
+    pub fn read_document_owned(
+        &mut self,
+        _schema: &Schema<'_>,
+    ) -> Result<Document<'static>, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
+        self.skip_whitespace();
+        let result: Result<Document<'static>, SerdeError> = match self.remaining().first() {
+            Some(b'"') => Ok(Document::string(self.read_string(_schema)?)),
+            Some(b't') | Some(b'f') => Ok(Document::boolean(self.read_boolean(_schema)?)),
+            Some(b'n') => {
+                if self.remaining().starts_with(b"null") {
+                    self.advance_by(4);
+                    Ok(Document::null())
+                } else {
+                    Err(SerdeError::InvalidInput {
+                        message: "unexpected token in document".into(),
+                    })
+                }
+            }
+            Some(b'{') => {
+                self.advance_by(1);
+                let mut map = std::collections::HashMap::new();
+                loop {
+                    self.skip_whitespace();
+                    if self.remaining().first() == Some(&b'}') {
+                        self.advance_by(1);
+                        break;
+                    }
+                    if self.remaining().first() != Some(&b'"') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected object key in document".into(),
+                        });
+                    }
+                    let key = self.parse_key()?.into_owned();
+                    self.skip_whitespace();
+                    if self.remaining().first() != Some(&b':') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected colon in document object".into(),
+                        });
+                    }
+                    self.advance_by(1);
+                    let value = self.read_document_owned(_schema)?;
+                    map.insert(key, value);
+                }
+                Ok(Document::map(map))
+            }
+            Some(b'[') => {
+                self.advance_by(1);
+                let mut arr = Vec::new();
+                loop {
+                    self.skip_whitespace();
+                    match self.remaining().first() {
+                        Some(&b']') => {
+                            self.advance_by(1);
+                            break;
+                        }
+                        None => {
+                            return Err(SerdeError::InvalidInput {
+                                message: "unexpected end of input in document array".into(),
+                            })
+                        }
+                        _ => arr.push(self.read_document_owned(_schema)?),
+                    }
+                }
+                Ok(Document::list(arr))
+            }
+            Some(c) if *c == b'-' || c.is_ascii_digit() => {
+                // Parse number — determine if integer or float
+                let rem = self.remaining();
+                let mut len = 0;
+                let mut is_float = false;
+                let mut is_negative = false;
+                for (i, &b) in rem.iter().enumerate() {
+                    if b == b'-' && i == 0 {
+                        is_negative = true;
+                        len += 1;
+                    } else if b.is_ascii_digit() || b == b'+' {
+                        len += 1;
+                    } else if b == b'.' || b == b'e' || b == b'E' {
+                        is_float = true;
+                        len += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let pos = self.position;
+                self.advance_by(len);
+                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
+                    SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    }
+                })?;
+                if is_float {
+                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::number(aws_smithy_types::Number::Float(f)))
+                } else if is_negative {
+                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::number(aws_smithy_types::Number::NegInt(n)))
+                } else {
+                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::number(aws_smithy_types::Number::PosInt(n)))
+                }
+            }
+            _ => Err(SerdeError::InvalidInput {
+                message: "unexpected token in document".into(),
+            }),
+        };
+        if result.is_ok() {
+            self.depth -= 1;
+        }
+        // Attach the codec's settings to the produced Document so downstream
+        // accessors like [`Document::as_blob`] and [`Document::as_timestamp`]
+        // can perform JSON-specific coercion (base64-decoded blobs, format-aware
+        // timestamps). Recursive calls already attach settings to nested values,
+        // so wrapping just the top-level produced Document propagates settings
+        // through the tree.
+        //
+        // Note: this implementation does not lift a top-level `__type` field
+        // into [`Document::with_discriminator`]. That lift is part of Phase 4
+        // of the schema-lifetime work; a wire-parsed `__type` value would
+        // need to land in the document's discriminator slot with a lifetime
+        // tied to the input slice, which is a separate refactor from the
+        // current Phase 3 (`Document<'a>` parameterization).
+        let settings: Arc<dyn DocumentSettings> = self.settings.clone();
+        result.map(|doc| doc.with_settings(settings))
+    }
+
     fn skip_whitespace(&mut self) {
         while self.position < self.input.len() {
             match self.input[self.position] {
