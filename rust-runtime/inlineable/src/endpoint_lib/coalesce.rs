@@ -99,7 +99,6 @@ pub(crate) use coalesce;
 
 #[cfg(test)]
 mod test {
-    use super::*;
 
     #[test]
     fn base_cases() {
