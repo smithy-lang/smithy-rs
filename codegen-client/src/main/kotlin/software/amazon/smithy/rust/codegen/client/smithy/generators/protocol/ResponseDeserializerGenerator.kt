@@ -470,6 +470,7 @@ class ResponseDeserializerGenerator(
                 let _error_message = generic.message().map(|msg| msg.to_owned());
                 let protocol = _cfg.load::<#{SharedClientProtocol}>()
                     .expect("a SharedClientProtocol is required");
+                let error_code = protocol.resolve_error_code(headers, error_code);
                 """,
                 *codegenScope,
                 "BoxError" to RuntimeType.boxError(runtimeConfig),

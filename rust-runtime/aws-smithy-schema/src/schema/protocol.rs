@@ -151,6 +151,19 @@ pub trait ClientProtocolInner: Send + Sync + std::fmt::Debug {
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         None
     }
+
+    /// Resolves the final error code for error variant dispatch.
+    ///
+    /// Protocols that carry error codes outside the body (e.g., awsQuery-compatible
+    /// uses the `x-amzn-query-error` header) override this to extract the code from
+    /// transport metadata. The default implementation returns `code` unchanged.
+    fn resolve_error_code<'a>(
+        &self,
+        _headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str {
+        code
+    }
 }
 
 /// Object-safe view of [`ClientProtocolInner`] parameterized over concrete
@@ -198,6 +211,13 @@ pub trait ClientProtocol<
 
     /// Returns the codec used for payload (de)serialization, if any.
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec>;
+
+    /// Resolves the final error code for error variant dispatch.
+    fn resolve_error_code<'a>(
+        &self,
+        headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str;
 }
 
 // Blanket impl: any `ClientProtocolInner` is automatically a `ClientProtocol`
@@ -240,6 +260,14 @@ where
 
     fn payload_codec(&self) -> Option<&dyn crate::codec::DynCodec> {
         <Self as ClientProtocolInner>::payload_codec(self)
+    }
+
+    fn resolve_error_code<'a>(
+        &self,
+        headers: &'a aws_smithy_runtime_api::http::Headers,
+        code: &'a str,
+    ) -> &'a str {
+        <Self as ClientProtocolInner>::resolve_error_code(self, headers, code)
     }
 }
 

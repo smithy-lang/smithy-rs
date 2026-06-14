@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.AwsQueryCompatibleTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.protocol.traits.Rpcv2CborTrait
@@ -24,6 +25,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType.Companion.pre
 import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructureCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * Determines whether schema-based serialization/deserialization should be used
@@ -120,6 +122,8 @@ private class SchemaProtocolCustomization(
                         when {
                             protocol == RestJson1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                            protocol == AwsJson1_0Trait.ID && codegenContext.serviceShape.hasTrait<AwsQueryCompatibleTrait>() ->
+                                smithyJson.resolve("protocol::aws_query_compatible::AwsQueryCompatibleProtocol") to "new(${serviceShapeName.dq()})"
                             protocol == AwsJson1_0Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
