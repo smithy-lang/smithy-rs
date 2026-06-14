@@ -6,4 +6,5 @@
 //! Protocol implementations for JSON-based Smithy protocols.
 
 pub mod aws_json_rpc;
+pub mod aws_query_compatible;
 pub mod aws_rest_json_1;
