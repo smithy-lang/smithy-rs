@@ -350,19 +350,32 @@ class SchemaGenerator(
             is StructureShape -> "ser.write_struct(&$memberSchemaRef, $varName)?;"
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                // Use helpers for simple non-enum element types
-                when (elementTarget) {
-                    is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
-                    is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
-                    is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
-                    is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
-                    else -> null
-                } ?: run {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // Use helpers for simple non-sparse, non-enum element types
+                val helperExpr =
+                    if (!isSparse) {
+                        when (elementTarget) {
+                            is StringShape -> if (!isStringEnum(elementTarget)) "ser.write_string_list(&$memberSchemaRef, $varName)?;" else null
+                            is BlobShape -> "ser.write_blob_list(&$memberSchemaRef, $varName)?;"
+                            is IntegerShape, is IntEnumShape -> "ser.write_integer_list(&$memberSchemaRef, $varName)?;"
+                            is LongShape -> "ser.write_long_list(&$memberSchemaRef, $varName)?;"
+                            else -> null
+                        }
+                    } else {
+                        null
+                    }
+                helperExpr ?: run {
                     val elementWrite = elementWriteExpr(elementTarget, "item")
+                    val loopBody =
+                        if (isSparse) {
+                            "match item { Some(item) => { $elementWrite } None => { ser.write_null(&$memberSchemaRef)?; } }"
+                        } else {
+                            elementWrite
+                        }
                     """
                     ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
-                            $elementWrite
+                            $loopBody
                         }
                         Ok(())
                     })?;
@@ -372,17 +385,27 @@ class SchemaGenerator(
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
-                // Use helper for non-enum string key, string value maps
-                if (!isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
-                    "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
-                } else {
+                val isSparse = target.hasTrait(SparseTrait::class.java)
+                // Use helper for non-sparse, non-enum string key, string value maps
+                val helperExpr =
+                    if (!isSparse && !isStringEnum(keyTarget) && valueTarget is StringShape && !isStringEnum(valueTarget)) {
+                        "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
+                    } else {
+                        null
+                    }
+                helperExpr ?: run {
                     val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                     val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                    val loopBody =
+                        if (isSparse) {
+                            "ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?; match value { Some(value) => { $valueWrite } None => { ser.write_null(&$memberSchemaRef)?; } }"
+                        } else {
+                            "ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?; $valueWrite"
+                        }
                     """
                     ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
-                            ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
-                            $valueWrite
+                            $loopBody
                         }
                         Ok(())
                     })?;
