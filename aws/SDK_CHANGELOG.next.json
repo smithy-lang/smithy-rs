@@ -6,18 +6,6 @@
   "smithy-rs": [],
   "aws-sdk-rust": [
     {
-      "message": "Fix null value handling in dense collections: SDK now correctly rejects null values in non-sparse collections instead of silently dropping them.\n",
-      "meta": {
-        "bug": true,
-        "breaking": false,
-        "tada": false
-      },
-      "author": "vcjana",
-      "references": [],
-      "since-commit": "2d226ef3c59de83febdc6790e2bf2a44f43f1d1f",
-      "age": 5
-    },
-    {
       "message": "Prevent memory leak in identity cache when overriding credentials via `config_override`. Each `config_override` that sets a credentials provider now uses an operation-scoped identity cache instead of the shared client-level cache, preventing unbounded partition growth. Additionally, the client-level identity cache now enforces a configurable `max_partitions` cap (default: 64) as a safety net.\n",
       "meta": {
         "bug": true,
@@ -29,7 +17,7 @@
         "smithy-rs#4340"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix `TokenBucket::is_full()` and `TokenBucket::is_empty()` to convert fractional tokens into whole permits before checking availability. Previously, accumulated fractional tokens from success rewards were not accounted for, causing these methods to return incorrect results.\n",
@@ -44,7 +32,7 @@
         "aws-sdk-rust#1423"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Make `ProviderConfig::with_use_fips()` and `ProviderConfig::with_use_dual_stack()` public so that applications constructing a `ProviderConfig` directly can propagate FIPS and dual-stack settings to credential providers.\n",
@@ -58,7 +46,7 @@
         "smithy-rs#4551"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Upgrade `sha2` from 0.10.x to 0.11.x. The previous version defaulted to software-based compression instead of hardware-accelerated compression, resulting in lower throughput. The new version automatically detects and uses hardware-accelerated instructions when available.\n",
@@ -72,7 +60,7 @@
         "smithy-rs#4587"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Optimize `Encoder::str()` and `Encoder::blob()` by collapsing multiple `write_all` calls into a single buffer operation. This bypasses minicbor's generic writer to write the CBOR type+length header and payload directly into the underlying `Vec<u8>`, improving performance on serialization-heavy hot paths.\n",
@@ -86,7 +74,7 @@
         "smithy-rs#4591"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Fix waiter codegen failure when JMESPath `&&` or `||` expressions have non-boolean operands (e.g., a list field used as a truthiness check). Non-boolean types are now coerced to booleans using JMESPath truthiness rules: arrays and strings check `!is_empty()`, all other non-null types are truthy.\n",
@@ -100,7 +88,7 @@
         "smithy-rs#4599"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add `sigv4a_signing_region_set` client configuration. Supports programmatic, environment variable (`AWS_SIGV4A_SIGNING_REGION_SET`), and shared config file (`sigv4a_signing_region_set`) configuration. User-provided values now take priority over endpoint-resolved values.\n",
@@ -114,7 +102,7 @@
         "smithy-rs#4521"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Add missing `EventOrInitial`, `EventOrInitialMarshaller`, and `EventStreamSender::into_inner` to `aws-smithy-legacy-http` event_stream module, fixing compilation failures in generated SDKs that reference these types.\n",
@@ -128,7 +116,7 @@
         "smithy-rs#4431"
       ],
       "since-commit": "00c6d6096f0d618545a7dece903770d8acb21114",
-      "age": 4
+      "age": 5
     },
     {
       "message": "Upgrade `p256` from 0.11 to 0.13.2 in `aws-sigv4` so the SigV4a signing path uses the same major version already pulled in elsewhere in the SDK and benefits from upstream maintenance fixes.\n",
@@ -142,7 +130,7 @@
         "smithy-rs#4648"
       ],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Implement retry behavior 2.1, opt-in via `AWS_NEW_RETRIES_2026=true` environment variable. Non-throttling errors now use 50ms base backoff (previously 1,000ms). Transient retry quota cost is 14 tokens (previously 5). DynamoDB and DynamoDB Streams use a 25ms base backoff and increase default max attempts to 4 (from 3). Long-polling operations (SQS `ReceiveMessage`, SFN `GetActivityTask`, SWF `PollForActivityTask`/`PollForDecisionTask`) backoff even when the retry token bucket is empty.\n",
@@ -156,7 +144,7 @@
         "smithy-rs#4638"
       ],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Remove the `ring` dependency from `aws-sigv4`. The `sigv4a` feature previously pulled in `ring` solely for HMAC-SHA256 in the SigV4a signing-key derivation; this is now done with the `hmac`/`sha2` (RustCrypto) crates that were already used by the SigV4 signer. `ring` is in maintenance hibernation, and the original reason for using it (a version conflict with the older `p256` crate at the time SigV4a was introduced) no longer applies. Users of the `sigv4a` feature will see `ring` removed from their dependency tree.\n",
@@ -170,7 +158,7 @@
         "smithy-rs#4650"
       ],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix `ProfileFileCredentialsProvider` so that profile-level `use_fips_endpoint` and `use_dualstack_endpoint` settings are propagated to the internal STS client used during assume-role credential chaining. Previously these settings were only applied when the provider was built through `aws_config::ConfigLoader::load`, so users constructing `ProfileFileCredentialsProvider` directly via its builder would see STS requests go to non-FIPS / non-dual-stack endpoints even when the selected profile enabled them.\n",
@@ -184,7 +172,7 @@
         "smithy-rs#4614"
       ],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Fix adaptive retry rate limiter to never allow negative token bucket capacity. Previously, `acquire_permission_to_send_a_request` unconditionally deducted the request cost even when returning a delay, causing capacity to go negative. With multiple concurrent tasks, this produced cascading sleep times proportional to the number of tasks (e.g., task 50 sleeping 100s), leading to near-zero request rates that never recovered after a throttling event. Now, capacity is only deducted when a token is actually granted, and the orchestrator re-acquires after sleeping to account for concurrent state changes.\n",
@@ -198,7 +186,7 @@
         "smithy-rs#4632"
       ],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Optimized BDD endpoint resolution performance by replacing HashMap-based auth schemes with a typed `EndpointAuthScheme` struct, inlining the BDD evaluation loop, and adding a single-entry endpoint cache. The BDD resolver is now up to 49% faster than the original implementation and outperforms the tree-based resolver on most benchmarks.\n",
@@ -210,7 +198,7 @@
       "author": "lnj",
       "references": [],
       "since-commit": "c29cba1fa16dbda9697f523e86ca9bb5ec2f6d67",
-      "age": 3
+      "age": 4
     },
     {
       "message": "Improve the `Debug` output of HTTP `Headers` and `Request` in `aws-smithy-runtime-api` to redact values of headers commonly used to carry sensitive data. The header name remains visible and the value is replaced with a placeholder that includes the original byte length to preserve diagnostic utility. The `aws-sigv4` signer applies the same redaction when logging the canonical request. The plain `Display` impl on `CanonicalRequest` is unchanged to preserve the raw canonical form used by downstream consumers.\n",
@@ -222,7 +210,7 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "8f0882046c467981ba5b4fd91a10befa96bd262f",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix paginator codegen for operations whose `@paginated` `outputToken` targets a `@required` member. Previously, the generated `src/lens.rs` borrowing accessor emitted a direct field access (`input.field`) instead of a reference (`&input.field`) for required members, causing a type mismatch (`Option<&String>` vs `String`).\n",
@@ -234,7 +222,7 @@
       "author": "vcjana",
       "references": [],
       "since-commit": "8f0882046c467981ba5b4fd91a10befa96bd262f",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Fix `ConnectorBuilder::default()` to enable `TCP_NODELAY` by default. Previously, the auto-derived `Default` impl left `enable_tcp_nodelay` at `false`, while the curated `Connector::builder()` initialized it to `true`. The `Default` impl on `ConnectorBuilder` is now hand-written to match `Connector::builder()`, so all construction paths, including the SDK's `default_https_client`, get `enable_tcp_nodelay = true` consistently. Without `TCP_NODELAY`, Nagle's algorithm can hold small writes in the kernel waiting for ACKs; on request shapes emitted as multiple small sub-MSS writes, such as the tested HTTP/2 small-body SDK path where HEADERS and DATA are flushed separately, this can add roughly one RTT plus delayed-ACK time. Callers who relied on the previous unintended `enable_tcp_nodelay = false` default of `ConnectorBuilder::default()` can restore that behavior with `.enable_tcp_nodelay(false)`.\n",
@@ -246,7 +234,7 @@
       "author": "PeterUlb",
       "references": [],
       "since-commit": "8f0882046c467981ba5b4fd91a10befa96bd262f",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Implement `serde::Serializer` and `serde::Deserializer` traits for `aws_smithy_types::Document`, allowing it to be used as a self-describing data format. This enables converting any `Serialize` type into a `Document` via `to_document()` and deserializing a `Document` into any `Deserialize` type via `from_document()`.\n",
@@ -258,7 +246,7 @@
       "author": "dnorred",
       "references": [],
       "since-commit": "8f0882046c467981ba5b4fd91a10befa96bd262f",
-      "age": 2
+      "age": 3
     },
     {
       "message": "Redact the `AWS_CONTAINER_AUTHORIZATION_TOKEN` value from WARN log output and error `Display` output when the ECS/EKS container credential provider rejects the token as invalid for use as an HTTP header. Previously, if the token contained a byte rejected by `HeaderValue` validation, it was logged at WARN level and embedded in the error string propagated through the credential chain. The value is now redacted.\n",
@@ -270,7 +258,33 @@
       "author": "aajtodd",
       "references": [],
       "since-commit": "8f0882046c467981ba5b4fd91a10befa96bd262f",
-      "age": 2
+      "age": 3
+    },
+    {
+      "message": "Make `CanDisable`'s `From` impl in `aws-smithy-types` concrete (`From<Duration>`) instead of a blanket `impl<T> From<T>`. The blanket impl could clash with `From` impls from other crates and break the build with `error[E0119]` on a routine dependency bump (it surfaced via `time 0.3.48`).\n\nAdditionally, constrain the `time` dependency to `<0.3.48` in `aws-smithy-types`. `time 0.3.48` introduced an E0119 coherence regression (<https://github.com/time-rs/time/issues/783>) that breaks any crate with a blanket `From` impl when `time` is in its dependency graph. Constraining `time` forces resolution to the last-good `0.3.47` across all build paths. Relax this bound once `time 0.3.49` ships.\n",
+      "meta": {
+        "bug": true,
+        "breaking": false,
+        "tada": false
+      },
+      "author": "vcjana",
+      "references": [],
+      "since-commit": "d3c82d35ac2966780e96f56d2d79810182fc4537",
+      "age": 1
+    },
+    {
+      "message": "Upgrade MSRV to Rust 1.94.1.\n",
+      "meta": {
+        "bug": false,
+        "breaking": true,
+        "tada": false
+      },
+      "author": "ysaito1001",
+      "references": [
+        "smithy-rs#4692"
+      ],
+      "since-commit": "d3c82d35ac2966780e96f56d2d79810182fc4537",
+      "age": 1
     }
   ],
   "aws-sdk-model": []

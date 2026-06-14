@@ -1,4 +1,15 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+June 14th, 2026
+===============
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#4692](https://github.com/smithy-lang/smithy-rs/issues/4692)) Upgrade MSRV to Rust 1.94.1.
+
+**New this release:**
+- :bug: (all) Make `CanDisable`'s `From` impl in `aws-smithy-types` concrete (`From<Duration>`) instead of a blanket `impl<T> From<T>`. The blanket impl could clash with `From` impls from other crates and break the build with `error[E0119]` on a routine dependency bump (it surfaced via `time 0.3.48`).
+
+    Additionally, constrain the `time` dependency to `<0.3.48` in `aws-smithy-types`. `time 0.3.48` introduced an E0119 coherence regression (<https://github.com/time-rs/time/issues/783>) that breaks any crate with a blanket `From` impl when `time` is in its dependency graph. Constraining `time` forces resolution to the last-good `0.3.47` across all build paths. Relax this bound once `time 0.3.49` ships.
+
+
 June 11th, 2026
 ===============
 **New this release:**
