@@ -5,6 +5,7 @@
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 mod de;
+mod discriminated;
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
@@ -13,9 +14,11 @@ mod doc_error;
 mod error;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod ser;
+mod settings;
 
 #[cfg(all(aws_sdk_unstable, feature = "serde-deserialize"))]
 pub use de::from_document;
+pub use discriminated::DiscriminatedDocument;
 #[cfg(any(
     all(aws_sdk_unstable, feature = "serde-deserialize"),
     all(aws_sdk_unstable, feature = "serde-serialize")
@@ -24,6 +27,7 @@ pub use doc_error::DocError;
 pub use error::DocumentError;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 pub use ser::to_document;
+pub use settings::DocumentSettings;
 
 use crate::{BigDecimal, BigInteger, DateTime, Number};
 use std::borrow::Cow;

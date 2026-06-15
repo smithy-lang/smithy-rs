@@ -838,7 +838,11 @@ fn signed_to_number(value: i64) -> Number {
 /// stored in a [`Number`], picks the narrowest unambiguous container
 /// from the precedence order `Integer → Long → BigInteger → Double →
 /// BigDecimal`. `Byte`, `IntEnum`, `Short`, and `Float` are skipped.
-fn number_shape_type(n: &Number) -> ShapeType {
+//
+// `pub(crate)` so the sibling `discriminated_ext` module can reuse it
+// for `DiscriminatedDocument::shape_type()` without having to clone the
+// document tree through the From-bridge route.
+pub(crate) fn number_shape_type(n: &Number) -> ShapeType {
     match n {
         Number::PosInt(v) => {
             if *v <= i32::MAX as u64 {
@@ -1024,11 +1028,20 @@ fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> Serd
 /// Convert a legacy [`aws_smithy_types::Document`] into the new
 /// [`Document`].
 ///
-/// This is total — every legacy variant has a corresponding new
-/// variant, since the legacy type is a strict subset. The new
-/// document carries no discriminator and no [`DocumentSettings`];
-/// callers can attach a discriminator afterward via
-/// [`Document::with_discriminator`].
+/// This impl is **transitional**. The whole `aws-smithy-schema`
+/// `Document<'a>` type — and along with it this bridge — is deleted
+/// in Phase 4 (the schema-crate trait-method migration) of the
+/// document-type unification work, after which the legacy and
+/// schema-side document types collapse into a single
+/// `aws_smithy_types::Document`. Until that lands, this conversion
+/// has to compile against the legacy enum.
+///
+/// The match below covers the original 6 legacy variants. The four
+/// new variants added in Phase 1
+/// (`Document::Blob`, `Document::Timestamp`, `Document::BigInteger`,
+/// `Document::BigDecimal`) are deliberately handled by the wildcard
+/// arm with a transitional `panic!` — see the
+/// `TODO(document-unification)` block inside the impl.
 impl From<aws_smithy_types::Document> for Document<'static> {
     fn from(value: aws_smithy_types::Document) -> Self {
         use aws_smithy_types::Document as Legacy;
@@ -1042,6 +1055,40 @@ impl From<aws_smithy_types::Document> for Document<'static> {
                 map.into_iter()
                     .map(|(k, v)| (k, Document::from(v)))
                     .collect(),
+            ),
+            // TODO(document-unification): the four new legacy variants
+            // (Blob, Timestamp, BigInteger, BigDecimal) introduced in
+            // Phase 1 of the document-type unification reach this arm
+            // and panic. Mapping them is mechanically a 4-line addition
+            // (Legacy::Blob(b) => Document::blob(b), and so on — every
+            // one has a corresponding constructor on schema-side
+            // Document), but the entire `From<aws_smithy_types::Document>
+            // for Document<'static>` impl is being removed in Phase 4
+            // when the two Document types collapse, so we accept the
+            // transitional regression rather than write code that's
+            // about to be deleted.
+            //
+            // Risk window: between Phase 1 and Phase 4. During that
+            // time, codegen still emits
+            // `::aws_smithy_schema::document::Document::from(legacy)`
+            // for `@document` members, so user code constructing one
+            // of the new variants and passing it to a `@document`
+            // input on a schema-serde-allowlisted service will hit
+            // this panic.
+            //
+            // No existing service exercises this path (the new
+            // variants didn't exist before Phase 1, so no service
+            // model uses them and no test fixture constructs them).
+            // The panic message below is intended to be loud and
+            // self-explanatory if the path ever does fire.
+            other => panic!(
+                "From<aws_smithy_types::Document> for aws_smithy_schema::document::Document<'static>: \
+                 transitional panic on the new variant {other:?}. \
+                 This conversion bridge is being removed in Phase 4 of the document-type \
+                 unification work; until then, the four new legacy variants \
+                 (Blob/Timestamp/BigInteger/BigDecimal) added in Phase 1 are not routed \
+                 through this bridge. If you are seeing this panic, please switch the affected \
+                 service to the schema-serde codegen path or wait for Phase 4."
             ),
         }
     }

@@ -25,10 +25,12 @@
 
 mod data;
 mod deserializer;
+mod discriminated_ext;
 #[cfg(test)]
 mod round_trips;
 mod serializer;
 
 pub use data::{Document, DocumentInner, DocumentSettings};
 pub use deserializer::DocumentShapeDeserializer;
+pub use discriminated_ext::DiscriminatedDocumentExt;
 pub use serializer::DocumentShapeSerializer;

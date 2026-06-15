@@ -74,6 +74,18 @@ pub enum DocumentError {
         /// Explanatory message.
         message: String,
     },
+    /// The operation is not supported on this document. Used by
+    /// [`DiscriminatedDocument`](super::DiscriminatedDocument)'s
+    /// format-aware coercion accessors when no protocol settings are
+    /// attached, and by
+    /// [`DocumentSettings`](super::DocumentSettings) trait default
+    /// methods that a particular protocol doesn't support (e.g.
+    /// CBOR's `coerce_string_to_blob`, since CBOR has native byte
+    /// strings).
+    UnsupportedOperation {
+        /// Description of which operation isn't supported and why.
+        message: String,
+    },
 }
 
 impl fmt::Display for DocumentError {
@@ -85,6 +97,9 @@ impl fmt::Display for DocumentError {
             }
             DocumentError::InvalidInput { message } => write!(f, "invalid input: {message}"),
             DocumentError::Custom { message } => f.write_str(message),
+            DocumentError::UnsupportedOperation { message } => {
+                write!(f, "unsupported operation: {message}")
+            }
         }
     }
 }
@@ -95,6 +110,13 @@ impl DocumentError {
     /// Creates a custom error with the given message.
     pub fn custom(message: impl Into<String>) -> Self {
         DocumentError::Custom {
+            message: message.into(),
+        }
+    }
+
+    /// Creates an `UnsupportedOperation` error with the given message.
+    pub fn unsupported(message: impl Into<String>) -> Self {
+        DocumentError::UnsupportedOperation {
             message: message.into(),
         }
     }
