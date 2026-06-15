@@ -68,6 +68,22 @@ impl TraitMap {
     /// Equivalent to [`Self::get`] when the caller already has the FQN
     /// as a string slice — for example, after extracting the
     /// `__type` field from a JSON document.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use aws_smithy_schema::traits::JsonNameTrait;
+    /// use aws_smithy_schema::{shape_id, ShapeId, TraitMap};
+    ///
+    /// let mut traits = TraitMap::new();
+    /// traits.insert(Box::new(JsonNameTrait::new("custom_name")));
+    ///
+    /// // Cross-lifetime: a static-lifetime ShapeId from `shape_id!` and a
+    /// // runtime-built ShapeId<'_> with the same FQN both resolve via
+    /// // `Borrow<str>`. The companion `_fqn` accessor takes `&str` directly.
+    /// assert!(traits.get(&shape_id!("smithy.api", "jsonName")).is_some());
+    /// assert!(traits.get_fqn("smithy.api#jsonName").is_some());
+    /// ```
     pub fn get_fqn(&self, fqn: &str) -> Option<&dyn Trait> {
         self.traits.as_ref()?.get(fqn).map(|t| t.as_ref())
     }

@@ -139,6 +139,28 @@ impl TypeRegistry {
     /// Use this when you already have the FQN as a string slice — for
     /// instance, after extracting a `__type` discriminator from a
     /// JSON document.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use aws_smithy_schema::prelude;
+    /// use aws_smithy_schema::registry::TypeRegistry;
+    /// use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
+    /// use aws_smithy_types::type_erasure::TypeErasedBox;
+    ///
+    /// fn deserialize_string(d: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
+    ///     Ok(TypeErasedBox::new(d.read_string(&prelude::STRING)?))
+    /// }
+    ///
+    /// let registry = TypeRegistry::builder()
+    ///     .insert_shape(&prelude::STRING, deserialize_string)
+    ///     .build();
+    ///
+    /// // FQN extracted at runtime — for instance from a wire-format
+    /// // `__type` field — looks up against the static registry.
+    /// assert!(registry.schema_for_fqn("smithy.api#String").is_some());
+    /// assert!(registry.schema_for_fqn("smithy.api#Boolean").is_none());
+    /// ```
     pub fn schema_for_fqn(&self, fqn: &str) -> Option<&'static Schema<'static>> {
         self.entries.get(fqn).map(|e| e.schema)
     }
@@ -172,6 +194,34 @@ impl TypeRegistry {
     /// runtime-parsed documents (e.g. with a `__type` discriminator
     /// borrowed from input bytes) resolve against the `'static`-keyed
     /// registry via FQN matching.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use aws_smithy_schema::document::Document;
+    /// use aws_smithy_schema::prelude;
+    /// use aws_smithy_schema::registry::TypeRegistry;
+    /// use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
+    /// use aws_smithy_schema::shape_id;
+    /// use aws_smithy_types::type_erasure::TypeErasedBox;
+    ///
+    /// fn deserialize_string(d: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
+    ///     Ok(TypeErasedBox::new(d.read_string(&prelude::STRING)?))
+    /// }
+    ///
+    /// let registry = TypeRegistry::builder()
+    ///     .insert_shape(&prelude::STRING, deserialize_string)
+    ///     .build();
+    ///
+    /// // Build a discriminated document. In practice this typically comes
+    /// // from `JsonDeserializer::read_document_owned` after a wire-format
+    /// // `__type` lift.
+    /// let doc = Document::string("hi").with_discriminator(shape_id!("smithy.api", "String"));
+    ///
+    /// let typed = registry.deserialize_document(&doc).unwrap();
+    /// let value = typed.downcast::<String>().unwrap();
+    /// assert_eq!(*value, "hi");
+    /// ```
     pub fn deserialize_document(
         &self,
         document: &Document<'_>,

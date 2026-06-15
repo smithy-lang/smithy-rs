@@ -865,6 +865,29 @@ impl<'a> JsonDeserializer<'a> {
     /// against a default namespace is not yet implemented because it
     /// would require allocating an FQN string whose lifetime can't
     /// fit inside `Document<'a>`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use aws_smithy_json::codec::JsonCodec;
+    /// use aws_smithy_schema::codec::Codec;
+    /// use aws_smithy_schema::prelude;
+    ///
+    /// let codec = JsonCodec::default();
+    /// let bytes = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+    /// let mut deser = codec.create_deserializer(bytes);
+    /// let doc = deser.read_document_owned(&prelude::DOCUMENT).unwrap();
+    ///
+    /// // `__type` was lifted into the discriminator slot. Component
+    /// // strings borrow from the input bytes (lifetime `'a`).
+    /// let id = doc.discriminator().unwrap();
+    /// assert_eq!(id.as_str(), "smithy.example#Bird");
+    ///
+    /// // The map no longer contains `__type`.
+    /// let map = doc.as_map().unwrap();
+    /// assert_eq!(map.len(), 1);
+    /// assert_eq!(map.get("name").and_then(|d| d.as_string()), Some("Iago"));
+    /// ```
     pub fn read_document_owned(
         &mut self,
         _schema: &Schema<'_>,
