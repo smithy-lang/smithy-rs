@@ -61,6 +61,14 @@ fn is_valid_big_decimal(s: &str) -> bool {
 /// This type does not perform arithmetic operations. Users should parse the string
 /// with their preferred big integer library.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-deserialize"),
+    derive(serde::Deserialize)
+)]
 pub struct BigInteger(String);
 
 impl Default for BigInteger {
@@ -91,6 +99,14 @@ impl AsRef<str> for BigInteger {
 /// This type does not perform arithmetic operations. Users should parse the string
 /// with their preferred big decimal library.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-serialize"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    all(aws_sdk_unstable, feature = "serde-deserialize"),
+    derive(serde::Deserialize)
+)]
 pub struct BigDecimal(String);
 
 impl Default for BigDecimal {
