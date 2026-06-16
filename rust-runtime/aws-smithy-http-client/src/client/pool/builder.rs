@@ -25,6 +25,10 @@ use crate::client::tls;
 use crate::client::{TlsProviderSelected, TlsUnset};
 use crate::tls::TlsContext;
 
+/// Default idle-connection eviction timeout, applied when the caller does
+/// not configure one.
+const DEFAULT_POOL_IDLE_TIMEOUT: Duration = Duration::from_secs(60);
+
 /// Builder for a [`SharedPool`].
 ///
 /// Configures pool-wide settings: TLS, DNS, connection limits, idle
@@ -39,8 +43,9 @@ use crate::tls::TlsContext;
 /// [`SharedPool`]: super::SharedPool
 #[derive(Clone)]
 pub struct Builder<Tls = TlsUnset> {
-    pool_idle_timeout: Option<Duration>,
+    pool_idle_timeout: Option<Option<Duration>>,
     tcp_nodelay: bool,
+    tcp_keepalive: Option<Option<Duration>>,
     max_connections: Option<usize>,
     max_connections_per_host: Option<usize>,
     proxy_config: Option<ProxyConfig>,
@@ -56,6 +61,7 @@ impl<Tls: std::fmt::Debug> std::fmt::Debug for Builder<Tls> {
         f.debug_struct("Builder")
             .field("pool_idle_timeout", &self.pool_idle_timeout)
             .field("tcp_nodelay", &self.tcp_nodelay)
+            .field("tcp_keepalive", &self.tcp_keepalive)
             .field("max_connections", &self.max_connections)
             .field("max_connections_per_host", &self.max_connections_per_host)
             .field("proxy_config", &self.proxy_config)
@@ -75,6 +81,7 @@ impl Default for Builder<TlsUnset> {
         Self {
             pool_idle_timeout: None,
             tcp_nodelay: true,
+            tcp_keepalive: None,
             max_connections: None,
             max_connections_per_host: None,
             proxy_config: None,
@@ -92,16 +99,62 @@ impl<Tls> Builder<Tls> {
     /// Set the pool idle timeout.
     ///
     /// Connections idle longer than this duration are evicted from the
-    /// pool. Set below the server's idle timeout to avoid stale
-    /// connection errors. Defaults to no eviction when unset.
-    pub fn pool_idle_timeout(mut self, timeout: Duration) -> Self {
-        self.pool_idle_timeout = Some(timeout);
+    /// pool. Set below the server's idle timeout to avoid dispatching on a
+    /// connection the server has already closed.
+    ///
+    /// Unset, the pool uses a default of 60 seconds. Pass `Some(duration)`
+    /// to override, or `None` to disable idle eviction entirely.
+    pub fn pool_idle_timeout<D>(mut self, timeout: D) -> Self
+    where
+        D: Into<Option<Duration>>,
+    {
+        self.pool_idle_timeout = Some(timeout.into());
+        self
+    }
+
+    /// This is the mutable version of [`pool_idle_timeout`](Self::pool_idle_timeout).
+    ///
+    /// The outer `None` selects the default; `Some(None)` disables idle
+    /// eviction; `Some(Some(d))` sets the timeout to `d`.
+    pub fn set_pool_idle_timeout(&mut self, timeout: Option<Option<Duration>>) -> &mut Self {
+        self.pool_idle_timeout = timeout;
         self
     }
 
     /// Set TCP_NODELAY on connections. Default: `true`.
     pub fn tcp_nodelay(mut self, nodelay: bool) -> Self {
         self.tcp_nodelay = nodelay;
+        self
+    }
+
+    /// This is the mutable version of [`tcp_nodelay`](Self::tcp_nodelay).
+    pub fn set_tcp_nodelay(&mut self, nodelay: bool) -> &mut Self {
+        self.tcp_nodelay = nodelay;
+        self
+    }
+
+    /// Set the TCP keepalive idle time.
+    ///
+    /// Enables `SO_KEEPALIVE` with the given idle time before the first
+    /// probe. Keepalive detects dead peers faster than idle eviction
+    /// alone, notably for long-lived H2 connections.
+    ///
+    /// Keepalive is disabled by default. Pass `Some(duration)` to enable
+    /// it with that idle time; `None` leaves it disabled.
+    pub fn tcp_keepalive<D>(mut self, time: D) -> Self
+    where
+        D: Into<Option<Duration>>,
+    {
+        self.tcp_keepalive = Some(time.into());
+        self
+    }
+
+    /// This is the mutable version of [`tcp_keepalive`](Self::tcp_keepalive).
+    ///
+    /// The outer `None` selects the default; `Some(None)` disables
+    /// keepalive; `Some(Some(d))` sets the idle time to `d`.
+    pub fn set_tcp_keepalive(&mut self, time: Option<Option<Duration>>) -> &mut Self {
+        self.tcp_keepalive = time;
         self
     }
 
@@ -120,6 +173,14 @@ impl<Tls> Builder<Tls> {
         self
     }
 
+    /// This is the mutable version of [`max_connections`](Self::max_connections).
+    ///
+    /// `None` leaves the global limit unset (unbounded).
+    pub fn set_max_connections(&mut self, n: Option<usize>) -> &mut Self {
+        self.max_connections = n;
+        self
+    }
+
     /// Set the maximum number of concurrent connections per host.
     ///
     /// Each unique (scheme, authority) pair has an independent connection
@@ -127,6 +188,15 @@ impl<Tls> Builder<Tls> {
     /// be set and are enforced simultaneously.
     pub fn max_connections_per_host(mut self, n: usize) -> Self {
         self.max_connections_per_host = Some(n);
+        self
+    }
+
+    /// This is the mutable version of
+    /// [`max_connections_per_host`](Self::max_connections_per_host).
+    ///
+    /// `None` leaves the per-host limit unset (unbounded).
+    pub fn set_max_connections_per_host(&mut self, n: Option<usize>) -> &mut Self {
+        self.max_connections_per_host = n;
         self
     }
 
@@ -144,7 +214,7 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Mutable-reference variant of [`proxy_config`](Self::proxy_config).
+    /// This is the mutable version of [`proxy_config`](Self::proxy_config).
     pub fn set_proxy_config(&mut self, config: Option<ProxyConfig>) -> &mut Self {
         self.proxy_config = config;
         self
@@ -156,7 +226,7 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Mutable-reference variant of [`connection_event_listener`](Self::connection_event_listener).
+    /// This is the mutable version of [`connection_event_listener`](Self::connection_event_listener).
     pub fn set_connection_event_listener(
         &mut self,
         listener: Option<Arc<dyn ConnectionEventListener>>,
@@ -176,7 +246,7 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Mutable-reference variant of [`cross_partition_policy`](Self::cross_partition_policy).
+    /// This is the mutable version of [`cross_partition_policy`](Self::cross_partition_policy).
     pub fn set_cross_partition_policy(&mut self, policy: CrossPartitionPolicy) -> &mut Self {
         self.cross_partition_policy = policy;
         self
@@ -191,7 +261,7 @@ impl<Tls> Builder<Tls> {
         self
     }
 
-    /// Mutable-reference variant of [`dns_resolver`](Self::dns_resolver).
+    /// This is the mutable version of [`dns_resolver`](Self::dns_resolver).
     pub fn set_dns_resolver(&mut self, resolver: Option<SharedDnsResolver>) -> &mut Self {
         self.dns_resolver = resolver;
         self
@@ -204,6 +274,15 @@ impl<Tls> Builder<Tls> {
         self.partitions = partitions.into_iter().collect();
         self
     }
+
+    /// This is the mutable version of [`partitions`](Self::partitions).
+    ///
+    /// `None` clears any declared topology; the pool then uses a single
+    /// anonymous partition on the current tokio runtime.
+    pub fn set_partitions(&mut self, partitions: Option<Vec<Partition>>) -> &mut Self {
+        self.partitions = partitions.unwrap_or_default();
+        self
+    }
 }
 
 impl Builder<TlsUnset> {
@@ -212,6 +291,7 @@ impl Builder<TlsUnset> {
         Builder {
             pool_idle_timeout: self.pool_idle_timeout,
             tcp_nodelay: self.tcp_nodelay,
+            tcp_keepalive: self.tcp_keepalive,
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
             proxy_config: self.proxy_config,
@@ -233,9 +313,10 @@ impl Builder<TlsUnset> {
         let config = PoolConfig {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
-            pool_idle_timeout: self.pool_idle_timeout,
+            pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
         };
+        let keepalive = resolve_tcp_keepalive(self.tcp_keepalive);
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
         let partitions = std::mem::take(&mut self.partitions);
         let policy = self.cross_partition_policy;
@@ -243,11 +324,13 @@ impl Builder<TlsUnset> {
             Some(resolver) => {
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
+                tcp.set_keepalive(keepalive);
                 build_http_pool_with_proxy(tcp, &self.proxy_config, config, partitions, policy)
             }
             None => {
                 let mut tcp = HyperHttpConnector::new();
                 tcp.set_nodelay(self.tcp_nodelay);
+                tcp.set_keepalive(keepalive);
                 build_http_pool_with_proxy(tcp, &self.proxy_config, config, partitions, policy)
             }
         };
@@ -282,7 +365,7 @@ impl Builder<TlsUnset> {
         let config = super::PoolConfig {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
-            pool_idle_timeout: self.pool_idle_timeout,
+            pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
         };
         let policy = self.cross_partition_policy;
@@ -339,19 +422,28 @@ impl Builder<TlsProviderSelected> {
         self
     }
 
+    /// This is the mutable version of [`tls_context`](Self::tls_context).
+    pub fn set_tls_context(&mut self, context: TlsContext) -> &mut Self {
+        self.tls.context = context;
+        self
+    }
+
     /// Build an HTTPS client with the selected TLS provider.
     pub fn build_https(mut self) -> super::SharedPool {
         let dns_resolver = self.dns_resolver.take();
+        let keepalive = resolve_tcp_keepalive(self.tcp_keepalive);
         match dns_resolver {
             Some(resolver) => {
                 let mut tcp = HyperHttpConnector::new_with_resolver(HyperUtilResolver { resolver });
                 tcp.set_nodelay(self.tcp_nodelay);
+                tcp.set_keepalive(keepalive);
                 tcp.enforce_http(false);
                 self.build_from_tcp(tcp)
             }
             None => {
                 let mut tcp = HyperHttpConnector::new();
                 tcp.set_nodelay(self.tcp_nodelay);
+                tcp.set_keepalive(keepalive);
                 tcp.enforce_http(false);
                 self.build_from_tcp(tcp)
             }
@@ -369,7 +461,7 @@ impl Builder<TlsProviderSelected> {
         let config = PoolConfig {
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
-            pool_idle_timeout: self.pool_idle_timeout,
+            pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
         };
 
@@ -425,6 +517,22 @@ impl Builder<TlsProviderSelected> {
     }
 }
 
+/// Resolve the configured pool idle timeout. Outer `None` applies the
+/// default; `Some(None)` disables eviction; `Some(Some(d))` uses `d`.
+fn resolve_pool_idle_timeout(configured: Option<Option<Duration>>) -> Option<Duration> {
+    match configured {
+        None => Some(DEFAULT_POOL_IDLE_TIMEOUT),
+        Some(inner) => inner,
+    }
+}
+
+/// Resolve the configured TCP keepalive idle time. Keepalive is disabled
+/// by default, so the outer `None` resolves to off. `Some(None)` is also
+/// off; `Some(Some(d))` enables keepalive with idle time `d`.
+fn resolve_tcp_keepalive(configured: Option<Option<Duration>>) -> Option<Duration> {
+    configured.flatten()
+}
+
 /// Build the proxy URL matcher from a `ProxyConfig`, returning `None` when
 /// no proxy is configured. Wrapped in `Arc` for shared ownership: the pool
 /// stores it once and each `PooledConnector` clones the handle.
@@ -451,7 +559,9 @@ mod tests {
     #[test]
     fn builder_defaults() {
         let b = Builder::default();
+        // Outer None = "not configured"; the default is applied at build time.
         assert_eq!(b.pool_idle_timeout, None);
+        assert_eq!(b.tcp_keepalive, None);
         assert!(b.tcp_nodelay, "tcp_nodelay defaults to true");
         assert_eq!(b.max_connections, None);
         assert_eq!(b.max_connections_per_host, None);
@@ -462,6 +572,54 @@ mod tests {
         assert!(b.partitions.is_empty());
     }
 
+    #[test]
+    fn idle_timeout_resolution() {
+        // Unconfigured → default applied.
+        assert_eq!(
+            resolve_pool_idle_timeout(None),
+            Some(DEFAULT_POOL_IDLE_TIMEOUT)
+        );
+        // Some(None) → explicitly disabled.
+        assert_eq!(resolve_pool_idle_timeout(Some(None)), None);
+        // Some(Some(d)) → overridden.
+        let d = Duration::from_secs(5);
+        assert_eq!(resolve_pool_idle_timeout(Some(Some(d))), Some(d));
+    }
+
+    #[test]
+    fn keepalive_resolution() {
+        // Unset → off (keepalive is disabled by default).
+        assert_eq!(resolve_tcp_keepalive(None), None);
+        assert_eq!(resolve_tcp_keepalive(Some(None)), None);
+        let d = Duration::from_secs(45);
+        assert_eq!(resolve_tcp_keepalive(Some(Some(d))), Some(d));
+    }
+
+    #[test]
+    fn idle_timeout_setters_set_three_states() {
+        // chaining setter: Duration → Some(Some(d))
+        let b = Builder::default().pool_idle_timeout(Duration::from_secs(7));
+        assert_eq!(b.pool_idle_timeout, Some(Some(Duration::from_secs(7))));
+        // chaining setter: None → Some(None) (disable)
+        let b = Builder::default().pool_idle_timeout(None);
+        assert_eq!(b.pool_idle_timeout, Some(None));
+        // mutable setter passes through verbatim
+        let mut b = Builder::default();
+        b.set_pool_idle_timeout(Some(None));
+        assert_eq!(b.pool_idle_timeout, Some(None));
+    }
+
+    #[test]
+    fn keepalive_setters_set_three_states() {
+        let b = Builder::default().tcp_keepalive(Duration::from_secs(15));
+        assert_eq!(b.tcp_keepalive, Some(Some(Duration::from_secs(15))));
+        let b = Builder::default().tcp_keepalive(None);
+        assert_eq!(b.tcp_keepalive, Some(None));
+        let mut b = Builder::default();
+        b.set_tcp_keepalive(Some(None));
+        assert_eq!(b.tcp_keepalive, Some(None));
+    }
+
     /// `tls_provider` transitions the type-state while preserving every
     /// configured field. Guards the hand-written field-by-field move in
     /// `tls_provider` against a dropped field on a future edit.
@@ -470,6 +628,7 @@ mod tests {
         let b = Builder::default()
             .pool_idle_timeout(Duration::from_secs(30))
             .tcp_nodelay(false)
+            .tcp_keepalive(Duration::from_secs(45))
             .max_connections(100)
             .max_connections_per_host(10)
             .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
@@ -489,8 +648,9 @@ mod tests {
         let provider = tls::Provider::Rustls(tls::rustls_provider::CryptoMode::AwsLc);
         let b = b.tls_provider(provider);
 
-        assert_eq!(b.pool_idle_timeout, Some(Duration::from_secs(30)));
+        assert_eq!(b.pool_idle_timeout, Some(Some(Duration::from_secs(30))));
         assert!(!b.tcp_nodelay);
+        assert_eq!(b.tcp_keepalive, Some(Some(Duration::from_secs(45))));
         assert_eq!(b.max_connections, Some(100));
         assert_eq!(b.max_connections_per_host, Some(10));
         assert_eq!(b.cross_partition_policy, CrossPartitionPolicy::PreferLocal);
