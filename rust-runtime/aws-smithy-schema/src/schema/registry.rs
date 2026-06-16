@@ -33,8 +33,9 @@ use std::collections::HashMap;
 use std::fmt;
 
 use aws_smithy_types::type_erasure::TypeErasedBox;
+use aws_smithy_types::DiscriminatedDocument;
 
-use crate::document::{Document, DocumentShapeDeserializer};
+use crate::document::DocumentShapeDeserializer;
 use crate::serde::{SerdeError, ShapeDeserializer};
 use crate::Schema;
 use crate::ShapeId;
@@ -198,11 +199,10 @@ impl TypeRegistry {
     /// # Example
     ///
     /// ```
-    /// use aws_smithy_schema::document::Document;
     /// use aws_smithy_schema::prelude;
     /// use aws_smithy_schema::registry::TypeRegistry;
     /// use aws_smithy_schema::serde::{SerdeError, ShapeDeserializer};
-    /// use aws_smithy_schema::shape_id;
+    /// use aws_smithy_types::{DiscriminatedDocument, Document};
     /// use aws_smithy_types::type_erasure::TypeErasedBox;
     ///
     /// fn deserialize_string(d: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
@@ -214,9 +214,10 @@ impl TypeRegistry {
     ///     .build();
     ///
     /// // Build a discriminated document. In practice this typically comes
-    /// // from `JsonDeserializer::read_document_owned` after a wire-format
-    /// // `__type` lift.
-    /// let doc = Document::string("hi").with_discriminator(shape_id!("smithy.api", "String"));
+    /// // from `JsonDeserializer::read_discriminated_document` after a
+    /// // wire-format `__type` lift.
+    /// let doc = DiscriminatedDocument::new(Document::String("hi".to_string()))
+    ///     .with_discriminator("smithy.api#String");
     ///
     /// let typed = registry.deserialize_document(&doc).unwrap();
     /// let value = typed.downcast::<String>().unwrap();
@@ -224,7 +225,7 @@ impl TypeRegistry {
     /// ```
     pub fn deserialize_document(
         &self,
-        document: &Document<'_>,
+        document: &DiscriminatedDocument,
     ) -> Result<TypeErasedBox, SerdeError> {
         let id = document
             .discriminator()
@@ -234,11 +235,11 @@ impl TypeRegistry {
             })?;
         let entry = self
             .entries
-            .get(id.as_str())
+            .get(id)
             .ok_or_else(|| SerdeError::UnknownMember {
                 member_name: id.to_string(),
             })?;
-        let mut deser = DocumentShapeDeserializer::new(document);
+        let mut deser = DocumentShapeDeserializer::new(document.document());
         (entry.deserialize)(&mut deser)
     }
 
@@ -347,7 +348,8 @@ impl ExactSizeIterator for Iter<'_> {
 mod tests {
     use super::*;
 
-    use crate::document::Document;
+    use aws_smithy_types::{Document, Number};
+
     use crate::shape_id;
     use crate::ShapeType;
 
@@ -543,7 +545,8 @@ mod tests {
         assert_eq!(merged.len(), 1);
 
         // Resolve Foo and round-trip through deserialize_document.
-        let doc = Document::map(Default::default()).with_discriminator(*FOO_SCHEMA.shape_id());
+        let doc = DiscriminatedDocument::new(Document::Object(Default::default()))
+            .with_discriminator(FOO_SCHEMA.shape_id().as_str());
         let boxed = merged.deserialize_document(&doc).unwrap();
         let result = *boxed.downcast::<FooReplacement>().expect("override fn ran");
         assert_eq!(result, FooReplacement { replaced: true });
@@ -560,8 +563,9 @@ mod tests {
 
         // Build a Foo document with a "name" member and the Foo discriminator.
         let mut foo_members: HashMap<String, Document> = HashMap::new();
-        foo_members.insert("name".to_string(), Document::string("hello"));
-        let foo_doc = Document::map(foo_members).with_discriminator(*FOO_SCHEMA.shape_id());
+        foo_members.insert("name".to_string(), Document::String("hello".to_string()));
+        let foo_doc = DiscriminatedDocument::new(Document::Object(foo_members))
+            .with_discriminator(FOO_SCHEMA.shape_id().as_str());
 
         let boxed = registry.deserialize_document(&foo_doc).unwrap();
         let foo = *boxed.downcast::<Foo>().expect("downcast to Foo");
@@ -574,8 +578,9 @@ mod tests {
 
         // Same for Bar.
         let mut bar_members: HashMap<String, Document> = HashMap::new();
-        bar_members.insert("value".to_string(), Document::integer(42));
-        let bar_doc = Document::map(bar_members).with_discriminator(*BAR_SCHEMA.shape_id());
+        bar_members.insert("value".to_string(), Document::Number(Number::PosInt(42)));
+        let bar_doc = DiscriminatedDocument::new(Document::Object(bar_members))
+            .with_discriminator(BAR_SCHEMA.shape_id().as_str());
 
         let boxed = registry.deserialize_document(&bar_doc).unwrap();
         let bar = *boxed.downcast::<Bar>().expect("downcast to Bar");
@@ -589,7 +594,7 @@ mod tests {
             .build();
 
         // No discriminator attached.
-        let doc = Document::map(Default::default());
+        let doc = DiscriminatedDocument::new(Document::Object(Default::default()));
 
         let err = registry.deserialize_document(&doc).unwrap_err();
         match err {
@@ -609,8 +614,8 @@ mod tests {
             .insert_shape(&FOO_SCHEMA, deserialize_foo)
             .build();
 
-        let doc = Document::map(Default::default())
-            .with_discriminator(shape_id!("smithy.example", "Unregistered"));
+        let doc = DiscriminatedDocument::new(Document::Object(Default::default()))
+            .with_discriminator("smithy.example#Unregistered");
 
         let err = registry.deserialize_document(&doc).unwrap_err();
         match err {
@@ -630,8 +635,9 @@ mod tests {
             .build();
 
         let mut foo_members: HashMap<String, Document> = HashMap::new();
-        foo_members.insert("name".to_string(), Document::integer(5));
-        let doc = Document::map(foo_members).with_discriminator(*FOO_SCHEMA.shape_id());
+        foo_members.insert("name".to_string(), Document::Number(Number::PosInt(5)));
+        let doc = DiscriminatedDocument::new(Document::Object(foo_members))
+            .with_discriminator(FOO_SCHEMA.shape_id().as_str());
 
         let err = registry.deserialize_document(&doc).unwrap_err();
         match err {

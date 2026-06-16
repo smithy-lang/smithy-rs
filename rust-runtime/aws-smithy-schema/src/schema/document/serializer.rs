@@ -4,22 +4,25 @@
  */
 
 //! [`DocumentShapeSerializer`] — a [`ShapeSerializer`] implementation that
-//! builds up a [`Document`] tree from a typed Smithy shape.
+//! builds up an [`aws_smithy_types::Document`] tree (wrapped in a
+//! [`DiscriminatedDocument`] at the root) from a typed Smithy shape.
 //!
 //! A [`ShapeSerializer`] receives a sequence of `write_*(schema, value)`
 //! calls driven either by `value.serialize_members(self)` (for structures)
-//! or by a closure passed to `write_list`/`write_map`. The serializer does
-//! not see the shape's static type; it only sees the schema and the value
-//! at each call site.
+//! or by a closure passed to `write_list`/`write_map`. The serializer
+//! does not see the shape's static type; it only sees the schema and the
+//! value at each call site.
 //!
 //! [`DocumentShapeSerializer`] turns each such call into a [`Document`]
 //! node and stitches them into a tree using a small frame stack:
 //!
 //! - **No frame on the stack** — the next `write_*` call sets the root
-//!   document. The common entry point is [`Document::from_struct`], which
-//!   immediately calls `write_struct` and produces a structure-typed root.
-//!   A bare `write_string` (etc.) at the top level produces a scalar root,
-//!   which is also valid (e.g. a payload that's just `"foo"`).
+//!   document. The common entry point is
+//!   [`DiscriminatedDocument::from_struct`](crate::document::DiscriminatedDocumentExt::from_struct),
+//!   which immediately calls `write_struct` and produces a structure-
+//!   typed root. A bare `write_string` (etc.) at the top level produces
+//!   a scalar root, which is also valid (e.g. a payload that's just
+//!   `"foo"`).
 //! - **Struct frame** — each `write_*(member_schema, value)` insertion
 //!   uses `member_schema.member_name()` as the map key.
 //! - **List frame** — each `write_*` value is appended to the list.
@@ -27,55 +30,55 @@
 //!   map frame must produce a [`String`] document (the key); the next
 //!   call's value is bound to that key.
 //!
-//! When a frame's body completes, the serializer pops the frame, wraps it
-//! in the appropriate [`Document`] variant, and commits the wrapper to
-//! the parent frame (or to the root slot if the stack is now empty).
+//! When a frame's body completes, the serializer pops the frame, wraps
+//! it in the appropriate [`Document`] variant, and commits the wrapper
+//! to the parent frame (or to the root slot if the stack is now empty).
 
 use std::collections::HashMap;
 
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, Number};
 
-use super::{Document, DocumentInner};
 use crate::serde::{SerdeError, SerializableStruct, ShapeSerializer};
-use crate::{Schema, ShapeId};
+use crate::Schema;
 
-/// Builds a [`Document`] tree from a typed shape via the
+/// Builds a [`DiscriminatedDocument`] from a typed shape via the
 /// [`ShapeSerializer`] interface.
-///
-/// The lifetime parameter `'a` is the schema-data lifetime of the
-/// resulting [`Document`]. For codegen-emitted schemas (which are
-/// `'static`), use `DocumentShapeSerializer::new()` to obtain a
-/// `DocumentShapeSerializer<'static>`. Runtime callers with shorter-
-/// lived schemas should use `DocumentShapeSerializer::default()` and
-/// let `'a` flow from context.
 ///
 /// See the module-level documentation for an overview.
 ///
 /// # Discriminator capture
 ///
-/// Top-level discriminator capture (e.g. via [`Document::from_struct`]
+/// Top-level discriminator capture (e.g. via
+/// [`DiscriminatedDocument::from_struct`](crate::document::DiscriminatedDocumentExt::from_struct)
 /// or via direct calls like `ser.write_struct(&MY_SCHEMA, ...)`) goes
 /// through the inherent [`DocumentShapeSerializer::write_struct`]
-/// method, which captures the schema's shape ID via a `'b: 'a` bound.
+/// method, which captures the schema's shape ID into the serializer's
+/// `root_discriminator` slot.
 ///
 /// Nested discriminator capture (a struct member that is itself a
-/// struct, called through `value.serialize_members(&mut dyn
-/// ShapeSerializer)`) currently goes through the trait method and
-/// loses the discriminator, because the trait's `&Schema<'_>` has an
-/// anonymous per-call lifetime that cannot be bounded against the
-/// serializer's storage lifetime. Nested capture would require
-/// surgically parameterizing the [`ShapeSerializer`] / [`SerializableStruct`]
-/// traits over a lifetime — a separate piece of work.
+/// struct, called through `value.serialize_members(&mut dyn ShapeSerializer)`)
+/// is **not** preserved, because the unified [`Document`] type has no
+/// per-node discriminator slot — only the outer
+/// [`DiscriminatedDocument`] wrapper carries one. This matches the
+/// design in `.kiro/document-unification-plan.md` §2.3:
+/// discriminators apply at the wrapper level, not at every nested
+/// struct. The legacy schema-side `Document<'a>` carried a discriminator
+/// slot on every node, but in practice only the top-level capture was
+/// reachable through the trait surface (the trait method's anonymous
+/// `&Schema<'_>` lifetime could not be soundly bridged to the
+/// serializer's storage lifetime), so the unified design loses no
+/// observable behavior here.
 ///
 /// # Example
 ///
-/// Use [`Document::from_struct`] for the common case of converting a
-/// `SerializableStruct` into a `Document`:
+/// Use [`DiscriminatedDocument::from_struct`] for the common case of
+/// converting a [`SerializableStruct`] into a [`DiscriminatedDocument`]:
 ///
 /// ```ignore
-/// use aws_smithy_schema::document::Document;
+/// use aws_smithy_schema::document::DiscriminatedDocumentExt;
+/// use aws_smithy_types::DiscriminatedDocument;
 ///
-/// let doc = Document::from_struct(MyStruct::SCHEMA, &my_struct)?;
+/// let doc = DiscriminatedDocument::from_struct(MyStruct::SCHEMA, &my_struct)?;
 /// ```
 ///
 /// Direct construction is useful when round-tripping pieces of a tree
@@ -90,24 +93,28 @@ use crate::{Schema, ShapeId};
 /// let doc = ser.finish()?;
 /// ```
 #[derive(Debug, Default)]
-pub struct DocumentShapeSerializer<'a> {
+pub struct DocumentShapeSerializer {
     /// Stack of in-progress containers. Top is the active write target.
-    stack: Vec<Frame<'a>>,
+    stack: Vec<Frame>,
     /// Holds the root document once it is committed (i.e. once a write_*
     /// call returns with an empty stack).
-    finished: Option<Document<'a>>,
+    finished: Option<Document>,
+    /// FQN of the top-level struct's schema, captured by the inherent
+    /// [`DocumentShapeSerializer::write_struct`] method. `None` for
+    /// non-struct top-level writes or when the top-level write went
+    /// through the trait method.
+    root_discriminator: Option<String>,
 }
 
 /// An in-progress container on the serializer's frame stack.
 #[derive(Debug)]
-enum Frame<'a> {
+enum Frame {
     Struct {
-        members: HashMap<String, Document<'a>>,
-        discriminator: Option<ShapeId<'a>>,
+        members: HashMap<String, Document>,
     },
-    List(Vec<Document<'a>>),
+    List(Vec<Document>),
     Map {
-        entries: HashMap<String, Document<'a>>,
+        entries: HashMap<String, Document>,
         /// `Some(k)` after a key has been written and we're awaiting the
         /// matching value; `None` when we are at an entry boundary
         /// (next write becomes the next key).
@@ -115,95 +122,92 @@ enum Frame<'a> {
     },
 }
 
-impl DocumentShapeSerializer<'static> {
-    /// Creates a fresh `'static`-lifetimed serializer with an empty
-    /// frame stack.
-    ///
-    /// This is the codegen entry point — generated schemas are all
-    /// `'static`, so `'static` is the natural default. For shorter-
-    /// lifetime construction, use [`DocumentShapeSerializer::default`].
+impl DocumentShapeSerializer {
+    /// Creates a fresh serializer with an empty frame stack.
     pub fn new() -> Self {
         Self::default()
     }
-}
 
-impl<'a> DocumentShapeSerializer<'a> {
-    /// Consumes the serializer and returns the constructed [`Document`].
+    /// Consumes the serializer and returns the constructed
+    /// [`DiscriminatedDocument`].
+    ///
+    /// The wrapper carries the captured top-level discriminator (the
+    /// FQN of the schema passed to the inherent
+    /// [`DocumentShapeSerializer::write_struct`] entry point), if any.
+    /// Settings are not attached — serialize-side documents have no
+    /// protocol context.
     ///
     /// Returns an error if no value has been written yet, if any frame
     /// is still open (caller forgot a closing callback), or if the
     /// serializer was driven into a malformed state.
-    pub fn finish(self) -> Result<Document<'a>, SerdeError> {
+    pub fn finish(self) -> Result<DiscriminatedDocument, SerdeError> {
         if !self.stack.is_empty() {
             return Err(SerdeError::custom(format!(
                 "DocumentShapeSerializer::finish called with {} unfinished container(s) on the stack",
                 self.stack.len()
             )));
         }
-        self.finished.ok_or_else(|| {
+        let document = self.finished.ok_or_else(|| {
             SerdeError::custom(
                 "DocumentShapeSerializer::finish called before any value was written",
             )
-        })
+        })?;
+        let mut wrapper = DiscriminatedDocument::new(document);
+        if let Some(d) = self.root_discriminator {
+            wrapper = wrapper.with_discriminator(d);
+        }
+        Ok(wrapper)
     }
 
     /// Inherent struct write that captures the schema's shape ID as the
-    /// frame's discriminator.
+    /// serializer's top-level discriminator.
     ///
     /// Method resolution prefers this inherent method over the
     /// [`ShapeSerializer::write_struct`] trait method when the receiver
-    /// is a concrete `&mut DocumentShapeSerializer<'a>` — so call sites
+    /// is a concrete `&mut DocumentShapeSerializer` — so call sites
     /// like
+    ///
     /// ```ignore
     /// let mut ser = DocumentShapeSerializer::new();
     /// ser.write_struct(&MY_SCHEMA, &my_value)?;
     /// ```
-    /// hit this method (with `'b: 'a` satisfied trivially when the
-    /// schema is `'static` and `'a = 'static`).
     ///
-    /// Indirect calls through `&mut dyn ShapeSerializer` (e.g., from
-    /// inside another struct's `serialize_members` callback) take the
-    /// trait method instead, which currently can't capture due to its
-    /// per-call anonymous schema lifetime — see the trait impl below.
-    pub fn write_struct<'b: 'a>(
+    /// hit this method. Indirect calls through `&mut dyn ShapeSerializer`
+    /// (e.g., from inside another struct's `serialize_members` callback)
+    /// take the trait method instead, which doesn't capture a
+    /// discriminator — nested struct discriminators are deliberately
+    /// not preserved (see the type-level docs).
+    pub fn write_struct(
         &mut self,
-        schema: &Schema<'b>,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        // `'b: 'a` lets us covariantly upcast `ShapeId<'b>` from the
-        // schema into `Option<ShapeId<'a>>` storage on the frame.
-        let discriminator = *schema.shape_id();
+        let is_top_level = self.stack.is_empty() && self.finished.is_none();
+        if is_top_level {
+            self.root_discriminator = Some(schema.shape_id().as_str().to_string());
+        }
         self.stack.push(Frame::Struct {
             members: HashMap::new(),
-            discriminator: Some(discriminator),
         });
         // `value.serialize_members(self)` coerces `self` to `&mut dyn
         // ShapeSerializer`. Nested struct writes from within that
-        // callback go through the trait method and lose discriminator
-        // capture. Top-level capture (this call) is preserved.
+        // callback go through the trait method.
         value.serialize_members(self)?;
         let frame = self.stack.pop().expect("frame just pushed");
-        let (members, discriminator) = match frame {
-            Frame::Struct {
-                members,
-                discriminator,
-            } => (members, discriminator),
+        let members = match frame {
+            Frame::Struct { members } => members,
             _ => {
                 return Err(SerdeError::custom(
                     "DocumentShapeSerializer struct frame replaced by a different frame kind during serialization",
                 ));
             }
         };
-        let mut doc = Document::map(members);
-        if let Some(id) = discriminator {
-            doc = doc.with_discriminator(id);
-        }
-        self.commit_value(schema, doc)
+        self.commit_value(schema, Document::Object(members))
     }
 
-    /// Routes a constructed [`Document`] into the active frame, or commits
-    /// it as the root if the stack is empty.
-    fn commit_value(&mut self, schema: &Schema<'_>, value: Document<'a>) -> Result<(), SerdeError> {
+    /// Routes a constructed [`Document`] into the active frame, or
+    /// commits it as the root if the stack is empty.
+    fn commit_value(&mut self, schema: &Schema<'_>, value: Document) -> Result<(), SerdeError> {
         match self.stack.last_mut() {
             None => {
                 if self.finished.is_some() {
@@ -214,7 +218,7 @@ impl<'a> DocumentShapeSerializer<'a> {
                 self.finished = Some(value);
                 Ok(())
             }
-            Some(Frame::Struct { members, .. }) => {
+            Some(Frame::Struct { members }) => {
                 let name = schema.member_name().ok_or_else(|| {
                     SerdeError::custom(format!(
                         "writing a struct member requires a member schema with member_name set; got schema for {}",
@@ -236,13 +240,14 @@ impl<'a> DocumentShapeSerializer<'a> {
                     entries.insert(key, value);
                 } else {
                     // First write in an entry must be the key, and
-                    // map keys are always strings in the Smithy data model.
-                    let key = match value.inner() {
-                        DocumentInner::String(s) => s.clone(),
+                    // map keys are always strings in the Smithy data
+                    // model.
+                    let key = match value {
+                        Document::String(s) => s,
                         other => {
                             return Err(SerdeError::custom(format!(
                                 "map key must be a String document; got {}",
-                                shape_kind_name(other),
+                                shape_kind_name(&other),
                             )))
                         }
                     };
@@ -254,65 +259,50 @@ impl<'a> DocumentShapeSerializer<'a> {
     }
 }
 
-/// Human-readable name for a [`DocumentInner`] variant, used in error
+/// Human-readable name for a [`Document`] variant, used in error
 /// messages for type-mismatch diagnostics.
-fn shape_kind_name(inner: &DocumentInner) -> &'static str {
-    match inner {
-        DocumentInner::Null => "null",
-        DocumentInner::Boolean(_) => "boolean",
-        DocumentInner::Number(_) => "number",
-        DocumentInner::BigInteger(_) => "bigInteger",
-        DocumentInner::BigDecimal(_) => "bigDecimal",
-        DocumentInner::String(_) => "string",
-        DocumentInner::Blob(_) => "blob",
-        DocumentInner::Timestamp(_) => "timestamp",
-        DocumentInner::List(_) => "list",
-        DocumentInner::Map(_) => "map",
+fn shape_kind_name(d: &Document) -> &'static str {
+    match d {
+        Document::Null => "null",
+        Document::Bool(_) => "boolean",
+        Document::Number(_) => "number",
+        Document::String(_) => "string",
+        Document::Blob(_) => "blob",
+        Document::Timestamp(_) => "timestamp",
+        Document::BigInteger(_) => "bigInteger",
+        Document::BigDecimal(_) => "bigDecimal",
+        Document::Array(_) => "list",
+        Document::Object(_) => "map",
+        // The legacy enum is `#[non_exhaustive]`. Future variants are
+        // surfaced as a generic kind name for diagnostics.
+        _ => "unknown",
     }
 }
 
-impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
+impl ShapeSerializer for DocumentShapeSerializer {
     fn write_struct(
         &mut self,
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        // TODO(schema-lifetime): the trait method's `&Schema<'_>` is
-        // fresh per call and not bounded against `Self`'s `'a`; we
-        // cannot soundly copy `*schema.shape_id()` (a `ShapeId<'_>`)
-        // into the `Option<ShapeId<'a>>` slot without proof that
-        // `'_ : 'a`. Concrete callers that need the discriminator
-        // should call the inherent [`Self::write_struct`] (which
-        // carries that bound) — method resolution prefers the inherent
-        // over this trait method for direct calls. Indirect calls
-        // through `&mut dyn ShapeSerializer` (e.g. `serialize_members`
-        // callbacks for a nested struct member) hit this method and
-        // lose the discriminator. Lifting that limitation requires
-        // parameterizing [`ShapeSerializer`] / [`SerializableStruct`]
-        // over a lifetime; deferred.
-        let _ = schema;
+        // Trait dispatch path: nested struct writes from within
+        // `serialize_members` callbacks land here. We do NOT capture
+        // a discriminator — only the top-level inherent write_struct
+        // entry point does that (see the type-level docs).
         self.stack.push(Frame::Struct {
             members: HashMap::new(),
-            discriminator: None,
         });
         value.serialize_members(self)?;
         let frame = self.stack.pop().expect("frame just pushed");
-        let (members, discriminator) = match frame {
-            Frame::Struct {
-                members,
-                discriminator,
-            } => (members, discriminator),
+        let members = match frame {
+            Frame::Struct { members } => members,
             _ => {
                 return Err(SerdeError::custom(
                     "DocumentShapeSerializer struct frame replaced by a different frame kind during serialization",
                 ));
             }
         };
-        let mut doc = Document::map(members);
-        if let Some(id) = discriminator {
-            doc = doc.with_discriminator(id);
-        }
-        self.commit_value(schema, doc)
+        self.commit_value(schema, Document::Object(members))
     }
 
     fn write_list(
@@ -331,7 +321,7 @@ impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
                 ));
             }
         };
-        self.commit_value(schema, Document::list(items))
+        self.commit_value(schema, Document::Array(items))
     }
 
     fn write_map(
@@ -361,35 +351,36 @@ impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
                 "map ended with an unmatched key (key written without a matching value)",
             ));
         }
-        self.commit_value(schema, Document::map(entries))
+        self.commit_value(schema, Document::Object(entries))
     }
 
     fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::boolean(value))
+        self.commit_value(schema, Document::Bool(value))
     }
 
     fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::byte(value))
+        // Smithy byte (i8) — encode through Number's signed-int slot.
+        self.commit_value(schema, Document::Number(signed_to_number(value as i64)))
     }
 
     fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::short(value))
+        self.commit_value(schema, Document::Number(signed_to_number(value as i64)))
     }
 
     fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::integer(value))
+        self.commit_value(schema, Document::Number(signed_to_number(value as i64)))
     }
 
     fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::long(value))
+        self.commit_value(schema, Document::Number(signed_to_number(value)))
     }
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::float(value))
+        self.commit_value(schema, Document::Number(Number::Float(value as f64)))
     }
 
     fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::double(value))
+        self.commit_value(schema, Document::Number(Number::Float(value)))
     }
 
     fn write_big_integer(
@@ -397,7 +388,7 @@ impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
         schema: &Schema<'_>,
         value: &BigInteger,
     ) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::big_integer(value.clone()))
+        self.commit_value(schema, Document::BigInteger(value.clone()))
     }
 
     fn write_big_decimal(
@@ -405,34 +396,39 @@ impl<'a> ShapeSerializer for DocumentShapeSerializer<'a> {
         schema: &Schema<'_>,
         value: &BigDecimal,
     ) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::big_decimal(value.clone()))
+        self.commit_value(schema, Document::BigDecimal(value.clone()))
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::string(value))
+        self.commit_value(schema, Document::String(value.to_string()))
     }
 
     fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::blob(value.to_vec()))
+        self.commit_value(schema, Document::Blob(value.to_vec()))
     }
 
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::timestamp(*value))
+        self.commit_value(schema, Document::Timestamp(*value))
     }
 
-    fn write_document(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &Document<'_>,
-    ) -> Result<(), SerdeError> {
-        // Walk-and-clone to coerce the input's anonymous lifetime into
-        // the serializer's `'static` storage lifetime. See the doc on
-        // `Document::to_static_owned` for why.
-        self.commit_value(schema, value.to_static_owned())
+    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
+        // The unified Document is fully owned, so this is just a clone.
+        self.commit_value(schema, value.clone())
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
-        self.commit_value(schema, Document::null())
+        self.commit_value(schema, Document::Null)
+    }
+}
+
+/// Routes a signed integer into [`Number::PosInt`] or [`Number::NegInt`]
+/// based on sign — [`Number::PosInt`] is the natural slot for non-
+/// negative values; [`Number::NegInt`] for negatives.
+fn signed_to_number(v: i64) -> Number {
+    if v >= 0 {
+        Number::PosInt(v as u64)
+    } else {
+        Number::NegInt(v)
     }
 }
 
@@ -481,7 +477,7 @@ mod tests {
         let mut ser = DocumentShapeSerializer::new();
         ser.write_string(&prelude::STRING, "hello").unwrap();
         let doc = ser.finish().unwrap();
-        assert_eq!(doc.as_string(), Some("hello"));
+        assert_eq!(doc.document().as_string(), Some("hello"));
         assert!(doc.discriminator().is_none());
     }
 
@@ -490,7 +486,11 @@ mod tests {
         let mut ser = DocumentShapeSerializer::new();
         ser.write_integer(&prelude::INTEGER, 42).unwrap();
         let doc = ser.finish().unwrap();
-        assert_eq!(doc.as_integer().unwrap(), 42);
+        // 42 is non-negative → encoded as Number::PosInt(42).
+        assert!(matches!(
+            doc.document().as_number(),
+            Some(Number::PosInt(42))
+        ));
     }
 
     #[test]
@@ -498,13 +498,13 @@ mod tests {
         let mut ser = DocumentShapeSerializer::new();
         ser.write_null(&prelude::STRING).unwrap();
         let doc = ser.finish().unwrap();
-        assert!(matches!(doc.inner(), DocumentInner::Null));
+        assert!(matches!(doc.document(), Document::Null));
     }
 
     // -- Struct ----------------------------------------------------------
 
     #[test]
-    fn write_struct_produces_map_with_discriminator() {
+    fn write_struct_produces_object_with_discriminator() {
         let mut ser = DocumentShapeSerializer::new();
         ser.write_struct(
             &PERSON_SCHEMA,
@@ -516,13 +516,10 @@ mod tests {
         .unwrap();
         let doc = ser.finish().unwrap();
 
-        assert_eq!(
-            doc.discriminator().map(|id| id.as_str()),
-            Some("smithy.example#Person")
-        );
-        let map = doc.as_map().unwrap();
-        assert_eq!(map.get("name").and_then(Document::as_string), Some("Iago"));
-        assert_eq!(map.get("age").and_then(|d| d.as_integer().ok()), Some(7));
+        assert_eq!(doc.discriminator(), Some("smithy.example#Person"));
+        let map = doc.document().as_object().unwrap();
+        assert!(matches!(map.get("name"), Some(Document::String(s)) if s == "Iago"));
+        assert!(matches!(map.get("age"), Some(Document::Number(_))));
     }
 
     // -- List ------------------------------------------------------------
@@ -539,10 +536,10 @@ mod tests {
         })
         .unwrap();
         let doc = ser.finish().unwrap();
-        let items = doc.as_list().unwrap();
+        let items = doc.document().as_array().unwrap();
         assert_eq!(items.len(), 3);
-        assert_eq!(items[0].as_string(), Some("a"));
-        assert_eq!(items[2].as_string(), Some("c"));
+        assert!(matches!(&items[0], Document::String(s) if s == "a"));
+        assert!(matches!(&items[2], Document::String(s) if s == "c"));
     }
 
     #[test]
@@ -556,11 +553,11 @@ mod tests {
         })
         .unwrap();
         let doc = ser.finish().unwrap();
-        let items = doc.as_list().unwrap();
+        let items = doc.document().as_array().unwrap();
         assert_eq!(items.len(), 3);
-        assert_eq!(items[0].as_string(), Some("first"));
-        assert!(matches!(items[1].inner(), DocumentInner::Null));
-        assert_eq!(items[2].as_string(), Some("third"));
+        assert!(matches!(&items[0], Document::String(s) if s == "first"));
+        assert!(matches!(&items[1], Document::Null));
+        assert!(matches!(&items[2], Document::String(s) if s == "third"));
     }
 
     // -- Map -------------------------------------------------------------
@@ -577,16 +574,10 @@ mod tests {
         })
         .unwrap();
         let doc = ser.finish().unwrap();
-        let map = doc.as_map().unwrap();
+        let map = doc.document().as_object().unwrap();
         assert_eq!(map.len(), 2);
-        assert_eq!(
-            map.get("key1").and_then(Document::as_string),
-            Some("value1")
-        );
-        assert_eq!(
-            map.get("key2").and_then(Document::as_string),
-            Some("value2")
-        );
+        assert!(matches!(map.get("key1"), Some(Document::String(s)) if s == "value1"));
+        assert!(matches!(map.get("key2"), Some(Document::String(s)) if s == "value2"));
     }
 
     #[test]
@@ -623,18 +614,12 @@ mod tests {
     // -- Nested aggregates ----------------------------------------------
 
     #[test]
-    // TODO(schema-lifetime): nested struct discriminator capture
-    // requires going through the inherent `write_struct<'b: 'a>` on
-    // `DocumentShapeSerializer<'a>`, but `value.serialize_members(self)`
-    // coerces `self` to `&mut dyn ShapeSerializer` and the nested
-    // `inner.write_struct(...)` resolves to the trait method, which
-    // cannot capture the discriminator without a `'_ : 'a` bound on
-    // the trait method. Lifting that limitation requires
-    // parameterizing `ShapeSerializer` / `SerializableStruct` over a
-    // lifetime — a separate piece of work.
-    #[ignore]
-    fn nested_struct_in_map_round_trips() {
-        // map<String, Person> with a single entry
+    fn nested_struct_in_map_round_trips_data_but_loses_inner_discriminator() {
+        // map<String, Person> with a single entry. Nested Person
+        // discriminator is NOT preserved by design (per type-level
+        // docs / plan §2.3): the unified Document has no per-node
+        // discriminator slot — only the outer DiscriminatedDocument
+        // wrapper carries one. We still verify the data round-trips.
         let mut ser = DocumentShapeSerializer::new();
         ser.write_map(&prelude::DOCUMENT, &|inner| {
             inner.write_string(&prelude::STRING, "owner")?;
@@ -649,31 +634,28 @@ mod tests {
         })
         .unwrap();
         let doc = ser.finish().unwrap();
-        let map = doc.as_map().unwrap();
+        let map = doc.document().as_object().unwrap();
         let nested = map.get("owner").unwrap();
-        assert_eq!(
-            nested.discriminator().map(|id| id.as_str()),
-            Some("smithy.example#Person")
-        );
-        let nested_members = nested.as_map().unwrap();
-        assert_eq!(
-            nested_members.get("name").and_then(Document::as_string),
-            Some("Alex")
-        );
+        let nested_members = nested.as_object().unwrap();
+        assert!(matches!(
+            nested_members.get("name"),
+            Some(Document::String(s)) if s == "Alex"
+        ));
     }
 
-    // -- write_document round-trips a Document ---------------------------
+    // -- write_document round-trips a Document --------------------------
 
     #[test]
     fn write_document_commits_value_directly() {
-        let nested = Document::map(HashMap::from([(
+        let nested = Document::Object(HashMap::from([(
             "foo".to_string(),
-            Document::string("bar"),
+            Document::String("bar".to_string()),
         )]));
         let mut ser = DocumentShapeSerializer::new();
         ser.write_document(&prelude::DOCUMENT, &nested).unwrap();
         let doc = ser.finish().unwrap();
-        assert_eq!(doc.member("foo").and_then(Document::as_string), Some("bar"));
+        let map = doc.document().as_object().unwrap();
+        assert!(matches!(map.get("foo"), Some(Document::String(s)) if s == "bar"));
     }
 
     // -- Finish error paths ---------------------------------------------

@@ -9,7 +9,7 @@ use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSeria
 use crate::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
-use crate::document::Document;
+use aws_smithy_types::Document;
 
 /// Serializer for converting Smithy types to strings (for HTTP headers, query params, labels).
 pub struct HttpStringSerializer {
@@ -421,7 +421,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
             })
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "documents cannot be deserialized from strings".into(),
         })

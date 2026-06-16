@@ -6,8 +6,8 @@
 //! Shape deserialization interfaces for the Smithy data model.
 
 use super::error::SerdeError;
-use crate::document::Document;
 use crate::Schema;
+use aws_smithy_types::Document;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
 /// Deserializes Smithy shapes from a serial format.
@@ -130,7 +130,11 @@ pub trait ShapeDeserializer {
     fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError>;
 
     /// Reads a document value.
-    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document<'_>, SerdeError>;
+    ///
+    /// Returns the unified [`aws_smithy_types::Document`] (fully owned,
+    /// no lifetime). Implementations construct the value from their
+    /// underlying source representation.
+    fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError>;
 
     /// Checks if the current value is null.
     ///

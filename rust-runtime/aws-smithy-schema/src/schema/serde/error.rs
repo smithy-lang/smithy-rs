@@ -132,3 +132,33 @@ impl SerdeError {
         }
     }
 }
+
+/// Lift a [`DocumentError`](aws_smithy_types::DocumentError) coming
+/// out of the unified [`Document`](aws_smithy_types::Document)'s
+/// numeric / coercion accessors into the schema crate's broader
+/// [`SerdeError`].
+///
+/// The variant shapes line up one-to-one — `DocumentError` is a
+/// strict subset (Document-shaped failures only); `SerdeError` adds
+/// shape-serde concerns like missing/unknown members and write
+/// failures that are out of scope for the types crate.
+impl From<aws_smithy_types::DocumentError> for SerdeError {
+    fn from(err: aws_smithy_types::DocumentError) -> Self {
+        use aws_smithy_types::DocumentError as DE;
+        match err {
+            DE::TypeMismatch { message } => SerdeError::TypeMismatch { message },
+            DE::NumericCoercionOverflow { target, value } => {
+                SerdeError::NumericCoercionOverflow { target, value }
+            }
+            DE::InvalidInput { message } => SerdeError::InvalidInput { message },
+            DE::UnsupportedOperation { message } => SerdeError::UnsupportedOperation { message },
+            DE::Custom { message } => SerdeError::Custom { message },
+            // `DocumentError` is `#[non_exhaustive]`. Future variants
+            // surface as `Custom` so callers always see a reasonable
+            // mapping.
+            other => SerdeError::Custom {
+                message: format!("{other}"),
+            },
+        }
+    }
+}

@@ -57,7 +57,8 @@ use crate::{Schema, ShapeId, ShapeType};
 /// Documents can be created in two ways:
 ///
 /// - **Serialize side** — built from a typed shape via
-///   `Document::from_struct` or constructed directly by user code. These
+///   [`DiscriminatedDocument::from_struct`](aws_smithy_types::DiscriminatedDocument)
+///   (the unified API entry point) or constructed directly by user code. These
 ///   carry no settings; the default Smithy data-model semantics apply.
 ///
 /// - **Deserialize side** — produced by parsing a wire-format payload (e.g.
@@ -397,9 +398,10 @@ impl<'a> Document<'a> {
     /// implementations during parsing — see
     /// `aws_smithy_json::codec::JsonDeserializer` for an example.
     /// User code constructing documents from typed shapes via
-    /// [`Document::from_struct`] does not attach settings; format
-    /// coercion is unnecessary because such documents already carry
-    /// native `Blob` / `Timestamp` variants.
+    /// [`DiscriminatedDocument::from_struct`](aws_smithy_types::DiscriminatedDocument)
+    /// does not attach settings; format coercion is unnecessary
+    /// because such documents already carry native `Blob` / `Timestamp`
+    /// variants.
     pub fn with_settings(mut self, settings: Arc<dyn DocumentSettings>) -> Self {
         self.settings = Some(settings);
         self
@@ -419,111 +421,9 @@ impl<'a> Document<'a> {
     pub fn inner(&self) -> &DocumentInner<'a> {
         &self.inner
     }
-
-    /// Recursively rebuilds this Document with `'static` lifetime by
-    /// cloning every owned variant and dropping the discriminator.
-    ///
-    /// Used as a workaround in
-    /// [`DocumentShapeSerializer::write_document`] to coerce an input
-    /// `Document<'_>` (whose lifetime came from the trait method's
-    /// parameter, independent of the serializer's storage) into the
-    /// `Document<'static>` that the serializer's frame stack stores.
-    ///
-    /// The conversion drops the discriminator: turning `ShapeId<'a>`
-    /// into `ShapeId<'static>` would require the underlying string
-    /// slices to live forever, which the type system can't guarantee
-    /// for a generic `Document<'a>`. Callers that need to preserve a
-    /// discriminator on a typed document should use
-    /// [`Document::from_struct`] (which produces the document directly
-    /// from a typed value, and can attach the schema's
-    /// [`ShapeId`](ShapeId) statically) rather than constructing a
-    /// `Document` and writing it via `write_document`.
-    pub(crate) fn to_static_owned(&self) -> Document<'static> {
-        Document {
-            inner: self.inner.to_static_owned(),
-            discriminator: None,
-            settings: self.settings.clone(),
-        }
-    }
-}
-
-impl<'a> DocumentInner<'a> {
-    pub(crate) fn to_static_owned(&self) -> DocumentInner<'static> {
-        match self {
-            Self::Null => DocumentInner::Null,
-            Self::Boolean(b) => DocumentInner::Boolean(*b),
-            Self::Number(n) => DocumentInner::Number(*n),
-            Self::BigInteger(bi) => DocumentInner::BigInteger(bi.clone()),
-            Self::BigDecimal(bd) => DocumentInner::BigDecimal(bd.clone()),
-            Self::String(s) => DocumentInner::String(s.clone()),
-            Self::Blob(b) => DocumentInner::Blob(b.clone()),
-            Self::Timestamp(t) => DocumentInner::Timestamp(*t),
-            Self::List(items) => {
-                DocumentInner::List(items.iter().map(|d| d.to_static_owned()).collect())
-            }
-            Self::Map(m) => DocumentInner::Map(
-                m.iter()
-                    .map(|(k, v)| (k.clone(), v.to_static_owned()))
-                    .collect(),
-            ),
-        }
-    }
 }
 
 impl<'a> Document<'a> {
-    // -- High-level entry points ----------------------------------------
-
-    /// Constructs a [`Document`] tree from any
-    /// [`SerializableStruct`](crate::serde::SerializableStruct) by
-    /// driving it through a `DocumentShapeSerializer`.
-    ///
-    /// This is the SEP's `Document.of(struct)` entry point. The
-    /// resulting document carries `schema.shape_id()` as its
-    /// discriminator so the reverse conversion via a type registry can
-    /// find the right schema.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let bird_doc = Document::from_struct(Bird::SCHEMA, &my_bird)?;
-    /// assert_eq!(bird_doc.discriminator().unwrap().as_str(), "com.example#Bird");
-    /// ```
-    pub fn from_struct(
-        schema: &Schema<'a>,
-        value: &dyn crate::serde::SerializableStruct,
-    ) -> Result<Self, SerdeError> {
-        // Method resolution dispatches `ser.write_struct(schema, value)`
-        // to the inherent `DocumentShapeSerializer<'a>::write_struct`
-        // (with `'b: 'a` satisfied here by `'b = 'a`), which captures
-        // the schema's shape ID into the discriminator slot. The trait
-        // method does not capture; see the comment on the trait impl.
-        let mut ser = super::DocumentShapeSerializer::<'a>::default();
-        ser.write_struct(schema, value)?;
-        ser.finish()
-    }
-
-    /// Reifies this [`Document`] as a typed shape by driving the given
-    /// `deserialize` callback through a `DocumentShapeDeserializer`.
-    ///
-    /// This is the SEP's `Document::asShape` entry point. The callback
-    /// is typically the generated `<Type>::deserialize` function on a
-    /// shape's data carrier or builder; it sees a fresh
-    /// [`ShapeDeserializer`](crate::serde::ShapeDeserializer)
-    /// positioned at this document.
-    ///
-    /// # Example
-    ///
-    /// ```ignore
-    /// let bird: Bird = bird_doc.as_shape(|deser| Bird::deserialize(deser))?;
-    /// ```
-    pub fn as_shape<T, F>(&self, deserialize: F) -> Result<T, SerdeError>
-    where
-        F: FnOnce(&mut dyn crate::serde::ShapeDeserializer) -> Result<T, SerdeError>,
-    {
-        let mut deser = super::DocumentShapeDeserializer::new(self);
-        deserialize(&mut deser)
-    }
-
     // -- Shape type reporting -------------------------------------------
 
     /// Returns the [`ShapeType`] this document would be reported as if
@@ -1028,20 +928,26 @@ fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> Serd
 /// Convert a legacy [`aws_smithy_types::Document`] into the new
 /// [`Document`].
 ///
-/// This impl is **transitional**. The whole `aws-smithy-schema`
-/// `Document<'a>` type — and along with it this bridge — is deleted
-/// in Phase 4 (the schema-crate trait-method migration) of the
-/// document-type unification work, after which the legacy and
-/// schema-side document types collapse into a single
-/// `aws_smithy_types::Document`. Until that lands, this conversion
-/// has to compile against the legacy enum.
+/// Convert the legacy [`aws_smithy_types::Document`] into the new
+/// schema-side [`Document<'static>`].
 ///
-/// The match below covers the original 6 legacy variants. The four
-/// new variants added in Phase 1
+/// Both types are owned `'static` after Phase 1 of the document-type
+/// unification work added the four new variants
 /// (`Document::Blob`, `Document::Timestamp`, `Document::BigInteger`,
-/// `Document::BigDecimal`) are deliberately handled by the wildcard
-/// arm with a transitional `panic!` — see the
-/// `TODO(document-unification)` block inside the impl.
+/// `Document::BigDecimal`) to [`aws_smithy_types::Document`]. This
+/// bridge is a complete one-to-one mapping: every legacy variant
+/// has a corresponding schema-side constructor.
+///
+/// Discriminator and [`DocumentSettings`] are not carried — the legacy
+/// type has no slot for them. Callers that need to attach a
+/// discriminator after conversion can do so via
+/// [`Document::with_discriminator`].
+///
+/// This impl is being removed in Phase 8 of the document-type
+/// unification work, when the schema-side [`Document<'a>`] type is
+/// deleted. Until then the bridge supports both directions of
+/// conversion for codec implementations that still walk the
+/// schema-side tree internally.
 impl From<aws_smithy_types::Document> for Document<'static> {
     fn from(value: aws_smithy_types::Document) -> Self {
         use aws_smithy_types::Document as Legacy;
@@ -1050,45 +956,25 @@ impl From<aws_smithy_types::Document> for Document<'static> {
             Legacy::Bool(b) => Document::boolean(b),
             Legacy::Number(n) => Document::number(n),
             Legacy::String(s) => Document::string(s),
+            Legacy::Blob(b) => Document::blob(b),
+            Legacy::Timestamp(ts) => Document::timestamp(ts),
+            Legacy::BigInteger(bi) => Document::big_integer(bi),
+            Legacy::BigDecimal(bd) => Document::big_decimal(bd),
             Legacy::Array(items) => Document::list(items.into_iter().map(Document::from).collect()),
             Legacy::Object(map) => Document::map(
                 map.into_iter()
                     .map(|(k, v)| (k, Document::from(v)))
                     .collect(),
             ),
-            // TODO(document-unification): the four new legacy variants
-            // (Blob, Timestamp, BigInteger, BigDecimal) introduced in
-            // Phase 1 of the document-type unification reach this arm
-            // and panic. Mapping them is mechanically a 4-line addition
-            // (Legacy::Blob(b) => Document::blob(b), and so on — every
-            // one has a corresponding constructor on schema-side
-            // Document), but the entire `From<aws_smithy_types::Document>
-            // for Document<'static>` impl is being removed in Phase 4
-            // when the two Document types collapse, so we accept the
-            // transitional regression rather than write code that's
-            // about to be deleted.
-            //
-            // Risk window: between Phase 1 and Phase 4. During that
-            // time, codegen still emits
-            // `::aws_smithy_schema::document::Document::from(legacy)`
-            // for `@document` members, so user code constructing one
-            // of the new variants and passing it to a `@document`
-            // input on a schema-serde-allowlisted service will hit
-            // this panic.
-            //
-            // No existing service exercises this path (the new
-            // variants didn't exist before Phase 1, so no service
-            // model uses them and no test fixture constructs them).
-            // The panic message below is intended to be loud and
-            // self-explanatory if the path ever does fire.
+            // The legacy type is `#[non_exhaustive]` after Phase 1 to
+            // future-proof against further Smithy data-model
+            // additions. If a new variant is introduced in
+            // `aws-smithy-types` without updating this bridge, the
+            // catch-all panic surfaces it loudly during testing.
             other => panic!(
                 "From<aws_smithy_types::Document> for aws_smithy_schema::document::Document<'static>: \
-                 transitional panic on the new variant {other:?}. \
-                 This conversion bridge is being removed in Phase 4 of the document-type \
-                 unification work; until then, the four new legacy variants \
-                 (Blob/Timestamp/BigInteger/BigDecimal) added in Phase 1 are not routed \
-                 through this bridge. If you are seeing this panic, please switch the affected \
-                 service to the schema-serde codegen path or wait for Phase 4."
+                 unhandled legacy variant {other:?}. The legacy enum is non_exhaustive; this bridge \
+                 needs an arm for every variant. Please add the corresponding mapping."
             ),
         }
     }
@@ -1097,11 +983,14 @@ impl From<aws_smithy_types::Document> for Document<'static> {
 /// Convert a new [`Document`] into the legacy
 /// [`aws_smithy_types::Document`].
 ///
-/// Fails on variants that have no legacy representation —
-/// [`DocumentInner::Blob`], [`DocumentInner::Timestamp`],
-/// [`DocumentInner::BigInteger`], and [`DocumentInner::BigDecimal`] —
-/// returning [`SerdeError::TypeMismatch`]. The check is recursive: a
-/// list or map containing any of those variants fails.
+/// After Phase 1 of the document-type unification work added the four
+/// new variants (`Blob`, `Timestamp`, `BigInteger`, `BigDecimal`) to
+/// [`aws_smithy_types::Document`], every schema-side [`DocumentInner`]
+/// variant has a corresponding legacy variant — so this conversion is
+/// now infallible (it returns `Ok` for every variant). The
+/// [`TryFrom`] shape is preserved over `From` because the schema-side
+/// `Document<'a>` is being deleted in Phase 8 of the unification work
+/// and changing the trait kind would be a needless API churn.
 ///
 /// Discriminator and [`DocumentSettings`] are silently dropped; the
 /// legacy type has no slot for them.
@@ -1115,6 +1004,10 @@ impl<'a> TryFrom<Document<'a>> for aws_smithy_types::Document {
             DocumentInner::Boolean(b) => Ok(Legacy::Bool(b)),
             DocumentInner::Number(n) => Ok(Legacy::Number(n)),
             DocumentInner::String(s) => Ok(Legacy::String(s)),
+            DocumentInner::Blob(b) => Ok(Legacy::Blob(b)),
+            DocumentInner::Timestamp(ts) => Ok(Legacy::Timestamp(ts)),
+            DocumentInner::BigInteger(bi) => Ok(Legacy::BigInteger(bi)),
+            DocumentInner::BigDecimal(bd) => Ok(Legacy::BigDecimal(bd)),
             DocumentInner::List(items) => items
                 .into_iter()
                 .map(Self::try_from)
@@ -1125,21 +1018,6 @@ impl<'a> TryFrom<Document<'a>> for aws_smithy_types::Document {
                 .map(|(k, v)| Self::try_from(v).map(|v| (k, v)))
                 .collect::<Result<HashMap<_, _>, _>>()
                 .map(Legacy::Object),
-            DocumentInner::Blob(_) => Err(SerdeError::TypeMismatch {
-                message: "blob has no representation in aws_smithy_types::Document".to_string(),
-            }),
-            DocumentInner::Timestamp(_) => Err(SerdeError::TypeMismatch {
-                message: "timestamp has no representation in aws_smithy_types::Document"
-                    .to_string(),
-            }),
-            DocumentInner::BigInteger(_) => Err(SerdeError::TypeMismatch {
-                message: "bigInteger has no representation in aws_smithy_types::Document"
-                    .to_string(),
-            }),
-            DocumentInner::BigDecimal(_) => Err(SerdeError::TypeMismatch {
-                message: "bigDecimal has no representation in aws_smithy_types::Document"
-                    .to_string(),
-            }),
         }
     }
 }
@@ -1151,17 +1029,9 @@ mod tests {
     //! and [`From`] / [`TryFrom`] bridges to
     //! [`aws_smithy_types::Document`].
     //!
-    //! The SEP-normative test cases from
-    //! `new-document-type-test-cases.json` exercise the full
-    //! `serialize → deserialize → asShape → of` round-trip and depend
-    //! on machinery that doesn't exist yet:
-    //! - Phase 2: `DocumentShapeSerializer` / `DocumentShapeDeserializer`,
-    //!   `Document::from_struct`, `Document::as_shape`.
-    //! - Phase 7: `JsonDocumentSettings` (timestamp / blob coercion,
-    //!   `__type` discriminator extraction).
-    //!
-    //! Those normative cases land alongside Phases 2 and 7 per
-    //! `.kiro/document-types-and-type-registries-plan.md` §4.
+    //! End-to-end serialize → deserialize round-trips for the unified
+    //! Document API live in `round_trips.rs`; this module's tests are
+    //! limited to the schema-side data type that is being phased out.
 
     use super::*;
     use crate::shape_id;
@@ -1765,35 +1635,51 @@ mod tests {
     }
 
     #[test]
-    fn try_from_to_legacy_fails_on_extended_variants() {
-        let err: SerdeError =
-            aws_smithy_types::Document::try_from(Document::blob(b"hi".to_vec())).unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+    fn try_from_to_legacy_round_trips_extended_variants() {
+        // After Phase 4 of the document-type unification, the four
+        // new variants (Blob/Timestamp/BigInteger/BigDecimal) are all
+        // representable on both sides and round-trip directly through
+        // the bridge.
+        let blob_back = aws_smithy_types::Document::try_from(Document::blob(b"hi".to_vec()))
+            .expect("blob should round-trip after Phase 4");
+        assert_eq!(blob_back, aws_smithy_types::Document::Blob(b"hi".to_vec()));
 
-        let err: SerdeError =
+        let ts_back =
             aws_smithy_types::Document::try_from(Document::timestamp(DateTime::from_secs(0)))
-                .unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+                .expect("timestamp should round-trip after Phase 4");
+        assert_eq!(
+            ts_back,
+            aws_smithy_types::Document::Timestamp(DateTime::from_secs(0))
+        );
 
-        let bi = "1".parse::<BigInteger>().unwrap();
-        let err: SerdeError =
-            aws_smithy_types::Document::try_from(Document::big_integer(bi)).unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+        let bi = "12345678901234567890".parse::<BigInteger>().unwrap();
+        let bi_back = aws_smithy_types::Document::try_from(Document::big_integer(bi.clone()))
+            .expect("bigInteger should round-trip after Phase 4");
+        assert_eq!(bi_back, aws_smithy_types::Document::BigInteger(bi));
 
-        let bd = "1.0".parse::<BigDecimal>().unwrap();
-        let err: SerdeError =
-            aws_smithy_types::Document::try_from(Document::big_decimal(bd)).unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+        let bd = "1.234567890123456789".parse::<BigDecimal>().unwrap();
+        let bd_back = aws_smithy_types::Document::try_from(Document::big_decimal(bd.clone()))
+            .expect("bigDecimal should round-trip after Phase 4");
+        assert_eq!(bd_back, aws_smithy_types::Document::BigDecimal(bd));
     }
 
     #[test]
-    fn try_from_to_legacy_propagates_through_list_and_map() {
-        // List with a nested Blob → fails recursively.
+    fn try_from_to_legacy_round_trips_through_list_and_map() {
+        // List containing extended variants — recursive conversion
+        // succeeds end-to-end.
         let list = Document::list(vec![Document::string("ok"), Document::blob(b"!".to_vec())]);
-        let err = aws_smithy_types::Document::try_from(list).unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+        let legacy = aws_smithy_types::Document::try_from(list)
+            .expect("list with blob should round-trip after Phase 4");
+        match legacy {
+            aws_smithy_types::Document::Array(items) => {
+                assert_eq!(items.len(), 2);
+                assert!(matches!(&items[0], aws_smithy_types::Document::String(s) if s == "ok"));
+                assert!(matches!(&items[1], aws_smithy_types::Document::Blob(b) if b == b"!"));
+            }
+            other => panic!("expected Array, got {other:?}"),
+        }
 
-        // Map with a nested Timestamp value → fails recursively.
+        // Map containing extended variants — same.
         let map = Document::map(HashMap::from([
             ("ok".to_string(), Document::string("yes")),
             (
@@ -1801,8 +1687,58 @@ mod tests {
                 Document::timestamp(DateTime::from_secs(0)),
             ),
         ]));
-        let err = aws_smithy_types::Document::try_from(map).unwrap_err();
-        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+        let legacy = aws_smithy_types::Document::try_from(map)
+            .expect("map with timestamp should round-trip after Phase 4");
+        match legacy {
+            aws_smithy_types::Document::Object(entries) => {
+                assert_eq!(entries.len(), 2);
+                assert!(matches!(
+                    entries.get("ok"),
+                    Some(aws_smithy_types::Document::String(s)) if s == "yes"
+                ));
+                assert!(matches!(
+                    entries.get("when"),
+                    Some(aws_smithy_types::Document::Timestamp(ts)) if *ts == DateTime::from_secs(0)
+                ));
+            }
+            other => panic!("expected Object, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn from_legacy_round_trips_extended_variants() {
+        // The reverse direction: legacy → schema-side. The four new
+        // legacy variants now have proper schema-side mappings (no
+        // panic).
+        let schema_blob: Document<'static> =
+            aws_smithy_types::Document::Blob(b"hello".to_vec()).into();
+        match schema_blob.inner() {
+            DocumentInner::Blob(got) => assert_eq!(got.as_slice(), b"hello"),
+            other => panic!("expected Blob, got {other:?}"),
+        }
+
+        let schema_ts: Document<'static> =
+            aws_smithy_types::Document::Timestamp(DateTime::from_secs(42)).into();
+        match schema_ts.inner() {
+            DocumentInner::Timestamp(got) => assert_eq!(*got, DateTime::from_secs(42)),
+            other => panic!("expected Timestamp, got {other:?}"),
+        }
+
+        let bi = "999999999999999999999".parse::<BigInteger>().unwrap();
+        let schema_bi: Document<'static> =
+            aws_smithy_types::Document::BigInteger(bi.clone()).into();
+        match schema_bi.inner() {
+            DocumentInner::BigInteger(got) => assert_eq!(*got, bi),
+            other => panic!("expected BigInteger, got {other:?}"),
+        }
+
+        let bd = "0.123456789012345678".parse::<BigDecimal>().unwrap();
+        let schema_bd: Document<'static> =
+            aws_smithy_types::Document::BigDecimal(bd.clone()).into();
+        match schema_bd.inner() {
+            DocumentInner::BigDecimal(got) => assert_eq!(*got, bd),
+            other => panic!("expected BigDecimal, got {other:?}"),
+        }
     }
 
     #[test]
@@ -1852,59 +1788,5 @@ mod tests {
         let new: Document = original.clone().into();
         let round_tripped: aws_smithy_types::Document = new.try_into().unwrap();
         assert_eq!(round_tripped, original);
-    }
-
-    // -- from_struct / as_shape entry points ----------------------------
-
-    use crate::serde::{SerializableStruct, ShapeDeserializer, ShapeSerializer};
-
-    const TINY_ID: ShapeId<'static> = shape_id!("smithy.example", "Tiny");
-    const TINY_FLAG_ID: ShapeId<'static> = shape_id!("smithy.example", "Tiny", "flag");
-    static TINY_FLAG_MEMBER: Schema<'static> =
-        Schema::new_member(TINY_FLAG_ID, ShapeType::Boolean, "flag", 0);
-    static TINY_SCHEMA: Schema<'static> =
-        Schema::new_struct(TINY_ID, ShapeType::Structure, &[&TINY_FLAG_MEMBER]);
-
-    #[derive(Debug, PartialEq)]
-    struct Tiny {
-        flag: bool,
-    }
-
-    impl SerializableStruct for Tiny {
-        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
-            ser.write_boolean(&TINY_FLAG_MEMBER, self.flag)
-        }
-    }
-
-    fn deserialize_tiny(deser: &mut dyn ShapeDeserializer) -> Result<Tiny, SerdeError> {
-        let mut flag = false;
-        deser.read_struct(&TINY_SCHEMA, &mut |member, sub| {
-            if member.member_index() == Some(0) {
-                flag = sub.read_boolean(member)?;
-            }
-            Ok(())
-        })?;
-        Ok(Tiny { flag })
-    }
-
-    #[test]
-    fn from_struct_attaches_discriminator() {
-        let doc = Document::from_struct(&TINY_SCHEMA, &Tiny { flag: true }).unwrap();
-        assert_eq!(
-            doc.discriminator().map(|id| id.as_str()),
-            Some("smithy.example#Tiny")
-        );
-        assert_eq!(
-            doc.member("flag").and_then(Document::as_boolean),
-            Some(true)
-        );
-    }
-
-    #[test]
-    fn as_shape_round_trips_through_document() {
-        let original = Tiny { flag: true };
-        let doc = Document::from_struct(&TINY_SCHEMA, &original).unwrap();
-        let restored: Tiny = doc.as_shape(deserialize_tiny).unwrap();
-        assert_eq!(restored, original);
     }
 }

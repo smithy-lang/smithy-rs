@@ -891,7 +891,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
     fn write_document(
         &mut self,
         schema: &Schema<'_>,
-        value: &crate::document::Document,
+        value: &aws_smithy_types::Document,
     ) -> Result<(), SerdeError> {
         self.body.write_document(schema, value)
     }
@@ -1118,7 +1118,7 @@ impl ShapeSerializer for ListElementCollector {
     fn write_document(
         &mut self,
         _: &Schema<'_>,
-        _: &crate::document::Document,
+        _: &aws_smithy_types::Document,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -1266,7 +1266,7 @@ impl ShapeSerializer for MapEntryCollector {
     fn write_document(
         &mut self,
         _: &Schema<'_>,
-        _: &crate::document::Document,
+        _: &aws_smithy_types::Document,
     ) -> Result<(), SerdeError> {
         Ok(())
     }
@@ -1470,7 +1470,7 @@ mod tests {
         fn write_document(
             &mut self,
             _: &Schema<'_>,
-            _: &crate::document::Document,
+            _: &aws_smithy_types::Document,
         ) -> Result<(), SerdeError> {
             Ok(())
         }
@@ -1555,8 +1555,8 @@ mod tests {
         fn read_document(
             &mut self,
             _: &Schema<'_>,
-        ) -> Result<crate::document::Document<'_>, SerdeError> {
-            Ok(crate::document::Document::null())
+        ) -> Result<aws_smithy_types::Document, SerdeError> {
+            Ok(aws_smithy_types::Document::Null)
         }
         fn is_null(&self) -> bool {
             false
@@ -1815,7 +1815,7 @@ mod tests {
             fn write_document(
                 &mut self,
                 _: &Schema<'_>,
-                _: &crate::document::Document,
+                _: &aws_smithy_types::Document,
             ) -> Result<(), SerdeError> {
                 panic!("body codec write_document() called");
             }

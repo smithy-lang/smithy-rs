@@ -3,14 +3,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! [`DocumentShapeDeserializer`] — a [`ShapeDeserializer`] implementation
-//! that walks a [`Document`] tree.
+//! [`DocumentShapeDeserializer`] — a [`ShapeDeserializer`]
+//! implementation that walks an [`aws_smithy_types::Document`] tree.
 //!
 //! Generated `deserialize` methods on Smithy shapes call the
 //! [`ShapeDeserializer`] interface to drive structure / list / map
 //! consumer dispatch and read scalar leaves. Pointing such generated
 //! code at this deserializer reifies a [`Document`] tree as the
-//! corresponding typed shape — the inverse of [`Document::from_struct`].
+//! corresponding typed shape — the inverse of [`DocumentShapeSerializer`].
 //!
 //! The deserializer holds a borrow of the source [`Document`] so reads
 //! are zero-copy where possible (e.g. [`String`] reads still clone the
@@ -21,19 +21,22 @@
 //! For struct reads, member dispatch uses the document's keys (not the
 //! schema's member list) so that documents created from a typed shape
 //! by [`DocumentShapeSerializer`] round-trip — those use Smithy member
-//! names. Documents parsed from a wire format that renames members
-//! (`@jsonName`, `@xmlName`) carry an [`Arc<dyn DocumentSettings>`] that
-//! resolves wire names back to schema member indices; see
-//! [`DocumentSettings::member_index_for`].
+//! names. Wire-name resolution for `@jsonName` / `@xmlName`-style
+//! renames is the responsibility of the protocol's deserializer
+//! (`JsonDeserializer`, etc.) — not this generic Document walker. The
+//! `JsonFieldMapper` machinery in `aws-smithy-json` performs that
+//! mapping during the codec stage; this deserializer simply matches
+//! Smithy member names against document keys.
 //!
 //! Members present in the schema but absent from the document are not
-//! reported: generated builders default unset optional members to `None`
-//! and required-member enforcement is the builder's responsibility, not
-//! the deserializer's.
+//! reported: generated builders default unset optional members to
+//! `None` and required-member enforcement is the builder's
+//! responsibility, not the deserializer's.
+//!
+//! [`DocumentShapeSerializer`]: super::DocumentShapeSerializer
 
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
 
-use super::{Document, DocumentInner, DocumentSettings};
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
 
@@ -43,11 +46,12 @@ use crate::Schema;
 ///
 /// # Example
 ///
-/// Use [`Document::as_shape`] for the common case of consuming a
-/// `Document` via a generated `deserialize` method:
+/// Use [`DiscriminatedDocument::as_shape`](crate::document::DiscriminatedDocumentExt::as_shape)
+/// for the common case of consuming a [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument)
+/// via a generated `deserialize` method:
 ///
 /// ```ignore
-/// use aws_smithy_schema::document::Document;
+/// use aws_smithy_schema::document::DiscriminatedDocumentExt;
 ///
 /// let person: Person = doc.as_shape(|deser| Person::deserialize(deser))?;
 /// ```
@@ -65,55 +69,62 @@ use crate::Schema;
 #[derive(Debug)]
 pub struct DocumentShapeDeserializer<'a> {
     /// The document this deserializer is currently positioned at.
-    cursor: &'a Document<'a>,
+    cursor: &'a Document,
 }
 
 impl<'a> DocumentShapeDeserializer<'a> {
     /// Creates a deserializer positioned at the given document.
-    pub fn new(document: &'a Document<'a>) -> Self {
+    ///
+    /// The lifetime parameter is the borrow lifetime of `document` —
+    /// the cursor is just a `&Document`. The unified [`Document`] type
+    /// itself has no lifetime parameter (it is fully owned), so this
+    /// `'a` is purely the per-call borrow lifetime.
+    pub fn new(document: &'a Document) -> Self {
         Self { cursor: document }
     }
 }
 
 /// Builds a `TypeMismatch` error message for a read that expected one
 /// kind of value and found another.
-fn type_mismatch(expected: &str, found: &DocumentInner<'_>) -> SerdeError {
+fn type_mismatch(expected: &str, found: &Document) -> SerdeError {
     SerdeError::TypeMismatch {
-        message: format!("expected {expected} document, got {}", kind_name(found),),
+        message: format!("expected {expected} document, got {}", kind_name(found)),
     }
 }
 
-fn kind_name(inner: &DocumentInner<'_>) -> &'static str {
-    match inner {
-        DocumentInner::Null => "null",
-        DocumentInner::Boolean(_) => "boolean",
-        DocumentInner::Number(_) => "number",
-        DocumentInner::BigInteger(_) => "bigInteger",
-        DocumentInner::BigDecimal(_) => "bigDecimal",
-        DocumentInner::String(_) => "string",
-        DocumentInner::Blob(_) => "blob",
-        DocumentInner::Timestamp(_) => "timestamp",
-        DocumentInner::List(_) => "list",
-        DocumentInner::Map(_) => "map",
+/// Human-readable name for a [`Document`] variant, used in error
+/// messages for type-mismatch diagnostics.
+fn kind_name(d: &Document) -> &'static str {
+    match d {
+        Document::Null => "null",
+        Document::Bool(_) => "boolean",
+        Document::Number(_) => "number",
+        Document::String(_) => "string",
+        Document::Blob(_) => "blob",
+        Document::Timestamp(_) => "timestamp",
+        Document::BigInteger(_) => "bigInteger",
+        Document::BigDecimal(_) => "bigDecimal",
+        Document::Array(_) => "list",
+        Document::Object(_) => "map",
+        // Document is `#[non_exhaustive]`. Future variants surface as
+        // a generic kind name so error messages remain informative.
+        _ => "unknown",
     }
 }
 
-/// Resolves a wire-level map key to a member of `schema`. If the
-/// document has settings attached, those are consulted so that
-/// `@jsonName`-style member rename traits resolve correctly. Otherwise
-/// falls back to matching against [`Schema::member_name`] directly.
-fn resolve_member<'s>(
-    schema: &'s Schema<'s>,
-    settings: Option<&dyn DocumentSettings>,
-    wire_name: &str,
-) -> Option<&'s Schema<'s>> {
-    let idx = match settings {
-        Some(s) => s.member_index_for(schema, wire_name)?,
-        None => schema
-            .members()
-            .iter()
-            .position(|m| m.member_name() == Some(wire_name))?,
-    };
+/// Resolves a wire-level map key to a member of `schema`, matching
+/// against [`Schema::member_name`] directly.
+///
+/// Wire-name resolution for `@jsonName` / `@xmlName`-style renames is
+/// the responsibility of the protocol's deserializer (which has access
+/// to the codec settings); this generic Document walker matches Smithy
+/// member names only. Documents produced by [`DocumentShapeSerializer`]
+/// always use Smithy member names, so the round-trip is exact.
+fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Schema<'s>> {
+    let idx = schema
+        .members()
+        .iter()
+        .position(|m| m.member_name() == Some(wire_name))?;
     schema.member_schema_by_index(idx)
 }
 
@@ -125,16 +136,10 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     ) -> Result<(), SerdeError> {
         let map = self
             .cursor
-            .as_map()
-            .ok_or_else(|| type_mismatch("struct (map)", self.cursor.inner()))?;
-        // Inherit settings from the parent so wire-renamed members
-        // resolve correctly; this is `None` for serialize-side documents.
-        let settings = self
-            .cursor
-            .settings()
-            .map(|arc| arc.as_ref() as &dyn DocumentSettings);
+            .as_object()
+            .ok_or_else(|| type_mismatch("struct (map)", self.cursor))?;
         for (key, value) in map {
-            let Some(member_schema) = resolve_member(schema, settings, key) else {
+            let Some(member_schema) = resolve_member(schema, key) else {
                 // Unknown member — silently ignore. Matches the
                 // tolerant "ignore unknown fields" behavior of the
                 // JSON deserializer.
@@ -153,8 +158,8 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     ) -> Result<(), SerdeError> {
         let items = self
             .cursor
-            .as_list()
-            .ok_or_else(|| type_mismatch("list", self.cursor.inner()))?;
+            .as_array()
+            .ok_or_else(|| type_mismatch("list", self.cursor))?;
         for item in items {
             let mut sub = Self::new(item);
             consumer(&mut sub)?;
@@ -169,8 +174,8 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     ) -> Result<(), SerdeError> {
         let entries = self
             .cursor
-            .as_map()
-            .ok_or_else(|| type_mismatch("map", self.cursor.inner()))?;
+            .as_object()
+            .ok_or_else(|| type_mismatch("map", self.cursor))?;
         for (key, value) in entries {
             let mut sub = Self::new(value);
             consumer(key.clone(), &mut sub)?;
@@ -180,73 +185,83 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
 
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         self.cursor
-            .as_boolean()
-            .ok_or_else(|| type_mismatch("boolean", self.cursor.inner()))
+            .as_bool()
+            .ok_or_else(|| type_mismatch("boolean", self.cursor))
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        self.cursor.as_byte()
+        Ok(self.cursor.as_byte()?)
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        self.cursor.as_short()
+        Ok(self.cursor.as_short()?)
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        self.cursor.as_integer()
+        Ok(self.cursor.as_integer()?)
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        self.cursor.as_long()
+        Ok(self.cursor.as_long()?)
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        self.cursor.as_float()
+        Ok(self.cursor.as_float()?)
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        self.cursor.as_double()
+        Ok(self.cursor.as_double()?)
     }
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        self.cursor.as_big_integer()
+        // `coerce_big_integer` widens numeric variants into BigInteger
+        // and accepts a native `BigInteger` directly. Mirrors the
+        // schema-side type's previous behavior.
+        Ok(self.cursor.coerce_big_integer()?)
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        self.cursor.as_big_decimal()
+        Ok(self.cursor.coerce_big_decimal()?)
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
-        match self.cursor.inner() {
-            DocumentInner::String(s) => Ok(s.clone()),
+        match self.cursor {
+            Document::String(s) => Ok(s.clone()),
             other => Err(type_mismatch("string", other)),
         }
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        // `Document::as_blob` returns the variant directly for native
-        // `Blob` documents and consults `DocumentSettings` to coerce
-        // strings (e.g. JSON's base64-encoded blobs).
-        let bytes = self.cursor.as_blob()?;
-        Ok(Blob::new(bytes.into_owned()))
+        // Variant-only: format-aware coercion (e.g. base64-decode of a
+        // JSON string-encoded blob) lives on `DiscriminatedDocument::
+        // as_blob`, not here. Documents that need that coercion
+        // should be unwrapped via the discriminated wrapper before
+        // reaching `read_blob`.
+        match self.cursor {
+            Document::Blob(b) => Ok(Blob::new(b.clone())),
+            other => Err(type_mismatch("blob", other)),
+        }
     }
 
     fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        self.cursor.as_timestamp()
+        match self.cursor {
+            Document::Timestamp(ts) => Ok(*ts),
+            other => Err(type_mismatch("timestamp", other)),
+        }
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         Ok(self.cursor.clone())
     }
 
     fn is_null(&self) -> bool {
-        matches!(self.cursor.inner(), DocumentInner::Null)
+        matches!(self.cursor, Document::Null)
     }
 
     fn container_size(&self) -> Option<usize> {
-        let raw = match self.cursor.inner() {
-            DocumentInner::List(items) => items.len(),
-            DocumentInner::Map(entries) => entries.len(),
+        let raw = match self.cursor {
+            Document::Array(items) => items.len(),
+            Document::Object(entries) => entries.len(),
             _ => return None,
         };
         Some(capped_container_size(raw))
@@ -261,6 +276,8 @@ mod tests {
     use crate::document::DocumentShapeSerializer;
     use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
     use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
+
+    use aws_smithy_types::Number;
 
     // -- Test schemas ----------------------------------------------------
 
@@ -315,14 +332,14 @@ mod tests {
 
     #[test]
     fn read_string_returns_value() {
-        let doc = Document::string("hello");
+        let doc = Document::String("hello".to_string());
         let mut deser = DocumentShapeDeserializer::new(&doc);
         assert_eq!(deser.read_string(&prelude::STRING).unwrap(), "hello");
     }
 
     #[test]
     fn read_string_on_non_string_errors() {
-        let doc = Document::integer(1);
+        let doc = Document::Number(Number::PosInt(1));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let err = deser.read_string(&prelude::STRING).unwrap_err();
         assert!(matches!(err, SerdeError::TypeMismatch { .. }));
@@ -331,14 +348,14 @@ mod tests {
     #[test]
     fn read_integer_with_coercion() {
         // Integer narrowing follows SEP rules (precision loss ignored).
-        let doc = Document::long(42);
+        let doc = Document::Number(Number::PosInt(42));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         assert_eq!(deser.read_integer(&prelude::INTEGER).unwrap(), 42);
     }
 
     #[test]
     fn read_integer_overflow_errors() {
-        let doc = Document::long(i64::MAX);
+        let doc = Document::Number(Number::PosInt(u64::MAX));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let err = deser.read_integer(&prelude::INTEGER).unwrap_err();
         assert!(matches!(err, SerdeError::NumericCoercionOverflow { .. }));
@@ -346,29 +363,39 @@ mod tests {
 
     #[test]
     fn read_boolean_returns_value() {
-        let doc = Document::boolean(true);
+        let doc = Document::Bool(true);
         let mut deser = DocumentShapeDeserializer::new(&doc);
         assert!(deser.read_boolean(&prelude::BOOLEAN).unwrap());
     }
 
     #[test]
     fn read_blob_returns_value_for_native_blob() {
-        let doc = Document::blob(vec![1, 2, 3]);
+        let doc = Document::Blob(vec![1, 2, 3]);
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let blob = deser.read_blob(&prelude::BLOB).unwrap();
         assert_eq!(blob.as_ref(), &[1u8, 2, 3]);
     }
 
     #[test]
+    fn read_blob_on_string_errors_without_settings() {
+        // The deserializer no longer consults DocumentSettings for
+        // base64-coercion — that lives on DiscriminatedDocument now.
+        let doc = Document::String("YWJjZA==".to_string());
+        let mut deser = DocumentShapeDeserializer::new(&doc);
+        let err = deser.read_blob(&prelude::BLOB).unwrap_err();
+        assert!(matches!(err, SerdeError::TypeMismatch { .. }));
+    }
+
+    #[test]
     fn is_null_for_null_document() {
-        let doc = Document::null();
+        let doc = Document::Null;
         let deser = DocumentShapeDeserializer::new(&doc);
         assert!(deser.is_null());
     }
 
     #[test]
     fn is_null_false_for_non_null() {
-        let doc = Document::string("not-null");
+        let doc = Document::String("not-null".to_string());
         let deser = DocumentShapeDeserializer::new(&doc);
         assert!(!deser.is_null());
     }
@@ -377,10 +404,10 @@ mod tests {
 
     #[test]
     fn read_list_iterates_elements() {
-        let doc = Document::list(vec![
-            Document::string("a"),
-            Document::string("b"),
-            Document::string("c"),
+        let doc = Document::Array(vec![
+            Document::String("a".to_string()),
+            Document::String("b".to_string()),
+            Document::String("c".to_string()),
         ]);
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let mut collected = Vec::new();
@@ -395,9 +422,9 @@ mod tests {
 
     #[test]
     fn read_map_iterates_entries() {
-        let doc = Document::map(HashMap::from([
-            ("k1".to_string(), Document::string("v1")),
-            ("k2".to_string(), Document::string("v2")),
+        let doc = Document::Object(HashMap::from([
+            ("k1".to_string(), Document::String("v1".to_string())),
+            ("k2".to_string(), Document::String("v2".to_string())),
         ]));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let mut collected = HashMap::new();
@@ -413,14 +440,14 @@ mod tests {
 
     #[test]
     fn container_size_on_list() {
-        let doc = Document::list(vec![Document::null(); 5]);
+        let doc = Document::Array(vec![Document::Null; 5]);
         let deser = DocumentShapeDeserializer::new(&doc);
         assert_eq!(deser.container_size(), Some(5));
     }
 
     #[test]
     fn container_size_on_scalar_is_none() {
-        let doc = Document::string("foo");
+        let doc = Document::String("foo".to_string());
         let deser = DocumentShapeDeserializer::new(&doc);
         assert!(deser.container_size().is_none());
     }
@@ -429,9 +456,9 @@ mod tests {
 
     #[test]
     fn read_struct_with_consumer_dispatch() {
-        let doc = Document::map(HashMap::from([
-            ("name".to_string(), Document::string("Alex")),
-            ("age".to_string(), Document::integer(30)),
+        let doc = Document::Object(HashMap::from([
+            ("name".to_string(), Document::String("Alex".to_string())),
+            ("age".to_string(), Document::Number(Number::PosInt(30))),
         ]));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let person = deserialize_person(&mut deser).unwrap();
@@ -447,9 +474,9 @@ mod tests {
     #[test]
     fn read_struct_with_missing_optional_member() {
         // Document only has `name`; `age` is missing.
-        let doc = Document::map(HashMap::from([(
+        let doc = Document::Object(HashMap::from([(
             "name".to_string(),
-            Document::string("Sam"),
+            Document::String("Sam".to_string()),
         )]));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let person = deserialize_person(&mut deser).unwrap();
@@ -464,9 +491,12 @@ mod tests {
 
     #[test]
     fn read_struct_ignores_unknown_members() {
-        let doc = Document::map(HashMap::from([
-            ("name".to_string(), Document::string("Joe")),
-            ("unknown_field".to_string(), Document::string("ignored")),
+        let doc = Document::Object(HashMap::from([
+            ("name".to_string(), Document::String("Joe".to_string())),
+            (
+                "unknown_field".to_string(),
+                Document::String("ignored".to_string()),
+            ),
         ]));
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let person = deserialize_person(&mut deser).unwrap();
@@ -475,7 +505,7 @@ mod tests {
 
     #[test]
     fn read_struct_on_non_map_errors() {
-        let doc = Document::string("not-a-struct");
+        let doc = Document::String("not-a-struct".to_string());
         let mut deser = DocumentShapeDeserializer::new(&doc);
         let err = deserialize_person(&mut deser).unwrap_err();
         assert!(matches!(err, SerdeError::TypeMismatch { .. }));
@@ -489,18 +519,15 @@ mod tests {
             name: Some("Iago".into()),
             age: Some(7),
         };
-        // serialize → Document
+        // serialize → DiscriminatedDocument
         let mut ser = DocumentShapeSerializer::new();
         ser.write_struct(&PERSON_SCHEMA, &original).unwrap();
         let doc = ser.finish().unwrap();
-        // deserialize Document → typed
-        let mut deser = DocumentShapeDeserializer::new(&doc);
+        // deserialize the inner Document → typed
+        let mut deser = DocumentShapeDeserializer::new(doc.document());
         let restored = deserialize_person(&mut deser).unwrap();
         assert_eq!(restored, original);
-        // discriminator is preserved through the serialize side
-        assert_eq!(
-            doc.discriminator().map(|id| id.as_str()),
-            Some("smithy.example#Person")
-        );
+        // discriminator is preserved at the wrapper level
+        assert_eq!(doc.discriminator(), Some("smithy.example#Person"));
     }
 }

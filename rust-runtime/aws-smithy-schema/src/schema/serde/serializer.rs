@@ -6,8 +6,8 @@
 //! Shape serialization interfaces for the Smithy data model.
 
 use super::error::SerdeError;
-use crate::document::Document;
 use crate::Schema;
+use aws_smithy_types::Document;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
 /// Serializes Smithy shapes to a target format.
@@ -118,11 +118,11 @@ pub trait ShapeSerializer {
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError>;
 
     /// Writes a document value.
-    fn write_document(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &Document<'_>,
-    ) -> Result<(), SerdeError>;
+    ///
+    /// `value` is the unified [`aws_smithy_types::Document`] (fully
+    /// owned, no lifetime). Implementors clone the value into their
+    /// output representation.
+    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError>;
 
     /// Writes a null value (for sparse collections).
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError>;

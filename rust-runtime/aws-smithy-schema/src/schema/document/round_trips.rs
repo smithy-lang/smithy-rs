@@ -30,9 +30,9 @@
 use std::collections::HashMap;
 use std::str::FromStr;
 
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument};
 
-use super::{Document, DocumentShapeDeserializer, DocumentShapeSerializer};
+use super::{DiscriminatedDocumentExt, DocumentShapeDeserializer, DocumentShapeSerializer};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
 
@@ -286,7 +286,7 @@ fn round_trip_every_simple_type_and_simple_aggregates() {
         ])),
     };
 
-    let doc = Document::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_all_types).unwrap();
     assert_eq!(restored, original);
 }
@@ -294,7 +294,7 @@ fn round_trip_every_simple_type_and_simple_aggregates() {
 #[test]
 fn round_trip_with_all_members_absent_yields_empty_struct() {
     let original = AllTypes::default();
-    let doc = Document::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_all_types).unwrap();
     assert_eq!(restored, original);
 }
@@ -305,11 +305,8 @@ fn round_trip_preserves_struct_discriminator() {
         a_string: Some("anchor".into()),
         ..AllTypes::default()
     };
-    let doc = Document::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
-    assert_eq!(
-        doc.discriminator().map(ShapeId::as_str),
-        Some("smithy.example#AllTypes")
-    );
+    let doc = DiscriminatedDocument::from_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
+    assert_eq!(doc.discriminator(), Some("smithy.example#AllTypes"));
     // The discriminator does not interfere with deserialization.
     let restored = doc.as_shape(deserialize_all_types).unwrap();
     assert_eq!(restored, original);
@@ -381,7 +378,7 @@ fn round_trip_sparse_list_preserves_null_positions() {
             Some("sixth".into()),
         ],
     };
-    let doc = Document::from_struct(&SPARSE_LIST_HOLDER_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&SPARSE_LIST_HOLDER_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_sparse_list_holder).unwrap();
     assert_eq!(restored, original);
 }
@@ -534,7 +531,7 @@ fn round_trip_list_of_structs_and_map_of_structs() {
             ),
         ]),
     };
-    let doc = Document::from_struct(&ITEM_BAG_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&ITEM_BAG_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_item_bag).unwrap();
     assert_eq!(restored, original);
 }
@@ -636,7 +633,7 @@ fn round_trip_recursive_tree_structure() {
             })),
         })),
     };
-    let doc = Document::from_struct(&TREE_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&TREE_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_tree).unwrap();
     assert_eq!(restored, original);
 }
@@ -700,7 +697,7 @@ fn round_trip_nested_list_of_lists() {
     let original = MatrixHolder {
         matrix: vec![vec![1, 2, 3], vec![4, 5, 6], vec![7, 8, 9]],
     };
-    let doc = Document::from_struct(&MATRIX_HOLDER_SCHEMA, &original).unwrap();
+    let doc = DiscriminatedDocument::from_struct(&MATRIX_HOLDER_SCHEMA, &original).unwrap();
     let restored = doc.as_shape(deserialize_matrix_holder).unwrap();
     assert_eq!(restored, original);
 }
@@ -724,7 +721,7 @@ fn round_trip_via_explicit_serializer_and_deserializer() {
     ser.write_struct(&ALL_TYPES_SCHEMA, &original).unwrap();
     let doc = ser.finish().unwrap();
 
-    let mut deser = DocumentShapeDeserializer::new(&doc);
+    let mut deser = DocumentShapeDeserializer::new(doc.document());
     let restored = deserialize_all_types(&mut deser).unwrap();
 
     assert_eq!(restored, original);

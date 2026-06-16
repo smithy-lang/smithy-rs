@@ -26,47 +26,23 @@
 //! let restored: MyShape = doc.as_shape(|deser| MyShape::deserialize(deser))?;
 //! ```
 //!
-//! # Transitional limitations
+//! # Implementation
 //!
-//! The implementation routes through the existing schema-side
-//! [`Document<'a>`](super::Document) +
+//! The implementation routes through the schema-side
 //! [`DocumentShapeSerializer`](super::DocumentShapeSerializer) /
-//! [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer)
-//! pipeline, then bridges to/from
-//! [`aws_smithy_types::Document`] using the existing
-//! [`From`] / [`TryFrom`] conversions. Both bridges have known
-//! limitations after Phase 1 of the document-type unification work:
+//! [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer),
+//! which after Phase 4 of the document-type unification work operate
+//! on [`aws_smithy_types::Document`] directly. Discriminator capture
+//! happens on the way out (the schema's shape ID is recorded as the
+//! resulting wrapper's [`discriminator()`] field); on `as_shape`, the
+//! deserializer reads from `self.document()` directly without going
+//! through any bridge.
 //!
-//! - The `TryFrom<Document<'_>> for aws_smithy_types::Document`
-//!   direction returns
-//!   `Err(SerdeError::TypeMismatch { .. })` for the four new variants
-//!   (`Blob`, `Timestamp`, `BigInteger`, `BigDecimal`). After Phase 1
-//!   added those variants to `aws_smithy_types::Document`, the
-//!   pre-existing error arms became technically incorrect — the
-//!   variants ARE representable now, but the bridge predates that
-//!   change. Consequently, [`DiscriminatedDocument::from_struct`] on
-//!   a struct whose schema includes a member of any of those new
-//!   variants returns the same `TypeMismatch` error.
-//!
-//! - The `From<aws_smithy_types::Document> for Document<'static>`
-//!   direction has an Option-B transitional `panic!` arm covering the
-//!   four new variants (see the bridge's `TODO(document-unification)`
-//!   comment in `data.rs`). [`DiscriminatedDocument::as_shape`]
-//!   inherits that panic when called on a document whose tree contains
-//!   any of those variants.
-//!
-//! Both limitations resolve in Phase 4 of the unification work, when
-//! the schema-side `Document<'a>` type and its bridges are removed and
-//! [`DocumentShapeSerializer`] / [`DocumentShapeDeserializer`] are
-//! retargeted at `aws_smithy_types::Document` directly. Until then,
-//! [`DiscriminatedDocument::from_struct`] and
-//! [`DiscriminatedDocument::as_shape`] are functional only for
-//! documents whose every node is one of the legacy six variants
-//! (`Null`, `Bool`, `Number`, `String`, `Array`, `Object`).
+//! [`discriminator()`]: aws_smithy_types::DiscriminatedDocument::discriminator
 
 use aws_smithy_types::DiscriminatedDocument;
 
-use super::{Document, DocumentShapeDeserializer, DocumentShapeSerializer};
+use super::{DocumentShapeDeserializer, DocumentShapeSerializer};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
 use crate::{Schema, ShapeType};
 
@@ -91,11 +67,9 @@ pub trait DiscriminatedDocumentExt {
     ///
     /// # Errors
     ///
-    /// Returns [`SerdeError::TypeMismatch`] if the struct contains any
-    /// member of the new Smithy variants
-    /// (`Blob` / `Timestamp` / `BigInteger` / `BigDecimal`) — see the
-    /// "Transitional limitations" section of [the module docs](self).
-    /// Resolved in Phase 4 of the document-type unification work.
+    /// Returns [`SerdeError`] if the struct's `serialize_members`
+    /// callback fails (rare — typically only on internal invariant
+    /// violations or invalid map-key writes).
     fn from_struct(
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
@@ -109,14 +83,11 @@ pub trait DiscriminatedDocumentExt {
     /// callback is typically the generated `<Type>::deserialize`
     /// function on a shape's data carrier or builder.
     ///
-    /// # Panics
+    /// # Errors
     ///
-    /// Panics if `self.document` contains any of the new Smithy
-    /// variants (`Blob` / `Timestamp` / `BigInteger` / `BigDecimal`),
-    /// because the underlying [`From<aws_smithy_types::Document>`]
-    /// bridge has an Option-B transitional `panic!` arm for those
-    /// variants. See the "Transitional limitations" section of
-    /// [the module docs](self). Resolved in Phase 4.
+    /// Returns whatever error the `deserialize` callback returns —
+    /// typically a [`SerdeError::TypeMismatch`] when the document's
+    /// shape doesn't match what the callback expects.
     fn as_shape<T, F>(&self, deserialize: F) -> Result<T, SerdeError>
     where
         F: FnOnce(&mut dyn ShapeDeserializer) -> Result<T, SerdeError>;
@@ -141,69 +112,35 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<DiscriminatedDocument, SerdeError> {
-        // Drive the schema-side serializer pipeline. The inherent
-        // `DocumentShapeSerializer<'_>::write_struct` captures the
-        // schema's shape ID into the resulting document's
-        // discriminator slot.
+        // The schema-side serializer now produces a
+        // `DiscriminatedDocument` directly (Phase 4): no bridge
+        // round-trip. The inherent `DocumentShapeSerializer::write_struct`
+        // captures the schema's shape ID into the resulting wrapper's
+        // discriminator slot; settings are not attached.
         let mut ser = DocumentShapeSerializer::default();
         ser.write_struct(schema, value)?;
-        let schema_doc: Document<'_> = ser.finish()?;
-
-        // Capture the discriminator BEFORE the move into try_into:
-        // schema_doc.discriminator() is a `&ShapeId<'_>`, whose
-        // `.as_str()` is borrowed from schema-side storage; we want
-        // an owned `String` for the unified DiscriminatedDocument.
-        let discriminator = schema_doc.discriminator().map(|id| id.as_str().to_string());
-
-        // Convert schema-side → legacy via the existing TryFrom bridge.
-        // For the four new Smithy variants, this currently returns
-        // SerdeError::TypeMismatch — see the "Transitional limitations"
-        // section of the module docs.
-        let unified: aws_smithy_types::Document = schema_doc.try_into()?;
-
-        let mut wrapper = DiscriminatedDocument::new(unified);
-        if let Some(d) = discriminator {
-            wrapper = wrapper.with_discriminator(d);
-        }
-        Ok(wrapper)
+        ser.finish()
     }
 
     fn as_shape<T, F>(&self, deserialize: F) -> Result<T, SerdeError>
     where
         F: FnOnce(&mut dyn ShapeDeserializer) -> Result<T, SerdeError>,
     {
-        // Convert legacy → schema-side via the existing From bridge,
-        // then drive the schema-side deserializer.
-        //
-        // The bridge has an Option-B transitional `panic!` for the
-        // four new variants (see the bridge's `TODO(document-unification)`
-        // comment in `data.rs`). We do NOT pre-check here to convert
-        // that panic to a typed Err because:
-        //   1. A pre-check is a tree walk — same complexity as the
-        //      4-line bridge fix we explicitly chose to defer.
-        //   2. The pre-check is itself code that gets deleted in
-        //      Phase 4, so it doesn't reduce the total deletable
-        //      surface; it just shifts where the deletion happens.
-        //   3. The bridge's panic message is loud and self-explanatory
-        //      to anyone hitting it during the transition window.
-        //
-        // We DO clone before converting because the schema-side
-        // From bridge is by-value. The clone is unavoidable until the
-        // schema-side type goes away; Phase 4's deserializer will read
-        // directly from `self.document` without conversion.
-        let schema_doc: Document<'static> = self.document.clone().into();
-        let mut deser = DocumentShapeDeserializer::new(&schema_doc);
+        // The schema-side deserializer reads directly from the
+        // unified `Document` (Phase 4): no bridge clone, no conversion.
+        // Settings on the wrapper are not currently consulted — the
+        // `DocumentShapeDeserializer` is variant-only. Format-aware
+        // coercion lives on `DiscriminatedDocument::as_blob` /
+        // `as_timestamp` for callers who need it.
+        let mut deser = DocumentShapeDeserializer::new(self.document());
         deserialize(&mut deser)
     }
 
     fn shape_type(&self) -> ShapeType {
         use aws_smithy_types::Document as Legacy;
-        // Inline the variant→ShapeType mapping rather than delegate to
-        // `Document::shape_type()` via the bridge, because the bridge
-        // is by-value (would require a full clone of the document tree
-        // just to read the top-level variant). The number-disambiguation
-        // logic delegates to the same private helper used by the
-        // schema-side `Document::shape_type`.
+        // The unified `Document` is the public type; this match is
+        // straightforward. The number-disambiguation logic delegates
+        // to the private helper that drives `Document::shape_type`.
         match &self.document {
             Legacy::Null => ShapeType::Document,
             Legacy::Bool(_) => ShapeType::Boolean,
@@ -215,8 +152,8 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
             Legacy::String(_) => ShapeType::String,
             Legacy::Array(_) => ShapeType::List,
             Legacy::Object(_) => ShapeType::Map,
-            // Future variants on the `#[non_exhaustive]` legacy enum
-            // fall through to a generic Document type.
+            // Future variants on the `#[non_exhaustive]` enum fall
+            // through to a generic Document type.
             _ => ShapeType::Document,
         }
     }
@@ -414,14 +351,18 @@ mod tests {
         }
     }
 
-    // -- Documented transitional limitations ---------------------------
+    // -- New variants now round-trip through the bridges -------------
+    //
+    // Phase 4 of the document-type unification work fixed both the
+    // From and TryFrom bridges to handle the four extended variants
+    // (`Blob` / `Timestamp` / `BigInteger` / `BigDecimal`). Phase 3
+    // had `#[should_panic]` and `assert_matches!(Err(TypeMismatch))`
+    // tests here documenting the transitional limitations; those are
+    // replaced below by positive round-trip tests asserting the
+    // limitations are gone.
 
     #[test]
-    fn from_struct_with_blob_member_returns_typemismatch_during_phase3() {
-        // A struct whose schema includes a blob member exercises
-        // `write_blob` on the schema-side serializer, producing a
-        // `Document::Blob`. The TryFrom bridge then errors.
-
+    fn from_struct_with_blob_member_now_round_trips() {
         const BLOBBY_ID: ShapeId<'static> = shape_id!("smithy.example", "Blobby");
         const BLOBBY_DATA_ID: ShapeId<'static> = shape_id!("smithy.example", "Blobby", "data");
         static BLOBBY_DATA_MEMBER: Schema<'static> =
@@ -438,31 +379,33 @@ mod tests {
             }
         }
 
-        let result = DiscriminatedDocument::from_struct(
+        let doc = DiscriminatedDocument::from_struct(
             &BLOBBY_SCHEMA,
             &Blobby {
                 data: b"raw".to_vec(),
             },
-        );
-        let err = result.expect_err(
-            "from_struct on a struct with a Blob member should error during \
-             Phase 3 (TryFrom bridge regression)",
-        );
-        assert!(
-            matches!(err, SerdeError::TypeMismatch { .. }),
-            "expected TypeMismatch, got {err:?}"
-        );
+        )
+        .expect("from_struct should succeed for blob members after Phase 4");
+        assert_eq!(doc.discriminator(), Some("smithy.example#Blobby"));
+        let map = doc.document().as_object().unwrap();
+        match map.get("data").unwrap() {
+            aws_smithy_types::Document::Blob(b) => assert_eq!(b.as_slice(), b"raw"),
+            other => panic!("expected Blob in 'data' field, got {other:?}"),
+        }
     }
 
     #[test]
-    #[should_panic(expected = "transitional panic on the new variant")]
-    fn as_shape_on_top_level_blob_panics_during_phase3() {
-        // The From bridge's Option-B arm panics with the documented
-        // transitional message. We test only that the panic fires
-        // with the expected message — the bridge itself is being
-        // removed in Phase 4.
+    fn as_shape_on_top_level_blob_now_works() {
+        // Phase 3 marked this `#[should_panic]` because the From
+        // bridge's Option-B arm panicked on Blob/Timestamp/BigInteger/
+        // BigDecimal. Phase 4 made the bridge complete, so as_shape
+        // now reaches the deserializer and successfully reads the
+        // inner Blob.
         let doc = DiscriminatedDocument::new(aws_smithy_types::Document::Blob(b"x".to_vec()));
-        let _ = doc.as_shape(|deser| deser.read_blob(&prelude::BLOB));
+        let blob = doc
+            .as_shape(|deser| deser.read_blob(&prelude::BLOB))
+            .expect("as_shape on a Blob document should succeed after Phase 4");
+        assert_eq!(blob.as_ref(), b"x");
     }
 
     // -- Discriminator preservation across construction paths ----------
