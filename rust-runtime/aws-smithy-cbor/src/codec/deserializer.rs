@@ -9,7 +9,7 @@ use aws_smithy_schema::serde::{capped_container_size, SerdeError, ShapeDeseriali
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
-use aws_smithy_schema::document::Document;
+use aws_smithy_types::Document;
 
 use crate::data::Type;
 
@@ -225,7 +225,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         self.decoder.timestamp().map_err(deser_err)
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "document types are not supported by rpcv2Cbor protocol".into(),
         })

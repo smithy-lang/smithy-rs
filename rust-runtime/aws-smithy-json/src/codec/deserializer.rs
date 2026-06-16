@@ -2285,66 +2285,46 @@ mod tests {
             .expect("10-level nesting should succeed under custom limit");
     }
 
-    // --- read_document attaches DocumentSettings ----------------------------
+    // --- read_discriminated_document attaches DocumentSettings ----------------------------
 
     #[test]
-    fn read_document_attaches_settings_to_top_level_value() {
+    fn read_discriminated_document_attaches_settings() {
+        // Under the unified design, settings live on the
+        // `DiscriminatedDocument` wrapper, not on individual data
+        // nodes. `read_discriminated_document` is the entry point
+        // that attaches them.
         let mut deser = JsonDeserializer::new(b"\"hello\"", Arc::new(JsonCodecSettings::default()));
-        let doc = deser.read_document(dummy_schema()).unwrap();
+        let wrapper = deser.read_discriminated_document().unwrap();
         assert!(
-            doc.settings().is_some(),
-            "settings should be attached to the produced Document"
+            wrapper.settings().is_some(),
+            "settings should be attached to the wrapper produced by \
+             read_discriminated_document"
         );
     }
 
     #[test]
-    fn read_document_attaches_settings_to_nested_map_values() {
-        let mut deser = JsonDeserializer::new(
-            br#"{"inner":"value"}"#,
-            Arc::new(JsonCodecSettings::default()),
-        );
-        let doc = deser.read_document(dummy_schema()).unwrap();
-        let inner = doc.member("inner").expect("inner member exists");
-        assert!(
-            inner.settings().is_some(),
-            "settings should propagate to nested map values"
-        );
-    }
-
-    #[test]
-    fn read_document_attaches_settings_to_nested_list_elements() {
-        let mut deser =
-            JsonDeserializer::new(br#"["a","b"]"#, Arc::new(JsonCodecSettings::default()));
-        let doc = deser.read_document(dummy_schema()).unwrap();
-        let elements = doc.as_list().expect("list");
-        for (idx, element) in elements.iter().enumerate() {
-            assert!(
-                element.settings().is_some(),
-                "settings should propagate to list element at index {idx}"
-            );
-        }
-    }
-
-    #[test]
-    fn read_document_settings_enable_blob_coercion() {
-        // "aGVsbG8=" is base64("hello"). Without settings, as_blob on a String
-        // document returns UnsupportedOperation. With settings attached by
-        // `read_document`, JsonCodecSettings::coerce_string_to_blob decodes it.
+    fn read_discriminated_document_settings_enable_blob_coercion() {
+        // "aGVsbG8=" is base64("hello"). Without settings, as_blob on a
+        // String document returns an error. With settings attached by
+        // `read_discriminated_document`, JsonCodecSettings::coerce_string_to_blob
+        // decodes it.
         let mut deser =
             JsonDeserializer::new(br#""aGVsbG8=""#, Arc::new(JsonCodecSettings::default()));
-        let doc = deser.read_document(dummy_schema()).unwrap();
-        let bytes = doc.as_blob().expect("base64 string should decode to blob");
+        let wrapper = deser.read_discriminated_document().unwrap();
+        let bytes = wrapper
+            .as_blob()
+            .expect("base64 string should decode to blob");
         assert_eq!(&*bytes, b"hello");
     }
 
     #[test]
-    fn read_document_settings_enable_timestamp_coercion() {
+    fn read_discriminated_document_settings_enable_timestamp_coercion() {
         // EpochSeconds is the JSON default; a number value coerces via
         // `coerce_number_to_timestamp`.
         let mut deser =
             JsonDeserializer::new(b"1577836800", Arc::new(JsonCodecSettings::default()));
-        let doc = deser.read_document(dummy_schema()).unwrap();
-        let ts = doc
+        let wrapper = deser.read_discriminated_document().unwrap();
+        let ts = wrapper
             .as_timestamp()
             .expect("epoch-seconds number should decode to timestamp");
         assert_eq!(ts.secs(), 1577836800);
@@ -2353,25 +2333,20 @@ mod tests {
     // -- `__type` discriminator lift -----------------------------------------------------------
 
     #[test]
-    fn read_document_lifts_absolute_type_into_discriminator() {
-        // An absolute `__type` value parses into a `ShapeId` borrowing
-        // its component strings from the input bytes, lands in the
-        // resulting Document's discriminator slot, and is dropped from
-        // the result map.
+    fn read_discriminated_document_lifts_absolute_type_into_discriminator() {
+        // An absolute `__type` value lands in the wrapper's
+        // discriminator slot (as an owned `String` FQN), and the
+        // `__type` key is dropped from the result map.
         let input = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
         let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
-        let doc = deser
-            .read_document_owned(dummy_schema())
-            .expect("parse succeeds");
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
 
-        let id = doc
+        let id = wrapper
             .discriminator()
             .expect("absolute __type lifted into discriminator");
-        assert_eq!(id.as_str(), "smithy.example#Bird");
-        assert_eq!(id.namespace(), "smithy.example");
-        assert_eq!(id.shape_name(), "Bird");
+        assert_eq!(id, "smithy.example#Bird");
 
-        let map = doc.as_map().expect("top-level is map");
+        let map = wrapper.document().as_object().expect("top-level is map");
         assert!(
             !map.contains_key("__type"),
             "__type must be dropped from result map after lift"
@@ -2380,21 +2355,19 @@ mod tests {
     }
 
     #[test]
-    fn read_document_relative_type_stays_in_map() {
+    fn read_discriminated_document_relative_type_stays_in_map() {
         // Relative `__type` (no `#`) is not yet resolved against a
         // default namespace — it stays in the map as a regular key,
         // and the discriminator remains None.
         let input = br#"{"__type":"Bird","name":"Iago"}"#;
         let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
-        let doc = deser
-            .read_document_owned(dummy_schema())
-            .expect("parse succeeds");
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
 
         assert!(
-            doc.discriminator().is_none(),
+            wrapper.discriminator().is_none(),
             "relative __type must not be lifted (no default-namespace resolution yet)"
         );
-        let map = doc.as_map().expect("top-level is map");
+        let map = wrapper.document().as_object().expect("top-level is map");
         assert_eq!(
             map.get("__type").and_then(Document::as_string),
             Some("Bird")
@@ -2402,57 +2375,37 @@ mod tests {
     }
 
     #[test]
-    fn read_document_lift_only_for_top_level_object() {
-        // A `__type` key that appears INSIDE a nested object is also
-        // lifted into THAT nested object's discriminator (the lift is
-        // local to whatever JSON object is currently being parsed,
-        // not just the outermost one).
+    fn read_discriminated_document_lifts_only_top_level() {
+        // Under the unified design, only the top-level wrapper has a
+        // discriminator slot. A `__type` field appearing INSIDE a
+        // nested object stays as a regular map entry — there's no
+        // per-node discriminator to lift it into.
         let input = br#"{"outer":{"__type":"smithy.example#Inner"}}"#;
         let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
-        let doc = deser
-            .read_document_owned(dummy_schema())
-            .expect("parse succeeds");
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
 
-        // Outer object has no discriminator.
-        assert!(doc.discriminator().is_none());
-        // Inner object does.
-        let inner = doc
-            .as_map()
+        // Outer wrapper has no discriminator (the top-level object
+        // didn't carry `__type` at its own level).
+        assert!(wrapper.discriminator().is_none());
+        // The inner object's `__type` remains as a regular string
+        // entry in the nested object's map.
+        let inner = wrapper
+            .document()
+            .as_object()
             .and_then(|m| m.get("outer"))
-            .expect("outer key present");
-        let id = inner
-            .discriminator()
-            .expect("inner __type lifted into nested discriminator");
-        assert_eq!(id.as_str(), "smithy.example#Inner");
-        assert!(inner
-            .as_map()
-            .map(|m| !m.contains_key("__type"))
-            .unwrap_or(false));
-    }
-
-    #[test]
-    fn read_document_first_absolute_type_wins() {
-        // If a JSON object somehow contains two `__type` keys (a
-        // protocol violation, but parsers shouldn't crash), the first
-        // is lifted and the second falls through to the standard
-        // map-insert path.
-        let input = br#"{"__type":"smithy.example#A","__type":"smithy.example#B","x":1}"#;
-        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
-        let doc = deser
-            .read_document_owned(dummy_schema())
-            .expect("parse succeeds");
-        let id = doc.discriminator().expect("first lift wins");
-        assert_eq!(id.as_str(), "smithy.example#A");
-        // Second `__type` lands in the map as a string value.
-        let map = doc.as_map().expect("top-level is map");
+            .and_then(Document::as_object)
+            .expect("outer key present and is object");
         assert_eq!(
-            map.get("__type").and_then(Document::as_string),
-            Some("smithy.example#B")
+            inner.get("__type").and_then(Document::as_string),
+            Some("smithy.example#Inner"),
+            "nested __type must remain as a regular map entry under \
+             the unified design (only the top-level wrapper has a \
+             discriminator slot)",
         );
     }
 
     #[test]
-    fn read_document_malformed_type_stays_in_map() {
+    fn read_discriminated_document_malformed_type_stays_in_map() {
         // `__type` whose value isn't a well-formed absolute shape ID
         // (member-component, multiple `#`, empty parts) stays in the
         // map as a regular string entry and discriminator is None.
@@ -2465,14 +2418,12 @@ mod tests {
             let body = format!(r#"{{"__type":{malformed}}}"#);
             let mut deser =
                 JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
-            let doc = deser
-                .read_document_owned(dummy_schema())
-                .expect("parse succeeds");
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
             assert!(
-                doc.discriminator().is_none(),
+                wrapper.discriminator().is_none(),
                 "malformed __type {malformed} must not be lifted"
             );
-            let map = doc.as_map().expect("top-level is map");
+            let map = wrapper.document().as_object().expect("top-level is map");
             assert!(
                 map.contains_key("__type"),
                 "malformed __type {malformed} must remain in map"
@@ -2481,7 +2432,7 @@ mod tests {
     }
 
     #[test]
-    fn read_document_non_string_type_stays_in_map() {
+    fn read_discriminated_document_non_string_type_stays_in_map() {
         // `__type` with a non-string value (number, object, array,
         // bool, null) stays in the map.
         for non_string in [
@@ -2494,14 +2445,12 @@ mod tests {
             let body = format!(r#"{{"__type":{non_string}}}"#);
             let mut deser =
                 JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
-            let doc = deser
-                .read_document_owned(dummy_schema())
-                .expect("parse succeeds");
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
             assert!(
-                doc.discriminator().is_none(),
+                wrapper.discriminator().is_none(),
                 "non-string __type {non_string} must not be lifted"
             );
-            let map = doc.as_map().expect("top-level is map");
+            let map = wrapper.document().as_object().expect("top-level is map");
             assert!(
                 map.contains_key("__type"),
                 "non-string __type {non_string} must remain in map"

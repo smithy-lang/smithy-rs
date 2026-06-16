@@ -35,7 +35,9 @@
 //!
 //! [`DocumentShapeSerializer`]: super::DocumentShapeSerializer
 
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use std::sync::Arc;
+
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document, DocumentSettings};
 
 use crate::serde::{capped_container_size, SerdeError, ShapeDeserializer};
 use crate::Schema;
@@ -70,6 +72,20 @@ use crate::Schema;
 pub struct DocumentShapeDeserializer<'a> {
     /// The document this deserializer is currently positioned at.
     cursor: &'a Document,
+    /// Optional codec settings used for format-aware coercion when
+    /// the cursor doesn't match a native variant. For example: a
+    /// document parsed from JSON wire bytes encodes blobs as strings
+    /// (base64) and may encode timestamps as strings or numbers; with
+    /// settings attached, [`Self::read_blob`] / [`Self::read_timestamp`]
+    /// fall back through [`DocumentSettings::coerce_string_to_blob`] /
+    /// [`DocumentSettings::coerce_string_to_timestamp`] /
+    /// [`DocumentSettings::coerce_number_to_timestamp`] when the
+    /// native variant isn't present.
+    ///
+    /// `None` for serialize-side documents (e.g. those produced by
+    /// [`super::DocumentShapeSerializer`]) that always carry native
+    /// variants — no coercion required.
+    settings: Option<Arc<dyn DocumentSettings>>,
 }
 
 impl<'a> DocumentShapeDeserializer<'a> {
@@ -79,8 +95,36 @@ impl<'a> DocumentShapeDeserializer<'a> {
     /// the cursor is just a `&Document`. The unified [`Document`] type
     /// itself has no lifetime parameter (it is fully owned), so this
     /// `'a` is purely the per-call borrow lifetime.
+    ///
+    /// No format-aware coercion is performed; this deserializer is
+    /// variant-only. For coercion of wire-encoded blobs and timestamps
+    /// (e.g. JSON's base64-string blobs, epoch-seconds-number
+    /// timestamps), use [`Self::new_with_settings`].
     pub fn new(document: &'a Document) -> Self {
-        Self { cursor: document }
+        Self {
+            cursor: document,
+            settings: None,
+        }
+    }
+
+    /// Creates a deserializer positioned at the given document with
+    /// codec settings attached.
+    ///
+    /// With settings present, [`Self::read_blob`] and
+    /// [`Self::read_timestamp`] consult the settings to coerce
+    /// non-native variants — JSON wire bytes encode blobs as
+    /// base64 strings and may encode timestamps as strings or
+    /// numbers, so a document parsed from JSON via
+    /// [`crate::codec::Codec::create_deserializer`] needs settings
+    /// for those round-trips to succeed.
+    pub fn new_with_settings(
+        document: &'a Document,
+        settings: Option<Arc<dyn DocumentSettings>>,
+    ) -> Self {
+        Self {
+            cursor: document,
+            settings,
+        }
     }
 }
 
@@ -145,7 +189,7 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
                 // JSON deserializer.
                 continue;
             };
-            let mut sub = Self::new(value);
+            let mut sub = Self::new_with_settings(value, self.settings.clone());
             consumer(member_schema, &mut sub)?;
         }
         Ok(())
@@ -161,7 +205,7 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
             .as_array()
             .ok_or_else(|| type_mismatch("list", self.cursor))?;
         for item in items {
-            let mut sub = Self::new(item);
+            let mut sub = Self::new_with_settings(item, self.settings.clone());
             consumer(&mut sub)?;
         }
         Ok(())
@@ -177,7 +221,7 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
             .as_object()
             .ok_or_else(|| type_mismatch("map", self.cursor))?;
         for (key, value) in entries {
-            let mut sub = Self::new(value);
+            let mut sub = Self::new_with_settings(value, self.settings.clone());
             consumer(key.clone(), &mut sub)?;
         }
         Ok(())
@@ -232,22 +276,49 @@ impl<'a> ShapeDeserializer for DocumentShapeDeserializer<'a> {
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        // Variant-only: format-aware coercion (e.g. base64-decode of a
-        // JSON string-encoded blob) lives on `DiscriminatedDocument::
-        // as_blob`, not here. Documents that need that coercion
-        // should be unwrapped via the discriminated wrapper before
-        // reaching `read_blob`.
-        match self.cursor {
-            Document::Blob(b) => Ok(Blob::new(b.clone())),
-            other => Err(type_mismatch("blob", other)),
+        // Native variant — return directly.
+        if let Document::Blob(b) = self.cursor {
+            return Ok(Blob::new(b.clone()));
         }
+        // Settings-driven coercion: e.g. JSON encodes blobs as
+        // base64-encoded strings on the wire, and the codec's
+        // [`DocumentSettings::coerce_string_to_blob`] decodes them.
+        if let (Document::String(s), Some(settings)) = (self.cursor, &self.settings) {
+            return settings
+                .coerce_string_to_blob(s)
+                .map(Blob::new)
+                .map_err(SerdeError::from);
+        }
+        Err(type_mismatch("blob", self.cursor))
     }
 
     fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        match self.cursor {
-            Document::Timestamp(ts) => Ok(*ts),
-            other => Err(type_mismatch("timestamp", other)),
+        // Native variant — return directly.
+        if let Document::Timestamp(ts) = self.cursor {
+            return Ok(*ts);
         }
+        // Settings-driven coercion: JSON typically encodes timestamps
+        // as numbers (epoch-seconds) or strings (date-time / http-date),
+        // depending on the codec's default format. The codec's
+        // [`DocumentSettings`] supplies the format; the right
+        // [`DocumentSettings::coerce_*_to_timestamp`] is dispatched
+        // by source variant.
+        if let Some(settings) = &self.settings {
+            match self.cursor {
+                Document::String(s) => {
+                    return settings
+                        .coerce_string_to_timestamp(s)
+                        .map_err(SerdeError::from);
+                }
+                Document::Number(n) => {
+                    return settings
+                        .coerce_number_to_timestamp(n)
+                        .map_err(SerdeError::from);
+                }
+                _ => {}
+            }
+        }
+        Err(type_mismatch("timestamp", self.cursor))
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {

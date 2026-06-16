@@ -19,7 +19,7 @@ use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
-use aws_smithy_schema::document::Document;
+use aws_smithy_types::Document;
 use std::sync::Arc;
 
 /// XML serializer that implements the [`ShapeSerializer`] trait.
@@ -927,7 +927,7 @@ impl ShapeSerializer for XmlSerializer {
     fn write_document(
         &mut self,
         _schema: &Schema<'_>,
-        _value: &Document<'_>,
+        _value: &Document,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::custom(
             "document types are not supported by REST XML",
@@ -1493,7 +1493,7 @@ mod tests {
     #[test]
     fn write_document_returns_error() {
         let mut ser = XmlSerializer::new(Arc::new(XmlCodecSettings::default()));
-        let result = ser.write_document(&SCALAR_MEMBER, &Document::map(Default::default()));
+        let result = ser.write_document(&SCALAR_MEMBER, &Document::Object(Default::default()));
         assert_eq!(
             result.unwrap_err().to_string(),
             "document types are not supported by REST XML"

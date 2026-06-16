@@ -10,7 +10,7 @@ use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
 
-use aws_smithy_schema::document::Document;
+use aws_smithy_types::Document;
 
 /// CBOR serializer that implements the ShapeSerializer trait.
 ///

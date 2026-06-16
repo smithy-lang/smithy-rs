@@ -221,6 +221,7 @@ impl<'a> JsonArrayWriter<'a> {
 #[cfg(test)]
 mod tests {
     use super::{JsonArrayWriter, JsonObjectWriter};
+    use crate::codec::JsonCodecSettings;
     use crate::serialize::JsonValueWriter;
     use aws_smithy_types::date_time::Format;
     use aws_smithy_types::{DateTime, Document, Number};

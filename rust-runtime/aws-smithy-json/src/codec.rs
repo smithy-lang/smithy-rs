@@ -409,7 +409,7 @@ mod tests {
     fn document_settings_protocol_id_default_is_codec_sentinel() {
         let settings = JsonCodecSettings::default();
         assert_eq!(
-            DocumentSettings::protocol_id(&settings).as_str(),
+            DocumentSettings::protocol_id(&settings),
             "aws.smithy.json#JsonCodec"
         );
     }
@@ -420,63 +420,9 @@ mod tests {
             .protocol_id(shape_id!("aws.protocols", "restJson1"))
             .build();
         assert_eq!(
-            DocumentSettings::protocol_id(&settings).as_str(),
+            DocumentSettings::protocol_id(&settings),
             "aws.protocols#restJson1"
         );
-    }
-
-    #[test]
-    fn document_settings_member_index_for_resolves_member_name() {
-        use aws_smithy_schema::ShapeType;
-
-        // Build a tiny struct schema with two members.
-        static M_FIRST: Schema<'static> = Schema::new_member(
-            shape_id!("com.example", "MyStruct", "first"),
-            ShapeType::String,
-            "first",
-            0,
-        );
-        static M_SECOND: Schema<'static> = Schema::new_member(
-            shape_id!("com.example", "MyStruct", "second"),
-            ShapeType::Integer,
-            "second",
-            1,
-        );
-        static MY_STRUCT: Schema<'static> = Schema::new_struct(
-            shape_id!("com.example", "MyStruct"),
-            ShapeType::Structure,
-            &[&M_FIRST, &M_SECOND],
-        );
-
-        let settings = JsonCodecSettings::builder().use_json_name(false).build();
-        assert_eq!(settings.member_index_for(&MY_STRUCT, "first"), Some(0));
-        assert_eq!(settings.member_index_for(&MY_STRUCT, "second"), Some(1));
-        assert_eq!(settings.member_index_for(&MY_STRUCT, "missing"), None);
-    }
-
-    #[test]
-    fn document_settings_member_index_for_honors_json_name() {
-        use aws_smithy_schema::ShapeType;
-
-        // Member's wire name is "first_json" via @jsonName.
-        static M_FIRST: Schema<'static> = Schema::new_member(
-            shape_id!("com.example", "MyStruct", "first"),
-            ShapeType::String,
-            "first",
-            0,
-        )
-        .with_json_name("first_json");
-        static MY_STRUCT: Schema<'static> = Schema::new_struct(
-            shape_id!("com.example", "MyStruct"),
-            ShapeType::Structure,
-            &[&M_FIRST],
-        );
-
-        let settings = JsonCodecSettings::builder().use_json_name(true).build();
-        // With use_json_name=true: lookup by wire name succeeds, lookup
-        // by member name fails (because @jsonName takes precedence).
-        assert_eq!(settings.member_index_for(&MY_STRUCT, "first_json"), Some(0));
-        assert_eq!(settings.member_index_for(&MY_STRUCT, "first"), None);
     }
 
     #[test]
@@ -494,8 +440,8 @@ mod tests {
             .coerce_string_to_blob("not!valid!base64!")
             .unwrap_err();
         match err {
-            SerdeError::BlobDecodeFailed { .. } => {}
-            other => panic!("expected BlobDecodeFailed, got {other:?}"),
+            DocumentError::InvalidInput { .. } => {}
+            other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
     }
 
@@ -528,8 +474,8 @@ mod tests {
             .coerce_string_to_timestamp("not a timestamp")
             .unwrap_err();
         match err {
-            SerdeError::TimestampParseFailed { .. } => {}
-            other => panic!("expected TimestampParseFailed, got {other:?}"),
+            DocumentError::InvalidInput { .. } => {}
+            other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
     }
 
@@ -563,8 +509,8 @@ mod tests {
             .coerce_number_to_timestamp(&Number::PosInt(0))
             .unwrap_err();
         match err {
-            SerdeError::UnsupportedOperation { .. } => {}
-            other => panic!("expected UnsupportedOperation, got {other:?}"),
+            DocumentError::UnsupportedOperation { .. } => {}
+            other => panic!("expected DocumentError::UnsupportedOperation, got {other:?}"),
         }
     }
 
@@ -575,8 +521,8 @@ mod tests {
             .coerce_number_to_timestamp(&Number::Float(f64::NAN))
             .unwrap_err();
         match err {
-            SerdeError::TimestampParseFailed { .. } => {}
-            other => panic!("expected TimestampParseFailed, got {other:?}"),
+            DocumentError::InvalidInput { .. } => {}
+            other => panic!("expected DocumentError::InvalidInput, got {other:?}"),
         }
     }
 }

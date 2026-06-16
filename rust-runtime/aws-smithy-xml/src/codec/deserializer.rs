@@ -12,7 +12,7 @@ use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
 use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 
-use aws_smithy_schema::document::Document as SmithyDocument;
+use aws_smithy_types::Document as SmithyDocument;
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -610,7 +610,7 @@ impl ShapeDeserializer for XmlDeserializer<'_> {
         DateTime::from_str(text.as_ref(), format).map_err(|e| SerdeError::custom(format!("{e}")))
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<SmithyDocument<'_>, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<SmithyDocument, SerdeError> {
         Err(SerdeError::custom(
             "document types are not supported by REST XML",
         ))

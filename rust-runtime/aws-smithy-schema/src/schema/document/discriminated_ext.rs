@@ -127,12 +127,14 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
         F: FnOnce(&mut dyn ShapeDeserializer) -> Result<T, SerdeError>,
     {
         // The schema-side deserializer reads directly from the
-        // unified `Document` (Phase 4): no bridge clone, no conversion.
-        // Settings on the wrapper are not currently consulted — the
-        // `DocumentShapeDeserializer` is variant-only. Format-aware
-        // coercion lives on `DiscriminatedDocument::as_blob` /
-        // `as_timestamp` for callers who need it.
-        let mut deser = DocumentShapeDeserializer::new(self.document());
+        // unified `Document` (Phase 4). Settings on the wrapper are
+        // attached to the deserializer so format-aware coercion (e.g.
+        // a JSON-wire base64 string read as a blob, an
+        // epoch-seconds number read as a timestamp) succeeds when
+        // the data tree carries the wire-format representation
+        // rather than a native variant.
+        let mut deser =
+            DocumentShapeDeserializer::new_with_settings(self.document(), self.settings().cloned());
         deserialize(&mut deser)
     }
 

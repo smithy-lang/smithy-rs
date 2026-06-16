@@ -46,13 +46,13 @@ use std::collections::HashMap;
 
 use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::document::Document;
+use aws_smithy_schema::document::DiscriminatedDocumentExt;
 use aws_smithy_schema::prelude;
 use aws_smithy_schema::serde::{
     SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer,
 };
 use aws_smithy_schema::{shape_id, Schema, ShapeId, ShapeType};
-use aws_smithy_types::{Blob, DateTime};
+use aws_smithy_types::{Blob, DateTime, DiscriminatedDocument, Document};
 
 // -- Test fixture: `OmniWidget` schema and typed shape ----------------
 
@@ -338,27 +338,34 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     );
 
     // (c) document_from_serialization: parse the canonical bytes into
-    //     a Document. This is the "deserialize-side" Document — it
-    //     carries `JsonDocumentSettings` per Phase 7 so format-aware
-    //     coercion (e.g. base64 string → blob) works on the read side.
-    let document_from_serialization: Document = {
+    //     a DiscriminatedDocument. This is the "deserialize-side"
+    //     wrapper — it carries `JsonDocumentSettings` per Phase 7 so
+    //     format-aware coercion (e.g. base64 string → blob) works on
+    //     the read side. No `__type` is present in the canonical
+    //     bytes, so the discriminator slot remains `None`.
+    let document_from_serialization: DiscriminatedDocument = {
         let mut deser = codec.create_deserializer(&canonical_serialization);
-        // Use the inherent `read_document_owned` (returns
-        // `Document<'static>`) rather than the trait method, whose
-        // elided `Document<'_>` return type would tie the result to
-        // the deserializer's borrow and prevent escape from this
-        // block.
+        // The trait method `read_document` returns plain `Document`;
+        // the inherent `read_discriminated_document` is the one that
+        // attaches settings and lifts a top-level `__type` field if
+        // present. We use the inherent method because the SEP test
+        // matrix's read-side expectations match the discriminated-
+        // document semantics (settings attached, discriminator-aware).
         deser
-            .read_document_owned(&prelude::DOCUMENT)
-            .unwrap_or_else(|e| panic!("[{label}] read_document failed: {e:?}"))
+            .read_discriminated_document()
+            .unwrap_or_else(|e| panic!("[{label}] read_discriminated_document failed: {e:?}"))
     };
 
-    // (d) document_from_data_object: produce a Document from the typed
-    //     value. This is the "serialize-side" Document — protocol-
-    //     agnostic per SEP §Document Types rule 8.
-    let document_from_data_object: Document =
-        Document::from_struct(&OMNI_WIDGET_SCHEMA, &canonical_data_object)
-            .unwrap_or_else(|e| panic!("[{label}] Document::from_struct failed: {e:?}"));
+    // (d) document_from_data_object: produce a DiscriminatedDocument
+    //     from the typed value. This is the "serialize-side" wrapper —
+    //     protocol-agnostic per SEP §Document Types rule 8. The
+    //     discriminator slot is populated with the FQN of the
+    //     OmniWidget schema.
+    let document_from_data_object: DiscriminatedDocument =
+        DiscriminatedDocument::from_struct(&OMNI_WIDGET_SCHEMA, &canonical_data_object)
+            .unwrap_or_else(|e| {
+                panic!("[{label}] DiscriminatedDocument::from_struct failed: {e:?}")
+            });
 
     // --- Run the 6 assertions ---------------------------------------
 
@@ -416,7 +423,12 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     // not "produces byte-identical JSON".
     let reser_doc_from_ser: Vec<u8> = {
         let mut ser = codec.create_serializer();
-        ser.write_document(&prelude::DOCUMENT, &document_from_serialization)
+        // `write_document` takes a plain `&Document` (no
+        // discriminator); extract via `.document()` from the wrapper.
+        // The wrapper's discriminator slot is empty here anyway —
+        // canonical_serialization doesn't carry `__type` — so this is
+        // semantically equivalent to using `write_discriminated_document`.
+        ser.write_document(&prelude::DOCUMENT, document_from_serialization.document())
             .unwrap_or_else(|e| panic!("[{label}] write_document on doc_from_ser: {e:?}"));
         ser.finish()
     };
@@ -433,29 +445,24 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     //              write_document is *semantically* equivalent to
     //              canonical_serialization.
     //
-    // `Document::from_struct` attaches the schema's shape ID as a
-    // discriminator at every struct level (the SEP "typed Document"
-    // model). Our `write_document` correctly emits `__type` for any
-    // discriminated Document — but the typed-shape `write_struct` path
-    // does NOT emit `__type` (typed shapes are closed-world; the
-    // receiver knows the type by context).
+    // `DiscriminatedDocument::from_struct` attaches the schema's shape
+    // ID as the *wrapper's* discriminator (the SEP "typed Document"
+    // model — a Document derived from a typed shape carries the
+    // typed-shape identity). Under the unified design, only the top-
+    // level wrapper carries a discriminator; nested struct nodes in
+    // the data tree do not.
     //
-    // So `serialize(documentFromDataObject) != canonicalSerialization`
-    // when the Document tree carries discriminators. To assert the
-    // member-content equivalence the SEP intends — without conflating
-    // it with the typed/untyped distinction — strip discriminators
-    // first. The discriminator-emission contract is exercised by the
-    // separate `sep_write_document_emits_type_discriminator` test
-    // below.
-    let document_from_data_object_without_discriminators =
-        strip_discriminators(&document_from_data_object);
+    // The trait method `write_document` takes a plain `&Document`
+    // (data-only, no discriminator emission). Calling it on the
+    // wrapper's `.document()` view produces canonical bytes without
+    // `__type`. The discriminator-emission contract is exercised by
+    // the separate `sep_write_document_emits_type_discriminator`
+    // test below via the inherent `write_discriminated_document`
+    // method.
     let reser_doc_from_data: Vec<u8> = {
         let mut ser = codec.create_serializer();
-        ser.write_document(
-            &prelude::DOCUMENT,
-            &document_from_data_object_without_discriminators,
-        )
-        .unwrap_or_else(|e| panic!("[{label}] write_document on doc_from_data: {e:?}"));
+        ser.write_document(&prelude::DOCUMENT, document_from_data_object.document())
+            .unwrap_or_else(|e| panic!("[{label}] write_document on doc_from_data: {e:?}"));
         ser.finish()
     };
     assert_json_equivalent(
@@ -463,8 +470,8 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
         "assertion 6",
         &reser_doc_from_data,
         &canonical_serialization,
-        "serializing document_from_data_object (with discriminators \
-         stripped) via write_document must produce JSON semantically \
+        "serializing document_from_data_object via write_document \
+         (which doesn't emit `__type`) must produce JSON semantically \
          equivalent to canonical_serialization",
     );
 
@@ -503,40 +510,6 @@ fn assert_json_equivalent(
         String::from_utf8_lossy(actual),
         String::from_utf8_lossy(expected),
     );
-}
-
-/// Recursively returns a clone of `doc` with every Document-tree
-/// discriminator removed.
-///
-/// `Document::from_struct` attaches the schema's shape ID at every
-/// struct level. The SEP normative tests for assertion 6 want to
-/// compare member content, not the typed-shape identity — strip
-/// discriminators first.
-fn strip_discriminators(doc: &Document<'_>) -> Document<'static> {
-    use aws_smithy_schema::document::DocumentInner;
-    match doc.inner() {
-        DocumentInner::Null => Document::null(),
-        DocumentInner::Boolean(b) => Document::boolean(*b),
-        DocumentInner::Number(n) => Document::number(*n),
-        DocumentInner::String(s) => Document::string(s.clone()),
-        DocumentInner::Blob(b) => Document::blob(b.clone()),
-        DocumentInner::Timestamp(t) => Document::timestamp(*t),
-        DocumentInner::BigInteger(bi) => Document::big_integer(bi.clone()),
-        DocumentInner::BigDecimal(bd) => Document::big_decimal(bd.clone()),
-        DocumentInner::List(items) => {
-            Document::list(items.iter().map(strip_discriminators).collect())
-        }
-        DocumentInner::Map(entries) => Document::map(
-            entries
-                .iter()
-                .map(|(k, v)| (k.clone(), strip_discriminators(v)))
-                .collect(),
-        ),
-        // `DocumentInner` is `#[non_exhaustive]`. Future variants will
-        // need explicit handling; panic loudly so the test surfaces a
-        // missing case rather than silently dropping data.
-        other => panic!("strip_discriminators: unsupported DocumentInner variant {other:?}"),
-    }
 }
 
 // -- Test cases -------------------------------------------------------
@@ -702,16 +675,17 @@ fn sep_round_trip_full_payload() {
 
 #[test]
 fn sep_write_document_emits_type_discriminator() {
-    // `Document::from_struct(schema, value)` attaches the schema's
-    // shape ID as the document's discriminator (per the SEP "typed
-    // Document" model — a Document derived from a typed shape carries
-    // the typed-shape identity).
+    // `DiscriminatedDocument::from_struct(schema, value)` attaches the
+    // schema's shape ID as the wrapper's discriminator (per the SEP
+    // "typed Document" model — a Document derived from a typed shape
+    // carries the typed-shape identity).
     //
-    // When such a discriminator-tagged Document is serialized via
-    // `write_document`, `JsonSerializer` emits a `__type` field with
-    // the absolute shape id per SEP § Typed Document Serialization
-    // rule 1 ("`"__type": "com.absolute#ShapeId"`"). This test pins
-    // that contract down — it's deliberately separate from the SEP
+    // When such a discriminator-tagged DiscriminatedDocument is
+    // serialized via `write_discriminated_document`, `JsonSerializer`
+    // emits a `__type` field with the absolute shape id per SEP §
+    // Typed Document Serialization rule 1
+    // ("`"__type": "com.absolute#ShapeId"`"). This test pins that
+    // contract down — it's deliberately separate from the SEP
     // 6-assertion matrix because the typed-shape `write_struct` path
     // does NOT emit `__type` and the two are structurally different.
     //
@@ -723,12 +697,12 @@ fn sep_write_document_emits_type_discriminator() {
         ..OmniWidget::default()
     };
     let codec = JsonCodec::default();
-    let document = Document::from_struct(&OMNI_WIDGET_SCHEMA, &value)
-        .expect("Document::from_struct succeeds for OmniWidget");
+    let document = DiscriminatedDocument::from_struct(&OMNI_WIDGET_SCHEMA, &value)
+        .expect("DiscriminatedDocument::from_struct succeeds for OmniWidget");
 
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document succeeds for a discriminated Document");
+    ser.write_discriminated_document(&prelude::DOCUMENT, &document)
+        .expect("write_discriminated_document succeeds for a discriminated Document");
     let bytes = ser.finish();
 
     // The `__type` field appears first (the implementation emits the
@@ -740,39 +714,35 @@ fn sep_write_document_emits_type_discriminator() {
     assert_eq!(
         bytes.as_slice(),
         expected.as_slice(),
-        "write_document must emit the discriminator as `__type` with \
-         the absolute shape id, ahead of the member fields",
+        "write_discriminated_document must emit the discriminator as \
+         `__type` with the absolute shape id, ahead of the member fields",
     );
 }
 
 #[test]
 fn sep_write_document_no_discriminator_omits_type() {
-    // Symmetric negative: a Document constructed *without* a
-    // discriminator (e.g. one parsed from wire bytes that didn't
-    // carry `__type`, or built directly via `Document::map(...)` for
-    // ad-hoc data) must NOT emit `__type`. The discriminator field is
-    // a function of the document's own state, not a default the
-    // serializer pretends about.
-    let mut entries: HashMap<String, Document> = HashMap::new();
-    entries.insert("value_string".to_owned(), Document::string("hi"));
-    let document = Document::map(entries);
-    assert!(
-        document.discriminator().is_none(),
-        "Document::map(...) must produce a Document without a discriminator",
-    );
+    // Symmetric negative: a Document constructed directly (no typed-
+    // shape origin) has no discriminator. The trait method
+    // `write_document` never emits `__type` for *any* input — it
+    // operates purely on the data tree. This pins down the contract
+    // that `write_document` is the discriminator-free emission path.
+    let mut entries: std::collections::HashMap<String, Document> = std::collections::HashMap::new();
+    entries.insert("value_string".to_owned(), Document::String("hi".into()));
+    let document = Document::Object(entries);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
     ser.write_document(&prelude::DOCUMENT, &document)
-        .expect("write_document succeeds for a discriminator-less Document");
+        .expect("write_document succeeds for a plain Document");
     let bytes = ser.finish();
 
     let expected = br#"{"value_string":"hi"}"#;
     assert_eq!(
         bytes.as_slice(),
         expected.as_slice(),
-        "write_document on a Document with no discriminator must \
-         NOT emit `__type`",
+        "write_document on a plain Document must NOT emit `__type` \
+         (the trait method is the discriminator-free emission path; \
+         use write_discriminated_document for typed-Document emission)",
     );
 }
 
@@ -894,12 +864,16 @@ fn sep_write_document_ignores_json_name() {
     let value = AliasHolder {
         alternate_name: Some("hello".to_owned()),
     };
-    let document = Document::from_struct(&ALIAS_HOLDER_SCHEMA, &value)
-        .expect("Document::from_struct must succeed");
-    let document = strip_discriminators(&document);
+    let document = DiscriminatedDocument::from_struct(&ALIAS_HOLDER_SCHEMA, &value)
+        .expect("DiscriminatedDocument::from_struct must succeed");
 
     let mut ser = codec.create_serializer();
-    ser.write_document(&prelude::DOCUMENT, &document)
+    // Use plain `write_document` on the wrapper's `.document()` view
+    // so we don't emit `__type` here — this test's contract is about
+    // member-name handling, not about the discriminator. Under the
+    // unified design the data tree never carries discriminators on
+    // individual nodes; only the wrapper does.
+    ser.write_document(&prelude::DOCUMENT, document.document())
         .expect("write_document must succeed");
     let bytes = ser.finish();
 
@@ -941,7 +915,7 @@ fn sep_write_document_big_integer_preserves_precision() {
     // mismatched exponent form. We assert the exact decimal string
     // reaches the wire intact.
     let value = BigInteger::from_str("1234567890123456789012345678901").expect("valid BigInteger");
-    let document = Document::big_integer(value);
+    let document = Document::BigInteger(value);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
@@ -967,7 +941,7 @@ fn sep_write_document_big_decimal_preserves_precision() {
     // would produce `0.12345678901234568` — losing 14 trailing
     // digits. The wire form must keep every digit.
     let value = BigDecimal::from_str("0.123456789012345678901234567890").expect("valid BigDecimal");
-    let document = Document::big_decimal(value);
+    let document = Document::BigDecimal(value);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
@@ -999,13 +973,13 @@ fn sep_write_document_big_numbers_inside_aggregate() {
     let mut entries: HashMap<String, Document> = HashMap::new();
     entries.insert(
         "list_of_big_ints".to_owned(),
-        Document::list(vec![Document::big_integer(big_int.clone())]),
+        Document::Array(vec![Document::BigInteger(big_int.clone())]),
     );
     entries.insert(
         "single_big_dec".to_owned(),
-        Document::big_decimal(big_dec.clone()),
+        Document::BigDecimal(big_dec.clone()),
     );
-    let document = Document::map(entries);
+    let document = Document::Object(entries);
 
     let codec = JsonCodec::default();
     let mut ser = codec.create_serializer();
