@@ -6,11 +6,9 @@
 //! JSON codec implementation for schema-based serialization.
 
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::document::DocumentSettings;
-use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::date_time::{DateTime, Format as TimestampFormat};
-use aws_smithy_types::Number;
+use aws_smithy_types::{DocumentError, DocumentSettings, Number};
 use std::sync::Arc;
 
 mod deserializer;
@@ -224,22 +222,11 @@ impl JsonCodecSettingsBuilder {
 }
 
 impl DocumentSettings for JsonCodecSettings {
-    fn protocol_id(&self) -> &ShapeId<'static> {
-        &self.protocol_id
-    }
-
-    /// Resolves a JSON wire field name to the index of the matching
-    /// member, honoring `@jsonName` when configured via
-    /// [`JsonCodecSettingsBuilder::use_json_name`].
-    ///
-    /// Falls back to `None` if no member matches — matching the JSON
-    /// "ignore unknown fields" convention.
-    fn member_index_for(&self, schema: &Schema<'_>, wire_name: &str) -> Option<usize> {
-        // `field_to_member` honors @jsonName per `JsonFieldMapper`.
-        // `Schema::member_index` is `Option<usize>`, returning `Some`
-        // for member schemas (which is what `field_to_member` always
-        // returns).
-        self.field_to_member(schema, wire_name)?.member_index()
+    fn protocol_id(&self) -> &str {
+        // The internal field is `ShapeId<'static>` (preserved for
+        // ergonomic construction via `shape_id!`); the trait surface
+        // is the FQN string per the unified `DocumentSettings`.
+        self.protocol_id.as_str()
     }
 
     /// Decodes a base64 string into a blob.
@@ -250,9 +237,9 @@ impl DocumentSettings for JsonCodecSettings {
     /// the JSON wire. This method consumes those strings on the
     /// deserialization side; the corresponding encode happens in
     /// `JsonSerializer::write_document`.
-    fn coerce_string_to_blob(&self, s: &str) -> Result<Vec<u8>, SerdeError> {
-        aws_smithy_types::base64::decode(s).map_err(|e| SerdeError::BlobDecodeFailed {
-            message: e.to_string(),
+    fn coerce_string_to_blob(&self, s: &str) -> Result<Vec<u8>, DocumentError> {
+        aws_smithy_types::base64::decode(s).map_err(|e| DocumentError::InvalidInput {
+            message: format!("base64 decode failed: {e}"),
         })
     }
 
@@ -266,7 +253,7 @@ impl DocumentSettings for JsonCodecSettings {
     /// epoch-seconds (which is a number). For this case we attempt
     /// `date-time` parsing as a fallback so common ISO-8601 strings
     /// still coerce.
-    fn coerce_string_to_timestamp(&self, s: &str) -> Result<DateTime, SerdeError> {
+    fn coerce_string_to_timestamp(&self, s: &str) -> Result<DateTime, DocumentError> {
         let primary_format = self.default_timestamp_format;
         // If the configured default is a string-encoded format, use it.
         let attempt = match primary_format {
@@ -279,8 +266,8 @@ impl DocumentSettings for JsonCodecSettings {
             TimestampFormat::EpochSeconds => DateTime::from_str(s, TimestampFormat::DateTime),
             _ => DateTime::from_str(s, TimestampFormat::DateTime),
         };
-        attempt.map_err(|e| SerdeError::TimestampParseFailed {
-            message: e.to_string(),
+        attempt.map_err(|e| DocumentError::InvalidInput {
+            message: format!("timestamp parse failed: {e}"),
         })
     }
 
@@ -294,9 +281,9 @@ impl DocumentSettings for JsonCodecSettings {
     /// (`date-time` / `http-date`), this method returns an
     /// `UnsupportedOperation` error — a number value isn't valid for
     /// those formats.
-    fn coerce_number_to_timestamp(&self, n: &Number) -> Result<DateTime, SerdeError> {
+    fn coerce_number_to_timestamp(&self, n: &Number) -> Result<DateTime, DocumentError> {
         if !matches!(self.default_timestamp_format, TimestampFormat::EpochSeconds) {
-            return Err(SerdeError::UnsupportedOperation {
+            return Err(DocumentError::UnsupportedOperation {
                 message: format!(
                     "JSON codec configured with timestamp format {:?}; \
                      number-to-timestamp coercion only valid for epoch-seconds",
@@ -307,7 +294,7 @@ impl DocumentSettings for JsonCodecSettings {
         Ok(match *n {
             Number::PosInt(u) => {
                 if u > i64::MAX as u64 {
-                    return Err(SerdeError::TimestampParseFailed {
+                    return Err(DocumentError::InvalidInput {
                         message: format!(
                             "epoch-seconds value {u} overflows i64; cannot construct DateTime"
                         ),
@@ -318,7 +305,7 @@ impl DocumentSettings for JsonCodecSettings {
             Number::NegInt(i) => DateTime::from_secs(i),
             Number::Float(f) => {
                 if !f.is_finite() {
-                    return Err(SerdeError::TimestampParseFailed {
+                    return Err(DocumentError::InvalidInput {
                         message: format!(
                             "non-finite epoch-seconds value {f}; cannot construct DateTime"
                         ),

@@ -5,11 +5,10 @@
 
 //! JSON serializer implementation.
 
-use aws_smithy_schema::document::{Document, DocumentInner};
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
 use aws_smithy_types::date_time::Format as TimestampFormat;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document};
 
 use crate::codec::JsonCodecSettings;
 
@@ -111,12 +110,9 @@ impl JsonSerializer {
         use crate::serialize::JsonValueWriter;
         use aws_smithy_types::base64;
 
-        // Walk `DocumentInner` directly so blob (base64), timestamp
-        // (codec-default format), bignum, and discriminator-tagged
-        // structures all serialize correctly. The previous bridge to
-        // `aws_smithy_types::Document` (the legacy document type) only
-        // supported the JSON-typed subset and errored on the rich
-        // variants the schema-serde path produces.
+        // Walk the unified `aws_smithy_types::Document` directly so blob
+        // (base64), timestamp (codec-default format), and bignum
+        // variants all serialize correctly.
         //
         // Per the SEP § Document Types rule 8, the document is
         // protocol-agnostic on the serialization side: it carries no
@@ -126,48 +122,49 @@ impl JsonSerializer {
         // unconditionally — schema-typed members go through the
         // dedicated `write_timestamp` path and inspect
         // `@timestampFormat` themselves, not via `write_document`.
-        match doc.inner() {
-            DocumentInner::Null => self.output.push_str("null"),
-            DocumentInner::Boolean(b) => self.output.push_str(if *b { "true" } else { "false" }),
-            DocumentInner::Number(n) => {
+        //
+        // The unified `Document` has no discriminator slot. Discriminated
+        // documents (with a `__type` field) flow through
+        // [`Self::write_discriminated_document`] which emits the
+        // wrapper's discriminator before delegating here for the
+        // payload.
+        match doc {
+            Document::Null => self.output.push_str("null"),
+            Document::Bool(b) => self.output.push_str(if *b { "true" } else { "false" }),
+            Document::Number(n) => {
                 let writer = JsonValueWriter::new(&mut self.output);
                 writer.number(*n);
             }
-            DocumentInner::String(s) => {
+            Document::String(s) => {
                 self.output.push('"');
                 self.output.push_str(&escape_string(s));
                 self.output.push('"');
             }
-            DocumentInner::Blob(b) => {
+            Document::Blob(b) => {
+                // base64 alphabet contains no JSON-special characters,
+                // but route through `JsonValueWriter::string` to keep
+                // the encoding centralized.
                 let encoded = base64::encode(b);
-                self.output.push('"');
-                self.output.push_str(&encoded);
-                self.output.push('"');
+                JsonValueWriter::new(&mut self.output).string(&encoded);
             }
-            DocumentInner::Timestamp(ts) => {
+            Document::Timestamp(ts) => {
                 let format = self.settings.default_timestamp_format;
-                let formatted = ts.fmt(format).map_err(|e| SerdeError::WriteFailed {
-                    message: format!("failed to format timestamp: {e}"),
-                })?;
-                match format {
-                    TimestampFormat::EpochSeconds => self.output.push_str(&formatted),
-                    _ => {
-                        self.output.push('"');
-                        self.output.push_str(&formatted);
-                        self.output.push('"');
-                    }
-                }
+                JsonValueWriter::new(&mut self.output)
+                    .date_time(ts, format)
+                    .map_err(|e| SerdeError::WriteFailed {
+                        message: format!("failed to format timestamp: {e}"),
+                    })?;
             }
-            DocumentInner::BigInteger(bi) => {
+            Document::BigInteger(bi) => {
                 // Big integers serialize as raw JSON numbers (no quotes,
                 // no scientific notation) so receivers with arbitrary-
                 // precision parsers can recover the exact value.
                 self.output.push_str(bi.as_ref());
             }
-            DocumentInner::BigDecimal(bd) => {
+            Document::BigDecimal(bd) => {
                 self.output.push_str(bd.as_ref());
             }
-            DocumentInner::List(items) => {
+            Document::Array(items) => {
                 self.output.push('[');
                 let mut first = true;
                 for item in items {
@@ -179,20 +176,9 @@ impl JsonSerializer {
                 }
                 self.output.push(']');
             }
-            DocumentInner::Map(entries) => {
+            Document::Object(entries) => {
                 self.output.push('{');
                 let mut first = true;
-                // If the document carries a discriminator (i.e. it
-                // represents a typed shape), emit it as a `__type`
-                // field per the SEP § Typed Document Serialization. The
-                // SEP requires the absolute shape id — `ShapeId::as_str`
-                // already returns the FQN form `namespace#name`.
-                if let Some(id) = doc.discriminator() {
-                    self.output.push_str("\"__type\":\"");
-                    self.output.push_str(&escape_string(id.as_str()));
-                    self.output.push('"');
-                    first = false;
-                }
                 for (key, value) in entries {
                     if !first {
                         self.output.push(',');
@@ -205,16 +191,57 @@ impl JsonSerializer {
                 }
                 self.output.push('}');
             }
-            // `DocumentInner` is `#[non_exhaustive]`. Future variants
-            // need a deliberate decision in this serializer rather than
-            // a silent no-op.
+            // `Document` is `#[non_exhaustive]`. Future variants need a
+            // deliberate decision in this serializer rather than a
+            // silent no-op.
             other => {
                 return Err(SerdeError::custom(format!(
-                    "JSON write_document: unsupported DocumentInner variant {other:?}"
+                    "JSON write_document: unsupported Document variant {other:?}"
                 )));
             }
         }
         Ok(())
+    }
+
+    /// Serialize a [`DiscriminatedDocument`] to the codec's output.
+    ///
+    /// When the wrapper carries a discriminator and the inner Document
+    /// is a [`Document::Object`], the discriminator is emitted as a
+    /// `__type` field at the start of the JSON object per the SEP
+    /// § Typed Document Serialization (always serialized as an
+    /// absolute shape ID, the FQN form `namespace#name`).
+    ///
+    /// For non-object inner documents, or when no discriminator is
+    /// attached, this delegates to [`Self::write_json_value`] for
+    /// plain serialization.
+    pub fn write_discriminated_document(
+        &mut self,
+        schema: &Schema<'_>,
+        value: &DiscriminatedDocument,
+    ) -> Result<(), SerdeError> {
+        use crate::escape::escape_string;
+
+        self.prefix(schema);
+        match (value.discriminator(), value.document()) {
+            (Some(id), Document::Object(entries)) => {
+                self.output.push('{');
+                self.output.push_str("\"__type\":\"");
+                self.output.push_str(&escape_string(id));
+                self.output.push('"');
+                for (key, val) in entries {
+                    self.output.push(',');
+                    self.output.push('"');
+                    self.output.push_str(&escape_string(key));
+                    self.output.push_str("\":");
+                    self.write_json_value(val)?;
+                }
+                self.output.push('}');
+                Ok(())
+            }
+            // No discriminator, or discriminator on a non-object payload
+            // — emit the inner document plainly.
+            (_, doc) => self.write_json_value(doc),
+        }
     }
 }
 
@@ -461,11 +488,7 @@ impl ShapeSerializer for JsonSerializer {
         Ok(())
     }
 
-    fn write_document(
-        &mut self,
-        schema: &Schema<'_>,
-        value: &Document<'_>,
-    ) -> Result<(), SerdeError> {
+    fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
         self.prefix(schema);
         self.write_json_value(value)?;
         Ok(())

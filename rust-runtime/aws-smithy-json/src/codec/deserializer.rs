@@ -5,12 +5,13 @@
 
 //! JSON deserializer implementation.
 
-use aws_smithy_schema::document::{Document, DocumentSettings};
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
-use aws_smithy_schema::ShapeId;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+use aws_smithy_types::{
+    BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
+    Number,
+};
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
@@ -110,89 +111,30 @@ impl<'a> JsonDeserializer<'a> {
         }
     }
 
-    /// Parse a JSON quoted string *value* directly from bytes, advancing
-    /// past it. Assumes the current position is at the opening `"`.
+    /// Predicate: is `s` a well-formed absolute Smithy shape ID of
+    /// the form `namespace#ShapeName` (no member component, no nested
+    /// `#`, both segments non-empty)?
     ///
-    /// Same scanning shape as [`Self::parse_key`]; kept as a separate
-    /// function so callers can distinguish key-parsing from
-    /// value-parsing at the type level (e.g. for the `__type`
-    /// discriminator lift, which only borrows from input when the
-    /// value has no escape sequences).
-    fn parse_string_value(&mut self) -> Result<std::borrow::Cow<'a, str>, SerdeError> {
-        let start = self.position + 1;
-        self.position += 1;
-        let input = self.input;
-        let remaining = &input[start..];
-        let mut i = 0;
-        let mut has_escapes = false;
-        let mut found_end = false;
-        while i < remaining.len() {
-            match remaining[i] {
-                b'"' => {
-                    found_end = true;
-                    break;
-                }
-                b'\\' => {
-                    has_escapes = true;
-                    i += 2;
-                }
-                _ => i += 1,
-            }
-        }
-        if !found_end {
-            return Err(SerdeError::InvalidInput {
-                message: "unterminated string value".into(),
-            });
-        }
-        self.position = start + i + 1;
-        let value_bytes = &input[start..start + i];
-        if has_escapes {
-            let raw = std::str::from_utf8(value_bytes).map_err(|e| SerdeError::InvalidInput {
-                message: e.to_string(),
-            })?;
-            Ok(std::borrow::Cow::Owned(
-                crate::escape::unescape_string(raw)
-                    .map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?
-                    .into_owned(),
-            ))
-        } else {
-            Ok(std::borrow::Cow::Borrowed(
-                std::str::from_utf8(value_bytes).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })?,
-            ))
-        }
-    }
-
-    /// Parse `s` as an absolute Smithy shape ID of the form
-    /// `namespace#ShapeName` (no member component) and build a
-    /// [`ShapeId`] borrowing the namespace and name segments out of
-    /// `s`.
+    /// Used by [`Self::read_discriminated_document`] to validate a
+    /// candidate `__type` field value before lifting it into the
+    /// resulting [`DiscriminatedDocument`]'s discriminator slot.
+    /// Returning `false` causes the field to be left in the map so a
+    /// stray `__type: "garbage"` doesn't poison the surrounding
+    /// document parse.
     ///
-    /// Returns `None` for relative names (no `#`) — relative resolution
-    /// against [`JsonCodecSettings::default_namespace`] is not yet
-    /// implemented because it requires an allocation whose lifetime
-    /// can't naturally live inside `Document<'a>`. Callers fall back
-    /// to leaving the `__type` key in the resulting map.
-    ///
-    /// Returns `None` for malformed inputs (multiple `#`, member
-    /// segments via `$`, empty namespace or name) — same fall-back
-    /// behavior so a stray `__type: "garbage"` doesn't poison the
-    /// surrounding document parse.
-    fn parse_absolute_shape_id(s: &str) -> Option<ShapeId<'_>> {
-        let (namespace, shape_name) = s.split_once('#')?;
-        // No member component, no nested `#`, both segments non-empty.
-        if namespace.is_empty()
-            || shape_name.is_empty()
-            || shape_name.contains('#')
-            || shape_name.contains('$')
-            || namespace.contains('$')
-        {
-            return None;
-        }
-        Some(ShapeId::from_static(s, namespace, shape_name))
+    /// Returns `false` for relative names (no `#`) — relative
+    /// resolution against `JsonCodecSettings::default_namespace`
+    /// is not yet implemented and callers fall back to leaving the
+    /// `__type` key in the resulting map.
+    fn is_absolute_shape_id(s: &str) -> bool {
+        let Some((namespace, shape_name)) = s.split_once('#') else {
+            return false;
+        };
+        !namespace.is_empty()
+            && !shape_name.is_empty()
+            && !shape_name.contains('#')
+            && !shape_name.contains('$')
+            && !namespace.contains('$')
     }
 }
 
@@ -751,17 +693,128 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document<'_>, SerdeError> {
-        // Delegate to the inherent method that returns `Document<'static>`.
-        // The trait method's elided `Document<'_>` lifetime ties to
-        // `&mut self` (per the 3rd elision rule), which would block
-        // recursive `self.read_document(...)` calls inside the body —
-        // each recursive return value would borrow `self` for the rest
-        // of the function. Going through `read_document_owned` makes
-        // every nested document `Document<'static>`, so no such borrow
-        // ties exist. The final `Document<'static>` then widens to
-        // `Document<'_>` via covariance when returned.
-        self.read_document_owned(_schema)
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        self.depth += 1;
+        if self.depth > self.settings.max_depth() {
+            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+        }
+        self.skip_whitespace();
+        let result: Result<Document, SerdeError> = match self.remaining().first() {
+            Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
+            Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
+            Some(b'n') => {
+                if self.remaining().starts_with(b"null") {
+                    self.advance_by(4);
+                    Ok(Document::Null)
+                } else {
+                    Err(SerdeError::InvalidInput {
+                        message: "unexpected token in document".into(),
+                    })
+                }
+            }
+            Some(b'{') => {
+                self.advance_by(1);
+                let mut map = std::collections::HashMap::new();
+                loop {
+                    self.skip_whitespace();
+                    if self.remaining().first() == Some(&b'}') {
+                        self.advance_by(1);
+                        break;
+                    }
+                    if self.remaining().first() != Some(&b'"') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected object key in document".into(),
+                        });
+                    }
+                    let key = self.parse_key()?.into_owned();
+                    self.skip_whitespace();
+                    if self.remaining().first() != Some(&b':') {
+                        return Err(SerdeError::InvalidInput {
+                            message: "expected colon in document object".into(),
+                        });
+                    }
+                    self.advance_by(1);
+                    self.skip_whitespace();
+                    let value = self.read_document(_schema)?;
+                    map.insert(key, value);
+                }
+                Ok(Document::Object(map))
+            }
+            Some(b'[') => {
+                self.advance_by(1);
+                let mut arr = Vec::new();
+                loop {
+                    self.skip_whitespace();
+                    match self.remaining().first() {
+                        Some(&b']') => {
+                            self.advance_by(1);
+                            break;
+                        }
+                        None => {
+                            return Err(SerdeError::InvalidInput {
+                                message: "unexpected end of input in document array".into(),
+                            })
+                        }
+                        _ => {
+                            arr.push(self.read_document(_schema)?);
+                        }
+                    }
+                }
+                Ok(Document::Array(arr))
+            }
+            Some(c) if *c == b'-' || c.is_ascii_digit() => {
+                // Parse a JSON number into the unified `Document::Number`.
+                // Range determines which `Number` variant carries it
+                // (PosInt / NegInt / Float).
+                let rem = self.remaining();
+                let mut len = 0;
+                let mut is_float = false;
+                let mut is_negative = false;
+                for (i, &b) in rem.iter().enumerate() {
+                    if b == b'-' && i == 0 {
+                        is_negative = true;
+                        len += 1;
+                    } else if b.is_ascii_digit() || b == b'+' {
+                        len += 1;
+                    } else if b == b'.' || b == b'e' || b == b'E' {
+                        is_float = true;
+                        len += 1;
+                    } else {
+                        break;
+                    }
+                }
+                let pos = self.position;
+                self.advance_by(len);
+                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
+                    SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    }
+                })?;
+                if is_float {
+                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(Number::Float(f)))
+                } else if is_negative {
+                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(Number::NegInt(n)))
+                } else {
+                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
+                        message: e.to_string(),
+                    })?;
+                    Ok(Document::Number(Number::PosInt(n)))
+                }
+            }
+            _ => Err(SerdeError::InvalidInput {
+                message: "unexpected token in document".into(),
+            }),
+        };
+        if result.is_ok() {
+            self.depth -= 1;
+        }
+        result
     }
 
     fn is_null(&self) -> bool {
@@ -836,243 +889,79 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 }
 
 impl<'a> JsonDeserializer<'a> {
-    /// Reads a document from the JSON input stream and returns it tied
-    /// to the deserializer's input lifetime.
-    ///
-    /// This is the actual implementation backing the `ShapeDeserializer`
-    /// trait method [`Self::read_document`]. It is split out as an
-    /// inherent method so the body can recurse without each recursive
-    /// call's return value tying to `&mut self` via the trait method's
-    /// elided lifetime — an artifact of the trait signature
-    /// (`fn read_document(&mut self, _) -> Result<Document<'_>, _>`)
-    /// where the `'_` defaults to the lifetime of `&self`.
-    ///
-    /// The returned `Document<'a>` widens to `Document<'_>` in the
-    /// trait method via covariance.
+    /// Reads a JSON document from the input, lifts an optional
+    /// top-level `__type` field into the result's discriminator slot,
+    /// and attaches the codec's [`DocumentSettings`] to the result so
+    /// downstream accessors like
+    /// [`DiscriminatedDocument::as_blob`](aws_smithy_types::DiscriminatedDocument::as_blob)
+    /// and
+    /// [`DiscriminatedDocument::as_timestamp`](aws_smithy_types::DiscriminatedDocument::as_timestamp)
+    /// can perform JSON-specific coercion (base64-decoded blobs,
+    /// format-aware timestamps).
     ///
     /// # `__type` discriminator lift
     ///
-    /// When the parsed JSON document is a top-level object that
-    /// contains a `__type` key whose value is an absolute Smithy shape
-    /// ID (`namespace#ShapeName`), the lift extracts that ID into the
-    /// resulting [`Document::discriminator`] and drops the key from
-    /// the result map. The discriminator's component strings borrow
-    /// from the deserializer's input slice (lifetime `'a`).
+    /// When the parsed top-level value is a JSON object containing a
+    /// `__type` key whose value is an absolute Smithy shape ID
+    /// (`namespace#ShapeName`), the lift extracts that ID into the
+    /// resulting [`DiscriminatedDocument`]'s discriminator slot and
+    /// drops the key from the result map.
     ///
-    /// Falls back to inserting `__type` into the result map normally
-    /// when the value is not a string, contains JSON escape sequences,
-    /// or is a relative shape name (no `#`). Relative resolution
-    /// against a default namespace is not yet implemented because it
-    /// would require allocating an FQN string whose lifetime can't
-    /// fit inside `Document<'a>`.
+    /// Falls back to leaving `__type` in the map when the value is
+    /// not a string or is a relative shape name (no `#`). Relative
+    /// resolution against a default namespace is not yet implemented.
     ///
     /// # Example
     ///
     /// ```
     /// use aws_smithy_json::codec::JsonCodec;
     /// use aws_smithy_schema::codec::Codec;
-    /// use aws_smithy_schema::prelude;
     ///
     /// let codec = JsonCodec::default();
     /// let bytes = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
     /// let mut deser = codec.create_deserializer(bytes);
-    /// let doc = deser.read_document_owned(&prelude::DOCUMENT).unwrap();
+    /// let doc = deser.read_discriminated_document().unwrap();
     ///
-    /// // `__type` was lifted into the discriminator slot. Component
-    /// // strings borrow from the input bytes (lifetime `'a`).
-    /// let id = doc.discriminator().unwrap();
-    /// assert_eq!(id.as_str(), "smithy.example#Bird");
+    /// // `__type` was lifted into the discriminator slot.
+    /// assert_eq!(doc.discriminator(), Some("smithy.example#Bird"));
     ///
     /// // The map no longer contains `__type`.
-    /// let map = doc.as_map().unwrap();
+    /// let map = doc.document().as_object().unwrap();
     /// assert_eq!(map.len(), 1);
     /// assert_eq!(map.get("name").and_then(|d| d.as_string()), Some("Iago"));
     /// ```
-    pub fn read_document_owned(
-        &mut self,
-        _schema: &Schema<'_>,
-    ) -> Result<Document<'a>, SerdeError> {
-        self.depth += 1;
-        if self.depth > self.settings.max_depth() {
-            return Err(SerdeError::custom("maximum nesting depth exceeded"));
+    pub fn read_discriminated_document(&mut self) -> Result<DiscriminatedDocument, SerdeError> {
+        // Use the trait method's walker and post-hoc lift the
+        // top-level `__type` field. The lift cost is one HashMap
+        // probe + one `String` clone, replacing the original
+        // implementation's borrowed-vs-owned `Cow` dance — simpler
+        // and unambiguous now that the unified `Document` is fully
+        // owned and `DiscriminatedDocument` carries an
+        // `Option<String>` discriminator.
+        let dummy_schema = &aws_smithy_schema::prelude::DOCUMENT;
+        let mut doc = self.read_document(dummy_schema)?;
+        let mut discriminator: Option<String> = None;
+        if let Document::Object(ref mut map) = doc {
+            // Pull the candidate value first (borrowing), validate it,
+            // then remove from the map only when the lift succeeds.
+            // This keeps a malformed `__type` value in the map so the
+            // caller can post-process if it wants to.
+            let lift_candidate = match map.get("__type") {
+                Some(Document::String(s)) if Self::is_absolute_shape_id(s) => Some(s.clone()),
+                _ => None,
+            };
+            if let Some(id) = lift_candidate {
+                map.remove("__type");
+                discriminator = Some(id);
+            }
         }
-        self.skip_whitespace();
-        let mut discriminator: Option<ShapeId<'a>> = None;
-        let result: Result<Document<'a>, SerdeError> = match self.remaining().first() {
-            Some(b'"') => Ok(Document::string(self.read_string(_schema)?)),
-            Some(b't') | Some(b'f') => Ok(Document::boolean(self.read_boolean(_schema)?)),
-            Some(b'n') => {
-                if self.remaining().starts_with(b"null") {
-                    self.advance_by(4);
-                    Ok(Document::null())
-                } else {
-                    Err(SerdeError::InvalidInput {
-                        message: "unexpected token in document".into(),
-                    })
-                }
-            }
-            Some(b'{') => {
-                self.advance_by(1);
-                let mut map = std::collections::HashMap::new();
-                loop {
-                    self.skip_whitespace();
-                    if self.remaining().first() == Some(&b'}') {
-                        self.advance_by(1);
-                        break;
-                    }
-                    if self.remaining().first() != Some(&b'"') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected object key in document".into(),
-                        });
-                    }
-                    let key = self.parse_key()?;
-                    self.skip_whitespace();
-                    if self.remaining().first() != Some(&b':') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected colon in document object".into(),
-                        });
-                    }
-                    self.advance_by(1);
-                    self.skip_whitespace();
-                    // `__type` lift: if the key is the well-known
-                    // discriminator marker and we haven't yet captured
-                    // one, try to parse the value as an absolute
-                    // shape ID borrowed from the input slice. On any
-                    // failure (value isn't a string, value contains
-                    // escape sequences, value is a relative shape
-                    // name, value is malformed), fall through to the
-                    // normal "insert into the map" path so the caller
-                    // can post-process if it wants to.
-                    let lifted = if discriminator.is_none()
-                        && key == "__type"
-                        && self.remaining().first() == Some(&b'"')
-                    {
-                        // Snapshot position so we can rewind on the
-                        // fall-through path. `parse_string_value`
-                        // advances `self.position`.
-                        let start_pos = self.position;
-                        match self.parse_string_value()? {
-                            std::borrow::Cow::Borrowed(s) => {
-                                if let Some(id) = Self::parse_absolute_shape_id(s) {
-                                    discriminator = Some(id);
-                                    true
-                                } else {
-                                    // Relative or malformed — rewind
-                                    // and let the standard path read
-                                    // the value into the map.
-                                    self.position = start_pos;
-                                    false
-                                }
-                            }
-                            std::borrow::Cow::Owned(_) => {
-                                // Escape sequences — can't borrow into
-                                // ShapeId<'a>. Rewind and fall through.
-                                self.position = start_pos;
-                                false
-                            }
-                        }
-                    } else {
-                        false
-                    };
-                    if !lifted {
-                        let key = key.into_owned();
-                        let value = self.read_document_owned(_schema)?;
-                        map.insert(key, value);
-                    }
-                }
-                Ok(Document::map(map))
-            }
-            Some(b'[') => {
-                self.advance_by(1);
-                let mut arr = Vec::new();
-                loop {
-                    self.skip_whitespace();
-                    match self.remaining().first() {
-                        Some(&b']') => {
-                            self.advance_by(1);
-                            break;
-                        }
-                        None => {
-                            return Err(SerdeError::InvalidInput {
-                                message: "unexpected end of input in document array".into(),
-                            })
-                        }
-                        _ => arr.push(self.read_document_owned(_schema)?),
-                    }
-                }
-                Ok(Document::list(arr))
-            }
-            Some(c) if *c == b'-' || c.is_ascii_digit() => {
-                // Parse number — determine if integer or float
-                let rem = self.remaining();
-                let mut len = 0;
-                let mut is_float = false;
-                let mut is_negative = false;
-                for (i, &b) in rem.iter().enumerate() {
-                    if b == b'-' && i == 0 {
-                        is_negative = true;
-                        len += 1;
-                    } else if b.is_ascii_digit() || b == b'+' {
-                        len += 1;
-                    } else if b == b'.' || b == b'e' || b == b'E' {
-                        is_float = true;
-                        len += 1;
-                    } else {
-                        break;
-                    }
-                }
-                let pos = self.position;
-                self.advance_by(len);
-                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
-                    SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    }
-                })?;
-                if is_float {
-                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::Float(f)))
-                } else if is_negative {
-                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::NegInt(n)))
-                } else {
-                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::number(aws_smithy_types::Number::PosInt(n)))
-                }
-            }
-            _ => Err(SerdeError::InvalidInput {
-                message: "unexpected token in document".into(),
-            }),
-        };
-        if result.is_ok() {
-            self.depth -= 1;
-        }
-        // Attach the codec's settings to the produced Document so downstream
-        // accessors like [`Document::as_blob`] and [`Document::as_timestamp`]
-        // can perform JSON-specific coercion (base64-decoded blobs, format-aware
-        // timestamps). Recursive calls already attach settings to nested values,
-        // so wrapping just the top-level produced Document propagates settings
-        // through the tree.
-        //
-        // If we extracted a `__type` discriminator from the JSON object's
-        // top-level keys (the absolute-shape-id case), attach it here.
-        // The discriminator's component strings are borrowed slices of
-        // the deserializer's input bytes (lifetime `'a`), so the
-        // resulting `Document<'a>` carries the input lifetime as
-        // expected.
+
         let settings: Arc<dyn DocumentSettings> = self.settings.clone();
-        result.map(|doc| {
-            let doc = doc.with_settings(settings);
-            match discriminator {
-                Some(id) => doc.with_discriminator(id),
-                None => doc,
-            }
-        })
+        let mut wrapper = DiscriminatedDocument::new(doc).with_settings(settings);
+        if let Some(id) = discriminator {
+            wrapper = wrapper.with_discriminator(id);
+        }
+        Ok(wrapper)
     }
 
     fn skip_whitespace(&mut self) {

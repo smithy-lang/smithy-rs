@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+use crate::codec::JsonCodecSettings;
 use crate::escape::escape_string;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::primitive::Encoder;
@@ -31,13 +32,23 @@ impl<'a> JsonValueWriter<'a> {
         });
     }
 
-    /// Writes a document `value`.
-    pub fn document(self, value: &Document) {
+    /// Writes a document `value` using the supplied codec settings.
+    ///
+    /// `settings.default_timestamp_format` controls the wire form of
+    /// [`Document::Timestamp`]; AWS JSON / restJson1 default to
+    /// `epoch-seconds`. The other extended variants
+    /// ([`Document::Blob`], [`Document::BigInteger`],
+    /// [`Document::BigDecimal`]) use protocol-agnostic conventions
+    /// matching the schema-serde codec
+    /// ([`crate::codec::JsonSerializer`]): base64-encoded JSON string
+    /// for blobs, raw JSON number for arbitrary-precision integers /
+    /// decimals.
+    pub fn document(self, value: &Document, settings: &JsonCodecSettings) {
         match value {
             Document::Array(values) => {
                 let mut array = self.start_array();
                 for value in values {
-                    array.value().document(value);
+                    array.value().document(value, settings);
                 }
                 array.finish();
             }
@@ -47,11 +58,26 @@ impl<'a> JsonValueWriter<'a> {
             Document::Object(values) => {
                 let mut object = self.start_object();
                 for (key, value) in values {
-                    object.key(key).document(value);
+                    object.key(key).document(value, settings);
                 }
                 object.finish();
             }
             Document::String(value) => self.string(value),
+            Document::Blob(bytes) => {
+                self.string(&aws_smithy_types::base64::encode(bytes));
+            }
+            Document::Timestamp(ts) => self
+                .date_time(ts, settings.default_timestamp_format())
+                .expect("DateTime always formats as the requested codec format"),
+            Document::BigInteger(bi) => self.write_raw_value(bi.as_ref()),
+            Document::BigDecimal(bd) => self.write_raw_value(bd.as_ref()),
+            // `Document` is `#[non_exhaustive]`. Future variants land
+            // alongside their wire-format support; until then we panic
+            // rather than silently produce malformed JSON.
+            other => panic!(
+                "JsonValueWriter::document: unsupported Document variant {other:?}; \
+                 a new variant was added to aws_smithy_types::Document without updating this serializer"
+            ),
         }
     }
 
@@ -363,7 +389,7 @@ mod tests {
 
     fn format_document(document: Document) -> String {
         let mut output = String::new();
-        JsonValueWriter::new(&mut output).document(&document);
+        JsonValueWriter::new(&mut output).document(&document, &JsonCodecSettings::default());
         output
     }
 
