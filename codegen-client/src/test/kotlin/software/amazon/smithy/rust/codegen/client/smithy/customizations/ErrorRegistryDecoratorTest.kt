@@ -40,9 +40,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
  */
 class ErrorRegistryDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
+        val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)
         return arrayOf(
-            "Document" to smithySchema.resolve("document::Document"),
+            "Document" to smithyTypes.resolve("Document"),
+            "DiscriminatedDocument" to smithyTypes.resolve("DiscriminatedDocument"),
+            "Number" to smithyTypes.resolve("Number"),
             "shape_id" to smithySchema.resolve("shape_id"),
             "HashMap" to RuntimeType.HashMap,
         )
@@ -267,10 +270,10 @@ class ErrorRegistryDecoratorTest {
                         let mut members: #{HashMap}<String, #{Document}> = #{HashMap}::new();
                         members.insert(
                             "message".to_owned(),
-                            #{Document}::string("no bird with that name"),
+                            #{Document}::String("no bird with that name".to_owned()),
                         );
-                        let doc = #{Document}::map(members)
-                            .with_discriminator(#{shape_id}!("com.example", "BirdNotFound"));
+                        let doc = #{DiscriminatedDocument}::new(#{Document}::Object(members))
+                            .with_discriminator("com.example##BirdNotFound");
 
                         let typed = $moduleName::Client::error_registry()
                             .deserialize_document(&doc)
@@ -301,8 +304,10 @@ class ErrorRegistryDecoratorTest {
                         // A discriminator that points to a non-error shape
                         // (or a shape outside the closure entirely) must
                         // produce an error rather than silently fall back.
-                        let doc = #{Document}::map(#{HashMap}::new())
-                            .with_discriminator(#{shape_id}!("com.example", "NotAModeledError"));
+                        let doc = #{DiscriminatedDocument}::new(
+                            #{Document}::Object(#{HashMap}::new()),
+                        )
+                        .with_discriminator("com.example##NotAModeledError");
 
                         let result = $moduleName::Client::error_registry()
                             .deserialize_document(&doc);

@@ -15,8 +15,8 @@ use std::collections::HashMap;
 
 use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;
-use aws_smithy_schema::document::Document;
 use aws_smithy_schema::shape_id;
+use aws_smithy_types::{DiscriminatedDocument, Document, Number};
 
 #[test]
 fn registry_deserialize_document_round_trip() {
@@ -26,11 +26,20 @@ fn registry_deserialize_document_round_trip() {
     // uses the original Smithy names as `member_name`, not the snake_case Rust
     // field names).
     let mut members: HashMap<String, Document> = HashMap::new();
-    members.insert("ReadCapacityUnits".to_owned(), Document::double(1.5));
-    members.insert("WriteCapacityUnits".to_owned(), Document::double(2.5));
-    members.insert("CapacityUnits".to_owned(), Document::double(3.0));
-    let doc =
-        Document::map(members).with_discriminator(shape_id!("com.amazonaws.dynamodb", "Capacity"));
+    members.insert(
+        "ReadCapacityUnits".to_owned(),
+        Document::Number(Number::Float(1.5)),
+    );
+    members.insert(
+        "WriteCapacityUnits".to_owned(),
+        Document::Number(Number::Float(2.5)),
+    );
+    members.insert(
+        "CapacityUnits".to_owned(),
+        Document::Number(Number::Float(3.0)),
+    );
+    let doc = DiscriminatedDocument::new(Document::Object(members))
+        .with_discriminator("com.amazonaws.dynamodb#Capacity");
 
     // Look up via the package-level registry and deserialize.
     let registry = Client::registry();
@@ -51,8 +60,8 @@ fn registry_deserialize_document_round_trip() {
 #[test]
 fn registry_returns_none_for_unregistered_shape() {
     // Unknown shape id → registry has no entry → deserialize_document errors.
-    let doc =
-        Document::map(HashMap::new()).with_discriminator(shape_id!("com.example", "NotARealShape"));
+    let doc = DiscriminatedDocument::new(Document::Object(HashMap::new()))
+        .with_discriminator("com.example#NotARealShape");
 
     let result = Client::registry().deserialize_document(&doc);
     assert!(result.is_err(), "unregistered shape should error");
@@ -61,7 +70,7 @@ fn registry_returns_none_for_unregistered_shape() {
 #[test]
 fn registry_errors_when_discriminator_missing() {
     // No discriminator → deserialize_document errors.
-    let doc = Document::map(HashMap::new());
+    let doc = DiscriminatedDocument::new(Document::Object(HashMap::new()));
 
     let result = Client::registry().deserialize_document(&doc);
     assert!(
@@ -131,12 +140,10 @@ fn error_registry_deserialize_document_round_trip() {
     let mut members: HashMap<String, Document> = HashMap::new();
     members.insert(
         "message".to_owned(),
-        Document::string("the conditional request failed"),
+        Document::String("the conditional request failed".to_owned()),
     );
-    let doc = Document::map(members).with_discriminator(shape_id!(
-        "com.amazonaws.dynamodb",
-        "ConditionalCheckFailedException"
-    ));
+    let doc = DiscriminatedDocument::new(Document::Object(members))
+        .with_discriminator("com.amazonaws.dynamodb#ConditionalCheckFailedException");
 
     let typed = Client::error_registry()
         .deserialize_document(&doc)

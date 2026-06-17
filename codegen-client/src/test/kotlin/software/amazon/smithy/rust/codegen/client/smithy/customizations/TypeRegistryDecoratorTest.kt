@@ -39,9 +39,12 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
  */
 class TypeRegistryDecoratorTest {
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
+        val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)
         return arrayOf(
-            "Document" to smithySchema.resolve("document::Document"),
+            "Document" to smithyTypes.resolve("Document"),
+            "DiscriminatedDocument" to smithyTypes.resolve("DiscriminatedDocument"),
+            "Number" to smithyTypes.resolve("Number"),
             "shape_id" to smithySchema.resolve("shape_id"),
             "HashMap" to RuntimeType.HashMap,
         )
@@ -287,10 +290,13 @@ class TypeRegistryDecoratorTest {
                         // Map keys must match Smithy member names (the schema's
                         // `member_name`), not the snake_case Rust field names.
                         let mut members: #{HashMap}<String, #{Document}> = #{HashMap}::new();
-                        members.insert("biome".to_owned(), #{Document}::string("forest"));
-                        members.insert("altitude".to_owned(), #{Document}::integer(1200));
-                        let doc = #{Document}::map(members)
-                            .with_discriminator(#{shape_id}!("com.example", "Habitat"));
+                        members.insert("biome".to_owned(), #{Document}::String("forest".to_owned()));
+                        members.insert(
+                            "altitude".to_owned(),
+                            #{Document}::Number(#{Number}::PosInt(1200)),
+                        );
+                        let doc = #{DiscriminatedDocument}::new(#{Document}::Object(members))
+                            .with_discriminator("com.example##Habitat");
 
                         let typed = $moduleName::Client::registry()
                             .deserialize_document(&doc)
@@ -322,8 +328,10 @@ class TypeRegistryDecoratorTest {
                         // A Document with a discriminator that points to a shape NOT
                         // in this service's closure must produce an error. This is
                         // the negative path that complements the round-trip test.
-                        let doc = #{Document}::map(#{HashMap}::new())
-                            .with_discriminator(#{shape_id}!("com.example", "NotAModeledShape"));
+                        let doc = #{DiscriminatedDocument}::new(
+                            #{Document}::Object(#{HashMap}::new()),
+                        )
+                        .with_discriminator("com.example##NotAModeledShape");
 
                         let result = $moduleName::Client::registry().deserialize_document(&doc);
                         assert!(result.is_err(), "unregistered shape must error");
@@ -347,7 +355,9 @@ class TypeRegistryDecoratorTest {
                         // Without a discriminator, the registry has no way to choose
                         // a deserialize fn. Surface as an error rather than silently
                         // pick a default — this keeps the runtime contract explicit.
-                        let doc = #{Document}::map(#{HashMap}::new());
+                        let doc = #{DiscriminatedDocument}::new(
+                            #{Document}::Object(#{HashMap}::new()),
+                        );
 
                         let result = $moduleName::Client::registry().deserialize_document(&doc);
                         assert!(

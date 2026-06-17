@@ -11,8 +11,9 @@
 //! JSON wire bytes
 //!     ↓ JsonCodec::create_deserializer
 //! JsonDeserializer<'a>
-//!     ↓ read_document_owned (inherent path; lifts top-level __type)
-//! Document<'a>  with discriminator borrowed from the input slice
+//!     ↓ read_discriminated_document (lifts top-level __type)
+//! DiscriminatedDocument  (wraps a fully-owned aws_smithy_types::Document
+//!                         and carries the lifted FQN as Option<String>)
 //!     ↓ TypeRegistry::deserialize_document
 //! TypeErasedBox
 //!     ↓ downcast::<ConcreteShape>()
@@ -27,7 +28,6 @@ use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;
 use aws_smithy_json::codec::JsonCodec;
 use aws_smithy_schema::codec::Codec;
-use aws_smithy_schema::prelude;
 
 #[test]
 fn wire_bytes_with_absolute_type_round_trip_through_registry() {
@@ -44,32 +44,35 @@ fn wire_bytes_with_absolute_type_round_trip_through_registry() {
     let codec = JsonCodec::default();
     let mut deser = codec.create_deserializer(bytes);
     let doc = deser
-        .read_document_owned(&prelude::DOCUMENT)
+        .read_discriminated_document()
         .expect("well-formed JSON parses successfully");
 
     // Step 1: the deserializer lifted the top-level __type into the
-    // document's discriminator slot. The component strings borrow
-    // directly from the input bytes (lifetime tied to `bytes`).
-    let id = doc
+    // discriminator slot of the DiscriminatedDocument wrapper. The
+    // unified design carries the discriminator as an owned FQN
+    // string rather than a structured ShapeId — namespace and
+    // shape-name parsing is the caller's responsibility if needed.
+    let fqn = doc
         .discriminator()
         .expect("absolute __type lifted into discriminator");
-    assert_eq!(id.as_str(), "com.amazonaws.dynamodb#Capacity");
-    assert_eq!(id.namespace(), "com.amazonaws.dynamodb");
-    assert_eq!(id.shape_name(), "Capacity");
+    assert_eq!(fqn, "com.amazonaws.dynamodb#Capacity");
 
     // Step 2: __type was dropped from the resulting map; only the
-    // body members remain.
-    let map = doc.as_map().expect("top-level value is a map");
+    // body members remain. The data lives on the inner Document
+    // (DiscriminatedDocument is a thin wrapper around it).
+    let map = doc
+        .document()
+        .as_object()
+        .expect("top-level value is an object");
     assert!(
         !map.contains_key("__type"),
         "lift must drop __type from the resulting map",
     );
     assert_eq!(map.len(), 3);
 
-    // Step 3: the registry looks up the discriminator (`&ShapeId<'_>`,
-    // input-lifetime) against its `'static`-keyed table via the
-    // FQN-based `Borrow<str>` lookup, finds Capacity, and dispatches
-    // to the generated deserialize fn.
+    // Step 3: the registry looks up the discriminator FQN against
+    // its `'static`-keyed table, finds Capacity, and dispatches to
+    // the generated deserialize fn.
     let typed = Client::registry()
         .deserialize_document(&doc)
         .expect("Capacity is registered and the document is well-formed");
@@ -95,14 +98,17 @@ fn wire_bytes_with_relative_type_does_not_lift() {
     let codec = JsonCodec::default();
     let mut deser = codec.create_deserializer(bytes);
     let doc = deser
-        .read_document_owned(&prelude::DOCUMENT)
+        .read_discriminated_document()
         .expect("well-formed JSON parses successfully");
 
     assert!(
         doc.discriminator().is_none(),
         "relative __type values must not be lifted (no default-namespace resolution yet)",
     );
-    let map = doc.as_map().expect("top-level value is a map");
+    let map = doc
+        .document()
+        .as_object()
+        .expect("top-level value is an object");
     assert_eq!(
         map.get("__type").and_then(|d| d.as_string()),
         Some("Capacity"),
@@ -119,11 +125,11 @@ fn wire_bytes_with_unknown_absolute_type_errors_at_registry() {
     let codec = JsonCodec::default();
     let mut deser = codec.create_deserializer(bytes);
     let doc = deser
-        .read_document_owned(&prelude::DOCUMENT)
+        .read_discriminated_document()
         .expect("well-formed JSON parses successfully");
 
-    let id = doc.discriminator().expect("absolute lift succeeded");
-    assert_eq!(id.as_str(), "com.example#NotARealShape");
+    let fqn = doc.discriminator().expect("absolute lift succeeded");
+    assert_eq!(fqn, "com.example#NotARealShape");
 
     let result = Client::registry().deserialize_document(&doc);
     assert!(

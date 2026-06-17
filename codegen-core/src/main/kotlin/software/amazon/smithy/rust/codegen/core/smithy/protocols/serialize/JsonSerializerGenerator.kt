@@ -191,6 +191,7 @@ class JsonSerializerGenerator(
             "SdkBody" to RuntimeType.sdkBody(runtimeConfig),
             "JsonObjectWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonObjectWriter"),
             "JsonValueWriter" to RuntimeType.smithyJson(runtimeConfig).resolve("serialize::JsonValueWriter"),
+            "JsonCodecSettings" to RuntimeType.smithyJson(runtimeConfig).resolve("codec::JsonCodecSettings"),
             "ByteSlab" to RuntimeType.ByteSlab,
         )
     private val serializerUtil = SerializerUtil(model, symbolProvider)
@@ -306,7 +307,7 @@ class JsonSerializerGenerator(
                 """
                 pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
                     let mut out = String::new();
-                    #{JsonValueWriter}::new(&mut out).document(input);
+                    #{JsonValueWriter}::new(&mut out).document(input, &#{JsonCodecSettings}::default());
                     out.into_bytes()
                 }
                 """,
@@ -483,7 +484,11 @@ class JsonSerializerGenerator(
                     serializeUnion(Context(objectName, value, target))
                 }
 
-            is DocumentShape -> rust("$writer.document(${value.asRef()});")
+            is DocumentShape ->
+                rustTemplate(
+                    "$writer.document(${value.asRef()}, &#{JsonCodecSettings}::default());",
+                    *codegenScope,
+                )
             else -> TODO(target.toString())
         }
     }
