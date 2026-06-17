@@ -32,7 +32,7 @@
 //! Coverage scope is intentionally bounded by the SEP's design: every
 //! timestamp member here uses the codec's *default* format
 //! (`epoch-seconds`). The SEP allows mixing per-member
-//! `@timestampFormat` overrides on the wire (Phase 7 deserialization
+//! `@timestampFormat` overrides on the wire (the deserialization path
 //! handles that) but a [`Document`] produced via
 //! `Document::from_struct(...)` is protocol-agnostic — it carries no
 //! per-member format trait — so a Document constructed from a struct
@@ -339,7 +339,7 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
 
     // (c) document_from_serialization: parse the canonical bytes into
     //     a DiscriminatedDocument. This is the "deserialize-side"
-    //     wrapper — it carries `JsonDocumentSettings` per Phase 7 so
+    //     wrapper — it carries `JsonDocumentSettings` so
     //     format-aware coercion (e.g. base64 string → blob) works on
     //     the read side. No `__type` is present in the canonical
     //     bytes, so the discriminator slot remains `None`.
@@ -415,8 +415,7 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     //
     // Byte-for-byte comparison would require a `Document` whose map
     // representation preserves insertion order. The current
-    // implementation uses `HashMap` (consistent with the legacy
-    // `aws_smithy_types::Document`) — so when canonical bytes get
+    // implementation uses `HashMap` — so when canonical bytes get
     // parsed into a Document and then re-serialized, the member order
     // can shift. Parse both as `serde_json::Value` and compare
     // structurally — the SEP's intent is "produces equivalent JSON",
@@ -448,9 +447,8 @@ fn run_sep_assertions(label: &str, value: OmniWidget) -> Vec<u8> {
     // `DiscriminatedDocument::from_struct` attaches the schema's shape
     // ID as the *wrapper's* discriminator (the SEP "typed Document"
     // model — a Document derived from a typed shape carries the
-    // typed-shape identity). Under the unified design, only the top-
-    // level wrapper carries a discriminator; nested struct nodes in
-    // the data tree do not.
+    // typed-shape identity). Only the top-level wrapper carries a
+    // discriminator; nested struct nodes in the data tree do not.
     //
     // The trait method `write_document` takes a plain `&Document`
     // (data-only, no discriminator emission). Calling it on the
@@ -545,7 +543,7 @@ fn sep_round_trip_blob_only() {
     // `b"abcd"` encodes as `YWJjZA==`. Critically, `write_document`
     // on a `Document::Blob` must emit the same base64 string the
     // typed-shape `write_blob` would; this is the assertion 6 case
-    // that the legacy bridge could not satisfy.
+    // for the extended variants.
     let value = OmniWidget {
         value_blob: Some(Blob::new(b"abcd".to_vec())),
         ..OmniWidget::default()
@@ -870,9 +868,9 @@ fn sep_write_document_ignores_json_name() {
     let mut ser = codec.create_serializer();
     // Use plain `write_document` on the wrapper's `.document()` view
     // so we don't emit `__type` here — this test's contract is about
-    // member-name handling, not about the discriminator. Under the
-    // unified design the data tree never carries discriminators on
-    // individual nodes; only the wrapper does.
+    // member-name handling, not about the discriminator. The data
+    // tree never carries discriminators on individual nodes; only
+    // the wrapper does.
     ser.write_document(&prelude::DOCUMENT, document.document())
         .expect("write_document must succeed");
     let bytes = ser.finish();
@@ -891,10 +889,9 @@ fn sep_write_document_ignores_json_name() {
 // cannot be represented as `serde_json::Number` (which is f64 under
 // the hood). The Document path stores them as their own
 // `Document::BigInteger` / `Document::BigDecimal` variants;
-// `JsonSerializer::write_json_value` (Phase 7 sub-task 3) emits the
-// underlying decimal string verbatim as a raw JSON number — without
-// any precision loss that would occur if it were routed through
-// `serde_json::Number`.
+// `JsonSerializer::write_json_value` emits the underlying decimal
+// string verbatim as a raw JSON number — without any precision loss
+// that would occur if it were routed through `serde_json::Number`.
 //
 // These tests pin the wire form down. They sit outside the SEP
 // 6-assertion matrix because there's no typed-shape carrier in

@@ -110,7 +110,7 @@ impl JsonSerializer {
         use crate::serialize::JsonValueWriter;
         use aws_smithy_types::base64;
 
-        // Walk the unified `aws_smithy_types::Document` directly so blob
+        // Walk the [`aws_smithy_types::Document`] directly so blob
         // (base64), timestamp (codec-default format), and bignum
         // variants all serialize correctly.
         //
@@ -123,7 +123,7 @@ impl JsonSerializer {
         // dedicated `write_timestamp` path and inspect
         // `@timestampFormat` themselves, not via `write_document`.
         //
-        // The unified `Document` has no discriminator slot. Discriminated
+        // [`Document`] has no discriminator slot. Discriminated
         // documents (with a `__type` field) flow through
         // [`Self::write_discriminated_document`] which emits the
         // wrapper's discriminator before delegating here for the
@@ -212,8 +212,7 @@ impl JsonSerializer {
     /// absolute shape ID, the FQN form `namespace#name`).
     ///
     /// For non-object inner documents, or when no discriminator is
-    /// attached, this delegates to [`Self::write_json_value`] for
-    /// plain serialization.
+    /// attached, this delegates to the plain JSON serialization path.
     pub fn write_discriminated_document(
         &mut self,
         schema: &Schema<'_>,

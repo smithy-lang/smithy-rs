@@ -763,7 +763,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 Ok(Document::Array(arr))
             }
             Some(c) if *c == b'-' || c.is_ascii_digit() => {
-                // Parse a JSON number into the unified `Document::Number`.
+                // Parse a JSON number into [`Document::Number`].
                 // Range determines which `Number` variant carries it
                 // (PosInt / NegInt / Float).
                 let rem = self.remaining();
@@ -933,11 +933,9 @@ impl<'a> JsonDeserializer<'a> {
     pub fn read_discriminated_document(&mut self) -> Result<DiscriminatedDocument, SerdeError> {
         // Use the trait method's walker and post-hoc lift the
         // top-level `__type` field. The lift cost is one HashMap
-        // probe + one `String` clone, replacing the original
-        // implementation's borrowed-vs-owned `Cow` dance — simpler
-        // and unambiguous now that the unified `Document` is fully
-        // owned and `DiscriminatedDocument` carries an
-        // `Option<String>` discriminator.
+        // probe + one `String` clone — straightforward because
+        // [`Document`] is fully owned and [`DiscriminatedDocument`]
+        // carries an `Option<String>` discriminator.
         let dummy_schema = &aws_smithy_schema::prelude::DOCUMENT;
         let mut doc = self.read_document(dummy_schema)?;
         let mut discriminator: Option<String> = None;
@@ -2289,10 +2287,9 @@ mod tests {
 
     #[test]
     fn read_discriminated_document_attaches_settings() {
-        // Under the unified design, settings live on the
-        // `DiscriminatedDocument` wrapper, not on individual data
-        // nodes. `read_discriminated_document` is the entry point
-        // that attaches them.
+        // Settings live on the [`DiscriminatedDocument`] wrapper, not
+        // on individual data nodes. `read_discriminated_document` is
+        // the entry point that attaches them.
         let mut deser = JsonDeserializer::new(b"\"hello\"", Arc::new(JsonCodecSettings::default()));
         let wrapper = deser.read_discriminated_document().unwrap();
         assert!(
@@ -2376,10 +2373,10 @@ mod tests {
 
     #[test]
     fn read_discriminated_document_lifts_only_top_level() {
-        // Under the unified design, only the top-level wrapper has a
-        // discriminator slot. A `__type` field appearing INSIDE a
-        // nested object stays as a regular map entry — there's no
-        // per-node discriminator to lift it into.
+        // Only the top-level wrapper has a discriminator slot. A
+        // `__type` field appearing INSIDE a nested object stays as a
+        // regular map entry — there's no per-node discriminator to
+        // lift it into.
         let input = br#"{"outer":{"__type":"smithy.example#Inner"}}"#;
         let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
         let wrapper = deser.read_discriminated_document().expect("parse succeeds");
@@ -2398,9 +2395,8 @@ mod tests {
         assert_eq!(
             inner.get("__type").and_then(Document::as_string),
             Some("smithy.example#Inner"),
-            "nested __type must remain as a regular map entry under \
-             the unified design (only the top-level wrapper has a \
-             discriminator slot)",
+            "nested __type must remain as a regular map entry: \
+             only the top-level wrapper has a discriminator slot",
         );
     }
 

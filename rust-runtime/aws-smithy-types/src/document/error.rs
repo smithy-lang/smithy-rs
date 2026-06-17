@@ -25,8 +25,8 @@
 //! Document-shaped failures only (type-mismatch on a coercion, numeric
 //! overflow, malformed numeric text). The schema crate's `SerdeError`
 //! covers the broader set of shape-serde concerns (missing members,
-//! unknown members, write failures, etc.) and bridges to
-//! `DocumentError` via `From` where their concerns overlap.
+//! unknown members, write failures, etc.) and lifts `DocumentError`
+//! via `From` where their concerns overlap.
 
 use std::fmt;
 

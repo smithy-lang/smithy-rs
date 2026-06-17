@@ -132,7 +132,7 @@ class TypeRegistryDecorator : ClientCodegenDecorator {
                 """,
                 "TypeRegistry" to typeRegistry,
                 "ShapeId" to smithySchema.resolve("ShapeId"),
-                "Document" to smithySchema.resolve("document::Document"),
+                "Document" to smithyTypes.resolve("Document"),
             )
         }
     }

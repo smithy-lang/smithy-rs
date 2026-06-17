@@ -92,9 +92,9 @@ impl<'a> DocumentShapeDeserializer<'a> {
     /// Creates a deserializer positioned at the given document.
     ///
     /// The lifetime parameter is the borrow lifetime of `document` —
-    /// the cursor is just a `&Document`. The unified [`Document`] type
-    /// itself has no lifetime parameter (it is fully owned), so this
-    /// `'a` is purely the per-call borrow lifetime.
+    /// the cursor is just a `&Document`. [`Document`] itself has no
+    /// lifetime parameter (it is fully owned), so this `'a` is purely
+    /// the per-call borrow lifetime.
     ///
     /// No format-aware coercion is performed; this deserializer is
     /// variant-only. For coercion of wire-encoded blobs and timestamps

@@ -225,7 +225,7 @@ impl DocumentSettings for JsonCodecSettings {
     fn protocol_id(&self) -> &str {
         // The internal field is `ShapeId<'static>` (preserved for
         // ergonomic construction via `shape_id!`); the trait surface
-        // is the FQN string per the unified `DocumentSettings`.
+        // returns the FQN string per [`DocumentSettings`].
         self.protocol_id.as_str()
     }
 

@@ -119,7 +119,7 @@ pub trait ShapeSerializer {
 
     /// Writes a document value.
     ///
-    /// `value` is the unified [`aws_smithy_types::Document`] (fully
+    /// `value` is the [`aws_smithy_types::Document`] (fully
     /// owned, no lifetime). Implementors clone the value into their
     /// output representation.
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError>;

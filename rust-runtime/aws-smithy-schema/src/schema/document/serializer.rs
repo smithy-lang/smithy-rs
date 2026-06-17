@@ -57,15 +57,16 @@ use crate::Schema;
 ///
 /// Nested discriminator capture (a struct member that is itself a
 /// struct, called through `value.serialize_members(&mut dyn ShapeSerializer)`)
-/// is **not** preserved, because the unified [`Document`] type has no
-/// per-node discriminator slot — only the outer
+/// is **not** preserved, because [`Document`] has no per-node
+/// discriminator slot — only the outer
 /// [`DiscriminatedDocument`] wrapper carries one. Discriminators apply
 /// at the wrapper level, not at every nested struct.
 ///
 /// # Example
 ///
-/// Use [`DiscriminatedDocument::from_struct`] for the common case of
-/// converting a [`SerializableStruct`] into a [`DiscriminatedDocument`]:
+/// Use [`DiscriminatedDocument::from_struct`](crate::document::DiscriminatedDocumentExt::from_struct)
+/// for the common case of converting a [`SerializableStruct`] into a
+/// [`DiscriminatedDocument`]:
 ///
 /// ```ignore
 /// use aws_smithy_schema::document::DiscriminatedDocumentExt;
@@ -405,7 +406,7 @@ impl ShapeSerializer for DocumentShapeSerializer {
     }
 
     fn write_document(&mut self, schema: &Schema<'_>, value: &Document) -> Result<(), SerdeError> {
-        // The unified Document is fully owned, so this is just a clone.
+        // `Document` is fully owned, so this is just a clone.
         self.commit_value(schema, value.clone())
     }
 
@@ -609,10 +610,10 @@ mod tests {
     #[test]
     fn nested_struct_in_map_round_trips_data_but_loses_inner_discriminator() {
         // map<String, Person> with a single entry. Nested Person
-        // discriminator is NOT preserved by design (per type-level
-        // docs / plan §2.3): the unified Document has no per-node
-        // discriminator slot — only the outer DiscriminatedDocument
-        // wrapper carries one. We still verify the data round-trips.
+        // discriminator is NOT preserved by design (see type-level
+        // docs): `Document` has no per-node discriminator slot —
+        // only the outer `DiscriminatedDocument` wrapper carries
+        // one. We still verify the data round-trips.
         let mut ser = DocumentShapeSerializer::new();
         ser.write_map(&prelude::DOCUMENT, &|inner| {
             inner.write_string(&prelude::STRING, "owner")?;

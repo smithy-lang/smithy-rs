@@ -131,7 +131,7 @@ pub trait ShapeDeserializer {
 
     /// Reads a document value.
     ///
-    /// Returns the unified [`aws_smithy_types::Document`] (fully owned,
+    /// Returns the [`aws_smithy_types::Document`] (fully owned,
     /// no lifetime). Implementations construct the value from their
     /// underlying source representation.
     fn read_document(&mut self, schema: &Schema<'_>) -> Result<Document, SerdeError>;

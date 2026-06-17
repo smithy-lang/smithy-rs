@@ -134,7 +134,7 @@ impl SerdeError {
 }
 
 /// Lift a [`DocumentError`](aws_smithy_types::DocumentError) coming
-/// out of the unified [`Document`](aws_smithy_types::Document)'s
+/// out of the [`Document`](aws_smithy_types::Document)'s
 /// numeric / coercion accessors into the schema crate's broader
 /// [`SerdeError`].
 ///

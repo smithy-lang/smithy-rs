@@ -50,12 +50,12 @@ use crate::{DateTime, Document, DocumentError, DocumentSettings};
 /// A [`Document`] together with an optional discriminator and
 /// optional protocol settings.
 ///
-/// See the [module-level docs](self) for the rationale behind
+/// See the module-level documentation for the rationale behind
 /// splitting this off `Document`.
 ///
 /// `#[non_exhaustive]` matches `Document`'s policy — future fields
-/// (e.g. a typed `Schema` reference once `aws-smithy-schema` re-
-/// exports the unified type) can land additively.
+/// (e.g. a typed `Schema` reference if the schema crate ever adds
+/// schema-binding to this wrapper) can land additively.
 #[non_exhaustive]
 #[derive(Clone, Debug, Default)]
 pub struct DiscriminatedDocument {
@@ -88,10 +88,10 @@ impl DiscriminatedDocument {
     /// to this document.
     ///
     /// Used by the schema-serde pipeline when constructing a
-    /// document from a typed shape: the schema's
-    /// [`Schema::shape_id().as_str()`] gets attached as the
-    /// discriminator so downstream consumers (the type registry, the
-    /// `__type` write path) know what shape the document represents.
+    /// document from a typed shape: the schema's `shape_id` (in its
+    /// `namespace#name` FQN form) gets attached as the discriminator
+    /// so downstream consumers (the type registry, the `__type`
+    /// write path) know what shape the document represents.
     pub fn with_discriminator(mut self, fqn: impl Into<String>) -> Self {
         self.discriminator = Some(fqn.into());
         self
@@ -245,8 +245,8 @@ mod tests {
     //! `DocumentSettings` — it doesn't try to do anything realistic
     //! (the JSON codec's settings will base64-decode, parse RFC-3339
     //! timestamps, etc.). The point is to exercise dispatch and
-    //! error-path coverage; the realistic implementations land in
-    //! Phase 5 alongside the codecs.
+    //! error-path coverage; realistic implementations live in the
+    //! codec crates that pair with this type.
 
     use super::*;
     use crate::Number;

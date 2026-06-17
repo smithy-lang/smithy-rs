@@ -31,12 +31,11 @@
 //! The implementation routes through the schema-side
 //! [`DocumentShapeSerializer`](super::DocumentShapeSerializer) /
 //! [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer),
-//! which after Phase 4 of the document-type unification work operate
-//! on [`aws_smithy_types::Document`] directly. Discriminator capture
-//! happens on the way out (the schema's shape ID is recorded as the
-//! resulting wrapper's [`discriminator()`] field); on `as_shape`, the
-//! deserializer reads from `self.document()` directly without going
-//! through any bridge.
+//! which operate on [`aws_smithy_types::Document`] directly.
+//! Discriminator capture happens on the way out (the schema's shape
+//! ID is recorded as the resulting wrapper's [`discriminator()`]
+//! field); on `as_shape`, the deserializer reads from
+//! `self.document()` directly.
 //!
 //! [`discriminator()`]: aws_smithy_types::DiscriminatedDocument::discriminator
 
@@ -51,7 +50,7 @@ use crate::{Schema, ShapeType};
 /// Implemented for [`DiscriminatedDocument`] in `aws-smithy-schema`
 /// because the methods need [`Schema`], [`SerializableStruct`], and
 /// the [`ShapeDeserializer`] trait — types that live in this crate.
-/// See the [module-level docs](self) for the rationale.
+/// See the trait's documentation for the rationale.
 pub trait DiscriminatedDocumentExt {
     /// Constructs a [`DiscriminatedDocument`] from any
     /// [`SerializableStruct`] by driving it through the
@@ -63,7 +62,7 @@ pub trait DiscriminatedDocumentExt {
     /// schema for the reverse conversion.
     ///
     /// Settings are not attached — serialize-side documents have no
-    /// protocol context (per plan §2.4).
+    /// protocol context.
     ///
     /// # Errors
     ///
@@ -95,7 +94,6 @@ pub trait DiscriminatedDocumentExt {
     /// Returns the [`ShapeType`] this document would be reported as if
     /// converted to a typed shape.
     ///
-    /// Mirrors [`Document::shape_type`](super::Document::shape_type).
     /// For numeric values, follows the SEP "Reporting `Document`
     /// ambiguous shape types" guidance — picks the narrowest
     /// unambiguous container from the precedence
@@ -112,9 +110,8 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
         schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<DiscriminatedDocument, SerdeError> {
-        // The schema-side serializer now produces a
-        // `DiscriminatedDocument` directly (Phase 4): no bridge
-        // round-trip. The inherent `DocumentShapeSerializer::write_struct`
+        // The schema-side serializer produces a `DiscriminatedDocument`
+        // directly. The inherent `DocumentShapeSerializer::write_struct`
         // captures the schema's shape ID into the resulting wrapper's
         // discriminator slot; settings are not attached.
         let mut ser = DocumentShapeSerializer::default();
@@ -126,34 +123,32 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
     where
         F: FnOnce(&mut dyn ShapeDeserializer) -> Result<T, SerdeError>,
     {
-        // The schema-side deserializer reads directly from the
-        // unified `Document` (Phase 4). Settings on the wrapper are
-        // attached to the deserializer so format-aware coercion (e.g.
-        // a JSON-wire base64 string read as a blob, an
-        // epoch-seconds number read as a timestamp) succeeds when
-        // the data tree carries the wire-format representation
-        // rather than a native variant.
+        // The schema-side deserializer reads directly from the inner
+        // `Document`. Settings on the wrapper are attached to the
+        // deserializer so format-aware coercion (e.g. a JSON-wire
+        // base64 string read as a blob, an epoch-seconds number read
+        // as a timestamp) succeeds when the data tree carries the
+        // wire-format representation rather than a native variant.
         let mut deser =
             DocumentShapeDeserializer::new_with_settings(self.document(), self.settings().cloned());
         deserialize(&mut deser)
     }
 
     fn shape_type(&self) -> ShapeType {
-        use aws_smithy_types::Document as Legacy;
-        // The unified `Document` is the public type; this match is
-        // straightforward. The number-disambiguation logic delegates
-        // to the private helper that drives `Document::shape_type`.
+        use aws_smithy_types::Document as Doc;
+        // The number-disambiguation logic delegates to the private
+        // helper that drives `Document::shape_type`.
         match &self.document {
-            Legacy::Null => ShapeType::Document,
-            Legacy::Bool(_) => ShapeType::Boolean,
-            Legacy::Number(n) => number_shape_type(n),
-            Legacy::Blob(_) => ShapeType::Blob,
-            Legacy::Timestamp(_) => ShapeType::Timestamp,
-            Legacy::BigInteger(_) => ShapeType::BigInteger,
-            Legacy::BigDecimal(_) => ShapeType::BigDecimal,
-            Legacy::String(_) => ShapeType::String,
-            Legacy::Array(_) => ShapeType::List,
-            Legacy::Object(_) => ShapeType::Map,
+            Doc::Null => ShapeType::Document,
+            Doc::Bool(_) => ShapeType::Boolean,
+            Doc::Number(n) => number_shape_type(n),
+            Doc::Blob(_) => ShapeType::Blob,
+            Doc::Timestamp(_) => ShapeType::Timestamp,
+            Doc::BigInteger(_) => ShapeType::BigInteger,
+            Doc::BigDecimal(_) => ShapeType::BigDecimal,
+            Doc::String(_) => ShapeType::String,
+            Doc::Array(_) => ShapeType::List,
+            Doc::Object(_) => ShapeType::Map,
             // Future variants on the `#[non_exhaustive]` enum fall
             // through to a generic Document type.
             _ => ShapeType::Document,
@@ -168,9 +163,7 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
 /// skipped per the SEP.
 ///
 /// Private helper for [`DiscriminatedDocumentExt::shape_type`] on
-/// numeric documents. Previously co-located with the now-deleted
-/// schema-side `Document<'a>` data module; relocated here when that
-/// module was removed.
+/// numeric documents.
 fn number_shape_type(n: &Number) -> ShapeType {
     match n {
         Number::PosInt(v) => {
@@ -217,17 +210,15 @@ mod tests {
     //! Tests for [`DiscriminatedDocumentExt`].
     //!
     //! Coverage:
-    //! - Round-trip a struct through the legacy 6-variant subset
+    //! - Round-trip a struct using base scalar variants
     //!   (`Person { name: String, age: i32 }`).
     //! - Discriminator capture on `from_struct`.
     //! - `as_shape` reverses the round-trip.
-    //! - Shape-type reporting for the new variants (Blob/Timestamp/
-    //!   BigInteger/BigDecimal) — these don't exercise the bridges and
-    //!   so don't hit the transitional limitations.
-    //! - Documented limitation: a struct with a Blob member triggers
-    //!   the TryFrom bridge regression and `from_struct` errors.
-    //! - Documented limitation: `as_shape` on a top-level Blob document
-    //!   panics via the From bridge's Option-B arm.
+    //! - Shape-type reporting for the extended variants
+    //!   (Blob/Timestamp/BigInteger/BigDecimal).
+    //! - End-to-end round-trip through `from_struct` for structs whose
+    //!   members use the extended variants.
+    //! - End-to-end `as_shape` on a top-level extended-variant document.
     //!
     //! All tests use `Schema<'static>` because the schema-crate
     //! prelude and codegen-emitted schemas are `'static`. The trait
@@ -329,10 +320,11 @@ mod tests {
     }
 
     #[test]
-    fn as_shape_works_on_legacy_six_variant_document() {
-        // Construct a DiscriminatedDocument directly from a legacy
-        // map (no schema-side intermediate). Confirms as_shape works
-        // on documents that didn't come from `from_struct`.
+    fn as_shape_works_on_directly_constructed_document() {
+        // Construct a DiscriminatedDocument directly from a map of
+        // base scalar variants (no schema-side intermediate). Confirms
+        // as_shape works on documents that didn't come from
+        // `from_struct`.
         use std::collections::HashMap;
         let mut map = HashMap::new();
         map.insert(
@@ -357,19 +349,19 @@ mod tests {
     // -- shape_type reporting ------------------------------------------
 
     #[test]
-    fn shape_type_reports_each_legacy_variant() {
-        use aws_smithy_types::{Document as Legacy, Number};
+    fn shape_type_reports_each_base_variant() {
+        use aws_smithy_types::{Document, Number};
         let cases = [
-            (Legacy::Null, ShapeType::Document),
-            (Legacy::Bool(true), ShapeType::Boolean),
-            (Legacy::String("x".into()), ShapeType::String),
-            (Legacy::Number(Number::PosInt(0)), ShapeType::Integer),
+            (Document::Null, ShapeType::Document),
+            (Document::Bool(true), ShapeType::Boolean),
+            (Document::String("x".into()), ShapeType::String),
+            (Document::Number(Number::PosInt(0)), ShapeType::Integer),
             (
-                Legacy::Number(Number::PosInt(u64::MAX)),
+                Document::Number(Number::PosInt(u64::MAX)),
                 ShapeType::BigInteger,
             ),
-            (Legacy::Array(vec![]), ShapeType::List),
-            (Legacy::Object(Default::default()), ShapeType::Map),
+            (Document::Array(vec![]), ShapeType::List),
+            (Document::Object(Default::default()), ShapeType::Map),
         ];
         for (doc, expected) in cases {
             let wrapped = DiscriminatedDocument::new(doc);
@@ -378,23 +370,23 @@ mod tests {
     }
 
     #[test]
-    fn shape_type_reports_each_new_variant() {
-        // The new variants don't go through any bridge for shape_type
-        // — the impl matches them directly.
-        use aws_smithy_types::{BigDecimal, BigInteger, Document as Legacy};
+    fn shape_type_reports_each_extended_variant() {
+        // The extended variants (Blob, Timestamp, BigInteger,
+        // BigDecimal) are matched directly by the impl.
+        use aws_smithy_types::{BigDecimal, BigInteger, Document};
         use std::str::FromStr;
-        let cases: [(Legacy, ShapeType); 4] = [
-            (Legacy::Blob(vec![1, 2, 3]), ShapeType::Blob),
+        let cases: [(Document, ShapeType); 4] = [
+            (Document::Blob(vec![1, 2, 3]), ShapeType::Blob),
             (
-                Legacy::Timestamp(DateTime::from_secs(0)),
+                Document::Timestamp(DateTime::from_secs(0)),
                 ShapeType::Timestamp,
             ),
             (
-                Legacy::BigInteger(BigInteger::from_str("1").unwrap()),
+                Document::BigInteger(BigInteger::from_str("1").unwrap()),
                 ShapeType::BigInteger,
             ),
             (
-                Legacy::BigDecimal(BigDecimal::from_str("1.0").unwrap()),
+                Document::BigDecimal(BigDecimal::from_str("1.0").unwrap()),
                 ShapeType::BigDecimal,
             ),
         ];
@@ -404,18 +396,10 @@ mod tests {
         }
     }
 
-    // -- New variants now round-trip through the bridges -------------
-    //
-    // Phase 4 of the document-type unification work fixed both the
-    // From and TryFrom bridges to handle the four extended variants
-    // (`Blob` / `Timestamp` / `BigInteger` / `BigDecimal`). Phase 3
-    // had `#[should_panic]` and `assert_matches!(Err(TypeMismatch))`
-    // tests here documenting the transitional limitations; those are
-    // replaced below by positive round-trip tests asserting the
-    // limitations are gone.
+    // -- Extended variants round-trip end-to-end ------------------------
 
     #[test]
-    fn from_struct_with_blob_member_now_round_trips() {
+    fn from_struct_with_blob_member_round_trips() {
         const BLOBBY_ID: ShapeId<'static> = shape_id!("smithy.example", "Blobby");
         const BLOBBY_DATA_ID: ShapeId<'static> = shape_id!("smithy.example", "Blobby", "data");
         static BLOBBY_DATA_MEMBER: Schema<'static> =
@@ -438,7 +422,7 @@ mod tests {
                 data: b"raw".to_vec(),
             },
         )
-        .expect("from_struct should succeed for blob members after Phase 4");
+        .expect("from_struct should succeed for blob members");
         assert_eq!(doc.discriminator(), Some("smithy.example#Blobby"));
         let map = doc.document().as_object().unwrap();
         match map.get("data").unwrap() {
@@ -448,16 +432,11 @@ mod tests {
     }
 
     #[test]
-    fn as_shape_on_top_level_blob_now_works() {
-        // Phase 3 marked this `#[should_panic]` because the From
-        // bridge's Option-B arm panicked on Blob/Timestamp/BigInteger/
-        // BigDecimal. Phase 4 made the bridge complete, so as_shape
-        // now reaches the deserializer and successfully reads the
-        // inner Blob.
+    fn as_shape_on_top_level_blob_document() {
         let doc = DiscriminatedDocument::new(aws_smithy_types::Document::Blob(b"x".to_vec()));
         let blob = doc
             .as_shape(|deser| deser.read_blob(&prelude::BLOB))
-            .expect("as_shape on a Blob document should succeed after Phase 4");
+            .expect("as_shape on a Blob document should succeed");
         assert_eq!(blob.as_ref(), b"x");
     }
 

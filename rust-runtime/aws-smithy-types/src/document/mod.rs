@@ -224,7 +224,8 @@ impl Document {
     /// Returns the inner blob value if this `Document` is a [`Document::Blob`].
     ///
     /// Does not coerce — a [`Document::String`] containing base64-encoded bytes returns `None`.
-    /// Coercion lives in the schema-driven path; see the schema crate's `DiscriminatedDocument`.
+    /// Coercion lives on [`DiscriminatedDocument`], which carries the protocol settings needed
+    /// to disambiguate (e.g. base64-decode for JSON).
     pub fn as_blob(&self) -> Option<&[u8]> {
         if let Self::Blob(b) = self {
             Some(b.as_slice())
@@ -245,7 +246,8 @@ impl Document {
     /// Returns the inner timestamp if this `Document` is a [`Document::Timestamp`].
     ///
     /// Does not coerce — a [`Document::String`] containing an RFC-3339 timestamp returns `None`.
-    /// Coercion lives in the schema-driven path; see the schema crate's `DiscriminatedDocument`.
+    /// Coercion lives on [`DiscriminatedDocument`], which carries the protocol settings needed
+    /// to disambiguate (e.g. parse a string as a timestamp using the codec's default format).
     pub fn as_timestamp(&self) -> Option<DateTime> {
         if let Self::Timestamp(t) = self {
             Some(*t)
@@ -326,9 +328,8 @@ impl Document {
     // narrowing on overflow.
     //
     // Crucially, they do **not** accept `Number::Float` — the SEP forbids
-    // crossing the integer/float logical-kind boundary. This matches
-    // wiki §8.2's no-int/float-crossover rule. `as_float` / `as_double`
-    // accept integer sources losslessly going the other way.
+    // crossing the integer/float logical-kind boundary. `as_float` /
+    // `as_double` accept integer sources losslessly going the other way.
     //
     // The arbitrary-precision coercions live as `coerce_big_integer` /
     // `coerce_big_decimal` (rather than overloading the type-checking
@@ -403,7 +404,7 @@ impl Document {
                 .map_err(|e| invalid_input("bigInteger", &v.to_string(), &e)),
             Self::Number(Number::NegInt(v)) => BigInteger::from_str(&v.to_string())
                 .map_err(|e| invalid_input("bigInteger", &v.to_string(), &e)),
-            // No int/float crossover per SEP §"Number coercion" / wiki §8.2.
+            // No int/float crossover per SEP §"Number coercion".
             // Callers wanting a float-to-integer coercion should call `as_long` first.
             Self::Number(Number::Float(_)) => Err(type_mismatch(
                 "cannot coerce float to bigInteger without explicit narrowing",
@@ -566,10 +567,10 @@ where
         Document::Number(Number::NegInt(v)) => {
             T::try_from(*v).map_err(|_| overflow(name, format_args!("{v}")))
         }
-        // No int/float crossover. Per SEP §"Number coercion" and
-        // wiki §8.2: a Float source must NOT silently truncate into
-        // an integer accessor. Callers wanting that behavior can
-        // call `as_double()` first and cast explicitly.
+        // No int/float crossover. Per SEP §"Number coercion": a Float
+        // source must NOT silently truncate into an integer accessor.
+        // Callers wanting that behavior can call `as_double()` first
+        // and cast explicitly.
         Document::Number(Number::Float(_)) => Err(type_mismatch(format!(
             "cannot coerce float to {name} without explicit narrowing"
         ))),
@@ -709,8 +710,8 @@ fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> Docu
 /* ANCHOR END: document */
 
 #[cfg(test)]
-mod phase1_tests {
-    //! Tests for the Phase 1 Smithy data-model expansion: the new
+mod extended_variant_tests {
+    //! Tests for the extended Smithy data-model variants: the
     //! [`Document::Blob`] / [`Document::Timestamp`] /
     //! [`Document::BigInteger`] / [`Document::BigDecimal`] variants,
     //! their type-checking accessors and predicates, the numeric
@@ -720,13 +721,6 @@ mod phase1_tests {
     //!
     //! These do not depend on the legacy serde feature gates — they
     //! exercise functionality available in any build of the crate.
-    //!
-    //! Conformance references throughout point at the wiki guide
-    //! "Implementation tips for Smithy's Unified Data Model" (§8.1
-    //! JSON, §8.2 CBOR), which is itself a strict subset of the
-    //! Document Types and Type Registries SEP. The CBOR-side scenarios
-    //! involving native byte strings / timestamp tags belong to
-    //! Phase 5 and are out of scope here.
 
     use super::{Document, DocumentError};
     use crate::{BigDecimal, BigInteger, DateTime, Number};
@@ -769,7 +763,7 @@ mod phase1_tests {
     fn type_check_accessors_do_not_coerce_across_variants() {
         // A JSON-side base64 string is `Document::String`; it must NOT
         // surface as a blob through the type-checking accessor. Coercion
-        // (when the schema says it's a blob) lives on the schema crate's
+        // (when the schema says it's a blob) lives on
         // `DiscriminatedDocument`.
         let s = Document::String("YWJjZA==".to_owned());
         assert_eq!(s.as_blob(), None);
@@ -854,9 +848,9 @@ mod phase1_tests {
 
     #[test]
     fn as_double_widens_from_integer_sources() {
-        // Wiki §8.2: integer-source values must be losslessly convertible
-        // to f64 / f32 (going integer → float is allowed; the reverse is
-        // not).
+        // Integer-source values must be losslessly convertible to
+        // f64 / f32 (going integer → float is allowed; the reverse is
+        // not — see the no-crossover tests below).
         assert_eq!(
             Document::Number(Number::PosInt(42)).as_double().unwrap(),
             42.0
@@ -923,13 +917,13 @@ mod phase1_tests {
         assert!(matches!(err, DocumentError::NumericCoercionOverflow { .. }));
     }
 
-    // -- No integer/float crossover (wiki §8.2 conformance) -------------
+    // -- No integer/float crossover -------------------------------------
 
     #[test]
     fn as_byte_rejects_float_source_even_with_zero_fractional() {
-        // Wiki §8.2: a Float source value must NOT silently truncate
-        // into an integer accessor, even when the fractional part is
-        // zero. The caller can call `as_double()` first and cast
+        // A Float source value must NOT silently truncate into an
+        // integer accessor, even when the fractional part is zero.
+        // The caller can call `as_double()` first and cast
         // explicitly if they want that behavior.
         let err = Document::Number(Number::Float(42.0)).as_byte().unwrap_err();
         assert!(matches!(err, DocumentError::TypeMismatch { .. }));
@@ -984,9 +978,9 @@ mod phase1_tests {
 
     #[test]
     fn coerce_big_integer_truncates_big_decimal_at_decimal_point() {
-        // Wiki §8.1: a BigDecimal source must be truncated *as a string*
-        // at the decimal point, NOT routed through f64 (which would
-        // lose precision for values past 2^53).
+        // A BigDecimal source must be truncated *as a string* at the
+        // decimal point, NOT routed through f64 (which would lose
+        // precision for values past 2^53).
         let bd = BigDecimal::from_str("12345678901234567890.123").unwrap();
         let bi = Document::BigDecimal(bd).coerce_big_integer().unwrap();
         // The 20-digit integer survives intact — clearly larger than
@@ -1021,16 +1015,17 @@ mod phase1_tests {
         assert!(f.is_finite());
     }
 
-    // -- Special floats round-trip via Number (wiki §8.2 prep) ----------
+    // -- Special floats round-trip via Number ---------------------------
 
     #[test]
     fn special_floats_round_trip_via_as_double() {
-        // Wiki §8.2 requires CBOR's native float encoding for these
+        // CBOR uses native float encoding (major type 7) for these
         // values; the JSON serializer renders them as the strings
-        // `"NaN"` / `"Infinity"` / `"-Infinity"`. Both paths land in
-        // Phase 5 (codec migration). Phase 1 simply checks that
-        // `Number::Float` carries non-finite values intact through the
-        // Document API so the codec layer has something to render.
+        // `"NaN"` / `"Infinity"` / `"-Infinity"`. The codec layer
+        // owns wire-format rendering. This test simply checks that
+        // `Number::Float` carries non-finite values intact through
+        // the `Document` API so the codec layer has something to
+        // render.
         assert!(Document::Number(Number::Float(f64::NAN))
             .as_double()
             .unwrap()
@@ -1083,12 +1078,12 @@ mod phase1_tests {
     // -- Non-exhaustive exhaustive-match guard --------------------------
 
     #[test]
-    fn legacy_pattern_matches_continue_to_compile_with_wildcard_arm() {
-        // Defensive smoke test: this is the migration path described in
-        // the unification plan §6.1 — existing exhaustive matches need
-        // a `_ =>` arm because of #[non_exhaustive]. If a future commit
-        // deletes the wildcard or the variant set shifts, this test
-        // catches the regression.
+    fn exhaustive_match_with_wildcard_arm_compiles() {
+        // Defensive smoke test: an exhaustive `match` over the public
+        // variants needs a `_ =>` arm because `Document` is
+        // `#[non_exhaustive]`. If a future commit removes the
+        // wildcard or shifts the variant set, this test catches the
+        // regression.
         let doc = Document::Blob(b"hi".to_vec());
         let label = match &doc {
             Document::Object(_) => "object",
