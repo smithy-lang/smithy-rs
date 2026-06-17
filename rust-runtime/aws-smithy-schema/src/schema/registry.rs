@@ -26,7 +26,8 @@
 //! also be composed via [`TypeRegistry::compose`] to combine, for example,
 //! a service's primary registry with an extension package's registry.
 //!
-//! See `.kiro/document_types_and_type_registries.md` for the full specification.
+//! See the Smithy SEP "Document Types and Type Registries" for the
+//! full specification.
 
 use std::collections::hash_map;
 use std::collections::HashMap;

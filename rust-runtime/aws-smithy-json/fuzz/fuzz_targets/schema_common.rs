@@ -437,6 +437,32 @@ pub fn document_to_serde_value(doc: &aws_smithy_types::Document) -> serde_json::
                 .collect();
             serde_json::Value::Object(m)
         }
+        // Blob → base64-encoded JSON string. JSON has no native bytes type;
+        // base64 is the standard convention used in restJson1 and matches
+        // how the JsonSerializer emits Blob documents.
+        aws_smithy_types::Document::Blob(bytes) => {
+            serde_json::Value::String(aws_smithy_types::base64::encode(bytes))
+        }
+        // Timestamp → RFC-3339 date-time string. JSON has no native
+        // timestamp type; the date-time format is the most widely-supported
+        // textual form in JSON-based protocols.
+        aws_smithy_types::Document::Timestamp(ts) => serde_json::Value::String(
+            ts.fmt(aws_smithy_types::date_time::Format::DateTime)
+                .expect("DateTime format failure during fuzz differential check"),
+        ),
+        // BigInteger / BigDecimal → string. Both types wrap a validated
+        // decimal-string representation; the serde_json::Value::String form
+        // preserves all digits without going through f64 rounding.
+        aws_smithy_types::Document::BigInteger(bi) => {
+            serde_json::Value::String(bi.as_ref().to_string())
+        }
+        aws_smithy_types::Document::BigDecimal(bd) => {
+            serde_json::Value::String(bd.as_ref().to_string())
+        }
+        // `aws_smithy_types::Document` is `#[non_exhaustive]`. Future
+        // variants surface here as JSON null until a follow-up adds a
+        // dedicated arm.
+        _ => serde_json::Value::Null,
     }
 }
 

@@ -88,8 +88,8 @@ impl JsonFieldMapper {
 /// `JsonCodecSettings` implements [`DocumentSettings`]. The
 /// [`JsonDeserializer`] attaches `Arc<JsonCodecSettings>` to every
 /// `Document` it produces so the format-aware accessors
-/// ([`Document::as_blob`](aws_smithy_schema::document::Document::as_blob),
-/// [`Document::as_timestamp`](aws_smithy_schema::document::Document::as_timestamp))
+/// ([`Document::as_blob`](aws_smithy_types::Document::as_blob),
+/// [`Document::as_timestamp`](aws_smithy_types::Document::as_timestamp))
 /// can coerce JSON-encoded blobs (base64 strings) and timestamps
 /// (date-time strings or epoch-seconds numbers) back to typed Rust
 /// values. The same instance is reused on the serialization side so a

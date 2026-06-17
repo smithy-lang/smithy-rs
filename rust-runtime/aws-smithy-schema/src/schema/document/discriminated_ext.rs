@@ -40,7 +40,7 @@
 //!
 //! [`discriminator()`]: aws_smithy_types::DiscriminatedDocument::discriminator
 
-use aws_smithy_types::DiscriminatedDocument;
+use aws_smithy_types::{DiscriminatedDocument, Number};
 
 use super::{DocumentShapeDeserializer, DocumentShapeSerializer};
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
@@ -146,7 +146,7 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
         match &self.document {
             Legacy::Null => ShapeType::Document,
             Legacy::Bool(_) => ShapeType::Boolean,
-            Legacy::Number(n) => super::data::number_shape_type(n),
+            Legacy::Number(n) => number_shape_type(n),
             Legacy::Blob(_) => ShapeType::Blob,
             Legacy::Timestamp(_) => ShapeType::Timestamp,
             Legacy::BigInteger(_) => ShapeType::BigInteger,
@@ -157,6 +157,57 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
             // Future variants on the `#[non_exhaustive]` enum fall
             // through to a generic Document type.
             _ => ShapeType::Document,
+        }
+    }
+}
+
+/// SEP "Reporting `Document` ambiguous shape types" — for numeric
+/// values stored in a [`Number`], picks the narrowest unambiguous
+/// container from the precedence order `Integer → Long → BigInteger →
+/// Double → BigDecimal`. `Byte`, `IntEnum`, `Short`, and `Float` are
+/// skipped per the SEP.
+///
+/// Private helper for [`DiscriminatedDocumentExt::shape_type`] on
+/// numeric documents. Previously co-located with the now-deleted
+/// schema-side `Document<'a>` data module; relocated here when that
+/// module was removed.
+fn number_shape_type(n: &Number) -> ShapeType {
+    match n {
+        Number::PosInt(v) => {
+            if *v <= i32::MAX as u64 {
+                ShapeType::Integer
+            } else if *v <= i64::MAX as u64 {
+                ShapeType::Long
+            } else {
+                ShapeType::BigInteger
+            }
+        }
+        Number::NegInt(v) => {
+            if *v >= i32::MIN as i64 && *v <= i32::MAX as i64 {
+                ShapeType::Integer
+            } else {
+                // i64 fits in Long but not BigInteger; Number::NegInt is
+                // bounded by i64 so BigInteger is unreachable here.
+                ShapeType::Long
+            }
+        }
+        Number::Float(v) => {
+            // Per the SEP, integer-valued floats should be reported as
+            // the narrowest integer container that fits without
+            // precision loss. f64 represents integers up to 2^53
+            // exactly; beyond that the value is already lossy as f64,
+            // so `Double` is the correct report.
+            if v.is_finite() && v.fract() == 0.0 {
+                if (i32::MIN as f64..=i32::MAX as f64).contains(v) {
+                    ShapeType::Integer
+                } else if (i64::MIN as f64..=i64::MAX as f64).contains(v) {
+                    ShapeType::Long
+                } else {
+                    ShapeType::Double
+                }
+            } else {
+                ShapeType::Double
+            }
         }
     }
 }

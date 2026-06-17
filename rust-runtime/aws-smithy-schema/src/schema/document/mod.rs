@@ -3,34 +3,40 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! `Document` — a protocol-agnostic representation of any value in the
-//! Smithy data model — and the [`ShapeSerializer`] / [`ShapeDeserializer`]
-//! adapters that bridge `Document` with arbitrary Smithy shapes.
+//! Schema-aware adapters around the unified [`Document`] data model.
 //!
-//! The submodules are organized as:
+//! The [`Document`], [`DiscriminatedDocument`], and [`DocumentSettings`]
+//! types live in `aws-smithy-types` (the dependency direction is
+//! `aws-smithy-schema → aws-smithy-types`); import them from there. This
+//! module supplies the schema-crate-only adapters that bridge `Document`
+//! with the [`ShapeSerializer`](crate::serde::ShapeSerializer) /
+//! [`ShapeDeserializer`](crate::serde::ShapeDeserializer) machinery:
 //!
-//! - [`data`] — the [`Document`] data type, [`DocumentInner`] enum,
-//!   [`DocumentSettings`] trait, scalar accessors, and conversions
-//!   to/from `aws_smithy_types::Document`.
 //! - [`serializer`] — the [`DocumentShapeSerializer`], a
 //!   [`ShapeSerializer`](crate::serde::ShapeSerializer) implementation
-//!   that builds a `Document` tree from a typed shape.
+//!   that builds a [`Document`](aws_smithy_types::Document) tree from a
+//!   typed Smithy shape.
 //! - [`deserializer`] — the [`DocumentShapeDeserializer`], a
 //!   [`ShapeDeserializer`](crate::serde::ShapeDeserializer) implementation
-//!   that walks a `Document` tree and dispatches to consumer callbacks
-//!   defined by generated `deserialize` methods.
+//!   that walks a [`Document`](aws_smithy_types::Document) tree and
+//!   dispatches to consumer callbacks defined by generated `deserialize`
+//!   methods.
+//! - [`discriminated_ext`] — [`DiscriminatedDocumentExt`], an extension
+//!   trait that bolts `Document.from_struct` / `Document.asShape` /
+//!   `Document.shape_type` onto
+//!   [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument)
+//!   (which itself lives in `aws-smithy-types` and so cannot reference
+//!   [`Schema`](crate::Schema) inherently).
 //!
 //! See the SEP "Document Type and Type Registries" for the full
 //! specification.
 
-mod data;
 mod deserializer;
 mod discriminated_ext;
 #[cfg(test)]
 mod round_trips;
 mod serializer;
 
-pub use data::{Document, DocumentInner, DocumentSettings};
 pub use deserializer::DocumentShapeDeserializer;
 pub use discriminated_ext::DiscriminatedDocumentExt;
 pub use serializer::DocumentShapeSerializer;

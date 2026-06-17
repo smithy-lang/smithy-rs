@@ -543,7 +543,7 @@ fn sep_round_trip_string_only() {
 fn sep_round_trip_blob_only() {
     // Blob — verifies that base64 round-trips through every path.
     // `b"abcd"` encodes as `YWJjZA==`. Critically, `write_document`
-    // on a `DocumentInner::Blob` must emit the same base64 string the
+    // on a `Document::Blob` must emit the same base64 string the
     // typed-shape `write_blob` would; this is the assertion 6 case
     // that the legacy bridge could not satisfy.
     let value = OmniWidget {
@@ -627,9 +627,9 @@ fn sep_round_trip_sparse_list_with_nulls() {
     //   - typed-shape `is_null` detection inside `read_list`
     //   - `Document::from_struct` walking a list whose elements
     //     include null (the resulting Document tree has
-    //     `DocumentInner::Null` for those positions)
+    //     `Document::Null` for those positions)
     //   - `write_document` recursing into a list containing
-    //     `DocumentInner::Null` entries (per the SEP, Document::Null
+    //     `Document::Null` entries (per the SEP, Document::Null
     //     serializes as the JSON literal `null`)
     let value = OmniWidget {
         value_sparse_list: Some(vec![
@@ -890,7 +890,7 @@ fn sep_write_document_ignores_json_name() {
 // `BigInteger` and `BigDecimal` are arbitrary-precision numerics that
 // cannot be represented as `serde_json::Number` (which is f64 under
 // the hood). The Document path stores them as their own
-// `DocumentInner::BigInteger` / `DocumentInner::BigDecimal` variants;
+// `Document::BigInteger` / `Document::BigDecimal` variants;
 // `JsonSerializer::write_json_value` (Phase 7 sub-task 3) emits the
 // underlying decimal string verbatim as a raw JSON number — without
 // any precision loss that would occur if it were routed through

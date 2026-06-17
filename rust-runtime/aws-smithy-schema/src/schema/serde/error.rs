@@ -44,7 +44,7 @@ pub enum SerdeError {
     /// A numeric coercion overflowed the target type's representable
     /// range.
     ///
-    /// Emitted by [`Document::as_byte`](crate::document::Document::as_byte)
+    /// Emitted by [`Document::as_byte`](aws_smithy_types::Document::as_byte)
     /// (and the other narrow numeric accessors) when the source value
     /// is outside the target's `[min, max]` range.
     NumericCoercionOverflow {

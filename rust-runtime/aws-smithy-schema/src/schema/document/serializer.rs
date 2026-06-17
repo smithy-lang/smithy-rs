@@ -59,15 +59,8 @@ use crate::Schema;
 /// struct, called through `value.serialize_members(&mut dyn ShapeSerializer)`)
 /// is **not** preserved, because the unified [`Document`] type has no
 /// per-node discriminator slot — only the outer
-/// [`DiscriminatedDocument`] wrapper carries one. This matches the
-/// design in `.kiro/document-unification-plan.md` §2.3:
-/// discriminators apply at the wrapper level, not at every nested
-/// struct. The legacy schema-side `Document<'a>` carried a discriminator
-/// slot on every node, but in practice only the top-level capture was
-/// reachable through the trait surface (the trait method's anonymous
-/// `&Schema<'_>` lifetime could not be soundly bridged to the
-/// serializer's storage lifetime), so the unified design loses no
-/// observable behavior here.
+/// [`DiscriminatedDocument`] wrapper carries one. Discriminators apply
+/// at the wrapper level, not at every nested struct.
 ///
 /// # Example
 ///
