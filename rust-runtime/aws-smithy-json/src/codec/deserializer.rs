@@ -714,7 +714,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
             Some(b'{') => {
                 self.advance_by(1);
-                let mut map = std::collections::HashMap::new();
+                let mut map = aws_smithy_types::document::DocumentObject::new();
                 loop {
                     self.skip_whitespace();
                     if self.remaining().first() == Some(&b'}') {

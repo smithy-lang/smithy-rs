@@ -368,6 +368,7 @@ dependencies = [
  "http-body 0.4.6",
  "http-body 1.0.1",
  "http-body-util",
+ "indexmap",
  "itoa",
  "num-integer",
  "pin-project-lite",

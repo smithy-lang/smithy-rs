@@ -348,6 +348,7 @@ mod tests {
     use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
     use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
 
+    use aws_smithy_types::document::DocumentObject;
     use aws_smithy_types::Number;
 
     // -- Test schemas ----------------------------------------------------
@@ -493,7 +494,7 @@ mod tests {
 
     #[test]
     fn read_map_iterates_entries() {
-        let doc = Document::Object(HashMap::from([
+        let doc = Document::Object(DocumentObject::from([
             ("k1".to_string(), Document::String("v1".to_string())),
             ("k2".to_string(), Document::String("v2".to_string())),
         ]));
@@ -527,7 +528,7 @@ mod tests {
 
     #[test]
     fn read_struct_with_consumer_dispatch() {
-        let doc = Document::Object(HashMap::from([
+        let doc = Document::Object(DocumentObject::from([
             ("name".to_string(), Document::String("Alex".to_string())),
             ("age".to_string(), Document::Number(Number::PosInt(30))),
         ]));
@@ -545,7 +546,7 @@ mod tests {
     #[test]
     fn read_struct_with_missing_optional_member() {
         // Document only has `name`; `age` is missing.
-        let doc = Document::Object(HashMap::from([(
+        let doc = Document::Object(DocumentObject::from([(
             "name".to_string(),
             Document::String("Sam".to_string()),
         )]));
@@ -562,7 +563,7 @@ mod tests {
 
     #[test]
     fn read_struct_ignores_unknown_members() {
-        let doc = Document::Object(HashMap::from([
+        let doc = Document::Object(DocumentObject::from([
             ("name".to_string(), Document::String("Joe".to_string())),
             (
                 "unknown_field".to_string(),

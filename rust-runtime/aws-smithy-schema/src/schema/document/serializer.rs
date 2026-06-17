@@ -34,8 +34,7 @@
 //! it in the appropriate [`Document`] variant, and commits the wrapper
 //! to the parent frame (or to the root slot if the stack is now empty).
 
-use std::collections::HashMap;
-
+use aws_smithy_types::document::DocumentObject;
 use aws_smithy_types::{BigDecimal, BigInteger, DateTime, DiscriminatedDocument, Document, Number};
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeSerializer};
@@ -104,11 +103,11 @@ pub struct DocumentShapeSerializer {
 #[derive(Debug)]
 enum Frame {
     Struct {
-        members: HashMap<String, Document>,
+        members: DocumentObject,
     },
     List(Vec<Document>),
     Map {
-        entries: HashMap<String, Document>,
+        entries: DocumentObject,
         /// `Some(k)` after a key has been written and we're awaiting the
         /// matching value; `None` when we are at an entry boundary
         /// (next write becomes the next key).
@@ -181,7 +180,7 @@ impl DocumentShapeSerializer {
             self.root_discriminator = Some(schema.shape_id().as_str().to_string());
         }
         self.stack.push(Frame::Struct {
-            members: HashMap::new(),
+            members: DocumentObject::new(),
         });
         // `value.serialize_members(self)` coerces `self` to `&mut dyn
         // ShapeSerializer`. Nested struct writes from within that
@@ -284,7 +283,7 @@ impl ShapeSerializer for DocumentShapeSerializer {
         // a discriminator — only the top-level inherent write_struct
         // entry point does that (see the type-level docs).
         self.stack.push(Frame::Struct {
-            members: HashMap::new(),
+            members: DocumentObject::new(),
         });
         value.serialize_members(self)?;
         let frame = self.stack.pop().expect("frame just pushed");
@@ -324,7 +323,7 @@ impl ShapeSerializer for DocumentShapeSerializer {
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.stack.push(Frame::Map {
-            entries: HashMap::new(),
+            entries: DocumentObject::new(),
             pending_key: None,
         });
         write_entries(self)?;
@@ -428,8 +427,6 @@ fn signed_to_number(v: i64) -> Number {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashMap;
-
     use super::*;
     use crate::serde::{SerdeError, SerializableStruct, ShapeSerializer};
     use crate::{prelude, shape_id, Schema, ShapeId, ShapeType};
@@ -641,7 +638,7 @@ mod tests {
 
     #[test]
     fn write_document_commits_value_directly() {
-        let nested = Document::Object(HashMap::from([(
+        let nested = Document::Object(DocumentObject::from([(
             "foo".to_string(),
             Document::String("bar".to_string()),
         )]));

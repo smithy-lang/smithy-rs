@@ -146,10 +146,12 @@ struct OmniWidget {
     value_blob: Option<Blob>,
     value_timestamp_default: Option<DateTime>,
     value_list_strings: Option<Vec<String>>,
-    // Use Vec<(K, V)> rather than HashMap so the canonical wire bytes
-    // are deterministic — HashMap iteration order varies across runs.
-    // The deserialize side normalizes the read HashMap into a sorted
-    // Vec so equality comparisons stay stable.
+    // The Smithy data model maps to a `HashMap<String, String>` here, but the
+    // typed shape uses `Vec<(K, V)>` so canonical wire bytes are deterministic
+    // for the round-trip assertion below — the user-data path goes through
+    // serde with `String` values, where the reader produces a HashMap whose
+    // iteration order is unspecified. The deserialize side normalizes the read
+    // HashMap into a sorted Vec so equality comparisons stay stable.
     value_map_strings: Option<Vec<(String, String)>>,
     value_struct: Option<Nested>,
     // Sparse list: a `null` entry in the wire form means a present
@@ -724,7 +726,7 @@ fn sep_write_document_no_discriminator_omits_type() {
     // `write_document` never emits `__type` for *any* input — it
     // operates purely on the data tree. This pins down the contract
     // that `write_document` is the discriminator-free emission path.
-    let mut entries: std::collections::HashMap<String, Document> = std::collections::HashMap::new();
+    let mut entries = aws_smithy_types::document::DocumentObject::new();
     entries.insert("value_string".to_owned(), Document::String("hi".into()));
     let document = Document::Object(entries);
 
@@ -967,7 +969,7 @@ fn sep_write_document_big_numbers_inside_aggregate() {
     let big_int = BigInteger::from_str("999999999999999999999").expect("valid BigInteger");
     let big_dec = BigDecimal::from_str("1.234567890123456789012345").expect("valid BigDecimal");
 
-    let mut entries: HashMap<String, Document> = HashMap::new();
+    let mut entries = aws_smithy_types::document::DocumentObject::new();
     entries.insert(
         "list_of_big_ints".to_owned(),
         Document::Array(vec![Document::BigInteger(big_int.clone())]),
@@ -1001,5 +1003,54 @@ fn sep_write_document_big_numbers_inside_aggregate() {
         bytes_str.contains(r#""single_big_dec":1.234567890123456789012345"#),
         "BigDecimal inside a map must be emitted as a raw JSON number \
          with full precision; got: {bytes_str}",
+    );
+}
+
+// =============================================================================
+// SEP "Document Type and Type Registries" §"`Document` interface and type
+// coercion" point 9: "Document implementations SHOULD iterate map entries in
+// insertion order if possible. For a document created from serialized data,
+// insertion order is the order in which the entries appear in the source data."
+// =============================================================================
+
+#[test]
+fn sep_map_document_iterates_in_source_order() {
+    // Three keys whose hash order would not match either source order or
+    // alphabetical order under a typical SipHasher seed. The test asserts the
+    // document iterates them in source order, not hash order.
+    let source = br#"{"zebra":1,"alpha":2,"middle":3}"#;
+
+    let codec = JsonCodec::default();
+    let mut deser = codec.create_deserializer(source);
+
+    let document: Document = deser
+        .read_document(&prelude::DOCUMENT)
+        .expect("source bytes are valid JSON");
+
+    let object = document
+        .as_object()
+        .expect("read_document on a JSON object yields Document::Object");
+
+    let observed: Vec<&str> = object.keys().map(String::as_str).collect();
+    assert_eq!(
+        observed,
+        ["zebra", "alpha", "middle"],
+        "DocumentObject must iterate keys in the order they appeared in the \
+         source bytes (SEP Document Type and Type Registries §`Document` \
+         interface point 9)"
+    );
+
+    // Round-trip back through write_document and assert wire bytes match the
+    // source order too — confirms that serialization preserves the same
+    // insertion order on output.
+    let mut ser = codec.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &document)
+        .expect("write_document succeeds");
+    let bytes = ser.finish();
+    let bytes_str = std::str::from_utf8(&bytes).expect("valid UTF-8");
+
+    assert_eq!(
+        bytes_str, r#"{"zebra":1,"alpha":2,"middle":3}"#,
+        "Round-trip serialization must preserve insertion order. Got: {bytes_str}",
     );
 }

@@ -325,8 +325,8 @@ mod tests {
         // base scalar variants (no schema-side intermediate). Confirms
         // as_shape works on documents that didn't come from
         // `from_struct`.
-        use std::collections::HashMap;
-        let mut map = HashMap::new();
+        use aws_smithy_types::document::DocumentObject;
+        let mut map = DocumentObject::new();
         map.insert(
             "name".to_string(),
             aws_smithy_types::Document::String("Joe".into()),

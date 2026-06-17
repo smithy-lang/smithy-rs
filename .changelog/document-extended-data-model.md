@@ -31,3 +31,5 @@ match doc {
     _ => /* fallback for future variants */,
 }
 ```
+
+`Document::Object` map entries are now iterated in insertion order.

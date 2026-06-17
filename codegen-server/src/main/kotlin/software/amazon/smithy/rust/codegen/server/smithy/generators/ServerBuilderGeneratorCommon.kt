@@ -239,9 +239,9 @@ private fun defaultValue(
                 is ObjectNode -> {
                     check(node.isEmpty)
                     rustTemplate(
-                        "#{SmithyTypes}::Document::Object(#{HashMap}::new())",
+                        "#{SmithyTypes}::Document::Object(#{DocumentObject}::new())",
                         "SmithyTypes" to types,
-                        "HashMap" to RuntimeType.HashMap,
+                        "DocumentObject" to RuntimeType.documentObject(runtimeConfig),
                     )
                 }
 

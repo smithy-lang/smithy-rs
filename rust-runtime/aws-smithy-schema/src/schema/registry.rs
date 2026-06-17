@@ -563,7 +563,7 @@ mod tests {
             .build();
 
         // Build a Foo document with a "name" member and the Foo discriminator.
-        let mut foo_members: HashMap<String, Document> = HashMap::new();
+        let mut foo_members = aws_smithy_types::document::DocumentObject::new();
         foo_members.insert("name".to_string(), Document::String("hello".to_string()));
         let foo_doc = DiscriminatedDocument::new(Document::Object(foo_members))
             .with_discriminator(FOO_SCHEMA.shape_id().as_str());
@@ -578,7 +578,7 @@ mod tests {
         );
 
         // Same for Bar.
-        let mut bar_members: HashMap<String, Document> = HashMap::new();
+        let mut bar_members = aws_smithy_types::document::DocumentObject::new();
         bar_members.insert("value".to_string(), Document::Number(Number::PosInt(42)));
         let bar_doc = DiscriminatedDocument::new(Document::Object(bar_members))
             .with_discriminator(BAR_SCHEMA.shape_id().as_str());
@@ -635,7 +635,7 @@ mod tests {
             .insert_shape(&FOO_SCHEMA, deserialize_foo)
             .build();
 
-        let mut foo_members: HashMap<String, Document> = HashMap::new();
+        let mut foo_members = aws_smithy_types::document::DocumentObject::new();
         foo_members.insert("name".to_string(), Document::Number(Number::PosInt(5)));
         let doc = DiscriminatedDocument::new(Document::Object(foo_members))
             .with_discriminator(FOO_SCHEMA.shape_id().as_str());

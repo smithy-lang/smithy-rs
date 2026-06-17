@@ -43,10 +43,10 @@ class TypeRegistryDecoratorTest {
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)
         return arrayOf(
             "Document" to smithyTypes.resolve("Document"),
+            "DocumentObject" to smithyTypes.resolve("document::DocumentObject"),
             "DiscriminatedDocument" to smithyTypes.resolve("DiscriminatedDocument"),
             "Number" to smithyTypes.resolve("Number"),
             "shape_id" to smithySchema.resolve("shape_id"),
-            "HashMap" to RuntimeType.HashMap,
         )
     }
 
@@ -289,7 +289,7 @@ class TypeRegistryDecoratorTest {
                         // Build a Document carrying the data of a `Habitat` shape.
                         // Map keys must match Smithy member names (the schema's
                         // `member_name`), not the snake_case Rust field names.
-                        let mut members: #{HashMap}<String, #{Document}> = #{HashMap}::new();
+                        let mut members = #{DocumentObject}::new();
                         members.insert("biome".to_owned(), #{Document}::String("forest".to_owned()));
                         members.insert(
                             "altitude".to_owned(),
@@ -329,7 +329,7 @@ class TypeRegistryDecoratorTest {
                         // in this service's closure must produce an error. This is
                         // the negative path that complements the round-trip test.
                         let doc = #{DiscriminatedDocument}::new(
-                            #{Document}::Object(#{HashMap}::new()),
+                            #{Document}::Object(#{DocumentObject}::new()),
                         )
                         .with_discriminator("com.example##NotAModeledShape");
 
@@ -356,7 +356,7 @@ class TypeRegistryDecoratorTest {
                         // a deserialize fn. Surface as an error rather than silently
                         // pick a default — this keeps the runtime contract explicit.
                         let doc = #{DiscriminatedDocument}::new(
-                            #{Document}::Object(#{HashMap}::new()),
+                            #{Document}::Object(#{DocumentObject}::new()),
                         );
 
                         let result = $moduleName::Client::registry().deserialize_document(&doc);
