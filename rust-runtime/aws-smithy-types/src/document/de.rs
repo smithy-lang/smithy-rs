@@ -199,7 +199,7 @@ impl<'de> SeqAccess<'de> for SeqDeserializer {
 
 /// Deserializer for map (object) values.
 struct MapDeserializer {
-    iter: std::collections::hash_map::IntoIter<String, Document>,
+    iter: super::document_object::IntoIter,
     value: Option<Document>,
 }
 

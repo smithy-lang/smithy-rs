@@ -962,6 +962,7 @@ dependencies = [
  "http-body 1.0.1",
  "http-body-util",
  "hyper 0.14.32",
+ "indexmap 2.14.0",
  "itoa",
  "lazy_static",
  "num-integer",

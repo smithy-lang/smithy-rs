@@ -11,6 +11,7 @@ mod discriminated;
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 mod doc_error;
+pub mod document_object;
 mod error;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 mod ser;
@@ -24,6 +25,7 @@ pub use discriminated::DiscriminatedDocument;
     all(aws_sdk_unstable, feature = "serde-serialize")
 ))]
 pub use doc_error::DocError;
+pub use document_object::DocumentObject;
 pub use error::DocumentError;
 #[cfg(all(aws_sdk_unstable, feature = "serde-serialize"))]
 pub use ser::to_document;
@@ -31,7 +33,6 @@ pub use settings::DocumentSettings;
 
 use crate::{BigDecimal, BigInteger, DateTime, Number};
 use std::borrow::Cow;
-use std::collections::HashMap;
 use std::str::FromStr;
 
 #[cfg(any(
@@ -75,7 +76,7 @@ use serde;
 )]
 pub enum Document {
     /// JSON object
-    Object(HashMap<String, Document>),
+    Object(DocumentObject),
     /// JSON array
     Array(Vec<Document>),
     /// JSON number
@@ -118,7 +119,7 @@ pub enum Document {
 
 impl Document {
     /// Returns the inner map value if this `Document` is an object.
-    pub fn as_object(&self) -> Option<&HashMap<String, Document>> {
+    pub fn as_object(&self) -> Option<&DocumentObject> {
         if let Self::Object(object) = self {
             Some(object)
         } else {
@@ -127,7 +128,7 @@ impl Document {
     }
 
     /// Returns the mutable inner map value if this `Document` is an object.
-    pub fn as_object_mut(&mut self) -> Option<&mut HashMap<String, Document>> {
+    pub fn as_object_mut(&mut self) -> Option<&mut DocumentObject> {
         if let Self::Object(object) = self {
             Some(object)
         } else {
@@ -486,9 +487,22 @@ impl From<Vec<Document>> for Document {
     }
 }
 
-impl From<HashMap<String, Document>> for Document {
-    fn from(values: HashMap<String, Document>) -> Self {
-        Document::Object(values)
+impl From<DocumentObject> for Document {
+    fn from(object: DocumentObject) -> Self {
+        Document::Object(object)
+    }
+}
+
+impl From<std::collections::HashMap<String, Document>> for Document {
+    /// Converts a [`HashMap`](std::collections::HashMap) to a [`Document::Object`].
+    ///
+    /// Iteration order in the resulting document follows the
+    /// (unspecified) iteration order of the source `HashMap`. For
+    /// callers that care about iteration order, build a
+    /// [`DocumentObject`] directly with `insert` and pass it to
+    /// `Document::Object` instead.
+    fn from(values: std::collections::HashMap<String, Document>) -> Self {
+        Document::Object(DocumentObject::from(values))
     }
 }
 
@@ -1430,7 +1444,7 @@ mod test {
     fn test_map_empty() {
         let map: HashMap<String, u32> = HashMap::new();
         let doc = to_document(&map).unwrap();
-        assert_eq!(doc, Document::Object(HashMap::new()));
+        assert_eq!(doc, Document::Object(DocumentObject::new()));
         test_roundtrip(&[HashMap::<String, u32>::new()]);
     }
 
@@ -1618,7 +1632,7 @@ mod test {
             x: u32,
         }
 
-        let doc = Document::Object(HashMap::new());
+        let doc = Document::Object(DocumentObject::new());
         let result = from_document::<Required>(doc);
         assert!(result.is_err());
         let err = result.unwrap_err();
