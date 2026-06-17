@@ -348,6 +348,9 @@ impl Builder<TlsUnset> {
     /// that implements hyper's `Read`, `Write`, and `Connection` traits.
     /// The pool's Negotiate layer uses `Connection::connected().is_negotiated_h2()`
     /// to route connections to the H2 path.
+    ///
+    /// NIC binding is not applied to custom TCP connectors — the custom
+    /// connector owns its own socket configuration.
     #[cfg(all(feature = "test-util", aws_sdk_unstable))]
     #[doc(hidden)]
     pub fn build_http_with_tcp_connector<C, IO>(self, connector: C) -> super::SharedPool
@@ -369,7 +372,8 @@ impl Builder<TlsUnset> {
             connection_event_listener: self.connection_event_listener.clone(),
         };
         let policy = self.cross_partition_policy;
-        let pool = super::build_pool(connector, config, self.partitions, policy);
+        let connector_factory = move |_partition: &Partition| connector.clone();
+        let pool = super::build_pool(connector_factory, config, self.partitions, policy);
         super::SharedPool {
             inner: Arc::new(super::SharedPoolInner {
                 pool: Arc::new(pool),
@@ -408,10 +412,17 @@ where
     }
 
     if proxy_config.is_disabled() {
-        super::build_pool(tcp, config, partitions, policy)
+        let connector_factory =
+            move |partition: &Partition| bind_interface(&tcp, partition.nic.as_deref());
+        super::build_pool(connector_factory, config, partitions, policy)
     } else {
-        let connector = crate::client::connect::HttpProxyConnector::new(tcp, proxy_config);
-        super::build_pool(connector, config, partitions, policy)
+        let connector_factory = move |partition: &Partition| {
+            crate::client::connect::HttpProxyConnector::new(
+                bind_interface(&tcp, partition.nic.as_deref()),
+                proxy_config.clone(),
+            )
+        };
+        super::build_pool(connector_factory, config, partitions, policy)
     }
 }
 
@@ -480,13 +491,17 @@ impl Builder<TlsProviderSelected> {
                 feature = "rustls-ring"
             ))]
             tls::Provider::Rustls(crypto_mode) => {
-                let connector = tls::rustls_provider::build_connector::wrap_connector(
-                    tcp,
-                    crypto_mode.clone(),
-                    &self.tls.context,
-                    proxy_config,
-                );
-                let pool = super::build_pool(connector, config, partitions, policy);
+                let crypto_mode = crypto_mode.clone();
+                let tls_context = self.tls.context.clone();
+                let connector_factory = move |partition: &Partition| {
+                    tls::rustls_provider::build_connector::wrap_connector(
+                        bind_interface(&tcp, partition.nic.as_deref()),
+                        crypto_mode.clone(),
+                        &tls_context,
+                        proxy_config.clone(),
+                    )
+                };
+                let pool = super::build_pool(connector_factory, config, partitions, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),
@@ -496,12 +511,15 @@ impl Builder<TlsProviderSelected> {
             }
             #[cfg(feature = "s2n-tls")]
             tls::Provider::S2nTls => {
-                let connector = tls::s2n_tls_provider::build_connector::wrap_connector(
-                    tcp,
-                    &self.tls.context,
-                    proxy_config,
-                );
-                let pool = super::build_pool(connector, config, partitions, policy);
+                let tls_context = self.tls.context.clone();
+                let connector_factory = move |partition: &Partition| {
+                    tls::s2n_tls_provider::build_connector::wrap_connector(
+                        bind_interface(&tcp, partition.nic.as_deref()),
+                        &tls_context,
+                        proxy_config.clone(),
+                    )
+                };
+                let pool = super::build_pool(connector_factory, config, partitions, policy);
                 super::SharedPool {
                     inner: Arc::new(super::SharedPoolInner {
                         pool: Arc::new(pool),
@@ -531,6 +549,28 @@ fn resolve_pool_idle_timeout(configured: Option<Option<Duration>>) -> Option<Dur
 /// off; `Some(Some(d))` enables keepalive with idle time `d`.
 fn resolve_tcp_keepalive(configured: Option<Option<Duration>>) -> Option<Duration> {
     configured.flatten()
+}
+
+/// Bind a clone of the base TCP connector to a network interface.
+///
+/// The single place per-partition NIC binding happens: each partition's
+/// connector factory clones the shared base connector and routes it
+/// through here with that partition's `nic`. `None` (the default,
+/// no-interface case) returns an unbound clone. `set_interface` is only
+/// available on Linux-like targets; elsewhere the `nic` is accepted and
+/// ignored, matching the v1 client.
+fn bind_interface<R>(base: &HyperHttpConnector<R>, nic: Option<&str>) -> HyperHttpConnector<R>
+where
+    R: Clone,
+{
+    #[allow(unused_mut)]
+    let mut tcp = base.clone();
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
+    if let Some(interface) = nic {
+        tcp.set_interface(interface);
+    }
+    let _ = nic;
+    tcp
 }
 
 /// Build the proxy URL matcher from a `ProxyConfig`, returning `None` when

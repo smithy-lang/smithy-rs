@@ -242,9 +242,9 @@ pub enum CrossPartitionPolicy {
 /// for its lifetime.
 #[derive(Clone, Debug)]
 pub struct Partition {
-    id: PartitionId,
-    spawner: std::sync::Arc<dyn DriverSpawner>,
-    nic: Option<String>,
+    pub(super) id: PartitionId,
+    pub(super) spawner: std::sync::Arc<dyn DriverSpawner>,
+    pub(super) nic: Option<String>,
 }
 
 impl Partition {
@@ -344,7 +344,7 @@ impl PartitionRegistry {
     /// no-topology case via [`normalize_partitions`] first).
     pub(crate) fn build(
         partitions: Vec<Partition>,
-        make_stack_for: impl Fn(PartitionId, &std::sync::Arc<dyn DriverSpawner>) -> super::MakeStack,
+        make_stack_for: impl Fn(&Partition) -> super::MakeStack,
     ) -> Self {
         assert!(
             !partitions.is_empty(),
@@ -357,7 +357,7 @@ impl PartitionRegistry {
             std::collections::HashMap::new();
         for p in partitions {
             by_nic.entry(p.nic.clone()).or_default().push(p.id);
-            let make_stack = make_stack_for(p.id, &p.spawner);
+            let make_stack = make_stack_for(&p);
             let state = std::sync::Arc::new(PartitionState {
                 id: p.id,
                 spawner: p.spawner,

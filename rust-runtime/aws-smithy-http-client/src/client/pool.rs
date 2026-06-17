@@ -571,13 +571,14 @@ impl SharedPoolState {
 /// registering that cell's counters into the stats index and binding it to
 /// the shared budget. The connector is captured per partition so each can
 /// carry its own NIC binding.
-pub(crate) fn build_pool<C, IO>(
-    connector: C,
+pub(crate) fn build_pool<C, IO, F>(
+    connector_factory: F,
     config: PoolConfig,
     partitions: Vec<partition::Partition>,
     cross_partition_policy: partition::CrossPartitionPolicy,
 ) -> ConnectionPool
 where
+    F: Fn(&partition::Partition) -> C + Send + Sync + 'static,
     C: Service<http_1x::Uri, Response = IO> + Clone + Send + Sync + 'static,
     C::Error: Into<BoxError> + 'static,
     C::Future: Unpin + Send + 'static,
@@ -592,13 +593,12 @@ where
         "pool: initialized"
     );
 
+    let connector_factory = Arc::new(connector_factory);
     let make_stack_for = {
-        let connector = connector.clone();
-        move |partition_id: partition::PartitionId,
-              spawner: &Arc<dyn partition::DriverSpawner>|
-              -> MakeStack {
-            let connector = connector.clone();
-            let spawner = spawner.clone();
+        move |partition: &partition::Partition| -> MakeStack {
+            let connector = connector_factory(partition);
+            let partition_id = partition.id;
+            let spawner = partition.spawner.clone();
             let cross_partition_policy = cross_partition_policy;
             Arc::new(
                 move |uri: &http_1x::Uri, shared: &SharedPoolState| -> Box<dyn PoolEntry> {
@@ -1686,9 +1686,7 @@ mod tests {
 
     fn pool_with_config(config: PoolConfig) -> Arc<ConnectionPool> {
         let shared = Arc::new(SharedPoolState::new(&config));
-        let make_stack_for = |_partition_id: partition::PartitionId,
-                              _spawner: &Arc<dyn partition::DriverSpawner>|
-         -> MakeStack {
+        let make_stack_for = |_partition: &partition::Partition| -> MakeStack {
             Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
         };
         let partitions = partition::normalize_partitions(Vec::new(), || {
@@ -1709,9 +1707,8 @@ mod tests {
 
     /// A `make_stack_for` stub that produces `NullPoolEntry` stacks — enough
     /// to exercise registry indexing without standing up real connectors.
-    fn null_make_stack_for(
-    ) -> impl Fn(partition::PartitionId, &Arc<dyn partition::DriverSpawner>) -> MakeStack {
-        |_id, _spawner| Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
+    fn null_make_stack_for() -> impl Fn(&partition::Partition) -> MakeStack {
+        |_partition| Arc::new(|_uri, _shared| Box::new(NullPoolEntry) as Box<dyn PoolEntry>)
     }
 
     /// The registry's default partition is the first declared.
