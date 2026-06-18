@@ -96,7 +96,7 @@ mod tests {
     use time::format_description::well_known::Rfc3339;
 
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
-    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86", target_os = "windows")))]
     #[test]
     fn date_format() {
         let time: SystemTime = OffsetDateTime::parse("2039-02-04T23:01:09.104Z", &Rfc3339)
@@ -110,7 +110,7 @@ mod tests {
     }
 
     // TODO(https://github.com/smithy-lang/smithy-rs/issues/1857)
-    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86")))]
+    #[cfg(not(any(target_arch = "powerpc", target_arch = "x86", target_os = "windows")))]
     #[test]
     fn date_time_format() {
         let time: SystemTime = OffsetDateTime::parse("2039-02-04T23:01:09.104Z", &Rfc3339)

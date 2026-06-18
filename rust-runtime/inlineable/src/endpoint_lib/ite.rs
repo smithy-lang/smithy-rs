@@ -101,7 +101,6 @@ pub(crate) use ite;
 
 #[cfg(test)]
 mod test {
-    use super::*;
 
     #[test]
     fn base_cases() {
