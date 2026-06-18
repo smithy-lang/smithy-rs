@@ -67,7 +67,7 @@ impl<C: Codec> HttpBindingProtocol<C> {
         input: &dyn SerializableStruct,
         input_schema: &Schema,
         endpoint: &str,
-        _cfg: &ConfigBag,
+        cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
         // Construct the request up front with an empty body. The binder is
         // given a `&mut Headers` reference into this request and inserts
@@ -237,16 +237,33 @@ impl<C: Codec> HttpBindingProtocol<C> {
         // protocol default. (Pre-opt2 the late flush loop overwrote our
         // default after we set it; with direct insertion the customer header
         // is already present, so we must not clobber it.)
-        if set_content_type && request.headers().get("Content-Type").is_none() {
+        //
+        // A presigning interceptor (or any other caller that stored a
+        // `SharedHeaderOmitSettings` in the config bag) can request the
+        // runtime suppress these defaults so they don't end up in the signed-
+        // header set of a presigned URL.
+        let omit = cfg.load::<crate::header_omit_settings::SharedHeaderOmitSettings>();
+        let omit_content_type = omit
+            .map(|s| s.should_omit_default_content_type())
+            .unwrap_or(false);
+        let omit_content_length = omit
+            .map(|s| s.should_omit_default_content_length())
+            .unwrap_or(false);
+        if !omit_content_type && set_content_type && request.headers().get("Content-Type").is_none()
+        {
             request
                 .headers_mut()
                 .insert("Content-Type", self.content_type);
         }
-        if let Some(len) = request.body().content_length() {
-            if (len > 0 || set_content_type) && request.headers().get("Content-Length").is_none() {
-                request
-                    .headers_mut()
-                    .insert("Content-Length", len.to_string());
+        if !omit_content_length {
+            if let Some(len) = request.body().content_length() {
+                if (len > 0 || set_content_type)
+                    && request.headers().get("Content-Length").is_none()
+                {
+                    request
+                        .headers_mut()
+                        .insert("Content-Length", len.to_string());
+                }
             }
         }
         Ok(request)
@@ -1583,6 +1600,81 @@ mod tests {
             )
             .unwrap();
         assert!(request.headers().get("Content-Type").is_none());
+    }
+
+    /// The bug fix at the center of PR #4686 review: when a presigning
+    /// interceptor (or any other caller) stores a `SharedHeaderOmitSettings`
+    /// in the config bag, the runtime must not insert protocol-default
+    /// Content-Type or Content-Length headers — even on the standard-body
+    /// path used by ordinary structure inputs.
+    #[test]
+    fn presigning_omit_settings_suppress_default_content_headers() {
+        use crate::header_omit_settings::{HeaderOmitSettings, SharedHeaderOmitSettings};
+        use aws_smithy_types::config_bag::Layer;
+
+        #[derive(Debug)]
+        struct OmitBoth;
+        impl HeaderOmitSettings for OmitBoth {
+            fn should_omit_default_content_type(&self) -> bool {
+                true
+            }
+            fn should_omit_default_content_length(&self) -> bool {
+                true
+            }
+        }
+
+        let mut layer = Layer::new("test_omit");
+        layer.store_put(SharedHeaderOmitSettings::new(OmitBoth));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let request = make_protocol()
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &cfg,
+            )
+            .unwrap();
+        assert!(
+            request.headers().get("Content-Type").is_none(),
+            "presigning omit suppresses default Content-Type"
+        );
+        assert!(
+            request.headers().get("Content-Length").is_none(),
+            "presigning omit suppresses default Content-Length"
+        );
+    }
+
+    /// Companion to `presigning_omit_settings_suppress_default_content_headers`:
+    /// when no `SharedHeaderOmitSettings` is in the config bag, the runtime
+    /// inserts the protocol's default Content-Type plus a body-length-derived
+    /// Content-Length. `NameStruct` writes a single `"Alice"` member, which
+    /// the test codec frames as `{Alice}` for a 7-byte body — exercises the
+    /// `len > 0` branch of the Content-Length insertion logic.
+    #[test]
+    fn default_content_headers_inserted_when_omit_settings_absent() {
+        let request = make_protocol()
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+        assert_eq!(
+            request
+                .headers()
+                .get("Content-Type")
+                .expect("Content-Type set"),
+            "application/test"
+        );
+        assert_eq!(
+            request
+                .headers()
+                .get("Content-Length")
+                .expect("Content-Length set"),
+            "7"
+        );
     }
 
     /// When a schema is annotated `with_no_body_members()`, the body codec

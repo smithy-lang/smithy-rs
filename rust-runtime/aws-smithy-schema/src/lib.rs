@@ -20,6 +20,7 @@ mod schema {
     pub mod traits;
 
     pub mod codec;
+    pub mod header_omit_settings;
     pub mod http_protocol;
     pub mod prelude;
     pub mod protocol;
@@ -46,6 +47,10 @@ pub mod traits {
 
 pub mod codec {
     pub use crate::schema::codec::*;
+}
+
+pub mod header_omit_settings {
+    pub use crate::schema::header_omit_settings::*;
 }
 
 pub mod protocol {
