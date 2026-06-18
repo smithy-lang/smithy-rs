@@ -44,6 +44,29 @@ impl AwsRestJsonProtocol {
         }
     }
 
+    /// Configures the default Smithy namespace used to resolve relative
+    /// shape IDs in JSON `__type` discriminator fields. Forwarded to
+    /// [`JsonCodecSettings::default_namespace`] on the codec wrapped by
+    /// this protocol.
+    ///
+    /// REST JSON services may emit relative `__type` values in document-
+    /// typed members; code-generated clients call this method with the
+    /// service shape's namespace so the deserializer can produce a fully-
+    /// qualified discriminator.
+    pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
+        let new_settings = self
+            .inner
+            .codec()
+            .settings()
+            .to_builder()
+            .default_namespace(namespace)
+            .build();
+        let new_codec = JsonCodec::new(new_settings);
+        Self {
+            inner: self.inner.with_codec(new_codec),
+        }
+    }
+
     /// Returns a reference to the inner `HttpBindingProtocol`.
     pub fn inner(&self) -> &HttpBindingProtocol<JsonCodec> {
         &self.inner
@@ -206,5 +229,28 @@ mod tests {
         let cfg = ConfigBag::base();
         let err = proto.parse_error_metadata(&response, &cfg).unwrap_err();
         assert!(matches!(err, SerdeError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn with_default_namespace_propagates_to_codec_settings() {
+        let proto = AwsRestJsonProtocol::new().with_default_namespace("com.amazonaws.s3");
+        assert_eq!(
+            proto.inner.codec().settings().default_namespace(),
+            Some("com.amazonaws.s3"),
+        );
+    }
+
+    #[test]
+    fn with_default_namespace_preserves_other_settings() {
+        // Rebuilding the codec for `default_namespace` must preserve
+        // the restJson1-specific `@jsonName=true` field-mapper choice
+        // set in `AwsRestJsonProtocol::new`.
+        let proto = AwsRestJsonProtocol::new().with_default_namespace("com.example");
+        let settings = proto.inner.codec().settings();
+        assert_eq!(settings.default_namespace(), Some("com.example"));
+        assert_eq!(
+            settings.default_timestamp_format(),
+            aws_smithy_types::date_time::Format::EpochSeconds,
+        );
     }
 }

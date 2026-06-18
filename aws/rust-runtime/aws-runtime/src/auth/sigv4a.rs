@@ -239,7 +239,6 @@ mod tests {
     use aws_types::region::{Region, SigningRegionSet};
     use aws_types::SigningName;
     use std::borrow::Cow;
-    use std::collections::HashMap;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 

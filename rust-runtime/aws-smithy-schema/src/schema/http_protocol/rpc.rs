@@ -38,6 +38,31 @@ impl<C: Codec> HttpRpcProtocol<C> {
             content_type,
         }
     }
+
+    /// Returns a reference to the body codec. Used by wrapper protocols
+    /// that need to read the codec's settings before rebuilding it via
+    /// [`Self::with_codec`].
+    pub fn codec(&self) -> &C {
+        &self.codec
+    }
+
+    /// Returns the Content-Type string this protocol stamps onto the
+    /// outgoing request. Used by wrapper protocols that rebuild the
+    /// inner [`HttpRpcProtocol`] when reconfiguring the codec.
+    pub fn content_type(&self) -> &'static str {
+        self.content_type
+    }
+
+    /// Replaces the body codec, returning a new protocol instance
+    /// with all other fields preserved. Used by wrapper protocols
+    /// (e.g. AWS JSON RPC) that need to swap in a reconfigured codec.
+    pub fn with_codec(self, codec: C) -> Self {
+        Self {
+            protocol_id: self.protocol_id,
+            codec,
+            content_type: self.content_type,
+        }
+    }
 }
 
 impl<C> ClientProtocolInner for HttpRpcProtocol<C>

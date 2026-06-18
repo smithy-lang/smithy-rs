@@ -45,6 +45,7 @@
 use std::collections::HashMap;
 
 use aws_smithy_json::codec::JsonCodec;
+use aws_smithy_json::codec::JsonCodecSettings;
 use aws_smithy_schema::codec::Codec;
 use aws_smithy_schema::document::DiscriminatedDocumentExt;
 use aws_smithy_schema::prelude;
@@ -1053,4 +1054,113 @@ fn sep_map_document_iterates_in_source_order() {
         bytes_str, r#"{"zebra":1,"alpha":2,"middle":3}"#,
         "Round-trip serialization must preserve insertion order. Got: {bytes_str}",
     );
+}
+
+// -- use_string_for_arbitrary_precision wire-form round-trip ----------
+//
+// SEP §"Number coercion" + the JSON codec's behavior under the
+// `use_string_for_arbitrary_precision` setting. Sender configured for
+// strings → receiver decodes from strings → re-emits as strings:
+// lossless. Cross-config round-trip (sender writes strings, receiver
+// is on default) also works because read is unconditionally lenient.
+
+#[test]
+fn arbitrary_precision_string_form_round_trip() {
+    use aws_smithy_types::{BigDecimal, BigInteger};
+    use std::str::FromStr;
+
+    let codec = JsonCodec::new(
+        JsonCodecSettings::builder()
+            .use_string_for_arbitrary_precision(true)
+            .build(),
+    );
+
+    let bi = BigInteger::from_str("99999999999999999999999").unwrap();
+    let bd = BigDecimal::from_str("0.123456789012345678901234567890").unwrap();
+    let bi_doc = Document::BigInteger(bi.clone());
+    let bd_doc = Document::BigDecimal(bd.clone());
+
+    // Write — wire form is a JSON string.
+    let mut ser = codec.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &bi_doc).unwrap();
+    let bi_wire = ser.finish();
+    assert_eq!(bi_wire, br#""99999999999999999999999""#);
+
+    let mut ser = codec.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &bd_doc).unwrap();
+    let bd_wire = ser.finish();
+    assert_eq!(bd_wire, br#""0.123456789012345678901234567890""#);
+
+    // Read with a typed schema-aware accessor — both wire forms accepted.
+    let mut deser = codec.create_deserializer(&bi_wire);
+    let parsed_bi = deser.read_big_integer(&prelude::BIG_INTEGER).unwrap();
+    assert_eq!(parsed_bi.as_ref(), bi.as_ref());
+
+    let mut deser = codec.create_deserializer(&bd_wire);
+    let parsed_bd = deser.read_big_decimal(&prelude::BIG_DECIMAL).unwrap();
+    assert_eq!(parsed_bd.as_ref(), bd.as_ref());
+}
+
+#[test]
+fn arbitrary_precision_default_form_round_trip() {
+    // Default `use_string_for_arbitrary_precision = false` writes raw
+    // JSON numbers. Confirms the existing baseline test
+    // `sep_write_document_big_integer_preserves_precision` covers this
+    // direction; here we additionally verify that
+    // `read_big_integer`/`read_big_decimal` still parse the number form.
+    use aws_smithy_types::{BigDecimal, BigInteger};
+    use std::str::FromStr;
+
+    let codec = JsonCodec::default();
+
+    let bi = BigInteger::from_str("99999999999999999999999").unwrap();
+    let bd = BigDecimal::from_str("1.234567890123456789012345").unwrap();
+
+    let mut ser = codec.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &Document::BigInteger(bi.clone()))
+        .unwrap();
+    let bi_wire = ser.finish();
+    assert_eq!(bi_wire, b"99999999999999999999999"); // No quotes.
+
+    let mut deser = codec.create_deserializer(&bi_wire);
+    let parsed_bi = deser.read_big_integer(&prelude::BIG_INTEGER).unwrap();
+    assert_eq!(parsed_bi.as_ref(), bi.as_ref());
+
+    let mut ser = codec.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &Document::BigDecimal(bd.clone()))
+        .unwrap();
+    let bd_wire = ser.finish();
+    assert_eq!(bd_wire, b"1.234567890123456789012345");
+
+    let mut deser = codec.create_deserializer(&bd_wire);
+    let parsed_bd = deser.read_big_decimal(&prelude::BIG_DECIMAL).unwrap();
+    assert_eq!(parsed_bd.as_ref(), bd.as_ref());
+}
+
+#[test]
+fn arbitrary_precision_cross_config_interop() {
+    // Sender configured for string form, receiver on default — verifies
+    // the read side is unconditionally lenient on wire form regardless
+    // of its own setting.
+    use aws_smithy_types::BigInteger;
+    use std::str::FromStr;
+
+    let strict_sender = JsonCodec::new(
+        JsonCodecSettings::builder()
+            .use_string_for_arbitrary_precision(true)
+            .build(),
+    );
+    let default_receiver = JsonCodec::default();
+
+    let bi = BigInteger::from_str("99999999999999999999999").unwrap();
+
+    let mut ser = strict_sender.create_serializer();
+    ser.write_document(&prelude::DOCUMENT, &Document::BigInteger(bi.clone()))
+        .unwrap();
+    let wire = ser.finish();
+    assert!(wire.starts_with(b"\""));
+
+    let mut deser = default_receiver.create_deserializer(&wire);
+    let parsed = deser.read_big_integer(&prelude::BIG_INTEGER).unwrap();
+    assert_eq!(parsed.as_ref(), bi.as_ref());
 }

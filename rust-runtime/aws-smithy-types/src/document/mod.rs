@@ -1126,6 +1126,7 @@ mod extended_variant_tests {
 ))]
 mod test {
     use super::{from_document, to_document, Document};
+    use crate::document::DocumentObject;
     use crate::Number;
     use serde::{Deserialize, Serialize};
     use std::collections::HashMap;
@@ -1681,7 +1682,7 @@ mod test {
         );
         map.insert("map".into(), map.clone().into());
         map.insert("null".into(), Document::Null);
-        let obj = Document::Object(map);
+        let obj = Document::Object(map.into());
 
         let target_file = include_str!("../../test_data/serialize_document.json");
         let json: Result<serde_json::Value, _> = serde_json::from_str(target_file);

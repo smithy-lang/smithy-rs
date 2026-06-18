@@ -125,15 +125,19 @@ private class SchemaProtocolCustomization(
                     val smithySchema = RuntimeType.smithySchema(codegenContext.runtimeConfig)
                     val protocol = codegenContext.protocol
                     val serviceShapeName = codegenContext.serviceShape.id.name
+                    val serviceNamespace = codegenContext.serviceShape.id.namespace
 
                     val (protocolType, constructor) =
                         when {
                             protocol == RestJson1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                                smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to
+                                    "new().with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_0Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
+                                    "aws_json_1_0(${serviceShapeName.dq()}).with_default_namespace(${serviceNamespace.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
-                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_1(${serviceShapeName.dq()})"
+                                smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to
+                                    "aws_json_1_1(${serviceShapeName.dq()}).with_default_namespace(${serviceNamespace.dq()})"
                             protocol == RestXmlTrait.ID -> {
                                 val smithyXml = RuntimeType.smithyXml(codegenContext.runtimeConfig)
                                 val noWrap = codegenContext.serviceShape.expectTrait<RestXmlTrait>().isNoErrorWrapping

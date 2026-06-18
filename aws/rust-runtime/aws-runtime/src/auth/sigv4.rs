@@ -443,7 +443,6 @@ mod tests {
     use aws_smithy_types::Document;
     use aws_types::region::SigningRegion;
     use aws_types::SigningName;
-    use std::collections::HashMap;
     use std::time::{Duration, SystemTime};
     use tracing_test::traced_test;
 

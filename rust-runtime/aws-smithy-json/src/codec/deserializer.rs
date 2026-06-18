@@ -115,17 +115,13 @@ impl<'a> JsonDeserializer<'a> {
     /// the form `namespace#ShapeName` (no member component, no nested
     /// `#`, both segments non-empty)?
     ///
-    /// Used by [`Self::read_discriminated_document`] to validate a
-    /// candidate `__type` field value before lifting it into the
-    /// resulting [`DiscriminatedDocument`]'s discriminator slot.
-    /// Returning `false` causes the field to be left in the map so a
-    /// stray `__type: "garbage"` doesn't poison the surrounding
-    /// document parse.
-    ///
-    /// Returns `false` for relative names (no `#`) — relative
-    /// resolution against `JsonCodecSettings::default_namespace`
-    /// is not yet implemented and callers fall back to leaving the
-    /// `__type` key in the resulting map.
+    /// Used by [`Self::resolve_shape_id`] to short-circuit absolute
+    /// names and skip namespace prepending. Returning `false` for an
+    /// input that contains `#` indicates a malformed value (e.g.
+    /// nested `#`, empty namespace) — caller falls back to leaving
+    /// the `__type` key in the resulting map so a stray
+    /// `__type: "garbage#"` doesn't poison the surrounding document
+    /// parse.
     fn is_absolute_shape_id(s: &str) -> bool {
         let Some((namespace, shape_name)) = s.split_once('#') else {
             return false;
@@ -135,6 +131,55 @@ impl<'a> JsonDeserializer<'a> {
             && !shape_name.contains('#')
             && !shape_name.contains('$')
             && !namespace.contains('$')
+    }
+
+    /// Predicate: is `s` a syntactically valid Smithy shape name
+    /// (the part after `#` in an absolute shape ID)?
+    ///
+    /// Smithy identifiers per the spec begin with an ASCII letter or
+    /// underscore and continue with ASCII letters, digits, or
+    /// underscores. Returning `false` causes
+    /// [`Self::resolve_shape_id`] to leave the candidate value as a
+    /// regular `Document::String` in the resulting map rather than
+    /// produce a syntactically invalid synthesized shape ID like
+    /// `<namespace>#foo bar`.
+    fn is_relative_shape_name(s: &str) -> bool {
+        let mut bytes = s.bytes();
+        let Some(first) = bytes.next() else {
+            return false;
+        };
+        if !(first.is_ascii_alphabetic() || first == b'_') {
+            return false;
+        }
+        bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    }
+
+    /// Resolves a `__type` field value to a fully-qualified shape ID
+    /// string. Absolute IDs are returned as-is; relative names
+    /// (no `#`) are resolved against `default_ns` if both are set
+    /// and the name is syntactically valid. Returns `None` to signal
+    /// the lift should be skipped (caller leaves the value in the map).
+    fn resolve_shape_id(s: &str, default_ns: Option<&str>) -> Option<String> {
+        if s.contains('#') {
+            // Absolute form (or malformed) — only lift if syntactically
+            // valid. The `default_namespace` setting is intentionally
+            // ignored on this path: an explicit absolute `__type`
+            // overrides the codec's default namespace.
+            if Self::is_absolute_shape_id(s) {
+                Some(s.to_owned())
+            } else {
+                None
+            }
+        } else {
+            // Relative form — resolve against `default_namespace` if
+            // set and the name is syntactically valid. Without a
+            // configured namespace the lift is skipped (today's
+            // legacy behavior preserved).
+            match default_ns {
+                Some(ns) if Self::is_relative_shape_name(s) => Some(format!("{ns}#{s}")),
+                _ => None,
+            }
+        }
     }
 }
 
@@ -374,8 +419,19 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     message: e.to_string(),
                 })
             }
+            // String-encoded big integers are produced by senders
+            // configured with `use_string_for_arbitrary_precision`. The
+            // read side accepts both wire forms unconditionally so a
+            // sender configured for one form interoperates with a
+            // receiver configured for the other.
+            Some(b'"') => {
+                let s = self.read_string(_schema)?;
+                BigInteger::from_str(&s).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
             _ => Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
+                message: "expected number or string".into(),
             }),
         }
     }
@@ -397,8 +453,16 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     message: e.to_string(),
                 })
             }
+            // String-encoded big decimals — see the symmetric comment
+            // on `read_big_integer`.
+            Some(b'"') => {
+                let s = self.read_string(_schema)?;
+                BigDecimal::from_str(&s).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
             _ => Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
+                message: "expected number or string".into(),
             }),
         }
     }
@@ -790,21 +854,58 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         message: e.to_string(),
                     }
                 })?;
+                // Number variant selection follows the SEP "Reporting
+                // `Document` ambiguous shape types" guidance: pick the
+                // first container from `int -> long -> bigInteger ->
+                // double -> bigDecimal` that holds the value without
+                // loss of precision. `byte`, `intEnum`, `short`, and
+                // `float` are intentionally skipped per the same SEP
+                // guidance.
+                //
+                // The `Number` enum collapses `int`/`long` into
+                // `NegInt(i64)` and `PosInt(u64)`, so we only need
+                // three buckets here at the wire layer: `Number`
+                // (fits in i64 / u64 / finite f64), `BigInteger`
+                // (overflows i64 / u64), and `BigDecimal` (decimal
+                // value overflows f64 to non-finite).
+                use std::str::FromStr;
                 if is_float {
-                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(Number::Float(f)))
+                    match s.parse::<f64>() {
+                        Ok(f) if f.is_finite() => Ok(Document::Number(Number::Float(f))),
+                        // Either `f64` parse failed or yielded
+                        // `+/-Infinity` (overflow). Fall through to
+                        // `BigDecimal` so the source-string precision
+                        // is preserved. `BigDecimal::from_str` will
+                        // surface a real parse error if the input is
+                        // also malformed for arbitrary precision.
+                        _ => BigDecimal::from_str(s)
+                            .map(Document::BigDecimal)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 } else if is_negative {
-                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(Number::NegInt(n)))
+                    match s.parse::<i64>() {
+                        Ok(n) => Ok(Document::Number(Number::NegInt(n))),
+                        // Source string overflowed `i64`. Preserve
+                        // precision by routing to `BigInteger`.
+                        Err(_) => BigInteger::from_str(s)
+                            .map(Document::BigInteger)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 } else {
-                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(Number::PosInt(n)))
+                    match s.parse::<u64>() {
+                        Ok(n) => Ok(Document::Number(Number::PosInt(n))),
+                        // Source string overflowed `u64`. Preserve
+                        // precision by routing to `BigInteger`.
+                        Err(_) => BigInteger::from_str(s)
+                            .map(Document::BigInteger)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 }
             }
             _ => Err(SerdeError::InvalidInput {
@@ -945,7 +1046,9 @@ impl<'a> JsonDeserializer<'a> {
             // This keeps a malformed `__type` value in the map so the
             // caller can post-process if it wants to.
             let lift_candidate = match map.get("__type") {
-                Some(Document::String(s)) if Self::is_absolute_shape_id(s) => Some(s.clone()),
+                Some(Document::String(s)) => {
+                    Self::resolve_shape_id(s, self.settings.default_namespace())
+                }
                 _ => None,
             };
             if let Some(id) = lift_candidate {
@@ -2283,6 +2386,204 @@ mod tests {
             .expect("10-level nesting should succeed under custom limit");
     }
 
+    // --- read_document big-number fall-through (SEP "Reporting `Document` ambiguous shape types") ---
+
+    #[test]
+    fn read_document_keeps_in_range_int_as_pos_int() {
+        // Baseline: a value that fits in `u64` continues to land in
+        // `Number::PosInt` — no behavior change for the common case.
+        let mut deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::PosInt(n)) => assert_eq!(n, 42),
+            other => panic!("expected Number::PosInt(42), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_in_range_negative_int_as_neg_int() {
+        let mut deser = JsonDeserializer::new(b"-123", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::NegInt(n)) => assert_eq!(n, -123),
+            other => panic!("expected Number::NegInt(-123), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_finite_float_as_number_float() {
+        let mut deser = JsonDeserializer::new(b"1.5", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::Float(f)) => assert_eq!(f, 1.5),
+            other => panic!("expected Number::Float(1.5), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_positive_int_to_big_integer() {
+        // 23-digit integer overflows `u64` (max is ~1.84e19, 20 digits).
+        // Today (pre-fix) this errored out; per SEP it must be lifted
+        // to `Document::BigInteger` to preserve precision.
+        let bytes = b"99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "99999999999999999999999");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_negative_int_to_big_integer() {
+        // 23-digit negative integer overflows `i64` (min is ~-9.2e18,
+        // 19 digits). Same SEP fall-through as the positive case.
+        let bytes = b"-99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "-99999999999999999999999");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_decimal_to_big_decimal() {
+        // `1e500` overflows `f64` to `+Infinity`. Today (pre-fix) this
+        // silently produced `Number::Float(infinity)` — precision
+        // destroyed. Per SEP it must be lifted to `Document::BigDecimal`.
+        let bytes = b"1e500";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigDecimal(bd) => {
+                // `BigDecimal` may normalize the source; assert that
+                // it round-trips back to a finite, oversize-decimal
+                // representation rather than `inf`.
+                let s = bd.as_ref();
+                assert!(!s.contains("inf"), "expected finite repr, got {s}");
+                assert!(!s.contains("Inf"), "expected finite repr, got {s}");
+            }
+            other => panic!("expected Document::BigDecimal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_negative_decimal_to_big_decimal() {
+        // Symmetric `-Infinity` overflow case.
+        let bytes = b"-1.234e500";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigDecimal(bd) => {
+                let s = bd.as_ref();
+                assert!(s.starts_with('-'), "expected negative repr, got {s}");
+                assert!(
+                    !s.to_lowercase().contains("inf"),
+                    "expected finite repr, got {s}"
+                );
+            }
+            other => panic!("expected Document::BigDecimal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_max_u64_as_pos_int() {
+        // `u64::MAX` fits in `u64` exactly. Boundary check that the
+        // overflow fall-through doesn't fire on values that DO fit.
+        let bytes = b"18446744073709551615";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::PosInt(n)) => assert_eq!(n, u64::MAX),
+            other => panic!("expected Number::PosInt(u64::MAX), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_just_over_u64_max() {
+        // `u64::MAX + 1`. First value that overflows.
+        let bytes = b"18446744073709551616";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "18446744073709551616");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    // --- read_big_integer / read_big_decimal accept JSON strings (`use_string_for_arbitrary_precision`) ---
+
+    #[test]
+    fn read_big_integer_accepts_json_number() {
+        let bytes = b"99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bi = deser.read_big_integer(dummy_schema()).unwrap();
+        assert_eq!(bi.as_ref(), "99999999999999999999999");
+    }
+
+    #[test]
+    fn read_big_integer_accepts_json_string() {
+        // A sender configured with `use_string_for_arbitrary_precision`
+        // emits BigIntegers as JSON strings. The receiver must accept
+        // either form regardless of its own setting — leniency is
+        // unconditional on the read side.
+        let bytes = br#""99999999999999999999999""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bi = deser.read_big_integer(dummy_schema()).unwrap();
+        assert_eq!(bi.as_ref(), "99999999999999999999999");
+    }
+
+    #[test]
+    fn read_big_integer_rejects_other_types() {
+        // Booleans, arrays, etc. are not valid wire forms for BigInteger.
+        let bytes = b"true";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_integer(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn read_big_decimal_accepts_json_number() {
+        let bytes = b"1.234567890123456789012345";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bd = deser.read_big_decimal(dummy_schema()).unwrap();
+        assert_eq!(bd.as_ref(), "1.234567890123456789012345");
+    }
+
+    #[test]
+    fn read_big_decimal_accepts_json_string() {
+        let bytes = br#""1.234567890123456789012345""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bd = deser.read_big_decimal(dummy_schema()).unwrap();
+        assert_eq!(bd.as_ref(), "1.234567890123456789012345");
+    }
+
+    #[test]
+    fn read_big_decimal_rejects_other_types() {
+        let bytes = b"[]";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_decimal(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn read_big_integer_rejects_malformed_string() {
+        // A JSON string of non-digits is well-formed JSON but invalid
+        // BigInteger content. `BigInteger::from_str` should surface
+        // an `InvalidInput` error.
+        let bytes = br#""not-a-number""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_integer(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
     // --- read_discriminated_document attaches DocumentSettings ----------------------------
 
     #[test]
@@ -2352,17 +2653,19 @@ mod tests {
     }
 
     #[test]
-    fn read_discriminated_document_relative_type_stays_in_map() {
-        // Relative `__type` (no `#`) is not yet resolved against a
-        // default namespace — it stays in the map as a regular key,
-        // and the discriminator remains None.
+    fn read_discriminated_document_relative_type_stays_in_map_when_no_default_namespace() {
+        // Without a configured `default_namespace` on the codec
+        // settings, a relative `__type` (no `#`) is left in the map
+        // as a regular key. The discriminator slot remains unset.
+        // With a namespace set, see
+        // `read_discriminated_document_lifts_relative_with_namespace`.
         let input = br#"{"__type":"Bird","name":"Iago"}"#;
         let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
         let wrapper = deser.read_discriminated_document().expect("parse succeeds");
 
         assert!(
             wrapper.discriminator().is_none(),
-            "relative __type must not be lifted (no default-namespace resolution yet)"
+            "relative __type without default_namespace must not be lifted"
         );
         let map = wrapper.document().as_object().expect("top-level is map");
         assert_eq!(
@@ -2450,6 +2753,96 @@ mod tests {
             assert!(
                 map.contains_key("__type"),
                 "non-string __type {non_string} must remain in map"
+            );
+        }
+    }
+
+    // --- read_discriminated_document with default_namespace --------------------------------
+
+    fn settings_with_default_namespace(ns: &str) -> Arc<JsonCodecSettings> {
+        Arc::new(JsonCodecSettings::builder().default_namespace(ns).build())
+    }
+
+    #[test]
+    fn read_discriminated_document_lifts_relative_with_namespace() {
+        // With a configured `default_namespace`, a relative `__type`
+        // is prepended with `<namespace>#` and lifted into the
+        // discriminator slot. The key is removed from the resulting
+        // map (matching the absolute-form behavior).
+        let input = br#"{"__type":"Capacity","CapacityUnits":1.0}"#;
+        let settings = settings_with_default_namespace("com.amazonaws.dynamodb");
+        let mut deser = JsonDeserializer::new(input, settings);
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        assert_eq!(
+            wrapper.discriminator(),
+            Some("com.amazonaws.dynamodb#Capacity"),
+            "relative __type must be resolved against default_namespace"
+        );
+        let map = wrapper.document().as_object().expect("top-level is map");
+        assert!(
+            !map.contains_key("__type"),
+            "lifted __type must be removed from the map"
+        );
+        assert!(
+            map.contains_key("CapacityUnits"),
+            "non-discriminator keys remain"
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_absolute_overrides_default_namespace() {
+        // An absolute `__type` (with `#`) is taken as-is even when a
+        // default_namespace is set. Different namespaces in __type vs
+        // settings is a real scenario for cross-namespace discriminators.
+        let input = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+        let settings = settings_with_default_namespace("com.amazonaws.dynamodb");
+        let mut deser = JsonDeserializer::new(input, settings);
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        assert_eq!(
+            wrapper.discriminator(),
+            Some("smithy.example#Bird"),
+            "absolute __type must override default_namespace"
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_invalid_relative_name_stays_in_map() {
+        // A `__type` value that contains characters illegal in a
+        // Smithy identifier (e.g. whitespace, punctuation) must not
+        // be synthesized into a malformed shape ID. The lift is
+        // skipped and the value stays as a regular map entry.
+        for invalid in ["foo bar", "foo-bar", "foo.bar", "1leading-digit", ""] {
+            let body = format!(r#"{{"__type":"{invalid}"}}"#);
+            let settings = settings_with_default_namespace("com.example");
+            let mut deser = JsonDeserializer::new(body.as_bytes(), settings);
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert!(
+                wrapper.discriminator().is_none(),
+                "invalid relative name {invalid:?} must not be lifted"
+            );
+            let map = wrapper.document().as_object().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "invalid relative name {invalid:?} must remain in map"
+            );
+        }
+    }
+
+    #[test]
+    fn read_discriminated_document_accepts_relative_names_with_underscore() {
+        // Smithy identifiers allow leading underscore + digits in
+        // subsequent positions. Cover edge cases.
+        for valid in ["_Bird", "Bird1", "_a_b_c", "Foo_Bar"] {
+            let body = format!(r#"{{"__type":"{valid}"}}"#);
+            let settings = settings_with_default_namespace("ns");
+            let mut deser = JsonDeserializer::new(body.as_bytes(), settings);
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert_eq!(
+                wrapper.discriminator(),
+                Some(format!("ns#{valid}").as_str()),
+                "valid Smithy identifier {valid:?} must be lifted"
             );
         }
     }

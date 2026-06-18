@@ -159,10 +159,24 @@ impl JsonSerializer {
                 // Big integers serialize as raw JSON numbers (no quotes,
                 // no scientific notation) so receivers with arbitrary-
                 // precision parsers can recover the exact value.
-                self.output.push_str(bi.as_ref());
+                //
+                // When [`JsonCodecSettings::use_string_for_arbitrary_precision`]
+                // is set, emit as a JSON string instead — for interop
+                // with receivers that route every JSON number through
+                // `f64` and would otherwise lose precision on values
+                // that overflow `f64`.
+                if self.settings.use_string_for_arbitrary_precision() {
+                    JsonValueWriter::new(&mut self.output).string(bi.as_ref());
+                } else {
+                    self.output.push_str(bi.as_ref());
+                }
             }
             Document::BigDecimal(bd) => {
-                self.output.push_str(bd.as_ref());
+                if self.settings.use_string_for_arbitrary_precision() {
+                    JsonValueWriter::new(&mut self.output).string(bd.as_ref());
+                } else {
+                    self.output.push_str(bd.as_ref());
+                }
             }
             Document::Array(items) => {
                 self.output.push('[');
@@ -1066,5 +1080,77 @@ mod tests {
         .unwrap();
         let output = String::from_utf8(ser.finish()).unwrap();
         assert_eq!(output, r#"{"k":"v"}"#);
+    }
+
+    // --- write_document gates BigInteger / BigDecimal on use_string_for_arbitrary_precision -----
+
+    fn settings_with_string_for_arbitrary_precision(value: bool) -> Arc<JsonCodecSettings> {
+        Arc::new(
+            JsonCodecSettings::builder()
+                .use_string_for_arbitrary_precision(value)
+                .build(),
+        )
+    }
+
+    #[test]
+    fn write_document_emits_big_integer_as_number_by_default() {
+        // Default (`use_string_for_arbitrary_precision = false`) emits
+        // BigInteger as a raw JSON number — interoperable with arbitrary-
+        // precision parsers.
+        use std::str::FromStr;
+        let bi = BigInteger::from_str("99999999999999999999999").unwrap();
+        let doc = Document::BigInteger(bi);
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, "99999999999999999999999");
+    }
+
+    #[test]
+    fn write_document_emits_big_integer_as_string_when_setting_enabled() {
+        use std::str::FromStr;
+        let bi = BigInteger::from_str("99999999999999999999999").unwrap();
+        let doc = Document::BigInteger(bi);
+        let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
+        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, "\"99999999999999999999999\"");
+    }
+
+    #[test]
+    fn write_document_emits_big_decimal_as_number_by_default() {
+        use std::str::FromStr;
+        let bd = BigDecimal::from_str("1.234e500").unwrap();
+        let doc = Document::BigDecimal(bd);
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        // Raw JSON number — no quotes. Exact spelling depends on
+        // BigDecimal's normalization, so just assert "no quotes" and
+        // that it's not the JSON `null` token.
+        assert!(
+            !output.starts_with('"'),
+            "expected raw number, got {output}"
+        );
+        assert_ne!(output, "null");
+    }
+
+    #[test]
+    fn write_document_emits_big_decimal_as_string_when_setting_enabled() {
+        use std::str::FromStr;
+        let bd = BigDecimal::from_str("1.234e500").unwrap();
+        let doc = Document::BigDecimal(bd);
+        let mut ser = JsonSerializer::new(settings_with_string_for_arbitrary_precision(true));
+        ser.write_document(&aws_smithy_schema::prelude::DOCUMENT, &doc)
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert!(
+            output.starts_with('"'),
+            "expected quoted form, got {output}"
+        );
+        assert!(output.ends_with('"'), "expected quoted form, got {output}");
     }
 }

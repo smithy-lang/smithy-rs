@@ -22,7 +22,7 @@ pub use serializer::JsonSerializer;
 /// When `@jsonName` is enabled, the wire name may differ from the member name.
 /// This type handles the mapping in both directions and caches the reverse
 /// lookup (wire name → member index) per struct schema.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 enum JsonFieldMapper {
     /// Uses member names directly, ignoring `@jsonName`.
     UseMemberName,
@@ -95,7 +95,7 @@ impl JsonFieldMapper {
 /// values. The same instance is reused on the serialization side so a
 /// document round-trips through `JsonDeserializer` →
 /// `JsonSerializer` losslessly.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JsonCodecSettings {
     field_mapper: JsonFieldMapper,
     default_timestamp_format: TimestampFormat,
@@ -105,6 +105,32 @@ pub struct JsonCodecSettings {
     /// Default: `aws.smithy.json#JsonCodec`. AWS protocols (awsJson1_0,
     /// awsJson1_1, restJson1) override this to their own shape id.
     protocol_id: ShapeId<'static>,
+    /// When `true`, [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
+    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
+    /// serialize as JSON strings to preserve precision for receivers
+    /// using `f64`-routed JSON parsers. When `false` (default), they
+    /// emit as raw JSON numbers — interoperable with arbitrary-
+    /// precision JSON parsers but lossy when the receiver routes
+    /// through `f64`.
+    ///
+    /// The read path always accepts both wire forms, regardless of
+    /// this setting, so a sender configured for one form interoperates
+    /// with a receiver configured for the other.
+    use_string_for_arbitrary_precision: bool,
+    /// Default Smithy namespace used to resolve relative shape IDs in
+    /// JSON `__type` discriminator fields produced by services that
+    /// emit relative names (e.g., awsJson1_0/1_1 senders).
+    ///
+    /// When set, [`crate::codec::deserializer::JsonDeserializer::read_discriminated_document`]
+    /// resolves a relative `__type` value (e.g., `"Capacity"`) to its
+    /// fully-qualified shape ID (`"<default_namespace>#Capacity"`)
+    /// before lifting it onto the resulting [`DiscriminatedDocument`]
+    /// discriminator slot. Absolute `__type` values (already
+    /// containing `#`) are taken as-is regardless of this setting.
+    ///
+    /// `None` (default) preserves the prior behavior where relative
+    /// names are left in the resulting map as plain string entries.
+    default_namespace: Option<String>,
 }
 
 impl JsonCodecSettings {
@@ -123,6 +149,47 @@ impl JsonCodecSettings {
     /// and deeply-nested document payloads.
     pub fn max_depth(&self) -> u32 {
         self.max_depth
+    }
+
+    /// Whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
+    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
+    /// emit as JSON strings (when `true`) or as raw JSON numbers
+    /// (when `false`, the default). The read path is always lenient —
+    /// `read_big_integer` and `read_big_decimal` accept either wire form.
+    pub fn use_string_for_arbitrary_precision(&self) -> bool {
+        self.use_string_for_arbitrary_precision
+    }
+
+    /// Default Smithy namespace used to resolve relative shape IDs in
+    /// JSON `__type` discriminator fields. `None` if unset.
+    ///
+    /// See the field-level doc comment for [`Self::default_namespace`]'s
+    /// builder method for the resolution behavior.
+    pub fn default_namespace(&self) -> Option<&str> {
+        self.default_namespace.as_deref()
+    }
+
+    /// Returns a [`JsonCodecSettingsBuilder`] pre-populated with this
+    /// instance's current values. Useful for protocol wrappers that
+    /// need to rebuild a codec with one setting overridden:
+    ///
+    /// ```
+    /// use aws_smithy_json::codec::JsonCodecSettings;
+    ///
+    /// let original = JsonCodecSettings::default();
+    /// let modified = original.to_builder()
+    ///     .default_namespace("com.example")
+    ///     .build();
+    /// ```
+    pub fn to_builder(&self) -> JsonCodecSettingsBuilder {
+        JsonCodecSettingsBuilder {
+            use_json_name: matches!(self.field_mapper, JsonFieldMapper::UseJsonName),
+            default_timestamp_format: self.default_timestamp_format,
+            max_depth: self.max_depth,
+            protocol_id: self.protocol_id,
+            use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            default_namespace: self.default_namespace.clone(),
+        }
     }
 
     /// Returns the JSON wire name for a member schema.
@@ -147,6 +214,8 @@ impl Default for JsonCodecSettings {
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             protocol_id: DEFAULT_JSON_CODEC_ID,
+            use_string_for_arbitrary_precision: false,
+            default_namespace: None,
         }
     }
 }
@@ -163,6 +232,8 @@ pub struct JsonCodecSettingsBuilder {
     default_timestamp_format: TimestampFormat,
     max_depth: u32,
     protocol_id: ShapeId<'static>,
+    use_string_for_arbitrary_precision: bool,
+    default_namespace: Option<String>,
 }
 
 impl Default for JsonCodecSettingsBuilder {
@@ -172,6 +243,8 @@ impl Default for JsonCodecSettingsBuilder {
             default_timestamp_format: TimestampFormat::EpochSeconds,
             max_depth: crate::codec::deserializer::MAX_DESERIALIZE_DEPTH,
             protocol_id: DEFAULT_JSON_CODEC_ID,
+            use_string_for_arbitrary_precision: false,
+            default_namespace: None,
         }
     }
 }
@@ -205,6 +278,31 @@ impl JsonCodecSettingsBuilder {
         self
     }
 
+    /// Configures whether [`Document::BigInteger`](aws_smithy_types::Document::BigInteger)
+    /// and [`Document::BigDecimal`](aws_smithy_types::Document::BigDecimal)
+    /// serialize as JSON strings (when `true`) or as raw JSON numbers
+    /// (when `false`, the default).
+    ///
+    /// Set to `true` for interop with receivers using `f64`-routed
+    /// JSON parsers that would otherwise lose precision on large
+    /// integers or decimals. The read path always accepts both forms.
+    pub fn use_string_for_arbitrary_precision(mut self, value: bool) -> Self {
+        self.use_string_for_arbitrary_precision = value;
+        self
+    }
+
+    /// Sets the default Smithy namespace used to resolve relative shape
+    /// IDs in JSON `__type` discriminator fields. When set, a relative
+    /// `__type: "Capacity"` is lifted to `<namespace>#Capacity` on the
+    /// resulting [`DiscriminatedDocument`]. Absolute `__type` values
+    /// (already containing `#`) are taken as-is regardless.
+    ///
+    /// Defaults to `None` — relative names are not lifted.
+    pub fn default_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.default_namespace = Some(namespace.into());
+        self
+    }
+
     /// Builds the settings.
     pub fn build(self) -> JsonCodecSettings {
         let field_mapper = if self.use_json_name {
@@ -217,6 +315,8 @@ impl JsonCodecSettingsBuilder {
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
             protocol_id: self.protocol_id,
+            use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
+            default_namespace: self.default_namespace,
         }
     }
 }

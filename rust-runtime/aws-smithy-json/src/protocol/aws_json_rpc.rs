@@ -72,6 +72,31 @@ impl AwsJsonRpcProtocol {
             target_prefix,
         }
     }
+
+    /// Configures the default Smithy namespace used to resolve relative
+    /// shape IDs in JSON `__type` discriminator fields. Forwarded to
+    /// [`JsonCodecSettings::default_namespace`] on the codec wrapped by
+    /// this protocol.
+    ///
+    /// AWS JSON 1.0 / 1.1 services typically emit relative `__type`
+    /// values (the shape name without a namespace prefix). Code-generated
+    /// clients call this method with the service shape's namespace so
+    /// that [`crate::codec::JsonDeserializer::read_discriminated_document`]
+    /// can produce a fully-qualified discriminator.
+    pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
+        let new_settings = self
+            .inner
+            .codec()
+            .settings()
+            .to_builder()
+            .default_namespace(namespace)
+            .build();
+        let new_codec = JsonCodec::new(new_settings);
+        Self {
+            inner: self.inner.with_codec(new_codec),
+            target_prefix: self.target_prefix,
+        }
+    }
 }
 
 impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
@@ -308,5 +333,36 @@ mod tests {
         let cfg = ConfigBag::base();
         let err = proto.parse_error_metadata(&response, &cfg).unwrap_err();
         assert!(matches!(err, SerdeError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn with_default_namespace_propagates_to_codec_settings() {
+        // The protocol's `with_default_namespace` builder must surface
+        // the namespace on the codec's settings — this is the wiring
+        // codegen relies on so that wire-bytes `__type:"Capacity"`
+        // lifts to a fully-qualified `com.amazonaws.dynamodb#Capacity`
+        // discriminator on the resulting [`DiscriminatedDocument`].
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("DynamoDB_20120810")
+            .with_default_namespace("com.amazonaws.dynamodb");
+        assert_eq!(
+            proto.inner.codec().settings().default_namespace(),
+            Some("com.amazonaws.dynamodb"),
+        );
+    }
+
+    #[test]
+    fn with_default_namespace_preserves_other_settings() {
+        // Sanity-check that rebuilding the codec to set
+        // `default_namespace` doesn't reset other configured fields
+        // — the AwsJsonRpc constructor already disables `@jsonName`
+        // and sets epoch-seconds as the default timestamp format.
+        let proto =
+            AwsJsonRpcProtocol::aws_json_1_0("TestService").with_default_namespace("com.example");
+        let settings = proto.inner.codec().settings();
+        assert_eq!(settings.default_namespace(), Some("com.example"));
+        assert_eq!(
+            settings.default_timestamp_format(),
+            aws_smithy_types::date_time::Format::EpochSeconds,
+        );
     }
 }

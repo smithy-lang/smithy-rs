@@ -49,6 +49,24 @@ impl<C: Codec> HttpBindingProtocol<C> {
         &self.codec
     }
 
+    /// Returns the Content-Type string this protocol stamps onto the
+    /// outgoing request. Used by wrapper protocols that rebuild the
+    /// inner [`HttpBindingProtocol`] when reconfiguring the codec.
+    pub fn content_type(&self) -> &'static str {
+        self.content_type
+    }
+
+    /// Replaces the body codec, returning a new protocol instance
+    /// with all other fields preserved. Used by wrapper protocols
+    /// (e.g. AWS REST JSON) that need to swap in a reconfigured codec.
+    pub fn with_codec(self, codec: C) -> Self {
+        Self {
+            protocol_id: self.protocol_id,
+            codec,
+            content_type: self.content_type,
+        }
+    }
+
     /// Body-providable variant of [`serialize_request`](Self::serialize_request).
     /// The caller supplies an already-constructed body serializer, allowing
     /// codec-specific pre-configuration (e.g. setting one-shot state on the

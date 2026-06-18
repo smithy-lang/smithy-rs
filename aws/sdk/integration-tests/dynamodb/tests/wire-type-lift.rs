@@ -26,7 +26,7 @@
 
 use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;
-use aws_smithy_json::codec::JsonCodec;
+use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
 use aws_smithy_schema::codec::Codec;
 
 #[test]
@@ -88,11 +88,76 @@ fn wire_bytes_with_absolute_type_round_trip_through_registry() {
 }
 
 #[test]
-fn wire_bytes_with_relative_type_does_not_lift() {
-    // Relative `__type` (no `#`) is not currently lifted — relative
-    // resolution against `JsonCodecSettings::default_namespace` is
-    // a follow-up. The string remains in the result map and the
-    // discriminator is None.
+fn wire_bytes_with_relative_type_lifts_under_service_namespace() {
+    // With a `default_namespace` configured on the codec (which the
+    // generated DynamoDB client emits at protocol construction —
+    // see `with_default_namespace("com.amazonaws.dynamodb")` in the
+    // codegen output), a relative `__type` is resolved into a
+    // fully-qualified shape ID and lifted into the discriminator
+    // slot.
+    //
+    // This mirrors what awsJson1_0 services typically emit on the
+    // wire: the shape name without a namespace prefix.
+    let bytes = br#"{"__type":"Capacity","ReadCapacityUnits":1.5,"WriteCapacityUnits":2.5,"CapacityUnits":3.0}"#;
+
+    // Construct a codec mirroring what the codegen emits for the
+    // DynamoDB protocol — namespace-aware. End-to-end through
+    // `Client`'s registered `SharedClientProtocol` exercises the
+    // same code path; constructing the codec directly here keeps
+    // the test focused on the lift logic.
+    let codec = JsonCodec::new(
+        JsonCodecSettings::builder()
+            .default_namespace("com.amazonaws.dynamodb")
+            .build(),
+    );
+    let mut deser = codec.create_deserializer(bytes);
+    let doc = deser
+        .read_discriminated_document()
+        .expect("well-formed JSON parses successfully");
+
+    // Step 1: the relative __type was resolved to its FQN form
+    // and lifted into the wrapper's discriminator slot.
+    let fqn = doc
+        .discriminator()
+        .expect("relative __type lifted under default_namespace");
+    assert_eq!(fqn, "com.amazonaws.dynamodb#Capacity");
+
+    // Step 2: __type was dropped from the result map (same shape as
+    // the absolute case).
+    let map = doc
+        .document()
+        .as_object()
+        .expect("top-level value is an object");
+    assert!(
+        !map.contains_key("__type"),
+        "lift must drop __type from the resulting map",
+    );
+    assert_eq!(map.len(), 3);
+
+    // Step 3: the registry lookup uses the synthesized FQN and
+    // dispatches to the generated Capacity::deserialize fn.
+    let typed = Client::registry()
+        .deserialize_document(&doc)
+        .expect("Capacity is registered and the document is well-formed");
+
+    let capacity = typed
+        .downcast::<Capacity>()
+        .expect("registered DeserializeFn returns the correct concrete type");
+
+    assert_eq!(capacity.read_capacity_units, Some(1.5));
+    assert_eq!(capacity.write_capacity_units, Some(2.5));
+    assert_eq!(capacity.capacity_units, Some(3.0));
+}
+
+#[test]
+fn wire_bytes_with_relative_type_does_not_lift_when_namespace_unset() {
+    // Without a configured `default_namespace` on the codec, a
+    // relative `__type` is left in the map as a regular key — the
+    // discriminator remains None. Hand-built `JsonCodec` instances
+    // (i.e. those not produced via the codegen-emitted protocol
+    // chain) take this path by default. See
+    // `wire_bytes_with_relative_type_lifts_under_service_namespace`
+    // for the codegen-driven success case.
     let bytes = br#"{"__type":"Capacity","ReadCapacityUnits":1.5}"#;
 
     let codec = JsonCodec::default();
@@ -103,7 +168,7 @@ fn wire_bytes_with_relative_type_does_not_lift() {
 
     assert!(
         doc.discriminator().is_none(),
-        "relative __type values must not be lifted (no default-namespace resolution yet)",
+        "relative __type without default_namespace must not be lifted",
     );
     let map = doc
         .document()
