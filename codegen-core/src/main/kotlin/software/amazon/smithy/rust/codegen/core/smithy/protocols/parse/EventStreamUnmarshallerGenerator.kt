@@ -428,24 +428,56 @@ class EventStreamUnmarshallerGenerator(
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             if (useSchemaSerde) {
-                                rustTemplate(
-                                    """
-                                    let mut err = {
-                                        let codec = self.protocol.payload_codec()
-                                            .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
-                                        let mut deser = codec.create_deserializer(&message.payload()[..]);
-                                        #{Target}::deserialize(&mut *deser).map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
-                                        })?
-                                    };
-                                    err.meta = generic;
-                                    return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::${member.target.name.toPascalCase()}(err)
-                                    ))
-                                    """,
-                                    "Target" to symbolProvider.toSymbol(target),
-                                    *codegenScope,
-                                )
+                                // For protocols that wrap error responses
+                                // in a transport envelope (e.g., REST XML's
+                                // `<ErrorResponse><Error>...</Error></ErrorResponse>`),
+                                // strip the envelope before handing the body
+                                // to the schema-serde codec. JSON protocols
+                                // return null and the codec consumes the
+                                // payload directly. Mirrors the regular HTTP
+                                // error path in `ResponseDeserializerGenerator`.
+                                val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
+                                if (errorBodyContentsFn != null) {
+                                    rustTemplate(
+                                        """
+                                        let mut err = {
+                                            let error_body = #{error_body_contents}(&message.payload()[..]);
+                                            let codec = self.protocol.payload_codec()
+                                                .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                                            let mut deser = codec.create_deserializer(error_body);
+                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?
+                                        };
+                                        err.meta = generic;
+                                        return Ok(#{UnmarshalledMessage}::Error(
+                                            #{OpError}::${member.target.name.toPascalCase()}(err)
+                                        ))
+                                        """,
+                                        "error_body_contents" to errorBodyContentsFn,
+                                        "Target" to symbolProvider.toSymbol(target),
+                                        *codegenScope,
+                                    )
+                                } else {
+                                    rustTemplate(
+                                        """
+                                        let mut err = {
+                                            let codec = self.protocol.payload_codec()
+                                                .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                                            let mut deser = codec.create_deserializer(&message.payload()[..]);
+                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?
+                                        };
+                                        err.meta = generic;
+                                        return Ok(#{UnmarshalledMessage}::Error(
+                                            #{OpError}::${member.target.name.toPascalCase()}(err)
+                                        ))
+                                        """,
+                                        "Target" to symbolProvider.toSymbol(target),
+                                        *codegenScope,
+                                    )
+                                }
                             } else {
                                 val parser = protocol.structuredDataParser().errorParser(target)
                                 if (parser != null) {

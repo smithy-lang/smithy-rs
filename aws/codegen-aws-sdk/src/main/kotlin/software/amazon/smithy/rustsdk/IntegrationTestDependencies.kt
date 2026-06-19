@@ -148,7 +148,7 @@ class IntegrationTestDependencies(
     private fun serviceSpecificCustomizations(): List<LibRsCustomization> =
         when (moduleName) {
             "bedrockruntime" -> listOf(BedrockRuntimeDependencies(runtimeConfig))
-            "dynamodb" -> listOf(DynamoDbTestDependencies())
+            "dynamodb" -> listOf(DynamoDbTestDependencies(runtimeConfig))
             "s3" -> listOf(S3TestDependencies(runtimeConfig))
             "transcribestreaming" -> listOf(TranscribeTestDependencies())
             "webassembly" -> listOf(WebAssemblyTestDependencies())
@@ -163,10 +163,14 @@ class BedrockRuntimeDependencies(private val runtimeConfig: RuntimeConfig) : Lib
         }
 }
 
-class DynamoDbTestDependencies : LibRsCustomization() {
+class DynamoDbTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRsCustomization() {
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(Approx)
+            // Used by `tests/protocol-swap.rs` to plug `AwsRestXmlProtocol`
+            // into a JSON-RPC service to demonstrate runtime protocol selection
+            // (the Serialization-Schema-Decoupling SEP's goal 2).
+            addDependency(CargoDependency.smithyXml(runtimeConfig).toDevDependency())
         }
 }
 
