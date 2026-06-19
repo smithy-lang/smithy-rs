@@ -148,7 +148,6 @@ dependencies = [
  "aws-smithy-observability",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "aws-types",
  "bytes",
@@ -171,7 +170,6 @@ dependencies = [
  "aws-smithy-observability",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "aws-types",
  "bytes",
@@ -194,7 +192,6 @@ dependencies = [
  "aws-smithy-observability",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "aws-types",
  "bytes",
@@ -218,7 +215,6 @@ dependencies = [
  "aws-smithy-query",
  "aws-smithy-runtime",
  "aws-smithy-runtime-api",
- "aws-smithy-schema",
  "aws-smithy-types",
  "aws-smithy-xml",
  "aws-types",
@@ -402,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.2.0"
+version = "0.1.1"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -434,9 +430,6 @@ dependencies = [
 name = "aws-smithy-xml"
 version = "0.61.1"
 dependencies = [
- "aws-smithy-runtime-api",
- "aws-smithy-schema",
- "aws-smithy-types",
  "xmlparser",
 ]
 
