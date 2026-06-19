@@ -1,0 +1,55 @@
+[package]
+name = "aws-smithy-xml-fuzz"
+version = "0.0.0"
+authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+aws-smithy-xml = { path = ".." }
+aws-smithy-schema = { path = "../../aws-smithy-schema" }
+aws-smithy-types = { path = "../../aws-smithy-types" }
+# Version pinned due to https://github.com/rust-fuzz/libfuzzer/issues/126
+libfuzzer-sys = "=0.4.7"
+arbitrary = { version = "1", features = ["derive"] }
+# Used as a differential reference parser to verify the schema-based
+# serializer's output is well-formed XML, and as a tokenizer for the
+# struct-reorder target. Same version aws-smithy-xml itself depends on.
+xmlparser = "0.13.5"
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "schema_xml_deserialize"
+path = "fuzz_targets/schema_xml_deserialize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_xml_serialize"
+path = "fuzz_targets/schema_xml_serialize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_xml_roundtrip"
+path = "fuzz_targets/schema_xml_roundtrip.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_xml_struct_reorder"
+path = "fuzz_targets/schema_xml_struct_reorder.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "schema_xml_attribute_mix"
+path = "fuzz_targets/schema_xml_attribute_mix.rs"
+test = false
+doc = false

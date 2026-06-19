@@ -7,7 +7,7 @@
 
 use super::error::SerdeError;
 use crate::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 /// Serializes Smithy shapes to a target format.
 ///
@@ -97,7 +97,13 @@ pub trait ShapeSerializer {
     fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError>;
 
     /// Writes a blob (byte array) value.
-    fn write_blob(&mut self, schema: &Schema, value: &Blob) -> Result<(), SerdeError>;
+    ///
+    /// Takes `&[u8]` rather than `&Blob` so callers that already hold byte
+    /// slices (e.g., a server holding a `bytes::Bytes` payload, or a codec
+    /// receiving payload bytes from elsewhere) don't need to wrap them in
+    /// a `Blob` just to satisfy the API. Generated client code sources
+    /// blobs from `Blob` data carriers and passes `blob.as_ref()`.
+    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError>;
 
     /// Writes a timestamp value.
     fn write_timestamp(&mut self, schema: &Schema, value: &DateTime) -> Result<(), SerdeError>;
@@ -142,7 +148,7 @@ pub trait ShapeSerializer {
     ) -> Result<(), SerdeError> {
         self.write_list(schema, &|ser| {
             for item in values {
-                ser.write_blob(&crate::prelude::BLOB, item)?;
+                ser.write_blob(&crate::prelude::BLOB, item.as_ref())?;
             }
             Ok(())
         })

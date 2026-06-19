@@ -10,6 +10,7 @@ import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
+import software.amazon.smithy.rust.codegen.client.smithy.customizations.SchemaSerdeAllowlist
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCustomization
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
@@ -223,6 +224,26 @@ abstract class BaseRequestIdDecorator : ClientCodegenDecorator {
                                 """,
                                 "AccessorTrait" to accessorTrait(codegenContext),
                             )
+                            // For services in the schema-serde allowlist, also
+                            // expose a `_set_$fieldName` setter on the Output
+                            // struct so the `MutateOutput` customization (which
+                            // calls `output._set_$fieldName(...)`) works after
+                            // `deserialize_with_response` has already built the
+                            // Output. Legacy services don't need this because
+                            // their `MutateOutput` runs while `output` is still
+                            // a Builder.
+                            if (SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)) {
+                                rust(
+                                    """
+                                    impl ${section.structName} {
+                                        pub(crate) fn _set_$fieldName(&mut self, $fieldName: Option<String>) -> &mut Self {
+                                            self._$fieldName = $fieldName;
+                                            self
+                                        }
+                                    }
+                                    """,
+                                )
+                            }
                         }
 
                         is StructureSection.AdditionalDebugFields -> {
