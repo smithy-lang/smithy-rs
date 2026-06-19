@@ -166,10 +166,6 @@ class BigNumberPrecisionTest {
 
     @Test
     fun `test BigInteger and BigDecimal round trip through serializers with restXml`() {
-        // restXml does not yet have a schema-serde runtime (no XmlCodec /
-        // AwsRestXmlProtocol), so this test always uses the legacy codegen
-        // path. When schema-serde support is added for restXml, this test
-        // should gain an if/else branch analogous to the JSON tests.
         val model =
             """
             namespace test
@@ -198,49 +194,101 @@ class BigNumberPrecisionTest {
             }
             """.asSmithyModel()
 
-        clientIntegrationTest(model) { _, rustCrate ->
+        clientIntegrationTest(model) { codegenContext, rustCrate ->
             rustCrate.unitTest("big_number_round_trip_xml") {
-                rawRust(
-                    """
-                    use aws_smithy_types::{BigInteger, BigDecimal};
-                    use std::str::FromStr;
+                val useSchema = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
+                if (useSchema) {
+                    // Schema-serde restXml path: round-trip through XmlCodec
+                    // directly. Mirrors the JSON tests' shape; XML body is
+                    // a `<TestOutput>` element with `bigInt`/`bigDec`
+                    // children.
+                    rawRust(
+                        """
+                        use aws_smithy_types::{BigInteger, BigDecimal};
+                        use std::str::FromStr;
+                        use aws_smithy_xml::codec::{XmlCodec, XmlCodecSettings};
+                        use aws_smithy_schema::serde::ShapeSerializer;
+                        use aws_smithy_schema::codec::{Codec, FinishSerializer};
 
-                    // Test values that exceed native type limits
-                    let big_int_str = "99999999999999999999999999";  // > u64::MAX
-                    let big_dec_precision_str = "3.141592653589793238462643383279502884197";  // > f64 precision (15-17 digits)
-                    let big_dec_magnitude_str = "1.8e308";  // > f64::MAX (~1.7976931348623157e308)
+                        let big_int_str = "99999999999999999999999999";
+                        let big_dec_precision_str = "3.141592653589793238462643383279502884197";
+                        let big_dec_magnitude_str = "1.8e308";
 
-                    // Test 1: High precision BigDecimal
-                    let input = crate::operation::test_op::TestOpInput::builder()
-                        .big_int(BigInteger::from_str(big_int_str).unwrap())
-                        .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
-                        .build()
-                        .unwrap();
+                        let input = crate::operation::test_op::TestOpInput::builder()
+                            .big_int(BigInteger::from_str(big_int_str).unwrap())
+                            .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
+                            .build()
+                            .unwrap();
 
-                    let xml_body = crate::protocol_serde::shape_test_op::ser_test_op_op_input(&input).unwrap();
-                    let serialized = String::from_utf8(xml_body.bytes().unwrap().to_vec()).unwrap();
+                        let codec = XmlCodec::new(XmlCodecSettings::default());
+                        let mut ser = codec.create_serializer();
+                        ser.write_struct(crate::operation::test_op::TestOpInput::SCHEMA, &input).unwrap();
+                        let xml_body = ser.finish();
+                        let serialized = String::from_utf8(xml_body).unwrap();
 
-                    assert!(serialized.contains(big_int_str));
-                    assert!(serialized.contains(big_dec_precision_str));
+                        assert!(serialized.contains(big_int_str), "missing bigInt: {}", serialized);
+                        assert!(serialized.contains(big_dec_precision_str), "missing bigDec: {}", serialized);
 
-                    // Test 2: Large magnitude BigDecimal - construct XML manually
-                    let mut xml_response = String::from(r#"<TestOutput><bigInt>"#);
-                    xml_response.push_str(big_int_str);
-                    xml_response.push_str(r#"</bigInt><bigDec>"#);
-                    xml_response.push_str(big_dec_magnitude_str);
-                    xml_response.push_str(r#"</bigDec></TestOutput>"#);
+                        // Build a response body for the deserializer. The
+                        // schema's root element name is derived from the
+                        // synthetic output shape's original name
+                        // ("TestOutput"); members are unwrapped Smithy
+                        // member names.
+                        let mut xml_response = String::from(r#"<TestOutput><bigInt>"#);
+                        xml_response.push_str(big_int_str);
+                        xml_response.push_str(r#"</bigInt><bigDec>"#);
+                        xml_response.push_str(big_dec_magnitude_str);
+                        xml_response.push_str(r#"</bigDec></TestOutput>"#);
 
-                    let headers = ::aws_smithy_runtime_api::http::Headers::new();
-                    let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
-                        200,
-                        &headers,
-                        xml_response.as_bytes()
-                    ).unwrap();
+                        let mut deser = codec.create_deserializer(xml_response.as_bytes());
+                        let output = crate::operation::test_op::TestOpOutput::deserialize(&mut deser).unwrap();
 
-                    assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
-                    assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
-                    """,
-                )
+                        assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
+                        assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
+                        """,
+                    )
+                } else {
+                    // Legacy XML codegen path: use the per-shape serde
+                    // helpers under `protocol_serde::shape_test_op`.
+                    rawRust(
+                        """
+                        use aws_smithy_types::{BigInteger, BigDecimal};
+                        use std::str::FromStr;
+
+                        let big_int_str = "99999999999999999999999999";
+                        let big_dec_precision_str = "3.141592653589793238462643383279502884197";
+                        let big_dec_magnitude_str = "1.8e308";
+
+                        let input = crate::operation::test_op::TestOpInput::builder()
+                            .big_int(BigInteger::from_str(big_int_str).unwrap())
+                            .big_dec(BigDecimal::from_str(big_dec_precision_str).unwrap())
+                            .build()
+                            .unwrap();
+
+                        let xml_body = crate::protocol_serde::shape_test_op::ser_test_op_op_input(&input).unwrap();
+                        let serialized = String::from_utf8(xml_body.bytes().unwrap().to_vec()).unwrap();
+
+                        assert!(serialized.contains(big_int_str));
+                        assert!(serialized.contains(big_dec_precision_str));
+
+                        let mut xml_response = String::from(r#"<TestOutput><bigInt>"#);
+                        xml_response.push_str(big_int_str);
+                        xml_response.push_str(r#"</bigInt><bigDec>"#);
+                        xml_response.push_str(big_dec_magnitude_str);
+                        xml_response.push_str(r#"</bigDec></TestOutput>"#);
+
+                        let headers = ::aws_smithy_runtime_api::http::Headers::new();
+                        let output = crate::protocol_serde::shape_test_op::de_test_op_http_response(
+                            200,
+                            &headers,
+                            xml_response.as_bytes()
+                        ).unwrap();
+
+                        assert_eq!(output.big_int.unwrap().as_ref(), big_int_str);
+                        assert_eq!(output.big_dec.unwrap().as_ref(), big_dec_magnitude_str);
+                        """,
+                    )
+                }
             }
         }
     }
