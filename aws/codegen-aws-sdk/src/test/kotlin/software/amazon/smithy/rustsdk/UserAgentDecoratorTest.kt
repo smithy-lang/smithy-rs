@@ -231,6 +231,57 @@ class UserAgentDecoratorTest {
     }
 
     @Test
+    fun frameworkMetadataViaSdkConfig() {
+        awsSdkIntegrationTest(model) { context, rustCrate ->
+            val rc = context.runtimeConfig
+            val moduleName = context.moduleUseName()
+            rustCrate.integrationTest("framework_metadata_via_sdk_config") {
+                tokioTest("framework_metadata_propagates_from_sdk_config") {
+                    rustTemplate(
+                        """
+                        use $moduleName::config::Region;
+                        use $moduleName::Client;
+                        use #{capture_request};
+
+                        let (http_client, rcvr) = capture_request(None);
+
+                        // Set framework metadata on the shared `SdkConfig`; it must propagate into
+                        // the generated client config and be emitted in the user agent.
+                        let sdk_config = #{SdkConfig}::builder()
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .framework_metadata(#{FrameworkMetadata}::new("from-sdk-config", Some("9.9")).expect("valid"))
+                            .build();
+
+                        let client = Client::new(&sdk_config);
+                        let _ = client.some_operation().send().await;
+
+                        let request = rcvr.expect_request();
+                        let formatted = std::str::from_utf8(
+                            request
+                                .headers()
+                                .get("x-amz-user-agent")
+                                .unwrap()
+                                .as_bytes(),
+                        )
+                        .unwrap();
+                        assert!(
+                            formatted.contains("lib/from-sdk-config/9.9"),
+                            "framework metadata set on SdkConfig should appear in the user agent: '{}'",
+                            formatted
+                        );
+                        """,
+                        *preludeScope,
+                        "capture_request" to RuntimeType.captureRequest(rc),
+                        "SdkConfig" to AwsRuntimeType.awsTypes(rc).resolve("sdk_config::SdkConfig"),
+                        "FrameworkMetadata" to AwsRuntimeType.awsTypes(rc).resolve("sdk_ua_metadata::FrameworkMetadata"),
+                    )
+                }
+            }
+        }
+    }
+
+    @Test
     fun `it avoids emitting repeated business metrics on retry`() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
             rustCrate.integrationTest("business_metrics") {

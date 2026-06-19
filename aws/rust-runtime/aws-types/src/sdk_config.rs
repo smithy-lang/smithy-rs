@@ -639,17 +639,6 @@ impl Builder {
     /// number of unique entries included in the user agent is capped (currently at 10); additional
     /// entries beyond the cap are dropped with a warning.
     pub fn framework_metadata(mut self, framework_metadata: FrameworkMetadata) -> Self {
-        self.push_framework_metadata(framework_metadata);
-        self
-    }
-
-    /// Appends framework metadata to the user agent.
-    ///
-    /// This _optional_ metadata identifies a software framework or third-party library that is
-    /// being used with the SDK. It is rendered into the user agent (as `lib/{name}/{version}`) so
-    /// that libraries built on top of the AWS SDK can self-identify in the requests they make.
-    /// Each call appends another entry rather than replacing previous ones.
-    pub fn push_framework_metadata(&mut self, framework_metadata: FrameworkMetadata) -> &mut Self {
         self.framework_metadata.push(framework_metadata);
         self
     }

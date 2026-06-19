@@ -273,8 +273,15 @@ class UserAgentDecorator : ClientCodegenDecorator {
                             ///
                             /// This _optional_ metadata identifies software frameworks or third-party libraries
                             /// being used with the client, rendered into the user agent as `lib/{name}/{version}`.
+                            /// Entries are returned in first-seen (insertion) order, matching the order they are
+                            /// rendered into the user agent.
                             pub fn framework_metadata(&self) -> #{Vec}<&#{FrameworkMetadata}> {
-                                self.config.load::<#{FrameworkMetadata}>().collect()
+                                // `StoreAppend` loads entries newest-first; reverse to first-seen order so
+                                // this getter agrees with both the user agent and `SdkConfig::framework_metadata`.
+                                let mut entries: #{Vec}<&#{FrameworkMetadata}> =
+                                    self.config.load::<#{FrameworkMetadata}>().collect();
+                                entries.reverse();
+                                entries
                             }
                             """,
                             *codegenScope,

@@ -139,4 +139,46 @@ mod tests {
     fn empty_name() {
         assert!(FrameworkMetadata::new("", None::<&str>).is_err());
     }
+
+    #[test]
+    fn rejects_header_injection_characters() {
+        // None of these may ever reach the user-agent header.
+        for bad in [
+            "a\r\nb",   // CRLF (header injection)
+            "a\nb",     // LF
+            "a\rb",     // CR
+            "a\tb",     // tab
+            "a b",      // space (separates UA tokens)
+            "a/b",      // slash (would forge an extra lib/.../... segment)
+            "a\u{0}b",  // NUL
+            "a\u{7f}b", // DEL
+        ] {
+            assert!(
+                FrameworkMetadata::new(bad, None::<&str>).is_err(),
+                "name {bad:?} should be rejected"
+            );
+            assert!(
+                FrameworkMetadata::new("framework", Some(bad)).is_err(),
+                "version {bad:?} should be rejected"
+            );
+        }
+    }
+
+    #[test]
+    fn accepts_every_allowed_symbol_in_version() {
+        let md =
+            FrameworkMetadata::new("framework", Some("1.0-rc.1+build_2~3")).expect("valid version");
+        assert_eq!(Some("1.0-rc.1+build_2~3"), md.version());
+    }
+
+    #[test]
+    fn clone_and_equality() {
+        let a = FrameworkMetadata::new("framework", Some("1.0")).unwrap();
+        let b = a.clone();
+        assert_eq!(a, b);
+        let c = FrameworkMetadata::new("framework", Some("2.0")).unwrap();
+        assert_ne!(a, c);
+        let d = FrameworkMetadata::new("framework", None::<&str>).unwrap();
+        assert_ne!(a, d);
+    }
 }

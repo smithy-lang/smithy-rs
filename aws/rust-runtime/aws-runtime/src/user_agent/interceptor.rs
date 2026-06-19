@@ -528,6 +528,64 @@ mod tests {
     }
 
     #[test]
+    fn test_framework_metadata_cap_boundary() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        // Exactly 10 unique entries: all retained.
+        let ten = (0..10)
+            .map(|i| FrameworkMetadata::new(format!("fw-{i}"), Some("1.0")).unwrap())
+            .collect();
+        let header = run_interceptor_with_framework_metadata(ten);
+        for i in 0..10 {
+            assert!(
+                header.contains(&format!("lib/fw-{i}/1.0")),
+                "expected `lib/fw-{i}/1.0` in `{header}`"
+            );
+        }
+
+        // Eleven unique entries: the first 10 (first-seen) are retained, the 11th is dropped.
+        let eleven = (0..11)
+            .map(|i| FrameworkMetadata::new(format!("gw-{i}"), Some("1.0")).unwrap())
+            .collect();
+        let header = run_interceptor_with_framework_metadata(eleven);
+        assert_eq!(
+            10,
+            header.matches("lib/gw-").count(),
+            "expected exactly 10 entries in `{header}`"
+        );
+        assert!(
+            !header.contains("lib/gw-10/1.0"),
+            "the 11th entry should be dropped in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_dedup_preserves_first_occurrence_order() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        // A duplicate of an earlier entry must not reorder the surviving entries.
+        let header = run_interceptor_with_framework_metadata(vec![
+            FrameworkMetadata::new("a", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("b", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("a", Some("1.0")).unwrap(), // duplicate of the first
+            FrameworkMetadata::new("c", Some("1.0")).unwrap(),
+        ]);
+
+        let pa = header.find("lib/a/1.0").expect("a present");
+        let pb = header.find("lib/b/1.0").expect("b present");
+        let pc = header.find("lib/c/1.0").expect("c present");
+        assert!(
+            pa < pb && pb < pc,
+            "expected first-seen order a, b, c in `{header}`"
+        );
+        assert_eq!(
+            1,
+            header.matches("lib/a/1.0").count(),
+            "duplicate entry should appear once in `{header}`"
+        );
+    }
+
+    #[test]
     fn test_framework_metadata_no_version() {
         use aws_types::sdk_ua_metadata::FrameworkMetadata;
 
