@@ -146,6 +146,91 @@ class UserAgentDecoratorTest {
     }
 
     @Test
+    fun frameworkMetadataWorks() {
+        awsSdkIntegrationTest(model) { context, rustCrate ->
+            val rc = context.runtimeConfig
+            val moduleName = context.moduleUseName()
+            rustCrate.integrationTest("framework_metadata") {
+                rustTemplate(
+                    """
+                    use $moduleName::config::{Credentials, FrameworkMetadata, Region, SharedCredentialsProvider};
+                    use $moduleName::{Config, Client};
+                    use #{capture_request};
+
+                    ##[#{tokio}::test]
+                    async fn framework_metadata_in_user_agent() {
+                        let (http_client, rcvr) = capture_request(None);
+                        let config = Config::builder()
+                            .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            // Multiple libraries can each self-identify; entries are additive.
+                            .framework_metadata(FrameworkMetadata::new("framework-one", Some("1.0")).expect("valid"))
+                            .framework_metadata(FrameworkMetadata::new("framework-two", Some("2.0")).expect("valid"))
+                            .build();
+                        let client = Client::from_conf(config);
+                        let _ = client.some_operation().send().await;
+
+                        let request = rcvr.expect_request();
+                        let formatted = std::str::from_utf8(
+                            request
+                                .headers()
+                                .get("x-amz-user-agent")
+                                .unwrap()
+                                .as_bytes(),
+                        )
+                        .unwrap();
+                        assert!(
+                            formatted.contains("lib/framework-one/1.0"),
+                            "'{}' didn't contain the first framework metadata",
+                            formatted
+                        );
+                        assert!(
+                            formatted.contains("lib/framework-two/2.0"),
+                            "'{}' didn't contain the second framework metadata",
+                            formatted
+                        );
+                    }
+
+                    ##[#{tokio}::test]
+                    async fn framework_metadata_deduplicated() {
+                        let (http_client, rcvr) = capture_request(None);
+                        let config = Config::builder()
+                            .credentials_provider(SharedCredentialsProvider::new(Credentials::for_tests()))
+                            .region(Region::new("us-east-1"))
+                            .http_client(http_client.clone())
+                            .framework_metadata(FrameworkMetadata::new("dup-framework", Some("1.0")).expect("valid"))
+                            .framework_metadata(FrameworkMetadata::new("dup-framework", Some("1.0")).expect("valid"))
+                            .build();
+                        let client = Client::from_conf(config);
+                        let _ = client.some_operation().send().await;
+
+                        let request = rcvr.expect_request();
+                        let formatted = std::str::from_utf8(
+                            request
+                                .headers()
+                                .get("x-amz-user-agent")
+                                .unwrap()
+                                .as_bytes(),
+                        )
+                        .unwrap();
+                        assert_eq!(
+                            1,
+                            formatted.matches("lib/dup-framework/1.0").count(),
+                            "expected the duplicate framework metadata to appear once in '{}'",
+                            formatted
+                        );
+                    }
+                    """,
+                    *preludeScope,
+                    "tokio" to CargoDependency.Tokio.toDevDependency().withFeature("rt").withFeature("macros").toType(),
+                    "capture_request" to RuntimeType.captureRequest(rc),
+                )
+            }
+        }
+    }
+
+    @Test
     fun `it avoids emitting repeated business metrics on retry`() {
         awsSdkIntegrationTest(model) { context, rustCrate ->
             rustCrate.integrationTest("business_metrics") {
