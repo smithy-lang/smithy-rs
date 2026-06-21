@@ -9,6 +9,9 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client"] }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
+aws-smithy-types = { path = "../aws-smithy-types" }
 xmlparser = "0.13.5"
 
 [dev-dependencies]

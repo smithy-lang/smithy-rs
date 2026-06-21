@@ -26,6 +26,7 @@ use aws_smithy_runtime_api::client::runtime_components::{
     RuntimeComponents, RuntimeComponentsBuilder,
 };
 use aws_smithy_runtime_api::client::runtime_plugin::RuntimePlugin;
+use aws_smithy_schema::header_omit_settings::SharedHeaderOmitSettings;
 use aws_smithy_types::config_bag::{ConfigBag, FrozenLayer, Layer};
 use std::borrow::Cow;
 
@@ -58,12 +59,20 @@ impl Intercept for SigV4PresigningInterceptor {
         _runtime_components: &RuntimeComponents,
         cfg: &mut ConfigBag,
     ) -> Result<(), BoxError> {
+        let settings = HeaderSerializationSettings::new()
+            .omit_default_content_length()
+            .omit_default_content_type();
+        // Codegen-emitted streaming/payload request serializers read the
+        // concrete `HeaderSerializationSettings` directly out of the config
+        // bag.
         cfg.interceptor_state()
-            .store_put::<HeaderSerializationSettings>(
-                HeaderSerializationSettings::new()
-                    .omit_default_content_length()
-                    .omit_default_content_type(),
-            );
+            .store_put::<HeaderSerializationSettings>(settings.clone());
+        // The schema-serde runtime in `aws-smithy-schema` cannot reach the
+        // inlineable type, so it reads through the abstract trait wrapper
+        // instead. Storing both lets the same omit decisions reach the
+        // streaming/payload paths and the standard-body path uniformly.
+        cfg.interceptor_state()
+            .store_put(SharedHeaderOmitSettings::new(settings));
 
         cfg.interceptor_state().store_put(PresigningMarker);
         Ok(())
