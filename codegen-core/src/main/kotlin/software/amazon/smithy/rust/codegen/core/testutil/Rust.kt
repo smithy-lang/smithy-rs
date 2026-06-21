@@ -132,7 +132,9 @@ object TestWorkspace {
                 ),
             )
         cargoToml.writeText(workspaceToml)
-        cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
+        if (cargoLock.exists()) {
+            cargoLock.copyTo(baseDir.resolve("Cargo.lock"), true)
+        }
     }
 
     fun subproject(): File {
