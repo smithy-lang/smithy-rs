@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.AwsQueryTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
@@ -56,6 +57,7 @@ object SchemaSerdeAllowlist {
             RestJson1Trait.ID,
             AwsJson1_0Trait.ID,
             AwsJson1_1Trait.ID,
+            AwsQueryTrait.ID,
             RestXmlTrait.ID,
             Rpcv2CborTrait.ID,
         )
@@ -147,6 +149,10 @@ private class SchemaProtocolCustomization(
                                     builderChain.append(".with_service_xml_namespace($uri.to_owned(), $prefix)")
                                 }
                                 smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to builderChain.toString()
+                            }
+                            protocol == AwsQueryTrait.ID -> {
+                                val smithyQuery = RuntimeType.smithyQuery(codegenContext.runtimeConfig)
+                                smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
                             }
                             protocol == Rpcv2CborTrait.ID ->
                                 smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
