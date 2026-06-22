@@ -48,7 +48,11 @@ impl ClientProtocolInner for AwsQueryProtocol {
         let op_name = cfg
             .load::<Metadata>()
             .map(|m| m.name().to_string())
-            .unwrap_or_default();
+            .ok_or_else(|| {
+                SerdeError::custom(
+                    "operation Metadata is required to serialize an awsQuery request (Action=)",
+                )
+            })?;
 
         let mut serializer = QueryShapeSerializer::new(&op_name, &self.service_version);
         serializer.write_struct(input_schema, input)?;
@@ -155,6 +159,12 @@ fn strip_aws_query_envelope(xml: &str) -> Result<&str, SerdeError> {
                     root_start.get_or_insert(span.start());
                 } else if depth == 2 && target_start.is_none() {
                     let name = local.as_str();
+                    // The awsQuery response envelope nests exactly one
+                    // result/error element directly under the root:
+                    // `<XResponse><XResult>…` or `<ErrorResponse><Error>…`. So a
+                    // depth-2 element whose local name ends with `Result` (or
+                    // equals `Error`) uniquely identifies the payload wrapper;
+                    // deeper elements are its members.
                     if name.ends_with("Result") || name == "Error" {
                         target_start = Some(span.start());
                     }
@@ -173,6 +183,13 @@ fn strip_aws_query_envelope(xml: &str) -> Result<&str, SerdeError> {
                     depth = depth.saturating_sub(1);
                 }
                 ElementEnd::Empty => {
+                    if depth == 2 {
+                        if let Some(start) = target_start {
+                            // Self-closing target element, e.g. `<FooResult/>`
+                            // (span.end() is just past `/>`).
+                            return Ok(&xml[start..span.end()]);
+                        }
+                    }
                     depth = depth.saturating_sub(1);
                 }
                 ElementEnd::Open => {}
@@ -283,6 +300,23 @@ mod tests {
             .unwrap();
         assert_eq!(name, "Alice");
         assert_eq!(age, 30);
+    }
+
+    #[test]
+    fn strip_envelope_returns_self_closing_result_element() {
+        // A self-closing result element (empty output) must still be returned
+        // inclusive of its tags, not fall through to the whole-document root.
+        let xml = "<GetUserResponse><GetUserResult/><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></GetUserResponse>";
+        assert_eq!(strip_aws_query_envelope(xml).unwrap(), "<GetUserResult/>");
+    }
+
+    #[test]
+    fn strip_envelope_returns_error_element() {
+        let xml = "<ErrorResponse><Error><Code>Boom</Code></Error></ErrorResponse>";
+        assert_eq!(
+            strip_aws_query_envelope(xml).unwrap(),
+            "<Error><Code>Boom</Code></Error>"
+        );
     }
 
     #[test]
