@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import java.util.Optional
+import java.util.logging.Logger
 
 /*
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
@@ -182,7 +183,7 @@ data class ServerCodegenConfig(
             val configNode = node.get()
             val unknownKeys = configNode.members.keys.map { it.toString() }.filter { it !in KNOWN_CONFIG_KEYS }
             if (unknownKeys.isNotEmpty()) {
-                throw IllegalArgumentException(
+                Logger.getLogger("ServerCodegenConfig").warning(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
                         "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. ",
                 )
