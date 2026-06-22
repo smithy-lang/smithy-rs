@@ -10,6 +10,15 @@
 //! (`com.amazonaws.dynamodb#Capacity`), looks the entry up in the registry,
 //! deserializes via `TypeRegistry::deserialize_document`, and downcasts to the
 //! concrete type to assert field values round-tripped correctly.
+//!
+//! `Client::registry()` and `Client::error_registry()` are only generated when
+//! DynamoDB's protocol is on `SchemaSerdeAllowlist`, so this test compiles and
+//! runs only while that protocol is enabled there. It is currently enabled so it
+//! runs in CI against the schema-serde path.
+//!
+//! TODO(schema-serde): Rust cannot query the codegen allowlist, so this gating
+//! is manual — re-add `#![cfg(any())]` here to disable this test when the
+//! protocols are removed from the allowlist.
 
 use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;
@@ -82,13 +91,14 @@ fn registry_errors_when_discriminator_missing() {
 }
 
 #[test]
-fn registry_excludes_errors() {
-    // Per the SEP, error shapes are not in the primary type registry — they
-    // belong in `Client::error_registry()` instead.
+fn registry_includes_errors() {
+    // Per the SEP, the primary type registry includes every structure shape —
+    // `@error` structures included. The same shape also lives in
+    // `Client::error_registry()`; a shape legitimately appears in both.
     let id = shape_id!("com.amazonaws.dynamodb", "ResourceInUseException");
     assert!(
-        Client::registry().schema_for(&id).is_none(),
-        "error shapes must not appear in the primary type registry"
+        Client::registry().schema_for(&id).is_some(),
+        "error structures must appear in the primary type registry"
     );
 }
 

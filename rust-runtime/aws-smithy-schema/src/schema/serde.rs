@@ -371,6 +371,162 @@ mod test {
         assert_eq!(elements, vec!["a", "b", "c"]);
     }
 
+    // Records the shape id of every schema handed to an element/value read,
+    // so the default collection helpers can be checked to pass the *member*
+    // (list element / map value) schema — the carrier of element-level traits
+    // such as `@mediaType` / `@timestampFormat` — rather than the container
+    // schema.
+    #[derive(Default)]
+    struct SchemaRecordingDeserializer {
+        seen: Vec<String>,
+    }
+
+    impl ShapeDeserializer for SchemaRecordingDeserializer {
+        fn read_struct(
+            &mut self,
+            _schema: &Schema<'_>,
+            _consumer: &mut dyn FnMut(
+                &Schema<'_>,
+                &mut dyn ShapeDeserializer,
+            ) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            Ok(())
+        }
+
+        fn read_list(
+            &mut self,
+            _schema: &Schema<'_>,
+            consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            consumer(self)
+        }
+
+        fn read_map(
+            &mut self,
+            _schema: &Schema<'_>,
+            consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        ) -> Result<(), SerdeError> {
+            consumer("k".to_string(), self)
+        }
+
+        fn read_boolean(&mut self, _s: &Schema<'_>) -> Result<bool, SerdeError> {
+            Ok(false)
+        }
+        fn read_byte(&mut self, _s: &Schema<'_>) -> Result<i8, SerdeError> {
+            Ok(0)
+        }
+        fn read_short(&mut self, _s: &Schema<'_>) -> Result<i16, SerdeError> {
+            Ok(0)
+        }
+        fn read_integer(&mut self, schema: &Schema<'_>) -> Result<i32, SerdeError> {
+            self.seen.push(schema.shape_id().as_str().to_string());
+            Ok(0)
+        }
+        fn read_long(&mut self, schema: &Schema<'_>) -> Result<i64, SerdeError> {
+            self.seen.push(schema.shape_id().as_str().to_string());
+            Ok(0)
+        }
+        fn read_float(&mut self, _s: &Schema<'_>) -> Result<f32, SerdeError> {
+            Ok(0.0)
+        }
+        fn read_double(&mut self, _s: &Schema<'_>) -> Result<f64, SerdeError> {
+            Ok(0.0)
+        }
+        fn read_big_integer(
+            &mut self,
+            _s: &Schema<'_>,
+        ) -> Result<aws_smithy_types::BigInteger, SerdeError> {
+            use std::str::FromStr;
+            Ok(aws_smithy_types::BigInteger::from_str("0").unwrap())
+        }
+        fn read_big_decimal(
+            &mut self,
+            _s: &Schema<'_>,
+        ) -> Result<aws_smithy_types::BigDecimal, SerdeError> {
+            use std::str::FromStr;
+            Ok(aws_smithy_types::BigDecimal::from_str("0").unwrap())
+        }
+        fn read_string(&mut self, schema: &Schema<'_>) -> Result<String, SerdeError> {
+            self.seen.push(schema.shape_id().as_str().to_string());
+            Ok(String::new())
+        }
+        fn read_blob(&mut self, schema: &Schema<'_>) -> Result<aws_smithy_types::Blob, SerdeError> {
+            self.seen.push(schema.shape_id().as_str().to_string());
+            Ok(aws_smithy_types::Blob::new(Vec::new()))
+        }
+        fn read_timestamp(
+            &mut self,
+            _s: &Schema<'_>,
+        ) -> Result<aws_smithy_types::DateTime, SerdeError> {
+            Ok(aws_smithy_types::DateTime::from_secs(0))
+        }
+        fn read_document(
+            &mut self,
+            _s: &Schema<'_>,
+        ) -> Result<aws_smithy_types::Document, SerdeError> {
+            Ok(aws_smithy_types::Document::Null)
+        }
+        fn is_null(&self) -> bool {
+            false
+        }
+        fn container_size(&self) -> Option<usize> {
+            None
+        }
+    }
+
+    #[test]
+    fn default_string_list_passes_member_schema_to_elements() {
+        let member = Schema::new(
+            crate::shape_id!("test", "ListMember"),
+            crate::ShapeType::String,
+        );
+        let list = Schema::new_list(crate::shape_id!("test", "StringList"), &member);
+
+        let mut deser = SchemaRecordingDeserializer::default();
+        deser.read_string_list(&list).unwrap();
+        // The element read sees the member schema, not the container list.
+        assert_eq!(deser.seen, vec!["test#ListMember".to_string()]);
+    }
+
+    #[test]
+    fn default_integer_list_passes_member_schema_to_elements() {
+        let member = Schema::new(
+            crate::shape_id!("test", "IntMember"),
+            crate::ShapeType::Integer,
+        );
+        let list = Schema::new_list(crate::shape_id!("test", "IntList"), &member);
+
+        let mut deser = SchemaRecordingDeserializer::default();
+        deser.read_integer_list(&list).unwrap();
+        assert_eq!(deser.seen, vec!["test#IntMember".to_string()]);
+    }
+
+    #[test]
+    fn default_string_map_passes_value_schema_to_values() {
+        let key = Schema::new(crate::shape_id!("test", "MapKey"), crate::ShapeType::String);
+        let value = Schema::new(
+            crate::shape_id!("test", "MapValue"),
+            crate::ShapeType::String,
+        );
+        let map = Schema::new_map(crate::shape_id!("test", "StringMap"), &key, &value);
+
+        let mut deser = SchemaRecordingDeserializer::default();
+        deser.read_string_string_map(&map).unwrap();
+        // The value read sees the map value schema, not the container map.
+        assert_eq!(deser.seen, vec!["test#MapValue".to_string()]);
+    }
+
+    #[test]
+    fn default_collection_helper_falls_back_to_prelude_without_member() {
+        // A list schema built without a member set falls back to the prelude
+        // scalar rather than (incorrectly) passing the container schema.
+        let bare_list = Schema::new(crate::shape_id!("test", "BareList"), crate::ShapeType::List);
+
+        let mut deser = SchemaRecordingDeserializer::default();
+        deser.read_string_list(&bare_list).unwrap();
+        assert_eq!(deser.seen, vec!["smithy.api#String".to_string()]);
+    }
+
     #[test]
     fn test_deserializer_map() {
         let mut deser = MockDeserializer::new(vec!["val1".to_string(), "val2".to_string()]);

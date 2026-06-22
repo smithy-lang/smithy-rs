@@ -353,16 +353,17 @@ class ResponseDeserializerGenerator(
         customizations: List<OperationCustomization>,
     ) {
         if (schemaExclusive) {
-            // `body` is used by per-error `deserialize_with_response` calls; `headers` is used
-            // by request-id-applying customizations (e.g. AWS SDK `apply_request_id`,
-            // `apply_extended_request_id`). `status` is consumed inside
-            // `protocol.parse_error_metadata(response, _cfg)` and via
-            // `response.status().into()` at the deserialize site, so no local binding is needed.
+            // `body` is used by per-error `deserialize_with_response` calls; `headers` and
+            // `status` are referenced by request-id-applying customizations through the
+            // `PopulateErrorMetadataExtras` contract that `renderSchemaErrorParsing` declares
+            // (it lists `status` and `headers` as the in-scope names). Bind all three so the
+            // scope matches the non-streaming error path (`deserializeNonStreamingSchemaOnly`)
+            // and a customization that reads `status` compiles uniformly on both paths.
             //
-            // Either binding can be unused depending on operation shape: streaming operations
-            // with zero modeled errors don't reference `body`; protocol-test models without
-            // request-id customizations don't reference `headers`. The bindings stay
-            // unconditional and are annotated to suppress the warning, mirroring the
+            // Any of the three can be unused depending on the operation shape: streaming
+            // operations with zero modeled errors don't reference `body`; protocol-test models
+            // without request-id customizations don't reference `headers`/`status`. The bindings
+            // stay unconditional and are annotated to suppress the warning, mirroring the
             // `#[allow(unused_mut)]` idiom used elsewhere in this generator.
             rustTemplate(
                 """
@@ -371,6 +372,8 @@ class ResponseDeserializerGenerator(
                 let body = response.body().bytes().expect("body loaded");
                 ##[allow(unused_variables)]
                 let headers = response.headers();
+                ##[allow(unused_variables)]
+                let status = response.status().as_u16();
                 """,
                 *codegenScope,
             )

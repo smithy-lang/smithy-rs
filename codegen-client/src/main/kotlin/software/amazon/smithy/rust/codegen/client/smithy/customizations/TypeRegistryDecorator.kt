@@ -6,13 +6,11 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.model.shapes.StructureShape
-import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.client.smithy.ClientRustModule
 import software.amazon.smithy.rust.codegen.client.smithy.customize.ClientCodegenDecorator
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
-import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.RustCrate
@@ -24,8 +22,10 @@ import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticOutputTra
  * all user-modeled structure shapes in the service's closure.
  *
  * Per the SEP "Document Type and Type Registries", the primary type registry includes
- * structure shapes only:
- * - Errors are excluded; they belong in `Client::error_registry()` (Phase 6.4-6.5).
+ * every user-modeled structure shape in the service closure:
+ * - `@error` structures are included — the SEP requires the primary registry to hold
+ *   every structure shape, and a shape may live in both the primary registry and the
+ *   dedicated `Client::error_registry()`.
  * - Unions are excluded per SEP §"What to include in the package level Type Registries".
  * - Synthetic operation input/output shapes are excluded — they're codegen artifacts,
  *   not user-modeled types, and would inflate the registry with synthetic shape IDs
@@ -47,25 +47,21 @@ class TypeRegistryDecorator : ClientCodegenDecorator {
         }
 
         val model = codegenContext.model
-        val symbolProvider = codegenContext.symbolProvider
         val rc = codegenContext.runtimeConfig
 
         val smithySchema = RuntimeType.smithySchema(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         val typeRegistry = smithySchema.resolve("registry::TypeRegistry")
-        val typeErasedBox = smithyTypes.resolve("type_erasure::TypeErasedBox")
-        val shapeDeserializer = smithySchema.resolve("serde::ShapeDeserializer")
-        val serdeError = smithySchema.resolve("serde::SerdeError")
         val lazyLock = RuntimeType.std.resolve("sync::LazyLock")
 
-        // Walk the service closure for structures, filtering out:
-        // - Errors (handled by error_registry codegen)
-        // - Synthetic operation input/output shapes (codegen artifacts)
+        // Walk the service closure for structures, filtering out only synthetic
+        // operation input/output shapes (codegen artifacts). `@error` structures are
+        // intentionally kept: the SEP requires the primary registry to include every
+        // structure shape, and an error may additionally appear in error_registry().
         // Sort by shape ID for deterministic output.
         val shapes =
             DirectedWalker(model).walkShapes(codegenContext.serviceShape)
                 .filterIsInstance<StructureShape>()
-                .filter { !it.hasTrait(ErrorTrait::class.java) }
                 .filter { !it.hasTrait(SyntheticInputTrait::class.java) }
                 .filter { !it.hasTrait(SyntheticOutputTrait::class.java) }
                 .sortedBy { it.id.toString() }
@@ -83,27 +79,7 @@ class TypeRegistryDecorator : ClientCodegenDecorator {
                 """,
                 "LazyLock" to lazyLock,
                 "TypeRegistry" to typeRegistry,
-                "Entries" to
-                    writable {
-                        shapes.forEach { shape ->
-                            val type = symbolProvider.toSymbol(shape)
-                            rustTemplate(
-                                """
-                                .insert_shape(
-                                    #{Type}::SCHEMA,
-                                    |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{TypeErasedBox}, #{SerdeError}> {
-                                        #{Result}::Ok(#{TypeErasedBox}::new(#{Type}::deserialize(d)?))
-                                    },
-                                )
-                                """,
-                                "Type" to type,
-                                "ShapeDeserializer" to shapeDeserializer,
-                                "TypeErasedBox" to typeErasedBox,
-                                "SerdeError" to serdeError,
-                                "Result" to RuntimeType.std.resolve("result::Result"),
-                            )
-                        }
-                    },
+                "Entries" to registryEntries(codegenContext, shapes),
             )
         }
 
@@ -116,7 +92,7 @@ class TypeRegistryDecorator : ClientCodegenDecorator {
                     /// Returns the type registry for this service.
                     ///
                     /// The registry contains an entry for every structure shape in the service
-                    /// closure (excluding errors and synthetic operation input/output shapes),
+                    /// closure (excluding only synthetic operation input/output shapes),
                     /// keyed by [`ShapeId`](#{ShapeId}). It is primarily useful for deserializing
                     /// a [`Document`](#{Document}) into a typed shape:
                     ///

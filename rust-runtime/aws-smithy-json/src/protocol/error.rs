@@ -24,29 +24,10 @@
 use crate::deserialize::token::skip_value;
 use crate::deserialize::{json_token_iter, Token};
 use aws_smithy_runtime_api::http::Headers;
+use aws_smithy_schema::error_envelope::{parse_query_compatible_header, sanitize_error_code};
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_types::error::metadata::{Builder as ErrorMetadataBuilder, ErrorMetadata};
 use std::borrow::Cow;
-
-/// Strips namespace prefixes and URL suffixes from an error code.
-///
-/// Examples:
-/// - `"FooError"` → `"FooError"`
-/// - `"aws.protocoltests.restjson#FooError"` → `"FooError"`
-/// - `"FooError:http://internal.amazon.com/coral/.../"` → `"FooError"`
-/// - `"aws.protocoltests.restjson#FooError:http://..."` → `"FooError"`
-fn sanitize_error_code(error_code: &str) -> &str {
-    // Strip trailing URL-style suffix (`:url`).
-    let error_code = match error_code.find(':') {
-        Some(idx) => &error_code[..idx],
-        None => error_code,
-    };
-    // Strip a leading `namespace#` prefix.
-    match error_code.find('#') {
-        Some(idx) => &error_code[idx + 1..],
-        None => error_code,
-    }
-}
 
 struct ErrorBody<'a> {
     code: Option<Cow<'a, str>>,
@@ -171,15 +152,6 @@ pub(crate) fn parse_error_envelope_metadata(
         builder = builder.code(qc_code).custom("type", qc_type);
     }
     Ok(builder)
-}
-
-/// Parses an `X-Amzn-Query-Error: <code>;<type>` header, returning the two
-/// halves. Returns `None` if the header is absent or malformed.
-fn parse_query_compatible_header(headers: &Headers) -> Option<(&str, &str)> {
-    let value = headers.get("x-amzn-query-error")?;
-    value
-        .find(';')
-        .map(|idx| (&value[..idx], &value[idx + 1..]))
 }
 
 #[cfg(test)]

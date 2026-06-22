@@ -82,7 +82,7 @@ where
         input: &dyn SerializableStruct,
         input_schema: &Schema<'_>,
         endpoint: &str,
-        _cfg: &ConfigBag,
+        cfg: &ConfigBag,
     ) -> Result<Request, SerdeError> {
         let mut serializer = self.codec.create_serializer();
         serializer.write_struct(input_schema, input)?;
@@ -96,13 +96,30 @@ where
         request
             .set_uri(uri)
             .map_err(|e| SerdeError::custom(format!("invalid endpoint URI: {e}")))?;
-        request
-            .headers_mut()
-            .insert("Content-Type", self.content_type);
-        if let Some(len) = request.body().content_length() {
+
+        // A presigning interceptor (or any other caller that stored a
+        // `SharedHeaderOmitSettings` in the config bag) can request that these
+        // protocol-default headers be suppressed so they don't end up in the
+        // signed-header set of a presigned URL. Mirrors
+        // `HttpBindingProtocol::serialize_request_with_body`.
+        let omit = cfg.load::<crate::header_omit_settings::SharedHeaderOmitSettings>();
+        let omit_content_type = omit
+            .map(|s| s.should_omit_default_content_type())
+            .unwrap_or(false);
+        let omit_content_length = omit
+            .map(|s| s.should_omit_default_content_length())
+            .unwrap_or(false);
+        if !omit_content_type {
             request
                 .headers_mut()
-                .insert("Content-Length", len.to_string());
+                .insert("Content-Type", self.content_type);
+        }
+        if !omit_content_length {
+            if let Some(len) = request.body().content_length() {
+                request
+                    .headers_mut()
+                    .insert("Content-Length", len.to_string());
+            }
         }
         Ok(request)
     }
@@ -470,5 +487,42 @@ mod tests {
             "application/x-amz-json-1.0",
         );
         assert_eq!(protocol.protocol_id().as_str(), "aws.protocols#awsJson1_0");
+    }
+
+    #[test]
+    fn serialize_honors_header_omit_settings() {
+        use crate::header_omit_settings::{HeaderOmitSettings, SharedHeaderOmitSettings};
+        use aws_smithy_types::config_bag::Layer;
+
+        #[derive(Debug)]
+        struct OmitBoth;
+        impl HeaderOmitSettings for OmitBoth {
+            fn should_omit_default_content_type(&self) -> bool {
+                true
+            }
+            fn should_omit_default_content_length(&self) -> bool {
+                true
+            }
+        }
+
+        let protocol = HttpRpcProtocol::new(
+            crate::shape_id!("test", "rpc"),
+            TestCodec,
+            "application/x-amz-json-1.0",
+        );
+        let mut layer = Layer::new("test");
+        layer.store_put(SharedHeaderOmitSettings::new(OmitBoth));
+        let cfg = ConfigBag::of_layers(vec![layer]);
+
+        let request = protocol
+            .serialize_request(
+                &NameStruct,
+                &STRUCT_WITH_MEMBER,
+                "https://example.com",
+                &cfg,
+            )
+            .unwrap();
+        assert!(request.headers().get("Content-Type").is_none());
+        assert!(request.headers().get("Content-Length").is_none());
     }
 }

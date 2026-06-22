@@ -475,7 +475,7 @@ mod tests {
     struct StubProtocol;
 
     static STUB_ID: ShapeId<'static> =
-        ShapeId::from_static("test#StubProtocol", "test", "StubProtocol");
+        ShapeId::from_parts("test#StubProtocol", "test", "StubProtocol");
 
     impl ClientProtocolInner for StubProtocol {
         type Request = Request;
@@ -606,7 +606,7 @@ mod tests {
     }
 
     static REC_ID: ShapeId<'static> =
-        ShapeId::from_static("test#RecordingProtocol", "test", "RecordingProtocol");
+        ShapeId::from_parts("test#RecordingProtocol", "test", "RecordingProtocol");
 
     impl ClientProtocolInner for RecordingProtocol {
         type Request = Request;

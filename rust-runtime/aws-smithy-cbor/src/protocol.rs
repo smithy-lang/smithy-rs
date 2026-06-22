@@ -8,6 +8,7 @@
 use crate::codec::{CborCodec, CborCodecSettings};
 use crate::Decoder;
 use aws_smithy_runtime_api::http::{Headers, Request, Response};
+use aws_smithy_schema::error_envelope::{parse_query_compatible_header, sanitize_error_code};
 use aws_smithy_schema::http_protocol::HttpRpcProtocol;
 use aws_smithy_schema::protocol::ClientProtocolInner;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeDeserializer};
@@ -152,15 +153,6 @@ fn parse_error_body(response_body: &[u8]) -> Result<ErrorMetadataBuilder, SerdeE
     Ok(builder)
 }
 
-/// Parses an `X-Amzn-Query-Error: <code>;<type>` header, returning the two
-/// halves. Returns `None` if the header is absent or malformed.
-fn parse_query_compatible_header(headers: &Headers) -> Option<(&str, &str)> {
-    let value = headers.get("x-amzn-query-error")?;
-    value
-        .find(';')
-        .map(|idx| (&value[..idx], &value[idx + 1..]))
-}
-
 fn error_code_and_message(
     mut builder: ErrorMetadataBuilder,
     decoder: &mut Decoder,
@@ -168,8 +160,14 @@ fn error_code_and_message(
     let key = decoder.str().map_err(deser_err)?;
     builder = match key.as_ref() {
         "__type" => {
-            let code = decoder.str().map_err(deser_err)?;
-            builder.code(sanitize_error_code(&code))
+            // Silently skip if the value isn't a string, mirroring the
+            // message-key handling below. A malformed error code
+            // shouldn't prevent the rest of the envelope (e.g. the
+            // message) from being recovered.
+            match decoder.str() {
+                Ok(code) => builder.code(sanitize_error_code(&code)),
+                Err(_) => builder,
+            }
         }
         "message" | "Message" | "errorMessage" => {
             // Silently skip if the value isn't a string. Custom error
@@ -185,20 +183,6 @@ fn error_code_and_message(
         }
     };
     Ok(builder)
-}
-
-/// Strips the namespace prefix (`com.example#`) and any URL suffix (`:url`) from
-/// a wire-format error code, leaving just the shape name. Mirrors the JSON
-/// envelope's `sanitize_error_code`.
-fn sanitize_error_code(error_code: &str) -> &str {
-    let error_code = match error_code.find(':') {
-        Some(idx) => &error_code[..idx],
-        None => error_code,
-    };
-    match error_code.find('#') {
-        Some(idx) => &error_code[idx + 1..],
-        None => error_code,
-    }
 }
 
 fn deser_err(e: crate::decode::DeserializeError) -> SerdeError {

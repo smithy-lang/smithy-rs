@@ -240,7 +240,10 @@ impl TypeRegistry {
             .ok_or_else(|| SerdeError::UnknownMember {
                 member_name: id.to_string(),
             })?;
-        let mut deser = DocumentShapeDeserializer::new(document.document());
+        let mut deser = DocumentShapeDeserializer::new_with_settings(
+            document.document(),
+            document.settings().cloned(),
+        );
         (entry.deserialize)(&mut deser)
     }
 
@@ -291,6 +294,14 @@ pub struct TypeRegistryBuilder {
     entries: HashMap<ShapeId<'static>, RegistryEntry>,
 }
 
+impl fmt::Debug for TypeRegistryBuilder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("TypeRegistryBuilder")
+            .field("entries", &self.entries.len())
+            .finish_non_exhaustive()
+    }
+}
+
 impl TypeRegistryBuilder {
     /// Insert an explicit `(ShapeId, RegistryEntry)` pair.
     pub fn insert(mut self, id: ShapeId<'static>, entry: RegistryEntry) -> Self {
@@ -327,6 +338,12 @@ pub struct Iter<'a> {
     inner: hash_map::Iter<'a, ShapeId<'static>, RegistryEntry>,
 }
 
+impl fmt::Debug for Iter<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Iter").finish_non_exhaustive()
+    }
+}
+
 impl<'a> Iterator for Iter<'a> {
     type Item = (&'a ShapeId<'static>, &'a RegistryEntry);
 
@@ -349,7 +366,9 @@ impl ExactSizeIterator for Iter<'_> {
 mod tests {
     use super::*;
 
-    use aws_smithy_types::{Document, Number};
+    use aws_smithy_types::{Blob, Document, DocumentError, DocumentSettings, Number};
+
+    use std::sync::Arc;
 
     use crate::shape_id;
     use crate::ShapeType;
@@ -378,6 +397,21 @@ mod tests {
         shape_id!("smithy.example", "Bar"),
         ShapeType::Structure,
         &[&M_BAR_VALUE],
+    );
+
+    // A structure with a `blob` member, used to verify that protocol
+    // settings are threaded through `deserialize_document` so wire-encoded
+    // blobs (JSON base64 strings) coerce on the type-registry path.
+    static M_WIDGET_DATA: Schema<'static> = Schema::new_member(
+        shape_id!("smithy.example", "Widget", "data"),
+        ShapeType::Blob,
+        "data",
+        0,
+    );
+    static WIDGET_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("smithy.example", "Widget"),
+        ShapeType::Structure,
+        &[&M_WIDGET_DATA],
     );
 
     // -- Test types and their deserialize fns ---------------------------------------------------
@@ -425,6 +459,40 @@ mod tests {
         _deser: &mut dyn ShapeDeserializer,
     ) -> Result<TypeErasedBox, SerdeError> {
         Ok(TypeErasedBox::new(FooReplacement { replaced: true }))
+    }
+
+    #[derive(Debug, PartialEq)]
+    struct Widget {
+        data: Option<Blob>,
+    }
+
+    fn deserialize_widget(deser: &mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError> {
+        let mut out = Widget { data: None };
+        deser.read_struct(&WIDGET_SCHEMA, &mut |member, sub| {
+            if let Some(0) = member.member_index() {
+                out.data = Some(sub.read_blob(member)?);
+            }
+            Ok(())
+        })?;
+        Ok(TypeErasedBox::new(out))
+    }
+
+    // A minimal JSON-like settings impl that base64-decodes strings into
+    // blob bytes, the way the JSON codec does on the wire. Used to prove
+    // that `deserialize_document` threads protocol settings into the
+    // deserializer so blob/timestamp coercion works on the registry path.
+    #[derive(Debug)]
+    struct JsonishSettings;
+
+    impl DocumentSettings for JsonishSettings {
+        fn protocol_id(&self) -> &str {
+            "smithy.example#Jsonish"
+        }
+
+        fn coerce_string_to_blob(&self, s: &str) -> Result<Vec<u8>, DocumentError> {
+            aws_smithy_types::base64::decode(s)
+                .map_err(|e| DocumentError::unsupported(format!("invalid base64 blob: {e}")))
+        }
     }
 
     // -- Lookup tests ---------------------------------------------------------------------------
@@ -647,6 +715,58 @@ mod tests {
         }
     }
 
+    #[test]
+    fn deserialize_document_threads_settings_for_blob_coercion() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&WIDGET_SCHEMA, deserialize_widget)
+            .build();
+
+        // JSON-origin document: the blob arrives as a base64 string and the
+        // attached settings know how to decode it. This mirrors what
+        // `JsonDeserializer::read_discriminated_document` produces. The fix
+        // threads these settings into the deserializer so the nested
+        // `read_blob` can coerce.
+        let mut members = aws_smithy_types::document::DocumentObject::new();
+        members.insert("data".to_string(), Document::String("YWJjZA==".to_string()));
+        let doc = DiscriminatedDocument::new(Document::Object(members))
+            .with_discriminator(WIDGET_SCHEMA.shape_id().as_str())
+            .with_settings(Arc::new(JsonishSettings));
+
+        let boxed = registry
+            .deserialize_document(&doc)
+            .expect("blob coercion should succeed when settings are threaded through");
+        let widget = *boxed.downcast::<Widget>().expect("downcast to Widget");
+        assert_eq!(
+            widget,
+            Widget {
+                data: Some(Blob::new(b"abcd".to_vec())),
+            }
+        );
+    }
+
+    #[test]
+    fn deserialize_document_without_settings_cannot_coerce_blob() {
+        // Same base64-string blob, but no settings attached. Without
+        // settings the deserializer cannot coerce a JSON string into a blob
+        // and must report a type mismatch. This pins the behavior the
+        // settings-threading fix depends on: it is the failure mode that
+        // occurred on the registry path before the fix.
+        let registry = TypeRegistry::builder()
+            .insert_shape(&WIDGET_SCHEMA, deserialize_widget)
+            .build();
+
+        let mut members = aws_smithy_types::document::DocumentObject::new();
+        members.insert("data".to_string(), Document::String("YWJjZA==".to_string()));
+        let doc = DiscriminatedDocument::new(Document::Object(members))
+            .with_discriminator(WIDGET_SCHEMA.shape_id().as_str());
+
+        let err = registry.deserialize_document(&doc).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch without settings, got {err:?}"
+        );
+    }
+
     // -- Builder + Debug tests ------------------------------------------------------------------
 
     #[test]
@@ -686,14 +806,14 @@ mod tests {
         let owned_fqn = String::from("smithy.example#Foo");
         let owned_ns = String::from("smithy.example");
         let owned_name = String::from("Foo");
-        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        let runtime_id: ShapeId<'_> = ShapeId::from_parts(&owned_fqn, &owned_ns, &owned_name);
 
         let schema = registry.schema_for(&runtime_id).expect("found via FQN");
         assert_eq!(schema.shape_id(), FOO_SCHEMA.shape_id());
 
         // Negative case: same lifetime, different FQN.
         let owned_other = String::from("smithy.example#Nope");
-        let runtime_miss: ShapeId<'_> = ShapeId::from_static(&owned_other, &owned_ns, &owned_name);
+        let runtime_miss: ShapeId<'_> = ShapeId::from_parts(&owned_other, &owned_ns, &owned_name);
         assert!(registry.schema_for(&runtime_miss).is_none());
     }
 

@@ -301,7 +301,7 @@ pub fn percent_encode(input: &str) -> String {
 /// appending the result to `out`. Bulk-copies runs of already-safe bytes via
 /// `push_str` instead of pushing one byte at a time, which is the common case
 /// for URI labels and query values (typical inputs need no escaping).
-pub fn percent_encode_into(input: &str, out: &mut String) {
+pub(crate) fn percent_encode_into(input: &str, out: &mut String) {
     let bytes = input.as_bytes();
     let mut start = 0usize;
     for (i, &b) in bytes.iter().enumerate() {
@@ -986,6 +986,23 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
     }
 }
 
+/// Generates inert [`ShapeSerializer`] write methods (each returning
+/// `Ok(())`) for the named methods. The HTTP-binding collectors below
+/// implement only the writes that map a scalar to its string form;
+/// every other write is a no-op. Listing those no-ops through this
+/// macro keeps each collector's impl focused on the writes it actually
+/// handles. Each entry is `method_name(value_arg_types...)`; methods
+/// with no value beyond the schema (e.g. `write_null`) list no types.
+macro_rules! noop_writes {
+    ($($method:ident($($arg:ty),*)),+ $(,)?) => {
+        $(
+            fn $method(&mut self, _: &Schema<'_>, $(_: $arg),*) -> Result<(), SerdeError> {
+                Ok(())
+            }
+        )+
+    };
+}
+
 /// Whether a `ListElementCollector` is gathering values for a header or query param.
 /// Affects default timestamp format: `http-date` for headers, `date-time` for query.
 #[derive(Copy, Clone)]
@@ -1097,51 +1114,15 @@ impl ShapeSerializer for ListElementCollector {
         self.push(aws_smithy_types::base64::encode(value));
         Ok(())
     }
-    // Remaining methods are no-ops for list element collection
-    fn write_struct(
-        &mut self,
-        _: &Schema<'_>,
-        _: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_list(
-        &mut self,
-        _: &Schema<'_>,
-        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_map(
-        &mut self,
-        _: &Schema<'_>,
-        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_big_integer(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::BigInteger,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_big_decimal(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::BigDecimal,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_document(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::Document,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
-        Ok(())
+    // Remaining writes are no-ops for list element collection.
+    noop_writes! {
+        write_struct(&dyn SerializableStruct),
+        write_list(&dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>),
+        write_map(&dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>),
+        write_big_integer(&aws_smithy_types::BigInteger),
+        write_big_decimal(&aws_smithy_types::BigDecimal),
+        write_document(&aws_smithy_types::Document),
+        write_null(),
     }
 }
 
@@ -1204,15 +1185,6 @@ impl ShapeSerializer for MapEntryCollector {
         Ok(())
     }
 
-    // All other methods are no-ops — maps in HTTP bindings only have string keys/values.
-    // Exception: write_list handles Map<String, List<String>> for @httpQueryParams.
-    fn write_struct(
-        &mut self,
-        _: &Schema<'_>,
-        _: &dyn SerializableStruct,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
     fn write_list(
         &mut self,
         _: &Schema<'_>,
@@ -1229,67 +1201,25 @@ impl ShapeSerializer for MapEntryCollector {
         }
         Ok(())
     }
-    fn write_map(
-        &mut self,
-        _: &Schema<'_>,
-        _: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_boolean(&mut self, _: &Schema<'_>, _: bool) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_byte(&mut self, _: &Schema<'_>, _: i8) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_short(&mut self, _: &Schema<'_>, _: i16) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_integer(&mut self, _: &Schema<'_>, _: i32) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_long(&mut self, _: &Schema<'_>, _: i64) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_float(&mut self, _: &Schema<'_>, _: f32) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_double(&mut self, _: &Schema<'_>, _: f64) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_big_integer(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::BigInteger,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_big_decimal(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::BigDecimal,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_blob(&mut self, _: &Schema<'_>, _: &[u8]) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_timestamp(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::DateTime,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_document(
-        &mut self,
-        _: &Schema<'_>,
-        _: &aws_smithy_types::Document,
-    ) -> Result<(), SerdeError> {
-        Ok(())
-    }
-    fn write_null(&mut self, _: &Schema<'_>) -> Result<(), SerdeError> {
-        Ok(())
+    // Every other write is a no-op: HTTP-binding maps have string keys
+    // and values, and the `write_list` above handles the
+    // Map<String, List<String>> case for @httpQueryParams.
+    noop_writes! {
+        write_struct(&dyn SerializableStruct),
+        write_map(&dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>),
+        write_boolean(bool),
+        write_byte(i8),
+        write_short(i16),
+        write_integer(i32),
+        write_long(i64),
+        write_float(f32),
+        write_double(f64),
+        write_big_integer(&aws_smithy_types::BigInteger),
+        write_big_decimal(&aws_smithy_types::BigDecimal),
+        write_blob(&[u8]),
+        write_timestamp(&aws_smithy_types::DateTime),
+        write_document(&aws_smithy_types::Document),
+        write_null(),
     }
 }
 

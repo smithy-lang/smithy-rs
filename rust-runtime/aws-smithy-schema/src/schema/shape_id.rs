@@ -20,10 +20,10 @@ use std::fmt;
 #[macro_export]
 macro_rules! shape_id {
     ($ns:literal, $name:literal) => {
-        $crate::ShapeId::from_static(concat!($ns, "#", $name), $ns, $name)
+        $crate::ShapeId::from_parts(concat!($ns, "#", $name), $ns, $name)
     };
     ($ns:literal, $name:literal, $member:literal) => {
-        $crate::ShapeId::from_static_with_member(
+        $crate::ShapeId::from_parts_with_member(
             concat!($ns, "#", $name, "$", $member),
             $ns,
             $name,
@@ -65,7 +65,7 @@ macro_rules! shape_id {
 /// Two `ShapeId`s compare equal when their fully qualified names
 /// ([`Self::as_str`]) compare equal. The other fields are determined by
 /// the FQN for any `ShapeId` constructed via the [`shape_id!`] macro or
-/// [`Self::from_static`] with consistent parts, so this is the same
+/// [`Self::from_parts`] with consistent parts, so this is the same
 /// equality you would get from comparing every field.
 ///
 /// FQN-based equality lets [`ShapeId`] act as `Borrow<str>`: a
@@ -110,17 +110,17 @@ impl std::borrow::Borrow<str> for ShapeId<'_> {
 }
 
 impl<'a> ShapeId<'a> {
-    /// Creates a ShapeId from pre-computed strings.
+    /// Creates a `ShapeId` from its already-split component strings.
     ///
-    /// The function name is historical: when this method was introduced,
-    /// all `ShapeId` references were `'static`. Today `ShapeId<'a>` accepts
-    /// any lifetime; the function still compiles in `const` contexts when
-    /// the inputs are `'static` (which is the codegen case).
+    /// `const`-callable, so the [`shape_id!`] macro and codegen use it for
+    /// `'static` ids; it also accepts borrowed parts for runtime-built ids
+    /// (e.g. from a wire-format `__type`). `fqn` must agree with
+    /// `namespace`/`shape_name` — the macro guarantees this via `concat!`.
     ///
-    /// Prefer the [`shape_id!`] macro which computes `fqn` via `concat!`
-    /// to prevent the parts from getting out of sync.
+    /// Prefer the [`shape_id!`] macro for literal ids so the parts cannot get
+    /// out of sync.
     #[doc(hidden)]
-    pub const fn from_static(fqn: &'a str, namespace: &'a str, shape_name: &'a str) -> Self {
+    pub const fn from_parts(fqn: &'a str, namespace: &'a str, shape_name: &'a str) -> Self {
         Self {
             fqn,
             namespace,
@@ -129,14 +129,14 @@ impl<'a> ShapeId<'a> {
         }
     }
 
-    /// Creates a ShapeId with a member name from pre-computed strings.
+    /// Creates a member `ShapeId` from its already-split component strings.
     ///
-    /// See [`Self::from_static`] for naming rationale.
+    /// See [`Self::from_parts`]; this is the member-shape variant.
     ///
-    /// Prefer the [`shape_id!`] macro which computes `fqn` via `concat!`
-    /// to prevent the parts from getting out of sync.
+    /// Prefer the [`shape_id!`] macro for literal ids so the parts cannot get
+    /// out of sync.
     #[doc(hidden)]
-    pub const fn from_static_with_member(
+    pub const fn from_parts_with_member(
         fqn: &'a str,
         namespace: &'a str,
         shape_name: &'a str,
@@ -234,7 +234,7 @@ mod tests {
         let fqn = String::from("ns#Foo");
         let ns = String::from("ns");
         let name = String::from("Foo");
-        let id: ShapeId<'_> = ShapeId::from_static(&fqn, &ns, &name);
+        let id: ShapeId<'_> = ShapeId::from_parts(&fqn, &ns, &name);
         assert_eq!(id.as_str(), "ns#Foo");
         assert_eq!(id.namespace(), "ns");
         assert_eq!(id.shape_name(), "Foo");
@@ -249,7 +249,7 @@ mod tests {
         let owned_fqn = String::from("ns#Foo");
         let owned_ns = String::from("ns");
         let owned_name = String::from("Foo");
-        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        let runtime_id: ShapeId<'_> = ShapeId::from_parts(&owned_fqn, &owned_ns, &owned_name);
 
         assert_eq!(static_id, runtime_id);
 
@@ -281,7 +281,7 @@ mod tests {
         let owned_fqn = String::from("ns#Foo");
         let owned_ns = String::from("ns");
         let owned_name = String::from("Foo");
-        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        let runtime_id: ShapeId<'_> = ShapeId::from_parts(&owned_fqn, &owned_ns, &owned_name);
         assert_eq!(map.get(runtime_id.as_str()), Some(&42));
 
         // Negative case.

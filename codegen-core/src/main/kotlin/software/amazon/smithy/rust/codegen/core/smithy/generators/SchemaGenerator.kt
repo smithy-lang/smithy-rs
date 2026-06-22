@@ -156,7 +156,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -182,7 +182,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -1846,21 +1846,90 @@ class SchemaGenerator(
                 val stringValue = trait.stringValue()
                 if (trait.isAnnotationTrait()) {
                     rustTemplate(
-                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
+                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
                         *codegenScope,
                     )
                 } else if (stringValue != null) {
                     rustTemplate(
-                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
+                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
                         *codegenScope,
                     )
                 } else {
-                    val jsonValue = Node.printJson(trait.toNode()).replace("\\", "\\\\").replace("\"", "\\\"")
+                    // Render the trait's structured value as a structured `Document`
+                    // (object/array/number/bool/string), preserving the shape of the
+                    // value instead of flattening it to a JSON string. The runtime
+                    // `Document` type can represent the full Smithy data model, so an
+                    // unknown trait's value round-trips structurally (per the SEP:
+                    // unknown trait values "should be represented with a document data
+                    // type").
                     rustTemplate(
-                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), #{Document}::String("$jsonValue".to_string()))));""",
+                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
                         *codegenScope,
+                        "docValue" to nodeToDocument(trait.toNode()),
                     )
                 }
+            }
+        }
+
+    /**
+     * Renders a Smithy trait value [Node] as a [Writable] that constructs the
+     * structurally-equivalent [`aws_smithy_types::Document`].
+     *
+     * Used for unknown traits whose value is not a plain string, so the generated
+     * schema preserves the trait's structure (nested objects, arrays, numbers,
+     * booleans) rather than flattening it to a single JSON string.
+     *
+     * Uses [RuntimeType] symbols (not hardcoded paths) so the `aws-smithy-types`
+     * dependency is registered on the generated crate. `#` inside string literals
+     * is escaped as `##` so the result is safe inside a `rustTemplate`.
+     */
+    private fun nodeToDocument(node: Node): Writable =
+        writable {
+            val docScope =
+                arrayOf(
+                    "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+                    "Number" to RuntimeType.smithyTypes(runtimeConfig).resolve("Number"),
+                    "DocumentObject" to RuntimeType.smithyTypes(runtimeConfig).resolve("document::DocumentObject"),
+                )
+
+            fun escape(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("#", "##")
+            when {
+                node.isNullNode -> rustTemplate("#{Document}::Null", *docScope)
+                node.isBooleanNode -> rustTemplate("#{Document}::Bool(${node.expectBooleanNode().value})", *docScope)
+                node.isStringNode ->
+                    rustTemplate("""#{Document}::String("${escape(node.expectStringNode().value)}".to_string())""", *docScope)
+                node.isNumberNode -> {
+                    val number = node.expectNumberNode()
+                    if (number.isFloatingPointNumber) {
+                        rustTemplate("#{Document}::Number(#{Number}::Float(${number.value.toDouble()}f64))", *docScope)
+                    } else {
+                        val value = number.value.toLong()
+                        if (value >= 0) {
+                            rustTemplate("#{Document}::Number(#{Number}::PosInt(${value}u64))", *docScope)
+                        } else {
+                            rustTemplate("#{Document}::Number(#{Number}::NegInt(${value}i64))", *docScope)
+                        }
+                    }
+                }
+                node.isArrayNode -> {
+                    rustTemplate("#{Document}::Array(vec![", *docScope)
+                    node.expectArrayNode().elements.forEach { element ->
+                        nodeToDocument(element)(this)
+                        rust(", ")
+                    }
+                    rust("])")
+                }
+                node.isObjectNode -> {
+                    rustTemplate("{ let mut obj = #{DocumentObject}::new(); ", *docScope)
+                    node.expectObjectNode().stringMap.entries.forEach { (key, value) ->
+                        rust("""obj.insert("${escape(key)}".to_string(), """)
+                        nodeToDocument(value)(this)
+                        rust("); ")
+                    }
+                    rustTemplate("#{Document}::Object(obj) }", *docScope)
+                }
+                // Node is sealed over the cases above; this is unreachable for valid models.
+                else -> rustTemplate("#{Document}::Null", *docScope)
             }
         }
 
@@ -2056,6 +2125,17 @@ class SchemaGenerator(
      * `Schema::key()` / `.value()` / `.member()`.
      *
      * Returns `""` for non-aggregate targets.
+     *
+     * Termination invariant: this recursion descends only through aggregate
+     * members (list element, map key/value) and stops at structure/union targets
+     * (the `else -> ""` arm) and scalars. A structure/union carries its own
+     * top-level `::SCHEMA` constant, so the descent never crosses that boundary.
+     * Combined with the Smithy guarantee that a recursive list/map/set is valid
+     * only if its cycle passes through a structure or union, the descent is
+     * bounded for any valid model. The same boundary bounds the sibling write-expr
+     * recursion ([elementWriteExpr] / [mapValueWriteExpr]). A hand-built model that
+     * violated the invariant (an aggregate-only cycle) would not terminate, but
+     * such models are rejected by Smithy validation before reaching codegen.
      */
     private fun emitAggregateMemberChain(
         writer: RustWriter,
@@ -2077,7 +2157,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${prefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedKeyId",
                             "${target.key.id.namespace}",
                             "${target.key.id.name}",
@@ -2087,7 +2167,7 @@ class SchemaGenerator(
                         0,
                     )$keyTraitChain$keyAggChain;
                     static ${prefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedValueId",
                             "${target.value.id.namespace}",
                             "${target.value.id.name}",
@@ -2110,7 +2190,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${prefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedListMemberId",
                             "${target.member.id.namespace}",
                             "${target.member.id.name}",
@@ -2317,7 +2397,7 @@ class SchemaGenerator(
                     writer.rustTemplate(
                         """
                         static $memberConstName: #{Schema}<'static> = #{Schema}::new_member(
-                            #{ShapeId}::from_static(
+                            #{ShapeId}::from_parts(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
                                 "${member.id.name}",
@@ -2337,7 +2417,7 @@ class SchemaGenerator(
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema}<'static> = #{Schema}::new_member(
-                            #{ShapeId}::from_static(
+                            #{ShapeId}::from_parts(
                                 "synthetic##${synth.schemaMemberName}",
                                 "synthetic",
                                 "${synth.schemaMemberName}",
@@ -2359,7 +2439,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedMemberId",
                             "${shape.member.id.namespace}",
                             "${shape.member.id.name}",
@@ -2383,7 +2463,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedKeyId",
                             "${shape.key.id.namespace}",
                             "${shape.key.id.name}",
@@ -2394,7 +2474,7 @@ class SchemaGenerator(
                     )$keyTraitChain;
 
                     static ${schemaPrefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                        #{ShapeId}::from_parts(
                             "$escapedValueId",
                             "${shape.value.id.namespace}",
                             "${shape.value.id.name}",

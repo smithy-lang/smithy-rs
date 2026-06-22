@@ -6,6 +6,7 @@
 use crate::codec::JsonCodecSettings;
 use crate::escape::escape_string;
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
+use aws_smithy_types::error::operation::SerializationError;
 use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{DateTime, Document, Number};
 use std::borrow::Cow;
@@ -43,12 +44,16 @@ impl<'a> JsonValueWriter<'a> {
     /// ([`crate::codec::JsonSerializer`]): base64-encoded JSON string
     /// for blobs, raw JSON number for arbitrary-precision integers /
     /// decimals.
-    pub fn document(self, value: &Document, settings: &JsonCodecSettings) {
+    pub fn document(
+        self,
+        value: &Document,
+        settings: &JsonCodecSettings,
+    ) -> Result<(), SerializationError> {
         match value {
             Document::Array(values) => {
                 let mut array = self.start_array();
                 for value in values {
-                    array.value().document(value, settings);
+                    array.value().document(value, settings)?;
                 }
                 array.finish();
             }
@@ -58,7 +63,7 @@ impl<'a> JsonValueWriter<'a> {
             Document::Object(values) => {
                 let mut object = self.start_object();
                 for (key, value) in values {
-                    object.key(key).document(value, settings);
+                    object.key(key).document(value, settings)?;
                 }
                 object.finish();
             }
@@ -66,19 +71,15 @@ impl<'a> JsonValueWriter<'a> {
             Document::Blob(bytes) => {
                 self.string(&aws_smithy_types::base64::encode(bytes));
             }
-            Document::Timestamp(ts) => self
-                .date_time(ts, settings.default_timestamp_format())
-                .expect("DateTime always formats as the requested codec format"),
+            Document::Timestamp(ts) => self.date_time(ts, settings.default_timestamp_format())?,
             Document::BigInteger(bi) => self.write_raw_value(bi.as_ref()),
             Document::BigDecimal(bd) => self.write_raw_value(bd.as_ref()),
-            // `Document` is `#[non_exhaustive]`. Future variants land
-            // alongside their wire-format support; until then we panic
-            // rather than silently produce malformed JSON.
-            other => panic!(
-                "JsonValueWriter::document: unsupported Document variant {other:?}; \
-                 a new variant was added to aws_smithy_types::Document without updating this serializer"
-            ),
+            // `Document` is `#[non_exhaustive]`. A variant with no JSON
+            // serialization here means a new variant was added to
+            // `aws_smithy_types::Document` without updating this serializer.
+            _ => return Err(SerializationError::unknown_variant("Document")),
         }
+        Ok(())
     }
 
     /// Writes a string `value`.
@@ -390,7 +391,9 @@ mod tests {
 
     fn format_document(document: Document) -> String {
         let mut output = String::new();
-        JsonValueWriter::new(&mut output).document(&document, &JsonCodecSettings::default());
+        JsonValueWriter::new(&mut output)
+            .document(&document, &JsonCodecSettings::default())
+            .unwrap();
         output
     }
 

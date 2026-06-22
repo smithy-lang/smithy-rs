@@ -57,6 +57,20 @@ use serde;
 /// The enum is `#[non_exhaustive]`. Future Smithy data-model additions can be added without a
 /// breaking change. Pattern matches that need to compile across versions should include a wildcard
 /// arm.
+///
+/// ## Optional `serde` representation
+///
+/// Under the unstable `serde-serialize` / `serde-deserialize` features (with `--cfg
+/// aws_sdk_unstable`), `Document` derives `serde::Serialize` / `serde::Deserialize` with
+/// `#[serde(untagged)]`. Untagged deserialization resolves a value to the first variant, in
+/// declaration order, whose serialized shape matches the input. The variants that have no native
+/// JSON form all serialize to JSON strings — [`Document::Blob`] as base64, [`Document::Timestamp`]
+/// as a date-time string, and [`Document::BigInteger`] / [`Document::BigDecimal`] as their numeric
+/// text — so each deserializes back as [`Document::String`] rather than its original variant. This
+/// optional representation therefore does **not** round-trip the `Blob`, `Timestamp`, `BigInteger`,
+/// or `BigDecimal` variants. Faithful round-tripping of those variants is the job of a protocol
+/// codec, which carries the schema or protocol settings needed to interpret the string; the caveat
+/// here is specific to the `serde`-derive path and does not affect the codec (de)serializers.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 #[cfg_attr(
@@ -397,7 +411,8 @@ impl Document {
     /// Returns the variant directly when it is already a [`BigInteger`]. Coerces from
     /// [`Number::PosInt`] / [`Number::NegInt`] by string-formatting (always lossless).
     /// `Number::Float` is rejected with [`DocumentError::TypeMismatch`] — per SEP, no
-    /// integer/float crossover. `BigDecimal` sources truncate at the decimal point.
+    /// integer/float crossover. `BigDecimal` sources are truncated toward zero,
+    /// expanding scientific notation so the integer magnitude is preserved.
     pub fn coerce_big_integer(&self) -> Result<BigInteger, DocumentError> {
         match self {
             Self::BigInteger(bi) => Ok(bi.clone()),
@@ -411,11 +426,19 @@ impl Document {
                 "cannot coerce float to bigInteger without explicit narrowing",
             )),
             Self::BigDecimal(bd) => {
-                // Truncate at the first '.' / 'e' / 'E' to keep arbitrary precision for the
-                // integer portion. `from_str` then validates that what remains is integral.
-                let s = bd.as_ref();
-                let int_part = s.split_once(['.', 'e', 'E']).map(|(i, _)| i).unwrap_or(s);
-                BigInteger::from_str(int_part).map_err(|e| invalid_input("bigInteger", s, &e))
+                // Truncate toward zero, expanding any scientific-notation
+                // exponent so the magnitude is preserved. A naive split at
+                // the first '.' / 'e' / 'E' produced a silent wrong value
+                // (e.g. "1.23e10" -> "1"); dropping only the fractional
+                // digits is the SEP's "ignore loss of precision" rule.
+                let int_part = bd.to_integer_string().ok_or_else(|| {
+                    DocumentError::custom(format!(
+                        "cannot coerce bigDecimal {} to bigInteger: integer magnitude too large",
+                        bd.as_ref()
+                    ))
+                })?;
+                BigInteger::from_str(&int_part)
+                    .map_err(|e| invalid_input("bigInteger", bd.as_ref(), &e))
             }
             other => Err(type_mismatch_for("bigInteger", other)),
         }
@@ -1000,6 +1023,35 @@ mod extended_variant_tests {
         // The 20-digit integer survives intact — clearly larger than
         // f64's lossless integer range (≈ 16 digits).
         assert_eq!(bi.as_ref(), "12345678901234567890");
+    }
+
+    #[test]
+    fn coerce_big_integer_expands_scientific_notation_big_decimal() {
+        // Regression: a BigDecimal in scientific notation must coerce to
+        // its true integer magnitude, not be truncated at the 'e'. The
+        // previous implementation split at the first 'e' and returned "1"
+        // for "1.23e10" — off by ten orders of magnitude.
+        let bd = BigDecimal::from_str("1.23e10").unwrap();
+        let bi = Document::BigDecimal(bd).coerce_big_integer().unwrap();
+        assert_eq!(bi.as_ref(), "12300000000");
+
+        // A value beyond f64's lossless range, as the JSON wire path
+        // produces it (oversize decimal lifted to BigDecimal).
+        let bd = BigDecimal::from_str("1e30").unwrap();
+        let bi = Document::BigDecimal(bd).coerce_big_integer().unwrap();
+        assert_eq!(bi.as_ref(), "1000000000000000000000000000000");
+    }
+
+    #[test]
+    fn coerce_big_integer_errors_on_unmaterializable_big_decimal() {
+        // A pathological exponent must error, not allocate gigabytes or
+        // return a wrong value.
+        let bd = BigDecimal::from_str("1e1000000000").unwrap();
+        let err = Document::BigDecimal(bd).coerce_big_integer().unwrap_err();
+        assert!(
+            err.to_string().contains("too large"),
+            "expected a 'too large' error, got: {err}"
+        );
     }
 
     #[test]

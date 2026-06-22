@@ -237,6 +237,17 @@ impl JsonSerializer {
         self.prefix(schema);
         match (value.discriminator(), value.document()) {
             (Some(id), Document::Object(entries)) => {
+                // SEP § Typed Document Serialization: a serialized
+                // discriminator MUST be an absolute shape id so the
+                // document stays context-free for downstream readers.
+                // `DiscriminatedDocument::with_discriminator` enforces
+                // this at construction; this is a defense-in-depth
+                // check at the wire boundary for any document produced
+                // internally.
+                debug_assert!(
+                    id.contains('#'),
+                    "discriminator `{id}` must be an absolute shape id (namespace#name) when serialized"
+                );
                 self.output.push('{');
                 self.output.push_str("\"__type\":\"");
                 self.output.push_str(&escape_string(id));
@@ -550,6 +561,51 @@ mod tests {
         ser.write_null(&STRING).unwrap();
         let output = ser.finish();
         assert_eq!(String::from_utf8(output).unwrap(), "null");
+    }
+
+    #[test]
+    fn write_discriminated_document_emits_absolute_type() {
+        let mut obj = aws_smithy_types::document::DocumentObject::new();
+        obj.insert(
+            "greeting".to_string(),
+            Document::String("hello".to_string()),
+        );
+        let dd = DiscriminatedDocument::new(Document::Object(obj))
+            .with_discriminator("com.example#Greeting");
+        let schema = aws_smithy_schema::Schema::new(
+            aws_smithy_schema::shape_id!("com.example", "Greeting"),
+            ShapeType::Structure,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_discriminated_document(&schema, &dd).unwrap();
+        let out = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(
+            out,
+            r#"{"__type":"com.example#Greeting","greeting":"hello"}"#
+        );
+    }
+
+    // A relative discriminator constructed via the test-only unchecked
+    // setter (bypassing the absolute-FQN check in
+    // `with_discriminator`) must still be caught at the wire-write site
+    // in debug builds.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "absolute shape id")]
+    fn write_discriminated_document_rejects_relative_discriminator() {
+        let mut obj = aws_smithy_types::document::DocumentObject::new();
+        obj.insert(
+            "greeting".to_string(),
+            Document::String("hello".to_string()),
+        );
+        let mut dd = DiscriminatedDocument::new(Document::Object(obj));
+        dd.set_discriminator_unchecked("Greeting");
+        let schema = aws_smithy_schema::Schema::new(
+            aws_smithy_schema::shape_id!("com.example", "Greeting"),
+            ShapeType::Structure,
+        );
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        let _ = ser.write_discriminated_document(&schema, &dd);
     }
 
     #[test]

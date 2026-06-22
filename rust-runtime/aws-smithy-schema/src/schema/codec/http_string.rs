@@ -12,6 +12,7 @@ use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
 use aws_smithy_types::Document;
 
 /// Serializer for converting Smithy types to strings (for HTTP headers, query params, labels).
+#[derive(Debug)]
 pub struct HttpStringSerializer {
     output: String,
 }
@@ -227,6 +228,7 @@ impl ShapeSerializer for HttpStringSerializer {
 }
 
 /// Deserializer for parsing Smithy types from strings.
+#[derive(Debug)]
 pub struct HttpStringDeserializer<'a> {
     input: std::borrow::Cow<'a, str>,
     position: usize,
@@ -279,10 +281,19 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
     fn read_list(
         &mut self,
         _schema: &Schema<'_>,
-        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        // Lists are comma-separated values
-        // The consumer will call read methods for each element
+        // Comma-separated values: invoke the consumer once per element. Each
+        // call drives a single element read (e.g. `read_string`), which pulls
+        // the next comma-delimited token via `next_value`. An empty input is
+        // an empty list.
+        if self.current_value().is_empty() {
+            return Ok(());
+        }
+        let count = self.current_value().matches(',').count() + 1;
+        for _ in 0..count {
+            consumer(self)?;
+        }
         Ok(())
     }
 
@@ -438,6 +449,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
 }
 
 /// HTTP string codec for serializing/deserializing to/from strings.
+#[derive(Debug)]
 pub struct HttpStringCodec;
 
 impl crate::codec::Codec for HttpStringCodec {
@@ -577,6 +589,32 @@ mod tests {
             deser.read_string(&STRING).unwrap(),
         ];
         assert_eq!(values, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_read_list_drives_consumer_per_element() {
+        let mut deser = HttpStringDeserializer::new("a,b,c");
+        let mut collected = Vec::new();
+        deser
+            .read_list(&STRING, &mut |d: &mut dyn ShapeDeserializer| {
+                collected.push(d.read_string(&STRING)?);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(collected, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_read_list_empty_input_is_empty_list() {
+        let mut deser = HttpStringDeserializer::new("");
+        let mut count = 0;
+        deser
+            .read_list(&STRING, &mut |_d: &mut dyn ShapeDeserializer| {
+                count += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

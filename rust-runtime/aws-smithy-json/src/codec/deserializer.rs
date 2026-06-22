@@ -712,8 +712,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         }
                     }
                 } else {
-                    // Default: try date-time with offsets allowed
-                    aws_smithy_types::date_time::Format::DateTimeWithOffset
+                    // No `@timestampFormat` trait: honor the codec's
+                    // configured default format. A JSON string can't be
+                    // `epoch-seconds` (a number), so that case resolves to
+                    // the offset-aware date-time form. Shared with
+                    // `JsonCodecSettings::coerce_string_to_timestamp` so the
+                    // typed and untyped string-timestamp paths can't drift.
+                    crate::codec::string_timestamp_format(self.settings.default_timestamp_format())
                 };
                 DateTime::from_str(&s, format)
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
@@ -748,6 +753,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                             message: e.to_string(),
                         }
                     })?;
+                    if n > i64::MAX as u64 {
+                        return Err(SerdeError::InvalidInput {
+                            message: format!(
+                                "epoch-seconds value {n} overflows i64; cannot construct DateTime"
+                            ),
+                        });
+                    }
                     Ok(DateTime::from_secs(n as i64))
                 }
             }
@@ -1009,8 +1021,9 @@ impl<'a> JsonDeserializer<'a> {
     /// drops the key from the result map.
     ///
     /// Falls back to leaving `__type` in the map when the value is
-    /// not a string or is a relative shape name (no `#`). Relative
-    /// resolution against a default namespace is not yet implemented.
+    /// not a string, or is a relative shape name (no `#`) and no
+    /// `default_namespace` is configured. When a `default_namespace`
+    /// is set, a relative name is resolved against it before lifting.
     ///
     /// # Example
     ///
@@ -1203,6 +1216,16 @@ impl<'a> JsonDeserializer<'a> {
             return Err(SerdeError::TypeMismatch {
                 message: "expected integer".into(),
             });
+        }
+        // Reject a floating-point value for an integer member. Without this,
+        // `1.5` would read `1` and leave `.5` in the stream, surfacing as a
+        // confusing downstream parse error instead of a clean TypeMismatch.
+        if let Some(&next) = rem.get(len) {
+            if next == b'.' || next == b'e' || next == b'E' {
+                return Err(SerdeError::TypeMismatch {
+                    message: "expected integer, found floating-point number".into(),
+                });
+            }
         }
         let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
             message: e.to_string(),
@@ -1936,6 +1959,65 @@ mod tests {
     fn test_read_timestamp_invalid() {
         let mut deser = JsonDeserializer::new(b"true", Arc::new(JsonCodecSettings::default()));
         assert!(deser.read_timestamp(timestamp_schema()).is_err());
+    }
+
+    #[test]
+    fn test_read_timestamp_string_honors_httpdate_default() {
+        // No `@timestampFormat` trait on the schema, so the codec's default
+        // format governs string parsing. With an http-date default, an
+        // http-date string must parse. (Before L2a the string branch
+        // hardcoded date-time and this errored.)
+        let settings = JsonCodecSettings::builder()
+            .default_timestamp_format(aws_smithy_types::date_time::Format::HttpDate)
+            .build();
+        let mut deser =
+            JsonDeserializer::new(br#""Tue, 14 Nov 2023 22:13:20 GMT""#, Arc::new(settings));
+        let ts = deser.read_timestamp(timestamp_schema()).unwrap();
+        assert_eq!(ts, DateTime::from_secs(1700000000));
+    }
+
+    #[test]
+    fn test_read_timestamp_string_default_epoch_still_parses_datetime() {
+        // Regression guard for the common case: with the default
+        // (epoch-seconds) format, a date-time *string* still parses via the
+        // offset-aware fallback — the shared `string_timestamp_format` helper
+        // must not break this.
+        let mut deser = JsonDeserializer::new(
+            br#""2023-11-14T22:13:20Z""#,
+            Arc::new(JsonCodecSettings::default()),
+        );
+        let ts = deser.read_timestamp(timestamp_schema()).unwrap();
+        assert_eq!(ts, DateTime::from_secs(1700000000));
+    }
+
+    #[test]
+    fn test_read_timestamp_rejects_u64_overflow() {
+        // A positive epoch-seconds value beyond i64::MAX must error rather
+        // than silently wrapping through `as i64`.
+        let big = (i64::MAX as u64 + 1).to_string();
+        let mut deser =
+            JsonDeserializer::new(big.as_bytes(), Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_timestamp(timestamp_schema())
+            .expect_err("u64 epoch overflowing i64 must error");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_read_integer_rejects_float() {
+        // An integer member must reject a floating-point value rather than
+        // reading the integer part and leaving the fraction in the stream.
+        let mut deser = JsonDeserializer::new(b"1.5", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_integer(&aws_smithy_schema::prelude::INTEGER)
+            .expect_err("a float must not deserialize as an integer");
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
     }
 
     #[test]

@@ -4,7 +4,7 @@
  */
 
 //! [`DocumentObject`]: insertion-order-preserving map type used as the
-//! inner storage of [`Document::Object`](super::Document::Object).
+//! inner storage of [`Document::Object`].
 //!
 //! The Smithy "Document Type and Type Registries" SEP requires that a
 //! `Document` constructed from serialized data iterate its map entries
@@ -22,11 +22,11 @@
 //! # Example
 //!
 //! ```
-//! use aws_smithy_types::{Document, document::DocumentObject};
+//! use aws_smithy_types::{Document, Number, document::DocumentObject};
 //!
 //! let mut object = DocumentObject::new();
 //! object.insert("greeting".to_string(), Document::String("hello".to_string()));
-//! object.insert("count".to_string(), Document::Number(42u64.into()));
+//! object.insert("count".to_string(), Document::Number(Number::PosInt(42)));
 //!
 //! let doc = Document::Object(object);
 //! let map = doc.as_object().unwrap();
@@ -35,7 +35,7 @@
 //! assert!(map.contains_key("greeting"));
 //!
 //! // Iteration order matches insertion order.
-//! let keys: Vec<&str> = map.keys().collect();
+//! let keys: Vec<&str> = map.keys().map(|k| k.as_str()).collect();
 //! assert_eq!(keys, ["greeting", "count"]);
 //! ```
 

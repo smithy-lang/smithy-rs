@@ -6,59 +6,88 @@
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
 import software.amazon.smithy.model.Model
+import software.amazon.smithy.model.shapes.ListShape
+import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
-import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 
 /**
- * Classifies whether a member's target shape transitively references the
- * containing aggregate.
+ * Classifies whether emitting a nested aggregate's resolved schema constant
+ * from its containing aggregate would close a cycle in the `static` schema
+ * data graph.
  *
- * Used by [SchemaGenerator] to decide whether to emit the actual nested
- * aggregate's schema constant (e.g. `&FOO_VALUE_SCHEMA`) or to fall back
- * to `&prelude::DOCUMENT` for self-referential types. Recursive aggregates
- * (e.g. DynamoDB's `AttributeValue` map values) must keep emitting
- * `prelude::DOCUMENT` because the runtime walks the same `SCHEMA` constant
- * on each level — emitting a direct reference would create a cycle in the
- * `static` data the codegen lays down.
+ * Used by [SchemaGenerator] to decide whether a nested list/map element can
+ * reference the resolved sub-schema constant (e.g. `&FOO_MEMBER`) — preserving
+ * the element's member traits such as `@xmlName` / `@xmlFlattened` — or must
+ * fall back to `&prelude::DOCUMENT`.
  *
- * Closures are computed lazily and cached per target shape, so callers can
- * ask many questions across one codegen run without re-walking the shape
- * graph for the same target.
+ * Reachability is computed over **aggregate edges only**: list elements and map
+ * key/value targets. Structure and union targets terminate the walk because
+ * each carries its own top-level `::SCHEMA` constant, so a path that reaches the
+ * containing aggregate only by passing through a structure or union does **not**
+ * close a cycle in the inline `static` schema data — it crosses a named-constant
+ * boundary that breaks the chain. Only an aggregate-only cycle (a list/map that
+ * reaches itself without an intervening structure/union) would close such a
+ * cycle, and Smithy forbids those, so for any valid model the resolved constant
+ * is always finite and safe to reference.
+ *
+ * This matches the data emitted by [SchemaGenerator.emitAggregateMemberChain],
+ * which likewise descends only through aggregates and stops at struct/union.
+ *
+ * Closures are computed lazily and cached per target shape, so callers can ask
+ * many questions across one codegen run without re-walking the shape graph for
+ * the same target.
  */
-class RecursiveShapeClassifier(model: Model) {
-    private val walker = DirectedWalker(model)
-    private val targetClosures = mutableMapOf<ShapeId, Set<ShapeId>>()
+class RecursiveShapeClassifier(private val model: Model) {
+    private val aggregateClosures = mutableMapOf<ShapeId, Set<ShapeId>>()
 
     /**
-     * Returns true if [target] can reach [containingAggregate] via a chain
-     * of directed shape-graph edges.
+     * Returns true if [target] can reach [containingAggregate] by following only
+     * aggregate edges (list element, map key/value), treating structure and
+     * union shapes as opaque leaves.
      *
      * Intended to be called when [containingAggregate] has a direct
-     * member-target edge to [target] (i.e. when the codegen is about to
-     * render that very edge as a schema reference). Under that condition,
-     * a `true` result means emitting [target]'s schema as a direct
-     * reference from [containingAggregate]'s schema would close a cycle
-     * in the `static` data graph; the caller should fall back to
-     * `prelude::DOCUMENT` instead.
+     * member-target edge to [target] (i.e. when the codegen is about to render
+     * that very edge as a schema reference). Under that condition, a `true`
+     * result means emitting [target]'s schema as a direct reference from
+     * [containingAggregate]'s schema would close a cycle in the `static` data
+     * graph; the caller should fall back to `prelude::DOCUMENT` instead.
      *
-     * Asking in the reverse direction (no model edge from
-     * [containingAggregate] to [target]) is well-defined but not what
-     * this classifier is for: the answer reflects pure reachability and
-     * does not predict cycle creation.
-     *
-     * A self-referential target (`target == containingAggregate`) counts
-     * as recursive, because [DirectedWalker.walkShapes] includes the
-     * start shape in its result.
+     * A self-referential target (`target == containingAggregate`) counts as
+     * recursive, because the closure includes the start shape.
      */
     fun isRecursive(
         containingAggregate: Shape,
         target: Shape,
     ): Boolean {
-        val closure =
-            targetClosures.getOrPut(target.id) {
-                walker.walkShapes(target).map { it.id }.toSet()
-            }
+        val closure = aggregateClosures.getOrPut(target.id) { aggregateClosure(target) }
         return containingAggregate.id in closure
+    }
+
+    /**
+     * The set of shapes reachable from [start] by following only aggregate edges
+     * (list element, map key/value). Structure and union shapes are added to the
+     * set but the walk does not descend through them (they own a separate
+     * `::SCHEMA` constant). The `seen` set also guarantees termination even for a
+     * malformed model that contained an aggregate-only cycle.
+     */
+    private fun aggregateClosure(start: Shape): Set<ShapeId> {
+        val seen = mutableSetOf<ShapeId>()
+        val stack = ArrayDeque<Shape>()
+        stack.addLast(start)
+        while (stack.isNotEmpty()) {
+            val shape = stack.removeLast()
+            if (!seen.add(shape.id)) continue
+            val next =
+                when (shape) {
+                    // `ListShape` also covers the deprecated `SetShape` (a subclass).
+                    is ListShape -> listOf(shape.member.target)
+                    is MapShape -> listOf(shape.key.target, shape.value.target)
+                    // Structure / union (own `::SCHEMA` constant) and scalars terminate the walk.
+                    else -> emptyList()
+                }
+            next.forEach { stack.addLast(model.expectShape(it)) }
+        }
+        return seen
     }
 }

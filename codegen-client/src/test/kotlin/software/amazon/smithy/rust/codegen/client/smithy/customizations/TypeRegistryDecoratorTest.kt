@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIf
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -37,7 +39,19 @@ import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
  * Sibling suite: [ErrorRegistryDecoratorTest] for the error-registry
  * counterpart.
  */
+@EnabledIf("schemaSerdeEnabled")
 class TypeRegistryDecoratorTest {
+    companion object {
+        /**
+         * `Client::registry()` is only generated when the service's protocol is on
+         * [SchemaSerdeAllowlist]. This suite's model uses awsJson1_0, so it runs only
+         * when that protocol is enabled for schema-serde and is skipped otherwise —
+         * keeping the coverage live without hard-disabling it.
+         */
+        @JvmStatic
+        fun schemaSerdeEnabled(): Boolean = SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)
+    }
+
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
         val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)
@@ -60,9 +74,9 @@ class TypeRegistryDecoratorTest {
      * - `BirdEvent` — a union shape; per the SEP, unions are excluded from
      *   the primary registry even though they share structural traits with
      *   structures.
-     * - `BirdNotFound` — a `@error`-trait shape; per the SEP and the
-     *   decorator's filter, errors live in the *error* registry, not the
-     *   primary registry.
+     * - `BirdNotFound` — a `@error`-trait shape; per the SEP the primary
+     *   registry includes every structure shape (errors included), so it
+     *   must appear here as well as in the dedicated error registry.
      * - The synthetic operation input/output shapes for `GetBird` are
      *   produced by `OperationNormalizer`; the decorator's
      *   `SyntheticInputTrait` / `SyntheticOutputTrait` filter must exclude
@@ -212,25 +226,26 @@ class TypeRegistryDecoratorTest {
     }
 
     @Test
-    fun `registry excludes error shapes`() {
+    fun `registry includes error shapes`() {
         clientIntegrationTest(model) { codegenContext, rustCrate ->
-            rustCrate.integrationTest("registry_excludes_errors") {
+            rustCrate.integrationTest("registry_includes_errors") {
                 val moduleName = codegenContext.moduleUseName()
                 Attribute.Test.render(this)
                 rustTemplate(
                     """
-                    fn registry_excludes_errors() {
+                    fn registry_includes_errors() {
                         let registry = $moduleName::Client::registry();
 
-                        // Errors live in `Client::error_registry()`, not the primary
-                        // registry. Asserting absence here is the inverse of the
-                        // ErrorRegistryDecoratorTest "error_registry contains modeled
-                        // errors" assertion — together they pin down the partition.
+                        // Per the SEP, the primary registry includes every structure
+                        // shape — `@error` structures included. The same shape also
+                        // appears in `Client::error_registry()` (see
+                        // ErrorRegistryDecoratorTest); a shape legitimately lives in
+                        // both registries.
                         assert!(
                             registry
                                 .schema_for(&#{shape_id}!("com.example", "BirdNotFound"))
-                                .is_none(),
-                            "@error shapes must NOT appear in the primary registry",
+                                .is_some(),
+                            "@error structures must appear in the primary registry",
                         );
                     }
                     """,

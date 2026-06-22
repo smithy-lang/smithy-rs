@@ -45,14 +45,23 @@ object SchemaSerdeAllowlist {
     /**
      * Protocols for which schema-based serde is the sole path (no fallback).
      *
-     * Intentionally empty while preparing the branch for merge to main — keeps
-     * the schema-serde runtime and codegen infrastructure in place but opts
-     * every service back onto the legacy per-shape codegen path. Re-enable
-     * protocols incrementally in follow-up PRs by adding entries such as
-     * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
+     * All supported protocols are enabled so the schema-serde path is exercised
+     * end-to-end: codegen, generated-client compilation, decorator tests, and
+     * the dynamodb integration tests all run against the schema-serde path.
+     *
+     * TODO(schema-serde): remove these protocols (restore `emptySet()`) before
+     * merging to main so every service lands back on the legacy per-shape
+     * codegen path, then re-enable protocols incrementally in follow-up PRs per
+     * the SEP's phased-rollout guidance.
      */
     private val allowedProtocols: Set<ShapeId> =
-        emptySet()
+        setOf(
+            RestJson1Trait.ID,
+            AwsJson1_0Trait.ID,
+            AwsJson1_1Trait.ID,
+            RestXmlTrait.ID,
+            Rpcv2CborTrait.ID,
+        )
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
@@ -61,6 +70,16 @@ object SchemaSerdeAllowlist {
     fun usesSchemaSerdeExclusively(codegenContext: ClientCodegenContext): Boolean =
         codegenContext.protocol in allowedProtocols ||
             codegenContext.serviceShape.id.toString() in allowedServices
+
+    /**
+     * Returns true if schema-based serde is enabled for [protocol].
+     *
+     * Tests that exercise schema-serde-only generated APIs (e.g. the type/error
+     * registries or the schema-serde streaming deserializer) gate themselves on
+     * this so they run exactly when the corresponding protocol is enabled and are
+     * skipped otherwise, rather than being hard-disabled.
+     */
+    fun isProtocolEnabled(protocol: ShapeId): Boolean = protocol in allowedProtocols
 }
 
 /**

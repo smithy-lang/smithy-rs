@@ -23,6 +23,15 @@
 //! This is the user-visible payoff of:
 //!  * the `__type` lift in `aws-smithy-json::codec::deserializer`, and
 //!  * the cross-lifetime registry-lookup APIs on `TypeRegistry`.
+//!
+//! `Client::registry()` and the discriminated-document deserialize path are only
+//! generated when DynamoDB's protocol is on `SchemaSerdeAllowlist`, so this test
+//! compiles and runs only while that protocol is enabled there. It is currently
+//! enabled so it runs in CI against the schema-serde path.
+//!
+//! TODO(schema-serde): Rust cannot query the codegen allowlist, so this gating
+//! is manual — re-add `#![cfg(any())]` here to disable this test when the
+//! protocols are removed from the allowlist.
 
 use aws_sdk_dynamodb::types::Capacity;
 use aws_sdk_dynamodb::Client;

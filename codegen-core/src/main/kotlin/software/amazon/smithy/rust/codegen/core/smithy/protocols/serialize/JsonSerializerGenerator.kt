@@ -305,10 +305,10 @@ class JsonSerializerGenerator(
         return ProtocolFunctions.crossOperationFn("serialize_document") { fnName ->
             rustTemplate(
                 """
-                pub fn $fnName(input: &#{Document}) -> #{ByteSlab} {
+                pub fn $fnName(input: &#{Document}) -> std::result::Result<#{ByteSlab}, #{Error}> {
                     let mut out = String::new();
-                    #{JsonValueWriter}::new(&mut out).document(input, &#{JsonCodecSettings}::default());
-                    out.into_bytes()
+                    #{JsonValueWriter}::new(&mut out).document(input, &#{JsonCodecSettings}::default())?;
+                    Ok(out.into_bytes())
                 }
                 """,
                 "Document" to RuntimeType.document(runtimeConfig), *codegenScope,
@@ -486,7 +486,7 @@ class JsonSerializerGenerator(
 
             is DocumentShape ->
                 rustTemplate(
-                    "$writer.document(${value.asRef()}, &#{JsonCodecSettings}::default());",
+                    "$writer.document(${value.asRef()}, &#{JsonCodecSettings}::default())?;",
                     *codegenScope,
                 )
             else -> TODO(target.toString())

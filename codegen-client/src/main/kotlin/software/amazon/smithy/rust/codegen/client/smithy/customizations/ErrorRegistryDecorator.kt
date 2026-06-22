@@ -28,12 +28,15 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErr
  *
  * Per the Document Type & Type Registries SEP § "Package level error type registry":
  * - The service-wide error registry contains every shape with the `@error` trait in
- *   the service closure. It is the lookup table for runtime error-discriminator dispatch
- *   and for third-party Document-based use cases (e.g., reifying a Document into a
- *   typed error variant via [`TypeRegistry::deserialize_document`]).
+ *   the service closure. It is exposed publicly via `Client::error_registry()` and is
+ *   intended for third-party `Document`-based reification — turning a discriminated
+ *   `Document` into a typed error variant via [`TypeRegistry::deserialize_document`].
+ *   It is NOT consulted by the SDK's own error-response dispatch, which matches on each
+ *   operation's modeled errors directly. Wiring the registry into dispatch is a SEP
+ *   SHOULD, not a MUST, and is deferred.
  * - The per-operation error registry contains only the errors that operation can throw,
- *   and lives inside the operation's module. Customers handling a `Document` known to
- *   contain one of an operation's error variants can use it for scoped dispatch.
+ *   and lives inside the operation's module as a `pub(crate)` static. It is generated for
+ *   future internal scoped dispatch and is not yet consulted (hence `#[allow(dead_code)]`).
  *
  * Only fires for services in [SchemaSerdeAllowlist]; non-allowlisted services pay no
  * artifact-size cost. Per-operation registries are only emitted for operations with
@@ -69,15 +72,11 @@ class ErrorRegistryDecorator : ClientCodegenDecorator {
         }
 
         val model = codegenContext.model
-        val symbolProvider = codegenContext.symbolProvider
         val rc = codegenContext.runtimeConfig
 
         val smithySchema = RuntimeType.smithySchema(rc)
         val smithyTypes = RuntimeType.smithyTypes(rc)
         val typeRegistry = smithySchema.resolve("registry::TypeRegistry")
-        val typeErasedBox = smithyTypes.resolve("type_erasure::TypeErasedBox")
-        val shapeDeserializer = smithySchema.resolve("serde::ShapeDeserializer")
-        val serdeError = smithySchema.resolve("serde::SerdeError")
         val lazyLock = RuntimeType.std.resolve("sync::LazyLock")
 
         // Walk the service closure for every @error-trait structure shape, sorted by
@@ -102,27 +101,7 @@ class ErrorRegistryDecorator : ClientCodegenDecorator {
                 """,
                 "LazyLock" to lazyLock,
                 "TypeRegistry" to typeRegistry,
-                "Entries" to
-                    writable {
-                        errorShapes.forEach { shape ->
-                            val type = symbolProvider.toSymbol(shape)
-                            rustTemplate(
-                                """
-                                .insert_shape(
-                                    #{Type}::SCHEMA,
-                                    |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{TypeErasedBox}, #{SerdeError}> {
-                                        #{Result}::Ok(#{TypeErasedBox}::new(#{Type}::deserialize(d)?))
-                                    },
-                                )
-                                """,
-                                "Type" to type,
-                                "ShapeDeserializer" to shapeDeserializer,
-                                "TypeErasedBox" to typeErasedBox,
-                                "SerdeError" to serdeError,
-                                "Result" to RuntimeType.std.resolve("result::Result"),
-                            )
-                        }
-                    },
+                "Entries" to registryEntries(codegenContext, errorShapes),
             )
         }
 
@@ -135,9 +114,13 @@ class ErrorRegistryDecorator : ClientCodegenDecorator {
                     /// Returns the service-wide error registry.
                     ///
                     /// The registry contains an entry for every `@error`-trait structure shape
-                    /// in the service closure, keyed by [`ShapeId`](#{ShapeId}). It supports
-                    /// runtime error-discriminator dispatch and reifying a [`Document`](#{Document})
-                    /// into a typed error via [`TypeRegistry::deserialize_document`](#{TypeRegistry}::deserialize_document).
+                    /// in the service closure, keyed by [`ShapeId`](#{ShapeId}). Use it to reify a
+                    /// discriminated [`Document`](#{Document}) into a typed error variant via
+                    /// [`TypeRegistry::deserialize_document`](#{TypeRegistry}::deserialize_document).
+                    ///
+                    /// This registry is provided for third-party `Document`-based error handling.
+                    /// It is not consulted by the SDK's own error-response dispatch, which matches
+                    /// on each operation's modeled errors directly.
                     ///
                     /// ```ignore
                     /// let registry = MyClient::error_registry();
@@ -182,19 +165,18 @@ private class ErrorRegistryOperationCustomization(
             }
 
             val rc = codegenContext.runtimeConfig
-            val symbolProvider = codegenContext.symbolProvider
             val smithySchema = RuntimeType.smithySchema(rc)
-            val smithyTypes = RuntimeType.smithyTypes(rc)
             val typeRegistry = smithySchema.resolve("registry::TypeRegistry")
-            val typeErasedBox = smithyTypes.resolve("type_erasure::TypeErasedBox")
-            val shapeDeserializer = smithySchema.resolve("serde::ShapeDeserializer")
-            val serdeError = smithySchema.resolve("serde::SerdeError")
             val lazyLock = RuntimeType.std.resolve("sync::LazyLock")
 
             rustTemplate(
                 """
                 /// Per-operation error registry. Contains an entry for every modeled
                 /// error this operation can throw.
+                ///
+                /// Generated for potential future internal scoped error dispatch; it is not
+                /// yet consulted (the response deserializer matches on the operation's modeled
+                /// errors directly), hence the `##[allow(dead_code)]`.
                 pub(crate) mod error_registry {
                     ##[allow(dead_code)]
                     pub(crate) static REGISTRY: #{LazyLock}<#{TypeRegistry}> = #{LazyLock}::new(|| {
@@ -206,27 +188,7 @@ private class ErrorRegistryOperationCustomization(
                 """,
                 "LazyLock" to lazyLock,
                 "TypeRegistry" to typeRegistry,
-                "Entries" to
-                    writable {
-                        errors.forEach { shape ->
-                            val type = symbolProvider.toSymbol(shape)
-                            rustTemplate(
-                                """
-                                .insert_shape(
-                                    #{Type}::SCHEMA,
-                                    |d: &mut dyn #{ShapeDeserializer}| -> #{Result}<#{TypeErasedBox}, #{SerdeError}> {
-                                        #{Result}::Ok(#{TypeErasedBox}::new(#{Type}::deserialize(d)?))
-                                    },
-                                )
-                                """,
-                                "Type" to type,
-                                "ShapeDeserializer" to shapeDeserializer,
-                                "TypeErasedBox" to typeErasedBox,
-                                "SerdeError" to serdeError,
-                                "Result" to RuntimeType.std.resolve("result::Result"),
-                            )
-                        }
-                    },
+                "Entries" to registryEntries(codegenContext, errors),
             )
         }
 }

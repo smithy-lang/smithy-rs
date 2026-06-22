@@ -6,6 +6,13 @@
 /* Automatically managed default lints */
 #![cfg_attr(docsrs, feature(doc_cfg))]
 /* End of automatically managed default lints */
+#![warn(
+    missing_docs,
+    rustdoc::missing_crate_level_docs,
+    missing_debug_implementations,
+    rust_2018_idioms,
+    unreachable_pub
+)]
 
 //! Runtime schema types for Smithy shapes.
 //!
@@ -66,20 +73,21 @@
 //! before any downstream code is affected.
 
 mod schema {
-    pub mod shape_id;
-    pub mod shape_type;
-    pub mod trait_map;
-    pub mod trait_type;
-    pub mod traits;
+    pub(crate) mod shape_id;
+    pub(crate) mod shape_type;
+    pub(crate) mod trait_map;
+    pub(crate) mod trait_type;
+    pub(crate) mod traits;
 
-    pub mod codec;
-    pub mod document;
-    pub mod header_omit_settings;
-    pub mod http_protocol;
-    pub mod prelude;
-    pub mod protocol;
-    pub mod registry;
-    pub mod serde;
+    pub(crate) mod codec;
+    pub(crate) mod document;
+    pub(crate) mod error_envelope;
+    pub(crate) mod header_omit_settings;
+    pub(crate) mod http_protocol;
+    pub(crate) mod prelude;
+    pub(crate) mod protocol;
+    pub(crate) mod registry;
+    pub(crate) mod serde;
 }
 
 pub use schema::shape_id::ShapeId;
@@ -88,41 +96,60 @@ pub use schema::trait_map::TraitMap;
 pub use schema::trait_type::Trait;
 pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait};
 
+/// Schemas for the Smithy prelude shapes (`smithy.api#String`,
+/// `smithy.api#Integer`, and so on).
 pub mod prelude {
     pub use crate::schema::prelude::*;
 }
 
+/// Shape serialization and deserialization traits and their error type.
 pub mod serde {
     pub use crate::schema::serde::*;
 }
 
+/// Runtime representations of the Smithy serialization traits carried on a schema.
 pub mod traits {
     pub use crate::schema::traits::*;
 }
 
+/// Format codecs that pair a shape serializer with a matching deserializer.
 pub mod codec {
     pub use crate::schema::codec::*;
 }
 
+/// `Document` shape serde and the discriminated-document conversion extension.
 pub mod document {
     pub use crate::schema::document::*;
 }
 
+/// Settings controlling which HTTP headers are omitted during serialization.
 pub mod header_omit_settings {
     pub use crate::schema::header_omit_settings::*;
 }
 
+/// Client protocol abstraction for serializing requests and deserializing responses.
 pub mod protocol {
     pub use crate::schema::protocol::*;
 }
 
+/// Shared helpers for parsing AWS protocol error envelopes (error-code
+/// sanitization and the awsQueryCompatible header), used by the JSON and CBOR
+/// codecs.
+pub mod error_envelope {
+    pub use crate::schema::error_envelope::*;
+}
+
+/// HTTP client-protocol building blocks: HTTP bindings and RPC payloads.
 pub mod http_protocol {
     pub use crate::schema::http_protocol::*;
 }
 
+/// Runtime type and error registries for resolving shapes by `ShapeId`.
 pub mod registry {
     pub use crate::schema::registry::*;
 }
+
+use schema::traits as trait_types;
 
 /// A Smithy schema — a lightweight runtime representation of a Smithy shape.
 ///
@@ -132,8 +159,6 @@ pub mod registry {
 /// Schemas are constructed at compile time (via `const`) for generated code
 /// and prelude types. The Smithy type system is closed, so no extensibility
 /// via trait objects is needed.
-use schema::traits as trait_types;
-
 #[derive(Debug)]
 pub struct Schema<'a> {
     id: ShapeId<'a>,
@@ -267,7 +292,7 @@ impl<'a> Schema<'a> {
     /// have lifetime parameters in stable Rust.
     const fn empty_traits() -> Schema<'a> {
         Schema {
-            id: ShapeId::<'a>::from_static("", "", ""),
+            id: ShapeId::<'a>::from_parts("", "", ""),
             shape_type: ShapeType::Boolean,
             member_name: None,
             member_index: None,
@@ -318,9 +343,9 @@ impl<'a> Schema<'a> {
     /// ```
     /// use aws_smithy_schema::{Schema, ShapeId, ShapeType};
     ///
-    /// let id = ShapeId::from_static("ns#Foo", "ns", "Foo");
+    /// let id = ShapeId::from_parts("ns#Foo", "ns", "Foo");
     /// let member_x = Schema::new_member(
-    ///     ShapeId::from_static("smithy.api#String", "smithy.api", "String"),
+    ///     ShapeId::from_parts("smithy.api#String", "smithy.api", "String"),
     ///     ShapeType::String,
     ///     "x",
     ///     0,
@@ -454,7 +479,6 @@ impl<'a> Schema<'a> {
         self.has_body_members
     }
 
-    /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
     pub fn has_http_response_binding(&self) -> bool {
@@ -464,6 +488,7 @@ impl<'a> Schema<'a> {
             || self.http_payload.is_some()
     }
 
+    /// Returns the `@httpHeader` value if present.
     pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait> {
         self.http_header.as_ref()
     }
@@ -943,7 +968,7 @@ mod test {
         let owned_fqn = String::from("smithy.api#required");
         let owned_ns = String::from("smithy.api");
         let owned_name = String::from("required");
-        let runtime_id: ShapeId<'_> = ShapeId::from_static(&owned_fqn, &owned_ns, &owned_name);
+        let runtime_id: ShapeId<'_> = ShapeId::from_parts(&owned_fqn, &owned_ns, &owned_name);
         assert!(map.contains(&runtime_id));
         assert!(map.get(&runtime_id).is_some());
     }

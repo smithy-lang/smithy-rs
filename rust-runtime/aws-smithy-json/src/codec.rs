@@ -124,7 +124,7 @@ pub struct JsonCodecSettings {
     /// When set, [`crate::codec::deserializer::JsonDeserializer::read_discriminated_document`]
     /// resolves a relative `__type` value (e.g., `"Capacity"`) to its
     /// fully-qualified shape ID (`"<default_namespace>#Capacity"`)
-    /// before lifting it onto the resulting [`DiscriminatedDocument`]
+    /// before lifting it onto the resulting [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument)
     /// discriminator slot. Absolute `__type` values (already
     /// containing `#`) are taken as-is regardless of this setting.
     ///
@@ -225,6 +225,25 @@ impl Default for JsonCodecSettings {
 /// protocols override this with their own ids.
 const DEFAULT_JSON_CODEC_ID: ShapeId<'static> = shape_id!("aws.smithy.json", "JsonCodec");
 
+/// Selects the timestamp [`Format`](aws_smithy_types::date_time::Format) used
+/// to parse a *string*-encoded timestamp, given a codec's configured default
+/// format.
+///
+/// A JSON string never encodes `epoch-seconds` (a number), so every default
+/// other than `http-date` resolves to the offset-aware `date-time` form — the
+/// common JSON string-timestamp encoding and a lenient superset of strict
+/// `date-time`. `http-date` is used as-is.
+///
+/// Shared by the untyped-document coercion path (`coerce_string_to_timestamp`)
+/// and the schema-based read path (`read_timestamp`) so the two string-
+/// timestamp paths cannot drift.
+pub(crate) fn string_timestamp_format(default: TimestampFormat) -> TimestampFormat {
+    match default {
+        TimestampFormat::HttpDate => TimestampFormat::HttpDate,
+        _ => TimestampFormat::DateTimeWithOffset,
+    }
+}
+
 /// Builder for [`JsonCodecSettings`].
 #[derive(Debug, Clone)]
 pub struct JsonCodecSettingsBuilder {
@@ -294,7 +313,7 @@ impl JsonCodecSettingsBuilder {
     /// Sets the default Smithy namespace used to resolve relative shape
     /// IDs in JSON `__type` discriminator fields. When set, a relative
     /// `__type: "Capacity"` is lifted to `<namespace>#Capacity` on the
-    /// resulting [`DiscriminatedDocument`]. Absolute `__type` values
+    /// resulting [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument). Absolute `__type` values
     /// (already containing `#`) are taken as-is regardless.
     ///
     /// Defaults to `None` — relative names are not lifted.
@@ -354,19 +373,11 @@ impl DocumentSettings for JsonCodecSettings {
     /// `date-time` parsing as a fallback so common ISO-8601 strings
     /// still coerce.
     fn coerce_string_to_timestamp(&self, s: &str) -> Result<DateTime, DocumentError> {
-        let primary_format = self.default_timestamp_format;
-        // If the configured default is a string-encoded format, use it.
-        let attempt = match primary_format {
-            TimestampFormat::DateTime | TimestampFormat::HttpDate => {
-                DateTime::from_str(s, primary_format)
-            }
-            // Number-encoded format: a string value can't satisfy it.
-            // Fall back to `date-time` as the most common JSON
-            // string-timestamp encoding.
-            TimestampFormat::EpochSeconds => DateTime::from_str(s, TimestampFormat::DateTime),
-            _ => DateTime::from_str(s, TimestampFormat::DateTime),
-        };
-        attempt.map_err(|e| DocumentError::InvalidInput {
+        // A JSON string can't encode the number-typed `epoch-seconds`, so the
+        // parse format is resolved via the shared `string_timestamp_format`
+        // helper (also used by the schema-based read path).
+        let format = string_timestamp_format(self.default_timestamp_format);
+        DateTime::from_str(s, format).map_err(|e| DocumentError::InvalidInput {
             message: format!("timestamp parse failed: {e}"),
         })
     }

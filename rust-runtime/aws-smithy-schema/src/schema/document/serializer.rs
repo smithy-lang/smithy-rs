@@ -179,23 +179,12 @@ impl DocumentShapeSerializer {
         if is_top_level {
             self.root_discriminator = Some(schema.shape_id().as_str().to_string());
         }
-        self.stack.push(Frame::Struct {
-            members: DocumentObject::new(),
-        });
-        // `value.serialize_members(self)` coerces `self` to `&mut dyn
-        // ShapeSerializer`. Nested struct writes from within that
-        // callback go through the trait method.
-        value.serialize_members(self)?;
-        let frame = self.stack.pop().expect("frame just pushed");
-        let members = match frame {
-            Frame::Struct { members } => members,
-            _ => {
-                return Err(SerdeError::custom(
-                    "DocumentShapeSerializer struct frame replaced by a different frame kind during serialization",
-                ));
-            }
-        };
-        self.commit_value(schema, Document::Object(members))
+        // Capture the top-level discriminator above, then defer the
+        // actual struct framing to the trait method so both entry
+        // points share one implementation. Nested struct writes reach
+        // the trait method directly through `&mut dyn ShapeSerializer`
+        // and therefore never capture a discriminator.
+        <Self as ShapeSerializer>::write_struct(self, schema, value)
     }
 
     /// Routes a constructed [`Document`] into the active frame, or

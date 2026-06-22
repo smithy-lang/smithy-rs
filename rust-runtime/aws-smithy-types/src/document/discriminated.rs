@@ -60,17 +60,17 @@ use crate::{DateTime, Document, DocumentError, DocumentSettings};
 #[derive(Clone, Debug, Default)]
 pub struct DiscriminatedDocument {
     /// The wrapped document data. Always present.
-    pub document: Document,
+    document: Document,
     /// The fully-qualified shape ID of the source type, if known.
     /// Lifted from `__type` on the wire, set by
     /// [`Document::from_struct`](crate::Document) callers, or left
     /// `None` for documents constructed directly from data.
-    pub discriminator: Option<String>,
+    discriminator: Option<String>,
     /// Protocol-specific settings used by format-aware coercion. Set
     /// by codec deserializers (e.g. JSON's
     /// `read_discriminated_document`), left `None` on user-built
     /// documents.
-    pub settings: Option<Arc<dyn DocumentSettings>>,
+    settings: Option<Arc<dyn DocumentSettings>>,
 }
 
 impl DiscriminatedDocument {
@@ -92,8 +92,20 @@ impl DiscriminatedDocument {
     /// `namespace#name` FQN form) gets attached as the discriminator
     /// so downstream consumers (the type registry, the `__type`
     /// write path) know what shape the document represents.
+    ///
+    /// The discriminator MUST be an absolute shape ID — the
+    /// `namespace#name` FQN form, never a bare shape name. The SEP
+    /// requires a serialized `__type` to always be absolute so the
+    /// document stays context-free for downstream readers, and the
+    /// type registry keys on the FQN. Passing a relative id is a
+    /// caller error and trips a `debug_assert!`.
     pub fn with_discriminator(mut self, fqn: impl Into<String>) -> Self {
-        self.discriminator = Some(fqn.into());
+        let fqn = fqn.into();
+        debug_assert!(
+            fqn.contains('#'),
+            "discriminator `{fqn}` must be an absolute shape id (namespace#name)"
+        );
+        self.discriminator = Some(fqn);
         self
     }
 
@@ -106,6 +118,21 @@ impl DiscriminatedDocument {
     pub fn with_settings(mut self, settings: Arc<dyn DocumentSettings>) -> Self {
         self.settings = Some(settings);
         self
+    }
+
+    /// Sets the discriminator **without** the absolute-shape-id check
+    /// that [`with_discriminator`](Self::with_discriminator) enforces.
+    ///
+    /// Test-only escape hatch (behind the `test-util` feature) so that
+    /// downstream crates can construct a document carrying a relative
+    /// (non-absolute) discriminator to exercise their own guards
+    /// against one reaching the wire. Production code MUST use
+    /// [`with_discriminator`](Self::with_discriminator), which
+    /// guarantees the absolute `namespace#name` form the SEP requires.
+    #[cfg(feature = "test-util")]
+    #[doc(hidden)]
+    pub fn set_discriminator_unchecked(&mut self, discriminator: impl Into<String>) {
+        self.discriminator = Some(discriminator.into());
     }
 
     /// Returns the discriminator, if attached.
@@ -303,6 +330,15 @@ mod tests {
         let d =
             DiscriminatedDocument::new(Document::Null).with_discriminator("com.example#MyShape");
         assert_eq!(d.discriminator(), Some("com.example#MyShape"));
+    }
+
+    // The discriminator must be an absolute shape id; a bare name is a
+    // caller error and trips the debug-build assertion.
+    #[cfg(debug_assertions)]
+    #[test]
+    #[should_panic(expected = "absolute shape id")]
+    fn with_discriminator_rejects_relative_id() {
+        let _ = DiscriminatedDocument::new(Document::Null).with_discriminator("RelativeOnly");
     }
 
     #[test]

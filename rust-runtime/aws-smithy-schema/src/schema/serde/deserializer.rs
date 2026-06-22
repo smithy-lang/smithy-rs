@@ -62,6 +62,12 @@ pub fn capped_container_size(raw: usize) -> usize {
     raw.min(MAX_CONTAINER_PREALLOC)
 }
 
+/// Reads values of the Smithy data model from a serialized source, guided by a
+/// [`Schema`](crate::Schema).
+///
+/// This is the deserialization counterpart to
+/// [`ShapeSerializer`](crate::serde::ShapeSerializer): codecs implement it so a
+/// shape can be deserialized from any format without shape-specific code.
 pub trait ShapeDeserializer {
     /// Reads a structure from the deserializer.
     ///
@@ -179,9 +185,15 @@ pub trait ShapeDeserializer {
 
     /// Reads a list of strings.
     fn read_string_list(&mut self, schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
+        // Element reads receive the member (list element / map value) schema,
+        // not the container schema, so element-level traits (e.g.
+        // `@mediaType`, `@timestampFormat`) reach the codec — matching the
+        // serializer side. The prelude scalar is the fallback for a schema
+        // built without a member set.
+        let element = schema.member().unwrap_or(&crate::prelude::STRING);
         let mut out = Vec::new();
         self.read_list(schema, &mut |deser| {
-            out.push(deser.read_string(schema)?);
+            out.push(deser.read_string(element)?);
             Ok(())
         })?;
         Ok(out)
@@ -192,9 +204,10 @@ pub trait ShapeDeserializer {
         &mut self,
         schema: &Schema<'_>,
     ) -> Result<Vec<aws_smithy_types::Blob>, SerdeError> {
+        let element = schema.member().unwrap_or(&crate::prelude::BLOB);
         let mut out = Vec::new();
         self.read_list(schema, &mut |deser| {
-            out.push(deser.read_blob(schema)?);
+            out.push(deser.read_blob(element)?);
             Ok(())
         })?;
         Ok(out)
@@ -202,9 +215,10 @@ pub trait ShapeDeserializer {
 
     /// Reads a list of integers.
     fn read_integer_list(&mut self, schema: &Schema<'_>) -> Result<Vec<i32>, SerdeError> {
+        let element = schema.member().unwrap_or(&crate::prelude::INTEGER);
         let mut out = Vec::new();
         self.read_list(schema, &mut |deser| {
-            out.push(deser.read_integer(schema)?);
+            out.push(deser.read_integer(element)?);
             Ok(())
         })?;
         Ok(out)
@@ -212,9 +226,10 @@ pub trait ShapeDeserializer {
 
     /// Reads a list of longs.
     fn read_long_list(&mut self, schema: &Schema<'_>) -> Result<Vec<i64>, SerdeError> {
+        let element = schema.member().unwrap_or(&crate::prelude::LONG);
         let mut out = Vec::new();
         self.read_list(schema, &mut |deser| {
-            out.push(deser.read_long(schema)?);
+            out.push(deser.read_long(element)?);
             Ok(())
         })?;
         Ok(out)
@@ -225,9 +240,12 @@ pub trait ShapeDeserializer {
         &mut self,
         schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
+        // `member()` returns the map *value* schema; the key is produced by
+        // `read_map` itself. Fall back to the prelude scalar when unset.
+        let value = schema.member().unwrap_or(&crate::prelude::STRING);
         let mut out = std::collections::HashMap::new();
         self.read_map(schema, &mut |key, deser| {
-            out.insert(key, deser.read_string(schema)?);
+            out.insert(key, deser.read_string(value)?);
             Ok(())
         })?;
         Ok(out)

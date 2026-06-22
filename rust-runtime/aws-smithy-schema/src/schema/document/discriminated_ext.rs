@@ -137,8 +137,9 @@ impl DiscriminatedDocumentExt for DiscriminatedDocument {
     fn shape_type(&self) -> ShapeType {
         use aws_smithy_types::Document as Doc;
         // The number-disambiguation logic delegates to the private
-        // helper that drives `Document::shape_type`.
-        match &self.document {
+        // helper that drives `Document::shape_type`. Reads through the
+        // `document()` accessor for consistency with `as_shape`.
+        match self.document() {
             Doc::Null => ShapeType::Document,
             Doc::Bool(_) => ShapeType::Boolean,
             Doc::Number(n) => number_shape_type(n),

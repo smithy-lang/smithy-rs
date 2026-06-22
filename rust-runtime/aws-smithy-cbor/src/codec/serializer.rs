@@ -8,9 +8,7 @@
 use aws_smithy_schema::codec::FinishSerializer;
 use aws_smithy_schema::serde::{SerdeError, SerializableStruct, ShapeSerializer};
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, DateTime};
-
-use aws_smithy_types::Document;
+use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 
 /// CBOR serializer that implements the ShapeSerializer trait.
 ///

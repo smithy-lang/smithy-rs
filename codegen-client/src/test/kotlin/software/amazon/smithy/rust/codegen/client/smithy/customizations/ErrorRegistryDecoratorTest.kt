@@ -6,6 +6,8 @@
 package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.condition.EnabledIf
+import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.rust.codegen.client.testutil.clientIntegrationTest
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
@@ -38,7 +40,20 @@ import software.amazon.smithy.rust.codegen.core.testutil.unitTest
  * compile failure (e.g. a missing static or wrong path) or a runtime
  * test failure.
  */
+@EnabledIf("schemaSerdeEnabled")
 class ErrorRegistryDecoratorTest {
+    companion object {
+        /**
+         * `Client::error_registry()` and the per-operation error registries are only
+         * generated when the service's protocol is on [SchemaSerdeAllowlist]. This
+         * suite's model uses awsJson1_0, so it runs only when that protocol is enabled
+         * for schema-serde and is skipped otherwise — keeping the coverage live without
+         * hard-disabling it.
+         */
+        @JvmStatic
+        fun schemaSerdeEnabled(): Boolean = SchemaSerdeAllowlist.isProtocolEnabled(AwsJson1_0Trait.ID)
+    }
+
     private fun codegenScope(runtimeConfig: RuntimeConfig): Array<Pair<String, Any>> {
         val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
         val smithySchema = RuntimeType.smithySchema(runtimeConfig)

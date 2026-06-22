@@ -17,6 +17,11 @@ pub enum SerdeError {
         message: String,
     },
     /// A required structure member was missing during deserialization.
+    ///
+    /// **Not currently emitted.** The schema-serde deserializers use the
+    /// push/consumer pattern and defer required-member enforcement to the
+    /// generated builder's `build()`. This variant is reserved for
+    /// deserializers that choose to enforce member presence during the read.
     MissingMember {
         /// The name of the missing member.
         member_name: String,
@@ -71,6 +76,11 @@ pub enum SerdeError {
     },
     /// Failed to decode a blob from its wire-format representation —
     /// for example, invalid base64 in a JSON payload.
+    ///
+    /// **Not currently emitted.** In-tree codecs surface blob-decode
+    /// failures as [`InvalidInput`](Self::InvalidInput). This variant is
+    /// reserved for codecs that want to distinguish blob-decode failures as a
+    /// separate category.
     BlobDecodeFailed {
         /// Description of the decode failure.
         message: String,
@@ -78,6 +88,11 @@ pub enum SerdeError {
     /// Failed to parse a timestamp from its wire-format representation —
     /// for example, a malformed RFC-3339 string or an out-of-range
     /// epoch-seconds value.
+    ///
+    /// **Not currently emitted.** In-tree codecs surface timestamp-parse
+    /// failures as [`InvalidInput`](Self::InvalidInput). This variant is
+    /// reserved for codecs that want to distinguish timestamp-parse failures
+    /// as a separate category.
     TimestampParseFailed {
         /// Description of the parse failure.
         message: String,
