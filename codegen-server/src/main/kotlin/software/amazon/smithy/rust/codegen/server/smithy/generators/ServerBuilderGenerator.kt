@@ -495,8 +495,7 @@ class ServerBuilderGenerator(
     private fun builderMemberSymbol(member: MemberShape): Symbol =
         if (member.isEventStream(model)) {
             symbolProvider.toSymbol(member).makeOptional()
-        }
-        else {
+        } else {
             if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
                 val strippedOption =
                     if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
