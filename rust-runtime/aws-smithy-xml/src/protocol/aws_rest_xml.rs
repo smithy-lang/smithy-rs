@@ -233,6 +233,15 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsRestXmlProtocol {
         _cfg: &ConfigBag,
     ) -> Result<ErrorMetadataBuilder, SerdeError> {
         let body = response.body().bytes().unwrap_or(&[]);
+        // An empty body carries no error metadata. Some services signal errors
+        // with a status code and an empty body (e.g. S3 HEAD operations, whose
+        // responses have no body to hold an error code). Return an empty builder
+        // rather than failing to locate a root XML element; the error code for
+        // such responses is derived from the HTTP status by the generated
+        // dispatch's error-metadata customizations.
+        if body.is_empty() {
+            return Ok(ErrorMetadata::builder());
+        }
         let body_str = std::str::from_utf8(body)
             .map_err(|e| SerdeError::custom(format!("invalid UTF-8: {e}")))?;
         let mut doc = Document::new(body_str);

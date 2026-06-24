@@ -14,22 +14,43 @@ use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 ///
 /// Wraps the existing optimized `Encoder` which uses `minicbor` with
 /// infallible writes to `Vec<u8>`.
+/// Tracks the kind of CBOR container currently being written.
+///
+/// In RPC v2 CBOR a structure is a map keyed by member name, but list elements
+/// are positional and map values follow a key that is written separately. A
+/// member schema carries a `member_name` (e.g. a list's `member` or a map's
+/// `value` member), so without tracking the surrounding container that name
+/// would be wrongly emitted as a key when the member appears as a list element
+/// or map value. Member-name keys are therefore only emitted in [`Container::Struct`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Container {
+    Struct,
+    List,
+    Map,
+}
+
 pub struct CborSerializer {
     encoder: crate::Encoder,
+    container_stack: Vec<Container>,
 }
 
 impl CborSerializer {
     pub(crate) fn new() -> Self {
         Self {
             encoder: crate::Encoder::new(Vec::new()),
+            container_stack: Vec::new(),
         }
     }
 
-    /// Writes the member name as a CBOR text string key if this schema is a struct member.
+    /// Writes the member name as a CBOR text string key, but only for structure
+    /// members. List elements and map values are not keyed by member name even
+    /// though their schemas carry one (see [`Container`]).
     #[inline]
     fn write_member_key(&mut self, schema: &Schema<'_>) {
-        if let Some(name) = schema.member_name() {
-            self.encoder.str(name);
+        if self.container_stack.last() == Some(&Container::Struct) {
+            if let Some(name) = schema.member_name() {
+                self.encoder.str(name);
+            }
         }
     }
 }
@@ -48,7 +69,9 @@ impl ShapeSerializer for CborSerializer {
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Struct);
         value.serialize_members(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
@@ -60,7 +83,9 @@ impl ShapeSerializer for CborSerializer {
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_array();
+        self.container_stack.push(Container::List);
         write_elements(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
@@ -72,7 +97,9 @@ impl ShapeSerializer for CborSerializer {
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Map);
         write_entries(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }

@@ -521,7 +521,7 @@ class ResponseDeserializerGenerator(
                 writable {
                     writeCustomizations(
                         customizations,
-                        OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "status", "headers"),
+                        OperationSection.PopulateErrorMetadataExtras(customizations, "generic_builder", "status", "headers", "body"),
                     )
                 },
         )

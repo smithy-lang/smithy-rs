@@ -951,7 +951,8 @@ class SchemaGenerator(
                         val memberName = symbolProvider.toMemberName(member)
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val target = model.expectShape(member.target)
-                        val readExpr = readMethodForShape(target, "member")
+                        val memberConstRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                        val readExpr = readMethodForShape(target, "member", memberConstRef)
                         val wrapped =
                             if (memberSymbol.isRustBoxed()) {
                                 "Box::new($readExpr)"
@@ -1580,7 +1581,8 @@ class SchemaGenerator(
                                 if (hasHttpBinding) {
                                     rust("Some($idx) => { /* read from headers above */ }")
                                 } else {
-                                    val readExpr = readMethodForShape(target, "member")
+                                    val memberConstRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                                    val readExpr = readMethodForShape(target, "member", memberConstRef)
                                     val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
                                     if (memberSymbol.isOptional()) {
                                         rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
@@ -1598,6 +1600,11 @@ class SchemaGenerator(
     private fun readMethodForShape(
         target: Shape,
         memberRef: String,
+        // Rust schema constant for this member (e.g. `<PREFIX>_MEMBER_<NAME>`),
+        // used to derive nested collection sub-schema references
+        // (`_KEY`/`_VALUE`/`_MEMBER`). `null` falls back to `prelude::DOCUMENT`
+        // for nested aggregates (e.g. union variants that don't track a const).
+        memberConstRef: String? = null,
     ): String =
         when (target) {
             is BooleanShape -> "deser.read_boolean($memberRef)?"
@@ -1650,7 +1657,7 @@ class SchemaGenerator(
                 if (helperExpr != null) {
                     helperExpr
                 } else {
-                    val elementRead = elementReadExpr(elementTarget, memberRef)
+                    val elementRead = listElementReadExpr(target, memberConstRef, elementTarget)
                     val pushExpr =
                         if (isSparse) {
                             "container.push(if deser.is_null() { deser.read_null()?; None } else { Some($elementRead) })"
@@ -1676,7 +1683,7 @@ class SchemaGenerator(
                         } else {
                             "key"
                         }
-                    val valueRead = elementReadExpr(valueTarget, memberRef)
+                    val valueRead = mapValueReadExpr(target, memberConstRef, valueTarget)
                     val insertExpr =
                         if (isSparse) {
                             "container.insert($keyInsert, if deser.is_null() { deser.read_null()?; None } else { Some($valueRead) })"
@@ -1704,37 +1711,40 @@ class SchemaGenerator(
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
         }
 
-    /** Returns a read expression for a list element or map value. */
-    private fun elementReadExpr(
-        target: Shape,
-        memberRef: String,
-    ): String =
-        when (target) {
-            is BooleanShape -> "deser.read_boolean($memberRef)?"
-            is ByteShape -> "deser.read_byte($memberRef)?"
-            is ShortShape -> "deser.read_short($memberRef)?"
-            is IntegerShape -> "deser.read_integer($memberRef)?"
-            is LongShape -> "deser.read_long($memberRef)?"
-            is FloatShape -> "deser.read_float($memberRef)?"
-            is DoubleShape -> "deser.read_double($memberRef)?"
-            is BigIntegerShape -> "deser.read_big_integer($memberRef)?"
-            is BigDecimalShape -> "deser.read_big_decimal($memberRef)?"
+    /**
+     * Returns a read expression for the leaf scalar/struct/union shapes shared by
+     * [mapValueReadExpr] and [listElementReadExpr]. Returns `null` for the nested
+     * aggregate shapes (list/map) those callers handle themselves, since each
+     * threads its own `_VALUE` / `_MEMBER` sub-schema reference.
+     */
+    private fun nestedLeafReadExpr(target: Shape): String? {
+        val prelude = "::aws_smithy_schema::prelude"
+        return when (target) {
+            is BooleanShape -> "deser.read_boolean(&$prelude::BOOLEAN)?"
+            is ByteShape -> "deser.read_byte(&$prelude::BYTE)?"
+            is ShortShape -> "deser.read_short(&$prelude::SHORT)?"
+            is IntegerShape -> "deser.read_integer(&$prelude::INTEGER)?"
+            is LongShape -> "deser.read_long(&$prelude::LONG)?"
+            is FloatShape -> "deser.read_float(&$prelude::FLOAT)?"
+            is DoubleShape -> "deser.read_double(&$prelude::DOUBLE)?"
+            is BigIntegerShape -> "deser.read_big_integer(&$prelude::BIG_INTEGER)?"
+            is BigDecimalShape -> "deser.read_big_decimal(&$prelude::BIG_DECIMAL)?"
             is EnumShape -> {
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                "$enumName::from(deser.read_string(&$prelude::STRING)?.as_str())"
             }
 
             is StringShape ->
                 if (isStringEnum(target)) {
                     val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                    "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                    "$enumName::from(deser.read_string(&$prelude::STRING)?.as_str())"
                 } else {
-                    "deser.read_string($memberRef)?"
+                    "deser.read_string(&$prelude::STRING)?"
                 }
 
-            is BlobShape -> "deser.read_blob($memberRef)?"
-            is TimestampShape -> "deser.read_timestamp($memberRef)?"
-            is DocumentShape -> "deser.read_document($memberRef)?"
+            is BlobShape -> "deser.read_blob(&$prelude::BLOB)?"
+            is TimestampShape -> "deser.read_timestamp(&$prelude::TIMESTAMP)?"
+            is DocumentShape -> "deser.read_document(&$prelude::DOCUMENT)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
@@ -1745,13 +1755,71 @@ class SchemaGenerator(
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
 
+            else -> null
+        }
+    }
+
+    /**
+     * Returns a read expression for a single map value.
+     *
+     * Deserialize-side mirror of [mapValueWriteExpr]: a nested aggregate value
+     * reads against the containing map's resolved `_VALUE` sub-schema so the codec
+     * sees the inner aggregate's own member traits (e.g. `@xmlName` on nested map
+     * keys/values). [parentRef] is the Rust schema constant for the containing
+     * map; `null` or a recursive cycle falls back to `prelude::DOCUMENT`.
+     */
+    private fun mapValueReadExpr(
+        containingMap: Shape,
+        parentRef: String?,
+        target: Shape,
+    ): String {
+        nestedLeafReadExpr(target)?.let { return it }
+        return when (target) {
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val valueTarget = model.expectShape(target.value.target)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingMap, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val keyInsert =
+                    if (isStringEnum(keyTarget)) {
+                        val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
+                        "$enumName::from(key.as_str())"
+                    } else {
+                        "key"
+                    }
+                val innerValueRead = mapValueReadExpr(target, nextRef, valueTarget)
+                """
+                {
+                    let mut map = ::std::collections::HashMap::new();
+                    deser.read_map($schemaExpr, &mut |key, deser| {
+                        let value = $innerValueRead;
+                        map.insert($keyInsert, value);
+                        Ok(())
+                    })?;
+                    map
+                }
+                """.trimIndent()
+            }
+
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementRead = elementReadExpr(elementTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingMap, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementRead = listElementReadExpr(target, nextRef, elementTarget)
                 """
                 {
                     let mut list = Vec::new();
-                    deser.read_list(member, &mut |deser| {
+                    deser.read_list($schemaExpr, &mut |deser| {
                         list.push($elementRead);
                         Ok(())
                     })?;
@@ -1760,10 +1828,36 @@ class SchemaGenerator(
                 """.trimIndent()
             }
 
+            else -> "todo!(\"deserialize nested map value\")"
+        }
+    }
+
+    /**
+     * Returns a read expression for a single list element.
+     *
+     * Deserialize-side mirror of [elementWriteExpr]: a nested aggregate element
+     * reads against the containing list's resolved `_MEMBER` sub-schema so the
+     * codec sees the inner aggregate's own member traits. [parentRef] is the Rust
+     * schema constant for the containing list; `null` or a recursive cycle falls
+     * back to `prelude::DOCUMENT`.
+     */
+    private fun listElementReadExpr(
+        containingList: Shape,
+        parentRef: String?,
+        target: Shape,
+    ): String {
+        nestedLeafReadExpr(target)?.let { return it }
+        return when (target) {
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
-                val valueRead = elementReadExpr(valueTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingList, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
                 val keyInsert =
                     if (isStringEnum(keyTarget)) {
                         val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
@@ -1771,10 +1865,11 @@ class SchemaGenerator(
                     } else {
                         "key"
                     }
+                val valueRead = mapValueReadExpr(target, nextRef, valueTarget)
                 """
                 {
                     let mut map = ::std::collections::HashMap::new();
-                    deser.read_map(member, &mut |key, deser| {
+                    deser.read_map($schemaExpr, &mut |key, deser| {
                         let value = $valueRead;
                         map.insert($keyInsert, value);
                         Ok(())
@@ -1784,8 +1879,31 @@ class SchemaGenerator(
                 """.trimIndent()
             }
 
-            else -> "todo!(\"deserialize nested aggregate\")"
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingList, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementRead = listElementReadExpr(target, nextRef, elementTarget)
+                """
+                {
+                    let mut list = Vec::new();
+                    deser.read_list($schemaExpr, &mut |deser| {
+                        list.push($elementRead);
+                        Ok(())
+                    })?;
+                    list
+                }
+                """.trimIndent()
+            }
+
+            else -> "todo!(\"deserialize nested list element\")"
         }
+    }
 
     /** Returns a Rust default value expression for a shape, or null if no sensible default exists. */
     private fun shapeTypeVariant(shape: Shape): String =

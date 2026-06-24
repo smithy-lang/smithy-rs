@@ -7,7 +7,7 @@
 //!
 //! Used by `AwsJsonRpcProtocol` (`awsJson1_0` / `awsJson1_1`) and by
 //! `AwsRestJsonProtocol` (`restJson1`) to implement
-//! [`ClientProtocolInner::parse_error_metadata`].
+//! `ClientProtocolInner::parse_error_metadata`.
 //!
 //! Both protocols use the same envelope shape:
 //! - Top-level body keys: `__type` (or `code`) for the error code, and
