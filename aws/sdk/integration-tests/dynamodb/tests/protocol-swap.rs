@@ -12,7 +12,7 @@
 //! `SchemaSerdeAllowlist`. With the allowlist empty on main, DynamoDB's
 //! config builder does not expose `protocol(...)` and these tests cannot
 //! compile. Once awsJson1_0 (or DynamoDB specifically) is re-added to the
-//! allowlist, uncomment the block below.
+//! allowlist, uncomment the blocks below.
 //! See: codegen-client/.../customizations/SchemaDecorator.kt
 
 // --- BEGIN schema-serde protocol-swap tests (disabled) ---
@@ -152,18 +152,19 @@ async fn swap_to_rest_json_protocol() {
 */
 // --- END schema-serde protocol-swap tests (disabled) ---
 
-// --- BEGIN XML protocol swap test ---
+// --- BEGIN XML protocol swap test (disabled) ---
 // Cross-family swap (JSON RPC → XML REST) is the strongest demonstration of
 // the SEP's serialization-from-shape decoupling. Generated DynamoDB code
 // emits `Schema` statics + `SerializableStruct` impls and defers wire-format
 // choice to whatever `ClientProtocol` is in the config bag. Plugging in
 // `AwsRestXmlProtocol` walks those same shapes through XML serialization.
 //
-// Kept active (not in the disabled block above) so CI can prove the swap
-// mechanism end-to-end. When the schema-serde allowlist is reduced and the
-// generated `protocol(...)` setter goes away, this test will need to be
-// disabled too — group it with the rest of the file then.
-
+// Disabled for the same reason as the block above: the runtime `protocol(...)`
+// setter is only generated while DynamoDB is on the schema-serde allowlist.
+// With the allowlist empty the setter is absent, so this test cannot compile.
+// Re-enable it together with the block above once awsJson1_0 returns to the
+// allowlist.
+/*
 use aws_sdk_dynamodb::config::{
     BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
 };
@@ -242,4 +243,5 @@ async fn swap_to_rest_xml_protocol() {
         "expected Limit element in body: {body}"
     );
 }
-// --- END XML protocol swap test ---
+*/
+// --- END XML protocol swap test (disabled) ---
