@@ -365,6 +365,10 @@ pub(crate) struct ConnectCtx {
     /// means no connect timeout; cached connections skip the connector
     /// entirely so this is automatically a no-op on cache hit.
     pub(crate) connect_timeout: Option<TimeoutContext>,
+    /// Async sleep used to pace establishment when the rate limiter throttles.
+    /// `None` disables pacing for this request. Carried per-request because the
+    /// pace wait is supplied by the caller's runtime, like `connect_timeout`'s.
+    pub(crate) sleep_impl: Option<SharedAsyncSleep>,
     /// How the connect path behaves when a permit cannot be acquired.
     pub(crate) mode: AcquireMode,
 }
@@ -420,6 +424,7 @@ impl ConnectCtx {
         Self {
             uri,
             connect_timeout,
+            sleep_impl: None,
             mode: AcquireMode::Blocking,
         }
     }
@@ -427,6 +432,13 @@ impl ConnectCtx {
     /// Set the acquire mode (defaults to [`AcquireMode::Blocking`]).
     pub(crate) fn with_mode(mut self, mode: AcquireMode) -> Self {
         self.mode = mode;
+        self
+    }
+
+    /// Set the async sleep used to pace establishment (defaults to `None`,
+    /// which disables pacing for this request).
+    pub(crate) fn with_sleep(mut self, sleep_impl: Option<SharedAsyncSleep>) -> Self {
+        self.sleep_impl = sleep_impl;
         self
     }
 }

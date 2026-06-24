@@ -40,6 +40,7 @@
 //!
 //! [`HttpClient`]: aws_smithy_runtime_api::client::http::HttpClient
 
+mod admission;
 pub(crate) mod connection;
 mod handshake;
 pub(crate) mod stats;
@@ -485,6 +486,10 @@ impl PeerBorrowHandle {
 pub(crate) struct SharedPoolState {
     pub(crate) hooks: handshake::PoolHooks,
     pub(crate) global_sem: Option<Arc<Semaphore>>,
+    /// Pool-level governor of new-connection establishment rate. Shared by all
+    /// partitions; each partition's connect stack holds a clone. Defaults to
+    /// unbounded (no pacing).
+    pub(crate) connect_rate: Arc<admission::ConnectRateController>,
     max_connections_per_host: Option<usize>,
     per_host_sems: Mutex<HashMap<PoolKey, Arc<Semaphore>>>,
     stats_index: Arc<StatsIndex>,
@@ -503,6 +508,7 @@ impl SharedPoolState {
         Self {
             hooks: handshake::PoolHooks::new(config.connection_event_listener.clone()),
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
+            connect_rate: Arc::new(admission::ConnectRateController::unbounded()),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
             stats_index: Arc::new(StatsIndex::default()),
@@ -632,11 +638,16 @@ where
 
                     let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
                     let per_host_sem = shared.per_host_sem(&key);
-                    let limited = handshake::ConnectionLimit::new(
-                        connector.clone(),
+                    let limited = admission::ConnectionLimit::new(
+                        admission::ConnectAccounting::new(
+                            admission::ConnectRateLimit::new(
+                                admission::ConnectTimeout::new(connector.clone()),
+                                shared.connect_rate.clone(),
+                            ),
+                            counters.clone(),
+                        ),
                         shared.global_sem.clone(),
                         per_host_sem,
-                        counters.clone(),
                         shared.reclaim_handle(partition_id),
                     );
 

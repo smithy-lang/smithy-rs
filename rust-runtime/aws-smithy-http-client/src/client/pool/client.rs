@@ -184,9 +184,10 @@ impl HttpConnector for PooledConnector {
             let connect_ctx = super::ConnectCtx::new(
                 full_uri,
                 connect_timeout
-                    .zip(sleep_impl)
+                    .zip(sleep_impl.clone())
                     .map(|(d, s)| super::TimeoutContext::new(d, s)),
-            );
+            )
+            .with_sleep(sleep_impl);
 
             let response = pool
                 .send_request(&partition, connect_ctx, request)
