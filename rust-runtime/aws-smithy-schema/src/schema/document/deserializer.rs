@@ -162,7 +162,7 @@ fn kind_name(d: &Document) -> &'static str {
 /// Wire-name resolution for `@jsonName` / `@xmlName`-style renames is
 /// the responsibility of the protocol's deserializer (which has access
 /// to the codec settings); this generic Document walker matches Smithy
-/// member names only. Documents produced by [`DocumentShapeSerializer`]
+/// member names only. Documents produced by [`DocumentShapeSerializer`](super::DocumentShapeSerializer)
 /// always use Smithy member names, so the round-trip is exact.
 fn resolve_member<'s>(schema: &'s Schema<'s>, wire_name: &str) -> Option<&'s Schema<'s>> {
     let idx = schema

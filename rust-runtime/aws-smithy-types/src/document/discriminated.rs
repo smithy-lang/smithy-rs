@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Schema-aware wrapper around [`Document`](super::Document).
+//! Schema-aware wrapper around [`Document`].
 //!
 //! [`DiscriminatedDocument`] adds two pieces of context that the bare
 //! `Document` data type deliberately doesn't carry:
@@ -16,7 +16,7 @@
 //!   right schema.
 //!
 //! - Optional **protocol settings** — a
-//!   [`DocumentSettings`](super::DocumentSettings) trait object
+//!   [`DocumentSettings`] trait object
 //!   describing how the source protocol encodes Smithy types that
 //!   don't have native wire representations. Used by the format-aware
 //!   accessors [`as_blob`](DiscriminatedDocument::as_blob) and

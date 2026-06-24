@@ -547,7 +547,7 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
     }
 
-    /// Like [`resolve_member`] but only succeeds when the member can be
+    /// Like [`Self::resolve_member`] but only succeeds when the member can be
     /// resolved through `input_schema`. Returns the member with the
     /// binder's `'a` data lifetime so callers can push into `'a`-bound
     /// collections (e.g. `labels: Vec<(Cow<'a, str>, String)>`) without

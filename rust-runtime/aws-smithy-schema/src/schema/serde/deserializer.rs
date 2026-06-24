@@ -63,7 +63,7 @@ pub fn capped_container_size(raw: usize) -> usize {
 }
 
 /// Reads values of the Smithy data model from a serialized source, guided by a
-/// [`Schema`](crate::Schema).
+/// [`Schema`].
 ///
 /// This is the deserialization counterpart to
 /// [`ShapeSerializer`](crate::serde::ShapeSerializer): codecs implement it so a

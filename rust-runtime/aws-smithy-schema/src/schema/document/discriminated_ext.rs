@@ -5,7 +5,7 @@
 
 //! Extension methods on [`DiscriminatedDocument`] that need access to
 //! [`Schema`], [`SerializableStruct`], and the schema-side
-//! [`ShapeSerializer`] / [`ShapeDeserializer`] machinery — types that
+//! [`ShapeSerializer`](crate::serde::ShapeSerializer) / [`ShapeDeserializer`] machinery — types that
 //! live in `aws-smithy-schema` and therefore cannot be referenced from
 //! the inherent-impl in `aws-smithy-types` where
 //! [`DiscriminatedDocument`] is defined.
@@ -29,8 +29,8 @@
 //! # Implementation
 //!
 //! The implementation routes through the schema-side
-//! [`DocumentShapeSerializer`](super::DocumentShapeSerializer) /
-//! [`DocumentShapeDeserializer`](super::DocumentShapeDeserializer),
+//! [`DocumentShapeSerializer`] /
+//! [`DocumentShapeDeserializer`],
 //! which operate on [`aws_smithy_types::Document`] directly.
 //! Discriminator capture happens on the way out (the schema's shape
 //! ID is recorded as the resulting wrapper's [`discriminator()`]

@@ -12,7 +12,7 @@
 //! Registries are the runtime piece behind the SEP's "Type Registry" concept.
 //! They support two main use cases:
 //!
-//! 1. **Document → typed shape conversion.** Given a [`Document`] carrying
+//! 1. **Document → typed shape conversion.** Given a [`Document`](aws_smithy_types::Document) carrying
 //!    a discriminator ([`ShapeId`]), the registry resolves the discriminator
 //!    to a `RegistryEntry`, walks the document via [`DocumentShapeDeserializer`],
 //!    and returns the typed value as a [`TypeErasedBox`] for the caller to

@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Schema-aware adapters for the [`Document`] data model.
+//! Schema-aware adapters for the [`Document`](aws_smithy_types::Document) data model.
 //!
-//! The [`Document`], [`DiscriminatedDocument`], and [`DocumentSettings`]
+//! The [`Document`](aws_smithy_types::Document), [`DiscriminatedDocument`](aws_smithy_types::DiscriminatedDocument), and [`DocumentSettings`](aws_smithy_types::DocumentSettings)
 //! types live in `aws-smithy-types` (the dependency direction is
 //! `aws-smithy-schema → aws-smithy-types`); import them from there. This
 //! module supplies the schema-crate-only adapters that connect `Document`
