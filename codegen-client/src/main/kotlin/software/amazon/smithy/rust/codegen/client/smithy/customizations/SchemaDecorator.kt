@@ -55,13 +55,7 @@ object SchemaSerdeAllowlist {
      * the SEP's phased-rollout guidance.
      */
     private val allowedProtocols: Set<ShapeId> =
-        setOf(
-            RestJson1Trait.ID,
-            AwsJson1_0Trait.ID,
-            AwsJson1_1Trait.ID,
-            RestXmlTrait.ID,
-            Rpcv2CborTrait.ID,
-        )
+        emptySet()
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
