@@ -25,7 +25,7 @@ opentelemetry_sdk = {version = "0.26.0", features = ["metrics", "testing"]}
 
 [dev-dependencies]
 tokio = { version = "1.49.0" }
-criterion = {version = "0.5.1", features = ["async_tokio"]}
+criterion = {version = "0.8.2", features = ["async_tokio"]}
 stats_alloc = "0.1.10"
 
 [package.metadata.docs.rs]
