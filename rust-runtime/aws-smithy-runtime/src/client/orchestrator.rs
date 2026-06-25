@@ -37,6 +37,8 @@ use endpoints::apply_endpoint;
 use std::mem;
 use tracing::{debug, debug_span, instrument, trace, Instrument};
 
+use crate::client::metrics::OperationTelemetry;
+
 mod auth;
 pub use auth::AuthSchemeAndEndpointOrchestrationV2;
 
@@ -387,8 +389,30 @@ async fn try_attempt(
 ) {
     run_interceptors!(halt_on_err: read_before_attempt(ctx, runtime_components, cfg));
 
+    let should_measure = cfg.load::<OperationTelemetry>().is_some();
+    let identity_start = if should_measure {
+        runtime_components.time_source().map(|ts| ts.now())
+    } else {
+        None
+    };
     let (scheme_id, identity, endpoint) = halt_on_err!([ctx] => resolve_identity(runtime_components, cfg).await.map_err(OrchestratorError::other));
+    if let Some(start) = identity_start {
+        if let Some(ts) = runtime_components.time_source() {
+            if let Ok(d) = ts.now().duration_since(start) {
+                if let Some(telemetry) = cfg.load::<OperationTelemetry>() {
+                    telemetry
+                        .resolve_identity_duration
+                        .record(d.as_secs_f64(), None, None);
+                }
+            }
+        }
+    }
 
+    let endpoint_start = if should_measure {
+        runtime_components.time_source().map(|ts| ts.now())
+    } else {
+        None
+    };
     match endpoint {
         Some(endpoint) => {
             // This branch is for backward compatibility when `AuthSchemeAndEndpointOrchestrationV2` is not present in the config bag.
@@ -402,6 +426,17 @@ async fn try_attempt(
 				    .instrument(debug_span!("orchestrate_endpoint"))
 				    .await
 				    .map_err(OrchestratorError::other));
+        }
+    }
+    if let Some(start) = endpoint_start {
+        if let Some(ts) = runtime_components.time_source() {
+            if let Ok(d) = ts.now().duration_since(start) {
+                if let Some(telemetry) = cfg.load::<OperationTelemetry>() {
+                    telemetry
+                        .resolve_endpoint_duration
+                        .record(d.as_secs_f64(), None, None);
+                }
+            }
         }
     }
 
