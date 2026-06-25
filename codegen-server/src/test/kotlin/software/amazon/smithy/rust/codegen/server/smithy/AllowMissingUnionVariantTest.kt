@@ -77,9 +77,10 @@ class AllowMissingUnionVariantTest {
 
     @Test
     fun `an empty union body fails the httpRequestTest when allowMissingUnionVariant is disabled`() {
-        val error = assertThrows<CommandError> {
-            runWithAllowMissingUnionVariant(enabled = false)
-        }
+        val error =
+            assertThrows<CommandError> {
+                runWithAllowMissingUnionVariant(enabled = false)
+            }
         error.message shouldContain "Union did not contain a valid variant."
     }
 }
