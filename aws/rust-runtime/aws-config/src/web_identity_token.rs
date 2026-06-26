@@ -133,9 +133,7 @@ impl WebIdentityTokenCredentialsProvider {
                     CredentialsError::not_loaded(format!("${ENV_VAR_TOKEN_FILE} was not set"))
                 })?;
                 let role_arn = env.get(ENV_VAR_ROLE_ARN).map_err(|_| {
-                    CredentialsError::invalid_configuration(
-                        "AWS_ROLE_ARN environment variable must be set",
-                    )
+                    CredentialsError::not_loaded("AWS_ROLE_ARN environment variable must be set")
                 })?;
                 let session_name = env.get(ENV_VAR_SESSION_NAME).unwrap_or_else(|_| {
                     sts::util::default_session_name("web-identity-token", self.time_source.now())
@@ -339,10 +337,10 @@ mod test {
             "`{}` did not contain expected string",
             err
         );
-        match err {
-            CredentialsError::InvalidConfiguration { .. } => { /* ok */ }
-            _ => panic!("incorrect error variant"),
-        }
+        assert!(
+            matches!(err, CredentialsError::CredentialsNotLoaded(_)),
+            "incorrect error variant: {err:?}"
+        );
     }
 
     #[tokio::test]
