@@ -441,6 +441,7 @@ fun Project.registerDowngradeFor(
                     "libfuzzer-sys" to "0.4.7", // TODO(https://github.com/rust-fuzz/libfuzzer/issues/126)
                     "crc-fast" to "1.9.0", // TODO(https://github.com/smithy-lang/smithy-rs/issues/3981)
                     "serde_json" to "1.0.146", // TODO(https://github.com/serde-rs/json/issues/1309)
+                    "time" to "0.3.47", // TODO(https://github.com/time-rs/time/issues/783): 0.3.48 has an E0119 regression; remove once 0.3.49 ships
                 )
 
             crateNameToLastKnownWorkingVersions.forEach { (crate, version) ->

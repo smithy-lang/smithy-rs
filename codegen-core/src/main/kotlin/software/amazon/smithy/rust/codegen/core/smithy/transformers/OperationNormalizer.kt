@@ -21,7 +21,7 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 import software.amazon.smithy.rust.codegen.core.util.outputShape
 import software.amazon.smithy.rust.codegen.core.util.rename
 import java.util.Optional
-import kotlin.streams.toList
+import java.util.stream.Collectors
 
 /**
  * Generate synthetic Input and Output structures for operations.
@@ -82,7 +82,7 @@ object OperationNormalizer {
      */
     fun transform(model: Model): Model {
         val transformer = ModelTransformer.create()
-        val operations = model.shapes(OperationShape::class.java).toList()
+        val operations = model.shapes(OperationShape::class.java).collect(Collectors.toList())
         val newShapes =
             operations.flatMap { operation ->
                 // Generate or modify the input and output of the given `Operation` to be a unique shape

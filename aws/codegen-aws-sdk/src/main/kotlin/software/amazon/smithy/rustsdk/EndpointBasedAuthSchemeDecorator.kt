@@ -37,7 +37,8 @@ private val EndpointBasedAuthSchemeAllowList =
 class EndpointBasedAuthSchemeDecorator : ConditionalDecorator(
     predicate = { codegenContext, _ ->
         codegenContext?.let {
-            EndpointBasedAuthSchemeAllowList.contains(codegenContext.serviceShape.sdkId())
+            EndpointBasedAuthSchemeAllowList.contains(codegenContext.serviceShape.sdkId()) ||
+                codegenContext.sdkSettings().endpointBasedAuthSchemeEnabled
         } ?: false
     },
     delegateTo =

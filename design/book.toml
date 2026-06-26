@@ -2,7 +2,6 @@
 title = "Smithy Rust"
 authors = ["Russell Cohen", "aws-sdk-rust@amazon.com"]
 language = "en"
-multilingual = false
 src = "src"
 
 [rust]

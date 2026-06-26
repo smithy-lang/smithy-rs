@@ -10,7 +10,7 @@ are to allow this crate to be compilable and testable in isolation, no client co
 license = "Apache-2.0"
 publish = false
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91.1"
+rust-version = "1.94.1"
 
 [features]
 # this allows the tests to be excluded from downstream crates to keep dependencies / test times reasonable (e.g. no proptests)
@@ -24,6 +24,7 @@ aws-smithy-http = { path = "../aws-smithy-http", features = ["event-stream"] }
 aws-smithy-json = { path = "../aws-smithy-json" }
 aws-smithy-runtime = { path = "../aws-smithy-runtime", features = ["client"] }
 aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "test-util", "http-1x"] }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"]}
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 bytes = "1.11.1"

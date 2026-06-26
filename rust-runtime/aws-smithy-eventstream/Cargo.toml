@@ -1,14 +1,12 @@
 [package]
 name = "aws-smithy-eventstream"
-# <IMPORTANT> Only patch releases can be made to this runtime crate until 0.60.21 is published on crates.io
-version = "0.60.21"
-# </IMPORTANT>
+version = "0.61.1"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>", "John DiSanti <jdisanti@amazon.com>"]
 description = "Event stream logic for smithy-rs."
 edition = "2021"
 license = "Apache-2.0"
 repository = "https://github.com/smithy-lang/smithy-rs"
-rust-version = "1.91.1"
+rust-version = "1.94.1"
 
 [features]
 derive-arbitrary = ["dep:arbitrary", "dep:derive_arbitrary", "arbitrary?/derive"]
