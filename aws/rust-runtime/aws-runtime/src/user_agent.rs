@@ -270,16 +270,11 @@ impl AwsUserAgent {
         ua_value
     }
 
-    /// Generate an old-style User-Agent header for backward compatibility
+    /// Generate an old-style User-Agent header
     ///
     /// This header is intended to be set at `User-Agent`
     pub fn ua_header(&self) -> String {
-        let mut ua_value = String::new();
-        use std::fmt::Write;
-        write!(ua_value, "{} ", &self.sdk_metadata).unwrap();
-        write!(ua_value, "{} ", &self.os_metadata).unwrap();
-        write!(ua_value, "{}", &self.language_metadata).unwrap();
-        ua_value
+        self.aws_ua_header()
     }
 }
 
@@ -641,7 +636,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0"
         );
     }
 
@@ -662,7 +657,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 exec-env/lambda"
         );
     }
 
@@ -686,7 +681,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
         );
     }
 
@@ -705,7 +700,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 os/macos/1.15 lang/rust/1.50.0"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 app/my_app"
         );
     }
 
@@ -719,7 +714,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+            "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 md/asdf"
         );
     }
 
@@ -734,7 +729,7 @@ mod test {
             );
             assert_eq!(
                 ua.ua_header(),
-                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+                "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/A"
             );
         }
         // multiple metric IDs
@@ -749,7 +744,7 @@ mod test {
             );
             assert_eq!(
                 ua.ua_header(),
-                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+                "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/F,G,J"
             );
         }
     }
