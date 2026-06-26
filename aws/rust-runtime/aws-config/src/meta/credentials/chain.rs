@@ -9,7 +9,6 @@ use aws_credential_types::{
 };
 use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
-use std::error::Error;
 use std::fmt::Debug;
 use tracing::Instrument;
 
@@ -92,7 +91,6 @@ impl CredentialsProviderChain {
     }
 
     async fn credentials(&self) -> provider::Result {
-        let mut error_summaries = Vec::with_capacity(self.providers.len());
         for (name, provider) in &self.providers {
             let span = tracing::debug_span!("credentials_provider_chain", provider = %name);
             match provider.provide_credentials().instrument(span).await {
@@ -100,33 +98,17 @@ impl CredentialsProviderChain {
                     tracing::debug!(provider = %name, "loaded credentials");
                     return Ok(credentials);
                 }
-                Err(ref err @ CredentialsError::CredentialsNotLoaded(_)) => {
-                    let reason = err
-                        .source()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| "not configured".into());
-                    tracing::debug!(provider = %name, context = %DisplayErrorContext(err), "provider in chain did not provide credentials");
-                    error_summaries.push(format!("{name}: skipped ({reason})"));
+                Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
+                    tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
                 }
-                Err(ref err) => {
-                    let reason = err
-                        .source()
-                        .map(|s| s.to_string())
-                        .unwrap_or_else(|| err.to_string());
-                    tracing::warn!(provider = %name, error = %DisplayErrorContext(err), "provider failed to provide credentials");
-                    error_summaries.push(format!("{name}: failed ({reason})"));
+                Err(err) => {
+                    tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
+                    return Err(err);
                 }
             }
         }
         Err(CredentialsError::not_loaded(
-            if error_summaries.is_empty() {
-                "no credentials providers were configured in the chain".into()
-            } else {
-                format!(
-                    "no credentials found in chain. Attempted:\n  {}",
-                    error_summaries.join("\n  ")
-                )
-            },
+            "no providers in chain provided credentials",
         ))
     }
 }
@@ -245,89 +227,5 @@ mod tests {
                 ),
             },
         };
-    }
-
-    #[tokio::test]
-    async fn error_message_includes_per_provider_summary() {
-        let chain = CredentialsProviderChain::first_try(
-            "Environment",
-            provide_credentials_fn(|| async { Err(CredentialsError::not_loaded("not set")) }),
-        )
-        .or_else(
-            "Profile",
-            provide_credentials_fn(|| async {
-                Err(CredentialsError::invalid_configuration(
-                    "profile 'deploy' not found",
-                ))
-            }),
-        )
-        .or_else(
-            "IMDS",
-            provide_credentials_fn(|| async {
-                Err(CredentialsError::provider_error("connect timeout"))
-            }),
-        );
-
-        let err = chain.provide_credentials().await.expect_err("should fail");
-        assert!(
-            matches!(err, CredentialsError::CredentialsNotLoaded(_)),
-            "expected CredentialsNotLoaded, got: {err:?}"
-        );
-
-        // Verify per-provider summaries are present
-        let source = std::error::Error::source(&err)
-            .expect("error should have a source")
-            .to_string();
-        assert!(
-            source.contains("no credentials found in chain. Attempted:"),
-            "missing header in: {source}"
-        );
-        assert!(
-            source.contains("Environment: skipped (not set)"),
-            "missing Environment summary in: {source}"
-        );
-        assert!(
-            source.contains("Profile: failed (profile 'deploy' not found)"),
-            "missing Profile summary in: {source}"
-        );
-        assert!(
-            source.contains("IMDS: failed (connect timeout)"),
-            "missing IMDS summary in: {source}"
-        );
-    }
-
-    #[tokio::test]
-    async fn chain_continues_past_provider_errors() {
-        // A provider that returns a hard error should NOT stop the chain
-        let chain = CredentialsProviderChain::first_try(
-            "Failing",
-            provide_credentials_fn(|| async {
-                Err(CredentialsError::provider_error("503 Service Unavailable"))
-            }),
-        )
-        .or_else(
-            "Working",
-            provide_credentials_fn(|| async { Ok(Credentials::for_tests()) }),
-        );
-
-        let creds = chain
-            .provide_credentials()
-            .await
-            .expect("chain should fall through to working provider");
-        assert_eq!(creds.access_key_id(), "ANOTREAL");
-    }
-
-    #[tokio::test]
-    async fn empty_chain_error_message() {
-        let chain = CredentialsProviderChain { providers: vec![] };
-        let err = chain.provide_credentials().await.expect_err("should fail");
-        assert!(matches!(err, CredentialsError::CredentialsNotLoaded(_)));
-        let source = std::error::Error::source(&err)
-            .expect("error should have a source")
-            .to_string();
-        assert!(
-            source.contains("no credentials providers were configured in the chain"),
-            "unexpected message: {source}"
-        );
     }
 }
