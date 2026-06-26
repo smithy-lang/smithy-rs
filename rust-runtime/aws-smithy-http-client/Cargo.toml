@@ -2,7 +2,7 @@
 name = "aws-smithy-http-client"
 authors = ["AWS Rust SDK Team <aws-sdk-rust@amazon.com>"]
 description = "HTTP client abstractions for generated smithy clients"
-version = "1.2.0"
+version = "1.3.0"
 license = "Apache-2.0"
 edition = "2021"
 repository = "https://github.com/smithy-lang/smithy-rs"
@@ -27,6 +27,10 @@ default-client = [
     "hyper-util?/client-proxy",
     "dep:http-1x",
     "dep:tower",
+    "dep:tower-service",
+    "tower?/util",
+    "dep:futures-util",
+    "tokio/sync",
     "dep:rustls-pki-types",
     "dep:rustls-native-certs"
 ]
@@ -40,6 +44,7 @@ wire-mock = [
     "hyper-util?/server-graceful",
     "tokio/macros",
     "dep:http-body-util",
+    "dep:socket2",
 ]
 
 test-util = [
@@ -85,19 +90,21 @@ tracing = "0.1.44"
 
 # hyper 1.x stack
 hyper = { version = "1.6.0", features = ["client", "http1", "http2"], optional = true }
-hyper-util = { version = "0.1.16", features = ["http1", "http2"], optional = true }
+hyper-util = { version = "0.1.20", features = ["http1", "http2", "client-pool"], optional = true }
 http-1x = { package = "http", version = "1.3.1" , optional = true }
 http-body-1x = { package = "http-body", version = "1.0.1", optional = true}
-hyper-rustls = { version = "0.27", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
+hyper-rustls = { version = "0.27.9", features = ["http2", "http1", "native-tokio", "tls12"], default-features = false, optional = true }
 rustls = { version = "0.23.31", default-features = false, optional = true }
-tokio-rustls = {  version = "0.26.2", default-features = false, optional = true}
+tokio-rustls = {  version = "0.26.4", default-features = false, optional = true}
 # TODO(hyper1): add a way to enable the fips feature flag in s2n-tls
 s2n-tls-hyper = { version = "0.1.0", optional = true }
-s2n-tls = { version = "0.3.33", optional = true }
-s2n-tls-tokio = { version = "0.3.33", optional = true}
+s2n-tls = { version = "0.3.36", optional = true }
+s2n-tls-tokio = { version = "0.3.36", optional = true}
 tower = { version = "0.5.2", optional = true }
-rustls-pki-types = { version = "1.12.0", features = ["std"], optional = true }
-rustls-native-certs = { version = "0.8.1", optional = true }
+tower-service = { version = "0.3", optional = true }
+futures-util = { version = "0.3.32", default-features = false, features = ["std"], optional = true }
+rustls-pki-types = { version = "1.14.1", features = ["std"], optional = true }
+rustls-native-certs = { version = "0.8.3", optional = true }
 # end hyper 1.x stack deps
 
 # legacy hyper-0.14.x stack the SDK/runtime GA'd with
@@ -115,6 +122,7 @@ serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.146", features = ["preserve_order"], optional = true }
 indexmap = { version = "2.10.0", features = ["serde"], optional = true }
 http-body-util = { version = "0.1.3", optional = true }
+socket2 = { version = "0.6", optional = true }
 # end test util stack
 
 [dev-dependencies]
@@ -123,12 +131,16 @@ aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["test
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-0-4-x", "test-util"] }
 http-body-util = { version = "0.1.3" }
 serial_test = "3.2"
-hyper-util = { version = "0.1.16", features = ["full"] }
+hyper-util = { version = "0.1.20", features = ["full"] }
 base64 = "0.22"
 rustls-pemfile = "2.2.0"
-rustls-pki-types = { version = "1.12.0", features = ["std"] }
+rustls-pki-types = { version = "1.14.1", features = ["std"] }
 tokio = { version = "1.49.0", features = ["macros", "rt", "rt-multi-thread", "test-util", "full"] }
-tokio-rustls = "0.26.2"
+tokio-rustls = "0.26.4"
+# used by tests vendored from hyper-util in src/client/pool/vendored_cache.rs
+tower-test = "0.4"
+# Test-only ANSI-free subscriber for capturing pool tracing events in assertions.
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 
 [[example]]
@@ -149,6 +161,16 @@ doc-scrape-examples = true
 [[example]]
 name = "custom-dns"
 required-features = ["rustls-ring"]
+doc-scrape-examples = true
+
+[[example]]
+name = "pool-basic"
+required-features = ["rustls-aws-lc"]
+doc-scrape-examples = true
+
+[[example]]
+name = "pool-partitioned"
+required-features = ["rustls-aws-lc"]
 doc-scrape-examples = true
 
 [package.metadata.smithy-rs-release-tooling]

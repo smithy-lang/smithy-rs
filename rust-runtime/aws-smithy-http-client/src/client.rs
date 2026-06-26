@@ -11,6 +11,7 @@ mod timeout;
 pub mod tls;
 
 pub(crate) mod connect;
+pub mod pool;
 
 use crate::cfg::cfg_tls;
 use crate::tls::TlsContext;
@@ -146,10 +147,8 @@ pub struct TlsUnset {}
 /// TLS implementation selected
 #[derive(Debug, Clone)]
 pub struct TlsProviderSelected {
-    #[allow(unused)]
-    provider: tls::Provider,
-    #[allow(unused)]
-    context: TlsContext,
+    pub(crate) provider: tls::Provider,
+    pub(crate) context: TlsContext,
 }
 
 impl ConnectorBuilder<TlsUnset> {
@@ -511,31 +510,13 @@ fn new_tokio_hyper_builder(
 }
 
 impl<C> Adapter<C> {
-    /// Add proxy authentication header to the request if needed
+    /// Add proxy authentication header to the request if needed.
+    ///
+    /// Inject the `Proxy-Authorization` header when proxy credentials apply,
+    /// via the shared [`proxy::add_proxy_auth_header`] helper.
     fn add_proxy_auth_header(&self, request: &mut http_1x::Request<SdkBody>) {
-        // Only add auth for HTTP requests (not HTTPS which uses CONNECT tunneling)
-        if request.uri().scheme() != Some(&http_1x::uri::Scheme::HTTP) {
-            return;
-        }
-
-        // Don't override existing proxy authorization header
-        if request
-            .headers()
-            .contains_key(http_1x::header::PROXY_AUTHORIZATION)
-        {
-            return;
-        }
-
-        if let Some(ref matcher) = self.proxy_matcher {
-            if let Some(intercept) = matcher.intercept(request.uri()) {
-                // Add basic auth header if available
-                if let Some(auth_header) = intercept.basic_auth() {
-                    request
-                        .headers_mut()
-                        .insert(http_1x::header::PROXY_AUTHORIZATION, auth_header.clone());
-                    tracing::debug!("added proxy authentication header for {}", request.uri());
-                }
-            }
+        if let Some(matcher) = self.proxy_matcher.as_ref() {
+            proxy::add_proxy_auth_header(request, matcher);
         }
     }
 }
@@ -583,7 +564,7 @@ where
 }
 
 /// Downcast errors coming out of hyper into an appropriate `ConnectorError`
-fn downcast_error(err: BoxError) -> ConnectorError {
+pub(crate) fn downcast_error(err: BoxError) -> ConnectorError {
     // is a `TimedOutError` (from aws_smithy_async::timeout) in the chain? if it is, this is a timeout
     if find_source::<TimedOutError>(err.as_ref()).is_some() {
         return ConnectorError::timeout(err);
@@ -970,6 +951,27 @@ impl Builder<TlsUnset> {
             move |client_builder, settings, runtime_components| {
                 let builder = new_conn_builder(client_builder, settings, runtime_components);
                 builder.build_http()
+            },
+        )
+    }
+
+    /// Build an HTTP client (no TLS) with a custom DNS resolver.
+    #[doc(hidden)]
+    #[cfg(feature = "test-util")]
+    pub fn build_with_resolver(
+        self,
+        resolver: impl aws_smithy_runtime_api::client::dns::ResolveDns + Clone + 'static,
+    ) -> SharedHttpClient {
+        build_with_conn_fn(
+            self.client_builder,
+            self.pool_idle_timeout,
+            move |client_builder, settings, runtime_components| {
+                let builder = new_conn_builder(client_builder, settings, runtime_components);
+                use crate::client::dns::HyperUtilResolver;
+                let http_connector = builder.base_connector_with_resolver(HyperUtilResolver {
+                    resolver: resolver.clone(),
+                });
+                builder.wrap_connector(http_connector)
             },
         )
     }

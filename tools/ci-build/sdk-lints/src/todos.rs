@@ -11,7 +11,12 @@ use std::path::{Path, PathBuf};
 // All "TODOs" must include (...) that gives them context
 pub(crate) struct TodosHaveContext;
 
-const IGNORE_DIRS: &[&str] = &["tools/ci-build/sdk-lints/src/todos.rs"];
+const IGNORE_DIRS: &[&str] = &[
+    "tools/ci-build/sdk-lints/src/todos.rs",
+    // Vendored from hyper-util; its TODOs are upstream's and kept verbatim so
+    // the file stays close to upstream for future syncs.
+    "rust-runtime/aws-smithy-http-client/src/client/pool/vendored_cache.rs",
+];
 
 impl Lint for TodosHaveContext {
     fn name(&self) -> &str {

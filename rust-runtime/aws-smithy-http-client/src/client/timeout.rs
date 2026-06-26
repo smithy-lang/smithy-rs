@@ -205,6 +205,51 @@ where
     }
 }
 
+/// Which timeout label a wrapping future should carry.
+///
+/// The label surfaces in the `HttpTimeoutError` produced when the timeout
+/// fires; it is what users see in the error message and what the retry
+/// classifier receives via `TimedOutError` downcasting.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum TimeoutKind {
+    Connect,
+    Read,
+}
+
+impl TimeoutKind {
+    fn label(self) -> &'static str {
+        match self {
+            TimeoutKind::Connect => "HTTP connect",
+            TimeoutKind::Read => "HTTP read",
+        }
+    }
+}
+
+/// Wrap `fut` in a `MaybeTimeoutFuture` if `timeout` is set.
+///
+/// Applies per-operation `connect_timeout` / `read_timeout` without
+/// requiring a dedicated Tower service per request. Takes `sleep_impl` by
+/// reference to avoid cloning it into a dedicated service.
+pub(crate) fn maybe_timeout_future<F, T, E>(
+    fut: F,
+    timeout: Option<Duration>,
+    sleep_impl: Option<&SharedAsyncSleep>,
+    kind: TimeoutKind,
+) -> MaybeTimeoutFuture<F>
+where
+    F: Future<Output = Result<T, E>>,
+    E: Into<BoxError>,
+{
+    match (timeout, sleep_impl) {
+        (Some(duration), Some(sleep)) => MaybeTimeoutFuture::Timeout {
+            timeout: Timeout::new(fut, sleep.sleep(duration)),
+            error_type: kind.label(),
+            duration,
+        },
+        _ => MaybeTimeoutFuture::NoTimeout { future: fut },
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod test {
     use hyper::rt::ReadBufCursor;

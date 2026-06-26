@@ -60,10 +60,9 @@ pub(crate) mod build_connector {
     ) -> super::connect::S2nTlsConnector<R> {
         let config = tls_context.s2n_config();
         http_connector.enforce_http(false);
-        let mut builder = s2n_tls_hyper::connector::HttpsConnector::builder_with_http(
-            http_connector,
-            config.clone(),
-        );
+        let timed = crate::client::pool::connection::TimingConnector::new(http_connector);
+        let mut builder =
+            s2n_tls_hyper::connector::HttpsConnector::builder_with_http(timed, config.clone());
         builder.with_plaintext_http(true);
         let https_connector = builder.build();
 
@@ -89,16 +88,20 @@ pub(crate) mod connect {
     };
     use tower::Service;
 
+    type S2nHttpsConnector<R> = s2n_tls_hyper::connector::HttpsConnector<
+        crate::client::pool::connection::TimingConnector<HttpConnector<R>>,
+    >;
+
     #[derive(Clone)]
     pub(crate) struct S2nTlsConnector<R> {
-        https: s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>>,
+        https: S2nHttpsConnector<R>,
         tls_config: s2n_tls::config::Config,
         proxy_matcher: Option<Arc<Matcher>>, // Pre-computed for performance
     }
 
     impl<R> S2nTlsConnector<R> {
         pub(super) fn new(
-            https: s2n_tls_hyper::connector::HttpsConnector<HttpConnector<R>>,
+            https: S2nHttpsConnector<R>,
             tls_config: s2n_tls::config::Config,
             proxy_config: ProxyConfig,
         ) -> Self {
@@ -259,9 +262,11 @@ pub(crate) mod connect {
         T: Connection + tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
     {
         fn connected(&self) -> Connected {
-            // For tunneled connections, we can't easily access the underlying connection info
-            // from s2n-tls, so we'll return a basic Connected instance
-            Connected::new()
+            let inner_connected = self.inner.inner().get_ref().connected();
+            match self.inner.inner().as_ref().application_protocol() {
+                Some(b"h2") => inner_connected.negotiated_h2(),
+                _ => inner_connected,
+            }
         }
     }
 

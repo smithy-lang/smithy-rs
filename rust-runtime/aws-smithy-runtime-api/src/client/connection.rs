@@ -10,6 +10,31 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
 
+/// Opaque identifier for a physical connection within a pool.
+///
+/// Distinct within a pool's lifetime under normal operation (backed by a
+/// monotonic 64-bit counter). All requests dispatched on the same
+/// connection (including H2 multiplexed requests) share the same id.
+/// Useful for correlating requests with connection lifecycle tracing events.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ConnectionId(u64);
+
+impl ConnectionId {
+    /// Create a connection id from a raw numeric value.
+    ///
+    /// For HTTP client/pool implementations that assign connection
+    /// identifiers; the value should be distinct per live connection.
+    pub fn new(id: u64) -> Self {
+        Self(id)
+    }
+}
+
+impl fmt::Display for ConnectionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 /// Metadata that tracks the state of an active connection.
 #[derive(Clone)]
 pub struct ConnectionMetadata {
@@ -17,6 +42,7 @@ pub struct ConnectionMetadata {
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
     poison_fn: Arc<dyn Fn() + Send + Sync>,
+    connection_id: Option<ConnectionId>,
 }
 
 impl ConnectionMetadata {
@@ -45,6 +71,7 @@ impl ConnectionMetadata {
             // need to use builder to set this field
             local_addr: None,
             poison_fn: Arc::new(poison),
+            connection_id: None,
         }
     }
 
@@ -62,6 +89,14 @@ impl ConnectionMetadata {
     pub fn local_addr(&self) -> Option<SocketAddr> {
         self.local_addr
     }
+
+    /// Get the connection id, if one was assigned by the HTTP client.
+    ///
+    /// `Some` when the HTTP client assigns pool-level connection identifiers;
+    /// `None` for clients that do not track connection identity.
+    pub fn connection_id(&self) -> Option<ConnectionId> {
+        self.connection_id
+    }
 }
 
 impl fmt::Debug for ConnectionMetadata {
@@ -70,6 +105,7 @@ impl fmt::Debug for ConnectionMetadata {
             .field("is_proxied", &self.is_proxied)
             .field("remote_addr", &self.remote_addr)
             .field("local_addr", &self.local_addr)
+            .field("connection_id", &self.connection_id)
             .finish()
     }
 }
@@ -81,6 +117,7 @@ pub struct ConnectionMetadataBuilder {
     remote_addr: Option<SocketAddr>,
     local_addr: Option<SocketAddr>,
     poison_fn: Option<Arc<dyn Fn() + Send + Sync>>,
+    connection_id: Option<ConnectionId>,
 }
 
 impl fmt::Debug for ConnectionMetadataBuilder {
@@ -155,6 +192,18 @@ impl ConnectionMetadataBuilder {
         self
     }
 
+    /// Set the [`ConnectionId`] the HTTP client assigned to this connection.
+    pub fn connection_id(mut self, id: ConnectionId) -> Self {
+        self.connection_id = Some(id);
+        self
+    }
+
+    /// Set the [`ConnectionId`] the HTTP client assigned to this connection.
+    pub fn set_connection_id(&mut self, id: Option<ConnectionId>) -> &mut Self {
+        self.connection_id = id;
+        self
+    }
+
     /// Build a [`ConnectionMetadata`] value.
     ///
     /// # Panics
@@ -170,6 +219,7 @@ impl ConnectionMetadataBuilder {
             poison_fn: self
                 .poison_fn
                 .expect("poison_fn should be set for ConnectionMetadata"),
+            connection_id: self.connection_id,
         }
     }
 }

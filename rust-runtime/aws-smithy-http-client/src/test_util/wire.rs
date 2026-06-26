@@ -39,6 +39,8 @@
 
 #![allow(missing_docs)]
 
+pub mod connection;
+
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
@@ -405,6 +407,22 @@ impl tower::Service<Name> for InnerDnsResolver {
                 .unwrap()
                 .push(RecordedEvent::DnsLookup(req.to_string()));
             Ok(std::iter::once(socket_addr))
+        })
+    }
+}
+
+impl aws_smithy_runtime_api::client::dns::ResolveDns for LoggingDnsResolver {
+    fn resolve_dns<'a>(
+        &'a self,
+        name: &'a str,
+    ) -> aws_smithy_runtime_api::client::dns::DnsFuture<'a> {
+        let socket_addr = self.0.socket_addr;
+        let log = self.0.log.clone();
+        aws_smithy_runtime_api::client::dns::DnsFuture::new(async move {
+            log.lock()
+                .unwrap()
+                .push(RecordedEvent::DnsLookup(name.to_string()));
+            Ok(vec![socket_addr.ip()])
         })
     }
 }

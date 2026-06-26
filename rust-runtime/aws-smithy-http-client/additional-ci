@@ -4,10 +4,36 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
-# This script contains additional CI checks to run for this specific package
+# Additional CI checks for aws-smithy-http-client
 
 set -e
 
 echo "### Testing unstable custom rustls crypto provider"
 # Enabling ring because the tests use it as the "custom" provider, and it transitively enables __rustls
 RUSTFLAGS="--cfg aws_sdk_unstable" cargo test --features rustls-ring
+
+
+echo "### Running connection pool integration tests"
+cargo test --features wire-mock,default-client --test connection_harness_test
+
+echo "### Running tracing-assertion tests (require single-threaded execution)"
+cargo test --features wire-mock,default-client,test-util --test pool_behavior_test -- --ignored --test-threads=1
+
+echo "### Running H2 pool behavior tests (requires aws_sdk_unstable cfg)"
+RUSTFLAGS='--cfg aws_sdk_unstable' cargo test --features s2n-tls,rustls-aws-lc,wire-mock,default-client,test-util --test h2_pool_test
+
+# ThreadSanitizer over the multi-partition concurrency stress test. The pool
+# composes std synchronization primitives across threads; TSan checks the
+# assembled concurrent system for data races. Requires a nightly toolchain
+# with the rust-src component for instrumented std (`-Zbuild-std`):
+#   rustup toolchain install nightly && rustup component add rust-src --toolchain nightly
+echo "### Running concurrency stress test under ThreadSanitizer (nightly + build-std)"
+TSAN_TARGET="$(rustc -vV | awk '/^host:/{print $2}')"
+RUSTFLAGS="-Zsanitizer=thread --cfg aws_sdk_unstable" \
+RUSTDOCFLAGS="-Zsanitizer=thread" \
+    cargo +nightly test \
+        -Zbuild-std \
+        --target "${TSAN_TARGET}" \
+        --features s2n-tls,rustls-aws-lc,wire-mock,default-client,test-util \
+        --test pool_behavior_test \
+        v2_cross_partition_concurrency_stress
