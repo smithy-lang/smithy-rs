@@ -582,7 +582,38 @@ class ResponseDeserializerGenerator(
                 rust("tmp")
                 rust("}),")
             }
-            rustTemplate("_ => #{error_symbol}::generic(generic)", "error_symbol" to errorSymbol)
+            rustTemplate(
+                """
+                _ => {
+                    // Registry-backed, operation-scoped reification of an error whose
+                    // code this operation does not model directly: the operation's own
+                    // error registry is consulted first, then the lookup widens to the
+                    // service-wide error registry. On a hit, the reified error is attached
+                    // as the source of the returned unhandled error while its metadata
+                    // (code, message, request id) is preserved; on a miss the generic
+                    // error is returned unchanged.
+                    match protocol
+                        .deserialize_error_response(response, _cfg)
+                        .ok()
+                        .and_then(|mut deser| {
+                            #{reify_error}(
+                                ${errorSymbol.namespace}::error_registry::REGISTRY
+                                    .or(&crate::error_type_registry::REGISTRY),
+                                error_code,
+                                &mut *deser,
+                            )
+                        }) {
+                        #{Some}(source) => <#{error_symbol} as #{CreateUnhandledError}>::create_unhandled_error(source, #{Some}(generic)),
+                        #{None} => #{error_symbol}::generic(generic),
+                    }
+                }
+                """,
+                *codegenScope,
+                "error_symbol" to errorSymbol,
+                "reify_error" to RuntimeType.smithySchema(runtimeConfig).resolve("registry::reify_error"),
+                "CreateUnhandledError" to
+                    RuntimeType.smithyRuntimeApiClient(runtimeConfig).resolve("client::result::CreateUnhandledError"),
+            )
             rustTemplate(
                 """
                 };

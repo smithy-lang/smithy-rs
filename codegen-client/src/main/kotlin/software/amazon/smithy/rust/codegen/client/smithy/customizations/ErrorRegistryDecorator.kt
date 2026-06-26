@@ -28,19 +28,27 @@ import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErr
  *
  * Per the Document Type & Type Registries SEP § "Package level error type registry":
  * - The service-wide error registry contains every shape with the `@error` trait in
- *   the service closure. It is exposed publicly via `Client::error_registry()` and is
- *   intended for third-party `Document`-based reification — turning a discriminated
- *   `Document` into a typed error variant via [`TypeRegistry::deserialize_document`].
- *   It is NOT consulted by the SDK's own error-response dispatch, which matches on each
- *   operation's modeled errors directly. Wiring the registry into dispatch is a SEP
- *   SHOULD, not a MUST, and is deferred.
+ *   the service closure. It is exposed publicly via `Client::error_registry()` for
+ *   third-party `Document`-based reification — turning a discriminated `Document` into
+ *   a typed error variant via [`TypeRegistry::deserialize_document`]. It also serves as
+ *   the widening fallback for the per-operation scoped reification in the schema-serde
+ *   error path.
  * - The per-operation error registry contains only the errors that operation can throw,
- *   and lives inside the operation's module as a `pub(crate)` static. It is generated for
- *   future internal scoped dispatch and is not yet consulted (hence `#[allow(dead_code)]`).
+ *   and lives inside the operation's module as a `pub(crate)` static. The schema-serde
+ *   error path consults it first (then widens to the service-wide registry) to reify an
+ *   error code that does not match one of the operation's modeled errors directly.
  *
  * Only fires for services in [SchemaSerdeAllowlist]; non-allowlisted services pay no
  * artifact-size cost. Per-operation registries are only emitted for operations with
  * at least one modeled error to avoid empty registries.
+ *
+ * Future optimization: the per-operation registries exist solely to give the
+ * scoped reification fallback operation-level precedence (an operation's own errors
+ * win over a service-wide error sharing the same wire code). If that precedence is
+ * later judged unnecessary, the per-operation registries can be dropped entirely and
+ * the fallback can reify against the service-wide registry alone. Eliminating them
+ * would reduce generated code, compile time, and binary size, at the cost of losing
+ * operation-scoped precedence on wire-code collisions.
  *
  * The pattern mirrors [TypeRegistryDecorator] except:
  * - The shape filter is inverted: the primary registry excludes errors; here errors
@@ -101,7 +109,7 @@ class ErrorRegistryDecorator : ClientCodegenDecorator {
                 """,
                 "LazyLock" to lazyLock,
                 "TypeRegistry" to typeRegistry,
-                "Entries" to registryEntries(codegenContext, errorShapes),
+                "Entries" to registryEntries(codegenContext, errorShapes, emitErrorConstructor = true),
             )
         }
 
@@ -119,8 +127,9 @@ class ErrorRegistryDecorator : ClientCodegenDecorator {
                     /// [`TypeRegistry::deserialize_document`](#{TypeRegistry}::deserialize_document).
                     ///
                     /// This registry is provided for third-party `Document`-based error handling.
-                    /// It is not consulted by the SDK's own error-response dispatch, which matches
-                    /// on each operation's modeled errors directly.
+                    /// Internally it also serves as the widening fallback when the schema-serde
+                    /// error path reifies an error code that an operation does not model directly
+                    /// (the operation's own error registry is consulted first).
                     ///
                     /// ```ignore
                     /// let registry = MyClient::error_registry();
@@ -174,11 +183,12 @@ private class ErrorRegistryOperationCustomization(
                 /// Per-operation error registry. Contains an entry for every modeled
                 /// error this operation can throw.
                 ///
-                /// Generated for potential future internal scoped error dispatch; it is not
-                /// yet consulted (the response deserializer matches on the operation's modeled
-                /// errors directly), hence the `##[allow(dead_code)]`.
+                /// Used by the schema-serde error path as the operation-scoped lookup
+                /// for registry-backed error reification: an error code that does not
+                /// match one of the operation's modeled errors directly is resolved
+                /// against this registry first, then widened to the service-wide error
+                /// registry.
                 pub(crate) mod error_registry {
-                    ##[allow(dead_code)]
                     pub(crate) static REGISTRY: #{LazyLock}<#{TypeRegistry}> = #{LazyLock}::new(|| {
                         #{TypeRegistry}::builder()
                             #{Entries}
@@ -188,7 +198,7 @@ private class ErrorRegistryOperationCustomization(
                 """,
                 "LazyLock" to lazyLock,
                 "TypeRegistry" to typeRegistry,
-                "Entries" to registryEntries(codegenContext, errors),
+                "Entries" to registryEntries(codegenContext, errors, emitErrorConstructor = true),
             )
         }
 }

@@ -37,6 +37,7 @@ use aws_smithy_types::type_erasure::TypeErasedBox;
 use aws_smithy_types::DiscriminatedDocument;
 
 use crate::document::DocumentShapeDeserializer;
+use crate::schema::error_envelope::sanitize_error_code;
 use crate::serde::{SerdeError, ShapeDeserializer};
 use crate::Schema;
 use crate::ShapeId;
@@ -52,12 +53,26 @@ use crate::ShapeId;
 /// method that wraps the result in `TypeErasedBox::new(...)`.
 pub type DeserializeFn = fn(&mut dyn ShapeDeserializer) -> Result<TypeErasedBox, SerdeError>;
 
+/// Error-typed deserialize function.
+///
+/// Like [`DeserializeFn`], but returns the reified value boxed as a
+/// `dyn std::error::Error` so it can be attached as the `source` of an
+/// unhandled error. Error-registry entries carry one of these in addition to
+/// the type-erased [`DeserializeFn`]; primary-registry entries do not.
+pub type ErrorDeserializeFn =
+    fn(&mut dyn ShapeDeserializer) -> Result<Box<dyn std::error::Error + Send + Sync>, SerdeError>;
+
 /// A single entry in a [`TypeRegistry`], pairing a shape's [`Schema`]
 /// with a [`DeserializeFn`] that constructs the typed value.
+///
+/// Error-registry entries additionally carry an [`ErrorDeserializeFn`] so the
+/// reified value can be surfaced as the `source` of an unhandled error; see
+/// [`reify_error`].
 #[derive(Clone, Copy)]
 pub struct RegistryEntry {
     schema: &'static Schema<'static>,
     deserialize: DeserializeFn,
+    error_deserialize: Option<ErrorDeserializeFn>,
 }
 
 impl RegistryEntry {
@@ -67,6 +82,22 @@ impl RegistryEntry {
         Self {
             schema,
             deserialize,
+            error_deserialize: None,
+        }
+    }
+
+    /// Build a `RegistryEntry` for an `@error` shape, carrying both a
+    /// type-erased [`DeserializeFn`] and an [`ErrorDeserializeFn`] that boxes
+    /// the reified value as a `dyn std::error::Error`.
+    pub const fn new_error(
+        schema: &'static Schema<'static>,
+        deserialize: DeserializeFn,
+        error_deserialize: ErrorDeserializeFn,
+    ) -> Self {
+        Self {
+            schema,
+            deserialize,
+            error_deserialize: Some(error_deserialize),
         }
     }
 
@@ -78,6 +109,12 @@ impl RegistryEntry {
     /// The type-erased deserialize function for this entry.
     pub fn deserialize_fn(&self) -> DeserializeFn {
         self.deserialize
+    }
+
+    /// The error deserialize function for this entry, if it was registered as
+    /// an `@error` shape.
+    pub fn error_deserialize_fn(&self) -> Option<ErrorDeserializeFn> {
+        self.error_deserialize
     }
 }
 
@@ -181,6 +218,33 @@ impl TypeRegistry {
         self.entries.get(fqn)
     }
 
+    /// Look up the entry for an error shape by its **wire error code**
+    /// (e.g. `"NotFound"`), rather than by fully qualified name.
+    ///
+    /// Error responses identify the error by a bare code on the wire — the
+    /// `<Code>` element for restXml, the `__type` discriminator for the JSON
+    /// protocols, the `x-amzn-query-error` header for awsQueryCompatible — not
+    /// by a fully qualified [`ShapeId`]. This resolves such a code to its entry
+    /// so a schema-serde error path can reify an error by the identifier it
+    /// actually receives off the wire.
+    ///
+    /// `wire_code` is sanitized first (a leading `namespace#` prefix and a
+    /// trailing `:url` suffix are stripped), so a bare name, a fully qualified
+    /// name, or a URL-suffixed code all resolve correctly. Matching is by the
+    /// registered shape's name; per-operation and per-service error sets are
+    /// small, so a linear scan is sufficient and needs no extra generated index.
+    ///
+    /// Returns `None` if no registered shape's name matches the code.
+    //
+    // TODO(schema-error): honor an `@awsQueryError` code override once `Schema`
+    // carries that trait — awsQueryCompatible services can emit a custom error
+    // code that differs from the shape name, which this name-based match would miss.
+    pub fn entry_for_error_code(&self, wire_code: &str) -> Option<&RegistryEntry> {
+        let wire_code = sanitize_error_code(wire_code);
+        self.iter()
+            .find_map(|(id, entry)| (id.shape_name() == wire_code).then_some(entry))
+    }
+
     /// Deserialize the given `document` into the shape pointed to by its
     /// discriminator.
     ///
@@ -261,6 +325,26 @@ impl TypeRegistry {
         self
     }
 
+    /// Borrow `self` and `fallback` into a [`ComposedRegistry`] whose lookups
+    /// consult `self` first and fall back to `fallback`.
+    ///
+    /// Unlike [`compose`](Self::compose), this neither consumes nor copies
+    /// either registry — both are borrowed in place, so two `&'static`
+    /// registries (the typical case for codegen-emitted statics) can be
+    /// layered per call with no allocation.
+    ///
+    /// The precedence — `self` wins over `fallback` on a colliding lookup — is
+    /// what makes this useful for **operation-scoped** error resolution: layer
+    /// an operation's own error registry over the service-wide one so the
+    /// operation's modeled errors take priority before widening to the rest of
+    /// the service closure.
+    pub fn or<'a>(&'a self, fallback: &'a TypeRegistry) -> ComposedRegistry<'a> {
+        ComposedRegistry {
+            primary: self,
+            fallback,
+        }
+    }
+
     /// Iterate the registry's `(ShapeId, RegistryEntry)` pairs. Iteration
     /// order is unspecified.
     pub fn iter(&self) -> Iter<'_> {
@@ -286,6 +370,85 @@ impl fmt::Debug for TypeRegistry {
             .field("entries", &self.entries.len())
             .finish_non_exhaustive()
     }
+}
+
+/// Two [`TypeRegistry`] references layered for lookup, produced by
+/// [`TypeRegistry::or`].
+///
+/// Lookups consult the `primary` registry first and fall back to the
+/// `fallback` registry, so an entry in `primary` shadows an entry with the
+/// same key in `fallback`. Both registries are borrowed, so a `ComposedRegistry`
+/// is a cheap, allocation-free view — typically a per-operation error registry
+/// layered over the service-wide one for operation-scoped error resolution.
+#[derive(Debug, Clone, Copy)]
+pub struct ComposedRegistry<'a> {
+    primary: &'a TypeRegistry,
+    fallback: &'a TypeRegistry,
+}
+
+impl ComposedRegistry<'_> {
+    /// Look up an entry by [`ShapeId`], consulting `primary` then `fallback`.
+    pub fn entry_for(&self, id: &ShapeId<'_>) -> Option<&RegistryEntry> {
+        self.primary
+            .entry_for(id)
+            .or_else(|| self.fallback.entry_for(id))
+    }
+
+    /// Look up an entry by fully qualified name, consulting `primary` then
+    /// `fallback`.
+    pub fn entry_for_fqn(&self, fqn: &str) -> Option<&RegistryEntry> {
+        self.primary
+            .entry_for_fqn(fqn)
+            .or_else(|| self.fallback.entry_for_fqn(fqn))
+    }
+
+    /// Look up an entry by wire error code, consulting `primary` then
+    /// `fallback`. See [`TypeRegistry::entry_for_error_code`].
+    ///
+    /// This is the operation-scoped error resolution primitive: with an
+    /// operation's error registry as `primary` and the service-wide registry
+    /// as `fallback`, an error the operation models is resolved against the
+    /// operation's own set before the lookup widens to the rest of the service.
+    pub fn entry_for_error_code(&self, wire_code: &str) -> Option<&RegistryEntry> {
+        self.primary
+            .entry_for_error_code(wire_code)
+            .or_else(|| self.fallback.entry_for_error_code(wire_code))
+    }
+}
+
+/// Reify an error response body into a boxed `dyn std::error::Error`, scoped to
+/// an operation and then widened to the service.
+///
+/// Given a `registry` composed as `operation_errors.or(&service_errors)`, a wire
+/// `error_code`, and a [`ShapeDeserializer`] positioned at the error body (such
+/// as the one returned by a protocol's `deserialize_error_response`), this looks
+/// the code up — the operation's own errors first, then the service-wide set —
+/// and runs the matched entry's [`ErrorDeserializeFn`]. The result is the typed
+/// error boxed as a `dyn std::error::Error`, ready to be attached as the
+/// `source` of an unhandled error.
+///
+/// It is the registry-backed fallback for the schema-serde error path, meant to
+/// run only after an operation's modeled-error match misses, to recover
+/// structure from an error the operation does not model but the service (or an
+/// extension package) does. Deserialization failures are swallowed (returning
+/// `None`) so a malformed or unexpected body can never change how an operation
+/// fails relative to the plain generic-error path.
+///
+/// Body-only deserialization is correct here: the reified value is body data
+/// which carries no HTTP header or status bindings, so the entry's body
+/// [`ErrorDeserializeFn`] is sufficient — there is no lossy header/status case
+/// to account for.
+///
+/// Returns `None` if `error_code` matches no registered shape, if the matched
+/// entry carries no [`ErrorDeserializeFn`] (i.e. it was not registered as an
+/// `@error` shape), or if deserialization of the matched shape fails.
+pub fn reify_error(
+    registry: ComposedRegistry<'_>,
+    error_code: &str,
+    deser: &mut dyn ShapeDeserializer,
+) -> Option<Box<dyn std::error::Error + Send + Sync>> {
+    let entry = registry.entry_for_error_code(error_code)?;
+    (entry.error_deserialize_fn()?)(deser).ok()
 }
 
 /// Builder for [`TypeRegistry`].
@@ -321,6 +484,27 @@ impl TypeRegistryBuilder {
         let id = *schema.shape_id();
         self.entries
             .insert(id, RegistryEntry::new(schema, deserialize));
+        self
+    }
+
+    /// Insert a registration for an `@error` shape, carrying both a type-erased
+    /// [`DeserializeFn`] and an [`ErrorDeserializeFn`]. The shape ID is taken
+    /// from the schema.
+    ///
+    /// This is the form generated code uses for error registries; the
+    /// [`ErrorDeserializeFn`] lets [`reify_error`] surface the reified value as
+    /// the `source` of an unhandled error.
+    pub fn insert_error_shape(
+        mut self,
+        schema: &'static Schema<'static>,
+        deserialize: DeserializeFn,
+        error_deserialize: ErrorDeserializeFn,
+    ) -> Self {
+        let id = *schema.shape_id();
+        self.entries.insert(
+            id,
+            RegistryEntry::new_error(schema, deserialize, error_deserialize),
+        );
         self
     }
 
@@ -544,6 +728,44 @@ mod tests {
     }
 
     #[test]
+    fn entry_for_error_code_resolves_sanitized_codes() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+
+        // A bare wire code, a fully qualified code, a URL-suffixed code, and a
+        // fully qualified + URL-suffixed code all resolve to the same entry.
+        for code in [
+            "Foo",
+            "smithy.example#Foo",
+            "Foo:http://internal.example.com/x",
+            "smithy.example#Foo:http://internal.example.com/x",
+        ] {
+            let entry = registry
+                .entry_for_error_code(code)
+                .unwrap_or_else(|| panic!("expected a match for {code:?}"));
+            assert_eq!(entry.schema().shape_id(), FOO_SCHEMA.shape_id());
+        }
+
+        // The scan selects the correct entry among several.
+        let bar = registry.entry_for_error_code("Bar").unwrap();
+        assert_eq!(bar.schema().shape_id(), BAR_SCHEMA.shape_id());
+    }
+
+    #[test]
+    fn entry_for_error_code_returns_none_for_unknown_code() {
+        let registry = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+
+        assert!(registry.entry_for_error_code("DoesNotExist").is_none());
+        // A namespace that happens to share the name's text must not match on
+        // the namespace component — matching is on the shape name only.
+        assert!(registry.entry_for_error_code("Foo#Nope").is_none());
+    }
+
+    #[test]
     fn len_and_is_empty() {
         let empty = TypeRegistry::new();
         assert_eq!(empty.len(), 0);
@@ -619,6 +841,146 @@ mod tests {
         let boxed = merged.deserialize_document(&doc).unwrap();
         let result = *boxed.downcast::<FooReplacement>().expect("override fn ran");
         assert_eq!(result, FooReplacement { replaced: true });
+    }
+
+    #[test]
+    fn composed_registry_prefers_primary_then_widens() {
+        // `primary` models Foo (deserialize_foo); `fallback` also has Foo but
+        // with a different fn, plus Bar. On the Foo collision the primary must
+        // win (the opposite precedence of `compose`, where the argument wins),
+        // and the lookup must widen to the fallback for Bar.
+        let primary = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let fallback = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo_replacement)
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+        let composed = primary.or(&fallback);
+
+        // Collision: primary wins — the entry carries deserialize_foo, not the
+        // fallback's replacement fn.
+        let foo = composed.entry_for_error_code("Foo").unwrap();
+        assert!(std::ptr::fn_addr_eq(
+            foo.deserialize_fn(),
+            deserialize_foo as DeserializeFn
+        ));
+
+        // Widen: Bar resolves from the fallback.
+        let bar = composed.entry_for_error_code("Bar").unwrap();
+        assert_eq!(bar.schema().shape_id(), BAR_SCHEMA.shape_id());
+
+        // Miss in both: None.
+        assert!(composed.entry_for_error_code("Nope").is_none());
+    }
+
+    #[test]
+    fn composed_registry_entry_for_and_fqn_compose() {
+        let primary = TypeRegistry::builder()
+            .insert_shape(&FOO_SCHEMA, deserialize_foo)
+            .build();
+        let fallback = TypeRegistry::builder()
+            .insert_shape(&BAR_SCHEMA, deserialize_bar)
+            .build();
+        let composed = primary.or(&fallback);
+
+        // entry_for (by ShapeId): primary hit, then fallback widen.
+        assert_eq!(
+            composed
+                .entry_for(&shape_id!("smithy.example", "Foo"))
+                .unwrap()
+                .schema()
+                .shape_id(),
+            FOO_SCHEMA.shape_id()
+        );
+        assert_eq!(
+            composed
+                .entry_for(&shape_id!("smithy.example", "Bar"))
+                .unwrap()
+                .schema()
+                .shape_id(),
+            BAR_SCHEMA.shape_id()
+        );
+
+        // entry_for_fqn: same composition, plus a miss in both.
+        assert!(composed.entry_for_fqn("smithy.example#Foo").is_some());
+        assert!(composed.entry_for_fqn("smithy.example#Bar").is_some());
+        assert!(composed.entry_for_fqn("smithy.example#Nope").is_none());
+    }
+
+    // Error-constructor stubs for `reify_error` tests. They ignore the
+    // deserializer and return a boxed error whose `Display` identifies which
+    // registry the entry came from, so the tests can assert scoping/precedence.
+    fn error_ctor_primary(
+        _deser: &mut dyn ShapeDeserializer,
+    ) -> Result<Box<dyn std::error::Error + Send + Sync>, SerdeError> {
+        Ok("primary".into())
+    }
+
+    fn error_ctor_fallback(
+        _deser: &mut dyn ShapeDeserializer,
+    ) -> Result<Box<dyn std::error::Error + Send + Sync>, SerdeError> {
+        Ok("fallback".into())
+    }
+
+    // An error constructor that always fails, used to prove `reify_error`
+    // swallows deserialize errors.
+    fn error_ctor_always_errors(
+        _deser: &mut dyn ShapeDeserializer,
+    ) -> Result<Box<dyn std::error::Error + Send + Sync>, SerdeError> {
+        Err(SerdeError::custom("boom"))
+    }
+
+    #[test]
+    fn reify_error_scopes_to_primary_then_widens() {
+        // `primary` models Foo (→ "primary"); `fallback` models Bar (→ "fallback").
+        // Each entry carries the input-ignoring type-erased stub plus an error
+        // constructor, so the test exercises reify_error's plumbing and scoping
+        // rather than any specific body shape.
+        let primary = TypeRegistry::builder()
+            .insert_error_shape(&FOO_SCHEMA, deserialize_foo_replacement, error_ctor_primary)
+            .build();
+        let fallback = TypeRegistry::builder()
+            .insert_error_shape(
+                &BAR_SCHEMA,
+                deserialize_foo_replacement,
+                error_ctor_fallback,
+            )
+            .build();
+        let composed = primary.or(&fallback);
+        let doc = Document::Object(Default::default());
+
+        // Operation-scoped hit (primary).
+        let boxed = reify_error(composed, "Foo", &mut DocumentShapeDeserializer::new(&doc))
+            .expect("Foo reifies from the operation registry");
+        assert_eq!(boxed.to_string(), "primary");
+
+        // Widen to the service registry for a code the operation does not model.
+        let boxed = reify_error(composed, "Bar", &mut DocumentShapeDeserializer::new(&doc))
+            .expect("Bar widens to the service registry");
+        assert_eq!(boxed.to_string(), "fallback");
+
+        // Unknown code in both: None.
+        assert!(reify_error(composed, "Nope", &mut DocumentShapeDeserializer::new(&doc)).is_none());
+    }
+
+    #[test]
+    fn reify_error_swallows_deserialize_failure() {
+        // The code resolves, but the matched entry's error constructor errors —
+        // reify_error must return None rather than propagate, so a malformed
+        // unmodeled error can never change how the operation fails.
+        let primary = TypeRegistry::builder()
+            .insert_error_shape(
+                &FOO_SCHEMA,
+                deserialize_foo_replacement,
+                error_ctor_always_errors,
+            )
+            .build();
+        let empty = TypeRegistry::new();
+        let composed = primary.or(&empty);
+        let doc = Document::Object(Default::default());
+
+        assert!(reify_error(composed, "Foo", &mut DocumentShapeDeserializer::new(&doc)).is_none());
     }
 
     // -- deserialize_document tests -------------------------------------------------------------
