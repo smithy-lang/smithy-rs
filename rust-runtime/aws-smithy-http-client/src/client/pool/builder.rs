@@ -167,7 +167,9 @@ impl<Tls> Builder<Tls> {
     ///
     /// Should be at least [`max_connections_per_host`](Self::max_connections_per_host)
     /// when both are set; the global limit applies on top of the per-host
-    /// limit.
+    /// limit. A global limit below the per-host limit clamps every host to
+    /// the global value (the per-host limit can never be reached) and logs a
+    /// warning at build time.
     pub fn max_connections(mut self, n: usize) -> Self {
         self.max_connections = Some(n);
         self

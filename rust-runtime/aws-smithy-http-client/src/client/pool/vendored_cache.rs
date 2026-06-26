@@ -1,4 +1,9 @@
 /*
+ * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/*
  * Portions of this file are derived from hyper-util
  * (https://github.com/hyperium/hyper-util), licensed under MIT:
  *

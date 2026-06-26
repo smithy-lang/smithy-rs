@@ -584,6 +584,23 @@ where
     C::Future: Unpin + Send + 'static,
     IO: hyper::rt::Read + hyper::rt::Write + HyperConnection + Unpin + Send + 'static,
 {
+    // A global cap below the per-host cap clamps every host to the global
+    // value: the per-host limit can never be reached, so its configured
+    // value is silently ineffective. Benign (the pool still works, just
+    // more tightly bound than intended), so warn rather than reject.
+    if let (Some(global), Some(per_host)) =
+        (config.max_connections, config.max_connections_per_host)
+    {
+        if global < per_host {
+            tracing::warn!(
+                max_connections = global,
+                max_connections_per_host = per_host,
+                "pool: max_connections is below max_connections_per_host; the \
+                 global cap binds first, so the per-host limit cannot be reached"
+            );
+        }
+    }
+
     let shared = Arc::new(SharedPoolState::new(&config));
 
     tracing::debug!(
@@ -1452,8 +1469,9 @@ struct TypedPoolEntry<S> {
     /// Empty until the first request against this host; safe to iterate
     /// at any point (no leg = no-op retain, trivially empty).
     retainers: RetainerSlot,
-    // Write handle for this cell's counters; the read path is `StatsIndex`.
-    #[allow(dead_code)]
+    // Write handle for this cell's counters; the `StatsIndex` is the other
+    // reader. `is_empty` consults `active`/`establishing` here to keep an
+    // entry with in-flight checkouts alive (see `is_empty`).
     counters: Arc<ConnectionCounters>,
     /// Cross-partition borrow handle. `Some` only under
     /// `CrossPartitionPolicy::PreferLocal`; `None` under `Never` (and for
@@ -1622,6 +1640,18 @@ where
     }
 
     fn is_empty(&self) -> bool {
+        // An entry with in-flight checkouts (`active`) or in-progress
+        // connects (`establishing`) is not empty, even when the retainers
+        // report so. A checked-out H1 connection is `take()`n out of the
+        // cache's idle set, so the H1 retainer reports empty while the
+        // connection is still out; removing the entry would drop the cache
+        // the connection returns to, and the in-flight checkout (holding
+        // only a `Weak`) would lose it on body drain rather than reuse it.
+        if self.counters.active.load(Ordering::Relaxed) > 0
+            || self.counters.establishing.load(Ordering::Relaxed) > 0
+        {
+            return false;
+        }
         let retainers = self.retainers.lock().expect("retainer slot poisoned");
         retainers.iter().all(|r| r.is_empty())
     }

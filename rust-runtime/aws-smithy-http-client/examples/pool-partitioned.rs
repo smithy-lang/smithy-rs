@@ -13,12 +13,19 @@
 //!
 //! This example declares two interface-bound partitions, builds a `Client`
 //! for one, and reads per-partition connection state for an authority.
+//!
+//! Binding a partition to a network interface ([`Partition::interface`]) is
+//! only available on Android, Fuchsia, and Linux, so this example builds its
+//! interface-bound topology only on those targets.
 
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 use aws_smithy_http_client::pool::{
     Authority, Client, CrossPartitionPolicy, Partition, PartitionId, SharedPool, TokioDriverSpawner,
 };
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 use aws_smithy_http_client::tls::{self, rustls_provider::CryptoMode};
 
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::main]
 async fn main() {
     // Declare one partition per interface. `PartitionId` is a caller-owned
@@ -59,4 +66,13 @@ async fn main() {
             s.establishing,
         );
     }
+}
+
+/// Interface binding is unavailable on this target; see the module docs.
+#[cfg(not(any(target_os = "android", target_os = "fuchsia", target_os = "linux")))]
+fn main() {
+    eprintln!(
+        "pool-partitioned: interface-bound partitions require Android, Fuchsia, \
+         or Linux; nothing to demonstrate on this target"
+    );
 }

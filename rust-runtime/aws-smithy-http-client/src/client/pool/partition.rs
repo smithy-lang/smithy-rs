@@ -258,6 +258,20 @@ impl Partition {
     }
 
     /// Bind this partition's connections to a network interface.
+    ///
+    /// If a socket is bound to an interface, only packets received from that
+    /// particular interface are processed by the socket. Note that this only
+    /// works for some socket types (e.g. `AF_INET` sockets).
+    ///
+    /// On Linux it can be used to specify a [VRF], but the binary needs to
+    /// either have `CAP_NET_RAW` capability set or be run as root.
+    ///
+    /// This method is only available on Android, Fuchsia, and Linux; on other
+    /// targets the interface cannot be bound and the setter is not offered,
+    /// so an unsupported binding cannot be configured silently.
+    ///
+    /// [VRF]: https://www.kernel.org/doc/Documentation/networking/vrf.txt
+    #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
     pub fn interface(mut self, nic: impl Into<String>) -> Self {
         self.nic = Some(nic.into());
         self

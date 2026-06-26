@@ -1770,6 +1770,10 @@ async fn partition_spawners_are_isolated() {
 ///   - P0's connection is freshly created (distinct `conn_id`),
 ///   - the server accepted two connections (P1's reclaimed, P0's new),
 ///   - P0 completed well under the idle timeout.
+// `Partition::interface` (the NIC-group label these partitions share) is only
+// available on Android/Fuchsia/Linux; the borrow/reclaim logic it exercises is
+// platform-independent but cannot be configured elsewhere.
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
 async fn v2_cross_partition_reclaim_frees_peer_idle() {
     use aws_smithy_http_client::pool::{
@@ -1934,6 +1938,10 @@ async fn v2_cross_partition_reclaim_frees_peer_idle() {
 /// reclaim: the connection stays the peer's (P0 runs on P1's exact
 /// connection), proven by `p0_conn_id == p1_conn_id` and a single TCP
 /// accept (P1's connection serves both requests via keep-alive).
+// `Partition::interface` (the shared NIC-group label) is Android/Fuchsia/Linux
+// only; the borrow path it exercises is platform-independent but unconfigurable
+// elsewhere.
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
 async fn v2_cross_partition_borrow_reuses_peer_connection() {
     use aws_smithy_http_client::pool::{
@@ -2029,6 +2037,10 @@ async fn v2_cross_partition_borrow_reuses_peer_connection() {
 /// not migrate it (connections never move). This is the wiring counterpart
 /// to the borrow test's `conn_id` equality: the id matches because the
 /// connection is P1's, and the residency confirms it stayed P1's.
+// `Partition::interface` (the shared NIC-group label) is Android/Fuchsia/Linux
+// only; the borrow residency it exercises is platform-independent but
+// unconfigurable elsewhere.
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
 async fn v2_borrowed_connection_stays_resident_in_peer() {
     use aws_smithy_http_client::pool::{
@@ -2119,6 +2131,10 @@ async fn v2_borrowed_connection_stays_resident_in_peer() {
 /// P0 then connects locally. Proven by `p0_conn_id != p1_conn_id` and two
 /// TCP accepts — the opposite of the same-NIC borrow case, which reuses
 /// P1's exact connection.
+// `Partition::interface` (the distinct NIC-group labels that form the boundary
+// under test) is Android/Fuchsia/Linux only; the boundary enforcement is
+// platform-independent but unconfigurable elsewhere.
+#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
 async fn v2_cross_partition_borrow_respects_nic_boundary() {
     use aws_smithy_http_client::pool::{
@@ -2628,4 +2644,130 @@ async fn v2_per_host_cap_isolates_hosts() {
         .expect("x2 completes after release")
         .expect("x2 task does not panic")
         .expect("x2 succeeds");
+}
+
+/// An H1 host entry must survive eviction while a request is in flight: a
+/// checked-out H1 connection is taken out of the cache's idle set, so the
+/// retainers report the entry empty even though the connection is still
+/// live and will return to the pool when its body drains. Hold an H1
+/// response (body undrained, connection checked out) across an eviction
+/// tick, then drain it and issue a second request to the same host. If the
+/// entry were removed mid-flight, the checked-out connection could not
+/// return to its (dropped) cache and request 2 would have to reconnect
+/// (`tcp_accepted == 2`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn h1_entry_survives_eviction_during_in_flight_request() {
+    use http_body_util::BodyExt;
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"one",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"two",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let idle_timeout = Duration::from_millis(100);
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .pool_idle_timeout(idle_timeout)
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let client = PoolClient::new(&pool).into_shared();
+
+    // Request 1: hold the response without draining, connection checked out.
+    let resp1 = send_to(&client, &url).await.expect("req1 should succeed");
+    assert_eq!(resp1.status().as_u16(), 200);
+
+    // Let the eviction task tick (>= 2 ticks) while the request is in flight.
+    tokio::time::sleep(idle_timeout * 3).await;
+
+    // Drain req1's body: the body guard drops, CachedConnection::Drop fires.
+    let _ = BodyExt::collect(resp1.into_body())
+        .await
+        .expect("body1 readable")
+        .to_bytes();
+    tokio::task::yield_now().await;
+
+    // Request 2 to the same host must reuse the held-open connection.
+    let resp2 = send_to(&client, &url).await.expect("req2 should succeed");
+    assert_eq!(resp2.status().as_u16(), 200);
+    let _ = BodyExt::collect(resp2.into_body())
+        .await
+        .expect("body2 readable")
+        .to_bytes();
+
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "entry must not be evicted while a request is in flight; req2 reuses the connection"
+    );
+}
+
+/// Control for `h1_entry_survives_eviction_during_in_flight_request`: same
+/// setup with eviction effectively disabled (60s idle timeout) reuses the
+/// connection (one accept), confirming the repro's second request reuses
+/// for the same reason in both cases — it isolates eviction as the only
+/// variable.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn h1_in_flight_request_reuses_without_eviction() {
+    use http_body_util::BodyExt;
+
+    let harness = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            vec![
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"one",
+                },
+                ConnectionBehavior::RespondKeepAlive {
+                    status: 200,
+                    body: b"two",
+                },
+            ],
+        )
+        .build()
+        .await;
+
+    let pool = SharedPool::builder()
+        .dns_resolver(harness.dns_resolver())
+        .pool_idle_timeout(Duration::from_secs(60))
+        .build_http();
+
+    let port = harness.endpoints[0].port();
+    let url = format!("http://127.0.0.1:{port}/");
+    let client = PoolClient::new(&pool).into_shared();
+
+    let resp1 = send_to(&client, &url).await.expect("req1 should succeed");
+    assert_eq!(resp1.status().as_u16(), 200);
+    let _ = BodyExt::collect(resp1.into_body())
+        .await
+        .expect("body1 readable")
+        .to_bytes();
+    tokio::task::yield_now().await;
+
+    let resp2 = send_to(&client, &url).await.expect("req2 should succeed");
+    assert_eq!(resp2.status().as_u16(), 200);
+    let _ = BodyExt::collect(resp2.into_body())
+        .await
+        .expect("body2 readable")
+        .to_bytes();
+
+    assert_eq!(
+        harness.tcp_accepted_count(),
+        1,
+        "no eviction: req2 reuses the connection"
+    );
 }
