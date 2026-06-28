@@ -129,6 +129,87 @@ const DEFAULT_CEILING_PER_SEC: f64 = 5_000.0;
 /// discovery would not engage.
 const DEFAULT_WINDOW: u32 = 32;
 
+/// Connection-establishment rate-limiter mode.
+///
+/// Selects how the pool paces new connection establishment. Defaults to
+/// [`Unbounded`](Self::Unbounded) (no pacing), preserving the default behavior
+/// of unlimited connection establishment.
+///
+/// # Variants
+///
+/// - **Unbounded** — connections are admitted as fast as the connection caps
+///   allow.
+/// - **Fixed** — a fixed token-bucket rate; never adapts.
+/// - **Governed** — adaptive: the rate climbs from a floor, brakes on
+///   latency inflation, and caps at a ceiling. Gain tuning (climb multiplier,
+///   brake factor, etc.) uses built-in defaults; a future API may expose them.
+#[derive(Clone, Copy, Debug, Default)]
+#[non_exhaustive]
+pub enum ConnectRateConfig {
+    /// No pacing: connections are admitted as fast as the connection caps allow.
+    #[default]
+    Unbounded,
+    /// Fixed token-bucket rate; never adapts.
+    Fixed {
+        /// Sustained connects per second.
+        rate_per_sec: f64,
+        /// Maximum connects admittable back-to-back after idle.
+        burst: f64,
+    },
+    /// Adaptive: rate climbs from `floor_per_sec`, latency-braked, capped at
+    /// `ceiling_per_sec`.
+    Governed {
+        /// Minimum rate (connects/sec); the rate never settles below this.
+        floor_per_sec: f64,
+        /// Maximum rate (connects/sec); a guardrail, not the discovered ceiling.
+        ceiling_per_sec: f64,
+        /// Maximum connects admittable back-to-back after idle.
+        burst: f64,
+        /// Completions per estimator window. Must be >= `burst`; clamped up if
+        /// smaller.
+        window_size: u32,
+    },
+}
+
+impl ConnectRateConfig {
+    /// Build a [`ConnectRateController`] from this configuration.
+    pub(crate) fn build(&self) -> ConnectRateController {
+        match *self {
+            ConnectRateConfig::Unbounded => ConnectRateController::unbounded(),
+            ConnectRateConfig::Fixed { rate_per_sec, burst } => {
+                ConnectRateController::limited(rate_per_sec, burst)
+            }
+            ConnectRateConfig::Governed {
+                floor_per_sec,
+                ceiling_per_sec,
+                burst,
+                window_size,
+            } => {
+                // The first window must outlast the burst's free tokens for
+                // discovery to engage. Clamp rather than panic so arbitrary
+                // runtime config does not bring down the process.
+                let min_window = burst.ceil() as u32;
+                let effective_window = if window_size < min_window {
+                    tracing::warn!(
+                        window_size,
+                        min_window,
+                        "pool: connect_rate window_size below burst; clamped up to {min_window}"
+                    );
+                    min_window
+                } else {
+                    window_size
+                };
+                ConnectRateController::governed(
+                    floor_per_sec,
+                    ceiling_per_sec,
+                    burst,
+                    effective_window,
+                )
+            }
+        }
+    }
+}
+
 /// Pool-level governor of new-connection establishment rate.
 ///
 /// Owns two independent pieces of state:
@@ -313,9 +394,6 @@ impl ConnectRateController {
 
     /// A controller that paces admission to a fixed `rate_per_sec`, allowing
     /// bursts of up to `burst` connects. The rate never changes.
-    // No non-test caller selects a finite rate; the pool builds the unbounded
-    // default.
-    #[allow(dead_code)]
     pub(crate) fn limited(rate_per_sec: f64, burst: f64) -> Self {
         Self {
             meter: Meter::default(),
@@ -332,9 +410,6 @@ impl ConnectRateController {
     /// discovers the connect rate from measured establishment behavior, closing
     /// one window every `window_size` completions. `ceiling` bounds the
     /// discovered rate; `burst` is the token-bucket capacity.
-    // No non-test caller constructs an adaptive controller; the pool builds the
-    // unbounded default.
-    #[allow(dead_code)]
     pub(crate) fn governed(floor: f64, ceiling: f64, burst: f64, window_size: u32) -> Self {
         // The first window of a burst must contain at least one paced
         // completion or discovery never engages; that requires the window to
@@ -1498,6 +1573,79 @@ mod tests {
         );
         // Rate holds at the floor: an unpaced window never engages discovery.
         assert_eq!(controller.current_rate(), Some(1000.0));
+    }
+
+    /// `ConnectRateConfig::default()` is `Unbounded`.
+    #[test]
+    fn config_default_is_unbounded() {
+        assert!(matches!(
+            ConnectRateConfig::default(),
+            ConnectRateConfig::Unbounded
+        ));
+    }
+
+    /// Building from `Unbounded` produces a controller that admits immediately
+    /// (no rate state).
+    #[tokio::test(start_paused = true)]
+    async fn config_unbounded_builds_unbounded_controller() {
+        let controller = ConnectRateConfig::Unbounded.build();
+        assert!(controller.current_rate().is_none(), "unbounded has no rate");
+        assert!(controller.try_admit(), "unbounded always admits");
+    }
+
+    /// Building from `Fixed` produces a limited controller at the configured
+    /// rate.
+    #[tokio::test(start_paused = true)]
+    async fn config_fixed_builds_limited_controller() {
+        let controller = ConnectRateConfig::Fixed {
+            rate_per_sec: 50.0,
+            burst: 2.0,
+        }
+        .build();
+        assert_eq!(
+            controller.current_rate(),
+            Some(50.0),
+            "fixed controller has the configured rate"
+        );
+        // Burst of 2 then empty.
+        assert!(controller.try_admit());
+        assert!(controller.try_admit());
+        assert!(!controller.try_admit(), "burst exhausted");
+    }
+
+    /// Building from `Governed` produces an adaptive (limited) controller at
+    /// the floor rate.
+    #[tokio::test(start_paused = true)]
+    async fn config_governed_builds_governed_controller() {
+        let controller = ConnectRateConfig::Governed {
+            floor_per_sec: 25.0,
+            ceiling_per_sec: 5000.0,
+            burst: 8.0,
+            window_size: 16,
+        }
+        .build();
+        assert_eq!(
+            controller.current_rate(),
+            Some(25.0),
+            "governed starts at the floor"
+        );
+    }
+
+    /// `Governed` with `window_size < burst` clamps `window_size` upward
+    /// instead of panicking.
+    #[test]
+    fn config_governed_clamps_window_below_burst() {
+        // burst=10, window_size=5 → should clamp to 10 without panic.
+        let controller = ConnectRateConfig::Governed {
+            floor_per_sec: 20.0,
+            ceiling_per_sec: 1000.0,
+            burst: 10.0,
+            window_size: 5,
+        }
+        .build();
+        // The controller constructed successfully (no panic). It should be at
+        // the floor rate, confirming it is governed/limited.
+        assert_eq!(controller.current_rate(), Some(20.0));
     }
 }
 

@@ -60,6 +60,7 @@ pub use connection::{
 pub use partition::{
     CrossPartitionPolicy, DriverSpawner, Partition, PartitionId, TokioDriverSpawner,
 };
+pub use admission::ConnectRateConfig;
 pub use stats::{AuthorityStats, PartitionStats};
 
 pub(crate) use stats::{ConnectionCounters, StatsIndex};
@@ -156,6 +157,9 @@ pub(crate) struct PoolConfig {
 
     /// Optional listener for connection lifecycle events.
     pub(crate) connection_event_listener: Option<Arc<dyn connection::ConnectionEventListener>>,
+
+    /// Connection-establishment rate-limiter mode.
+    pub(crate) connect_rate: ConnectRateConfig,
 }
 
 /// The connection pool's configuration surface.
@@ -508,7 +512,7 @@ impl SharedPoolState {
         Self {
             hooks: handshake::PoolHooks::new(config.connection_event_listener.clone()),
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
-            connect_rate: Arc::new(admission::ConnectRateController::unbounded()),
+            connect_rate: Arc::new(config.connect_rate.build()),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
             stats_index: Arc::new(StatsIndex::default()),

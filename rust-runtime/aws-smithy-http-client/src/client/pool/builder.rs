@@ -18,7 +18,7 @@ use hyper_util::client::proxy::matcher::Matcher as ProxyMatcher;
 
 use super::connection::ConnectionEventListener;
 use super::partition::{CrossPartitionPolicy, Partition};
-use super::{BoxError, ConnectionPool, PoolConfig};
+use super::{BoxError, ConnectRateConfig, ConnectionPool, PoolConfig};
 use crate::client::dns::HyperUtilResolver;
 use crate::client::proxy::ProxyConfig;
 use crate::client::tls;
@@ -48,6 +48,7 @@ pub struct Builder<Tls = TlsUnset> {
     tcp_keepalive: Option<Option<Duration>>,
     max_connections: Option<usize>,
     max_connections_per_host: Option<usize>,
+    connect_rate: ConnectRateConfig,
     proxy_config: Option<ProxyConfig>,
     connection_event_listener: Option<Arc<dyn ConnectionEventListener>>,
     cross_partition_policy: CrossPartitionPolicy,
@@ -64,6 +65,7 @@ impl<Tls: std::fmt::Debug> std::fmt::Debug for Builder<Tls> {
             .field("tcp_keepalive", &self.tcp_keepalive)
             .field("max_connections", &self.max_connections)
             .field("max_connections_per_host", &self.max_connections_per_host)
+            .field("connect_rate", &self.connect_rate)
             .field("proxy_config", &self.proxy_config)
             .field(
                 "connection_event_listener",
@@ -84,6 +86,7 @@ impl Default for Builder<TlsUnset> {
             tcp_keepalive: None,
             max_connections: None,
             max_connections_per_host: None,
+            connect_rate: ConnectRateConfig::default(),
             proxy_config: None,
             connection_event_listener: None,
             cross_partition_policy: CrossPartitionPolicy::default(),
@@ -202,6 +205,21 @@ impl<Tls> Builder<Tls> {
         self
     }
 
+    /// Set the connection-establishment rate-limiter mode.
+    ///
+    /// Controls how the pool paces new connection establishment. Defaults
+    /// to [`ConnectRateConfig::Unbounded`] (no pacing).
+    pub fn connect_rate(mut self, config: ConnectRateConfig) -> Self {
+        self.connect_rate = config;
+        self
+    }
+
+    /// This is the mutable version of [`connect_rate`](Self::connect_rate).
+    pub fn set_connect_rate(&mut self, config: ConnectRateConfig) -> &mut Self {
+        self.connect_rate = config;
+        self
+    }
+
     /// Route connections through an HTTP/HTTPS/SOCKS proxy.
     ///
     /// Per-host proxy resolution is stable for the lifetime of the
@@ -296,6 +314,7 @@ impl Builder<TlsUnset> {
             tcp_keepalive: self.tcp_keepalive,
             max_connections: self.max_connections,
             max_connections_per_host: self.max_connections_per_host,
+            connect_rate: self.connect_rate,
             proxy_config: self.proxy_config,
             connection_event_listener: self.connection_event_listener,
             cross_partition_policy: self.cross_partition_policy,
@@ -317,6 +336,7 @@ impl Builder<TlsUnset> {
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
+            connect_rate: self.connect_rate,
         };
         let keepalive = resolve_tcp_keepalive(self.tcp_keepalive);
         let proxy_matcher = proxy_matcher_from(&self.proxy_config);
@@ -372,6 +392,7 @@ impl Builder<TlsUnset> {
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
+            connect_rate: self.connect_rate,
         };
         let policy = self.cross_partition_policy;
         let connector_factory = move |_partition: &Partition| connector.clone();
@@ -476,6 +497,7 @@ impl Builder<TlsProviderSelected> {
             max_connections_per_host: self.max_connections_per_host,
             pool_idle_timeout: resolve_pool_idle_timeout(self.pool_idle_timeout),
             connection_event_listener: self.connection_event_listener.clone(),
+            connect_rate: self.connect_rate,
         };
 
         let proxy_config = self
@@ -607,6 +629,7 @@ mod tests {
         assert!(b.tcp_nodelay, "tcp_nodelay defaults to true");
         assert_eq!(b.max_connections, None);
         assert_eq!(b.max_connections_per_host, None);
+        assert!(matches!(b.connect_rate, ConnectRateConfig::Unbounded));
         assert!(b.proxy_config.is_none());
         assert!(b.connection_event_listener.is_none());
         assert_eq!(b.cross_partition_policy, CrossPartitionPolicy::Never);
@@ -673,6 +696,10 @@ mod tests {
             .tcp_keepalive(Duration::from_secs(45))
             .max_connections(100)
             .max_connections_per_host(10)
+            .connect_rate(ConnectRateConfig::Fixed {
+                rate_per_sec: 42.0,
+                burst: 7.0,
+            })
             .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
             .partitions([Partition::new(
                 PartitionId::from_index(0),
@@ -695,6 +722,13 @@ mod tests {
         assert_eq!(b.tcp_keepalive, Some(Some(Duration::from_secs(45))));
         assert_eq!(b.max_connections, Some(100));
         assert_eq!(b.max_connections_per_host, Some(10));
+        assert!(matches!(
+            b.connect_rate,
+            ConnectRateConfig::Fixed {
+                rate_per_sec,
+                burst,
+            } if rate_per_sec == 42.0 && burst == 7.0
+        ));
         assert_eq!(b.cross_partition_policy, CrossPartitionPolicy::PreferLocal);
         assert_eq!(b.partitions.len(), 1);
     }

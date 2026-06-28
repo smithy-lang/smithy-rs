@@ -36,5 +36,6 @@ mod timeout;
 
 pub(crate) use accounting::ConnectAccounting;
 pub(crate) use limit::ConnectionLimit;
+pub use rate::ConnectRateConfig;
 pub(crate) use rate::{ConnectRateController, ConnectRateLimit};
 pub(crate) use timeout::ConnectTimeout;
