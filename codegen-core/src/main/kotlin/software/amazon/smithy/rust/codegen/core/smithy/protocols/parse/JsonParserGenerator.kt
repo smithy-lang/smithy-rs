@@ -105,6 +105,12 @@ class JsonParserGenerator(
         ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
     },
     private val customizations: List<JsonParserCustomization> = listOf(),
+    /**
+     * When true, a union object that does not set any recognized variant parses to `Ok(None)`
+     * instead of erroring. Wired in by the server's `jsonParserGenerator` factory; the client
+     * always uses the strict default.
+     */
+    private val allowMissingUnionVariant: Boolean = false,
 ) : StructuredDataParserGenerator {
     private val model = codegenContext.model
     private val symbolProvider = codegenContext.symbolProvider
@@ -707,14 +713,16 @@ class JsonParserGenerator(
                     }
                     // If we've gotten to the point where the union had a `{ ... }` section, we can't return None
                     // anymore. If we didn't parse a union at this point, this is an error.
-                    rustTemplate(
-                        """
-                        if variant.is_none() {
-                            return Err(#{Error}::custom("Union did not contain a valid variant."))
-                        }
-                        """,
-                        *codegenScope,
-                    )
+                    if (!allowMissingUnionVariant) {
+                        rustTemplate(
+                            """
+                            if variant.is_none() {
+                                return Err(#{Error}::custom("Union did not contain a valid variant."))
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
                     rust("Ok(variant)")
                 }
             }
