@@ -51,6 +51,8 @@ class RustJmespathShapeTraversalGeneratorTest {
         val enum = symbolProvider.toSymbol(model.lookup<Shape>("test#Enum"))
         val struct = symbolProvider.toSymbol(model.lookup<Shape>("test#Struct"))
         val subStruct = symbolProvider.toSymbol(model.lookup<Shape>("test#SubStruct"))
+        val status = symbolProvider.toSymbol(model.lookup<Shape>("test#Status"))
+        val statusDone = symbolProvider.toSymbol(model.lookup<Shape>("test#StatusDone"))
         val traversalContext = TraversalContext(retainOption = false)
 
         val testInputDataFn: RuntimeType
@@ -137,6 +139,7 @@ class RustJmespathShapeTraversalGeneratorTest {
                                     .structs("foo", #{Struct}::builder().required_integer(2).integer(5).strings("maps_foo_struct_strings1").build().unwrap())
                                     .structs("bar", #{Struct}::builder().required_integer(3).primitives(primitives).integer(7).build().unwrap())
                                     .build())
+                                .status(#{Status}::Done(#{StatusDone}::builder().message("completed").build()))
                                 .build()
                         }
                         """,
@@ -147,6 +150,8 @@ class RustJmespathShapeTraversalGeneratorTest {
                         "Enum" to enum,
                         "Struct" to struct,
                         "SubStruct" to subStruct,
+                        "Status" to status,
+                        "StatusDone" to statusDone,
                     )
                 }
         }
@@ -481,6 +486,13 @@ class RustJmespathShapeTraversalGeneratorTest {
                     "assert!(result.contains(&\"bar\".to_string()));",
             ),
         )
+        test(
+            "keys_union", "keys(status)",
+            simple(
+                "assert_eq!(1, result.len());" +
+                    "assert_eq!(\"done\".to_string(), result[0]);",
+            ),
+        )
 
         invalid("length()", "Length function takes exactly one argument")
         invalid("length(primitives.integer)", "Argument to `length` function")
@@ -691,7 +703,20 @@ class RustJmespathShapeTraversalGeneratorTest {
             primitives: EntityPrimitives,
             lists: EntityLists,
             maps: EntityMaps,
+            status: Status,
         }
+
+        union Status {
+            pending: StatusPending,
+            running: StatusRunning,
+            done: StatusDone,
+            failed: StatusFailed,
+        }
+
+        structure StatusPending {}
+        structure StatusRunning {}
+        structure StatusDone { message: String }
+        structure StatusFailed { reason: String }
 
         structure EntityPrimitives {
             boolean: Boolean,
