@@ -13,6 +13,29 @@ pub mod credentials;
 pub mod region;
 pub mod token;
 
+/// A single provider's outcome in a chain, capturing the provider name and its error.
+#[derive(Debug)]
+pub struct ProviderAttempt<E> {
+    name: Cow<'static, str>,
+    error: E,
+}
+
+impl<E> ProviderAttempt<E> {
+    pub(crate) fn new(name: Cow<'static, str>, error: E) -> Self {
+        Self { name, error }
+    }
+
+    /// The name of the provider that was attempted.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The error returned by this provider.
+    pub fn error(&self) -> &E {
+        &self.error
+    }
+}
+
 /// Error returned when all providers in a chain are exhausted without producing credentials or tokens.
 ///
 /// Contains per-provider errors for programmatic inspection via [`ProviderChainError::attempts`].
@@ -26,23 +49,23 @@ pub mod token;
 /// if let Some(chain_err) = err.source()
 ///     .and_then(|s| s.downcast_ref::<ProviderChainError<CredentialsError>>())
 /// {
-///     for (name, provider_err) in chain_err.attempts() {
-///         println!("{name}: {provider_err}");
+///     for attempt in chain_err.attempts() {
+///         println!("{}: {}", attempt.name(), attempt.error());
 ///     }
 /// }
 /// ```
 #[derive(Debug)]
 pub struct ProviderChainError<E: Error> {
-    attempts: Vec<(Cow<'static, str>, E)>,
+    attempts: Vec<ProviderAttempt<E>>,
 }
 
 impl<E: Error> ProviderChainError<E> {
-    pub(crate) fn new(attempts: Vec<(Cow<'static, str>, E)>) -> Self {
+    pub(crate) fn new(attempts: Vec<ProviderAttempt<E>>) -> Self {
         Self { attempts }
     }
 
     /// Returns the per-provider errors in chain order.
-    pub fn attempts(&self) -> &[(Cow<'static, str>, E)] {
+    pub fn attempts(&self) -> &[ProviderAttempt<E>] {
         &self.attempts
     }
 }
@@ -53,9 +76,9 @@ impl<E: Error> fmt::Display for ProviderChainError<E> {
             return write!(f, "no providers were configured in the chain");
         }
         write!(f, "no credentials found in chain. Attempted:")?;
-        for (name, err) in &self.attempts {
-            write!(f, "\n  {name}: {err}")?;
-            let mut source = err.source();
+        for attempt in &self.attempts {
+            write!(f, "\n  {}: {}", attempt.name, attempt.error)?;
+            let mut source = attempt.error.source();
             while let Some(cause) = source {
                 write!(f, ": {cause}")?;
                 source = cause.source();

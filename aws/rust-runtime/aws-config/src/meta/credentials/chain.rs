@@ -12,7 +12,7 @@ use std::borrow::Cow;
 use std::fmt::Debug;
 use tracing::Instrument;
 
-use crate::meta::ProviderChainError;
+use crate::meta::{ProviderAttempt, ProviderChainError};
 
 /// Credentials provider that checks a series of inner providers
 ///
@@ -103,7 +103,7 @@ impl CredentialsProviderChain {
                 }
                 Err(err @ CredentialsError::CredentialsNotLoaded(_)) => {
                     tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide credentials");
-                    attempts.push((name.clone(), err));
+                    attempts.push(ProviderAttempt::new(name.clone(), err));
                 }
                 Err(err) => {
                     tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide credentials");
@@ -329,7 +329,7 @@ mod tests {
             .downcast_ref::<ProviderChainError<CredentialsError>>()
             .expect("should downcast to ProviderChainError");
         assert_eq!(chain_err.attempts().len(), 2);
-        assert_eq!(chain_err.attempts()[0].0, "Environment");
-        assert_eq!(chain_err.attempts()[1].0, "Profile");
+        assert_eq!(chain_err.attempts()[0].name(), "Environment");
+        assert_eq!(chain_err.attempts()[1].name(), "Profile");
     }
 }

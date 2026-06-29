@@ -12,7 +12,7 @@ use aws_smithy_types::error::display::DisplayErrorContext;
 use std::borrow::Cow;
 use tracing::Instrument;
 
-use crate::meta::ProviderChainError;
+use crate::meta::{ProviderAttempt, ProviderChainError};
 
 /// Access token provider that checks a series of inner providers.
 ///
@@ -94,7 +94,7 @@ impl TokenProviderChain {
                 }
                 Err(err @ TokenError::TokenNotLoaded(_)) => {
                     tracing::debug!(provider = %name, context = %DisplayErrorContext(&err), "provider in chain did not provide an access token");
-                    attempts.push((name.clone(), err));
+                    attempts.push(ProviderAttempt::new(name.clone(), err));
                 }
                 Err(err) => {
                     tracing::warn!(provider = %name, error = %DisplayErrorContext(&err), "provider failed to provide an access token");
