@@ -512,7 +512,14 @@ impl SharedPoolState {
         Self {
             hooks: handshake::PoolHooks::new(config.connection_event_listener.clone()),
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
-            connect_rate: Arc::new(config.connect_rate.build()),
+            // TEMPORARILY DISABLED: the connect rate gate is forced unbounded
+            // (pure pass-through, no pacing) regardless of `config.connect_rate`
+            // while we get the connection cap correct. The cap is required pool
+            // behavior; rate limiting is exploratory and was the source of the
+            // establishing explosion. Restore `config.connect_rate.build()` when
+            // re-enabling the rate gate.
+            //   was: Arc::new(config.connect_rate.build()),
+            connect_rate: Arc::new(admission::ConnectRateController::unbounded()),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
             stats_index: Arc::new(StatsIndex::default()),
@@ -652,7 +659,6 @@ where
                         ),
                         shared.global_sem.clone(),
                         per_host_sem,
-                        shared.reclaim_handle(partition_id),
                     );
 
                     let pool_hooks = shared.hooks.clone();

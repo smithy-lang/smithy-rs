@@ -535,6 +535,7 @@ dependencies = [
  "socket2 0.6.4",
  "tokio",
  "tokio-rustls 0.26.4",
+ "tokio-util",
  "tower 0.5.3",
  "tower-service",
  "tower-test",

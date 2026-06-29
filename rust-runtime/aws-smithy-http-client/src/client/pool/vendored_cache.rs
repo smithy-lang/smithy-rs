@@ -70,6 +70,7 @@
 pub(crate) use self::internal::{builder, Cached};
 
 mod internal {
+    use std::collections::VecDeque;
     use std::fmt;
     use std::future::Future;
     use std::pin::Pin;
@@ -78,6 +79,7 @@ mod internal {
 
     use futures_util::future;
     use tokio::sync::oneshot;
+    use tower::util::Oneshot;
     use tower_service::Service;
 
     use super::events;
@@ -121,15 +123,25 @@ mod internal {
     where
         M: Service<Dst>,
     {
+        // SDK MODIFICATION: the racing connect arm is `Oneshot<M, Dst>`
+        // (reserve-then-call), NOT a bare `M::Future`. This drives the
+        // connector's `poll_ready` inside the race so the connector's
+        // readiness contract is honored on the idle->miss transition (the
+        // upstream cache returns `Ready` from its own `poll_ready` on an
+        // idle hit without polling the connector, so a later miss can reach
+        // `connector.call` unreserved). Driving readiness here also lets the
+        // `select` wait on BOTH wake channels at once: the waiter (idle
+        // return) and the connector's `poll_ready` (e.g. a connection-cap
+        // permit freeing).
         Racing {
             shared: Arc<Mutex<Shared<M::Response>>>,
-            select: future::Select<oneshot::Receiver<M::Response>, M::Future>,
+            select: future::Select<oneshot::Receiver<M::Response>, Oneshot<M, Dst>>,
             events: Ev,
         },
         Connecting {
             // TODO: could be Weak even here...
             shared: Arc<Mutex<Shared<M::Response>>>,
-            future: M::Future,
+            future: Oneshot<M, Dst>,
         },
         Cached {
             svc: Option<Cached<M::Response>>,
@@ -140,7 +152,14 @@ mod internal {
     #[derive(Debug)]
     pub struct Shared<S> {
         services: Vec<S>,
-        waiters: Vec<oneshot::Sender<S>>,
+        // SDK MODIFICATION: `VecDeque` (was `Vec`) so waiters are served
+        // FIFO. `Shared::put` wakes via `pop_front` (oldest first); `call`
+        // registers via `push_back`. Upstream uses `Vec` + `pop` (LIFO),
+        // which starves the oldest waiters under sustained oversubscription
+        // (each freed connection goes to the most-recently-parked worker) —
+        // the cause of the conn-cap P999 tail (0.1% of requests wait the
+        // whole run). FIFO bounds the worst-case wait to arrival order.
+        waiters: VecDeque<oneshot::Sender<S>>,
     }
 
     // impl Builder
@@ -163,7 +182,7 @@ mod internal {
                 events: self.events,
                 shared: Arc::new(Mutex::new(Shared {
                     services: Vec::new(),
-                    waiters: Vec::new(),
+                    waiters: VecDeque::new(),
                 })),
             }
         }
@@ -225,21 +244,29 @@ mod internal {
 
     impl<M, Dst, Ev> Service<Dst> for Cache<M, Dst, Ev>
     where
-        M: Service<Dst>,
+        // SDK MODIFICATION: `M: Clone` (was absent). The racing connect arm
+        // is now `Oneshot<M, Dst>`, which owns a connector clone so it can
+        // drive `poll_ready` then `call` across awaits. The `Events` bound's
+        // `CF` is correspondingly `Oneshot<M, Dst>` (the lost-race future),
+        // not `M::Future`.
+        M: Service<Dst> + Clone,
         M::Future: Unpin,
         M::Response: Unpin,
-        Ev: events::Events<BackgroundConnect<M::Future, M::Response>> + Clone + Unpin,
+        Ev: events::Events<BackgroundConnect<Oneshot<M, Dst>, M::Response>> + Clone + Unpin,
     {
         type Response = Cached<M::Response>;
         type Error = M::Error;
         type Future = CacheFuture<M, Dst, Ev>;
 
-        fn poll_ready(&mut self, cx: &mut task::Context<'_>) -> Poll<Result<(), Self::Error>> {
-            if !self.shared.lock().unwrap().services.is_empty() {
-                Poll::Ready(Ok(()))
-            } else {
-                self.connector.poll_ready(cx)
-            }
+        // SDK MODIFICATION: `poll_ready` no longer forwards to the connector.
+        // Readiness (and thus permit reservation, for a limiter connector) is
+        // driven inside the racing future (`Oneshot`), so driving it here too
+        // would double-reserve. The cache is always ready to accept a
+        // checkout; whether a connection is reused or established (and whether
+        // establishment must wait on a permit) is resolved in the returned
+        // future.
+        fn poll_ready(&mut self, _cx: &mut task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
         }
 
         fn call(&mut self, target: Dst) -> Self::Future {
@@ -253,15 +280,19 @@ mod internal {
                 }
 
                 let (tx, rx) = oneshot::channel();
-                locked.waiters.push(tx);
+                locked.waiters.push_back(tx);
                 rx
             };
 
-            // 2. Otherwise, we start a new connect, and also listen for
-            //    any newly idle.
+            // 2. Otherwise, race an idle-return waiter against a
+            //    reserve-then-connect (`Oneshot` drives the connector's
+            //    `poll_ready` before `call`). SDK MODIFICATION: was
+            //    `future::select(waiter, self.connector.call(target))`, which
+            //    called the connector WITHOUT first driving `poll_ready` —
+            //    the source of the connection-cap TOCTOU.
             CacheFuture::Racing {
                 shared: self.shared.clone(),
-                select: future::select(waiter, self.connector.call(target)),
+                select: future::select(waiter, Oneshot::new(self.connector.clone(), target)),
                 events: self.events.clone(),
             }
         }
@@ -283,10 +314,12 @@ mod internal {
 
     impl<M, Dst, Ev> Future for CacheFuture<M, Dst, Ev>
     where
-        M: Service<Dst>,
+        // SDK MODIFICATION: `M: Clone` + the `Events` CF is `Oneshot<M, Dst>`
+        // (see the `Service` impl above for rationale).
+        M: Service<Dst> + Clone,
         M::Future: Unpin,
         M::Response: Unpin,
-        Ev: events::Events<BackgroundConnect<M::Future, M::Response>> + Unpin,
+        Ev: events::Events<BackgroundConnect<Oneshot<M, Dst>, M::Response>> + Unpin,
     {
         type Output = Result<Cached<M::Response>, M::Error>;
 
@@ -422,7 +455,7 @@ mod internal {
     impl<V> Shared<V> {
         fn put(&mut self, val: V) {
             let mut val = Some(val);
-            while let Some(tx) = self.waiters.pop() {
+            while let Some(tx) = self.waiters.pop_front() {
                 if !tx.is_closed() {
                     match tx.send(val.take().unwrap()) {
                         Ok(()) => break,
@@ -549,5 +582,257 @@ mod tests {
         let f = cache.call(1);
         let cached = f.await.expect("call");
         drop(cached);
+    }
+
+    // A connector that upholds the tower `Service` contract check: `call` must
+    // be preceded by a `poll_ready` returning `Ready`. Panics otherwise (the
+    // same check `tower::limit::ConcurrencyLimit` makes). `calls` counts how
+    // many times the connector established a connection.
+    #[derive(Clone)]
+    struct ContractConnector {
+        ready: std::sync::Arc<std::sync::atomic::AtomicBool>,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    impl Service<u32> for ContractConnector {
+        type Response = &'static str;
+        type Error = std::convert::Infallible;
+        type Future = future::Ready<Result<&'static str, std::convert::Infallible>>;
+
+        fn poll_ready(
+            &mut self,
+            _cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            self.ready.store(true, std::sync::atomic::Ordering::SeqCst);
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, _req: u32) -> Self::Future {
+            assert!(
+                self.ready.swap(false, std::sync::atomic::Ordering::SeqCst),
+                "call() invoked without a preceding ready poll_ready()"
+            );
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            future::ready(Ok("conn"))
+        }
+    }
+
+    // When `poll_ready` observes an idle connection and returns `Ready`, but
+    // that connection is removed before `call` (e.g. taken by another caller),
+    // the resulting miss must still drive the connector's `poll_ready` before
+    // `call`. Otherwise the cache violates the connector's `Service` contract.
+    #[tokio::test]
+    async fn drives_connector_poll_ready_when_idle_taken_between_poll_ready_and_call() {
+        let inner = ContractConnector {
+            ready: Default::default(),
+            calls: Default::default(),
+        };
+        let mut cache = super::builder().build(inner.clone());
+
+        // Establish one connection and return it to the idle set.
+        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        drop(cache.call(1).await.unwrap());
+        assert!(!cache.is_empty());
+
+        // poll_ready observes the idle connection and returns Ready.
+        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+
+        // Remove the idle connection before call, so this call misses and
+        // reaches the connector.
+        cache.retain(|_| false);
+        assert!(cache.is_empty());
+
+        // The miss must drive the connector's poll_ready before call.
+        let _conn = cache.call(1).await.unwrap();
+
+        assert_eq!(
+            inner.calls.load(std::sync::atomic::Ordering::SeqCst),
+            2,
+            "two connections established (initial + post-drain miss)"
+        );
+    }
+
+    // A capacity-limited connector mirroring the pool's `ConnectionLimit`:
+    // reserves a semaphore permit in `poll_ready`, consumes it in `call`, and
+    // attaches it to the response so the permit is released only when the
+    // response (the "connection") is dropped. A clone resets its reservation
+    // (each connect reserves independently against the shared semaphore).
+    // `calls` counts establishments.
+    struct CapConnector {
+        sem: tokio_util::sync::PollSemaphore,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    }
+
+    // A "connection" that holds its permit for its lifetime.
+    struct CapConn {
+        _permit: tokio::sync::OwnedSemaphorePermit,
+    }
+
+    impl CapConnector {
+        fn new(
+            sem: std::sync::Arc<tokio::sync::Semaphore>,
+            calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        ) -> Self {
+            Self {
+                sem: tokio_util::sync::PollSemaphore::new(sem),
+                calls,
+                permit: None,
+            }
+        }
+    }
+
+    impl Clone for CapConnector {
+        fn clone(&self) -> Self {
+            Self {
+                sem: self.sem.clone(),
+                calls: self.calls.clone(),
+                permit: None,
+            }
+        }
+    }
+
+    impl Service<u32> for CapConnector {
+        type Response = CapConn;
+        type Error = std::convert::Infallible;
+        type Future = future::Ready<Result<CapConn, std::convert::Infallible>>;
+
+        fn poll_ready(
+            &mut self,
+            cx: &mut std::task::Context<'_>,
+        ) -> std::task::Poll<Result<(), Self::Error>> {
+            if self.permit.is_none() {
+                match self.sem.poll_acquire(cx) {
+                    std::task::Poll::Ready(p) => self.permit = p,
+                    std::task::Poll::Pending => return std::task::Poll::Pending,
+                }
+            }
+            std::task::Poll::Ready(Ok(()))
+        }
+
+        fn call(&mut self, _req: u32) -> Self::Future {
+            let permit = self
+                .permit
+                .take()
+                .expect("poll_ready (permit reservation) must precede call");
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            future::ready(Ok(CapConn { _permit: permit }))
+        }
+    }
+
+    // At a connection cap, a checkout that misses the idle set must NOT start a
+    // new connect (it parks in the connector's `poll_ready` on the exhausted
+    // semaphore), and when an in-use connection returns to the idle set the
+    // parked checkout must wake and REUSE it rather than establish a new one.
+    // This is the property the connection cap depends on: driving the
+    // connector's `poll_ready` inside the race means the parked checkout is
+    // simultaneously waiting on an idle return (the cache waiter) and a freed
+    // permit (the connector), so an idle return wakes it without a new connect.
+    #[tokio::test]
+    async fn at_cap_a_miss_parks_without_connecting_and_wakes_on_idle_return() {
+        use std::future::Future;
+        use std::sync::atomic::Ordering::SeqCst;
+
+        // cap = 1.
+        let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut cache = super::builder().build(CapConnector::new(sem.clone(), calls.clone()));
+
+        // First checkout: reserves the only permit and establishes.
+        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        let first = cache.call(1).await.unwrap();
+        assert_eq!(calls.load(SeqCst), 1, "first checkout establishes");
+        assert_eq!(sem.available_permits(), 0, "first checkout holds the permit");
+
+        // Second checkout while `first` is still out. The cache is always ready
+        // (its poll_ready does not gate); the gating happens inside the returned
+        // future. Poll it once with a noop waker: it must be Pending and must
+        // NOT have started a second connect (parked in the connector's
+        // poll_ready on the exhausted semaphore).
+        let mut second = Box::pin(cache.call(1));
+        let waker = futures_util::task::noop_waker();
+        let mut cx = std::task::Context::from_waker(&waker);
+        assert!(
+            second.as_mut().poll(&mut cx).is_pending(),
+            "at cap, the miss parks"
+        );
+        assert_eq!(
+            calls.load(SeqCst),
+            1,
+            "at cap, the parked checkout starts NO new connect"
+        );
+
+        // Return the first connection to the idle set.
+        drop(first);
+
+        // The parked checkout wakes via the idle-return and reuses it — no new
+        // establish, and the permit simply rides the reused connection.
+        let _second = second.await.unwrap();
+        assert_eq!(
+            calls.load(SeqCst),
+            1,
+            "the parked checkout reused the returned idle connection, did not establish"
+        );
+        assert_eq!(
+            sem.available_permits(),
+            0,
+            "the single permit rides the reused connection"
+        );
+    }
+
+    // Waiters parked on a miss are woken in arrival order (FIFO). With three
+    // checkouts parked behind an exhausted cap, returning connections one at a
+    // time must hand them to the waiters oldest-first. Upstream wakes via
+    // `Vec::pop` (LIFO), which serves newest-first and starves the oldest
+    // waiter — the cause of the conn-cap P999 tail.
+    #[tokio::test]
+    async fn waiters_are_woken_in_fifo_arrival_order() {
+        use std::future::Future;
+        use std::sync::atomic::Ordering::SeqCst;
+
+        // cap = 1: one connection exists; three more checkouts must park.
+        let sem = std::sync::Arc::new(tokio::sync::Semaphore::new(1));
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mut cache = super::builder().build(CapConnector::new(sem.clone(), calls.clone()));
+
+        // Establish the single connection, then return it to idle.
+        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        let conn = cache.call(1).await.unwrap();
+        drop(conn);
+
+        // Take the idle connection out so the next checkouts miss and park as
+        // waiters (the permit is held by `held` for the duration).
+        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        let held = cache.call(1).await.unwrap();
+        assert_eq!(sem.available_permits(), 0, "the only permit is held");
+
+        let waker = futures_util::task::noop_waker();
+        let mut cx = std::task::Context::from_waker(&waker);
+
+        // Park three checkouts, in order A, B, C. Each misses (no idle, no
+        // permit) and registers a waiter via push_back.
+        let mut a = Box::pin(cache.call(1));
+        assert!(a.as_mut().poll(&mut cx).is_pending());
+        let mut b = Box::pin(cache.call(1));
+        assert!(b.as_mut().poll(&mut cx).is_pending());
+        let mut c = Box::pin(cache.call(1));
+        assert!(c.as_mut().poll(&mut cx).is_pending());
+
+        // Return the connection: it must wake the OLDEST waiter (A). Drop A's
+        // connection back; it must wake B next; then C.
+        drop(held);
+        let conn_a = a.await.unwrap();
+        assert!(b.as_mut().poll(&mut cx).is_pending(), "B not yet served");
+        assert!(c.as_mut().poll(&mut cx).is_pending(), "C not yet served");
+
+        drop(conn_a);
+        let conn_b = b.await.unwrap();
+        assert!(c.as_mut().poll(&mut cx).is_pending(), "C served last");
+
+        drop(conn_b);
+        let _conn_c = c.await.unwrap();
+
+        // Only the original connection ever existed; all waiters reused it.
+        assert_eq!(calls.load(SeqCst), 1, "no new connections established");
     }
 }

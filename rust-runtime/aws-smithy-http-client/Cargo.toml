@@ -30,6 +30,7 @@ default-client = [
     "dep:tower-service",
     "tower?/util",
     "dep:futures-util",
+    "dep:tokio-util",
     "tokio/sync",
     "dep:rustls-pki-types",
     "dep:rustls-native-certs"
@@ -123,6 +124,7 @@ serde_json = { version = "1.0.146", features = ["preserve_order"], optional = tr
 indexmap = { version = "2.10.0", features = ["serde"], optional = true }
 http-body-util = { version = "0.1.3", optional = true }
 socket2 = { version = "0.6", optional = true }
+tokio-util = { version = "0.7", optional = true }
 # end test util stack
 
 [dev-dependencies]
