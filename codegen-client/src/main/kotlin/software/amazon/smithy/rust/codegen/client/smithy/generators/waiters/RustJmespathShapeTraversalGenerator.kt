@@ -510,14 +510,19 @@ class RustJmespathShapeTraversalGenerator(
                                     // A union serializes as a single-key JSON object.
                                     // Generate a match that returns the active variant name.
                                     val unionSym = symbolProvider.toSymbol(outputShape)
-                                    val matchArms = outputShape.allMembers.keys.joinToString("\n") { memberName ->
-                                        val variantName = memberName.toPascalCase()
-                                        "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
-                                    }
-                                    rust("""let $ident = vec![match ${arg.identifier} {
-                                        |$matchArms
-                                        |_ => "unknown".to_string(),
-                                        |}];""".trimMargin())
+
+                                    val matchArms =
+                                        outputShape.allMembers.keys.joinToString("\n") { memberName ->
+                                            val variantName = memberName.toPascalCase()
+                                            "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
+                                        }
+                                    rust(
+                                        """let $ident = vec![match ${arg.identifier} {
+                                         |$matchArms
+                                         |_ => "unknown".to_string(),
+                                        |}];
+                                        """.trimMargin(),
+                                    )
                                 }
 
                                 else ->
