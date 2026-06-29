@@ -22,6 +22,11 @@ enum CollectionContext {
     },
 }
 
+/// Serializes a request shape to the awsQuery `application/x-www-form-urlencoded` body.
+///
+/// Recurses through nested structs/lists/maps without a depth bound; this is safe
+/// because the input is the client's own request shape, whose depth is fixed by the
+/// model at codegen time (not attacker-controlled).
 pub struct QueryShapeSerializer {
     output: String,
     prefix: String,
@@ -32,13 +37,13 @@ pub struct QueryShapeSerializer {
 impl QueryShapeSerializer {
     pub fn new(action: &str, version: &str) -> Self {
         let mut output = String::with_capacity(256);
-        write!(
+        // Writing to a String is infallible.
+        let _ = write!(
             output,
             "Action={}&Version={}",
             encode(action),
             encode(version)
-        )
-        .unwrap();
+        );
         Self {
             output,
             prefix: String::with_capacity(64),
@@ -83,42 +88,60 @@ impl QueryShapeSerializer {
         self.prefix.truncate(prev_len);
     }
 
-    fn write_scalar(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
-        self.output.push('&');
-        if schema.member_name().is_none() {
-            if let Some(ctx) = self.context_stack.last_mut() {
-                match ctx {
-                    CollectionContext::List { index } => {
-                        write!(self.output, "{}.{}", self.prefix, index).unwrap();
-                        *index += 1;
-                    }
-                    CollectionContext::Map {
-                        index,
-                        expecting_key,
-                        key_name,
-                        value_name,
-                    } => {
-                        if *expecting_key {
-                            write!(self.output, "{}.{}.{}", self.prefix, index, key_name).unwrap();
-                            *expecting_key = false;
-                        } else {
-                            write!(self.output, "{}.{}.{}", self.prefix, index, value_name)
-                                .unwrap();
-                            *expecting_key = true;
-                            *index += 1;
-                        }
-                    }
-                }
-                self.output.push('=');
-                self.output.push_str(&encode(value));
-                return Ok(());
+    /// Returns the path segment for the current collection element and advances the
+    /// cursor: a 1-based index for lists, `<index>.<key|value_name>` for maps. Returns
+    /// `None` when not inside a collection.
+    fn next_collection_segment(&mut self) -> Option<String> {
+        let ctx = self.context_stack.last_mut()?;
+        Some(match ctx {
+            CollectionContext::List { index } => {
+                let s = index.to_string();
+                *index += 1;
+                s
             }
-        }
-        let name = self.wire_name(schema);
-        if self.prefix.is_empty() {
-            self.output.push_str(name);
+            CollectionContext::Map {
+                index,
+                expecting_key,
+                key_name,
+                value_name,
+            } => {
+                if *expecting_key {
+                    let s = format!("{}.{}", index, key_name);
+                    *expecting_key = false;
+                    s
+                } else {
+                    let s = format!("{}.{}", index, value_name);
+                    *expecting_key = true;
+                    *index += 1;
+                    s
+                }
+            }
+        })
+    }
+
+    /// Appends `&<param>=<value>` to the output, where `<param>` is `prefix` joined
+    /// with either the collection segment (for an anonymous element) or the scalar's
+    /// own wire name.
+    fn write_scalar(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+        let segment = if schema.member_name().is_none() {
+            self.next_collection_segment()
         } else {
-            write!(self.output, "{}.{}", self.prefix, name).unwrap();
+            None
+        };
+        self.output.push('&');
+        // Writing to a String is infallible.
+        match segment {
+            Some(seg) => {
+                let _ = write!(self.output, "{}.{}", self.prefix, seg);
+            }
+            None => {
+                let name = self.wire_name(schema);
+                if self.prefix.is_empty() {
+                    self.output.push_str(name);
+                } else {
+                    let _ = write!(self.output, "{}.{}", self.prefix, name);
+                }
+            }
         }
         self.output.push('=');
         self.output.push_str(&encode(value));
@@ -142,31 +165,7 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(ctx) = self.context_stack.last_mut() {
-            let idx_str = match ctx {
-                CollectionContext::List { index } => {
-                    let s = index.to_string();
-                    *index += 1;
-                    s
-                }
-                CollectionContext::Map {
-                    index,
-                    expecting_key,
-                    key_name,
-                    value_name,
-                } => {
-                    if *expecting_key {
-                        let s = format!("{}.{}", index, key_name);
-                        *expecting_key = false;
-                        s
-                    } else {
-                        let s = format!("{}.{}", index, value_name);
-                        *expecting_key = true;
-                        *index += 1;
-                        s
-                    }
-                }
-            };
+        } else if let Some(idx_str) = self.next_collection_segment() {
             self.push_prefix(&idx_str);
             true
         } else {
@@ -189,31 +188,7 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(ctx) = self.context_stack.last_mut() {
-            let idx_str = match ctx {
-                CollectionContext::List { index } => {
-                    let s = index.to_string();
-                    *index += 1;
-                    s
-                }
-                CollectionContext::Map {
-                    index,
-                    expecting_key,
-                    key_name,
-                    value_name,
-                } => {
-                    if *expecting_key {
-                        let s = format!("{}.{}", index, key_name);
-                        *expecting_key = false;
-                        s
-                    } else {
-                        let s = format!("{}.{}", index, value_name);
-                        *expecting_key = true;
-                        *index += 1;
-                        s
-                    }
-                }
-            };
+        } else if let Some(idx_str) = self.next_collection_segment() {
             self.push_prefix(&idx_str);
             true
         } else {
@@ -253,31 +228,7 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(ctx) = self.context_stack.last_mut() {
-            let idx_str = match ctx {
-                CollectionContext::List { index } => {
-                    let s = index.to_string();
-                    *index += 1;
-                    s
-                }
-                CollectionContext::Map {
-                    index,
-                    expecting_key,
-                    key_name,
-                    value_name,
-                } => {
-                    if *expecting_key {
-                        let s = format!("{}.{}", index, key_name);
-                        *expecting_key = false;
-                        s
-                    } else {
-                        let s = format!("{}.{}", index, value_name);
-                        *expecting_key = true;
-                        *index += 1;
-                        s
-                    }
-                }
-            };
+        } else if let Some(idx_str) = self.next_collection_segment() {
             self.push_prefix(&idx_str);
             true
         } else {
@@ -400,6 +351,9 @@ impl ShapeSerializer for QueryShapeSerializer {
     }
 
     fn write_null(&mut self, _: &Schema) -> Result<(), SerdeError> {
+        // awsQuery has no null representation: nulls are omitted. The collection
+        // index is not advanced here (only emitted elements consume an index), so a
+        // `@sparse` null is dropped rather than reserving a positional slot.
         Ok(())
     }
 }
@@ -767,6 +721,80 @@ mod edge_cases {
         let mut ser = QueryShapeSerializer::new("Op", "1.0");
         ser.write_string(&M, "").unwrap();
         assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected);
+    }
+
+    #[test]
+    fn empty_non_flat_list_emits_bare_param() {
+        // An empty list serializes to just `<prefix>=`; cross-checked against the legacy writer.
+        let mut expected = String::new();
+        let mut writer = QueryWriter::new(&mut expected, "Op", "1.0");
+        writer.prefix("myList").start_list(false, None).finish();
+        writer.finish();
+
+        static M: Schema = Schema::new_member(shape_id!("test", "I"), ShapeType::List, "myList", 0);
+        let mut ser = QueryShapeSerializer::new("Op", "1.0");
+        ser.write_list(&M, &|_| Ok(())).unwrap();
+        assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected);
+        assert_eq!(expected, "Action=Op&Version=1.0&myList=");
+    }
+
+    #[test]
+    fn empty_flat_list_emits_bare_param() {
+        let mut expected = String::new();
+        let mut writer = QueryWriter::new(&mut expected, "Op", "1.0");
+        writer.prefix("myList").start_list(true, None).finish();
+        writer.finish();
+
+        static M: Schema = Schema::new_member(shape_id!("test", "I"), ShapeType::List, "myList", 0)
+            .with_xml_flattened();
+        let mut ser = QueryShapeSerializer::new("Op", "1.0");
+        ser.write_list(&M, &|_| Ok(())).unwrap();
+        assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected);
+        assert_eq!(expected, "Action=Op&Version=1.0&myList=");
+    }
+
+    #[test]
+    fn empty_list_does_not_alias_single_empty_string_element() {
+        // Guards the `wrote_elements` length-delta heuristic in `write_list`: an empty
+        // list (`myList=`) must not produce the same output as a one-empty-string-element
+        // list (`myList.member.1=`).
+        static EMPTY: Schema =
+            Schema::new_member(shape_id!("test", "I"), ShapeType::List, "myList", 0);
+        let mut empty_ser = QueryShapeSerializer::new("Op", "1.0");
+        empty_ser.write_list(&EMPTY, &|_| Ok(())).unwrap();
+        let empty_out = String::from_utf8(empty_ser.finish()).unwrap();
+
+        static ONE: Schema =
+            Schema::new_member(shape_id!("test", "I"), ShapeType::List, "myList", 0);
+        let mut one_ser = QueryShapeSerializer::new("Op", "1.0");
+        one_ser
+            .write_list(&ONE, &|s| {
+                s.write_string(&aws_smithy_schema::prelude::STRING, "")
+            })
+            .unwrap();
+        let one_out = String::from_utf8(one_ser.finish()).unwrap();
+
+        assert_eq!(empty_out, "Action=Op&Version=1.0&myList=");
+        assert_eq!(one_out, "Action=Op&Version=1.0&myList.member.1=");
+        assert_ne!(empty_out, one_out);
+    }
+
+    #[test]
+    fn sparse_null_list_element_is_dropped_and_index_reflects_emitted_only() {
+        // A null element is dropped without consuming an index, so the next real
+        // element takes `.2` rather than `.3`.
+        static M: Schema = Schema::new_member(shape_id!("test", "I"), ShapeType::List, "Items", 0);
+        let mut ser = QueryShapeSerializer::new("Op", "1.0");
+        ser.write_list(&M, &|s| {
+            s.write_string(&aws_smithy_schema::prelude::STRING, "a")?;
+            s.write_null(&aws_smithy_schema::prelude::STRING)?;
+            s.write_string(&aws_smithy_schema::prelude::STRING, "b")
+        })
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(ser.finish()).unwrap(),
+            "Action=Op&Version=1.0&Items.member.1=a&Items.member.2=b"
+        );
     }
 
     #[test]
