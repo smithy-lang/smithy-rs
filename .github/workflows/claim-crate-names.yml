@@ -20,6 +20,11 @@ on:
   schedule:
   - cron: 0 11 * * *     # run at 11:00 UTC (morning) every day
 
+# OIDC permissions needed to assume the release-ops role in AWS.
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   main-branch-check:
     name: Check that workflow is running in main
@@ -73,10 +78,24 @@ jobs:
         toolchain: ${{ env.rust_version }}
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
+        role-session-name: GitHubActions-ClaimCrateNames
+        aws-region: us-west-2
+    - name: Fetch crates.io token from Secrets Manager
+      id: secrets
+      run: |
+        token=$(aws secretsmanager get-secret-value \
+          --secret-id cratesio/user/v1-automation/access-token \
+          --query SecretString --output text)
+        echo "::add-mask::$token"
+        echo "CRATES_IO_TOKEN=$token" >> "$GITHUB_OUTPUT"
     - name: Publish to crates.io
       shell: bash
       env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ steps.secrets.outputs.CRATES_IO_TOKEN }}
       run: |
         cargo install --path tools/ci-build/publisher
         # Verify the publisher tool installed successfully
