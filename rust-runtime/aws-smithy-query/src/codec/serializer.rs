@@ -196,7 +196,7 @@ impl ShapeSerializer for QueryShapeSerializer {
         };
         if !flat {
             let member_name = Self::collection_member_name(schema.member(), "member");
-            self.push_prefix(&member_name);
+            self.push_prefix(member_name);
         }
         self.context_stack
             .push(CollectionContext::List { index: 1 });
