@@ -14,22 +14,43 @@ use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 ///
 /// Wraps the existing optimized `Encoder` which uses `minicbor` with
 /// infallible writes to `Vec<u8>`.
+/// Tracks the kind of CBOR container currently being written.
+///
+/// In RPC v2 CBOR a structure is a map keyed by member name, but list elements
+/// are positional and map values follow a key that is written separately. A
+/// member schema carries a `member_name` (e.g. a list's `member` or a map's
+/// `value` member), so without tracking the surrounding container that name
+/// would be wrongly emitted as a key when the member appears as a list element
+/// or map value. Member-name keys are therefore only emitted in [`Container::Struct`].
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Container {
+    Struct,
+    List,
+    Map,
+}
+
 pub struct CborSerializer {
     encoder: crate::Encoder,
+    container_stack: Vec<Container>,
 }
 
 impl CborSerializer {
     pub(crate) fn new() -> Self {
         Self {
             encoder: crate::Encoder::new(Vec::new()),
+            container_stack: Vec::new(),
         }
     }
 
-    /// Writes the member name as a CBOR text string key if this schema is a struct member.
+    /// Writes the member name as a CBOR text string key, but only for structure
+    /// members. List elements and map values are not keyed by member name even
+    /// though their schemas carry one (see [`Container`]).
     #[inline]
-    fn write_member_key(&mut self, schema: &Schema) {
-        if let Some(name) = schema.member_name() {
-            self.encoder.str(name);
+    fn write_member_key(&mut self, schema: &Schema<'_>) {
+        if self.container_stack.last() == Some(&Container::Struct) {
+            if let Some(name) = schema.member_name() {
+                self.encoder.str(name);
+            }
         }
     }
 }
@@ -43,77 +64,83 @@ impl FinishSerializer for CborSerializer {
 impl ShapeSerializer for CborSerializer {
     fn write_struct(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Struct);
         value.serialize_members(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
     fn write_list(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_array();
+        self.container_stack.push(Container::List);
         write_elements(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
     fn write_map(
         &mut self,
-        schema: &Schema,
+        schema: &Schema<'_>,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.begin_map();
+        self.container_stack.push(Container::Map);
         write_entries(self)?;
+        self.container_stack.pop();
         self.encoder.end();
         Ok(())
     }
 
-    fn write_boolean(&mut self, schema: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.boolean(value);
         Ok(())
     }
 
-    fn write_byte(&mut self, schema: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.byte(value);
         Ok(())
     }
 
-    fn write_short(&mut self, schema: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.short(value);
         Ok(())
     }
 
-    fn write_integer(&mut self, schema: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.integer(value);
         Ok(())
     }
 
-    fn write_long(&mut self, schema: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.long(value);
         Ok(())
     }
 
-    fn write_float(&mut self, schema: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.float(value);
         Ok(())
     }
 
-    fn write_double(&mut self, schema: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.double(value);
         Ok(())
@@ -121,7 +148,7 @@ impl ShapeSerializer for CborSerializer {
 
     fn write_big_integer(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         _value: &BigInteger,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
@@ -131,7 +158,7 @@ impl ShapeSerializer for CborSerializer {
 
     fn write_big_decimal(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         _value: &BigDecimal,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
@@ -139,31 +166,35 @@ impl ShapeSerializer for CborSerializer {
         })
     }
 
-    fn write_string(&mut self, schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.str(value);
         Ok(())
     }
 
-    fn write_blob(&mut self, schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.blob_bytes(value);
         Ok(())
     }
 
-    fn write_timestamp(&mut self, schema: &Schema, value: &DateTime) -> Result<(), SerdeError> {
+    fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.timestamp(value);
         Ok(())
     }
 
-    fn write_document(&mut self, _schema: &Schema, _value: &Document) -> Result<(), SerdeError> {
+    fn write_document(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &Document,
+    ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "document types are not supported by rpcv2Cbor protocol".into(),
         })
     }
 
-    fn write_null(&mut self, schema: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {
         self.write_member_key(schema);
         self.encoder.null();
         Ok(())
@@ -192,7 +223,7 @@ mod tests {
     fn test_write_boolean() {
         let bytes = round_trip(|s| s.write_boolean(&BOOLEAN, true).unwrap());
         let mut dec = crate::Decoder::new(&bytes);
-        assert_eq!(dec.boolean().unwrap(), true);
+        assert!(dec.boolean().unwrap());
     }
 
     #[test]

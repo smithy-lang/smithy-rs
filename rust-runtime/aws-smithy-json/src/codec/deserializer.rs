@@ -8,7 +8,10 @@
 use aws_smithy_schema::serde::SerdeError;
 use aws_smithy_schema::serde::ShapeDeserializer;
 use aws_smithy_schema::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{
+    BigDecimal, BigInteger, Blob, DateTime, DiscriminatedDocument, Document, DocumentSettings,
+    Number,
+};
 
 use crate::codec::JsonCodecSettings;
 use crate::deserialize::{json_token_iter, Token};
@@ -40,7 +43,11 @@ impl<'a> JsonDeserializer<'a> {
     }
 
     /// Resolves a JSON field name to a member schema.
-    fn resolve_member<'s>(&self, schema: &'s Schema, field_name: &str) -> Option<&'s Schema> {
+    fn resolve_member<'s>(
+        &self,
+        schema: &'s Schema<'s>,
+        field_name: &str,
+    ) -> Option<&'s Schema<'s>> {
         self.settings.field_to_member(schema, field_name)
     }
 
@@ -103,13 +110,84 @@ impl<'a> JsonDeserializer<'a> {
             ))
         }
     }
+
+    /// Predicate: is `s` a well-formed absolute Smithy shape ID of
+    /// the form `namespace#ShapeName` (no member component, no nested
+    /// `#`, both segments non-empty)?
+    ///
+    /// Used by [`Self::resolve_shape_id`] to short-circuit absolute
+    /// names and skip namespace prepending. Returning `false` for an
+    /// input that contains `#` indicates a malformed value (e.g.
+    /// nested `#`, empty namespace) — caller falls back to leaving
+    /// the `__type` key in the resulting map so a stray
+    /// `__type: "garbage#"` doesn't poison the surrounding document
+    /// parse.
+    fn is_absolute_shape_id(s: &str) -> bool {
+        let Some((namespace, shape_name)) = s.split_once('#') else {
+            return false;
+        };
+        !namespace.is_empty()
+            && !shape_name.is_empty()
+            && !shape_name.contains('#')
+            && !shape_name.contains('$')
+            && !namespace.contains('$')
+    }
+
+    /// Predicate: is `s` a syntactically valid Smithy shape name
+    /// (the part after `#` in an absolute shape ID)?
+    ///
+    /// Smithy identifiers per the spec begin with an ASCII letter or
+    /// underscore and continue with ASCII letters, digits, or
+    /// underscores. Returning `false` causes
+    /// [`Self::resolve_shape_id`] to leave the candidate value as a
+    /// regular `Document::String` in the resulting map rather than
+    /// produce a syntactically invalid synthesized shape ID like
+    /// `<namespace>#foo bar`.
+    fn is_relative_shape_name(s: &str) -> bool {
+        let mut bytes = s.bytes();
+        let Some(first) = bytes.next() else {
+            return false;
+        };
+        if !(first.is_ascii_alphabetic() || first == b'_') {
+            return false;
+        }
+        bytes.all(|b| b.is_ascii_alphanumeric() || b == b'_')
+    }
+
+    /// Resolves a `__type` field value to a fully-qualified shape ID
+    /// string. Absolute IDs are returned as-is; relative names
+    /// (no `#`) are resolved against `default_ns` if both are set
+    /// and the name is syntactically valid. Returns `None` to signal
+    /// the lift should be skipped (caller leaves the value in the map).
+    fn resolve_shape_id(s: &str, default_ns: Option<&str>) -> Option<String> {
+        if s.contains('#') {
+            // Absolute form (or malformed) — only lift if syntactically
+            // valid. The `default_namespace` setting is intentionally
+            // ignored on this path: an explicit absolute `__type`
+            // overrides the codec's default namespace.
+            if Self::is_absolute_shape_id(s) {
+                Some(s.to_owned())
+            } else {
+                None
+            }
+        } else {
+            // Relative form — resolve against `default_namespace` if
+            // set and the name is syntactically valid. Without a
+            // configured namespace the lift is skipped (today's
+            // legacy behavior preserved).
+            match default_ns {
+                Some(ns) if Self::is_relative_shape_name(s) => Some(format!("{ns}#{s}")),
+                _ => None,
+            }
+        }
+    }
 }
 
 impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
     fn read_struct(
         &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
@@ -182,7 +260,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_list(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
@@ -219,7 +297,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.depth += 1;
@@ -272,7 +350,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(())
     }
 
-    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
         if rem.starts_with(b"true") {
@@ -288,7 +366,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i8::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for byte".into(),
@@ -296,7 +374,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i16::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for short".into(),
@@ -304,7 +382,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         self.read_integer_value().and_then(|n| {
             i32::try_from(n).map_err(|_| SerdeError::InvalidInput {
                 message: "value out of range for integer".into(),
@@ -312,19 +390,19 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         self.read_integer_value()
     }
 
-    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         self.read_float_value().map(|f| f as f32)
     }
 
-    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         self.read_float_value()
     }
 
-    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         use std::str::FromStr;
         self.skip_whitespace();
         match self.remaining().first() {
@@ -341,13 +419,24 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     message: e.to_string(),
                 })
             }
+            // String-encoded big integers are produced by senders
+            // configured with `use_string_for_arbitrary_precision`. The
+            // read side accepts both wire forms unconditionally so a
+            // sender configured for one form interoperates with a
+            // receiver configured for the other.
+            Some(b'"') => {
+                let s = self.read_string(_schema)?;
+                BigInteger::from_str(&s).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
             _ => Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
+                message: "expected number or string".into(),
             }),
         }
     }
 
-    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         use std::str::FromStr;
         self.skip_whitespace();
         match self.remaining().first() {
@@ -364,13 +453,21 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     message: e.to_string(),
                 })
             }
+            // String-encoded big decimals — see the symmetric comment
+            // on `read_big_integer`.
+            Some(b'"') => {
+                let s = self.read_string(_schema)?;
+                BigDecimal::from_str(&s).map_err(|e| SerdeError::InvalidInput {
+                    message: e.to_string(),
+                })
+            }
             _ => Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
+                message: "expected number or string".into(),
             }),
         }
     }
 
-    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.skip_whitespace();
         let pos = self.position;
         let input = self.input;
@@ -415,7 +512,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         })
     }
 
-    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         let s = self.read_string(_schema)?;
         let decoded =
             aws_smithy_types::base64::decode(&s).map_err(|e| SerdeError::InvalidInput {
@@ -424,7 +521,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(Blob::new(decoded))
     }
 
-    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+    fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -456,7 +553,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+    fn read_blob_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<Blob>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -488,7 +585,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+    fn read_integer_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i32>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -520,7 +617,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+    fn read_long_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i64>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
@@ -554,7 +651,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
     fn read_string_string_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
@@ -595,7 +692,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         Ok(out)
     }
 
-    fn read_timestamp(&mut self, schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         self.skip_whitespace();
         let rem = self.remaining();
         match rem.first() {
@@ -615,8 +712,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         }
                     }
                 } else {
-                    // Default: try date-time with offsets allowed
-                    aws_smithy_types::date_time::Format::DateTimeWithOffset
+                    // No `@timestampFormat` trait: honor the codec's
+                    // configured default format. A JSON string can't be
+                    // `epoch-seconds` (a number), so that case resolves to
+                    // the offset-aware date-time form. Shared with
+                    // `JsonCodecSettings::coerce_string_to_timestamp` so the
+                    // typed and untyped string-timestamp paths can't drift.
+                    crate::codec::string_timestamp_format(self.settings.default_timestamp_format())
                 };
                 DateTime::from_str(&s, format)
                     .map_err(|e| SerdeError::custom(format!("invalid timestamp string: {e}")))
@@ -651,6 +753,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                             message: e.to_string(),
                         }
                     })?;
+                    if n > i64::MAX as u64 {
+                        return Err(SerdeError::InvalidInput {
+                            message: format!(
+                                "epoch-seconds value {n} overflows i64; cannot construct DateTime"
+                            ),
+                        });
+                    }
                     Ok(DateTime::from_secs(n as i64))
                 }
             }
@@ -660,13 +769,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
     }
 
-    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         self.depth += 1;
         if self.depth > self.settings.max_depth() {
             return Err(SerdeError::custom("maximum nesting depth exceeded"));
         }
         self.skip_whitespace();
-        let result = match self.remaining().first() {
+        let result: Result<Document, SerdeError> = match self.remaining().first() {
             Some(b'"') => Ok(Document::String(self.read_string(_schema)?)),
             Some(b't') | Some(b'f') => Ok(Document::Bool(self.read_boolean(_schema)?)),
             Some(b'n') => {
@@ -681,7 +790,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             }
             Some(b'{') => {
                 self.advance_by(1);
-                let mut map = std::collections::HashMap::new();
+                let mut map = aws_smithy_types::document::DocumentObject::new();
                 loop {
                     self.skip_whitespace();
                     if self.remaining().first() == Some(&b'}') {
@@ -701,6 +810,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         });
                     }
                     self.advance_by(1);
+                    self.skip_whitespace();
                     let value = self.read_document(_schema)?;
                     map.insert(key, value);
                 }
@@ -721,13 +831,17 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                                 message: "unexpected end of input in document array".into(),
                             })
                         }
-                        _ => arr.push(self.read_document(_schema)?),
+                        _ => {
+                            arr.push(self.read_document(_schema)?);
+                        }
                     }
                 }
                 Ok(Document::Array(arr))
             }
             Some(c) if *c == b'-' || c.is_ascii_digit() => {
-                // Parse number — determine if integer or float
+                // Parse a JSON number into [`Document::Number`].
+                // Range determines which `Number` variant carries it
+                // (PosInt / NegInt / Float).
                 let rem = self.remaining();
                 let mut len = 0;
                 let mut is_float = false;
@@ -752,21 +866,58 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         message: e.to_string(),
                     }
                 })?;
+                // Number variant selection follows the SEP "Reporting
+                // `Document` ambiguous shape types" guidance: pick the
+                // first container from `int -> long -> bigInteger ->
+                // double -> bigDecimal` that holds the value without
+                // loss of precision. `byte`, `intEnum`, `short`, and
+                // `float` are intentionally skipped per the same SEP
+                // guidance.
+                //
+                // The `Number` enum collapses `int`/`long` into
+                // `NegInt(i64)` and `PosInt(u64)`, so we only need
+                // three buckets here at the wire layer: `Number`
+                // (fits in i64 / u64 / finite f64), `BigInteger`
+                // (overflows i64 / u64), and `BigDecimal` (decimal
+                // value overflows f64 to non-finite).
+                use std::str::FromStr;
                 if is_float {
-                    let f = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(aws_smithy_types::Number::Float(f)))
+                    match s.parse::<f64>() {
+                        Ok(f) if f.is_finite() => Ok(Document::Number(Number::Float(f))),
+                        // Either `f64` parse failed or yielded
+                        // `+/-Infinity` (overflow). Fall through to
+                        // `BigDecimal` so the source-string precision
+                        // is preserved. `BigDecimal::from_str` will
+                        // surface a real parse error if the input is
+                        // also malformed for arbitrary precision.
+                        _ => BigDecimal::from_str(s)
+                            .map(Document::BigDecimal)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 } else if is_negative {
-                    let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(aws_smithy_types::Number::NegInt(n)))
+                    match s.parse::<i64>() {
+                        Ok(n) => Ok(Document::Number(Number::NegInt(n))),
+                        // Source string overflowed `i64`. Preserve
+                        // precision by routing to `BigInteger`.
+                        Err(_) => BigInteger::from_str(s)
+                            .map(Document::BigInteger)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 } else {
-                    let n = s.parse::<u64>().map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?;
-                    Ok(Document::Number(aws_smithy_types::Number::PosInt(n)))
+                    match s.parse::<u64>() {
+                        Ok(n) => Ok(Document::Number(Number::PosInt(n))),
+                        // Source string overflowed `u64`. Preserve
+                        // precision by routing to `BigInteger`.
+                        Err(_) => BigInteger::from_str(s)
+                            .map(Document::BigInteger)
+                            .map_err(|e| SerdeError::InvalidInput {
+                                message: e.to_string(),
+                            }),
+                    }
                 }
             }
             _ => Err(SerdeError::InvalidInput {
@@ -851,6 +1002,82 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 }
 
 impl<'a> JsonDeserializer<'a> {
+    /// Reads a JSON document from the input, lifts an optional
+    /// top-level `__type` field into the result's discriminator slot,
+    /// and attaches the codec's [`DocumentSettings`] to the result so
+    /// downstream accessors like
+    /// [`DiscriminatedDocument::as_blob`](aws_smithy_types::DiscriminatedDocument::as_blob)
+    /// and
+    /// [`DiscriminatedDocument::as_timestamp`](aws_smithy_types::DiscriminatedDocument::as_timestamp)
+    /// can perform JSON-specific coercion (base64-decoded blobs,
+    /// format-aware timestamps).
+    ///
+    /// # `__type` discriminator lift
+    ///
+    /// When the parsed top-level value is a JSON object containing a
+    /// `__type` key whose value is an absolute Smithy shape ID
+    /// (`namespace#ShapeName`), the lift extracts that ID into the
+    /// resulting [`DiscriminatedDocument`]'s discriminator slot and
+    /// drops the key from the result map.
+    ///
+    /// Falls back to leaving `__type` in the map when the value is
+    /// not a string, or is a relative shape name (no `#`) and no
+    /// `default_namespace` is configured. When a `default_namespace`
+    /// is set, a relative name is resolved against it before lifting.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use aws_smithy_json::codec::JsonCodec;
+    /// use aws_smithy_schema::codec::Codec;
+    ///
+    /// let codec = JsonCodec::default();
+    /// let bytes = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+    /// let mut deser = codec.create_deserializer(bytes);
+    /// let doc = deser.read_discriminated_document().unwrap();
+    ///
+    /// // `__type` was lifted into the discriminator slot.
+    /// assert_eq!(doc.discriminator(), Some("smithy.example#Bird"));
+    ///
+    /// // The map no longer contains `__type`.
+    /// let map = doc.document().as_object().unwrap();
+    /// assert_eq!(map.len(), 1);
+    /// assert_eq!(map.get("name").and_then(|d| d.as_string()), Some("Iago"));
+    /// ```
+    pub fn read_discriminated_document(&mut self) -> Result<DiscriminatedDocument, SerdeError> {
+        // Use the trait method's walker and post-hoc lift the
+        // top-level `__type` field. The lift cost is one HashMap
+        // probe + one `String` clone — straightforward because
+        // [`Document`] is fully owned and [`DiscriminatedDocument`]
+        // carries an `Option<String>` discriminator.
+        let dummy_schema = &aws_smithy_schema::prelude::DOCUMENT;
+        let mut doc = self.read_document(dummy_schema)?;
+        let mut discriminator: Option<String> = None;
+        if let Document::Object(ref mut map) = doc {
+            // Pull the candidate value first (borrowing), validate it,
+            // then remove from the map only when the lift succeeds.
+            // This keeps a malformed `__type` value in the map so the
+            // caller can post-process if it wants to.
+            let lift_candidate = match map.get("__type") {
+                Some(Document::String(s)) => {
+                    Self::resolve_shape_id(s, self.settings.default_namespace())
+                }
+                _ => None,
+            };
+            if let Some(id) = lift_candidate {
+                map.remove("__type");
+                discriminator = Some(id);
+            }
+        }
+
+        let settings: Arc<dyn DocumentSettings> = self.settings.clone();
+        let mut wrapper = DiscriminatedDocument::new(doc).with_settings(settings);
+        if let Some(id) = discriminator {
+            wrapper = wrapper.with_discriminator(id);
+        }
+        Ok(wrapper)
+    }
+
     fn skip_whitespace(&mut self) {
         while self.position < self.input.len() {
             match self.input[self.position] {
@@ -990,6 +1217,16 @@ impl<'a> JsonDeserializer<'a> {
                 message: "expected integer".into(),
             });
         }
+        // Reject a floating-point value for an integer member. Without this,
+        // `1.5` would read `1` and leave `.5` in the stream, surfacing as a
+        // confusing downstream parse error instead of a clean TypeMismatch.
+        if let Some(&next) = rem.get(len) {
+            if next == b'.' || next == b'e' || next == b'E' {
+                return Err(SerdeError::TypeMismatch {
+                    message: "expected integer, found floating-point number".into(),
+                });
+            }
+        }
         let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
             message: e.to_string(),
         })?;
@@ -1043,7 +1280,7 @@ impl<'a> JsonDeserializer<'a> {
 mod tests {
     use super::*;
 
-    fn dummy_schema() -> &'static aws_smithy_schema::Schema {
+    fn dummy_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::STRING
     }
 
@@ -1126,25 +1363,25 @@ mod tests {
             age: i32,
         }
 
-        static FIRST_NAME: Schema = Schema::new_member(
+        static FIRST_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
             "firstName",
             0,
         );
-        static LAST_NAME: Schema = Schema::new_member(
+        static LAST_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::String,
             "lastName",
             1,
         );
-        static AGE: Schema = Schema::new_member(
+        static AGE: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Integer,
             "age",
             2,
         );
-        static PERSON_SCHEMA: Schema = Schema::new_struct(
+        static PERSON_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Person"),
             aws_smithy_schema::ShapeType::Structure,
             &[&FIRST_NAME, &LAST_NAME, &AGE],
@@ -1152,7 +1389,7 @@ mod tests {
 
         fn consume_person(
             person: &mut Person,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1360,99 +1597,99 @@ mod tests {
         }
 
         // Address members & schema
-        static ADDR_STREET: Schema = Schema::new_member(
+        static ADDR_STREET: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "street",
             0,
         );
-        static ADDR_CITY: Schema = Schema::new_member(
+        static ADDR_CITY: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::String,
             "city",
             1,
         );
-        static ADDR_ZIP: Schema = Schema::new_member(
+        static ADDR_ZIP: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Integer,
             "zip",
             2,
         );
-        static ADDRESS_SCHEMA: Schema = Schema::new_struct(
+        static ADDRESS_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Address"),
             aws_smithy_schema::ShapeType::Structure,
             &[&ADDR_STREET, &ADDR_CITY, &ADDR_ZIP],
         );
 
         // Company members & schema
-        static COMP_NAME: Schema = Schema::new_member(
+        static COMP_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::String,
             "name",
             0,
         );
-        static COMP_EMPLOYEES: Schema = Schema::new_member(
+        static COMP_EMPLOYEES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::List,
             "employees",
             1,
         );
-        static COMP_METADATA: Schema = Schema::new_member(
+        static COMP_METADATA: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Map,
             "metadata",
             2,
         );
-        static COMP_ACTIVE: Schema = Schema::new_member(
+        static COMP_ACTIVE: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Boolean,
             "active",
             3,
         );
-        static COMPANY_SCHEMA: Schema = Schema::new_struct(
+        static COMPANY_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Company"),
             aws_smithy_schema::ShapeType::Structure,
             &[&COMP_NAME, &COMP_EMPLOYEES, &COMP_METADATA, &COMP_ACTIVE],
         );
 
         // User members & schema
-        static USER_ID: Schema = Schema::new_member(
+        static USER_ID: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Long,
             "id",
             0,
         );
-        static USER_NAME: Schema = Schema::new_member(
+        static USER_NAME: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::String,
             "name",
             1,
         );
-        static USER_SCORES: Schema = Schema::new_member(
+        static USER_SCORES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "scores",
             2,
         );
-        static USER_ADDRESS: Schema = Schema::new_member(
+        static USER_ADDRESS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
             "address",
             3,
         );
-        static USER_COMPANIES: Schema = Schema::new_member(
+        static USER_COMPANIES: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::List,
             "companies",
             4,
         );
-        static USER_TAGS: Schema = Schema::new_member(
+        static USER_TAGS: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Map,
             "tags",
             5,
         );
-        static USER_SCHEMA: Schema = Schema::new_struct(
+        static USER_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "User"),
             aws_smithy_schema::ShapeType::Structure,
             &[
@@ -1467,7 +1704,7 @@ mod tests {
 
         fn consume_address(
             addr: &mut Address,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1481,7 +1718,7 @@ mod tests {
 
         fn consume_company(
             comp: &mut Company,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1510,7 +1747,7 @@ mod tests {
 
         fn consume_user(
             user: &mut User,
-            schema: &Schema,
+            schema: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             match schema.member_name() {
@@ -1614,21 +1851,21 @@ mod tests {
     fn test_json_name_deserialization() {
         use aws_smithy_schema::Schema;
 
-        static FOO_MEMBER: Schema = Schema::new_member(
+        static FOO_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::String,
             "foo",
             0,
         );
         // "bar" member has @jsonName("Baz")
-        static BAR_MEMBER: Schema = Schema::new_member(
+        static BAR_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Integer,
             "bar",
             1,
         )
         .with_json_name("Baz");
-        static STRUCT_SCHEMA: Schema = Schema::new_struct(
+        static STRUCT_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "MyStruct"),
             aws_smithy_schema::ShapeType::Structure,
             &[&FOO_MEMBER, &BAR_MEMBER],
@@ -1672,7 +1909,7 @@ mod tests {
         assert_eq!(bar, None); // "Baz" not recognized without jsonName
     }
 
-    fn timestamp_schema() -> &'static aws_smithy_schema::Schema {
+    fn timestamp_schema() -> &'static aws_smithy_schema::Schema<'static> {
         &aws_smithy_schema::prelude::TIMESTAMP
     }
 
@@ -1725,17 +1962,76 @@ mod tests {
     }
 
     #[test]
+    fn test_read_timestamp_string_honors_httpdate_default() {
+        // No `@timestampFormat` trait on the schema, so the codec's default
+        // format governs string parsing. With an http-date default, an
+        // http-date string must parse. (Before L2a the string branch
+        // hardcoded date-time and this errored.)
+        let settings = JsonCodecSettings::builder()
+            .default_timestamp_format(aws_smithy_types::date_time::Format::HttpDate)
+            .build();
+        let mut deser =
+            JsonDeserializer::new(br#""Tue, 14 Nov 2023 22:13:20 GMT""#, Arc::new(settings));
+        let ts = deser.read_timestamp(timestamp_schema()).unwrap();
+        assert_eq!(ts, DateTime::from_secs(1700000000));
+    }
+
+    #[test]
+    fn test_read_timestamp_string_default_epoch_still_parses_datetime() {
+        // Regression guard for the common case: with the default
+        // (epoch-seconds) format, a date-time *string* still parses via the
+        // offset-aware fallback — the shared `string_timestamp_format` helper
+        // must not break this.
+        let mut deser = JsonDeserializer::new(
+            br#""2023-11-14T22:13:20Z""#,
+            Arc::new(JsonCodecSettings::default()),
+        );
+        let ts = deser.read_timestamp(timestamp_schema()).unwrap();
+        assert_eq!(ts, DateTime::from_secs(1700000000));
+    }
+
+    #[test]
+    fn test_read_timestamp_rejects_u64_overflow() {
+        // A positive epoch-seconds value beyond i64::MAX must error rather
+        // than silently wrapping through `as i64`.
+        let big = (i64::MAX as u64 + 1).to_string();
+        let mut deser =
+            JsonDeserializer::new(big.as_bytes(), Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_timestamp(timestamp_schema())
+            .expect_err("u64 epoch overflowing i64 must error");
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn test_read_integer_rejects_float() {
+        // An integer member must reject a floating-point value rather than
+        // reading the integer part and leaving the fraction in the stream.
+        let mut deser = JsonDeserializer::new(b"1.5", Arc::new(JsonCodecSettings::default()));
+        let err = deser
+            .read_integer(&aws_smithy_schema::prelude::INTEGER)
+            .expect_err("a float must not deserialize as an integer");
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
     fn test_skip_value_empty_array() {
         // Regression: skip_value failed on [] because json_token_iter can't parse ']' as a value start
         use aws_smithy_schema::ShapeType;
-        static KNOWN_MEMBER: Schema = Schema::new_member(
+        static KNOWN_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::String,
             "known",
             0,
         );
-        static MEMBERS: &[&Schema] = &[&KNOWN_MEMBER];
-        static TEST_SCHEMA: Schema = Schema::new_struct(
+        static MEMBERS: &[&Schema<'_>] = &[&KNOWN_MEMBER];
+        static TEST_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::Structure,
             MEMBERS,
@@ -1758,14 +2054,14 @@ mod tests {
     #[test]
     fn test_skip_value_nested_objects() {
         use aws_smithy_schema::ShapeType;
-        static D_MEMBER: Schema = Schema::new_member(
+        static D_MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::String,
             "d",
             0,
         );
-        static MEMBERS: &[&Schema] = &[&D_MEMBER];
-        static TEST_SCHEMA: Schema = Schema::new_struct(
+        static MEMBERS: &[&Schema<'_>] = &[&D_MEMBER];
+        static TEST_SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             ShapeType::Structure,
             MEMBERS,
@@ -1841,13 +2137,13 @@ mod tests {
         // to `remaining()` panic with an out-of-range slice index.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "m",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1870,13 +2166,13 @@ mod tests {
         // input was shorter than `true`.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "known",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1904,13 +2200,13 @@ mod tests {
         // that there are enough bytes to advance past.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "known",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -1940,13 +2236,13 @@ mod tests {
         // catch it. This mirrors the fix for `read_list`.
         use aws_smithy_schema::Schema;
 
-        static MEMBER: Schema = Schema::new_member(
+        static MEMBER: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::String,
             "m",
             0,
         );
-        static SCHEMA: Schema = Schema::new_struct(
+        static SCHEMA: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "S"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER],
@@ -2008,14 +2304,14 @@ mod tests {
     /// schema. This is the minimum schema needed to exercise the depth guard
     /// through `read_struct`'s consumer-callback path (without it, unknown
     /// members go through `skip_value` which is iterative).
-    fn recursive_struct_schema() -> &'static Schema {
-        static MEMBER_A: Schema = Schema::new_member(
+    fn recursive_struct_schema() -> &'static Schema<'static> {
+        static MEMBER_A: Schema<'static> = Schema::new_member(
             aws_smithy_schema::shape_id!("test", "Rec"),
             aws_smithy_schema::ShapeType::Structure,
             "a",
             0,
         );
-        static RECURSIVE: Schema = Schema::new_struct(
+        static RECURSIVE: Schema<'static> = Schema::new_struct(
             aws_smithy_schema::shape_id!("test", "Rec"),
             aws_smithy_schema::ShapeType::Structure,
             &[&MEMBER_A],
@@ -2025,7 +2321,7 @@ mod tests {
 
     /// Consumer that re-enters `read_struct` to exercise the depth guard.
     fn recursive_struct_consumer(
-        _member: &Schema,
+        _member: &Schema<'_>,
         deser: &mut dyn ShapeDeserializer,
     ) -> Result<(), SerdeError> {
         deser.read_struct(recursive_struct_schema(), &mut recursive_struct_consumer)
@@ -2170,5 +2466,466 @@ mod tests {
         deser_ok
             .read_list(dummy_schema(), &mut recursive_list_consumer)
             .expect("10-level nesting should succeed under custom limit");
+    }
+
+    // --- read_document big-number fall-through (SEP "Reporting `Document` ambiguous shape types") ---
+
+    #[test]
+    fn read_document_keeps_in_range_int_as_pos_int() {
+        // Baseline: a value that fits in `u64` continues to land in
+        // `Number::PosInt` — no behavior change for the common case.
+        let mut deser = JsonDeserializer::new(b"42", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::PosInt(n)) => assert_eq!(n, 42),
+            other => panic!("expected Number::PosInt(42), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_in_range_negative_int_as_neg_int() {
+        let mut deser = JsonDeserializer::new(b"-123", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::NegInt(n)) => assert_eq!(n, -123),
+            other => panic!("expected Number::NegInt(-123), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_finite_float_as_number_float() {
+        let mut deser = JsonDeserializer::new(b"1.5", Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::Float(f)) => assert_eq!(f, 1.5),
+            other => panic!("expected Number::Float(1.5), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_positive_int_to_big_integer() {
+        // 23-digit integer overflows `u64` (max is ~1.84e19, 20 digits).
+        // Today (pre-fix) this errored out; per SEP it must be lifted
+        // to `Document::BigInteger` to preserve precision.
+        let bytes = b"99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "99999999999999999999999");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_negative_int_to_big_integer() {
+        // 23-digit negative integer overflows `i64` (min is ~-9.2e18,
+        // 19 digits). Same SEP fall-through as the positive case.
+        let bytes = b"-99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "-99999999999999999999999");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_decimal_to_big_decimal() {
+        // `1e500` overflows `f64` to `+Infinity`. Today (pre-fix) this
+        // silently produced `Number::Float(infinity)` — precision
+        // destroyed. Per SEP it must be lifted to `Document::BigDecimal`.
+        let bytes = b"1e500";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigDecimal(bd) => {
+                // `BigDecimal` may normalize the source; assert that
+                // it round-trips back to a finite, oversize-decimal
+                // representation rather than `inf`.
+                let s = bd.as_ref();
+                assert!(!s.contains("inf"), "expected finite repr, got {s}");
+                assert!(!s.contains("Inf"), "expected finite repr, got {s}");
+            }
+            other => panic!("expected Document::BigDecimal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_oversize_negative_decimal_to_big_decimal() {
+        // Symmetric `-Infinity` overflow case.
+        let bytes = b"-1.234e500";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigDecimal(bd) => {
+                let s = bd.as_ref();
+                assert!(s.starts_with('-'), "expected negative repr, got {s}");
+                assert!(
+                    !s.to_lowercase().contains("inf"),
+                    "expected finite repr, got {s}"
+                );
+            }
+            other => panic!("expected Document::BigDecimal, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_keeps_max_u64_as_pos_int() {
+        // `u64::MAX` fits in `u64` exactly. Boundary check that the
+        // overflow fall-through doesn't fire on values that DO fit.
+        let bytes = b"18446744073709551615";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::Number(Number::PosInt(n)) => assert_eq!(n, u64::MAX),
+            other => panic!("expected Number::PosInt(u64::MAX), got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn read_document_lifts_just_over_u64_max() {
+        // `u64::MAX + 1`. First value that overflows.
+        let bytes = b"18446744073709551616";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        match deser.read_document(dummy_schema()).unwrap() {
+            Document::BigInteger(bi) => {
+                assert_eq!(bi.as_ref(), "18446744073709551616");
+            }
+            other => panic!("expected Document::BigInteger, got {other:?}"),
+        }
+    }
+
+    // --- read_big_integer / read_big_decimal accept JSON strings (`use_string_for_arbitrary_precision`) ---
+
+    #[test]
+    fn read_big_integer_accepts_json_number() {
+        let bytes = b"99999999999999999999999";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bi = deser.read_big_integer(dummy_schema()).unwrap();
+        assert_eq!(bi.as_ref(), "99999999999999999999999");
+    }
+
+    #[test]
+    fn read_big_integer_accepts_json_string() {
+        // A sender configured with `use_string_for_arbitrary_precision`
+        // emits BigIntegers as JSON strings. The receiver must accept
+        // either form regardless of its own setting — leniency is
+        // unconditional on the read side.
+        let bytes = br#""99999999999999999999999""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bi = deser.read_big_integer(dummy_schema()).unwrap();
+        assert_eq!(bi.as_ref(), "99999999999999999999999");
+    }
+
+    #[test]
+    fn read_big_integer_rejects_other_types() {
+        // Booleans, arrays, etc. are not valid wire forms for BigInteger.
+        let bytes = b"true";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_integer(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn read_big_decimal_accepts_json_number() {
+        let bytes = b"1.234567890123456789012345";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bd = deser.read_big_decimal(dummy_schema()).unwrap();
+        assert_eq!(bd.as_ref(), "1.234567890123456789012345");
+    }
+
+    #[test]
+    fn read_big_decimal_accepts_json_string() {
+        let bytes = br#""1.234567890123456789012345""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let bd = deser.read_big_decimal(dummy_schema()).unwrap();
+        assert_eq!(bd.as_ref(), "1.234567890123456789012345");
+    }
+
+    #[test]
+    fn read_big_decimal_rejects_other_types() {
+        let bytes = b"[]";
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_decimal(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::TypeMismatch { .. }),
+            "expected TypeMismatch, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn read_big_integer_rejects_malformed_string() {
+        // A JSON string of non-digits is well-formed JSON but invalid
+        // BigInteger content. `BigInteger::from_str` should surface
+        // an `InvalidInput` error.
+        let bytes = br#""not-a-number""#;
+        let mut deser = JsonDeserializer::new(bytes, Arc::new(JsonCodecSettings::default()));
+        let err = deser.read_big_integer(dummy_schema()).unwrap_err();
+        assert!(
+            matches!(err, SerdeError::InvalidInput { .. }),
+            "expected InvalidInput, got {err:?}"
+        );
+    }
+
+    // --- read_discriminated_document attaches DocumentSettings ----------------------------
+
+    #[test]
+    fn read_discriminated_document_attaches_settings() {
+        // Settings live on the [`DiscriminatedDocument`] wrapper, not
+        // on individual data nodes. `read_discriminated_document` is
+        // the entry point that attaches them.
+        let mut deser = JsonDeserializer::new(b"\"hello\"", Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().unwrap();
+        assert!(
+            wrapper.settings().is_some(),
+            "settings should be attached to the wrapper produced by \
+             read_discriminated_document"
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_settings_enable_blob_coercion() {
+        // "aGVsbG8=" is base64("hello"). Without settings, as_blob on a
+        // String document returns an error. With settings attached by
+        // `read_discriminated_document`, JsonCodecSettings::coerce_string_to_blob
+        // decodes it.
+        let mut deser =
+            JsonDeserializer::new(br#""aGVsbG8=""#, Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().unwrap();
+        let bytes = wrapper
+            .as_blob()
+            .expect("base64 string should decode to blob");
+        assert_eq!(&*bytes, b"hello");
+    }
+
+    #[test]
+    fn read_discriminated_document_settings_enable_timestamp_coercion() {
+        // EpochSeconds is the JSON default; a number value coerces via
+        // `coerce_number_to_timestamp`.
+        let mut deser =
+            JsonDeserializer::new(b"1577836800", Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().unwrap();
+        let ts = wrapper
+            .as_timestamp()
+            .expect("epoch-seconds number should decode to timestamp");
+        assert_eq!(ts.secs(), 1577836800);
+    }
+
+    // -- `__type` discriminator lift -----------------------------------------------------------
+
+    #[test]
+    fn read_discriminated_document_lifts_absolute_type_into_discriminator() {
+        // An absolute `__type` value lands in the wrapper's
+        // discriminator slot (as an owned `String` FQN), and the
+        // `__type` key is dropped from the result map.
+        let input = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        let id = wrapper
+            .discriminator()
+            .expect("absolute __type lifted into discriminator");
+        assert_eq!(id, "smithy.example#Bird");
+
+        let map = wrapper.document().as_object().expect("top-level is map");
+        assert!(
+            !map.contains_key("__type"),
+            "__type must be dropped from result map after lift"
+        );
+        assert_eq!(map.get("name").and_then(Document::as_string), Some("Iago"));
+    }
+
+    #[test]
+    fn read_discriminated_document_relative_type_stays_in_map_when_no_default_namespace() {
+        // Without a configured `default_namespace` on the codec
+        // settings, a relative `__type` (no `#`) is left in the map
+        // as a regular key. The discriminator slot remains unset.
+        // With a namespace set, see
+        // `read_discriminated_document_lifts_relative_with_namespace`.
+        let input = br#"{"__type":"Bird","name":"Iago"}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        assert!(
+            wrapper.discriminator().is_none(),
+            "relative __type without default_namespace must not be lifted"
+        );
+        let map = wrapper.document().as_object().expect("top-level is map");
+        assert_eq!(
+            map.get("__type").and_then(Document::as_string),
+            Some("Bird")
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_lifts_only_top_level() {
+        // Only the top-level wrapper has a discriminator slot. A
+        // `__type` field appearing INSIDE a nested object stays as a
+        // regular map entry — there's no per-node discriminator to
+        // lift it into.
+        let input = br#"{"outer":{"__type":"smithy.example#Inner"}}"#;
+        let mut deser = JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()));
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        // Outer wrapper has no discriminator (the top-level object
+        // didn't carry `__type` at its own level).
+        assert!(wrapper.discriminator().is_none());
+        // The inner object's `__type` remains as a regular string
+        // entry in the nested object's map.
+        let inner = wrapper
+            .document()
+            .as_object()
+            .and_then(|m| m.get("outer"))
+            .and_then(Document::as_object)
+            .expect("outer key present and is object");
+        assert_eq!(
+            inner.get("__type").and_then(Document::as_string),
+            Some("smithy.example#Inner"),
+            "nested __type must remain as a regular map entry: \
+             only the top-level wrapper has a discriminator slot",
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_malformed_type_stays_in_map() {
+        // `__type` whose value isn't a well-formed absolute shape ID
+        // (member-component, multiple `#`, empty parts) stays in the
+        // map as a regular string entry and discriminator is None.
+        for malformed in [
+            "\"smithy.example#Foo$bar\"", // member component not allowed
+            "\"smithy.example#\"",        // empty shape name
+            "\"#smithy.example\"",        // empty namespace
+            "\"no#hash#twice\"",          // multiple `#`
+        ] {
+            let body = format!(r#"{{"__type":{malformed}}}"#);
+            let mut deser =
+                JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert!(
+                wrapper.discriminator().is_none(),
+                "malformed __type {malformed} must not be lifted"
+            );
+            let map = wrapper.document().as_object().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "malformed __type {malformed} must remain in map"
+            );
+        }
+    }
+
+    #[test]
+    fn read_discriminated_document_non_string_type_stays_in_map() {
+        // `__type` with a non-string value (number, object, array,
+        // bool, null) stays in the map.
+        for non_string in [
+            r#"42"#,
+            r#"true"#,
+            r#"null"#,
+            r#"["a"]"#,
+            r#"{"nested":true}"#,
+        ] {
+            let body = format!(r#"{{"__type":{non_string}}}"#);
+            let mut deser =
+                JsonDeserializer::new(body.as_bytes(), Arc::new(JsonCodecSettings::default()));
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert!(
+                wrapper.discriminator().is_none(),
+                "non-string __type {non_string} must not be lifted"
+            );
+            let map = wrapper.document().as_object().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "non-string __type {non_string} must remain in map"
+            );
+        }
+    }
+
+    // --- read_discriminated_document with default_namespace --------------------------------
+
+    fn settings_with_default_namespace(ns: &str) -> Arc<JsonCodecSettings> {
+        Arc::new(JsonCodecSettings::builder().default_namespace(ns).build())
+    }
+
+    #[test]
+    fn read_discriminated_document_lifts_relative_with_namespace() {
+        // With a configured `default_namespace`, a relative `__type`
+        // is prepended with `<namespace>#` and lifted into the
+        // discriminator slot. The key is removed from the resulting
+        // map (matching the absolute-form behavior).
+        let input = br#"{"__type":"Capacity","CapacityUnits":1.0}"#;
+        let settings = settings_with_default_namespace("com.amazonaws.dynamodb");
+        let mut deser = JsonDeserializer::new(input, settings);
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        assert_eq!(
+            wrapper.discriminator(),
+            Some("com.amazonaws.dynamodb#Capacity"),
+            "relative __type must be resolved against default_namespace"
+        );
+        let map = wrapper.document().as_object().expect("top-level is map");
+        assert!(
+            !map.contains_key("__type"),
+            "lifted __type must be removed from the map"
+        );
+        assert!(
+            map.contains_key("CapacityUnits"),
+            "non-discriminator keys remain"
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_absolute_overrides_default_namespace() {
+        // An absolute `__type` (with `#`) is taken as-is even when a
+        // default_namespace is set. Different namespaces in __type vs
+        // settings is a real scenario for cross-namespace discriminators.
+        let input = br#"{"__type":"smithy.example#Bird","name":"Iago"}"#;
+        let settings = settings_with_default_namespace("com.amazonaws.dynamodb");
+        let mut deser = JsonDeserializer::new(input, settings);
+        let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+
+        assert_eq!(
+            wrapper.discriminator(),
+            Some("smithy.example#Bird"),
+            "absolute __type must override default_namespace"
+        );
+    }
+
+    #[test]
+    fn read_discriminated_document_invalid_relative_name_stays_in_map() {
+        // A `__type` value that contains characters illegal in a
+        // Smithy identifier (e.g. whitespace, punctuation) must not
+        // be synthesized into a malformed shape ID. The lift is
+        // skipped and the value stays as a regular map entry.
+        for invalid in ["foo bar", "foo-bar", "foo.bar", "1leading-digit", ""] {
+            let body = format!(r#"{{"__type":"{invalid}"}}"#);
+            let settings = settings_with_default_namespace("com.example");
+            let mut deser = JsonDeserializer::new(body.as_bytes(), settings);
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert!(
+                wrapper.discriminator().is_none(),
+                "invalid relative name {invalid:?} must not be lifted"
+            );
+            let map = wrapper.document().as_object().expect("top-level is map");
+            assert!(
+                map.contains_key("__type"),
+                "invalid relative name {invalid:?} must remain in map"
+            );
+        }
+    }
+
+    #[test]
+    fn read_discriminated_document_accepts_relative_names_with_underscore() {
+        // Smithy identifiers allow leading underscore + digits in
+        // subsequent positions. Cover edge cases.
+        for valid in ["_Bird", "Bird1", "_a_b_c", "Foo_Bar"] {
+            let body = format!(r#"{{"__type":"{valid}"}}"#);
+            let settings = settings_with_default_namespace("ns");
+            let mut deser = JsonDeserializer::new(body.as_bytes(), settings);
+            let wrapper = deser.read_discriminated_document().expect("parse succeeds");
+            assert_eq!(
+                wrapper.discriminator(),
+                Some(format!("ns#{valid}").as_str()),
+                "valid Smithy identifier {valid:?} must be lifted"
+            );
+        }
     }
 }

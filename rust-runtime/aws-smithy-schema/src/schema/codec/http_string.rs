@@ -7,9 +7,12 @@
 
 use crate::serde::{SerdeError, SerializableStruct, ShapeDeserializer, ShapeSerializer};
 use crate::Schema;
-use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime, Document};
+use aws_smithy_types::{BigDecimal, BigInteger, Blob, DateTime};
+
+use aws_smithy_types::Document;
 
 /// Serializer for converting Smithy types to strings (for HTTP headers, query params, labels).
+#[derive(Debug)]
 pub struct HttpStringSerializer {
     output: String,
 }
@@ -43,7 +46,7 @@ impl Default for HttpStringSerializer {
 impl ShapeSerializer for HttpStringSerializer {
     fn write_struct(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         _value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
@@ -53,7 +56,7 @@ impl ShapeSerializer for HttpStringSerializer {
 
     fn write_list(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Lists are serialized as comma-separated values
@@ -62,7 +65,7 @@ impl ShapeSerializer for HttpStringSerializer {
 
     fn write_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         _write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
@@ -70,7 +73,7 @@ impl ShapeSerializer for HttpStringSerializer {
         })
     }
 
-    fn write_boolean(&mut self, _schema: &Schema, value: bool) -> Result<(), SerdeError> {
+    fn write_boolean(&mut self, _schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -78,7 +81,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_byte(&mut self, _schema: &Schema, value: i8) -> Result<(), SerdeError> {
+    fn write_byte(&mut self, _schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -86,7 +89,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_short(&mut self, _schema: &Schema, value: i16) -> Result<(), SerdeError> {
+    fn write_short(&mut self, _schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -94,7 +97,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_integer(&mut self, _schema: &Schema, value: i32) -> Result<(), SerdeError> {
+    fn write_integer(&mut self, _schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -102,7 +105,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_long(&mut self, _schema: &Schema, value: i64) -> Result<(), SerdeError> {
+    fn write_long(&mut self, _schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -110,7 +113,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_float(&mut self, _schema: &Schema, value: f32) -> Result<(), SerdeError> {
+    fn write_float(&mut self, _schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -128,7 +131,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_double(&mut self, _schema: &Schema, value: f64) -> Result<(), SerdeError> {
+    fn write_double(&mut self, _schema: &Schema<'_>, value: f64) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -148,7 +151,7 @@ impl ShapeSerializer for HttpStringSerializer {
 
     fn write_big_integer(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         value: &BigInteger,
     ) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
@@ -160,7 +163,7 @@ impl ShapeSerializer for HttpStringSerializer {
 
     fn write_big_decimal(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         value: &BigDecimal,
     ) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
@@ -170,7 +173,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_string(&mut self, _schema: &Schema, value: &str) -> Result<(), SerdeError> {
+    fn write_string(&mut self, _schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -178,7 +181,7 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, _schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, _schema: &Schema<'_>, value: &[u8]) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -188,7 +191,11 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_timestamp(&mut self, _schema: &Schema, value: &DateTime) -> Result<(), SerdeError> {
+    fn write_timestamp(
+        &mut self,
+        _schema: &Schema<'_>,
+        value: &DateTime,
+    ) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
@@ -203,13 +210,17 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_document(&mut self, _schema: &Schema, _value: &Document) -> Result<(), SerdeError> {
+    fn write_document(
+        &mut self,
+        _schema: &Schema<'_>,
+        _value: &Document,
+    ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "documents cannot be serialized to strings".into(),
         })
     }
 
-    fn write_null(&mut self, _schema: &Schema) -> Result<(), SerdeError> {
+    fn write_null(&mut self, _schema: &Schema<'_>) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "null cannot be serialized to strings".into(),
         })
@@ -217,6 +228,7 @@ impl ShapeSerializer for HttpStringSerializer {
 }
 
 /// Deserializer for parsing Smithy types from strings.
+#[derive(Debug)]
 pub struct HttpStringDeserializer<'a> {
     input: std::borrow::Cow<'a, str>,
     position: usize,
@@ -255,8 +267,11 @@ impl<'a> HttpStringDeserializer<'a> {
 impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
     fn read_struct(
         &mut self,
-        _schema: &Schema,
-        _consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        _schema: &Schema<'_>,
+        _consumer: &mut dyn FnMut(
+            &Schema<'_>,
+            &mut dyn ShapeDeserializer,
+        ) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "structures cannot be deserialized from strings".into(),
@@ -265,17 +280,26 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
 
     fn read_list(
         &mut self,
-        _schema: &Schema,
-        _consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        _schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        // Lists are comma-separated values
-        // The consumer will call read methods for each element
+        // Comma-separated values: invoke the consumer once per element. Each
+        // call drives a single element read (e.g. `read_string`), which pulls
+        // the next comma-delimited token via `next_value`. An empty input is
+        // an empty list.
+        if self.current_value().is_empty() {
+            return Ok(());
+        }
+        let count = self.current_value().matches(',').count() + 1;
+        for _ in 0..count {
+            consumer(self)?;
+        }
         Ok(())
     }
 
     fn read_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         Err(SerdeError::UnsupportedOperation {
@@ -283,7 +307,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected boolean value".into(),
         })?;
@@ -292,7 +316,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected byte value".into(),
         })?;
@@ -301,7 +325,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected short value".into(),
         })?;
@@ -310,7 +334,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected integer value".into(),
         })?;
@@ -319,7 +343,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected long value".into(),
         })?;
@@ -328,7 +352,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected float value".into(),
         })?;
@@ -342,7 +366,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         }
     }
 
-    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected double value".into(),
         })?;
@@ -356,7 +380,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         }
     }
 
-    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected big integer value".into(),
         })?;
@@ -366,7 +390,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected big decimal value".into(),
         })?;
@@ -376,7 +400,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         })
     }
 
-    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.next_value()
             .ok_or_else(|| SerdeError::InvalidInput {
                 message: "expected string value".into(),
@@ -384,7 +408,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
             .map(|s| s.to_string())
     }
 
-    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected blob value".into(),
         })?;
@@ -395,7 +419,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         Ok(Blob::new(decoded))
     }
 
-    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
             message: "expected timestamp value".into(),
         })?;
@@ -408,7 +432,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
             })
     }
 
-    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "documents cannot be deserialized from strings".into(),
         })
@@ -425,6 +449,7 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
 }
 
 /// HTTP string codec for serializing/deserializing to/from strings.
+#[derive(Debug)]
 pub struct HttpStringCodec;
 
 impl crate::codec::Codec for HttpStringCodec {
@@ -564,6 +589,32 @@ mod tests {
             deser.read_string(&STRING).unwrap(),
         ];
         assert_eq!(values, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_read_list_drives_consumer_per_element() {
+        let mut deser = HttpStringDeserializer::new("a,b,c");
+        let mut collected = Vec::new();
+        deser
+            .read_list(&STRING, &mut |d: &mut dyn ShapeDeserializer| {
+                collected.push(d.read_string(&STRING)?);
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(collected, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn test_read_list_empty_input_is_empty_list() {
+        let mut deser = HttpStringDeserializer::new("");
+        let mut count = 0;
+        deser
+            .read_list(&STRING, &mut |_d: &mut dyn ShapeDeserializer| {
+                count += 1;
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(count, 0);
     }
 
     #[test]

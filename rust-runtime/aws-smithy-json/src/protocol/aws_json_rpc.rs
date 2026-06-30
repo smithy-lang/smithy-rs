@@ -56,16 +56,46 @@ impl AwsJsonRpcProtocol {
         )
     }
 
-    fn new(protocol_id: ShapeId, content_type: &'static str, target_prefix: String) -> Self {
+    fn new(
+        protocol_id: ShapeId<'static>,
+        content_type: &'static str,
+        target_prefix: String,
+    ) -> Self {
         let codec = JsonCodec::new(
             JsonCodecSettings::builder()
                 .use_json_name(false)
                 .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
+                .protocol_id(protocol_id)
                 .build(),
         );
         Self {
             inner: HttpRpcProtocol::new(protocol_id, codec, content_type),
             target_prefix,
+        }
+    }
+
+    /// Configures the default Smithy namespace used to resolve relative
+    /// shape IDs in JSON `__type` discriminator fields. Forwarded to
+    /// [`JsonCodecSettings::default_namespace`] on the codec wrapped by
+    /// this protocol.
+    ///
+    /// AWS JSON 1.0 / 1.1 services typically emit relative `__type`
+    /// values (the shape name without a namespace prefix). Code-generated
+    /// clients call this method with the service shape's namespace so
+    /// that [`crate::codec::JsonDeserializer::read_discriminated_document`]
+    /// can produce a fully-qualified discriminator.
+    pub fn with_default_namespace(self, namespace: impl Into<String>) -> Self {
+        let new_settings = self
+            .inner
+            .codec()
+            .settings()
+            .to_builder()
+            .default_namespace(namespace)
+            .build();
+        let new_codec = JsonCodec::new(new_settings);
+        Self {
+            inner: self.inner.with_codec(new_codec),
+            target_prefix: self.target_prefix,
         }
     }
 }
@@ -74,14 +104,14 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
     type Request = aws_smithy_runtime_api::http::Request;
     type Response = aws_smithy_runtime_api::http::Response;
 
-    fn protocol_id(&self) -> &ShapeId {
+    fn protocol_id(&self) -> &ShapeId<'static> {
         self.inner.protocol_id()
     }
 
     fn serialize_request(
         &self,
         input: &dyn aws_smithy_schema::serde::SerializableStruct,
-        input_schema: &Schema,
+        input_schema: &Schema<'_>,
         endpoint: &str,
         cfg: &ConfigBag,
     ) -> Result<aws_smithy_runtime_api::http::Request, aws_smithy_schema::serde::SerdeError> {
@@ -100,7 +130,7 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
     fn deserialize_response<'a>(
         &self,
         response: &'a aws_smithy_runtime_api::http::Response,
-        output_schema: &Schema,
+        output_schema: &Schema<'_>,
         cfg: &ConfigBag,
     ) -> Result<
         Box<dyn aws_smithy_schema::serde::ShapeDeserializer + 'a>,
@@ -108,6 +138,34 @@ impl aws_smithy_schema::protocol::ClientProtocolInner for AwsJsonRpcProtocol {
     > {
         self.inner
             .deserialize_response(response, output_schema, cfg)
+    }
+
+    /// Extracts canonical error metadata from an `awsJson1_0` / `awsJson1_1`
+    /// response.
+    ///
+    /// awsJson protocols carry the error code in the `__type` (or legacy
+    /// `code`) field of the JSON body, with `X-Amzn-Errortype` taking
+    /// priority. The error message comes from `message`, `Message`, or
+    /// `errorMessage` body keys.
+    ///
+    /// Per the
+    /// [`ClientProtocolInner::parse_error_metadata`](aws_smithy_schema::protocol::ClientProtocolInner::parse_error_metadata)
+    /// contract the request id is **not** populated here — the
+    /// orchestrator's request-id pipeline attaches it separately.
+    ///
+    /// `deserialize_error_response` is **not** overridden: awsJson has no
+    /// error envelope, so the default (which forwards to
+    /// `deserialize_response` against
+    /// [`prelude::DOCUMENT`](aws_smithy_schema::prelude::DOCUMENT)) is
+    /// already correct — the body root IS the error body.
+    fn parse_error_metadata(
+        &self,
+        response: &aws_smithy_runtime_api::http::Response,
+        _cfg: &ConfigBag,
+    ) -> Result<aws_smithy_types::error::metadata::Builder, aws_smithy_schema::serde::SerdeError>
+    {
+        let body = response.body().bytes().unwrap_or(&[]);
+        crate::protocol::error::parse_error_envelope_metadata(body, response.headers())
     }
 
     fn payload_codec(&self) -> Option<&dyn aws_smithy_schema::codec::DynCodec> {
@@ -209,6 +267,103 @@ mod tests {
                 .protocol_id()
                 .as_str(),
             "aws.protocols#awsJson1_1"
+        );
+    }
+
+    // ---- parse_error_metadata overrides --------------------------------
+
+    use aws_smithy_runtime_api::http::{Response, StatusCode};
+    use aws_smithy_types::body::SdkBody;
+
+    fn http_response(headers: &[(&str, &str)], body: &str) -> Response {
+        let mut response = Response::new(StatusCode::try_from(400).unwrap(), SdkBody::from(body));
+        for (name, value) in headers {
+            response
+                .headers_mut()
+                .insert(name.to_string(), value.to_string());
+        }
+        response
+    }
+
+    #[test]
+    fn parse_error_metadata_extracts_code_and_message_from_body() {
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let response = http_response(&[], r#"{"__type":"InvalidGreeting","message":"hi"}"#);
+        let cfg = ConfigBag::base();
+        let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
+        assert_eq!(meta.code(), Some("InvalidGreeting"));
+        assert_eq!(meta.message(), Some("hi"));
+    }
+
+    #[test]
+    fn parse_error_metadata_header_takes_priority() {
+        let proto = AwsJsonRpcProtocol::aws_json_1_1("Svc");
+        let response = http_response(
+            &[("x-amzn-errortype", "FromHeader")],
+            r#"{"__type":"FromBody","message":"go"}"#,
+        );
+        let cfg = ConfigBag::base();
+        let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
+        assert_eq!(meta.code(), Some("FromHeader"));
+        assert_eq!(meta.message(), Some("go"));
+    }
+
+    #[test]
+    fn parse_error_metadata_sanitizes_namespaced_code() {
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let response = http_response(&[], r#"{"__type":"aws.protocoltests.json#FooError"}"#);
+        let cfg = ConfigBag::base();
+        let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
+        assert_eq!(meta.code(), Some("FooError"));
+    }
+
+    #[test]
+    fn parse_error_metadata_empty_body_returns_empty_builder() {
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let response = http_response(&[], "");
+        let cfg = ConfigBag::base();
+        let meta = proto.parse_error_metadata(&response, &cfg).unwrap().build();
+        assert!(meta.code().is_none());
+        assert!(meta.message().is_none());
+    }
+
+    #[test]
+    fn parse_error_metadata_malformed_body_returns_error() {
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("Svc");
+        let response = http_response(&[], r#"{"__type":"FooError""#); // truncated
+        let cfg = ConfigBag::base();
+        let err = proto.parse_error_metadata(&response, &cfg).unwrap_err();
+        assert!(matches!(err, SerdeError::InvalidInput { .. }));
+    }
+
+    #[test]
+    fn with_default_namespace_propagates_to_codec_settings() {
+        // The protocol's `with_default_namespace` builder must surface
+        // the namespace on the codec's settings — this is the wiring
+        // codegen relies on so that wire-bytes `__type:"Capacity"`
+        // lifts to a fully-qualified `com.amazonaws.dynamodb#Capacity`
+        // discriminator on the resulting [`DiscriminatedDocument`].
+        let proto = AwsJsonRpcProtocol::aws_json_1_0("DynamoDB_20120810")
+            .with_default_namespace("com.amazonaws.dynamodb");
+        assert_eq!(
+            proto.inner.codec().settings().default_namespace(),
+            Some("com.amazonaws.dynamodb"),
+        );
+    }
+
+    #[test]
+    fn with_default_namespace_preserves_other_settings() {
+        // Sanity-check that rebuilding the codec to set
+        // `default_namespace` doesn't reset other configured fields
+        // — the AwsJsonRpc constructor already disables `@jsonName`
+        // and sets epoch-seconds as the default timestamp format.
+        let proto =
+            AwsJsonRpcProtocol::aws_json_1_0("TestService").with_default_namespace("com.example");
+        let settings = proto.inner.codec().settings();
+        assert_eq!(settings.default_namespace(), Some("com.example"));
+        assert_eq!(
+            settings.default_timestamp_format(),
+            aws_smithy_types::date_time::Format::EpochSeconds,
         );
     }
 }

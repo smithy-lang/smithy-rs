@@ -117,6 +117,14 @@ class SchemaGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
 
+    // Used to decide whether a nested aggregate target reaches back to its
+    // containing aggregate (a true recursive cycle in the schema graph).
+    // For non-recursive cases the runtime serializer emissions can reference
+    // the resolved sub-schema (`<PARENT>_MEMBER` / `<PARENT>_VALUE`) instead
+    // of `prelude::DOCUMENT`, letting the codec see the inner aggregate's
+    // member traits (e.g. `@xmlName` on map keys/values).
+    private val recursiveClassifier = RecursiveShapeClassifier(model)
+
     /** Sanitize a member name for use in Rust constant names (strips r# raw identifier prefix). */
     private fun constantName(memberName: String): String = memberName.removePrefix("r#").removePrefix("#").uppercase()
 
@@ -148,7 +156,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -174,7 +182,7 @@ class SchemaGenerator(
         val escapedFqn = fqn.replace("#", "##")
         writer.rustTemplate(
             """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId} = #{ShapeId}::from_static("$escapedFqn", "$ns", "$name");
+            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
             """,
             *codegenScope,
         )
@@ -188,7 +196,7 @@ class SchemaGenerator(
             """
             impl ${symbol.name} {
                 /// The schema for this shape.
-                pub const SCHEMA: &'static #{Schema} = &${schemaPrefix}_SCHEMA;
+                pub const SCHEMA: &'static #{Schema}<'static> = &${schemaPrefix}_SCHEMA;
             }
             """,
             *codegenScope,
@@ -372,7 +380,7 @@ class SchemaGenerator(
                         }
                     }
                 helperExpr ?: run {
-                    val elementWrite = elementWriteExpr(elementTarget, "item")
+                    val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                     if (isSparse) {
                         """
                         ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -408,7 +416,7 @@ class SchemaGenerator(
                     "ser.write_string_string_map(&$memberSchemaRef, $varName)?;"
                 } else {
                     val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
-                    val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                    val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                     if (isSparse) {
                         """
                         ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -545,7 +553,7 @@ class SchemaGenerator(
             is ListShape -> {
                 val isSparse = target.hasTrait(SparseTrait::class.java)
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
+                val elementWrite = elementWriteExpr(target, memberSchemaRef, elementTarget, "item")
                 if (isSparse) {
                     """
                     ser.write_list(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -575,7 +583,7 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueWrite = mapValueWriteExpr(valueTarget, "value")
+                val valueWrite = mapValueWriteExpr(target, memberSchemaRef, valueTarget, "value")
                 if (isSparse) {
                     """
                     ser.write_map(&$memberSchemaRef, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
@@ -608,8 +616,19 @@ class SchemaGenerator(
         }
     }
 
-    /** Returns a write expression for a list element (no member name needed). */
+    /**
+     * Returns a write expression for a list element (no member name needed).
+     *
+     * [containingAggregate] is the list whose elements we're writing.
+     * [parentRef] is the Rust schema constant name for that containing list,
+     * used to derive the inner element's schema constant
+     * (`<parent>_MEMBER`) when the element is itself a nested aggregate.
+     * `null` means we're past a recursive boundary upstream — every nested
+     * aggregate from here down falls back to `prelude::DOCUMENT`.
+     */
     private fun elementWriteExpr(
+        containingAggregate: Shape,
+        parentRef: String?,
         target: Shape,
         varName: String,
     ): String {
@@ -644,12 +663,23 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val valueWrite = mapValueWriteExpr(valueTarget, "value")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
-                val targetQualified = symbolProvider.toSymbol(target).rustType().qualifiedName()
+                // We're writing a list element that is itself a map. The map's
+                // schema at this position is the containing list's `_MEMBER`
+                // chain — unless we're in placeholder mode upstream
+                // (parentRef == null) or this target closes a cycle back to
+                // the containing list.
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val valueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             match value {
@@ -662,7 +692,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&::aws_smithy_schema::prelude::STRING, $keyExpr)?;
                             $valueWrite
@@ -675,11 +705,18 @@ class SchemaGenerator(
 
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -691,7 +728,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&::aws_smithy_schema::prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }
@@ -710,8 +747,19 @@ class SchemaGenerator(
         }
     }
 
-    /** Returns a write expression for a map value. */
+    /**
+     * Returns a write expression for a map value.
+     *
+     * [containingAggregate] is the map whose values we're writing.
+     * [parentRef] is the Rust schema constant name for that containing map,
+     * used to derive the inner value's schema constant (`<parent>_VALUE`)
+     * when the value is itself a nested aggregate. `null` means we're past
+     * a recursive boundary upstream — every nested aggregate from here down
+     * falls back to `prelude::DOCUMENT`.
+     */
     private fun mapValueWriteExpr(
+        containingAggregate: Shape,
+        parentRef: String?,
         target: Shape,
         varName: String,
     ): String {
@@ -746,11 +794,22 @@ class SchemaGenerator(
                 val keyTarget = model.expectShape(target.key.target)
                 val keyExpr = if (isStringEnum(keyTarget)) "key.as_str()" else "key"
                 val valueTarget = model.expectShape(target.value.target)
-                val innerValueWrite = mapValueWriteExpr(valueTarget, "value")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                // We're writing a map value that is itself a map. Its schema
+                // at this position is the containing map's `_VALUE` chain —
+                // unless we're already in placeholder mode or this target
+                // closes a cycle back to the containing map.
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&$prelude::DOCUMENT"
+                val innerValueWrite = mapValueWriteExpr(target, nextRef, valueTarget, "value")
                 if (isSparse) {
                     """
-                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             match value {
@@ -763,7 +822,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_map(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_map($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for (key, value) in $varName {
                             ser.write_string(&$prelude::STRING, $keyExpr)?;
                             $innerValueWrite
@@ -776,11 +835,18 @@ class SchemaGenerator(
 
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementWrite = elementWriteExpr(elementTarget, "item")
                 val isSparse = target.hasTrait(SparseTrait::class.java)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingAggregate, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&$prelude::DOCUMENT"
+                val elementWrite = elementWriteExpr(target, nextRef, elementTarget, "item")
                 if (isSparse) {
                     """
-                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             match item {
                                 Some(item) => { $elementWrite }
@@ -792,7 +858,7 @@ class SchemaGenerator(
                     """
                 } else {
                     """
-                    ser.write_list(&$prelude::DOCUMENT, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
+                    ser.write_list($schemaExpr, &|ser: &mut dyn ::aws_smithy_schema::serde::ShapeSerializer| {
                         for item in $varName {
                             $elementWrite
                         }
@@ -885,7 +951,8 @@ class SchemaGenerator(
                         val memberName = symbolProvider.toMemberName(member)
                         val memberSymbol = symbolProvider.toSymbol(member)
                         val target = model.expectShape(member.target)
-                        val readExpr = readMethodForShape(target, "member")
+                        val memberConstRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                        val readExpr = readMethodForShape(target, "member", memberConstRef)
                         val wrapped =
                             if (memberSymbol.isRustBoxed()) {
                                 "Box::new($readExpr)"
@@ -1514,7 +1581,8 @@ class SchemaGenerator(
                                 if (hasHttpBinding) {
                                     rust("Some($idx) => { /* read from headers above */ }")
                                 } else {
-                                    val readExpr = readMethodForShape(target, "member")
+                                    val memberConstRef = "${schemaPrefix}_MEMBER_${constantName(memberName)}"
+                                    val readExpr = readMethodForShape(target, "member", memberConstRef)
                                     val wrapped = if (memberSymbol.isRustBoxed()) "Box::new($readExpr)" else readExpr
                                     if (memberSymbol.isOptional()) {
                                         rust("Some($idx) => { builder.$memberName = Some($wrapped); }")
@@ -1532,6 +1600,11 @@ class SchemaGenerator(
     private fun readMethodForShape(
         target: Shape,
         memberRef: String,
+        // Rust schema constant for this member (e.g. `<PREFIX>_MEMBER_<NAME>`),
+        // used to derive nested collection sub-schema references
+        // (`_KEY`/`_VALUE`/`_MEMBER`). `null` falls back to `prelude::DOCUMENT`
+        // for nested aggregates (e.g. union variants that don't track a const).
+        memberConstRef: String? = null,
     ): String =
         when (target) {
             is BooleanShape -> "deser.read_boolean($memberRef)?"
@@ -1584,7 +1657,7 @@ class SchemaGenerator(
                 if (helperExpr != null) {
                     helperExpr
                 } else {
-                    val elementRead = elementReadExpr(elementTarget, memberRef)
+                    val elementRead = listElementReadExpr(target, memberConstRef, elementTarget)
                     val pushExpr =
                         if (isSparse) {
                             "container.push(if deser.is_null() { deser.read_null()?; None } else { Some($elementRead) })"
@@ -1610,7 +1683,7 @@ class SchemaGenerator(
                         } else {
                             "key"
                         }
-                    val valueRead = elementReadExpr(valueTarget, memberRef)
+                    val valueRead = mapValueReadExpr(target, memberConstRef, valueTarget)
                     val insertExpr =
                         if (isSparse) {
                             "container.insert($keyInsert, if deser.is_null() { deser.read_null()?; None } else { Some($valueRead) })"
@@ -1638,37 +1711,40 @@ class SchemaGenerator(
             else -> "{ let _ = $memberRef; todo!(\"deserialize aggregate\") }"
         }
 
-    /** Returns a read expression for a list element or map value. */
-    private fun elementReadExpr(
-        target: Shape,
-        memberRef: String,
-    ): String =
-        when (target) {
-            is BooleanShape -> "deser.read_boolean($memberRef)?"
-            is ByteShape -> "deser.read_byte($memberRef)?"
-            is ShortShape -> "deser.read_short($memberRef)?"
-            is IntegerShape -> "deser.read_integer($memberRef)?"
-            is LongShape -> "deser.read_long($memberRef)?"
-            is FloatShape -> "deser.read_float($memberRef)?"
-            is DoubleShape -> "deser.read_double($memberRef)?"
-            is BigIntegerShape -> "deser.read_big_integer($memberRef)?"
-            is BigDecimalShape -> "deser.read_big_decimal($memberRef)?"
+    /**
+     * Returns a read expression for the leaf scalar/struct/union shapes shared by
+     * [mapValueReadExpr] and [listElementReadExpr]. Returns `null` for the nested
+     * aggregate shapes (list/map) those callers handle themselves, since each
+     * threads its own `_VALUE` / `_MEMBER` sub-schema reference.
+     */
+    private fun nestedLeafReadExpr(target: Shape): String? {
+        val prelude = "::aws_smithy_schema::prelude"
+        return when (target) {
+            is BooleanShape -> "deser.read_boolean(&$prelude::BOOLEAN)?"
+            is ByteShape -> "deser.read_byte(&$prelude::BYTE)?"
+            is ShortShape -> "deser.read_short(&$prelude::SHORT)?"
+            is IntegerShape -> "deser.read_integer(&$prelude::INTEGER)?"
+            is LongShape -> "deser.read_long(&$prelude::LONG)?"
+            is FloatShape -> "deser.read_float(&$prelude::FLOAT)?"
+            is DoubleShape -> "deser.read_double(&$prelude::DOUBLE)?"
+            is BigIntegerShape -> "deser.read_big_integer(&$prelude::BIG_INTEGER)?"
+            is BigDecimalShape -> "deser.read_big_decimal(&$prelude::BIG_DECIMAL)?"
             is EnumShape -> {
                 val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                "$enumName::from(deser.read_string(&$prelude::STRING)?.as_str())"
             }
 
             is StringShape ->
                 if (isStringEnum(target)) {
                     val enumName = symbolProvider.toSymbol(target).rustType().qualifiedName()
-                    "$enumName::from(deser.read_string($memberRef)?.as_str())"
+                    "$enumName::from(deser.read_string(&$prelude::STRING)?.as_str())"
                 } else {
-                    "deser.read_string($memberRef)?"
+                    "deser.read_string(&$prelude::STRING)?"
                 }
 
-            is BlobShape -> "deser.read_blob($memberRef)?"
-            is TimestampShape -> "deser.read_timestamp($memberRef)?"
-            is DocumentShape -> "deser.read_document($memberRef)?"
+            is BlobShape -> "deser.read_blob(&$prelude::BLOB)?"
+            is TimestampShape -> "deser.read_timestamp(&$prelude::TIMESTAMP)?"
+            is DocumentShape -> "deser.read_document(&$prelude::DOCUMENT)?"
             is StructureShape -> {
                 val targetSymbol = symbolProvider.toSymbol(target)
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
@@ -1679,13 +1755,71 @@ class SchemaGenerator(
                 "${targetSymbol.rustType().qualifiedName()}::deserialize(deser)?"
             }
 
+            else -> null
+        }
+    }
+
+    /**
+     * Returns a read expression for a single map value.
+     *
+     * Deserialize-side mirror of [mapValueWriteExpr]: a nested aggregate value
+     * reads against the containing map's resolved `_VALUE` sub-schema so the codec
+     * sees the inner aggregate's own member traits (e.g. `@xmlName` on nested map
+     * keys/values). [parentRef] is the Rust schema constant for the containing
+     * map; `null` or a recursive cycle falls back to `prelude::DOCUMENT`.
+     */
+    private fun mapValueReadExpr(
+        containingMap: Shape,
+        parentRef: String?,
+        target: Shape,
+    ): String {
+        nestedLeafReadExpr(target)?.let { return it }
+        return when (target) {
+            is MapShape -> {
+                val keyTarget = model.expectShape(target.key.target)
+                val valueTarget = model.expectShape(target.value.target)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingMap, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val keyInsert =
+                    if (isStringEnum(keyTarget)) {
+                        val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
+                        "$enumName::from(key.as_str())"
+                    } else {
+                        "key"
+                    }
+                val innerValueRead = mapValueReadExpr(target, nextRef, valueTarget)
+                """
+                {
+                    let mut map = ::std::collections::HashMap::new();
+                    deser.read_map($schemaExpr, &mut |key, deser| {
+                        let value = $innerValueRead;
+                        map.insert($keyInsert, value);
+                        Ok(())
+                    })?;
+                    map
+                }
+                """.trimIndent()
+            }
+
             is ListShape -> {
                 val elementTarget = model.expectShape(target.member.target)
-                val elementRead = elementReadExpr(elementTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingMap, target)) {
+                        "${parentRef}_VALUE"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementRead = listElementReadExpr(target, nextRef, elementTarget)
                 """
                 {
                     let mut list = Vec::new();
-                    deser.read_list(member, &mut |deser| {
+                    deser.read_list($schemaExpr, &mut |deser| {
                         list.push($elementRead);
                         Ok(())
                     })?;
@@ -1694,10 +1828,36 @@ class SchemaGenerator(
                 """.trimIndent()
             }
 
+            else -> "todo!(\"deserialize nested map value\")"
+        }
+    }
+
+    /**
+     * Returns a read expression for a single list element.
+     *
+     * Deserialize-side mirror of [elementWriteExpr]: a nested aggregate element
+     * reads against the containing list's resolved `_MEMBER` sub-schema so the
+     * codec sees the inner aggregate's own member traits. [parentRef] is the Rust
+     * schema constant for the containing list; `null` or a recursive cycle falls
+     * back to `prelude::DOCUMENT`.
+     */
+    private fun listElementReadExpr(
+        containingList: Shape,
+        parentRef: String?,
+        target: Shape,
+    ): String {
+        nestedLeafReadExpr(target)?.let { return it }
+        return when (target) {
             is MapShape -> {
                 val keyTarget = model.expectShape(target.key.target)
                 val valueTarget = model.expectShape(target.value.target)
-                val valueRead = elementReadExpr(valueTarget, "&::aws_smithy_schema::prelude::DOCUMENT")
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingList, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
                 val keyInsert =
                     if (isStringEnum(keyTarget)) {
                         val enumName = symbolProvider.toSymbol(keyTarget).rustType().qualifiedName()
@@ -1705,10 +1865,11 @@ class SchemaGenerator(
                     } else {
                         "key"
                     }
+                val valueRead = mapValueReadExpr(target, nextRef, valueTarget)
                 """
                 {
                     let mut map = ::std::collections::HashMap::new();
-                    deser.read_map(member, &mut |key, deser| {
+                    deser.read_map($schemaExpr, &mut |key, deser| {
                         let value = $valueRead;
                         map.insert($keyInsert, value);
                         Ok(())
@@ -1718,8 +1879,31 @@ class SchemaGenerator(
                 """.trimIndent()
             }
 
-            else -> "todo!(\"deserialize nested aggregate\")"
+            is ListShape -> {
+                val elementTarget = model.expectShape(target.member.target)
+                val nextRef =
+                    if (parentRef != null && !recursiveClassifier.isRecursive(containingList, target)) {
+                        "${parentRef}_MEMBER"
+                    } else {
+                        null
+                    }
+                val schemaExpr = nextRef?.let { "&$it" } ?: "&::aws_smithy_schema::prelude::DOCUMENT"
+                val elementRead = listElementReadExpr(target, nextRef, elementTarget)
+                """
+                {
+                    let mut list = Vec::new();
+                    deser.read_list($schemaExpr, &mut |deser| {
+                        list.push($elementRead);
+                        Ok(())
+                    })?;
+                    list
+                }
+                """.trimIndent()
+            }
+
+            else -> "todo!(\"deserialize nested list element\")"
         }
+    }
 
     /** Returns a Rust default value expression for a shape, or null if no sensible default exists. */
     private fun shapeTypeVariant(shape: Shape): String =
@@ -1780,21 +1964,90 @@ class SchemaGenerator(
                 val stringValue = trait.stringValue()
                 if (trait.isAnnotationTrait()) {
                     rustTemplate(
-                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
+                        """map.insert(Box::new(#{AnnotationTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"))));""",
                         *codegenScope,
                     )
                 } else if (stringValue != null) {
                     rustTemplate(
-                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
+                        """map.insert(Box::new(#{StringTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), ${stringValue.dq()})));""",
                         *codegenScope,
                     )
                 } else {
-                    val jsonValue = Node.printJson(trait.toNode()).replace("\\", "\\\\").replace("\"", "\\\"")
+                    // Render the trait's structured value as a structured `Document`
+                    // (object/array/number/bool/string), preserving the shape of the
+                    // value instead of flattening it to a JSON string. The runtime
+                    // `Document` type can represent the full Smithy data model, so an
+                    // unknown trait's value round-trips structurally (per the SEP:
+                    // unknown trait values "should be represented with a document data
+                    // type").
                     rustTemplate(
-                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_static("$traitNs##$traitName", "$traitNs", "$traitName"), #{Document}::String("$jsonValue".to_string()))));""",
+                        """map.insert(Box::new(#{DocumentTrait}::new(#{ShapeId}::from_parts("$traitNs##$traitName", "$traitNs", "$traitName"), #{docValue})));""",
                         *codegenScope,
+                        "docValue" to nodeToDocument(trait.toNode()),
                     )
                 }
+            }
+        }
+
+    /**
+     * Renders a Smithy trait value [Node] as a [Writable] that constructs the
+     * structurally-equivalent [`aws_smithy_types::Document`].
+     *
+     * Used for unknown traits whose value is not a plain string, so the generated
+     * schema preserves the trait's structure (nested objects, arrays, numbers,
+     * booleans) rather than flattening it to a single JSON string.
+     *
+     * Uses [RuntimeType] symbols (not hardcoded paths) so the `aws-smithy-types`
+     * dependency is registered on the generated crate. `#` inside string literals
+     * is escaped as `##` so the result is safe inside a `rustTemplate`.
+     */
+    private fun nodeToDocument(node: Node): Writable =
+        writable {
+            val docScope =
+                arrayOf(
+                    "Document" to RuntimeType.smithyTypes(runtimeConfig).resolve("Document"),
+                    "Number" to RuntimeType.smithyTypes(runtimeConfig).resolve("Number"),
+                    "DocumentObject" to RuntimeType.smithyTypes(runtimeConfig).resolve("document::DocumentObject"),
+                )
+
+            fun escape(s: String) = s.replace("\\", "\\\\").replace("\"", "\\\"").replace("#", "##")
+            when {
+                node.isNullNode -> rustTemplate("#{Document}::Null", *docScope)
+                node.isBooleanNode -> rustTemplate("#{Document}::Bool(${node.expectBooleanNode().value})", *docScope)
+                node.isStringNode ->
+                    rustTemplate("""#{Document}::String("${escape(node.expectStringNode().value)}".to_string())""", *docScope)
+                node.isNumberNode -> {
+                    val number = node.expectNumberNode()
+                    if (number.isFloatingPointNumber) {
+                        rustTemplate("#{Document}::Number(#{Number}::Float(${number.value.toDouble()}f64))", *docScope)
+                    } else {
+                        val value = number.value.toLong()
+                        if (value >= 0) {
+                            rustTemplate("#{Document}::Number(#{Number}::PosInt(${value}u64))", *docScope)
+                        } else {
+                            rustTemplate("#{Document}::Number(#{Number}::NegInt(${value}i64))", *docScope)
+                        }
+                    }
+                }
+                node.isArrayNode -> {
+                    rustTemplate("#{Document}::Array(vec![", *docScope)
+                    node.expectArrayNode().elements.forEach { element ->
+                        nodeToDocument(element)(this)
+                        rust(", ")
+                    }
+                    rust("])")
+                }
+                node.isObjectNode -> {
+                    rustTemplate("{ let mut obj = #{DocumentObject}::new(); ", *docScope)
+                    node.expectObjectNode().stringMap.entries.forEach { (key, value) ->
+                        rust("""obj.insert("${escape(key)}".to_string(), """)
+                        nodeToDocument(value)(this)
+                        rust("); ")
+                    }
+                    rustTemplate("#{Document}::Object(obj) }", *docScope)
+                }
+                // Node is sealed over the cases above; this is unreachable for valid models.
+                else -> rustTemplate("#{Document}::Null", *docScope)
             }
         }
 
@@ -1990,6 +2243,17 @@ class SchemaGenerator(
      * `Schema::key()` / `.value()` / `.member()`.
      *
      * Returns `""` for non-aggregate targets.
+     *
+     * Termination invariant: this recursion descends only through aggregate
+     * members (list element, map key/value) and stops at structure/union targets
+     * (the `else -> ""` arm) and scalars. A structure/union carries its own
+     * top-level `::SCHEMA` constant, so the descent never crosses that boundary.
+     * Combined with the Smithy guarantee that a recursive list/map/set is valid
+     * only if its cycle passes through a structure or union, the descent is
+     * bounded for any valid model. The same boundary bounds the sibling write-expr
+     * recursion ([elementWriteExpr] / [mapValueWriteExpr]). A hand-built model that
+     * violated the invariant (an aggregate-only cycle) would not terminate, but
+     * such models are rejected by Smithy validation before reaching codegen.
      */
     private fun emitAggregateMemberChain(
         writer: RustWriter,
@@ -2010,8 +2274,8 @@ class SchemaGenerator(
                 val valueAggChain = emitAggregateMemberChain(writer, "${prefix}_VALUE", valueTarget, codegenScope)
                 writer.rustTemplate(
                     """
-                    static ${prefix}_KEY: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${prefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedKeyId",
                             "${target.key.id.namespace}",
                             "${target.key.id.name}",
@@ -2020,8 +2284,8 @@ class SchemaGenerator(
                         "key",
                         0,
                     )$keyTraitChain$keyAggChain;
-                    static ${prefix}_VALUE: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${prefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedValueId",
                             "${target.value.id.namespace}",
                             "${target.value.id.name}",
@@ -2043,8 +2307,8 @@ class SchemaGenerator(
                     emitAggregateMemberChain(writer, "${prefix}_MEMBER", listMemberTarget, codegenScope)
                 writer.rustTemplate(
                     """
-                    static ${prefix}_MEMBER: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${prefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedListMemberId",
                             "${target.member.id.namespace}",
                             "${target.member.id.name}",
@@ -2156,7 +2420,7 @@ class SchemaGenerator(
                             #{insertions}
                             map
                         });
-                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                        static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
                             ${schemaPrefix}_SCHEMA_ID,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
@@ -2170,7 +2434,7 @@ class SchemaGenerator(
                 } else {
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_struct(
+                        static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
                             ${schemaPrefix}_SCHEMA_ID,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
@@ -2184,7 +2448,7 @@ class SchemaGenerator(
             is ListShape -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_list(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_list(
                         ${schemaPrefix}_SCHEMA_ID,
                         &${schemaPrefix}_MEMBER,
                     );
@@ -2196,7 +2460,7 @@ class SchemaGenerator(
             is MapShape -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new_map(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_map(
                         ${schemaPrefix}_SCHEMA_ID,
                         &${schemaPrefix}_KEY,
                         &${schemaPrefix}_VALUE,
@@ -2209,7 +2473,7 @@ class SchemaGenerator(
             else -> {
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_SCHEMA: #{Schema} = #{Schema}::new(
+                    static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new(
                         ${schemaPrefix}_SCHEMA_ID,
                         #{ShapeType}::${shapeTypeVariant(shape)},
                     );
@@ -2250,8 +2514,8 @@ class SchemaGenerator(
 
                     writer.rustTemplate(
                         """
-                        static $memberConstName: #{Schema} = #{Schema}::new_member(
-                            #{ShapeId}::from_static(
+                        static $memberConstName: #{Schema}<'static> = #{Schema}::new_member(
+                            #{ShapeId}::from_parts(
                                 "$escapedMemberId",
                                 "${member.id.namespace}",
                                 "${member.id.name}",
@@ -2270,8 +2534,8 @@ class SchemaGenerator(
                     val synthIdx = baseIndex + i
                     writer.rustTemplate(
                         """
-                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema} = #{Schema}::new_member(
-                            #{ShapeId}::from_static(
+                        static ${schemaPrefix}_MEMBER_${constantName(synth.fieldName)}: #{Schema}<'static> = #{Schema}::new_member(
+                            #{ShapeId}::from_parts(
                                 "synthetic##${synth.schemaMemberName}",
                                 "synthetic",
                                 "${synth.schemaMemberName}",
@@ -2292,8 +2556,8 @@ class SchemaGenerator(
                 val traitChain = memberTraitChain(shape.member)
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_MEMBER: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${schemaPrefix}_MEMBER: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedMemberId",
                             "${shape.member.id.namespace}",
                             "${shape.member.id.name}",
@@ -2316,8 +2580,8 @@ class SchemaGenerator(
                 val valueTraitChain = memberTraitChain(shape.value)
                 writer.rustTemplate(
                     """
-                    static ${schemaPrefix}_KEY: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${schemaPrefix}_KEY: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedKeyId",
                             "${shape.key.id.namespace}",
                             "${shape.key.id.name}",
@@ -2327,8 +2591,8 @@ class SchemaGenerator(
                         0,
                     )$keyTraitChain;
 
-                    static ${schemaPrefix}_VALUE: #{Schema} = #{Schema}::new_member(
-                        #{ShapeId}::from_static(
+                    static ${schemaPrefix}_VALUE: #{Schema}<'static> = #{Schema}::new_member(
+                        #{ShapeId}::from_parts(
                             "$escapedValueId",
                             "${shape.value.id.namespace}",
                             "${shape.value.id.name}",

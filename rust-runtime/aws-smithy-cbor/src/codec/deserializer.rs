@@ -82,8 +82,8 @@ impl<'a> CborDeserializer<'a> {
 impl ShapeDeserializer for CborDeserializer<'_> {
     fn read_struct(
         &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Empty input (e.g., empty HTTP response body) is treated as an empty struct
         if self.decoder.position() >= self.input_len {
@@ -117,7 +117,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn read_list(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.check_depth()?;
@@ -143,7 +143,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn read_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.check_depth()?;
@@ -168,62 +168,62 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         Ok(())
     }
 
-    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         self.decoder.boolean().map_err(deser_err)
     }
 
-    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         self.decoder.byte().map_err(deser_err)
     }
 
-    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         self.decoder.short().map_err(deser_err)
     }
 
-    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         self.decoder.integer().map_err(deser_err)
     }
 
-    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         self.decoder.long().map_err(deser_err)
     }
 
-    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         self.decoder.float().map_err(deser_err)
     }
 
-    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         self.decoder.double().map_err(deser_err)
     }
 
-    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "CBOR big integer not yet supported (smithy-rs#4611)".into(),
         })
     }
 
-    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "CBOR big decimal not yet supported (smithy-rs#4611)".into(),
         })
     }
 
-    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.decoder
             .str()
             .map(|cow| cow.into_owned())
             .map_err(deser_err)
     }
 
-    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         self.decoder.blob().map_err(deser_err)
     }
 
-    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         self.decoder.timestamp().map_err(deser_err)
     }
 
-    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
         Err(SerdeError::UnsupportedOperation {
             message: "document types are not supported by rpcv2Cbor protocol".into(),
         })
@@ -250,25 +250,25 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         }
     }
 
-    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+    fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
         self.read_list_items(|dec| dec.str().map(|c| c.into_owned()).map_err(deser_err))
     }
 
-    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+    fn read_blob_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<Blob>, SerdeError> {
         self.read_list_items(|dec| dec.blob().map_err(deser_err))
     }
 
-    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+    fn read_integer_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i32>, SerdeError> {
         self.read_list_items(|dec| dec.integer().map_err(deser_err))
     }
 
-    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+    fn read_long_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i64>, SerdeError> {
         self.read_list_items(|dec| dec.long().map_err(deser_err))
     }
 
     fn read_string_string_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
         self.check_depth()?;
         let len = self.decoder.map().map_err(deser_err)?;
@@ -331,7 +331,7 @@ mod tests {
     fn test_read_boolean() {
         let bytes = make_deser(|s| s.write_boolean(&BOOLEAN, true).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
-        assert_eq!(de.read_boolean(&BOOLEAN).unwrap(), true);
+        assert!(de.read_boolean(&BOOLEAN).unwrap());
     }
 
     #[test]
@@ -604,7 +604,7 @@ mod tests {
 
         let mut de = CborDeserializer::new(&bytes, 128);
         fn recursive_consumer(
-            _member: &Schema,
+            _member: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             static MEMBER: Schema =
@@ -638,7 +638,7 @@ mod tests {
 
         let mut de = CborDeserializer::new(&bytes, 128);
         fn recursive_consumer(
-            _member: &Schema,
+            _member: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             static MEMBER: Schema =

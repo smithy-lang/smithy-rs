@@ -27,7 +27,7 @@ aws-smithy-types = { path = "../aws-smithy-types" }
 num-bigint = "0.4.6"
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.8.2"
 
 [[bench]]
 name = "string"

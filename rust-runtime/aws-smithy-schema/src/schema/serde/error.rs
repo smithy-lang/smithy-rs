@@ -17,6 +17,11 @@ pub enum SerdeError {
         message: String,
     },
     /// A required structure member was missing during deserialization.
+    ///
+    /// **Not currently emitted.** The schema-serde deserializers use the
+    /// push/consumer pattern and defer required-member enforcement to the
+    /// generated builder's `build()`. This variant is reserved for
+    /// deserializers that choose to enforce member presence during the read.
     MissingMember {
         /// The name of the missing member.
         member_name: String,
@@ -41,6 +46,57 @@ pub enum SerdeError {
         /// Description of the write failure.
         message: String,
     },
+    /// A numeric coercion overflowed the target type's representable
+    /// range.
+    ///
+    /// Emitted by [`Document::as_byte`](aws_smithy_types::Document::as_byte)
+    /// (and the other narrow numeric accessors) when the source value
+    /// is outside the target's `[min, max]` range.
+    NumericCoercionOverflow {
+        /// Target type name (e.g. `"byte"`, `"integer"`, `"long"`).
+        target: String,
+        /// String representation of the overflowing value, included
+        /// for diagnostics.
+        value: String,
+    },
+    /// A numeric coercion would lose precision in a context where
+    /// precision loss is not acceptable.
+    ///
+    /// **Not currently emitted by `Document::as_*` accessors.** Per the
+    /// SEP "Number coercion" rules, precision loss is silently ignored
+    /// on the standard Document accessor path. This variant is
+    /// reserved for callers (e.g. strict deserializers, customer code
+    /// using a custom accessor) that choose to enforce lossless
+    /// coercion.
+    NumericCoercionLossy {
+        /// Target type name.
+        target: String,
+        /// String representation of the value that would lose precision.
+        value: String,
+    },
+    /// Failed to decode a blob from its wire-format representation —
+    /// for example, invalid base64 in a JSON payload.
+    ///
+    /// **Not currently emitted.** In-tree codecs surface blob-decode
+    /// failures as [`InvalidInput`](Self::InvalidInput). This variant is
+    /// reserved for codecs that want to distinguish blob-decode failures as a
+    /// separate category.
+    BlobDecodeFailed {
+        /// Description of the decode failure.
+        message: String,
+    },
+    /// Failed to parse a timestamp from its wire-format representation —
+    /// for example, a malformed RFC-3339 string or an out-of-range
+    /// epoch-seconds value.
+    ///
+    /// **Not currently emitted.** In-tree codecs surface timestamp-parse
+    /// failures as [`InvalidInput`](Self::InvalidInput). This variant is
+    /// reserved for codecs that want to distinguish timestamp-parse failures
+    /// as a separate category.
+    TimestampParseFailed {
+        /// Description of the parse failure.
+        message: String,
+    },
     /// Catch-all for errors not covered by other variants.
     Custom {
         /// Explanatory message.
@@ -63,6 +119,19 @@ impl fmt::Display for SerdeError {
                 write!(f, "unsupported operation: {message}")
             }
             SerdeError::WriteFailed { message } => write!(f, "write failed: {message}"),
+            SerdeError::NumericCoercionOverflow { target, value } => {
+                write!(f, "numeric value {value} out of range for {target}")
+            }
+            SerdeError::NumericCoercionLossy { target, value } => {
+                write!(
+                    f,
+                    "numeric value {value} cannot be coerced to {target} without precision loss"
+                )
+            }
+            SerdeError::BlobDecodeFailed { message } => write!(f, "blob decode failed: {message}"),
+            SerdeError::TimestampParseFailed { message } => {
+                write!(f, "timestamp parse failed: {message}")
+            }
             SerdeError::Custom { message } => f.write_str(message),
         }
     }
@@ -75,6 +144,36 @@ impl SerdeError {
     pub fn custom(message: impl Into<String>) -> Self {
         SerdeError::Custom {
             message: message.into(),
+        }
+    }
+}
+
+/// Lift a [`DocumentError`](aws_smithy_types::DocumentError) coming
+/// out of the [`Document`](aws_smithy_types::Document)'s
+/// numeric / coercion accessors into the schema crate's broader
+/// [`SerdeError`].
+///
+/// The variant shapes line up one-to-one — `DocumentError` is a
+/// strict subset (Document-shaped failures only); `SerdeError` adds
+/// shape-serde concerns like missing/unknown members and write
+/// failures that are out of scope for the types crate.
+impl From<aws_smithy_types::DocumentError> for SerdeError {
+    fn from(err: aws_smithy_types::DocumentError) -> Self {
+        use aws_smithy_types::DocumentError as DE;
+        match err {
+            DE::TypeMismatch { message } => SerdeError::TypeMismatch { message },
+            DE::NumericCoercionOverflow { target, value } => {
+                SerdeError::NumericCoercionOverflow { target, value }
+            }
+            DE::InvalidInput { message } => SerdeError::InvalidInput { message },
+            DE::UnsupportedOperation { message } => SerdeError::UnsupportedOperation { message },
+            DE::Custom { message } => SerdeError::Custom { message },
+            // `DocumentError` is `#[non_exhaustive]`. Future variants
+            // surface as `Custom` so callers always see a reasonable
+            // mapping.
+            other => SerdeError::Custom {
+                message: format!("{other}"),
+            },
         }
     }
 }
