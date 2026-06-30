@@ -810,8 +810,13 @@ dependencies = [
 name = "aws-smithy-query"
 version = "0.61.1"
 dependencies = [
+ "aws-smithy-runtime-api 1.13.0",
+ "aws-smithy-schema 0.2.0",
  "aws-smithy-types 1.6.0",
+ "aws-smithy-xml 0.61.1",
+ "criterion",
  "urlencoding",
+ "xmlparser",
 ]
 
 [[package]]

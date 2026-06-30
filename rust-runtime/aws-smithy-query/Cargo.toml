@@ -9,8 +9,19 @@ repository = "https://github.com/smithy-lang/smithy-rs"
 rust-version = "1.94.1"
 
 [dependencies]
+aws-smithy-runtime-api = { path = "../aws-smithy-runtime-api", features = ["client", "http-1x"] }
+aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
+aws-smithy-xml = { path = "../aws-smithy-xml" }
 urlencoding = "2.1"
+xmlparser = "0.13.5"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "serde"
+harness = false
 
 [package.metadata.docs.rs]
 all-features = true
