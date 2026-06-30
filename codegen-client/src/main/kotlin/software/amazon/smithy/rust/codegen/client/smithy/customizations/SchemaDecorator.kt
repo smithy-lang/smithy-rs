@@ -7,6 +7,7 @@ package software.amazon.smithy.rust.codegen.client.smithy.customizations
 
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_0Trait
 import software.amazon.smithy.aws.traits.protocols.AwsJson1_1Trait
+import software.amazon.smithy.aws.traits.protocols.AwsQueryCompatibleTrait
 import software.amazon.smithy.aws.traits.protocols.RestJson1Trait
 import software.amazon.smithy.aws.traits.protocols.RestXmlTrait
 import software.amazon.smithy.model.shapes.ShapeId
@@ -27,6 +28,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.SchemaStructur
 import software.amazon.smithy.rust.codegen.core.smithy.generators.StructureCustomization
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
+import software.amazon.smithy.rust.codegen.core.util.hasTrait
 
 /**
  * Determines whether schema-based serialization/deserialization should be used
@@ -52,7 +54,12 @@ object SchemaSerdeAllowlist {
      * `RestJson1Trait.ID`, `AwsJson1_0Trait.ID`, or `AwsJson1_1Trait.ID`.
      */
     private val allowedProtocols: Set<ShapeId> =
-        emptySet()
+        setOf(
+            RestJson1Trait.ID,
+            AwsJson1_0Trait.ID,
+            AwsJson1_1Trait.ID,
+            Rpcv2CborTrait.ID,
+        )
 
     /** Individual services allowed regardless of protocol. */
     private val allowedServices: Set<String> = setOf<String>()
@@ -124,6 +131,8 @@ private class SchemaProtocolCustomization(
                         when {
                             protocol == RestJson1Trait.ID ->
                                 smithyJson.resolve("protocol::aws_rest_json_1::AwsRestJsonProtocol") to "new()"
+                            protocol == AwsJson1_0Trait.ID && codegenContext.serviceShape.hasTrait<AwsQueryCompatibleTrait>() ->
+                                smithyJson.resolve("protocol::aws_query_compatible::AwsQueryCompatibleProtocol") to "new(${serviceShapeName.dq()})"
                             protocol == AwsJson1_0Trait.ID ->
                                 smithyJson.resolve("protocol::aws_json_rpc::AwsJsonRpcProtocol") to "aws_json_1_0(${serviceShapeName.dq()})"
                             protocol == AwsJson1_1Trait.ID ->
