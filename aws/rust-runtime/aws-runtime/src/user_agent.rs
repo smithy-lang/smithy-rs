@@ -552,6 +552,19 @@ impl FrameworkMetadata {
     }
 }
 
+impl From<aws_types::sdk_ua_metadata::FrameworkMetadata> for FrameworkMetadata {
+    fn from(value: aws_types::sdk_ua_metadata::FrameworkMetadata) -> Self {
+        // The public `aws-types` type validates name/version against the identical charset on
+        // construction (see `aws_types::sdk_ua_metadata::FrameworkMetadata`), so no re-validation
+        // (and thus no fallible path) is needed here.
+        Self {
+            name: value.name().to_owned().into(),
+            version: value.version().map(|v| v.to_owned().into()),
+            additional: Default::default(),
+        }
+    }
+}
+
 impl fmt::Display for FrameworkMetadata {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // framework-metadata = "lib/" name ["/" version] *(RWS additional-metadata)

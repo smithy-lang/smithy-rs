@@ -180,24 +180,10 @@ impl Intercept for UserAgentInterceptor {
                 }
                 continue;
             }
-            // The aws-types type is already validated, so this conversion should not fail. Skip
-            // and warn defensively if it ever does, rather than failing the request.
-            match crate::user_agent::FrameworkMetadata::new(
-                md.name().to_owned(),
-                md.version().map(|v| Cow::Owned(v.to_owned())),
-            ) {
-                Ok(internal) => {
-                    ua.add_framework_metadata(internal);
-                    kept += 1;
-                }
-                Err(err) => {
-                    tracing::warn!(
-                        err = %err,
-                        "skipping invalid framework metadata entry; this is unexpected since it \
-                         was validated when constructed"
-                    );
-                }
-            }
+            // The public `aws-types` type was validated on construction, so the conversion into
+            // the internal user-agent type is infallible (see the `From` impl in `user_agent`).
+            ua.add_framework_metadata(md.clone().into());
+            kept += 1;
         }
 
         cfg.interceptor_state().store_put(ua);
