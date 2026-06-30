@@ -17,8 +17,8 @@ enum CollectionContext {
     Map {
         index: usize,
         expecting_key: bool,
-        key_name: String,
-        value_name: String,
+        key_name: &'static str,
+        value_name: &'static str,
     },
 }
 
@@ -67,11 +67,11 @@ impl QueryShapeSerializer {
     /// nested member schemas emitted by codegen's `emitAggregateMemberChain`
     /// (list member, map key, map value), so no protocol-specific schema
     /// fields are required.
-    fn collection_member_name(member: Option<&Schema>, default: &str) -> String {
+    fn collection_member_name(member: Option<&Schema>, default: &'static str) -> &'static str {
         member
-            .and_then(|m| m.xml_name().map(|n| n.value().to_string()))
-            .or_else(|| member.and_then(|m| m.member_name().map(|s| s.to_string())))
-            .unwrap_or_else(|| default.to_string())
+            .and_then(|m| m.xml_name().map(|n| n.value()))
+            .or_else(|| member.and_then(|m| m.member_name()))
+            .unwrap_or(default)
     }
 
     fn push_prefix(&mut self, segment: &str) {
