@@ -60,7 +60,6 @@ pub use connection::{
 pub use partition::{
     CrossPartitionPolicy, DriverSpawner, Partition, PartitionId, TokioDriverSpawner,
 };
-pub use admission::ConnectRateConfig;
 pub use stats::{AuthorityStats, PartitionStats};
 
 pub(crate) use stats::{ConnectionCounters, StatsIndex};
@@ -157,9 +156,6 @@ pub(crate) struct PoolConfig {
 
     /// Optional listener for connection lifecycle events.
     pub(crate) connection_event_listener: Option<Arc<dyn connection::ConnectionEventListener>>,
-
-    /// Connection-establishment rate-limiter mode.
-    pub(crate) connect_rate: ConnectRateConfig,
 }
 
 /// The connection pool's configuration surface.
@@ -490,10 +486,6 @@ impl PeerBorrowHandle {
 pub(crate) struct SharedPoolState {
     pub(crate) hooks: handshake::PoolHooks,
     pub(crate) global_sem: Option<Arc<Semaphore>>,
-    /// Pool-level governor of new-connection establishment rate. Shared by all
-    /// partitions; each partition's connect stack holds a clone. Defaults to
-    /// unbounded (no pacing).
-    pub(crate) connect_rate: Arc<admission::ConnectRateController>,
     max_connections_per_host: Option<usize>,
     per_host_sems: Mutex<HashMap<PoolKey, Arc<Semaphore>>>,
     stats_index: Arc<StatsIndex>,
@@ -512,14 +504,6 @@ impl SharedPoolState {
         Self {
             hooks: handshake::PoolHooks::new(config.connection_event_listener.clone()),
             global_sem: config.max_connections.map(|n| Arc::new(Semaphore::new(n))),
-            // TEMPORARILY DISABLED: the connect rate gate is forced unbounded
-            // (pure pass-through, no pacing) regardless of `config.connect_rate`
-            // while we get the connection cap correct. The cap is required pool
-            // behavior; rate limiting is exploratory and was the source of the
-            // establishing explosion. Restore `config.connect_rate.build()` when
-            // re-enabling the rate gate.
-            //   was: Arc::new(config.connect_rate.build()),
-            connect_rate: Arc::new(admission::ConnectRateController::unbounded()),
             max_connections_per_host: config.max_connections_per_host,
             per_host_sems: Mutex::new(HashMap::new()),
             stats_index: Arc::new(StatsIndex::default()),
@@ -649,12 +633,14 @@ where
 
                     let key = PoolKey::from_uri(uri).expect("pool entry URI has scheme+authority");
                     let per_host_sem = shared.per_host_sem(&key);
+                    // Layer order (outer → inner):
+                    //   ConnectionLimit   — hard cap, reserves a permit
+                    //   ConnectAccounting — births the EstablishingGuard (gauge++)
+                    //   ConnectTimeout    — bounds the connector call
+                    //   connector         — TCP + TLS
                     let limited = admission::ConnectionLimit::new(
                         admission::ConnectAccounting::new(
-                            admission::ConnectRateLimit::new(
-                                admission::ConnectTimeout::new(connector.clone()),
-                                shared.connect_rate.clone(),
-                            ),
+                            admission::ConnectTimeout::new(connector.clone()),
                             counters.clone(),
                         ),
                         shared.global_sem.clone(),
@@ -1998,3 +1984,4 @@ mod tests {
         assert_eq!(index.established_for(&authority, partition_id), 0);
     }
 }
+

@@ -13,17 +13,15 @@
 //! - [`ConnectAccounting`] — creates an [`EstablishingGuard`] before the
 //!   connector runs, so the `establishing` counter reflects the commitment
 //!   point.
-//! - [`ConnectRateLimit`] — paces new-connection establishment to measured
-//!   establishment capacity.
 //! - [`ConnectTimeout`] — bounds the TCP + TLS connector call with the
 //!   per-request connect timeout.
 //!
-//! Stack order is cap → accounting → rate → timeout → connector. Each layer
-//! attaches its contribution to [`EstablishedConnection`] on the unwind: the
-//! connector produces the IO, accounting the [`EstablishingGuard`], and the
-//! cap layer the [`ConnectionPermit`]. Because the cap, accounting, and rate
-//! layers wrap the timeout layer, time spent acquiring a permit or waiting to
-//! be paced is not charged against the connect-timeout budget.
+//! Stack order is cap → accounting → timeout → connector. Each layer attaches
+//! its contribution to [`EstablishedConnection`] on the unwind: the connector
+//! produces the IO, accounting the [`EstablishingGuard`], and the cap layer
+//! the [`ConnectionPermit`]. Because the cap and accounting layers wrap the
+//! timeout layer, time spent acquiring a permit is not charged against the
+//! connect-timeout budget.
 //!
 //! [`EstablishedConnection`]: super::connection::EstablishedConnection
 //! [`EstablishingGuard`]: super::stats::EstablishingGuard
@@ -31,11 +29,8 @@
 
 mod accounting;
 mod limit;
-mod rate;
 mod timeout;
 
 pub(crate) use accounting::ConnectAccounting;
 pub(crate) use limit::ConnectionLimit;
-pub use rate::ConnectRateConfig;
-pub(crate) use rate::{ConnectRateController, ConnectRateLimit};
 pub(crate) use timeout::ConnectTimeout;
