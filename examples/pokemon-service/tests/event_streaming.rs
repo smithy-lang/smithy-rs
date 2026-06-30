@@ -6,12 +6,14 @@
 pub mod common;
 
 use async_stream::stream;
-use rand::Rng;
-
 use pokemon_service_client::types::{
     error::{AttemptCapturingPokemonEventError, MasterBallUnsuccessful},
     AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload,
 };
+use rand::Rng;
+use serial_test::serial;
+use std::time::Duration;
+use tokio::time::sleep;
 
 fn get_pokemon_to_capture() -> String {
     let pokemons = vec!["Charizard", "Pikachu", "Regieleki"];
@@ -33,6 +35,36 @@ fn get_pokeball() -> String {
 }
 
 #[tokio::test]
+#[serial]
+async fn event_stream_empty_stream() {
+    let server = common::run_server().await;
+    let client = common::client(server.port);
+    let stream = stream! {
+        sleep(Duration::from_secs(10000)).await;
+        yield Ok(AttemptCapturingPokemonEvent::Event(
+            CapturingEvent::builder()
+            .payload(CapturingPayload::builder()
+                .name("Pikachu")
+                .pokeball("Master Ball")
+                .build())
+            .build()
+        ));
+    };
+    let _output = tokio::time::timeout(
+        Duration::from_secs(1),
+        client
+            .capture_pokemon()
+            .region("Kanto")
+            .events(stream.into())
+            .send(),
+    )
+    .await
+    .expect("timed out")
+    .expect("error from service");
+}
+
+#[tokio::test]
+#[serial]
 async fn event_stream_test() {
     let server = common::run_server().await;
     let client = common::client(server.port);

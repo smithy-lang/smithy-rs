@@ -122,6 +122,8 @@ class AwsJsonHttpBindingResolver(
             else -> false
         }
     }
+
+    override fun isRpcProtocol() = true
 }
 
 /**
