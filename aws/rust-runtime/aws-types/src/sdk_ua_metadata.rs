@@ -80,6 +80,16 @@ impl FrameworkMetadata {
     }
 }
 
+impl fmt::Display for FrameworkMetadata {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // framework-metadata = "lib/" name ["/" version]
+        match &self.version {
+            Some(version) => write!(f, "lib/{}/{}", self.name, version),
+            None => write!(f, "lib/{}", self.name),
+        }
+    }
+}
+
 /// Error for when framework metadata doesn't meet character requirements.
 ///
 /// See [`FrameworkMetadata`] for details on these requirements.

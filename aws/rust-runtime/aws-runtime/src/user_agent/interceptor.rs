@@ -180,9 +180,8 @@ impl Intercept for UserAgentInterceptor {
                 }
                 continue;
             }
-            // The public `aws-types` type was validated on construction, so the conversion into
-            // the internal user-agent type is infallible (see the `From` impl in `user_agent`).
-            ua.add_framework_metadata(md.clone().into());
+            // `md` is already the canonical `FrameworkMetadata` type, so no conversion is needed.
+            ua.add_framework_metadata(md.clone());
             kept += 1;
         }
 
