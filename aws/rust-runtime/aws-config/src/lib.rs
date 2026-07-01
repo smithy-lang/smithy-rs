@@ -922,9 +922,19 @@ mod loader {
             };
 
             let profiles = conf.profile().await;
+            let ignore_configured_endpoint_urls = if self.endpoint_url.is_some() {
+                // If an endpoint URL is set programmatically, the ignore flag is irrelevant
+                // because programmatic config always takes precedence.
+                false
+            } else {
+                ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                    .await
+                    .unwrap_or_default()
+            };
             let service_config = EnvServiceConfig {
                 env: conf.env(),
                 env_config_sections: profiles.cloned().unwrap_or_default(),
+                ignore_configured_endpoint_urls,
             };
             let mut builder = SdkConfig::builder()
                 .region(region.clone())
@@ -947,26 +957,18 @@ mod loader {
             let endpoint_url = if self.endpoint_url.is_some() {
                 builder.insert_origin("endpoint_url", Origin::shared_config());
                 self.endpoint_url
+            } else if ignore_configured_endpoint_urls {
+                // If yes, log a trace and return `None`.
+                tracing::trace!(
+                    "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                    NOTE: Endpoint URLs set programmatically WILL still be respected"
+                );
+                None
             } else {
-                // Otherwise, check to see if we should ignore EP URLs set in the environment.
-                let ignore_configured_endpoint_urls =
-                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
-                        .await
-                        .unwrap_or_default();
-
-                if ignore_configured_endpoint_urls {
-                    // If yes, log a trace and return `None`.
-                    tracing::trace!(
-                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
-                        NOTE: Endpoint URLs set programmatically WILL still be respected"
-                    );
-                    None
-                } else {
-                    // Otherwise, attempt to resolve one.
-                    let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
-                    builder.insert_origin("endpoint_url", origin);
-                    v
-                }
+                // Otherwise, attempt to resolve one.
+                let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
+                builder.insert_origin("endpoint_url", origin);
+                v
             };
 
             let token_provider = match self.token_provider {
@@ -1066,14 +1068,20 @@ mod loader {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     impl ConfigLoader {
-        pub(crate) fn env(mut self, env: Env) -> Self {
+        /// Override the environment variables used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn env(mut self, env: Env) -> Self {
             self.env = Some(env);
             self
         }
 
-        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+        /// Override the filesystem used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn fs(mut self, fs: Fs) -> Self {
             self.fs = Some(fs);
             self
         }
