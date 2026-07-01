@@ -14,7 +14,6 @@ aws-smithy-schema = { path = "../aws-smithy-schema" }
 aws-smithy-types = { path = "../aws-smithy-types", features = ["http-body-1-x"] }
 aws-smithy-xml = { path = "../aws-smithy-xml" }
 urlencoding = "2.1"
-xmlparser = "0.13.5"
 
 [dev-dependencies]
 criterion = "0.5.1"
