@@ -12,6 +12,7 @@ use aws_smithy_schema::serde::{
 use aws_smithy_schema::{shape_id, Schema, ShapeId};
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_xml::codec::find_depth2_element_slice_by;
 
 use crate::codec::serializer::QueryShapeSerializer;
 
@@ -99,7 +100,7 @@ impl ClientProtocolInner for AwsQueryProtocol {
         // can treat it as the output struct's root wrapper element (the merged
         // `XmlDeserializer::read_struct` reads members from the root element's
         // children).
-        let inner = strip_aws_query_envelope(body_str)?;
+        let inner = strip_aws_query_envelope(body_str);
 
         // AWS Query deserializes responses as XML with a default timestamp
         // format of `date-time` (per the protocol spec). `XmlCodec` is
@@ -140,68 +141,22 @@ impl ClientProtocolInner for AwsQueryProtocol {
 /// ```
 /// We locate the depth-2 element whose local name ends with `Result` or equals
 /// `Error` and return its full `<El>...</El>` slice so it can be handed to an
-/// `XmlDeserializer` as the output struct's root wrapper element. If no such
-/// element is found, we fall back to the document's root element (inclusive),
-/// or an empty string when the body contains no elements at all.
-fn strip_aws_query_envelope(xml: &str) -> Result<&str, SerdeError> {
-    use xmlparser::{ElementEnd, Token, Tokenizer};
-    let mut depth: u32 = 0;
-    let mut target_start: Option<usize> = None;
-    let mut root_start: Option<usize> = None;
-
-    for token in Tokenizer::from(xml) {
-        let token =
-            token.map_err(|e| SerdeError::custom(format!("malformed XML response: {e}")))?;
-        match token {
-            Token::ElementStart { local, span, .. } => {
-                depth += 1;
-                if depth == 1 {
-                    root_start.get_or_insert(span.start());
-                } else if depth == 2 && target_start.is_none() {
-                    let name = local.as_str();
-                    // The awsQuery response envelope nests exactly one
-                    // result/error element directly under the root:
-                    // `<XResponse><XResult>…` or `<ErrorResponse><Error>…`. So a
-                    // depth-2 element whose local name ends with `Result` (or
-                    // equals `Error`) uniquely identifies the payload wrapper;
-                    // deeper elements are its members.
-                    if name.ends_with("Result") || name == "Error" {
-                        target_start = Some(span.start());
-                    }
-                }
-            }
-            Token::ElementEnd { end, span } => match end {
-                ElementEnd::Close(_, _) => {
-                    if depth == 2 {
-                        if let Some(start) = target_start {
-                            // Closing tag of the target element — return the
-                            // full `<El>...</El>` slice (span.end() is just past
-                            // the closing `>`).
-                            return Ok(&xml[start..span.end()]);
-                        }
-                    }
-                    depth = depth.saturating_sub(1);
-                }
-                ElementEnd::Empty => {
-                    if depth == 2 {
-                        if let Some(start) = target_start {
-                            // Self-closing target element, e.g. `<FooResult/>`
-                            // (span.end() is just past `/>`).
-                            return Ok(&xml[start..span.end()]);
-                        }
-                    }
-                    depth = depth.saturating_sub(1);
-                }
-                ElementEnd::Open => {}
-            },
-            _ => {}
-        }
+/// `XmlDeserializer` as the output struct's root wrapper element.
+///
+/// Delegates the depth-2 lookup to `aws_smithy_xml`'s shared
+/// [`find_depth2_element_slice_by`] (the same utility the REST XML error path
+/// uses). If no such element is found — or the body isn't valid XML — we fall
+/// back to the whole body and let the downstream `XmlDeserializer` surface any
+/// error, mirroring the REST XML fallback.
+fn strip_aws_query_envelope(xml: &str) -> &str {
+    match find_depth2_element_slice_by(xml.as_bytes(), |name| {
+        name.ends_with("Result") || name == "Error"
+    }) {
+        // The returned slice is a sub-slice of `xml` bounded by ASCII `<`/`>`,
+        // so it is always valid UTF-8.
+        Some(slice) => std::str::from_utf8(slice).unwrap_or(xml),
+        None => xml,
     }
-
-    Ok(match root_start {
-        Some(start) => &xml[start..],
-        None => "",
-    })
 }
 
 #[cfg(test)]
@@ -307,14 +262,14 @@ mod tests {
         // A self-closing result element (empty output) must still be returned
         // inclusive of its tags, not fall through to the whole-document root.
         let xml = "<GetUserResponse><GetUserResult/><ResponseMetadata><RequestId>r</RequestId></ResponseMetadata></GetUserResponse>";
-        assert_eq!(strip_aws_query_envelope(xml).unwrap(), "<GetUserResult/>");
+        assert_eq!(strip_aws_query_envelope(xml), "<GetUserResult/>");
     }
 
     #[test]
     fn strip_envelope_returns_error_element() {
         let xml = "<ErrorResponse><Error><Code>Boom</Code></Error></ErrorResponse>";
         assert_eq!(
-            strip_aws_query_envelope(xml).unwrap(),
+            strip_aws_query_envelope(xml),
             "<Error><Code>Boom</Code></Error>"
         );
     }
