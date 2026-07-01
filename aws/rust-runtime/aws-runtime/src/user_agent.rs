@@ -636,7 +636,7 @@ mod test {
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 lib/other"
         );
     }
 
