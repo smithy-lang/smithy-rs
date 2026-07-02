@@ -346,7 +346,7 @@ max_attempts = potato
         assert!(matches!(
             err,
             RetryConfigError {
-                kind: RetryConfigErrorKind::MaxAttemptsMustNotBeZero { .. }
+                kind: RetryConfigErrorKind::MaxAttemptsMustNotBeZero
             }
         ));
     }
