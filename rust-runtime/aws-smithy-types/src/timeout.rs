@@ -46,10 +46,8 @@ impl<T> CanDisable<T> {
     }
 }
 
-// Keep this concrete (not a blanket `impl<T> From<T>`): a blanket impl can clash with
-// `From` impls from other crates and break the build (E0119) on a dependency bump.
-impl From<Duration> for CanDisable<Duration> {
-    fn from(value: Duration) -> Self {
+impl<T> From<T> for CanDisable<T> {
+    fn from(value: T) -> Self {
         Self::Set(value)
     }
 }
