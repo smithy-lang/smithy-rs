@@ -1734,4 +1734,61 @@ mod tests {
             "<items><member><entry><Attr>k1</Attr><Set>v1</Set></entry></member></items>"
         );
     }
+
+    // --- Required value-type members are serialized even when equal to the
+    // zero/default (bool false). Mirrors the generated non-optional branch
+    // (unconditional write, never a skip-if-default). Shapes the ELB
+    // `LoadBalancerAttributes { ConnectionDraining { Enabled = false } }` case.
+    static CD_ENABLED_X: Schema<'static> = Schema::new_member(
+        shape_id!("test", "ConnectionDraining$enabled"),
+        ShapeType::Boolean,
+        "enabled",
+        0,
+    );
+    static LBA_CD_X: Schema<'static> = Schema::new_member(
+        shape_id!("test", "LoadBalancerAttributes$connectionDraining"),
+        ShapeType::Structure,
+        "connectionDraining",
+        0,
+    );
+    static LBA_SCHEMA_X: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "LoadBalancerAttributes"),
+        ShapeType::Structure,
+        &[&LBA_CD_X],
+    );
+
+    struct ConnectionDrainingX {
+        enabled: bool,
+    }
+    impl SerializableStruct for ConnectionDrainingX {
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            let val = &self.enabled;
+            ser.write_boolean(&CD_ENABLED_X, *val)
+        }
+    }
+    struct LoadBalancerAttributesX {
+        connection_draining: ConnectionDrainingX,
+    }
+    impl SerializableStruct for LoadBalancerAttributesX {
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            ser.write_struct(&LBA_CD_X, &self.connection_draining)
+        }
+    }
+
+    #[test]
+    fn required_value_type_false_bool_is_serialized() {
+        let out = serialize(|ser| {
+            ser.write_struct(
+                &LBA_SCHEMA_X,
+                &LoadBalancerAttributesX {
+                    connection_draining: ConnectionDrainingX { enabled: false },
+                },
+            )
+        });
+        assert_eq!(
+            out,
+            "<LoadBalancerAttributes><connectionDraining><enabled>false</enabled></connectionDraining></LoadBalancerAttributes>",
+            "the required-default value-type member must be present with false, not dropped"
+        );
+    }
 }

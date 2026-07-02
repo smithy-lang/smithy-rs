@@ -1209,4 +1209,168 @@ mod tests {
         );
         assert!(output.ends_with('"'), "expected quoted form, got {output}");
     }
+
+    // --- Required value-type members are serialized even when the value equals
+    // the type's zero/default (e.g. bool `false`). This mirrors the generated
+    // non-optional branch `{ let val = &self.x; ser.write_boolean(..) }` (always
+    // written, never a skip-if-default), and shapes the ELB
+    // `LoadBalancerAttributes { ConnectionDraining { Enabled = false } }` case:
+    // the nested structure member is present and `enabled=false` appears.
+
+    static CD_ENABLED: Schema = Schema::new_member(
+        aws_smithy_schema::shape_id!("test", "ConnectionDraining$enabled"),
+        ShapeType::Boolean,
+        "enabled",
+        0,
+    );
+    static LBA_CD: Schema = Schema::new_member(
+        aws_smithy_schema::shape_id!("test", "LoadBalancerAttributes$connectionDraining"),
+        ShapeType::Structure,
+        "connectionDraining",
+        0,
+    );
+    static LBA_SCHEMA: Schema = Schema::new_struct(
+        aws_smithy_schema::shape_id!("test", "LoadBalancerAttributes"),
+        ShapeType::Structure,
+        &[&LBA_CD],
+    );
+
+    struct ConnectionDraining {
+        enabled: bool,
+    }
+    impl SerializableStruct for ConnectionDraining {
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            // Non-optional value-type member: unconditional write (mirrors codegen).
+            let val = &self.enabled;
+            ser.write_boolean(&CD_ENABLED, *val)
+        }
+    }
+    struct LoadBalancerAttributes {
+        connection_draining: ConnectionDraining,
+    }
+    impl SerializableStruct for LoadBalancerAttributes {
+        fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            ser.write_struct(&LBA_CD, &self.connection_draining)
+        }
+    }
+
+    #[test]
+    fn required_value_type_false_bool_is_serialized() {
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(
+            &LBA_SCHEMA,
+            &LoadBalancerAttributes {
+                connection_draining: ConnectionDraining { enabled: false },
+            },
+        )
+        .unwrap();
+        let out = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(
+            out, r#"{"connectionDraining":{"enabled":false}}"#,
+            "the required-default value-type member must be present with false, not dropped"
+        );
+    }
+
+    // Tagged-union serialization parity: a union serializes as a single-entry
+    // object keyed by the active variant name (`{"variantName": value}`), the
+    // same logical shape the CBOR serializer produces. Covers a scalar variant,
+    // a struct variant, and two union members in one input.
+    #[test]
+    fn tagged_union_serializes_as_single_variant_key() {
+        static EP_ARN: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Endpoint"),
+            ShapeType::String,
+            "arn",
+            0,
+        );
+        static EP_CONFIG: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "Endpoint"),
+            ShapeType::Structure,
+            "config",
+            1,
+        );
+        static ENDPOINT_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "Endpoint"),
+            ShapeType::Union,
+            &[&EP_ARN, &EP_CONFIG],
+        );
+        static EC_NAME: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "EndpointConfig"),
+            ShapeType::String,
+            "name",
+            0,
+        );
+        static CC_ATTACH: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Union,
+            "attachPoint",
+            0,
+        );
+        static CC_REMOTE: Schema = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Union,
+            "remoteAccount",
+            1,
+        );
+        static INPUT_SCHEMA: Schema = Schema::new_struct(
+            aws_smithy_schema::shape_id!("test", "CreateConnectionInput"),
+            ShapeType::Structure,
+            &[&CC_ATTACH, &CC_REMOTE],
+        );
+
+        struct EndpointConfig {
+            name: &'static str,
+        }
+        impl SerializableStruct for EndpointConfig {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(&EC_NAME, self.name)
+            }
+        }
+        enum Endpoint {
+            Arn(&'static str),
+            Config(EndpointConfig),
+        }
+        impl SerializableStruct for Endpoint {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                match self {
+                    Endpoint::Arn(v) => s.write_string(&EP_ARN, v),
+                    Endpoint::Config(v) => s.write_struct(&EP_CONFIG, v),
+                }
+            }
+        }
+        struct Input {
+            attach: Endpoint,
+            remote: Endpoint,
+        }
+        impl SerializableStruct for Input {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_struct(&CC_ATTACH, &self.attach)?;
+                s.write_struct(&CC_REMOTE, &self.remote)
+            }
+        }
+
+        // Scalar variant at top level.
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(&ENDPOINT_SCHEMA, &Endpoint::Arn("dxcon-abc"))
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(ser.finish()).unwrap(),
+            r#"{"arn":"dxcon-abc"}"#
+        );
+
+        // Two union members: scalar + struct variant.
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(
+            &INPUT_SCHEMA,
+            &Input {
+                attach: Endpoint::Arn("ap"),
+                remote: Endpoint::Config(EndpointConfig { name: "ra" }),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            String::from_utf8(ser.finish()).unwrap(),
+            r#"{"attachPoint":{"arn":"ap"},"remoteAccount":{"config":{"name":"ra"}}}"#
+        );
+    }
 }

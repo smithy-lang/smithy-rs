@@ -2929,3 +2929,238 @@ mod tests {
         }
     }
 }
+
+/// Deserialization tests for unions, focused on three cases that are easy to
+/// get wrong in a schema-based deserializer:
+///
+/// 1. a union member whose value is **itself a union** (union-in-union),
+/// 2. an explicitly-null union member (especially the first one), and
+/// 3. an empty / all-null union object.
+///
+/// These mirror the generated union deserializer exactly: a `read_struct`
+/// over a `ShapeType::Union` schema, a consumer that dispatches on
+/// `member_index()`, and `ok_or_else(...)` when no variant was set. A
+/// union-valued member recurses into the inner union's own `deserialize`,
+/// which performs its own self-contained `read_struct`. Because
+/// `JsonDeserializer::read_struct` consumes its own object braces and never
+/// relies on shared "resume" state, the recursion is safe and a null / empty
+/// union can neither panic nor corrupt the surrounding stream.
+#[cfg(test)]
+mod union_deserialization_tests {
+    use super::*;
+    use aws_smithy_schema::{shape_id, ShapeType};
+
+    // --- union-in-union model ---
+    //
+    // Mirrors the real `TargetConfiguration -> mcp -> McpTargetConfiguration`
+    // shape: an outer union whose `mcp` member targets an inner union whose
+    // `lambda` member is a string.
+
+    static INNER_LAMBDA: Schema<'static> = Schema::new_member(
+        shape_id!("test", "InnerUnion"),
+        ShapeType::String,
+        "lambda",
+        0,
+    );
+    static INNER_UNION_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "InnerUnion"),
+        ShapeType::Union,
+        &[&INNER_LAMBDA],
+    );
+
+    static OUTER_MCP: Schema<'static> =
+        Schema::new_member(shape_id!("test", "OuterUnion"), ShapeType::Union, "mcp", 0);
+    static OUTER_UNION_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "OuterUnion"),
+        ShapeType::Union,
+        &[&OUTER_MCP],
+    );
+
+    #[derive(Debug, PartialEq)]
+    enum InnerUnion {
+        Lambda(String),
+        Unknown,
+    }
+
+    #[derive(Debug, PartialEq)]
+    enum OuterUnion {
+        Mcp(InnerUnion),
+        Unknown,
+    }
+
+    fn deserialize_inner(deser: &mut dyn ShapeDeserializer) -> Result<InnerUnion, SerdeError> {
+        let mut result: Option<InnerUnion> = None;
+        deser.read_struct(&INNER_UNION_SCHEMA, &mut |member, d| {
+            result = Some(match member.member_index() {
+                Some(0) => InnerUnion::Lambda(d.read_string(member)?),
+                _ => InnerUnion::Unknown,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    fn deserialize_outer(deser: &mut dyn ShapeDeserializer) -> Result<OuterUnion, SerdeError> {
+        let mut result: Option<OuterUnion> = None;
+        deser.read_struct(&OUTER_UNION_SCHEMA, &mut |member, d| {
+            result = Some(match member.member_index() {
+                // The union-valued member recurses into the inner union's own
+                // deserialize, which does its own self-contained read_struct.
+                Some(0) => OuterUnion::Mcp(deserialize_inner(d)?),
+                _ => OuterUnion::Unknown,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    // --- explicit-null / empty / all-null union model ---
+
+    static CHOICE_A: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Choice"), ShapeType::String, "a", 0);
+    static CHOICE_B: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Choice"), ShapeType::String, "b", 1);
+    static CHOICE_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Choice"),
+        ShapeType::Union,
+        &[&CHOICE_A, &CHOICE_B],
+    );
+
+    #[derive(Debug, PartialEq)]
+    enum Choice {
+        A(String),
+        B(String),
+        Unknown,
+    }
+
+    fn deserialize_choice(deser: &mut dyn ShapeDeserializer) -> Result<Choice, SerdeError> {
+        let mut result: Option<Choice> = None;
+        deser.read_struct(&CHOICE_SCHEMA, &mut |member, d| {
+            result = Some(match member.member_index() {
+                Some(0) => Choice::A(d.read_string(member)?),
+                Some(1) => Choice::B(d.read_string(member)?),
+                _ => Choice::Unknown,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    // A struct that holds a union followed by a plain string member. Used to
+    // prove that reading the union does not corrupt the stream for the
+    // trailing sibling.
+    static HOLDER_CHOICE: Schema<'static> =
+        Schema::new_member(shape_id!("test", "Holder"), ShapeType::Union, "choice", 0);
+    static HOLDER_TRAILING: Schema<'static> = Schema::new_member(
+        shape_id!("test", "Holder"),
+        ShapeType::String,
+        "trailing",
+        1,
+    );
+    static HOLDER_SCHEMA: Schema<'static> = Schema::new_struct(
+        shape_id!("test", "Holder"),
+        ShapeType::Structure,
+        &[&HOLDER_CHOICE, &HOLDER_TRAILING],
+    );
+
+    fn deser(input: &[u8]) -> JsonDeserializer<'_> {
+        JsonDeserializer::new(input, Arc::new(JsonCodecSettings::default()))
+    }
+
+    #[test]
+    fn union_member_targeting_a_union_deserializes_without_panic() {
+        // The exact shape class that crashed the Go SDK: a union member whose
+        // value is itself a union.
+        let mut d = deser(br#"{"mcp":{"lambda":"arn:aws:lambda:fn"}}"#);
+        let got = deserialize_outer(&mut d).expect("union-in-union must deserialize");
+        assert_eq!(
+            got,
+            OuterUnion::Mcp(InnerUnion::Lambda("arn:aws:lambda:fn".to_string()))
+        );
+    }
+
+    #[test]
+    fn explicit_null_first_union_member_resolves_later_variant_without_stream_corruption() {
+        // The first union member is explicitly null; the real variant is the
+        // second member. read_struct skips the null member and still consumes
+        // the union's closing brace, so the trailing sibling of the enclosing
+        // struct parses correctly (i.e. no stream corruption).
+        let mut choice: Option<Choice> = None;
+        let mut trailing: Option<String> = None;
+        let mut d = deser(br#"{"choice":{"a":null,"b":"x"},"trailing":"ok"}"#);
+        d.read_struct(&HOLDER_SCHEMA, &mut |member, sub| {
+            match member.member_index() {
+                Some(0) => choice = Some(deserialize_choice(sub)?),
+                Some(1) => trailing = Some(sub.read_string(member)?),
+                _ => {}
+            }
+            Ok(())
+        })
+        .expect("holder with a null-first-member union must parse");
+        assert_eq!(choice, Some(Choice::B("x".to_string())));
+        assert_eq!(
+            trailing,
+            Some("ok".to_string()),
+            "trailing sibling must survive: reading the union must not corrupt the stream"
+        );
+    }
+
+    #[test]
+    fn empty_union_object_yields_clean_error_not_panic() {
+        let mut d = deser(br#"{}"#);
+        let err = deserialize_choice(&mut d).unwrap_err();
+        assert!(
+            err.to_string().contains("expected a union variant"),
+            "empty union object must be a clean error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn all_null_union_members_yield_clean_error_not_panic() {
+        let mut d = deser(br#"{"a":null,"b":null}"#);
+        let err = deserialize_choice(&mut d).unwrap_err();
+        assert!(
+            err.to_string().contains("expected a union variant"),
+            "all-null union must be a clean error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn list_of_union_in_union_deserializes() {
+        // union-in-union nested inside a list element position.
+        let mut d = deser(br#"[{"mcp":{"lambda":"a"}},{"mcp":{"lambda":"b"}}]"#);
+        let mut out = Vec::new();
+        d.read_list(&aws_smithy_schema::prelude::STRING, &mut |el| {
+            out.push(deserialize_outer(el)?);
+            Ok(())
+        })
+        .expect("list of union-in-union must deserialize");
+        assert_eq!(
+            out,
+            vec![
+                OuterUnion::Mcp(InnerUnion::Lambda("a".to_string())),
+                OuterUnion::Mcp(InnerUnion::Lambda("b".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn map_of_union_in_union_deserializes() {
+        // union-in-union nested inside a map value position.
+        let mut d = deser(br#"{"first":{"mcp":{"lambda":"a"}},"second":{"mcp":{"lambda":"b"}}}"#);
+        let mut out = std::collections::HashMap::new();
+        d.read_map(&aws_smithy_schema::prelude::STRING, &mut |k, v| {
+            out.insert(k, deserialize_outer(v)?);
+            Ok(())
+        })
+        .expect("map of union-in-union must deserialize");
+        assert_eq!(
+            out.get("first"),
+            Some(&OuterUnion::Mcp(InnerUnion::Lambda("a".to_string())))
+        );
+        assert_eq!(
+            out.get("second"),
+            Some(&OuterUnion::Mcp(InnerUnion::Lambda("b".to_string())))
+        );
+    }
+}
