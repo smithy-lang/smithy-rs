@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 approx = "0.5.1"
-aws-config = { path = "../../build/aws-sdk/sdk/aws-config" }
+aws-config = { path = "../../build/aws-sdk/sdk/aws-config", features = ["test-util"] }
 aws-runtime = { path = "../../build/aws-sdk/sdk/aws-runtime", features = ["test-util"] }
 aws-credential-types = { path = "../../build/aws-sdk/sdk/aws-credential-types", features = ["test-util"] }
 aws-sdk-dynamodb = { path = "../../build/aws-sdk/sdk/dynamodb", features = ["behavior-version-latest", "test-util"] }
