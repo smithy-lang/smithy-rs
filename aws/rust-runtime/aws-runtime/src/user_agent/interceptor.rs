@@ -236,14 +236,13 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut cfg)
             .unwrap();
 
-        let header = expect_header(&context, "user-agent");
-        assert_eq!(AwsUserAgent::for_tests().ua_header(), header);
-        assert!(!header.contains("unused"));
+        let ua_header = expect_header(&context, "user-agent");
+        assert_eq!(AwsUserAgent::for_tests().ua_header(), ua_header);
+        assert!(!ua_header.contains("unused"));
 
-        assert_eq!(
-            AwsUserAgent::for_tests().aws_ua_header(),
-            expect_header(&context, "x-amz-user-agent")
-        );
+        let aws_ua_header = expect_header(&context, "x-amz-user-agent");
+        assert_eq!(AwsUserAgent::for_tests().ua_header(), aws_ua_header);
+        assert!(!aws_ua_header.contains("unused"));
     }
 
     #[test]
@@ -308,11 +307,15 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut config)
             .unwrap();
 
+        let ua_header = expect_header(&context, "x-amz-user-agent");
         let aws_ua_header = expect_header(&context, "x-amz-user-agent");
-        let metrics_section = aws_ua_header.split(" m/").nth(1).unwrap();
-        let waiter_count = metrics_section.matches("B").count();
-        let s3_transfer_count = metrics_section.matches("G").count();
-        let credentials_code_count = metrics_section.matches("e").count();
+        let ua_metrics_section = ua_header.split(" m/").nth(1).unwrap();
+        let aws_ua_metrics_section = aws_ua_header.split(" m/").nth(1).unwrap();
+        assert_eq!(ua_metrics_section, aws_ua_metrics_section);
+
+        let waiter_count = ua_metrics_section.matches("B").count();
+        let s3_transfer_count = ua_metrics_section.matches("G").count();
+        let credentials_code_count = ua_metrics_section.matches("e").count();
         assert_eq!(
             1, waiter_count,
             "Waiter metric should appear only once, but found {waiter_count} occurrences in: {aws_ua_header}",
@@ -346,11 +349,17 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut config)
             .unwrap();
 
-        let aws_ua_header = expect_header(&context, "x-amz-user-agent");
-        let metrics_section = aws_ua_header.split(" m/").nth(1).unwrap();
-
+        let ua_header = expect_header(&context, "user-agent");
+        let ua_metrics_section = ua_header.split(" m/").nth(1).unwrap();
         assert_eq!(
-            metrics_section, "e,g,n",
+            ua_metrics_section, "e,g,n",
+            "AwsCredentialFeature metrics should preserve order"
+        );
+
+        let aws_ua_header = expect_header(&context, "x-amz-user-agent");
+        let aws_ua_metrics_section = aws_ua_header.split(" m/").nth(1).unwrap();
+        assert_eq!(
+            aws_ua_metrics_section, "e,g,n",
             "AwsCredentialFeature metrics should preserve order"
         );
     }
@@ -377,16 +386,16 @@ mod tests {
             .unwrap();
 
         let app_value = "app/my_awesome_app";
-        let header = expect_header(&context, "user-agent");
+        let ua_header = expect_header(&context, "user-agent");
         assert!(
-            !header.contains(app_value),
-            "expected `{header}` to not contain `{app_value}`"
+            ua_header.contains(app_value),
+            "expected `{ua_header}` to contain `{app_value}`"
         );
 
-        let header = expect_header(&context, "x-amz-user-agent");
+        let aws_ua_header = expect_header(&context, "x-amz-user-agent");
         assert!(
-            header.contains(app_value),
-            "expected `{header}` to contain `{app_value}`"
+            aws_ua_header.contains(app_value),
+            "expected `{aws_ua_header}` to contain `{app_value}`"
         );
     }
 
@@ -429,13 +438,12 @@ mod tests {
             .modify_before_signing(&mut ctx, &rc, &mut config)
             .expect("it should succeed");
 
-        let header = expect_header(&context, "user-agent");
-        assert_eq!(AwsUserAgent::for_tests().ua_header(), header);
-        assert!(!header.contains("unused"));
+        let ua_header = expect_header(&context, "user-agent");
+        assert_eq!(AwsUserAgent::for_tests().ua_header(), ua_header);
+        assert!(!ua_header.contains("unused"));
 
-        assert_eq!(
-            AwsUserAgent::for_tests().aws_ua_header(),
-            expect_header(&context, "x-amz-user-agent")
-        );
+        let aws_ua_header = expect_header(&context, "x-amz-user-agent");
+        assert_eq!(AwsUserAgent::for_tests().ua_header(), aws_ua_header);
+        assert!(!aws_ua_header.contains("unused"));
     }
 }
