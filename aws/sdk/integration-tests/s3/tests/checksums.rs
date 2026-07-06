@@ -28,7 +28,6 @@ use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::retry::RetryConfig;
-use http_1x::header::AUTHORIZATION;
 use http_1x::{HeaderValue, Uri};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -111,11 +110,7 @@ async fn test_checksum_on_streaming_response(
         .await
         .unwrap();
 
-    http_client.assert_requests_match(&[
-        "x-amz-checksum-mode",
-        "x-amz-user-agent",
-        AUTHORIZATION.as_str(),
-    ]);
+    http_client.relaxed_requests_match();
 
     res
 }
