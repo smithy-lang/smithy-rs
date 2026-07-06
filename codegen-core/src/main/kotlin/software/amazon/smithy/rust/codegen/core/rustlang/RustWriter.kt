@@ -835,6 +835,16 @@ class RustWriter private constructor(
                                     block(variable)
                                 }
 
+                            is FloatShape ->
+                                rustBlock("if ${variable.asValue()} != ${default}_f32") {
+                                    block(variable)
+                                }
+
+                            is DoubleShape ->
+                                rustBlock("if ${variable.asValue()} != ${default}_f64") {
+                                    block(variable)
+                                }
+
                             else ->
                                 rustBlock("if ${variable.asValue()} != $default") {
                                     block(variable)
