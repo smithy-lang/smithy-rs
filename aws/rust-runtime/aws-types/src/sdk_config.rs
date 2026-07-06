@@ -648,9 +648,9 @@ impl Builder {
     /// See [`Builder::framework_metadata`] for details on framework metadata.
     pub fn set_framework_metadata(
         &mut self,
-        framework_metadata: Vec<FrameworkMetadata>,
+        framework_metadata: impl IntoIterator<Item = FrameworkMetadata>,
     ) -> &mut Self {
-        self.framework_metadata = framework_metadata;
+        self.framework_metadata = framework_metadata.into_iter().collect();
         self
     }
 

@@ -162,7 +162,6 @@ impl Intercept for UserAgentInterceptor {
             .collect();
         let mut seen = std::collections::HashSet::new();
         let mut kept = 0usize;
-        let mut warned_cap = false;
         for md in appended.into_iter().rev() {
             let key = (md.name().to_owned(), md.version().map(|v| v.to_owned()));
             if !seen.insert(key) {
@@ -170,15 +169,12 @@ impl Intercept for UserAgentInterceptor {
                 continue;
             }
             if kept >= MAX_FRAMEWORK_METADATA {
-                if !warned_cap {
-                    warned_cap = true;
-                    tracing::warn!(
-                        "More than {MAX_FRAMEWORK_METADATA} unique framework metadata entries \
-                         were configured; only the first {MAX_FRAMEWORK_METADATA} will be included \
-                         in the user agent."
-                    );
-                }
-                continue;
+                tracing::warn!(
+                    "More than {MAX_FRAMEWORK_METADATA} unique framework metadata entries \
+                     were configured; only the first {MAX_FRAMEWORK_METADATA} will be included \
+                     in the user agent."
+                );
+                break;
             }
             // `md` is already the canonical `FrameworkMetadata` type, so no conversion is needed.
             ua.add_framework_metadata(md.clone());
