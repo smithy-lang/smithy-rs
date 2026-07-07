@@ -369,11 +369,17 @@ class ServerRpcV2CborProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        // This is just the key used by the router's map to store and look up operations, it's completely arbitrary.
-        // We use the same key used by the awsJson1.x routers for simplicity.
-        // The router will extract the service name and the operation name from the URI, build this key, and lookup the
+        // This is the key used by the router's map to store and look up operations.
+        // The router extracts the service name and operation name from the URI, builds this key, and looks up the
         // operation stored there.
-        rust("$serviceName.$operationName".dq())
+        //
+        // Per the smithy-rpc-v2 spec (https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html),
+        // the client builds the request URI using the verbatim Smithy operation shape name (operationShape.id.name),
+        // NOT the PascalCased Rust symbol name. We must use the same verbatim name here so the server router
+        // matches the client-produced URI. For example, an operation named `getFoo` in the Smithy model produces
+        // a client URI of `/service/Example/operation/getFoo`, so the router key must be `Example.getFoo`.
+        val wireOperationName = operationShape.id.name
+        rust("$serviceName.$wireOperationName".dq())
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
