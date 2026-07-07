@@ -375,10 +375,19 @@ class ServerRpcV2CborProtocol(
         //
         // Per the smithy-rpc-v2 spec (https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html),
         // the client builds the request URI using the verbatim Smithy operation shape name (operationShape.id.name),
-        // NOT the PascalCased Rust symbol name. We must use the same verbatim name here so the server router
-        // matches the client-produced URI. For example, an operation named `getFoo` in the Smithy model produces
-        // a client URI of `/service/Example/operation/getFoo`, so the router key must be `Example.getFoo`.
-        val wireOperationName = operationShape.id.name
+        // NOT the PascalCased Rust symbol name.
+        //
+        // The `rpcV2CborUseVerbatimOperationName` setting controls which behavior is used:
+        // - When FALSE (default): uses `operationName` (PascalCased Rust symbol name), preserving the historical
+        //   behavior for backwards compatibility. This is incorrect per spec but ensures existing generated
+        //   servers are byte-for-byte unchanged.
+        // - When TRUE (opt-in): uses `operationShape.id.name` (verbatim Smithy name), which is spec-compliant and
+        //   matches the generated client. For example, an operation named `getFoo` in the Smithy model produces
+        //   a client URI of `/service/Example/operation/getFoo`, so the router key must be `Example.getFoo`.
+        //
+        // See https://github.com/smithy-lang/smithy-rs/issues/4731
+        val useVerbatimName = serverCodegenContext.settings.codegenConfig.rpcV2CborUseVerbatimOperationName
+        val wireOperationName = if (useVerbatimName) operationShape.id.name else operationName
         rust("$serviceName.$wireOperationName".dq())
     }
 

@@ -125,6 +125,11 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
+            fun rpcV2CborUseVerbatimOperationName(enabled: Boolean = true): Builder {
+                settings.add(RpcV2CborUseVerbatimOperationName(enabled))
+                return this
+            }
+
             override fun build(): ServerAdditionalSettings = ServerAdditionalSettings(settings)
         }
 
@@ -160,6 +165,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
                     .withMember("requestBodyMaxBytes", maxBytes)
+                    .build()
+        }
+
+        private data class RpcV2CborUseVerbatimOperationName(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("rpcV2CborUseVerbatimOperationName", enabled)
                     .build()
         }
 

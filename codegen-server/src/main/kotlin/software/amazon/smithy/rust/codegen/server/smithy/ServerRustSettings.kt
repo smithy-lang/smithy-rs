@@ -100,6 +100,12 @@ data class ServerRustSettings(
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
  *   values). Default is `0` (no limit) for backwards compatibility.
+ * [rpcV2CborUseVerbatimOperationName]: When true, the RPCv2 CBOR server router keys on the verbatim
+ *   Smithy operation shape name (e.g., `getFoo`) per the smithy-rpc-v2 spec. When false (default),
+ *   the router uses the PascalCased Rust symbol name (e.g., `GetFoo`), preserving the historical
+ *   behavior. Set to true to fix client/server interoperability for operations with non-UpperCamelCase
+ *   names (see https://github.com/smithy-lang/smithy-rs/issues/4731). Intended to become opt-out
+ *   (default true) once downstream impact is validated.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -123,6 +129,7 @@ data class ServerCodegenConfig(
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
     val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
+    val rpcV2CborUseVerbatimOperationName: Boolean = DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -141,6 +148,14 @@ data class ServerCodegenConfig(
          * memory-exhaustion denial-of-service attacks via unbounded request bodies.
          */
         const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
+
+        /**
+         * Default value for `rpcV2CborUseVerbatimOperationName`.
+         *
+         * When false (default), the RPCv2 CBOR router uses PascalCased Rust symbol names as keys,
+         * preserving historical behavior. When true, it uses verbatim Smithy operation names per spec.
+         */
+        const val DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME = false
 
         /**
          * Configuration key for the HTTP 1.x flag.
@@ -162,6 +177,9 @@ data class ServerCodegenConfig(
         /** Configuration key for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
 
+        /** Configuration key for the RPCv2 CBOR verbatim operation name flag. */
+        const val RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY = "rpcV2CborUseVerbatimOperationName"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -173,6 +191,7 @@ data class ServerCodegenConfig(
                 "alwaysSendEventStreamInitialResponse",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
+                RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -225,6 +244,11 @@ data class ServerCodegenConfig(
                         REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                         DEFAULT_REQUEST_BODY_MAX_BYTES,
                     ).toLong(),
+                rpcV2CborUseVerbatimOperationName =
+                    node.get().getBooleanMemberOrDefault(
+                        RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY,
+                        DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME,
+                    ),
             ).also {
                 require(it.requestBodyMaxBytes >= 0) {
                     "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"
