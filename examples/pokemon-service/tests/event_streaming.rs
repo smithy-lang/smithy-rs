@@ -11,7 +11,6 @@ use pokemon_service_client::types::{
     AttemptCapturingPokemonEvent, CapturingEvent, CapturingPayload,
 };
 use rand::Rng;
-use serial_test::serial;
 use std::time::Duration;
 use tokio::time::sleep;
 
@@ -35,7 +34,6 @@ fn get_pokeball() -> String {
 }
 
 #[tokio::test]
-#[serial]
 async fn event_stream_empty_stream() {
     let server = common::run_server().await;
     let client = common::client(server.port);
@@ -64,7 +62,6 @@ async fn event_stream_empty_stream() {
 }
 
 #[tokio::test]
-#[serial]
 async fn event_stream_test() {
     let server = common::run_server().await;
     let client = common::client(server.port);
