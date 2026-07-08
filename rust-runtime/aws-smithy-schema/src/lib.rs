@@ -20,6 +20,7 @@ mod schema {
     pub mod traits;
 
     pub mod codec;
+    pub mod header_omit_settings;
     pub mod http_protocol;
     pub mod prelude;
     pub mod protocol;
@@ -46,6 +47,10 @@ pub mod traits {
 
 pub mod codec {
     pub use crate::schema::codec::*;
+}
+
+pub mod header_omit_settings {
+    pub use crate::schema::header_omit_settings::*;
 }
 
 pub mod protocol {
@@ -77,6 +82,22 @@ pub struct Schema {
     /// Shape-type-specific member data.
     members: SchemaMembers,
 
+    /// The pre-synthesis shape name for synthetic operation input/output
+    /// shapes.
+    ///
+    /// Smithy's `OperationNormalizer` rewrites every operation's input/output
+    /// to a synthetic shape named `OperationNameInput` / `OperationNameOutput`;
+    /// this field surfaces the name component of
+    /// `SyntheticInputTrait::originalId` / `SyntheticOutputTrait::originalId`,
+    /// which preserves the user-authored shape name. `None` for non-synthetic
+    /// shapes and for member schemas.
+    ///
+    /// Currently consumed by the REST XML codec to determine the body root
+    /// element name when no `@xmlName` overrides it. Distinct from `xml_name`,
+    /// which carries an `@xmlName` trait value. Other consumers (logging,
+    /// future protocols) may also read this field.
+    original_name: Option<&'static str>,
+
     // -- Known serde trait fields (const-constructable) --
     // IMPORTANT: These fields and their `with_*` setters must stay in sync with
     // `knownTraitSetter` in `SchemaGenerator.kt`. If a new known trait is added
@@ -87,6 +108,26 @@ pub struct Schema {
     xml_name: Option<trait_types::XmlNameTrait>,
     xml_attribute: Option<trait_types::XmlAttributeTrait>,
     xml_flattened: Option<trait_types::XmlFlattenedTrait>,
+    /// Marks an operation output struct whose XML wire format omits the
+    /// outer wrapper element (set by codegen for operations carrying the
+    /// AWS-customization `S3UnwrappedXmlOutputTrait`). Honored by the XML
+    /// codec; ignored by other codecs (so the schema remains protocol-neutral
+    /// — runtime protocol swap is unaffected).
+    xml_unwrapped_output: bool,
+    /// `true` (the default, conservative) means this struct has at least one
+    /// member that serializes to the request/response body — i.e., a member
+    /// without any HTTP binding trait, OR a member with `@httpPayload`
+    /// targeting a struct/union (which provides body framing through the codec).
+    ///
+    /// `false` (set by codegen via [`with_no_body_members`](Schema::with_no_body_members))
+    /// means every member is HTTP-bound (header / query / label / prefix-headers
+    /// / query-params, or scalar `@httpPayload` whose bytes go into the request
+    /// body raw). The HTTP binding protocol uses this to skip body codec
+    /// invocation entirely on the request side: no XML/JSON wrapper element
+    /// is opened, no `serialize_members` re-entry through the codec proxy
+    /// happens, and the body bytes are never collected (they'd be discarded
+    /// anyway). Saves ~15-20% on header-heavy SER cases like S3 PutObject.
+    has_body_members: bool,
     xml_namespace: Option<trait_types::XmlNamespaceTrait>,
     http_header: Option<trait_types::HttpHeaderTrait>,
     http_label: Option<trait_types::HttpLabelTrait>,
@@ -132,12 +173,15 @@ impl Schema {
         member_name: None,
         member_index: None,
         members: SchemaMembers::None,
+        original_name: None,
         sensitive: None,
         json_name: None,
         timestamp_format: None,
         xml_name: None,
         xml_attribute: None,
         xml_flattened: None,
+        xml_unwrapped_output: false,
+        has_body_members: true,
         xml_namespace: None,
         http_header: None,
         http_label: None,
@@ -251,6 +295,33 @@ impl Schema {
         self.xml_name.as_ref()
     }
 
+    /// Returns the `@xmlNamespace` value if present.
+    pub fn xml_namespace(&self) -> Option<&trait_types::XmlNamespaceTrait> {
+        self.xml_namespace.as_ref()
+    }
+
+    /// Returns `true` if this member has the `@xmlAttribute` trait.
+    pub fn xml_attribute(&self) -> bool {
+        self.xml_attribute.is_some()
+    }
+
+    /// Returns `true` if this member has the `@xmlFlattened` trait.
+    pub fn xml_flattened(&self) -> bool {
+        self.xml_flattened.is_some()
+    }
+
+    /// Returns `true` if this struct's XML wire format omits the outer
+    /// wrapper element. See field doc for details.
+    pub fn xml_unwrapped_output(&self) -> bool {
+        self.xml_unwrapped_output
+    }
+
+    /// Returns `true` if this struct has at least one member that serializes
+    /// to the request/response body, `false` if every member is HTTP-bound.
+    pub fn has_body_members(&self) -> bool {
+        self.has_body_members
+    }
+
     /// Returns the `@httpHeader` value if present.
     /// Returns `true` if this member schema has any HTTP response binding trait
     /// (`@httpHeader`, `@httpResponseCode`, `@httpPrefixHeaders`, or `@httpPayload`).
@@ -310,6 +381,26 @@ impl Schema {
 
     // -- Const setters for builder-style construction in generated code --
 
+    /// Sets the original (pre-synthesis) shape name for synthetic operation
+    /// input/output shapes. See [`Schema::original_name`] for semantics.
+    pub const fn with_original_name(mut self, name: &'static str) -> Self {
+        self.original_name = Some(name);
+        self
+    }
+
+    /// Attaches key and value member schemas to a map member schema.
+    /// Used by the XML codec to resolve `<key>` and `<value>` element names.
+    pub const fn with_map_members(mut self, key: &'static Schema, value: &'static Schema) -> Self {
+        self.members = SchemaMembers::Map { key, value };
+        self
+    }
+
+    /// Sets the list member schema on a member schema that targets a list.
+    pub const fn with_list_member(mut self, member: &'static Schema) -> Self {
+        self.members = SchemaMembers::List { member };
+        self
+    }
+
     /// Sets the `@sensitive` trait.
     pub const fn with_sensitive(mut self) -> Self {
         self.sensitive = Some(trait_types::SensitiveTrait);
@@ -343,6 +434,19 @@ impl Schema {
     /// Sets the `@xmlFlattened` trait.
     pub const fn with_xml_flattened(mut self) -> Self {
         self.xml_flattened = Some(trait_types::XmlFlattenedTrait);
+        self
+    }
+
+    /// Marks the struct as an unwrapped XML output. See field doc for details.
+    pub const fn with_xml_unwrapped_output(mut self) -> Self {
+        self.xml_unwrapped_output = true;
+        self
+    }
+
+    /// Marks this struct as having no body members — every member is HTTP-bound.
+    /// See [`has_body_members`](Schema::has_body_members) for what this enables.
+    pub const fn with_no_body_members(mut self) -> Self {
+        self.has_body_members = false;
         self
     }
 
@@ -425,8 +529,16 @@ impl Schema {
     }
 
     /// Sets the `@xmlNamespace` trait.
-    pub const fn with_xml_namespace(mut self) -> Self {
-        self.xml_namespace = Some(trait_types::XmlNamespaceTrait);
+    ///
+    /// `uri` is the namespace URI; `prefix` optionally declares the
+    /// `xmlns:prefix` form. Pass `None` for the default (unprefixed)
+    /// `xmlns="uri"` declaration.
+    pub const fn with_xml_namespace(
+        mut self,
+        uri: &'static str,
+        prefix: Option<&'static str>,
+    ) -> Self {
+        self.xml_namespace = Some(trait_types::XmlNamespaceTrait::new(uri, prefix));
         self
     }
 
@@ -437,7 +549,11 @@ impl Schema {
     }
 
     /// Returns the member name if this is a member schema.
-    pub fn member_name(&self) -> Option<&str> {
+    ///
+    /// Returns `Option<&'static str>` so callers can store the name in
+    /// `Cow::Borrowed` or other `'static`-lifetime contexts without
+    /// allocating, matching the underlying field type.
+    pub fn member_name(&self) -> Option<&'static str> {
         self.member_name
     }
 
@@ -447,6 +563,15 @@ impl Schema {
     /// Consumer code should not rely on specific position values as they may change.
     pub fn member_index(&self) -> Option<usize> {
         self.member_index
+    }
+
+    /// Returns the original (pre-synthesis) shape name for synthetic operation
+    /// input/output shapes.
+    ///
+    /// `None` for non-synthetic shapes. See the field documentation for full
+    /// semantics.
+    pub fn original_name(&self) -> Option<&str> {
+        self.original_name
     }
 
     /// Returns the member schema by name (for structures and unions).
@@ -488,10 +613,31 @@ impl Schema {
         }
     }
 
+    /// Like [`member`](Self::member) but returns the `'static` borrow that
+    /// codegen actually stores. Needed when callers (e.g. the XML codec)
+    /// must hold a reference to a value/element member schema across nested
+    /// callbacks without inheriting the parent borrow's lifetime.
+    pub fn member_static(&self) -> Option<&'static Schema> {
+        match &self.members {
+            SchemaMembers::List { member } => Some(*member),
+            SchemaMembers::Map { value, .. } => Some(*value),
+            _ => None,
+        }
+    }
+
     /// Returns the key schema for maps.
     pub fn key(&self) -> Option<&Schema> {
         match &self.members {
             SchemaMembers::Map { key, .. } => Some(key),
+            _ => None,
+        }
+    }
+
+    /// Like [`key`](Self::key) but returns the `'static` borrow that codegen
+    /// stores. See [`member_static`](Self::member_static).
+    pub fn key_static(&self) -> Option<&'static Schema> {
+        match &self.members {
+            SchemaMembers::Map { key, .. } => Some(*key),
             _ => None,
         }
     }

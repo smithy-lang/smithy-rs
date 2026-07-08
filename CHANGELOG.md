@@ -1,4 +1,22 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 7th, 2026
+==============
+**Breaking Changes:**
+- :warning: (all, [smithy-rs#4692](https://github.com/smithy-lang/smithy-rs/issues/4692)) Upgrade MSRV to Rust 1.94.1.
+
+**New this release:**
+- :tada: (client, [smithy-rs#4726](https://github.com/smithy-lang/smithy-rs/issues/4726), @mark-creamer-amazon) Add `keys()` JMESPath function support for union shapes in waiter matchers. This enables waiters to match on the active variant of a union using `keys(unionField)` with the `allStringEquals` or `anyStringEquals` comparators.
+- :bug: (server, @lauzadis) Soften the server codegen's handling of unknown `codegen` configuration keys: log a warning instead of throwing `IllegalArgumentException`. This makes server codegen forward-compatible with `smithy-build.json` files that carry keys recognized by other tools or by future server codegen versions, matching the lenient behavior already used for client codegen settings.
+- :bug: (all, [aws-sdk-rust#1433](https://github.com/awslabs/aws-sdk-rust/issues/1433), [aws-sdk-rust#1418](https://github.com/awslabs/aws-sdk-rust/issues/1418), @iconara) Update the `User-Agent` header to contain the same information as the `x-amz-user-agent` header (including `AppName`, environment metadata, business metrics, etc.)
+- :bug: (all, [smithy-rs#4729](https://github.com/smithy-lang/smithy-rs/issues/4729)) Fix codegen emitting integer literals for f64/f32 non-zero default value comparisons in serializers. When a Smithy model specifies a non-zero `@default` on a Double or Float member using a JSON integer (e.g., `1` instead of `1.0`), the generated "skip if default" check produced `if value != 1` which fails to compile in Rust. The fix appends `_f64`/`_f32` type suffixes to the rendered default value.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @iconara ([aws-sdk-rust#1418](https://github.com/awslabs/aws-sdk-rust/issues/1418), [aws-sdk-rust#1433](https://github.com/awslabs/aws-sdk-rust/issues/1433))
+- @lauzadis
+- @mark-creamer-amazon ([smithy-rs#4726](https://github.com/smithy-lang/smithy-rs/issues/4726))
+
+
 June 11th, 2026
 ===============
 **New this release:**

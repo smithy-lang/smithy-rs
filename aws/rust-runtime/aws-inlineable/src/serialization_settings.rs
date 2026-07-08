@@ -38,6 +38,22 @@ impl HeaderSerializationSettings {
         }
     }
 
+    /// Returns whether the default `Content-Length` header should be omitted.
+    /// Used by schema-serde-generated request serializers, which insert the
+    /// header directly on `aws_smithy_runtime_api::http::Request` rather than
+    /// going through `set_default_header`.
+    pub(crate) fn should_omit_default_content_length(&self) -> bool {
+        self.omit_default_content_length
+    }
+
+    /// Returns whether the default `Content-Type` header should be omitted.
+    /// Used by schema-serde-generated request serializers, which insert the
+    /// header directly on `aws_smithy_runtime_api::http::Request` rather than
+    /// going through `set_default_header`.
+    pub(crate) fn should_omit_default_content_type(&self) -> bool {
+        self.omit_default_content_type
+    }
+
     /// Returns true if the given default header name should be serialized
     fn include_header(&self, header: &HeaderName) -> bool {
         (!self.omit_default_content_length || header != CONTENT_LENGTH)
@@ -60,6 +76,24 @@ impl HeaderSerializationSettings {
 
 impl Storable for HeaderSerializationSettings {
     type Storer = StoreReplace<Self>;
+}
+
+// Bridge to the schema-serde runtime guard. The schema-serde runtime in
+// `aws-smithy-schema` reads omit flags from the config bag via the abstract
+// `HeaderOmitSettings` trait so it doesn't have to depend on this concrete
+// inlineable type. The presigning interceptor stores the same settings under
+// both `HeaderSerializationSettings` (read by codegen-emitted streaming/
+// payload paths) and `SharedHeaderOmitSettings` (read by the runtime's
+// standard-body path); this trait impl is what lets the same concrete value
+// satisfy both lookups.
+impl aws_smithy_schema::header_omit_settings::HeaderOmitSettings for HeaderSerializationSettings {
+    fn should_omit_default_content_type(&self) -> bool {
+        self.omit_default_content_type
+    }
+
+    fn should_omit_default_content_length(&self) -> bool {
+        self.omit_default_content_length
+    }
 }
 
 #[cfg(test)]

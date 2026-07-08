@@ -35,6 +35,7 @@ import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
+import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
@@ -58,6 +59,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.text.NumberFormat
 
 /**
@@ -88,7 +90,7 @@ sealed class TraversedShape {
             shape: Shape,
         ): TraversedShape =
             when {
-                shape is MapShape || shape is StructureShape -> Object(shape)
+                shape is MapShape || shape is StructureShape || shape is UnionShape -> Object(shape)
                 shape is CollectionShape -> Array(shape, from(model, model.expectShape(shape.member.target)))
                 shape is BooleanShape -> Bool(shape)
                 shape is EnumShape || shape.hasTrait<EnumTrait>() -> Enum(shape)
@@ -504,8 +506,27 @@ class RustJmespathShapeTraversalGenerator(
                                     rust("let $ident = ${arg.identifier}.keys().map(Clone::clone).collect::<Vec<String>>();")
                                 }
 
+                                is UnionShape -> {
+                                    // A union serializes as a single-key JSON object.
+                                    // Generate a match that returns the active variant name.
+                                    val unionSym = symbolProvider.toSymbol(outputShape)
+
+                                    val matchArms =
+                                        outputShape.allMembers.keys.joinToString("\n") { memberName ->
+                                            val variantName = memberName.toPascalCase()
+                                            "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
+                                        }
+                                    rust(
+                                        """let $ident = vec![match ${arg.identifier} {
+                                         |$matchArms
+                                         |_ => "unknown".to_string(),
+                                        |}];
+                                        """.trimMargin(),
+                                    )
+                                }
+
                                 else ->
-                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct or a map, got ${outputShape?.type}")
+                                    throw UnsupportedJmesPathException("The shape type for an input to the keys function must be a struct, map, or union, got ${outputShape?.type}")
                             }
                         },
                 )
