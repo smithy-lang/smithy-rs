@@ -92,7 +92,8 @@ class ServerServiceGenerator(
                     serviceId.name,
                     smithyHttpServer.resolve("routing::request_spec"),
                 )
-            // Generate a unique function name for each spec
+            // Generate a unique function name for each spec.
+            // The `_$index` suffix assumes no operation name collides with `<name>_<index>`; theoretical, negligible.
             val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
             specs.mapIndexed { index, spec ->
                 val functionName = if (index == 0) baseFunctionName else "${baseFunctionName}_$index"
@@ -279,6 +280,33 @@ class ServerServiceGenerator(
             }
         }
 
+    /**
+     * Emits route entries for an operation's request specs, handling clone vs move semantics.
+     *
+     * For operations with a single route spec (most protocols, or UpperCamelCase RpcV2Cbor ops),
+     * the handler is moved. For operations with multiple specs (RpcV2Cbor dual-route), earlier
+     * specs clone the handler and only the last spec moves it.
+     *
+     * This keeps single-route generated code byte-identical to before and deduplicates the
+     * clone-vs-move logic between buildMethod() and buildUncheckedMethod().
+     *
+     * @param specFunctions List of (functionName, Writable) for this operation's route specs
+     * @param emitHandlerExpr Lambda that emits the handler expression (different for build vs build_unchecked)
+     */
+    private fun RustWriter.emitRouteEntries(
+        specFunctions: List<Pair<String, Writable>>,
+        emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
+    ) {
+        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
+        // Use move semantics for the last (or only) spec; clone only when there are earlier specs.
+        specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
+            val isLast = index == specFunctions.size - 1
+            rust("($requestSpecsModuleName::$specBuilderFunctionName(), ")
+            emitHandlerExpr(!isLast)
+            rust("),")
+        }
+    }
+
     private fun buildMethod(): Writable =
         writable {
             val missingOperationsVariableName = "missing_operation_names"
@@ -303,25 +331,9 @@ class ServerServiceGenerator(
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
                         val specFunctions = requestSpecMap.getValue(operationShape)
-                        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
-                        // Use move semantics for the last (or only) spec; clone only when there are earlier specs.
-                        specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
-                            val isLast = index == specFunctions.size - 1
-                            if (isLast) {
-                                // Move the handler on the final route (or the only route for single-spec operations)
-                                rust(
-                                    """
-                                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
-                                    """,
-                                )
-                            } else {
-                                // Clone the handler for additional routes (dual-route RpcV2Cbor case)
-                                rust(
-                                    """
-                                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.clone().expect($expectMessageVariableName)),
-                                    """,
-                                )
-                            }
+                        emitRouteEntries(specFunctions) { isClone ->
+                            val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            rust("$accessor.expect($expectMessageVariableName)")
                         }
                     }
                 }
@@ -408,41 +420,18 @@ class ServerServiceGenerator(
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
                         val specFunctions = requestSpecMap.getValue(operationShape)
-                        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
-                        // Use move semantics for the last (or only) spec; clone only when there are earlier specs.
-                        specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
-                            val isLast = index == specFunctions.size - 1
-                            if (isLast) {
-                                // Move the handler on the final route (or the only route for single-spec operations)
-                                rustTemplate(
-                                    """
-                                    (
-                                        $requestSpecsModuleName::$specBuilderFunctionName(),
-                                        self.$fieldName.unwrap_or_else(|| {
-                                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
-                                            #{SmithyHttpServer}::routing::Route::new(svc)
-                                        })
-                                    ),
-                                    """,
-                                    "SmithyHttpServer" to smithyHttpServer,
-                                    "Protocol" to protocol.markerStruct(),
-                                )
-                            } else {
-                                // Clone the handler for additional routes (dual-route RpcV2Cbor case)
-                                rustTemplate(
-                                    """
-                                    (
-                                        $requestSpecsModuleName::$specBuilderFunctionName(),
-                                        self.$fieldName.clone().unwrap_or_else(|| {
-                                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
-                                            #{SmithyHttpServer}::routing::Route::new(svc)
-                                        })
-                                    ),
-                                    """,
-                                    "SmithyHttpServer" to smithyHttpServer,
-                                    "Protocol" to protocol.markerStruct(),
-                                )
-                            }
+                        emitRouteEntries(specFunctions) { isClone ->
+                            val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            rustTemplate(
+                                """
+                                $accessor.unwrap_or_else(|| {
+                                    let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                                    #{SmithyHttpServer}::routing::Route::new(svc)
+                                })
+                                """,
+                                "SmithyHttpServer" to smithyHttpServer,
+                                "Protocol" to protocol.markerStruct(),
+                            )
                         }
                     }
                 }

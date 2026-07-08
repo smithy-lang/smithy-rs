@@ -378,24 +378,25 @@ class ServerRpcV2CborProtocol(
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
+    /**
+     * Delegates to [serverRouterRequestSpecs] and returns the first (primary) spec.
+     * This keeps the `"{service}.{verbatimName}"` format in a single place.
+     */
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ) = writable {
-        // Return just the primary (verbatim) route key for backward compatibility with the single-spec API.
-        // The dual-route logic is implemented in serverRouterRequestSpecs() below.
-        val verbatimOperationName = operationShape.id.name
-        rust("$serviceName.$verbatimOperationName".dq())
-    }
+    ) = serverRouterRequestSpecs(operationShape, operationName, serviceName, requestSpecModule).first()
 
     /**
      * Returns the list of router request specs for an RpcV2Cbor operation.
      *
      * Per the smithy-rpc-v2 spec (https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html),
      * the client builds the request URI using the verbatim Smithy operation shape name (operationShape.id.name),
-     * NOT the PascalCased Rust symbol name.
+     * NOT the PascalCased Rust symbol name. The server's verbatim route key (`{service}.{operationShape.id.name}`)
+     * matches the client's generated URI path (`/service/{service}/operation/{operationShape.id.name}`) in
+     * codegen-core's RpcV2Cbor.kt.
      *
      * The `rpcV2CborExcludeLegacyOperationNameRoute` setting controls which routes are registered:
      * - When FALSE (default): if the PascalCased symbol name differs from the verbatim Smithy name,
@@ -403,6 +404,14 @@ class ServerRpcV2CborProtocol(
      *   (where names match) get a single route.
      * - When TRUE (opt-out): register ONLY the spec-compliant verbatim route. Use this to drop
      *   the legacy PascalCased alias once clients have migrated.
+     *
+     * ## Collision Safety
+     *
+     * The legacy PascalCase alias (`{service}.{PascalCaseName}`) can never collide with another
+     * operation's native key. Smithy's core `ShapeIdConflict` validator rejects any model that
+     * defines two operation shape IDs differing only by case within the same namespace (e.g.,
+     * both `getFoo` and `GetFoo`). Since operations cannot be renamed via traits, the PascalCased
+     * transformation of one operation name can never equal the verbatim name of another.
      *
      * See https://github.com/smithy-lang/smithy-rs/issues/4731
      */

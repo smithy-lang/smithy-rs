@@ -43,7 +43,7 @@ class RpcV2CborCamelCaseOperationNameTest {
 
         @rpcv2Cbor
         service Example {
-            operations: [getFoo, UpperCaseOp],
+            operations: [getFoo, UpperCaseOp, myAPIOp],
         }
 
         /// An operation with a camelCase name - this is the important test case.
@@ -59,6 +59,13 @@ class RpcV2CborCamelCaseOperationNameTest {
         operation UpperCaseOp {
             input:= { data: String }
             output:= { response: String }
+        }
+
+        /// An operation with an acronym (API) to test PascalCase transformation.
+        /// Smithy shape name "myAPIOp" becomes Rust symbol "MyAPIOp".
+        operation myAPIOp {
+            input:= { param: String }
+            output:= { out: String }
         }
         """.asSmithyModel(smithyVersion = "2")
 
@@ -109,6 +116,12 @@ class RpcV2CborCamelCaseOperationNameTest {
                         }
                     }
 
+                    async fn my_api_op_handler(input: crate::input::MyApiOpInput) -> crate::output::MyApiOpOutput {
+                        crate::output::MyApiOpOutput {
+                            out: Some(format!("api: {}", input.param.unwrap_or_default())),
+                        }
+                    }
+
                     fn create_cbor_input(json: &str) -> Vec<u8> {
                         let value: #{SerdeJson}::Value = #{SerdeJson}::from_str(json).expect("cannot parse JSON");
                         let mut cbor_data = #{Vec}::new();
@@ -128,6 +141,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -167,6 +181,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -206,6 +221,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -227,6 +243,82 @@ class RpcV2CborCamelCaseOperationNameTest {
                         assert!(
                             response.status().is_success(),
                             "Expected success for UpperCamelCase operation name, got status {}",
+                            response.status()
+                        );
+                        """,
+                        *codegenScope,
+                        "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                    )
+                }
+
+                // Test that acronym operation (myAPIOp -> MyAPIOp) is reachable via verbatim route
+                tokioTest("default_acronym_operation_verbatim_route_succeeds") {
+                    rustTemplate(
+                        """
+                        let config = crate::ExampleConfig::builder().build();
+                        let service = crate::Example::builder(config)
+                            .get_foo(get_foo_handler)
+                            .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
+                            .build()
+                            .expect("could not build service");
+
+                        let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
+
+                        // Verbatim route: myAPIOp (Smithy shape name)
+                        let request = #{Http}::Request::builder()
+                            .uri("/service/Example/operation/myAPIOp")
+                            .method("POST")
+                            .header("content-type", "application/cbor")
+                            .header("Smithy-Protocol", "rpc-v2-cbor")
+                            .body(#{CreateBody:W})
+                            .expect("Failed to build request");
+
+                        let response = #{Tower}::ServiceExt::oneshot(service, request)
+                            .await
+                            .expect("Failed to call service");
+
+                        assert!(
+                            response.status().is_success(),
+                            "Expected success for verbatim URI 'myAPIOp' with default settings, got status {}",
+                            response.status()
+                        );
+                        """,
+                        *codegenScope,
+                        "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                    )
+                }
+
+                // Test that acronym operation (myAPIOp -> MyAPIOp) is also reachable via legacy PascalCase route
+                tokioTest("default_acronym_operation_pascal_case_route_succeeds") {
+                    rustTemplate(
+                        """
+                        let config = crate::ExampleConfig::builder().build();
+                        let service = crate::Example::builder(config)
+                            .get_foo(get_foo_handler)
+                            .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
+                            .build()
+                            .expect("could not build service");
+
+                        let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
+
+                        // Legacy PascalCase route: MyAPIOp (Rust symbol name)
+                        let request = #{Http}::Request::builder()
+                            .uri("/service/Example/operation/MyAPIOp")
+                            .method("POST")
+                            .header("content-type", "application/cbor")
+                            .header("Smithy-Protocol", "rpc-v2-cbor")
+                            .body(#{CreateBody:W})
+                            .expect("Failed to build request");
+
+                        let response = #{Tower}::ServiceExt::oneshot(service, request)
+                            .await
+                            .expect("Failed to call service");
+
+                        assert!(
+                            response.status().is_success(),
+                            "Expected success for PascalCase URI 'MyAPIOp' with default settings (legacy route), got status {}",
                             response.status()
                         );
                         """,
@@ -290,6 +382,12 @@ class RpcV2CborCamelCaseOperationNameTest {
                         }
                     }
 
+                    async fn my_api_op_handler(input: crate::input::MyApiOpInput) -> crate::output::MyApiOpOutput {
+                        crate::output::MyApiOpOutput {
+                            out: Some(format!("api: {}", input.param.unwrap_or_default())),
+                        }
+                    }
+
                     fn create_cbor_input(json: &str) -> Vec<u8> {
                         let value: #{SerdeJson}::Value = #{SerdeJson}::from_str(json).expect("cannot parse JSON");
                         let mut cbor_data = #{Vec}::new();
@@ -309,6 +407,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -356,6 +455,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -394,6 +494,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                         let service = crate::Example::builder(config)
                             .get_foo(get_foo_handler)
                             .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
                             .build()
                             .expect("could not build service");
 
@@ -416,6 +517,83 @@ class RpcV2CborCamelCaseOperationNameTest {
                             response.status().is_success(),
                             "Expected success for UpperCamelCase operation name with opt-out setting, got status {}",
                             response.status()
+                        );
+                        """,
+                        *codegenScope,
+                        "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                    )
+                }
+
+                // Test that acronym operation (myAPIOp -> MyAPIOp) is reachable via verbatim route with opt-out
+                tokioTest("optout_acronym_operation_verbatim_route_succeeds") {
+                    rustTemplate(
+                        """
+                        let config = crate::ExampleConfig::builder().build();
+                        let service = crate::Example::builder(config)
+                            .get_foo(get_foo_handler)
+                            .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
+                            .build()
+                            .expect("could not build service");
+
+                        let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
+
+                        // Verbatim route: myAPIOp (Smithy shape name)
+                        let request = #{Http}::Request::builder()
+                            .uri("/service/Example/operation/myAPIOp")
+                            .method("POST")
+                            .header("content-type", "application/cbor")
+                            .header("Smithy-Protocol", "rpc-v2-cbor")
+                            .body(#{CreateBody:W})
+                            .expect("Failed to build request");
+
+                        let response = #{Tower}::ServiceExt::oneshot(service, request)
+                            .await
+                            .expect("Failed to call service");
+
+                        assert!(
+                            response.status().is_success(),
+                            "Expected success for verbatim URI 'myAPIOp' with opt-out setting, got status {}",
+                            response.status()
+                        );
+                        """,
+                        *codegenScope,
+                        "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                    )
+                }
+
+                // Test that acronym operation PascalCase route returns 404 with opt-out
+                tokioTest("optout_acronym_operation_pascal_case_route_returns_404") {
+                    rustTemplate(
+                        """
+                        let config = crate::ExampleConfig::builder().build();
+                        let service = crate::Example::builder(config)
+                            .get_foo(get_foo_handler)
+                            .upper_case_op(upper_case_op_handler)
+                            .my_api_op(my_api_op_handler)
+                            .build()
+                            .expect("could not build service");
+
+                        let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
+
+                        // Legacy PascalCase route: MyAPIOp (Rust symbol name) - should NOT be registered with opt-out
+                        let request = #{Http}::Request::builder()
+                            .uri("/service/Example/operation/MyAPIOp")
+                            .method("POST")
+                            .header("content-type", "application/cbor")
+                            .header("Smithy-Protocol", "rpc-v2-cbor")
+                            .body(#{CreateBody:W})
+                            .expect("Failed to build request");
+
+                        let response = #{Tower}::ServiceExt::oneshot(service, request)
+                            .await
+                            .expect("Failed to call service");
+
+                        // Opt-out behavior: PascalCase URI does NOT match (legacy route excluded) -> 404
+                        assert_eq!(
+                            response.status(),
+                            #{Http}::StatusCode::NOT_FOUND,
+                            "Expected 404 for PascalCase URI 'MyAPIOp' with opt-out setting (legacy route excluded)"
                         );
                         """,
                         *codegenScope,
