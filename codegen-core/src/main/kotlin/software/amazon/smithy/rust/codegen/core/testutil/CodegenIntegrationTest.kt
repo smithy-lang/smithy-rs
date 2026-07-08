@@ -125,8 +125,8 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
-            fun rpcV2CborUseVerbatimOperationName(enabled: Boolean = true): Builder {
-                settings.add(RpcV2CborUseVerbatimOperationName(enabled))
+            fun rpcV2CborExcludeLegacyOperationNameRoute(enabled: Boolean = true): Builder {
+                settings.add(RpcV2CborExcludeLegacyOperationNameRoute(enabled))
                 return this
             }
 
@@ -168,10 +168,10 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                     .build()
         }
 
-        private data class RpcV2CborUseVerbatimOperationName(val enabled: Boolean) : AdditionalSettings() {
+        private data class RpcV2CborExcludeLegacyOperationNameRoute(val enabled: Boolean) : AdditionalSettings() {
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
-                    .withMember("rpcV2CborUseVerbatimOperationName", enabled)
+                    .withMember("rpcV2CborExcludeLegacyOperationNameRoute", enabled)
                     .build()
         }
 

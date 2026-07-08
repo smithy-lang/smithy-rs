@@ -100,12 +100,13 @@ data class ServerRustSettings(
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
  *   values). Default is `0` (no limit) for backwards compatibility.
- * [rpcV2CborUseVerbatimOperationName]: When true, the RPCv2 CBOR server router keys on the verbatim
- *   Smithy operation shape name (e.g., `getFoo`) per the smithy-rpc-v2 spec. When false (default),
- *   the router uses the PascalCased Rust symbol name (e.g., `GetFoo`), preserving the historical
- *   behavior. Set to true to fix client/server interoperability for operations with non-UpperCamelCase
- *   names (see https://github.com/smithy-lang/smithy-rs/issues/4731). Intended to become opt-out
- *   (default true) once downstream impact is validated.
+ * [rpcV2CborExcludeLegacyOperationNameRoute]: When false (default), the RPCv2 CBOR server router
+ *   registers both routes for operations whose PascalCased Rust symbol name differs from the
+ *   verbatim Smithy operation name: the spec-compliant verbatim route (e.g., `Example.getFoo`) and
+ *   the legacy PascalCased route (e.g., `Example.GetFoo`). This provides backward compatibility
+ *   while fixing client/server interoperability (see https://github.com/smithy-lang/smithy-rs/issues/4731).
+ *   When true, the legacy PascalCased route is excluded, registering only the spec-compliant
+ *   verbatim route. Use this opt-out once clients have migrated to the correct URIs.
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -129,7 +130,7 @@ data class ServerCodegenConfig(
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
     val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
-    val rpcV2CborUseVerbatimOperationName: Boolean = DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME,
+    val rpcV2CborExcludeLegacyOperationNameRoute: Boolean = DEFAULT_RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -150,12 +151,13 @@ data class ServerCodegenConfig(
         const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
 
         /**
-         * Default value for `rpcV2CborUseVerbatimOperationName`.
+         * Default value for `rpcV2CborExcludeLegacyOperationNameRoute`.
          *
-         * When false (default), the RPCv2 CBOR router uses PascalCased Rust symbol names as keys,
-         * preserving historical behavior. When true, it uses verbatim Smithy operation names per spec.
+         * When false (default), the RPCv2 CBOR router registers both the spec-compliant verbatim
+         * route and the legacy PascalCased route for operations where names differ. When true,
+         * only the spec-compliant verbatim route is registered.
          */
-        const val DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME = false
+        const val DEFAULT_RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE = false
 
         /**
          * Configuration key for the HTTP 1.x flag.
@@ -177,8 +179,8 @@ data class ServerCodegenConfig(
         /** Configuration key for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
 
-        /** Configuration key for the RPCv2 CBOR verbatim operation name flag. */
-        const val RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY = "rpcV2CborUseVerbatimOperationName"
+        /** Configuration key for the RPCv2 CBOR legacy operation name route exclusion flag. */
+        const val RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE_CONFIG_KEY = "rpcV2CborExcludeLegacyOperationNameRoute"
 
         private val KNOWN_CONFIG_KEYS =
             setOf(
@@ -191,7 +193,7 @@ data class ServerCodegenConfig(
                 "alwaysSendEventStreamInitialResponse",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
-                RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY,
+                RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -244,10 +246,10 @@ data class ServerCodegenConfig(
                         REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                         DEFAULT_REQUEST_BODY_MAX_BYTES,
                     ).toLong(),
-                rpcV2CborUseVerbatimOperationName =
+                rpcV2CborExcludeLegacyOperationNameRoute =
                     node.get().getBooleanMemberOrDefault(
-                        RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME_CONFIG_KEY,
-                        DEFAULT_RPC_V2_CBOR_USE_VERBATIM_OPERATION_NAME,
+                        RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE_CONFIG_KEY,
+                        DEFAULT_RPC_V2_CBOR_EXCLUDE_LEGACY_OPERATION_NAME_ROUTE,
                     ),
             ).also {
                 require(it.requestBodyMaxBytes >= 0) {

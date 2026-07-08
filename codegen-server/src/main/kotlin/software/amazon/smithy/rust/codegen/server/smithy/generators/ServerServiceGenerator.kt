@@ -77,31 +77,39 @@ class ServerServiceGenerator(
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
 
-    /** Associate each operation with a function that returns its request spec. */
-    private val requestSpecMap: Map<OperationShape, Pair<String, Writable>> =
+    /**
+     * Associate each operation with functions that return its request spec(s).
+     * Most protocols have one spec per operation, but RpcV2Cbor may have two (verbatim + legacy PascalCase)
+     * when dual-route registration is enabled.
+     */
+    private val requestSpecMap: Map<OperationShape, List<Pair<String, Writable>>> =
         operations.associateWith { operationShape ->
             val operationName = symbolProvider.toSymbol(operationShape).name
-            val spec =
-                protocol.serverRouterRequestSpec(
+            val specs =
+                protocol.serverRouterRequestSpecs(
                     operationShape,
                     operationName,
                     serviceId.name,
                     smithyHttpServer.resolve("routing::request_spec"),
                 )
-            val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
-            val functionBody =
-                writable {
-                    rustTemplate(
-                        """
-                        fn $functionName() -> #{SpecType} {
-                            #{Spec:W}
-                        }
-                        """,
-                        "Spec" to spec,
-                        "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
-                    )
-                }
-            Pair(functionName, functionBody)
+            // Generate a unique function name for each spec
+            val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
+            specs.mapIndexed { index, spec ->
+                val functionName = if (index == 0) baseFunctionName else "${baseFunctionName}_$index"
+                val functionBody =
+                    writable {
+                        rustTemplate(
+                            """
+                            fn $functionName() -> #{SpecType} {
+                                #{Spec:W}
+                            }
+                            """,
+                            "Spec" to spec,
+                            "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
+                        )
+                    }
+                Pair(functionName, functionBody)
+            }
         }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
@@ -294,12 +302,15 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                        rust(
-                            """
-                            ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
-                            """,
-                        )
+                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route)
+                        for ((specBuilderFunctionName, _) in specFunctions) {
+                            rust(
+                                """
+                                ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.clone().expect($expectMessageVariableName)),
+                                """,
+                            )
+                        }
                     }
                 }
 
@@ -384,20 +395,23 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                        rustTemplate(
-                            """
-                            (
-                                $requestSpecsModuleName::$specBuilderFunctionName(),
-                                self.$fieldName.unwrap_or_else(|| {
-                                    let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
-                                    #{SmithyHttpServer}::routing::Route::new(svc)
-                                })
-                            ),
-                            """,
-                            "SmithyHttpServer" to smithyHttpServer,
-                            "Protocol" to protocol.markerStruct(),
-                        )
+                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route)
+                        for ((specBuilderFunctionName, _) in specFunctions) {
+                            rustTemplate(
+                                """
+                                (
+                                    $requestSpecsModuleName::$specBuilderFunctionName(),
+                                    self.$fieldName.clone().unwrap_or_else(|| {
+                                        let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
+                                        #{SmithyHttpServer}::routing::Route::new(svc)
+                                    })
+                                ),
+                                """,
+                                "SmithyHttpServer" to smithyHttpServer,
+                                "Protocol" to protocol.markerStruct(),
+                            )
+                        }
                     }
                 }
             rustTemplate(
@@ -465,13 +479,16 @@ class ServerServiceGenerator(
         writable {
             val functions =
                 writable {
-                    for ((_, function) in requestSpecMap.values) {
-                        rustTemplate(
-                            """
-                            pub(super) #{Function:W}
-                            """,
-                            "Function" to function,
-                        )
+                    // Flatten all spec functions from all operations (may have multiple per operation for RpcV2Cbor)
+                    for (specFunctions in requestSpecMap.values) {
+                        for ((_, function) in specFunctions) {
+                            rustTemplate(
+                                """
+                                pub(super) #{Function:W}
+                                """,
+                                "Function" to function,
+                            )
+                        }
                     }
                 }
             rustTemplate(
