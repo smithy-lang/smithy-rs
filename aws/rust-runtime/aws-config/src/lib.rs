@@ -104,6 +104,7 @@ pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
     region::Region,
+    sdk_ua_metadata::{FrameworkMetadata, InvalidFrameworkMetadata},
     SdkConfig,
 };
 /// Load default sources for all configuration with override support
@@ -244,6 +245,7 @@ mod loader {
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::SigningRegionSet;
     use aws_types::sdk_config::SharedHttpClient;
+    use aws_types::sdk_ua_metadata::FrameworkMetadata;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
@@ -277,6 +279,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        framework_metadata: Vec<FrameworkMetadata>,
         auth_scheme_preference: Option<AuthSchemePreference>,
         sigv4a_signing_region_set: Option<SigningRegionSet>,
         identity_cache: Option<SharedIdentityCache>,
@@ -616,6 +619,34 @@ mod loader {
         /// ```
         pub fn app_name(mut self, app_name: AppName) -> Self {
             self.app_name = Some(app_name);
+            self
+        }
+
+        /// Appends framework metadata to the user agent.
+        ///
+        /// This _optional_ metadata identifies a software framework or third-party library that is
+        /// being used with the SDK. It is rendered into the user agent (as `lib/{name}/{version}`)
+        /// so that libraries built on top of the AWS SDK can self-identify in the requests they
+        /// make. Each call appends another entry rather than replacing previous ones.
+        ///
+        /// Unlike the app name, framework metadata has no environment variable or profile source;
+        /// it can only be set programmatically.
+        ///
+        /// Entries are de-duplicated on `(name, version)`, rendered in first-seen order, and the
+        /// total number of unique entries included in the user agent is capped (currently at 10);
+        /// additional entries beyond the cap are dropped with a warning.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_config::FrameworkMetadata;
+        /// let config = aws_config::from_env()
+        ///     .framework_metadata(FrameworkMetadata::new("some-framework", Some("1.0")).expect("valid framework metadata"))
+        ///     .load().await;
+        /// # }
+        /// ```
+        pub fn framework_metadata(mut self, framework_metadata: FrameworkMetadata) -> Self {
+            self.framework_metadata.push(framework_metadata);
             self
         }
 
@@ -1000,6 +1031,7 @@ mod loader {
             builder.set_http_client(self.http_client);
             builder.set_protocol(self.protocol);
             builder.set_app_name(app_name);
+            builder.set_framework_metadata(self.framework_metadata);
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
@@ -1280,6 +1312,20 @@ mod loader {
             let app_name = AppName::new("my-app-name").unwrap();
             let conf = base_conf().app_name(app_name.clone()).load().await;
             assert_eq!(Some(&app_name), conf.app_name());
+        }
+
+        #[tokio::test]
+        async fn framework_metadata() {
+            use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+            let one = FrameworkMetadata::new("framework-one", Some("1.0")).unwrap();
+            let two = FrameworkMetadata::new("framework-two", Some("2.0")).unwrap();
+            let conf = base_conf()
+                .framework_metadata(one.clone())
+                .framework_metadata(two.clone())
+                .load()
+                .await;
+            assert_eq!(&[one, two], conf.framework_metadata());
         }
 
         #[tokio::test]
