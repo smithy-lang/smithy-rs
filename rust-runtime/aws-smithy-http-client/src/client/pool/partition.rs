@@ -440,6 +440,10 @@ impl PartitionRegistry {
     /// `key`, freeing its permit. Returns `true` if one was freed. The idle
     /// connection is popped under the cache lock and dropped after the lock
     /// is released. No-op `false` if the peer or entry is absent.
+    ///
+    /// Reserved for a future per-host reclaim path; global reclaim uses the
+    /// authority-blind [`try_reclaim_any`](Self::try_reclaim_any).
+    #[allow(dead_code)]
     pub(crate) fn try_reclaim_on(&self, peer: PartitionId, key: &super::PoolKey) -> bool {
         let state = match self.by_id.get(&peer) {
             Some(s) => s,

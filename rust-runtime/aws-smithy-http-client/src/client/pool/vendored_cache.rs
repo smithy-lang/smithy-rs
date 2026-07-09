@@ -87,7 +87,7 @@ mod internal {
     use std::future::Future;
     use std::pin::Pin;
     use std::sync::{Arc, Mutex, Weak};
-    use std::task::{self, Poll, Waker, ready};
+    use std::task::{self, ready, Poll, Waker};
 
     use tower_service::Service;
 
@@ -466,10 +466,11 @@ mod internal {
                         locked.store_waker(*waiter, cx.waker());
                     }
 
-                    let connected = match ready!(
-                        Pin::new(future.as_mut().expect("racing future polled after done"))
-                            .poll(cx)
-                    ) {
+                    let connected = match ready!(Pin::new(
+                        future.as_mut().expect("racing future polled after done")
+                    )
+                    .poll(cx))
+                    {
                         Ok(inner) => inner,
                         Err(err) => {
                             shared.lock().unwrap().cancel_waiter(*waiter);
@@ -682,8 +683,8 @@ mod events {
 mod tests {
     use std::convert::Infallible;
     use std::sync::{
-        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
+        Arc, Mutex,
     };
     use std::task::{self, Poll};
 
@@ -1125,10 +1126,20 @@ mod tests {
         let mut cache = super::builder().build(CapConnector::new(sem.clone(), calls.clone()));
 
         // First checkout: reserves the only permit and establishes.
-        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        std::future::poll_fn(|cx| cache.poll_ready(cx))
+            .await
+            .unwrap();
         let first = cache.call(1).await.unwrap();
-        assert_eq!(calls.load(Ordering::SeqCst), 1, "first checkout establishes");
-        assert_eq!(sem.available_permits(), 0, "first checkout holds the permit");
+        assert_eq!(
+            calls.load(Ordering::SeqCst),
+            1,
+            "first checkout establishes"
+        );
+        assert_eq!(
+            sem.available_permits(),
+            0,
+            "first checkout holds the permit"
+        );
 
         // Second checkout while `first` is still out, on a CLONE (independent
         // permit reservation, like a distinct worker). poll_ready must be
@@ -1176,7 +1187,9 @@ mod tests {
         let mut cache = super::builder().build(mock);
         handle.allow(1);
 
-        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        std::future::poll_fn(|cx| cache.poll_ready(cx))
+            .await
+            .unwrap();
         let cached = future::join(cache.call(1), async {
             assert_request_eq!(handle, 1).send_response("one");
         })
@@ -1199,7 +1212,9 @@ mod tests {
         let mut cache = super::builder().build(mock);
         handle.allow(1);
 
-        std::future::poll_fn(|cx| cache.poll_ready(cx)).await.unwrap();
+        std::future::poll_fn(|cx| cache.poll_ready(cx))
+            .await
+            .unwrap();
         let cached = future::join(cache.call(1), async {
             assert_request_eq!(handle, 1).send_response("one");
         })
@@ -1214,7 +1229,10 @@ mod tests {
         assert!(borrowed.is_some(), "borrowed the idle service");
         assert!(cache.is_empty(), "borrowed service is out of the idle set");
         drop(borrowed);
-        assert!(!cache.is_empty(), "borrowed service returned to pool on drop");
+        assert!(
+            !cache.is_empty(),
+            "borrowed service returned to pool on drop"
+        );
 
         // Miss: no idle → try_checkout_idle must NOT start a connect.
         let _took = cache.try_checkout_idle();

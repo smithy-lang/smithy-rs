@@ -19,6 +19,7 @@ use tower::Service;
 
 use super::super::connection::{ConnectCtx, ConnectionPermit, EstablishedConnection};
 use super::super::stats::EstablishingGuard;
+use super::super::PeerReclaimHandle;
 
 /// Enforces the pool's connection cap by reserving per-host then global
 /// semaphore permits in [`poll_ready`](Service::poll_ready) and consuming
@@ -34,6 +35,14 @@ pub(crate) struct ConnectionLimit<S> {
     per_host: Option<PollSemaphore>,
     global_permit: Option<OwnedSemaphorePermit>,
     per_host_permit: Option<OwnedSemaphorePermit>,
+    /// Cross-partition active reclaim, applied only to the global cap. When
+    /// the global semaphore is exhausted, this frees a fungible permit by
+    /// dropping an over-supplied peer's idle connection before parking —
+    /// preventing a starved partition from waiting on permits stranded in
+    /// other partitions' idle sets. `None` when reclaim is unavailable
+    /// (no registry / single-partition pool): `poll_ready` then simply
+    /// parks on the semaphore as before.
+    reclaim: Option<PeerReclaimHandle>,
 }
 
 impl<S> ConnectionLimit<S> {
@@ -41,6 +50,7 @@ impl<S> ConnectionLimit<S> {
         inner: S,
         global: Option<Arc<Semaphore>>,
         per_host: Option<Arc<Semaphore>>,
+        reclaim: Option<PeerReclaimHandle>,
     ) -> Self {
         Self {
             inner,
@@ -48,6 +58,7 @@ impl<S> ConnectionLimit<S> {
             per_host: per_host.map(PollSemaphore::new),
             global_permit: None,
             per_host_permit: None,
+            reclaim,
         }
     }
 }
@@ -60,6 +71,7 @@ impl<S: Clone> Clone for ConnectionLimit<S> {
             per_host: self.per_host.clone(),
             global_permit: None,
             per_host_permit: None,
+            reclaim: self.reclaim.clone(),
         }
     }
 }
@@ -90,11 +102,48 @@ where
 
         if self.global_permit.is_none() {
             if let Some(ref mut sem) = self.global {
-                self.global_permit = ready!(sem.poll_acquire(cx));
-                debug_assert!(
-                    self.global_permit.is_some(),
-                    "global semaphore is never closed"
-                );
+                match sem.poll_acquire(cx) {
+                    Poll::Ready(permit) => {
+                        debug_assert!(permit.is_some(), "global semaphore is never closed");
+                        self.global_permit = permit;
+                    }
+                    Poll::Pending => {
+                        // The global cap is exhausted. Under keep-alive the
+                        // held permits sit on *idle* connections that only
+                        // return their permit on drop (idle-timeout), so a
+                        // partition holding none of them can wait many
+                        // timeout cycles — the cross-partition starvation
+                        // tail. Before surrendering to that wait, try to
+                        // reclaim: drop an over-supplied peer's idle
+                        // connection, which returns its fungible permit to
+                        // this same semaphore.
+                        //
+                        // On a successful reclaim, re-poll immediately: the
+                        // freed permit is available now, so `poll_acquire`
+                        // typically returns `Ready` on this same wake. It is
+                        // not guaranteed — a concurrent acquirer may take the
+                        // freed permit first — but that is benign: the
+                        // re-poll then returns `Pending` with our waker
+                        // registered, so we are woken on the next release
+                        // exactly as an un-reclaimed park would be. We do not
+                        // loop on reclaim: one freed permit satisfies one
+                        // waiter, and repeated eviction under contention would
+                        // churn peers' warm connections.
+                        let reclaimed = self
+                            .reclaim
+                            .as_ref()
+                            .is_some_and(PeerReclaimHandle::try_free_global);
+                        if reclaimed {
+                            self.global_permit = ready!(sem.poll_acquire(cx));
+                            debug_assert!(
+                                self.global_permit.is_some(),
+                                "global semaphore is never closed"
+                            );
+                        } else {
+                            return Poll::Pending;
+                        }
+                    }
+                }
             }
         }
 
@@ -107,10 +156,9 @@ where
         // `poll_ready` and never reaches `call`, so it starts no connect and
         // orphans nothing.
         //
-        // The cache drives this layer's `poll_ready` before `call` (it wraps
-        // the connector in `tower::util::Oneshot` on its connect race), so the
-        // reservation is present here on the H1 cache path; the `debug_assert`s
-        // below encode that contract.
+        // The cache drives this layer's `poll_ready` before `call` on its
+        // connect race, so the reservation is present here on the H1 cache
+        // path; the `debug_assert`s below encode that contract.
         //
         // The `None` branches remain as a defensive fallback for any caller
         // that reaches `call` without a prior `poll_ready` (e.g. a connect
@@ -217,8 +265,7 @@ mod tests {
     impl Service<ConnectCtx> for MockInner {
         type Response = (MockIo, EstablishingGuard);
         type Error = BoxError;
-        type Future =
-            Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+        type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
         fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
             Poll::Ready(Ok(()))
@@ -243,8 +290,8 @@ mod tests {
         let global = Arc::new(Semaphore::new(1));
         let inner = MockInner::new();
 
-        let svc1 = ConnectionLimit::new(inner.clone(), Some(global.clone()), None);
-        let svc2 = ConnectionLimit::new(inner.clone(), Some(global.clone()), None);
+        let svc1 = ConnectionLimit::new(inner.clone(), Some(global.clone()), None, None);
+        let svc2 = ConnectionLimit::new(inner.clone(), Some(global.clone()), None, None);
 
         let mut spawn1 = Spawn::new(svc1);
         let mut spawn2 = Spawn::new(svc2);
@@ -279,8 +326,8 @@ mod tests {
         let per_host = Arc::new(Semaphore::new(1));
         let inner = MockInner::new();
 
-        let svc1 = ConnectionLimit::new(inner.clone(), None, Some(per_host.clone()));
-        let svc2 = ConnectionLimit::new(inner.clone(), None, Some(per_host.clone()));
+        let svc1 = ConnectionLimit::new(inner.clone(), None, Some(per_host.clone()), None);
+        let svc2 = ConnectionLimit::new(inner.clone(), None, Some(per_host.clone()), None);
 
         let mut spawn1 = Spawn::new(svc1);
         let mut spawn2 = Spawn::new(svc2);
@@ -313,7 +360,7 @@ mod tests {
         let global = Arc::new(Semaphore::new(10));
         let inner = MockInner::new();
 
-        let svc = ConnectionLimit::new(inner, Some(global.clone()), Some(per_host.clone()));
+        let svc = ConnectionLimit::new(inner, Some(global.clone()), Some(per_host.clone()), None);
         let mut spawn = Spawn::new(svc);
 
         assert!(
@@ -340,6 +387,7 @@ mod tests {
             inner.clone(),
             Some(global.clone()),
             Some(per_host.clone()),
+            None,
         );
         let mut spawn = Spawn::new(svc);
 
@@ -370,7 +418,7 @@ mod tests {
         let global = Arc::new(Semaphore::new(0)); // exhausted
         let inner = MockInner::new();
 
-        let svc = ConnectionLimit::new(inner, Some(global.clone()), Some(per_host.clone()));
+        let svc = ConnectionLimit::new(inner, Some(global.clone()), Some(per_host.clone()), None);
         let mut spawn = Spawn::new(svc);
 
         // Per-host is acquired, then blocks on global.
@@ -398,7 +446,7 @@ mod tests {
         let global = Arc::new(Semaphore::new(2));
         let inner = MockInner::new();
 
-        let svc = ConnectionLimit::new(inner, Some(global.clone()), None);
+        let svc = ConnectionLimit::new(inner, Some(global.clone()), None, None);
         let mut spawn = Spawn::new(svc);
 
         assert!(spawn.poll_ready().is_ready());
@@ -425,7 +473,7 @@ mod tests {
     async fn unbounded_passes_through() {
         let inner = MockInner::new();
 
-        let svc = ConnectionLimit::new(inner.clone(), None, None);
+        let svc = ConnectionLimit::new(inner.clone(), None, None, None);
         let mut spawn = Spawn::new(svc);
 
         assert!(spawn.poll_ready().is_ready());

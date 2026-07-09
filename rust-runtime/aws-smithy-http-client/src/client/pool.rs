@@ -308,7 +308,12 @@ pub(crate) type MakeStack =
 /// so a per-host failure yields `PerHost`, and a failure on the
 /// global semaphore while already holding the per-host permit yields
 /// `Global`.
+///
+/// Reclaim currently acts on `Global` only (see [`PeerReclaimHandle::try_free_global`]);
+/// per-host exhaustion is self-healing so `PerHost` is retained for a
+/// future per-host reclaim path but not yet wired.
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // PerHost reserved for a future per-host reclaim path (global-only today)
 pub(crate) enum BindingConstraint {
     /// The global `max_connections` semaphore is exhausted. Any
     /// over-supplied peer's idle connection frees a fungible permit.
@@ -339,55 +344,50 @@ pub(crate) struct PeerReclaimHandle {
 }
 
 impl PeerReclaimHandle {
-    /// Free one over-supplied peer's idle connection to relieve
-    /// `constraint`, returning `true` if a permit was freed. Best-effort:
-    /// `false` if the pool is gone, there are no NIC-group peers, or no
-    /// peer holds reclaimable idle (P0 then blocks on the permit).
-    pub(crate) fn try_free_under_load(&self, constraint: &BindingConstraint) -> bool {
+    /// Free one over-supplied peer's idle connection to relieve global-cap
+    /// exhaustion, returning `true` if a permit was freed. Best-effort:
+    /// `false` if the pool is gone or no peer holds reclaimable idle (the
+    /// requester then blocks on the permit until an idle return or drop).
+    ///
+    /// **Group-blind by design.** A global `max_connections` permit is
+    /// fungible: it is one shared semaphore across every partition, so
+    /// dropping *any* peer's idle connection — regardless of NIC group or
+    /// authority — returns a permit the requester can then acquire. The
+    /// requester connects on its own NIC afterward, so the victim's NIC is
+    /// irrelevant. Restricting reclaim to the requester's NIC group would
+    /// re-introduce cross-group starvation (a starved group unable to
+    /// reclaim from an over-supplied one), which is exactly the pathology
+    /// reclaim exists to prevent. Contrast borrow ([`PeerBorrowHandle`]),
+    /// which *dispatches* through the peer's connection and so must stay
+    /// within the NIC group.
+    ///
+    /// Only the global cap is reclaimed. Per-host exhaustion is
+    /// self-healing: it means the requester already holds
+    /// `max_connections_per_host` connections to this authority, which
+    /// return idle to its own cache and free the per-host permit — an idle
+    /// is already coming, so no reclaim is warranted.
+    pub(crate) fn try_free_global(&self) -> bool {
         let registry = match self.registry.upgrade() {
             Some(r) => r,
             None => return false, // pool dropped → nothing to reclaim
         };
-        let peers = registry.nic_group_peers(self.self_partition);
-        if peers.is_empty() {
-            return false; // alone in the NIC group (e.g. single-partition default)
-        }
-        match constraint {
-            BindingConstraint::PerHost(key) => {
-                // Candidates = peers with idle to this authority (index
-                // narrows; cache pop confirms). Round-robin start offset.
-                let authority = Authority::new(key.authority.as_str());
-                let mut candidates: Vec<PartitionId> = self
-                    .stats_index
-                    .idle_partitions_for(&authority)
-                    .into_iter()
-                    .map(|(p, _idle)| p)
-                    .filter(|p| *p != self.self_partition && peers.contains(p))
-                    .collect();
-                self.rotate(&mut candidates);
-                candidates
-                    .into_iter()
-                    .any(|peer| registry.try_reclaim_on(peer, key))
-            }
-            BindingConstraint::Global => {
-                // Fungible permit: any same-NIC-group peer's idle (any
-                // authority) relieves the global cap. Narrow to peers that
-                // the index shows holding idle.
-                let mut candidates: Vec<PartitionId> = self
-                    .stats_index
-                    .idle_cells()
-                    .into_iter()
-                    .map(|(_authority, p)| p)
-                    .filter(|p| *p != self.self_partition && peers.contains(p))
-                    .collect();
-                candidates.sort_unstable_by_key(|p| p.as_u64());
-                candidates.dedup();
-                self.rotate(&mut candidates);
-                candidates
-                    .into_iter()
-                    .any(|peer| registry.try_reclaim_any(peer))
-            }
-        }
+        // Candidates = any peer (any NIC group, any authority) the stats
+        // index shows holding idle. The freed permit is fungible, so the
+        // specific peer/authority does not matter; `try_reclaim_any`
+        // confirms against the authoritative cache pop.
+        let mut candidates: Vec<PartitionId> = self
+            .stats_index
+            .idle_cells()
+            .into_iter()
+            .map(|(_authority, p)| p)
+            .filter(|p| *p != self.self_partition)
+            .collect();
+        candidates.sort_unstable_by_key(|p| p.as_u64());
+        candidates.dedup();
+        self.rotate(&mut candidates);
+        candidates
+            .into_iter()
+            .any(|peer| registry.try_reclaim_any(peer))
     }
 
     /// Rotate the candidate vec by the partition's advisory `peer_cursor`,
@@ -638,6 +638,11 @@ where
                     //   ConnectAccounting — births the EstablishingGuard (gauge++)
                     //   ConnectTimeout    — bounds the connector call
                     //   connector         — TCP + TLS
+                    // Reclaim handle for this partition: lets a global-cap-bound
+                    // `poll_ready` free a fungible permit stranded on a peer's
+                    // idle connection. `None` when the registry is unbound or the
+                    // pool is single-partition (no peers to reclaim from).
+                    let reclaim = shared.reclaim_handle(partition_id);
                     let limited = admission::ConnectionLimit::new(
                         admission::ConnectAccounting::new(
                             admission::ConnectTimeout::new(connector.clone()),
@@ -645,6 +650,7 @@ where
                         ),
                         shared.global_sem.clone(),
                         per_host_sem,
+                        reclaim,
                     );
 
                     let pool_hooks = shared.hooks.clone();
@@ -1984,4 +1990,3 @@ mod tests {
         assert_eq!(index.established_for(&authority, partition_id), 0);
     }
 }
-
