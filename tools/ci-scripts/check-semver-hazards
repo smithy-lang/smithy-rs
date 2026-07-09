@@ -35,7 +35,12 @@ for sdk in aws-sdk-rust/sdk/*; do
     if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
       echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
       pushd "$sdk" &>/dev/null
-      cargo test --all-features
+      cargo_test_args=(--all-features)
+      if grep -q 'aws-config' Cargo.toml; then
+        # Some checked-out SDK release tests call aws_config::ConfigLoader test APIs.
+        cargo_test_args+=(--features aws-config/test-util)
+      fi
+      cargo test "${cargo_test_args[@]}"
       popd &>/dev/null
     fi
  fi
