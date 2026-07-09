@@ -169,6 +169,7 @@ class DynamoDbTestDependencies(private val runtimeConfig: RuntimeConfig) : LibRs
     override fun section(section: LibRsSection): Writable =
         writable {
             addDependency(Approx)
+            addDependency(awsConfig(runtimeConfig).toDevDependency().withFeature("test-util"))
             // Used by `tests/protocol-swap.rs` to plug `AwsRestXmlProtocol`
             // into a JSON-RPC service to demonstrate runtime protocol selection
             // (the Serialization-Schema-Decoupling SEP's goal 2).

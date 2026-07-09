@@ -220,6 +220,7 @@ impl ProviderConfig {
         let service_config = EnvServiceConfig {
             env: self.env(),
             env_config_sections: profiles.cloned().unwrap_or_default(),
+            ignore_configured_endpoint_urls: false,
         };
 
         let mut builder = SdkConfig::builder()
