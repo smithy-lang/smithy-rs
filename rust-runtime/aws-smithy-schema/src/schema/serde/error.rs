@@ -161,13 +161,15 @@ impl From<aws_smithy_types::DocumentError> for SerdeError {
     fn from(err: aws_smithy_types::DocumentError) -> Self {
         use aws_smithy_types::DocumentError as DE;
         match err {
-            DE::TypeMismatch { message } => SerdeError::TypeMismatch { message },
-            DE::NumericCoercionOverflow { target, value } => {
+            DE::TypeMismatch { message, .. } => SerdeError::TypeMismatch { message },
+            DE::NumericCoercionOverflow { target, value, .. } => {
                 SerdeError::NumericCoercionOverflow { target, value }
             }
-            DE::InvalidInput { message } => SerdeError::InvalidInput { message },
-            DE::UnsupportedOperation { message } => SerdeError::UnsupportedOperation { message },
-            DE::Custom { message } => SerdeError::Custom { message },
+            DE::InvalidInput { message, .. } => SerdeError::InvalidInput { message },
+            DE::UnsupportedOperation { message, .. } => {
+                SerdeError::UnsupportedOperation { message }
+            }
+            DE::Custom { message, .. } => SerdeError::Custom { message },
             // `DocumentError` is `#[non_exhaustive]`. Future variants
             // surface as `Custom` so callers always see a reasonable
             // mapping.

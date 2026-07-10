@@ -705,9 +705,7 @@ where
 
 /// Constructs a `TypeMismatch` error from a free-form message.
 fn type_mismatch(message: impl Into<String>) -> DocumentError {
-    DocumentError::TypeMismatch {
-        message: message.into(),
-    }
+    DocumentError::type_mismatch(message)
 }
 
 /// Constructs a `TypeMismatch` error describing the actual variant.
@@ -730,18 +728,13 @@ fn type_mismatch_for(expected: &str, found: &Document) -> DocumentError {
 /// Constructs a numeric overflow error with target/value populated for
 /// diagnostics.
 fn overflow(target: &str, value: std::fmt::Arguments<'_>) -> DocumentError {
-    DocumentError::NumericCoercionOverflow {
-        target: target.to_string(),
-        value: value.to_string(),
-    }
+    DocumentError::numeric_coercion_overflow(target, value.to_string())
 }
 
 /// Constructs an `InvalidInput` error for parse failures (e.g. a malformed `BigDecimal` string
 /// when going through `f64::from_str`).
 fn invalid_input(target: &str, value: &str, err: &dyn std::fmt::Display) -> DocumentError {
-    DocumentError::InvalidInput {
-        message: format!("cannot parse {value:?} as {target}: {err}"),
-    }
+    DocumentError::invalid_input(format!("cannot parse {value:?} as {target}: {err}"))
 }
 
 /* ANCHOR END: document */
@@ -1142,32 +1135,12 @@ mod extended_variant_tests {
     }
 
     // -- Non-exhaustive exhaustive-match guard --------------------------
-
-    #[test]
-    fn exhaustive_match_with_wildcard_arm_compiles() {
-        // Defensive smoke test: an exhaustive `match` over the public
-        // variants needs a `_ =>` arm because `Document` is
-        // `#[non_exhaustive]`. If a future commit removes the
-        // wildcard or shifts the variant set, this test catches the
-        // regression.
-        let doc = Document::Blob(b"hi".to_vec());
-        let label = match &doc {
-            Document::Object(_) => "object",
-            Document::Array(_) => "array",
-            Document::Number(_) => "number",
-            Document::String(_) => "string",
-            Document::Bool(_) => "bool",
-            Document::Null => "null",
-            other => match other {
-                Document::Blob(_) => "blob",
-                Document::Timestamp(_) => "timestamp",
-                Document::BigInteger(_) => "bigInteger",
-                Document::BigDecimal(_) => "bigDecimal",
-                _ => "unknown",
-            },
-        };
-        assert_eq!(label, "blob");
-    }
+    //
+    // The consumer-facing `#[non_exhaustive]` contract (a downstream exhaustive
+    // `match` on `Document` must include a wildcard arm) cannot be exercised
+    // from inside this crate, where the attribute has no effect. It is tested
+    // from a separate downstream crate by the `trybuild` compile-fail case in
+    // `tests/document_non_exhaustive.rs`.
 }
 
 #[cfg(test)]

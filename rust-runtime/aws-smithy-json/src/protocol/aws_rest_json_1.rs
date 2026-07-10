@@ -37,11 +37,11 @@ impl AwsRestJsonProtocol {
             JsonCodecSettings::builder()
                 .use_json_name(true)
                 .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
-                .protocol_id(PROTOCOL_ID)
+                .protocol_id(PROTOCOL_ID.clone())
                 .build(),
         );
         Self {
-            inner: HttpBindingProtocol::new(PROTOCOL_ID, codec, "application/json"),
+            inner: HttpBindingProtocol::new(PROTOCOL_ID.clone(), codec, "application/json"),
         }
     }
 

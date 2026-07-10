@@ -73,7 +73,7 @@ macro_rules! shape_id {
 /// any `&ShapeId<'_>` via [`Self::as_str`]) without going through
 /// the `'static`-bound storage key. This is what the cross-lifetime
 /// lookup APIs on `TypeRegistry` and `TraitMap` rely on.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ShapeId<'a> {
     fqn: &'a str,
     namespace: &'a str,

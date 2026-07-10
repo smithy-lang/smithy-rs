@@ -44,7 +44,7 @@ impl TraitMap {
 
     /// Inserts a trait into the map.
     pub fn insert(&mut self, trait_obj: Box<dyn Trait>) {
-        let id = *trait_obj.trait_id();
+        let id = trait_obj.trait_id().clone();
         self.traits
             .get_or_insert_with(HashMap::new)
             .insert(id, trait_obj);

@@ -272,13 +272,11 @@ enum SchemaMembers<'a> {
 //
 // Compile-time only; zero runtime cost.
 
-#[doc(hidden)]
 #[allow(dead_code)]
 fn _assert_schema_covariant<'a, 'b: 'a>(s: &'b Schema<'b>) -> &'a Schema<'a> {
     s
 }
 
-#[doc(hidden)]
 #[allow(dead_code)]
 fn _assert_shape_id_covariant<'a, 'b: 'a>(id: ShapeId<'b>) -> ShapeId<'a> {
     id
@@ -934,7 +932,7 @@ mod test {
 
         let trait_id = shape_id!("smithy.api", "required");
         let test_trait = Box::new(TestTrait {
-            id: trait_id,
+            id: trait_id.clone(),
             value: "test".to_string(),
         });
 

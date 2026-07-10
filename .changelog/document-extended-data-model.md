@@ -33,3 +33,26 @@ match doc {
 ```
 
 `Document::Object` map entries are now iterated in insertion order.
+
+**`Document::Object` inner type change**
+
+`Document::Object` now wraps an insertion-ordered `aws_smithy_types::document::DocumentObject` instead of a `std::collections::HashMap<String, Document>`. This is source-breaking beyond the variant additions in two ways:
+
+- Naming the old inner type no longer compiles. A pattern bind or annotation that referred to `HashMap<String, Document>` (for example `Document::Object(map) => { let _: &HashMap<String, Document> = map; }`) must be updated to `DocumentObject`.
+- `HashMap`-only methods are unavailable. `DocumentObject` mirrors most of the `HashMap` surface (`insert`, `get`, `get_mut`, `contains_key`, `remove`, `len`, `is_empty`, `clear`, `iter` / `iter_mut`, `keys`, `values` / `values_mut`, indexing by `&str` / `&String`, and the `IntoIterator` / `FromIterator` / `Extend` impls), but methods such as `.entry()`, `.retain()`, `.drain()`, `.capacity()`, and `.get_key_value()` are not provided.
+
+Migration:
+
+```rust
+use aws_smithy_types::document::DocumentObject;
+use std::collections::HashMap;
+
+// Build a DocumentObject from a HashMap...
+let obj = DocumentObject::from(map);
+// ...or from scratch:
+let mut obj = DocumentObject::new();
+obj.insert("key".to_string(), Document::String("value".to_string()));
+
+// Recover a HashMap when one is specifically required:
+let map: HashMap<String, Document> = obj.into_iter().collect();
+```

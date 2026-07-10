@@ -121,4 +121,67 @@ internal class RecursiveShapeClassifierTest {
         // The list element is the struct Tree; a struct target terminates the walk.
         classifier.isRecursive(treeList, tree) shouldBe false
     }
+
+    // -- Aggregate-only cycles (the `true` / defensive-guard path) -------------
+    //
+    // Smithy's model validation rejects aggregate-only cycles (recursion must
+    // pass through a structure or union), so a *valid* model can never drive
+    // `isRecursive` to `true`. These tests build such invalid models with
+    // `asSmithyModel(disableValidation = true)` to exercise the guard branch and
+    // the `seen`-set termination directly — proving the classifier is total and
+    // that the `SchemaGenerator` `prelude::DOCUMENT` fallback it gates is
+    // reachable exactly (and only) for these otherwise-illegal shapes.
+
+    @Test
+    fun `self-referential list is an aggregate cycle`() {
+        // `list SelfList { member: SelfList }` is an aggregate-only cycle Smithy
+        // would reject; validation is disabled so we can classify it. The
+        // aggregate closure includes the start shape, so a self-referential
+        // aggregate is recursive.
+        val model =
+            """
+            namespace com.example
+            list SelfList { member: SelfList }
+            """.asSmithyModel(disableValidation = true)
+        val classifier = RecursiveShapeClassifier(model)
+        val selfList = model.lookup<ListShape>("com.example#SelfList")
+
+        classifier.isRecursive(selfList, selfList) shouldBe true
+    }
+
+    @Test
+    fun `self-referential map value is an aggregate cycle`() {
+        // `map SelfMap { key: String, value: SelfMap }` — same idea via a map
+        // value edge.
+        val model =
+            """
+            namespace com.example
+            map SelfMap { key: String, value: SelfMap }
+            """.asSmithyModel(disableValidation = true)
+        val classifier = RecursiveShapeClassifier(model)
+        val selfMap = model.lookup<MapShape>("com.example#SelfMap")
+
+        classifier.isRecursive(selfMap, selfMap) shouldBe true
+    }
+
+    @Test
+    fun `two-node list-map aggregate cycle is recursive in both directions`() {
+        // A -> (element) B -> (value) A, with no intervening struct/union. This
+        // is the multi-hop aggregate-only cycle; without the `seen` set the walk
+        // would not terminate. Both member-target edges close the cycle.
+        val model =
+            """
+            namespace com.example
+            list A { member: B }
+            map B { key: String, value: A }
+            """.asSmithyModel(disableValidation = true)
+        val classifier = RecursiveShapeClassifier(model)
+        val a = model.lookup<ListShape>("com.example#A")
+        val b = model.lookup<MapShape>("com.example#B")
+
+        // A's member edge targets B, and B reaches back to A (B -> value A).
+        classifier.isRecursive(a, b) shouldBe true
+        // B's value edge targets A, and A reaches back to B (A -> member B).
+        classifier.isRecursive(b, a) shouldBe true
+    }
 }

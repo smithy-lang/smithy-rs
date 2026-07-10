@@ -186,7 +186,7 @@ impl JsonCodecSettings {
             use_json_name: matches!(self.field_mapper, JsonFieldMapper::UseJsonName),
             default_timestamp_format: self.default_timestamp_format,
             max_depth: self.max_depth,
-            protocol_id: self.protocol_id,
+            protocol_id: self.protocol_id.clone(),
             use_string_for_arbitrary_precision: self.use_string_for_arbitrary_precision,
             default_namespace: self.default_namespace.clone(),
         }
@@ -357,9 +357,8 @@ impl DocumentSettings for JsonCodecSettings {
     /// deserialization side; the corresponding encode happens in
     /// `JsonSerializer::write_document`.
     fn coerce_string_to_blob(&self, s: &str) -> Result<Vec<u8>, DocumentError> {
-        aws_smithy_types::base64::decode(s).map_err(|e| DocumentError::InvalidInput {
-            message: format!("base64 decode failed: {e}"),
-        })
+        aws_smithy_types::base64::decode(s)
+            .map_err(|e| DocumentError::invalid_input(format!("base64 decode failed: {e}")))
     }
 
     /// Parses a string-formatted timestamp using the codec's default
@@ -377,9 +376,8 @@ impl DocumentSettings for JsonCodecSettings {
         // parse format is resolved via the shared `string_timestamp_format`
         // helper (also used by the schema-based read path).
         let format = string_timestamp_format(self.default_timestamp_format);
-        DateTime::from_str(s, format).map_err(|e| DocumentError::InvalidInput {
-            message: format!("timestamp parse failed: {e}"),
-        })
+        DateTime::from_str(s, format)
+            .map_err(|e| DocumentError::invalid_input(format!("timestamp parse failed: {e}")))
     }
 
     /// Coerces a number to a timestamp interpreted as
@@ -394,33 +392,27 @@ impl DocumentSettings for JsonCodecSettings {
     /// those formats.
     fn coerce_number_to_timestamp(&self, n: &Number) -> Result<DateTime, DocumentError> {
         if !matches!(self.default_timestamp_format, TimestampFormat::EpochSeconds) {
-            return Err(DocumentError::UnsupportedOperation {
-                message: format!(
-                    "JSON codec configured with timestamp format {:?}; \
-                     number-to-timestamp coercion only valid for epoch-seconds",
-                    self.default_timestamp_format
-                ),
-            });
+            return Err(DocumentError::unsupported(format!(
+                "JSON codec configured with timestamp format {:?}; \
+                 number-to-timestamp coercion only valid for epoch-seconds",
+                self.default_timestamp_format
+            )));
         }
         Ok(match *n {
             Number::PosInt(u) => {
                 if u > i64::MAX as u64 {
-                    return Err(DocumentError::InvalidInput {
-                        message: format!(
-                            "epoch-seconds value {u} overflows i64; cannot construct DateTime"
-                        ),
-                    });
+                    return Err(DocumentError::invalid_input(format!(
+                        "epoch-seconds value {u} overflows i64; cannot construct DateTime"
+                    )));
                 }
                 DateTime::from_secs(u as i64)
             }
             Number::NegInt(i) => DateTime::from_secs(i),
             Number::Float(f) => {
                 if !f.is_finite() {
-                    return Err(DocumentError::InvalidInput {
-                        message: format!(
-                            "non-finite epoch-seconds value {f}; cannot construct DateTime"
-                        ),
-                    });
+                    return Err(DocumentError::invalid_input(format!(
+                        "non-finite epoch-seconds value {f}; cannot construct DateTime"
+                    )));
                 }
                 DateTime::from_secs_f64(f)
             }

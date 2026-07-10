@@ -481,7 +481,7 @@ impl TypeRegistryBuilder {
         schema: &'static Schema<'static>,
         deserialize: DeserializeFn,
     ) -> Self {
-        let id = *schema.shape_id();
+        let id = schema.shape_id().clone();
         self.entries
             .insert(id, RegistryEntry::new(schema, deserialize));
         self
@@ -500,7 +500,7 @@ impl TypeRegistryBuilder {
         deserialize: DeserializeFn,
         error_deserialize: ErrorDeserializeFn,
     ) -> Self {
-        let id = *schema.shape_id();
+        let id = schema.shape_id().clone();
         self.entries.insert(
             id,
             RegistryEntry::new_error(schema, deserialize, error_deserialize),
@@ -1134,13 +1134,13 @@ mod tests {
     #[test]
     fn builder_insert_keyed_form() {
         // Verify that the keyed `insert(id, entry)` form works alongside `insert_shape`.
-        let id = *FOO_SCHEMA.shape_id();
+        let id = FOO_SCHEMA.shape_id();
         let registry = TypeRegistry::builder()
-            .insert(id, RegistryEntry::new(&FOO_SCHEMA, deserialize_foo))
+            .insert(id.clone(), RegistryEntry::new(&FOO_SCHEMA, deserialize_foo))
             .build();
 
         assert_eq!(registry.len(), 1);
-        assert!(registry.schema_for(&id).is_some());
+        assert!(registry.schema_for(id).is_some());
     }
 
     #[test]

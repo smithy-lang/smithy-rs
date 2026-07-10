@@ -31,6 +31,15 @@ import software.amazon.smithy.model.shapes.ShapeId
  * cycle, and Smithy forbids those, so for any valid model the resolved constant
  * is always finite and safe to reference.
  *
+ * In practice this is therefore a **defensive guard**: because Smithy's model
+ * validation rejects aggregate-only cycles before code generation runs,
+ * [isRecursive] never returns `true` for a valid model and the
+ * `prelude::DOCUMENT` fallback in [SchemaGenerator] is never taken. It exists so
+ * codegen stays total if an invalid or synthetic model (e.g. one built in a unit
+ * test with validation disabled) ever reaches the generator — without it, such a
+ * model would drive emission of a self-referential `static` schema constant,
+ * which is an illegal, infinitely-sized value in Rust.
+ *
  * This matches the data emitted by [SchemaGenerator.emitAggregateMemberChain],
  * which likewise descends only through aggregates and stops at struct/union.
  *

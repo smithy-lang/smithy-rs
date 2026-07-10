@@ -178,9 +178,10 @@ impl DiscriminatedDocument {
                     "cannot coerce string to blob without protocol-specific document settings",
                 )),
             },
-            other => Err(DocumentError::TypeMismatch {
-                message: format!("expected blob, found {}", document_variant_name(other)),
-            }),
+            other => Err(DocumentError::type_mismatch(format!(
+                "expected blob, found {}",
+                document_variant_name(other)
+            ))),
         }
     }
 
@@ -210,9 +211,10 @@ impl DiscriminatedDocument {
                      settings",
                 ))
             }
-            (other, _) => Err(DocumentError::TypeMismatch {
-                message: format!("expected timestamp, found {}", document_variant_name(other)),
-            }),
+            (other, _) => Err(DocumentError::type_mismatch(format!(
+                "expected timestamp, found {}",
+                document_variant_name(other)
+            ))),
         }
     }
 }

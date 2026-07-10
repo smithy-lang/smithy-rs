@@ -52,7 +52,7 @@ impl AwsRestXmlProtocol {
         let settings = Arc::new(settings);
         let codec = XmlCodec::from_shared_settings(settings.clone());
         Self {
-            inner: HttpBindingProtocol::new(PROTOCOL_ID, codec, "application/xml"),
+            inner: HttpBindingProtocol::new(PROTOCOL_ID.clone(), codec, "application/xml"),
             settings,
             no_error_wrapping: false,
             service_xml_namespace: None,

@@ -65,7 +65,7 @@ impl AwsJsonRpcProtocol {
             JsonCodecSettings::builder()
                 .use_json_name(false)
                 .default_timestamp_format(aws_smithy_types::date_time::Format::EpochSeconds)
-                .protocol_id(protocol_id)
+                .protocol_id(protocol_id.clone())
                 .build(),
         );
         Self {

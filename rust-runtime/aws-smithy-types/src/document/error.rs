@@ -41,6 +41,7 @@ pub enum DocumentError {
     ///
     /// Example: calling [`Document::as_byte`](super::Document::as_byte)
     /// on a `Document::String(_)`.
+    #[non_exhaustive]
     TypeMismatch {
         /// Description of what was expected vs. what was found.
         message: String,
@@ -51,6 +52,7 @@ pub enum DocumentError {
     /// Emitted by [`Document::as_byte`](super::Document::as_byte) (and
     /// the other narrow numeric accessors) when the source value is
     /// outside the target's `[min, max]` range.
+    #[non_exhaustive]
     NumericCoercionOverflow {
         /// Target type name (e.g. `"byte"`, `"integer"`, `"long"`).
         target: String,
@@ -65,11 +67,13 @@ pub enum DocumentError {
     /// Example: a [`Document::BigDecimal`](super::Document::BigDecimal)
     /// whose internal string isn't parseable as `f64` when calling
     /// [`Document::as_double`](super::Document::as_double).
+    #[non_exhaustive]
     InvalidInput {
         /// Description of the problem.
         message: String,
     },
     /// Catch-all for errors not covered by other variants.
+    #[non_exhaustive]
     Custom {
         /// Explanatory message.
         message: String,
@@ -82,6 +86,7 @@ pub enum DocumentError {
     /// methods that a particular protocol doesn't support (e.g.
     /// CBOR's `coerce_string_to_blob`, since CBOR has native byte
     /// strings).
+    #[non_exhaustive]
     UnsupportedOperation {
         /// Description of which operation isn't supported and why.
         message: String,
@@ -107,6 +112,30 @@ impl fmt::Display for DocumentError {
 impl std::error::Error for DocumentError {}
 
 impl DocumentError {
+    /// Creates a `TypeMismatch` error with the given message describing
+    /// what was expected versus what was found.
+    pub fn type_mismatch(message: impl Into<String>) -> Self {
+        DocumentError::TypeMismatch {
+            message: message.into(),
+        }
+    }
+
+    /// Creates a `NumericCoercionOverflow` error for a `value` that is
+    /// outside the representable range of `target` (e.g. `"byte"`).
+    pub fn numeric_coercion_overflow(target: impl Into<String>, value: impl Into<String>) -> Self {
+        DocumentError::NumericCoercionOverflow {
+            target: target.into(),
+            value: value.into(),
+        }
+    }
+
+    /// Creates an `InvalidInput` error with the given message.
+    pub fn invalid_input(message: impl Into<String>) -> Self {
+        DocumentError::InvalidInput {
+            message: message.into(),
+        }
+    }
+
     /// Creates a custom error with the given message.
     pub fn custom(message: impl Into<String>) -> Self {
         DocumentError::Custom {
