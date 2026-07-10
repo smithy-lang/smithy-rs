@@ -511,11 +511,16 @@ class RustJmespathShapeTraversalGenerator(
                                     // Generate a match that returns the active variant name.
                                     val unionSym = symbolProvider.toSymbol(outputShape)
 
+                                    // Filter out "Unknown" to avoid generating a match arm that
+                                    // collides with the synthetic unit variant added by client codegen.
+                                    // The wildcard arm below handles it.
                                     val matchArms =
-                                        outputShape.allMembers.keys.joinToString("\n") { memberName ->
-                                            val variantName = memberName.toPascalCase()
-                                            "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
-                                        }
+                                        outputShape.allMembers.keys
+                                            .filter { it.toPascalCase() != "Unknown" }
+                                            .joinToString("\n") { memberName ->
+                                                val variantName = memberName.toPascalCase()
+                                                "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
+                                            }
                                     rust(
                                         """let $ident = vec![match ${arg.identifier} {
                                          |$matchArms

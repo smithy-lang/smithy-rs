@@ -711,12 +711,14 @@ class RustJmespathShapeTraversalGeneratorTest {
             running: StatusRunning,
             done: StatusDone,
             failed: StatusFailed,
+            unknown: StatusUnknown,
         }
 
         structure StatusPending {}
         structure StatusRunning {}
         structure StatusDone { message: String }
         structure StatusFailed { reason: String }
+        structure StatusUnknown {}
 
         structure EntityPrimitives {
             boolean: Boolean,
