@@ -85,6 +85,13 @@ impl PoolHooks {
             l.on_closed(event);
         }
     }
+
+    /// Fire the listener's connection-borrowed callback, if a listener is set.
+    pub(crate) fn on_borrowed(&self, event: &super::connection::ConnectionBorrowedEvent) {
+        if let Some(ref l) = self.listener {
+            l.on_borrowed(event);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

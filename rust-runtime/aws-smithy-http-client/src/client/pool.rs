@@ -54,8 +54,9 @@ pub mod partition;
 pub use builder::Builder;
 pub use client::Client;
 pub use connection::{
-    Authority, CloseReason, ConnectionClosedEvent, ConnectionCreatedEvent, ConnectionEventListener,
-    ConnectionFailedEvent, ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
+    Authority, CloseReason, ConnectionBorrowedEvent, ConnectionClosedEvent,
+    ConnectionCreatedEvent, ConnectionEventListener, ConnectionFailedEvent,
+    ConnectionReusedEvent, ConnectionTiming, NegotiatedProtocol,
 };
 pub use partition::{
     CrossPartitionPolicy, DriverSpawner, Partition, PartitionId, TokioDriverSpawner,
@@ -969,6 +970,7 @@ where
                             }
                             partition::CrossPartitionPolicy::Never => None,
                         },
+                        hooks: shared.hooks.clone(),
                     })
                 },
             )
@@ -1511,6 +1513,8 @@ struct TypedPoolEntry<S> {
     /// the single-partition default, where it would have no NIC-group
     /// peers anyway). Drives the `send` cap-bound borrow branch.
     borrow: Option<PeerBorrowHandle>,
+    /// Connection lifecycle hooks for firing events (borrowed, etc.).
+    hooks: handshake::PoolHooks,
 }
 
 impl<S, Conn, PoolUnnameable> PoolEntry for TypedPoolEntry<S>
@@ -1532,6 +1536,7 @@ where
     ) -> BoxFuture<Result<http_1x::Response<SdkBody>, BoxError>> {
         let mut svc = self.stack.clone();
         let borrow = self.borrow.clone();
+        let hooks = self.hooks.clone();
         Box::pin(async move {
             // Local checkout. The post-checkout `poll_ready` is the
             // reactive health check: the composable pool has no proactive
@@ -1618,7 +1623,15 @@ where
                             .await
                             .is_ok()
                         {
-                            return borrowed.dispatch(req).await;
+                            let result = borrowed.dispatch(req).await;
+                            if result.is_ok() {
+                                hooks.on_borrowed(
+                                    &connection::ConnectionBorrowedEvent::new(
+                                        connection::Authority::new(key.authority.as_str()),
+                                    ),
+                                );
+                            }
+                            return result;
                         }
                     }
                     // Borrow miss or dead — blocking local checkout.

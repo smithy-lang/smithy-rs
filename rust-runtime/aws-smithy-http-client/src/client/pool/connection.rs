@@ -194,6 +194,27 @@ impl ConnectionReusedEvent {
     }
 }
 
+/// Emitted when a cross-partition borrow dispatches a request through a peer's
+/// idle connection. The connection stays resident in the peer's partition; no
+/// permit moves. Fires once per successful borrow dispatch.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct ConnectionBorrowedEvent {
+    authority: Authority,
+}
+
+impl ConnectionBorrowedEvent {
+    /// Create a new borrowed event.
+    pub(crate) fn new(authority: Authority) -> Self {
+        Self { authority }
+    }
+
+    /// The authority the borrowed connection serves.
+    pub fn authority(&self) -> &Authority {
+        &self.authority
+    }
+}
+
 /// Emitted when a connection is removed from the pool.
 #[non_exhaustive]
 pub struct ConnectionClosedEvent {
@@ -324,6 +345,8 @@ pub trait ConnectionEventListener: Send + Sync + 'static {
     fn on_created(&self, _event: &ConnectionCreatedEvent) {}
     /// An existing idle connection was checked out from the pool.
     fn on_reused(&self, _event: &ConnectionReusedEvent) {}
+    /// A cross-partition borrow dispatched a request through a peer's idle connection.
+    fn on_borrowed(&self, _event: &ConnectionBorrowedEvent) {}
     /// A connection was removed from the pool.
     fn on_closed(&self, _event: &ConnectionClosedEvent) {}
     /// A connection attempt failed before completing the handshake.
