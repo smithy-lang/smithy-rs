@@ -1940,18 +1940,7 @@ async fn v2_cross_partition_reclaim_frees_peer_idle() {
 /// reclaim: the connection stays the peer's (P0 runs on P1's exact
 /// connection), proven by `p0_conn_id == p1_conn_id` and a single TCP
 /// accept (P1's connection serves both requests via keep-alive).
-// `Partition::interface` (the shared NIC-group label) is Android/Fuchsia/Linux
-// only; the borrow path it exercises is platform-independent but unconfigurable
-// elsewhere.
-#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
-// IGNORED: forces its shared NIC group via `.interface("eth-test")`, which does a
-// privileged `SO_BINDTODEVICE` to a nonexistent device → ENODEV before the borrow
-// path is reached (fails on any machine without that iface + CAP_NET_RAW). Borrow is
-// currently inert anyway (its `CapBound` trigger is unreachable under the poll_ready
-// acquire model). Re-enable when borrow's trigger is restored and NIC-group membership
-// is settable without a real bind — see task #31.
-#[ignore = "borrow inert under poll_ready + needs NIC-group label without SO_BINDTODEVICE (task #31)"]
 async fn v2_cross_partition_borrow_reuses_peer_connection() {
     use aws_smithy_http_client::pool::{
         CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
@@ -1976,12 +1965,10 @@ async fn v2_cross_partition_borrow_reuses_peer_connection() {
         .build()
         .await;
 
-    // Two partitions, same NIC group (borrow peers), global cap 1, long
-    // idle timeout so the eviction tick never interferes.
-    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
-        .interface("eth-test");
-    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
-        .interface("eth-test");
+    // Two partitions (borrow peers in the default NIC group), global cap 1,
+    // long idle timeout so the eviction tick never interferes.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current());
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current());
     let pool = SharedPool::builder()
         .dns_resolver(harness.dns_resolver())
         .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
@@ -2046,12 +2033,7 @@ async fn v2_cross_partition_borrow_reuses_peer_connection() {
 /// not migrate it (connections never move). This is the wiring counterpart
 /// to the borrow test's `conn_id` equality: the id matches because the
 /// connection is P1's, and the residency confirms it stayed P1's.
-// `Partition::interface` (the shared NIC-group label) is Android/Fuchsia/Linux
-// only; the borrow residency it exercises is platform-independent but
-// unconfigurable elsewhere.
-#[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
-#[ignore = "borrow inert under poll_ready + needs NIC-group label without SO_BINDTODEVICE (task #31)"]
 async fn v2_borrowed_connection_stays_resident_in_peer() {
     use aws_smithy_http_client::pool::{
         Authority, CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,
@@ -2074,12 +2056,11 @@ async fn v2_borrowed_connection_stays_resident_in_peer() {
         .build()
         .await;
 
-    // Same setup as the borrow test: two same-NIC partitions, cap 1, long
-    // idle timeout. The borrow is forced by P1 holding the only permit.
-    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current())
-        .interface("eth-test");
-    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current())
-        .interface("eth-test");
+    // Same setup as the borrow test: two partitions (default NIC group),
+    // cap 1, long idle timeout. The borrow is forced by P1 holding the
+    // only permit.
+    let p0 = Partition::new(PartitionId::from_index(0), TokioDriverSpawner::current());
+    let p1 = Partition::new(PartitionId::from_index(1), TokioDriverSpawner::current());
     let pool = SharedPool::builder()
         .dns_resolver(harness.dns_resolver())
         .cross_partition_policy(CrossPartitionPolicy::PreferLocal)
@@ -2146,7 +2127,7 @@ async fn v2_borrowed_connection_stays_resident_in_peer() {
 // platform-independent but unconfigurable elsewhere.
 #[cfg(any(target_os = "android", target_os = "fuchsia", target_os = "linux"))]
 #[tokio::test]
-#[ignore = "borrow inert under poll_ready + needs NIC-group labels without SO_BINDTODEVICE (task #31)"]
+#[ignore = "needs NIC-group label decoupled from SO_BINDTODEVICE — .interface() conflates grouping with real bind"]
 async fn v2_cross_partition_borrow_respects_nic_boundary() {
     use aws_smithy_http_client::pool::{
         CrossPartitionPolicy, Partition, PartitionId, TokioDriverSpawner,

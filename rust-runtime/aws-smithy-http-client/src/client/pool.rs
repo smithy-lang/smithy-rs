@@ -414,14 +414,14 @@ impl PeerReclaimHandle {
 /// Handle for cross-partition borrow (`PreferLocal`), held by the pool
 /// entry under a binding cap.
 ///
-/// At a cap-bound local checkout (`AcquireMode::NonBlocking` returned
-/// `CapBound`), the requesting partition uses this to borrow one peer's
-/// idle connection and dispatch its request through it — no permit moves,
-/// no cold start. Response-shaped and NIC-*bounded*: the borrowed
-/// connection physically lives on the peer's NIC, so candidates are drawn
-/// only from the same NIC group (unlike reclaim, which frees a fungible
-/// permit and is NIC-blind). Always keyed to the requested authority (the
-/// borrowed connection must already be connected to that host).
+/// When the global semaphore is saturated (no permits available), the
+/// requesting partition uses this to borrow one peer's idle connection and
+/// dispatch its request through it — no permit moves, no cold start.
+/// Response-shaped and NIC-*bounded*: the borrowed connection physically
+/// lives on the peer's NIC, so candidates are drawn only from the same NIC
+/// group (unlike reclaim, which frees a fungible permit and is NIC-blind).
+/// Always keyed to the requested authority (the borrowed connection must
+/// already be connected to that host).
 #[derive(Clone)]
 pub(crate) struct PeerBorrowHandle {
     /// `Weak` to avoid a cycle: the registry transitively owns the
@@ -431,6 +431,12 @@ pub(crate) struct PeerBorrowHandle {
     stats_index: Arc<StatsIndex>,
     /// The requesting partition — excluded from its own candidate walk.
     self_partition: PartitionId,
+    /// Best-effort saturation probe for the global cap. Checked before
+    /// attempting a peer borrow — if permits are available locally, skip
+    /// the borrow (a local connect is preferred). `None` when unbounded
+    /// (never saturated → borrow never fires, consistent with the intent
+    /// of an unbounded pool).
+    global_sem: Option<Arc<Semaphore>>,
 }
 
 impl PeerBorrowHandle {
@@ -458,6 +464,19 @@ impl PeerBorrowHandle {
         candidates
             .into_iter()
             .find_map(|peer| registry.try_borrow_on(peer, key))
+    }
+
+    /// Best-effort saturation hint: `true` when the global cap is likely
+    /// exhausted (no permits available). TOCTOU: the state may change
+    /// between this check and the act; both outcomes are benign because
+    /// borrow is best-effort (a false positive borrows unnecessarily, a
+    /// false negative falls through to the normal blocking acquire which
+    /// parks on poll_ready with reclaim active). Returns `false` when no
+    /// global cap is configured (unbounded pool → borrow never fires).
+    pub(crate) fn should_try_borrow(&self) -> bool {
+        self.global_sem
+            .as_ref()
+            .map_or(false, |sem| sem.available_permits() == 0)
     }
 
     /// Rotate the candidate vec by the partition's advisory `peer_cursor`
@@ -540,6 +559,7 @@ impl SharedPoolState {
             registry,
             stats_index: self.stats_index.clone(),
             self_partition,
+            global_sem: self.global_sem.clone(),
         })
     }
 
@@ -1527,9 +1547,6 @@ where
             //     the next `call` to run a fresh handshake; a handshake
             //     failure surfaces as an error from `svc.call` (not the
             //     inner `poll_ready`), which we propagate.
-            // Under `AcquireMode::NonBlocking`, a cache miss at the connect
-            // path returns `CapBound` instead of blocking — surfaced here
-            // so the caller can try a peer borrow before committing to wait.
             async fn local_checkout<S, Conn, PoolUnnameable>(
                 svc: &mut S,
                 ctx: ConnectCtx,
@@ -1587,56 +1604,33 @@ where
             }
 
             match &borrow {
-                // PreferLocal: probe locally without blocking; on a
-                // cap-bound miss, borrow a peer's idle connection before
-                // falling back to a blocking local acquire.
-                Some(handle) => {
-                    let probe = ctx.clone().with_mode(connection::AcquireMode::NonBlocking);
-                    match local_checkout(&mut svc, probe).await {
-                        Ok(mut conn) => {
-                            let resp = conn.call(req).await.map_err(Into::into)?;
-                            Ok(erase_body(resp))
+                Some(handle) if handle.should_try_borrow() => {
+                    // Global cap likely saturated. A blocking local
+                    // checkout would park in poll_ready (waiting on
+                    // permit) — try borrowing a peer's warm connection
+                    // first. On miss/dead, fall through to the blocking
+                    // path (which parks with reclaim active, eventually
+                    // succeeding).
+                    let key = PoolKey::from_uri(&ctx.uri)
+                        .ok_or("request URI must have scheme and authority")?;
+                    if let Some(mut borrowed) = handle.try_borrow(&key) {
+                        if std::future::poll_fn(|cx| borrowed.poll_ready(cx))
+                            .await
+                            .is_ok()
+                        {
+                            return borrowed.dispatch(req).await;
                         }
-                        // Cap-bound: the cap is full (no connect was
-                        // attempted under `NonBlocking`). Borrow a peer's
-                        // idle connection, else fall back to the
-                        // authoritative blocking acquire. A genuine connect
-                        // error (a permit was free but the connect failed)
-                        // is not `CapBound` and propagates.
-                        Err(err) if connection::CapBound::is(&*err) => {
-                            let key = PoolKey::from_uri(&ctx.uri)
-                                .ok_or("request URI must have scheme and authority")?;
-                            if let Some(mut borrowed) = handle.try_borrow(&key) {
-                                // Single-shot liveness check. On death,
-                                // fall through to the authoritative local
-                                // acquire rather than walk further peers.
-                                if std::future::poll_fn(|cx| borrowed.poll_ready(cx))
-                                    .await
-                                    .is_ok()
-                                {
-                                    // Dispatch through the peer's connection;
-                                    // its driver stays on the peer's runtime,
-                                    // and the connection returns to the peer's
-                                    // pool when the body drains.
-                                    return borrowed.dispatch(req).await;
-                                }
-                                // Dead borrowed connection drops here:
-                                // `CachedConnection::Drop` discards it from
-                                // the peer's pool and balances the peer's
-                                // `active`.
-                            }
-                            // Borrow miss → authoritative blocking local
-                            // acquire (blocks on the permit; includes reclaim).
-                            let mut conn = local_checkout(&mut svc, ctx).await?;
-                            let resp = conn.call(req).await.map_err(Into::into)?;
-                            Ok(erase_body(resp))
-                        }
-                        Err(err) => Err(err),
                     }
+                    // Borrow miss or dead — blocking local checkout.
+                    let mut conn = local_checkout(&mut svc, ctx).await?;
+                    let resp = conn.call(req).await.map_err(Into::into)?;
+                    Ok(erase_body(resp))
                 }
-                // Never (and single-partition default): blocking local
-                // acquire, unchanged.
-                None => {
+                // Cap not saturated or no borrow handle: blocking local
+                // checkout (cache hit returns immediately without touching
+                // the semaphore; cache miss parks on poll_ready with
+                // reclaim active).
+                _ => {
                     let mut conn = local_checkout(&mut svc, ctx).await?;
                     let resp = conn.call(req).await.map_err(Into::into)?;
                     Ok(erase_body(resp))
