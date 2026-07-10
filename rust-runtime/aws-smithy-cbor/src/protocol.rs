@@ -186,9 +186,7 @@ fn error_code_and_message(
 }
 
 fn deser_err(e: crate::decode::DeserializeError) -> SerdeError {
-    SerdeError::InvalidInput {
-        message: e.to_string(),
-    }
+    SerdeError::invalid_input(e.to_string())
 }
 
 #[cfg(test)]

@@ -197,15 +197,15 @@ impl ShapeDeserializer for CborDeserializer<'_> {
     }
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big integer not yet supported (smithy-rs#4611)".into(),
-        })
+        Err(SerdeError::unsupported(
+            "CBOR big integer not yet supported (smithy-rs#4611)",
+        ))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big decimal not yet supported (smithy-rs#4611)".into(),
-        })
+        Err(SerdeError::unsupported(
+            "CBOR big decimal not yet supported (smithy-rs#4611)",
+        ))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
@@ -224,9 +224,9 @@ impl ShapeDeserializer for CborDeserializer<'_> {
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "document types are not supported by rpcv2Cbor protocol".into(),
-        })
+        Err(SerdeError::unsupported(
+            "document types are not supported by rpcv2Cbor protocol",
+        ))
     }
 
     fn is_null(&self) -> bool {
@@ -303,9 +303,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 }
 
 fn deser_err(e: crate::decode::DeserializeError) -> SerdeError {
-    SerdeError::InvalidInput {
-        message: e.to_string(),
-    }
+    SerdeError::invalid_input(e.to_string())
 }
 
 #[cfg(test)]

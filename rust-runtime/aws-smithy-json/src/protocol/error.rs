@@ -105,9 +105,7 @@ fn parse_error_body(bytes: &[u8]) -> Result<ErrorBody<'_>, SerdeError> {
 }
 
 fn invalid_input(message: impl Into<String>) -> SerdeError {
-    SerdeError::InvalidInput {
-        message: message.into(),
-    }
+    SerdeError::invalid_input(message)
 }
 
 /// Extracts canonical error metadata (code + message) from a JSON-protocol

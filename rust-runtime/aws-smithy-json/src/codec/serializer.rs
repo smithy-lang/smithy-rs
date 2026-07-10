@@ -151,8 +151,8 @@ impl JsonSerializer {
                 let format = self.settings.default_timestamp_format;
                 JsonValueWriter::new(&mut self.output)
                     .date_time(ts, format)
-                    .map_err(|e| SerdeError::WriteFailed {
-                        message: format!("failed to format timestamp: {e}"),
+                    .map_err(|e| {
+                        SerdeError::write_failed(format!("failed to format timestamp: {e}"))
                     })?;
             }
             Document::BigInteger(bi) => {
@@ -369,33 +369,25 @@ impl ShapeSerializer for JsonSerializer {
     fn write_byte(&mut self, schema: &Schema<'_>, value: i8) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::write_failed(e.to_string()))
     }
 
     fn write_short(&mut self, schema: &Schema<'_>, value: i16) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::write_failed(e.to_string()))
     }
 
     fn write_integer(&mut self, schema: &Schema<'_>, value: i32) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::write_failed(e.to_string()))
     }
 
     fn write_long(&mut self, schema: &Schema<'_>, value: i64) -> Result<(), SerdeError> {
         use std::fmt::Write;
         self.prefix(schema);
-        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-            message: e.to_string(),
-        })
+        write!(&mut self.output, "{}", value).map_err(|e| SerdeError::write_failed(e.to_string()))
     }
 
     fn write_float(&mut self, schema: &Schema<'_>, value: f32) -> Result<(), SerdeError> {
@@ -412,9 +404,8 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-                message: e.to_string(),
-            })
+            write!(&mut self.output, "{}", value)
+                .map_err(|e| SerdeError::write_failed(e.to_string()))
         }
     }
 
@@ -432,9 +423,8 @@ impl ShapeSerializer for JsonSerializer {
             }
             Ok(())
         } else {
-            write!(&mut self.output, "{}", value).map_err(|e| SerdeError::WriteFailed {
-                message: e.to_string(),
-            })
+            write!(&mut self.output, "{}", value)
+                .map_err(|e| SerdeError::write_failed(e.to_string()))
         }
     }
 
@@ -493,9 +483,9 @@ impl ShapeSerializer for JsonSerializer {
     fn write_timestamp(&mut self, schema: &Schema<'_>, value: &DateTime) -> Result<(), SerdeError> {
         self.prefix(schema);
         let format = self.get_timestamp_format(schema);
-        let formatted = value.fmt(format).map_err(|e| SerdeError::WriteFailed {
-            message: format!("failed to format timestamp: {e}"),
-        })?;
+        let formatted = value
+            .fmt(format)
+            .map_err(|e| SerdeError::write_failed(format!("failed to format timestamp: {e}")))?;
 
         match format {
             TimestampFormat::EpochSeconds => {

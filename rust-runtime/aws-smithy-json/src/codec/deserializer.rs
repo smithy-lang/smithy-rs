@@ -85,28 +85,22 @@ impl<'a> JsonDeserializer<'a> {
             }
         }
         if !found_end {
-            return Err(SerdeError::InvalidInput {
-                message: "unterminated string key".into(),
-            });
+            return Err(SerdeError::invalid_input("unterminated string key"));
         }
         self.position = start + i + 1; // advance past key bytes + closing quote
         let key_bytes = &input[start..start + i];
         if has_escapes {
-            let raw = std::str::from_utf8(key_bytes).map_err(|e| SerdeError::InvalidInput {
-                message: e.to_string(),
-            })?;
+            let raw = std::str::from_utf8(key_bytes)
+                .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
             Ok(std::borrow::Cow::Owned(
                 crate::escape::unescape_string(raw)
-                    .map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    })?
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?
                     .into_owned(),
             ))
         } else {
             Ok(std::borrow::Cow::Borrowed(
-                std::str::from_utf8(key_bytes).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })?,
+                std::str::from_utf8(key_bytes)
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?,
             ))
         }
     }
@@ -201,9 +195,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             return Ok(());
         }
         if self.remaining().first() != Some(&b'{') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected object".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected object"));
         }
         self.advance_by(1);
 
@@ -218,15 +210,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in object".into(),
-                    });
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in object",
+                    ));
                 }
                 Some(&b'"') => {}
                 Some(_) => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "expected object key".into(),
-                    });
+                    return Err(SerdeError::invalid_input("expected object key"));
                 }
             }
 
@@ -236,9 +226,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             // Skip whitespace and expect colon
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected colon after key".into(),
-                });
+                return Err(SerdeError::invalid_input("expected colon after key"));
             }
             self.advance_by(1);
             self.skip_whitespace();
@@ -269,9 +257,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected array".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected array"));
         }
         self.advance_by(1);
 
@@ -283,9 +269,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in array".into(),
-                    });
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in array",
+                    ));
                 }
                 _ => consumer(self)?,
             }
@@ -306,9 +292,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected object".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected object"));
         }
         self.advance_by(1);
 
@@ -320,15 +304,13 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in object".into(),
-                    });
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in object",
+                    ));
                 }
                 Some(&b'"') => {}
                 Some(_) => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "expected key".into(),
-                    });
+                    return Err(SerdeError::invalid_input("expected key"));
                 }
             }
 
@@ -336,9 +318,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
 
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected colon".into(),
-                });
+                return Err(SerdeError::invalid_input("expected colon"));
             }
             self.advance_by(1);
             self.skip_whitespace();
@@ -360,33 +340,26 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             self.advance_by(5);
             Ok(false)
         } else {
-            Err(SerdeError::TypeMismatch {
-                message: "expected boolean".into(),
-            })
+            Err(SerdeError::type_mismatch("expected boolean"))
         }
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i8::try_from(n).map_err(|_| SerdeError::InvalidInput {
-                message: "value out of range for byte".into(),
-            })
+            i8::try_from(n).map_err(|_| SerdeError::invalid_input("value out of range for byte"))
         })
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i16::try_from(n).map_err(|_| SerdeError::InvalidInput {
-                message: "value out of range for short".into(),
-            })
+            i16::try_from(n).map_err(|_| SerdeError::invalid_input("value out of range for short"))
         })
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         self.read_integer_value().and_then(|n| {
-            i32::try_from(n).map_err(|_| SerdeError::InvalidInput {
-                message: "value out of range for integer".into(),
-            })
+            i32::try_from(n)
+                .map_err(|_| SerdeError::invalid_input("value out of range for integer"))
         })
     }
 
@@ -409,15 +382,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
                 self.consume_number();
-                let num_str =
-                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
-                    })?;
-                BigInteger::from_str(num_str).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })
+                let num_str = std::str::from_utf8(&self.input[start..self.position])
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                BigInteger::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
             }
             // String-encoded big integers are produced by senders
             // configured with `use_string_for_arbitrary_precision`. The
@@ -426,13 +393,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             // receiver configured for the other.
             Some(b'"') => {
                 let s = self.read_string(_schema)?;
-                BigInteger::from_str(&s).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })
+                BigInteger::from_str(&s).map_err(|e| SerdeError::invalid_input(e.to_string()))
             }
-            _ => Err(SerdeError::TypeMismatch {
-                message: "expected number or string".into(),
-            }),
+            _ => Err(SerdeError::type_mismatch("expected number or string")),
         }
     }
 
@@ -443,27 +406,17 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
             Some(b'-') | Some(b'0'..=b'9') => {
                 let start = self.position;
                 self.consume_number();
-                let num_str =
-                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
-                    })?;
-                BigDecimal::from_str(num_str).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })
+                let num_str = std::str::from_utf8(&self.input[start..self.position])
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+                BigDecimal::from_str(num_str).map_err(|e| SerdeError::invalid_input(e.to_string()))
             }
             // String-encoded big decimals — see the symmetric comment
             // on `read_big_integer`.
             Some(b'"') => {
                 let s = self.read_string(_schema)?;
-                BigDecimal::from_str(&s).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })
+                BigDecimal::from_str(&s).map_err(|e| SerdeError::invalid_input(e.to_string()))
             }
-            _ => Err(SerdeError::TypeMismatch {
-                message: "expected number or string".into(),
-            }),
+            _ => Err(SerdeError::type_mismatch("expected number or string")),
         }
     }
 
@@ -473,9 +426,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         let input = self.input;
         let rem = &input[pos..];
         if rem.first() != Some(&b'"') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected string".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected string"));
         }
         // Scan for end of string, tracking whether escapes are present
         let mut i = 1;
@@ -488,36 +439,27 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 let raw = &input[pos + 1..pos + i];
                 self.position = pos + i + 1;
                 if !has_escape {
-                    return std::str::from_utf8(raw).map(|s| s.to_owned()).map_err(|e| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
-                    });
+                    return std::str::from_utf8(raw)
+                        .map(|s| s.to_owned())
+                        .map_err(|e| SerdeError::invalid_input(e.to_string()));
                 }
-                let s = std::str::from_utf8(raw).map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                })?;
+                let s = std::str::from_utf8(raw)
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 return crate::deserialize::EscapedStr::new(s)
                     .to_unescaped()
                     .map(|s| s.into_owned())
-                    .map_err(|e| SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    });
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()));
             } else {
                 i += 1;
             }
         }
-        Err(SerdeError::InvalidInput {
-            message: "unterminated string".into(),
-        })
+        Err(SerdeError::invalid_input("unterminated string"))
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         let s = self.read_string(_schema)?;
-        let decoded =
-            aws_smithy_types::base64::decode(&s).map_err(|e| SerdeError::InvalidInput {
-                message: format!("invalid base64: {}", e),
-            })?;
+        let decoded = aws_smithy_types::base64::decode(&s)
+            .map_err(|e| SerdeError::invalid_input(format!("invalid base64: {}", e)))?;
         Ok(Blob::new(decoded))
     }
 
@@ -528,9 +470,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected array".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected array"));
         }
         self.advance_by(1);
         let mut out = Vec::new();
@@ -542,9 +482,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in array".into(),
-                    })
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in array",
+                    ))
                 }
                 _ => out.push(self.read_string(_schema)?),
             }
@@ -560,9 +500,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected array".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected array"));
         }
         self.advance_by(1);
         let mut out = Vec::new();
@@ -574,9 +512,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in array".into(),
-                    })
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in array",
+                    ))
                 }
                 _ => out.push(self.read_blob(_schema)?),
             }
@@ -592,9 +530,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected array".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected array"));
         }
         self.advance_by(1);
         let mut out = Vec::new();
@@ -606,9 +542,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in array".into(),
-                    })
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in array",
+                    ))
                 }
                 _ => out.push(self.read_integer(_schema)?),
             }
@@ -624,9 +560,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'[') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected array".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected array"));
         }
         self.advance_by(1);
         let mut out = Vec::new();
@@ -638,9 +572,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     break;
                 }
                 None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input in array".into(),
-                    })
+                    return Err(SerdeError::invalid_input(
+                        "unexpected end of input in array",
+                    ))
                 }
                 _ => out.push(self.read_long(_schema)?),
             }
@@ -659,9 +593,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
         }
         self.skip_whitespace();
         if self.remaining().first() != Some(&b'{') {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected object".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected object"));
         }
         self.advance_by(1);
         let mut out = std::collections::HashMap::new();
@@ -672,16 +604,12 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 break;
             }
             if self.remaining().first() != Some(&b'"') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected key".into(),
-                });
+                return Err(SerdeError::invalid_input("expected key"));
             }
             let key = self.parse_key()?;
             self.skip_whitespace();
             if self.remaining().first() != Some(&b':') {
-                return Err(SerdeError::InvalidInput {
-                    message: "expected colon".into(),
-                });
+                return Err(SerdeError::invalid_input("expected colon"));
             }
             self.advance_by(1);
             self.skip_whitespace();
@@ -727,45 +655,31 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 // Numeric timestamp — epoch seconds
                 let start = self.position;
                 self.consume_number();
-                let num_str =
-                    std::str::from_utf8(&self.input[start..self.position]).map_err(|e| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
-                    })?;
+                let num_str = std::str::from_utf8(&self.input[start..self.position])
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 if num_str.contains('.') || num_str.contains('e') || num_str.contains('E') {
                     let f: f64 = num_str.parse().map_err(|e: std::num::ParseFloatError| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
+                        SerdeError::invalid_input(e.to_string())
                     })?;
                     Ok(DateTime::from_secs_f64(f))
                 } else if num_str.starts_with('-') {
                     let n: i64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
+                        SerdeError::invalid_input(e.to_string())
                     })?;
                     Ok(DateTime::from_secs(n))
                 } else {
                     let n: u64 = num_str.parse().map_err(|e: std::num::ParseIntError| {
-                        SerdeError::InvalidInput {
-                            message: e.to_string(),
-                        }
+                        SerdeError::invalid_input(e.to_string())
                     })?;
                     if n > i64::MAX as u64 {
-                        return Err(SerdeError::InvalidInput {
-                            message: format!(
-                                "epoch-seconds value {n} overflows i64; cannot construct DateTime"
-                            ),
-                        });
+                        return Err(SerdeError::invalid_input(format!(
+                            "epoch-seconds value {n} overflows i64; cannot construct DateTime"
+                        )));
                     }
                     Ok(DateTime::from_secs(n as i64))
                 }
             }
-            _ => Err(SerdeError::TypeMismatch {
-                message: "expected timestamp".into(),
-            }),
+            _ => Err(SerdeError::type_mismatch("expected timestamp")),
         }
     }
 
@@ -783,9 +697,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                     self.advance_by(4);
                     Ok(Document::Null)
                 } else {
-                    Err(SerdeError::InvalidInput {
-                        message: "unexpected token in document".into(),
-                    })
+                    Err(SerdeError::invalid_input("unexpected token in document"))
                 }
             }
             Some(b'{') => {
@@ -798,16 +710,14 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         break;
                     }
                     if self.remaining().first() != Some(&b'"') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected object key in document".into(),
-                        });
+                        return Err(SerdeError::invalid_input("expected object key in document"));
                     }
                     let key = self.parse_key()?.into_owned();
                     self.skip_whitespace();
                     if self.remaining().first() != Some(&b':') {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected colon in document object".into(),
-                        });
+                        return Err(SerdeError::invalid_input(
+                            "expected colon in document object",
+                        ));
                     }
                     self.advance_by(1);
                     self.skip_whitespace();
@@ -827,9 +737,9 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                             break;
                         }
                         None => {
-                            return Err(SerdeError::InvalidInput {
-                                message: "unexpected end of input in document array".into(),
-                            })
+                            return Err(SerdeError::invalid_input(
+                                "unexpected end of input in document array",
+                            ))
                         }
                         _ => {
                             arr.push(self.read_document(_schema)?);
@@ -861,11 +771,8 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                 }
                 let pos = self.position;
                 self.advance_by(len);
-                let s = std::str::from_utf8(&self.input[pos..pos + len]).map_err(|e| {
-                    SerdeError::InvalidInput {
-                        message: e.to_string(),
-                    }
-                })?;
+                let s = std::str::from_utf8(&self.input[pos..pos + len])
+                    .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
                 // Number variant selection follows the SEP "Reporting
                 // `Document` ambiguous shape types" guidance: pick the
                 // first container from `int -> long -> bigInteger ->
@@ -892,9 +799,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         // also malformed for arbitrary precision.
                         _ => BigDecimal::from_str(s)
                             .map(Document::BigDecimal)
-                            .map_err(|e| SerdeError::InvalidInput {
-                                message: e.to_string(),
-                            }),
+                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
                     }
                 } else if is_negative {
                     match s.parse::<i64>() {
@@ -903,9 +808,7 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         // precision by routing to `BigInteger`.
                         Err(_) => BigInteger::from_str(s)
                             .map(Document::BigInteger)
-                            .map_err(|e| SerdeError::InvalidInput {
-                                message: e.to_string(),
-                            }),
+                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
                     }
                 } else {
                     match s.parse::<u64>() {
@@ -914,15 +817,11 @@ impl<'a> ShapeDeserializer for JsonDeserializer<'a> {
                         // precision by routing to `BigInteger`.
                         Err(_) => BigInteger::from_str(s)
                             .map(Document::BigInteger)
-                            .map_err(|e| SerdeError::InvalidInput {
-                                message: e.to_string(),
-                            }),
+                            .map_err(|e| SerdeError::invalid_input(e.to_string())),
                     }
                 }
             }
-            _ => Err(SerdeError::InvalidInput {
-                message: "unexpected token in document".into(),
-            }),
+            _ => Err(SerdeError::invalid_input("unexpected token in document")),
         };
         if result.is_ok() {
             self.depth -= 1;
@@ -1111,9 +1010,7 @@ impl<'a> JsonDeserializer<'a> {
                 }
                 Some(b'}') | Some(b']') => {
                     if depth == 0 {
-                        return Err(SerdeError::InvalidInput {
-                            message: "unexpected end token".into(),
-                        });
+                        return Err(SerdeError::invalid_input("unexpected end token"));
                     }
                     self.advance_by(1);
                     depth -= 1;
@@ -1150,9 +1047,7 @@ impl<'a> JsonDeserializer<'a> {
                 }
                 Some(b't') => {
                     if !self.remaining().starts_with(b"true") {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected `true`".into(),
-                        });
+                        return Err(SerdeError::invalid_input("expected `true`"));
                     }
                     self.advance_by(4);
                     if depth == 0 {
@@ -1161,9 +1056,7 @@ impl<'a> JsonDeserializer<'a> {
                 }
                 Some(b'f') => {
                     if !self.remaining().starts_with(b"false") {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected `false`".into(),
-                        });
+                        return Err(SerdeError::invalid_input("expected `false`"));
                     }
                     self.advance_by(5);
                     if depth == 0 {
@@ -1172,9 +1065,7 @@ impl<'a> JsonDeserializer<'a> {
                 }
                 Some(b'n') => {
                     if !self.remaining().starts_with(b"null") {
-                        return Err(SerdeError::InvalidInput {
-                            message: "expected `null`".into(),
-                        });
+                        return Err(SerdeError::invalid_input("expected `null`"));
                     }
                     self.advance_by(4);
                     if depth == 0 {
@@ -1187,16 +1078,8 @@ impl<'a> JsonDeserializer<'a> {
                         return Ok(());
                     }
                 }
-                Some(_) => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected token in skip_value".into(),
-                    })
-                }
-                None => {
-                    return Err(SerdeError::InvalidInput {
-                        message: "unexpected end of input".into(),
-                    })
-                }
+                Some(_) => return Err(SerdeError::invalid_input("unexpected token in skip_value")),
+                None => return Err(SerdeError::invalid_input("unexpected end of input")),
             }
         }
     }
@@ -1213,26 +1096,23 @@ impl<'a> JsonDeserializer<'a> {
             }
         }
         if len == 0 {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected integer".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected integer"));
         }
         // Reject a floating-point value for an integer member. Without this,
         // `1.5` would read `1` and leave `.5` in the stream, surfacing as a
         // confusing downstream parse error instead of a clean TypeMismatch.
         if let Some(&next) = rem.get(len) {
             if next == b'.' || next == b'e' || next == b'E' {
-                return Err(SerdeError::TypeMismatch {
-                    message: "expected integer, found floating-point number".into(),
-                });
+                return Err(SerdeError::type_mismatch(
+                    "expected integer, found floating-point number",
+                ));
             }
         }
-        let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
-            message: e.to_string(),
-        })?;
-        let n = s.parse::<i64>().map_err(|e| SerdeError::InvalidInput {
-            message: e.to_string(),
-        })?;
+        let s = std::str::from_utf8(&rem[..len])
+            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+        let n = s
+            .parse::<i64>()
+            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
         self.advance_by(len);
         Ok(n)
     }
@@ -1247,9 +1127,9 @@ impl<'a> JsonDeserializer<'a> {
                 "NaN" => Ok(f64::NAN),
                 "Infinity" => Ok(f64::INFINITY),
                 "-Infinity" => Ok(f64::NEG_INFINITY),
-                _ => s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-                    message: e.to_string(),
-                }),
+                _ => s
+                    .parse::<f64>()
+                    .map_err(|e| SerdeError::invalid_input(e.to_string())),
             };
         }
         let mut len = 0;
@@ -1261,16 +1141,13 @@ impl<'a> JsonDeserializer<'a> {
             }
         }
         if len == 0 {
-            return Err(SerdeError::TypeMismatch {
-                message: "expected number".into(),
-            });
+            return Err(SerdeError::type_mismatch("expected number"));
         }
-        let s = std::str::from_utf8(&rem[..len]).map_err(|e| SerdeError::InvalidInput {
-            message: e.to_string(),
-        })?;
-        let n = s.parse::<f64>().map_err(|e| SerdeError::InvalidInput {
-            message: e.to_string(),
-        })?;
+        let s = std::str::from_utf8(&rem[..len])
+            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
+        let n = s
+            .parse::<f64>()
+            .map_err(|e| SerdeError::invalid_input(e.to_string()))?;
         self.advance_by(len);
         Ok(n)
     }
@@ -2342,7 +2219,7 @@ mod tests {
 
     fn assert_depth_error(err: SerdeError) {
         match err {
-            SerdeError::Custom { ref message } => {
+            SerdeError::Custom { ref message, .. } => {
                 assert!(
                     message.contains("maximum nesting depth exceeded"),
                     "wrong error message: {message}"

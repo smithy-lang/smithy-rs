@@ -49,9 +49,9 @@ impl ShapeSerializer for HttpStringSerializer {
         _schema: &Schema<'_>,
         _value: &dyn SerializableStruct,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "structures cannot be serialized to strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "structures cannot be serialized to strings",
+        ))
     }
 
     fn write_list(
@@ -68,9 +68,9 @@ impl ShapeSerializer for HttpStringSerializer {
         _schema: &Schema<'_>,
         _write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "maps cannot be serialized to strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "maps cannot be serialized to strings",
+        ))
     }
 
     fn write_boolean(&mut self, _schema: &Schema<'_>, value: bool) -> Result<(), SerdeError> {
@@ -203,9 +203,7 @@ impl ShapeSerializer for HttpStringSerializer {
         // TODO(schema): Check schema for timestampFormat trait
         let formatted = value
             .fmt(aws_smithy_types::date_time::Format::HttpDate)
-            .map_err(|e| SerdeError::WriteFailed {
-                message: format!("failed to format timestamp: {e}"),
-            })?;
+            .map_err(|e| SerdeError::write_failed(format!("failed to format timestamp: {e}")))?;
         self.output.push_str(&formatted);
         Ok(())
     }
@@ -215,15 +213,15 @@ impl ShapeSerializer for HttpStringSerializer {
         _schema: &Schema<'_>,
         _value: &Document,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "documents cannot be serialized to strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "documents cannot be serialized to strings",
+        ))
     }
 
     fn write_null(&mut self, _schema: &Schema<'_>) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "null cannot be serialized to strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "null cannot be serialized to strings",
+        ))
     }
 }
 
@@ -273,9 +271,9 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
             &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "structures cannot be deserialized from strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "structures cannot be deserialized from strings",
+        ))
     }
 
     fn read_list(
@@ -302,140 +300,132 @@ impl<'a> ShapeDeserializer for HttpStringDeserializer<'a> {
         _schema: &Schema<'_>,
         _consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "maps cannot be deserialized from strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "maps cannot be deserialized from strings",
+        ))
     }
 
     fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected boolean value".into(),
-        })?;
-        value.parse().map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid boolean: {value}"),
-        })
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected boolean value"))?;
+        value
+            .parse()
+            .map_err(|_| SerdeError::invalid_input(format!("invalid boolean: {value}")))
     }
 
     fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected byte value".into(),
-        })?;
-        value.parse().map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid byte: {value}"),
-        })
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected byte value"))?;
+        value
+            .parse()
+            .map_err(|_| SerdeError::invalid_input(format!("invalid byte: {value}")))
     }
 
     fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected short value".into(),
-        })?;
-        value.parse().map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid short: {value}"),
-        })
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected short value"))?;
+        value
+            .parse()
+            .map_err(|_| SerdeError::invalid_input(format!("invalid short: {value}")))
     }
 
     fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected integer value".into(),
-        })?;
-        value.parse().map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid integer: {value}"),
-        })
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected integer value"))?;
+        value
+            .parse()
+            .map_err(|_| SerdeError::invalid_input(format!("invalid integer: {value}")))
     }
 
     fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected long value".into(),
-        })?;
-        value.parse().map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid long: {value}"),
-        })
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected long value"))?;
+        value
+            .parse()
+            .map_err(|_| SerdeError::invalid_input(format!("invalid long: {value}")))
     }
 
     fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected float value".into(),
-        })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected float value"))?;
         match value {
             "NaN" => Ok(f32::NAN),
             "Infinity" => Ok(f32::INFINITY),
             "-Infinity" => Ok(f32::NEG_INFINITY),
-            _ => value.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid float: {value}"),
-            }),
+            _ => value
+                .parse()
+                .map_err(|_| SerdeError::invalid_input(format!("invalid float: {value}"))),
         }
     }
 
     fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected double value".into(),
-        })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected double value"))?;
         match value {
             "NaN" => Ok(f64::NAN),
             "Infinity" => Ok(f64::INFINITY),
             "-Infinity" => Ok(f64::NEG_INFINITY),
-            _ => value.parse().map_err(|_| SerdeError::InvalidInput {
-                message: format!("invalid double: {value}"),
-            }),
+            _ => value
+                .parse()
+                .map_err(|_| SerdeError::invalid_input(format!("invalid double: {value}"))),
         }
     }
 
     fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected big integer value".into(),
-        })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected big integer value"))?;
         use std::str::FromStr;
-        BigInteger::from_str(value).map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid big integer: {value}"),
-        })
+        BigInteger::from_str(value)
+            .map_err(|_| SerdeError::invalid_input(format!("invalid big integer: {value}")))
     }
 
     fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected big decimal value".into(),
-        })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected big decimal value"))?;
         use std::str::FromStr;
-        BigDecimal::from_str(value).map_err(|_| SerdeError::InvalidInput {
-            message: format!("invalid big decimal: {value}"),
-        })
+        BigDecimal::from_str(value)
+            .map_err(|_| SerdeError::invalid_input(format!("invalid big decimal: {value}")))
     }
 
     fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.next_value()
-            .ok_or_else(|| SerdeError::InvalidInput {
-                message: "expected string value".into(),
-            })
+            .ok_or_else(|| SerdeError::invalid_input("expected string value"))
             .map(|s| s.to_string())
     }
 
     fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected blob value".into(),
-        })?;
-        let decoded =
-            aws_smithy_types::base64::decode(value).map_err(|e| SerdeError::InvalidInput {
-                message: format!("invalid base64: {e}"),
-            })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected blob value"))?;
+        let decoded = aws_smithy_types::base64::decode(value)
+            .map_err(|e| SerdeError::invalid_input(format!("invalid base64: {e}")))?;
         Ok(Blob::new(decoded))
     }
 
     fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
-        let value = self.next_value().ok_or_else(|| SerdeError::InvalidInput {
-            message: "expected timestamp value".into(),
-        })?;
+        let value = self
+            .next_value()
+            .ok_or_else(|| SerdeError::invalid_input("expected timestamp value"))?;
         // Try HTTP date format first, then fall back to other formats
         // TODO(schema): Check schema for timestampFormat trait
         DateTime::from_str(value, aws_smithy_types::date_time::Format::HttpDate)
             .or_else(|_| DateTime::from_str(value, aws_smithy_types::date_time::Format::DateTime))
-            .map_err(|e| SerdeError::InvalidInput {
-                message: format!("invalid timestamp: {e}"),
-            })
+            .map_err(|e| SerdeError::invalid_input(format!("invalid timestamp: {e}")))
     }
 
     fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "documents cannot be deserialized from strings".into(),
-        })
+        Err(SerdeError::unsupported(
+            "documents cannot be deserialized from strings",
+        ))
     }
 
     fn is_null(&self) -> bool {

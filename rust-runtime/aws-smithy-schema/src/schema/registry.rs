@@ -292,18 +292,15 @@ impl TypeRegistry {
         &self,
         document: &DiscriminatedDocument,
     ) -> Result<TypeErasedBox, SerdeError> {
-        let id = document
-            .discriminator()
-            .ok_or_else(|| SerdeError::InvalidInput {
-                message: "document has no discriminator; cannot resolve shape via TypeRegistry"
-                    .to_string(),
-            })?;
+        let id = document.discriminator().ok_or_else(|| {
+            SerdeError::invalid_input(
+                "document has no discriminator; cannot resolve shape via TypeRegistry".to_string(),
+            )
+        })?;
         let entry = self
             .entries
             .get(id)
-            .ok_or_else(|| SerdeError::UnknownMember {
-                member_name: id.to_string(),
-            })?;
+            .ok_or_else(|| SerdeError::unknown_member(id.to_string()))?;
         let mut deser = DocumentShapeDeserializer::new_with_settings(
             document.document(),
             document.settings().cloned(),

@@ -151,9 +151,9 @@ impl ShapeSerializer for CborSerializer {
         _schema: &Schema<'_>,
         _value: &BigInteger,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big integer not yet supported (smithy-rs#4611)".into(),
-        })
+        Err(SerdeError::unsupported(
+            "CBOR big integer not yet supported (smithy-rs#4611)",
+        ))
     }
 
     fn write_big_decimal(
@@ -161,9 +161,9 @@ impl ShapeSerializer for CborSerializer {
         _schema: &Schema<'_>,
         _value: &BigDecimal,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big decimal not yet supported (smithy-rs#4611)".into(),
-        })
+        Err(SerdeError::unsupported(
+            "CBOR big decimal not yet supported (smithy-rs#4611)",
+        ))
     }
 
     fn write_string(&mut self, schema: &Schema<'_>, value: &str) -> Result<(), SerdeError> {
@@ -189,9 +189,9 @@ impl ShapeSerializer for CborSerializer {
         _schema: &Schema<'_>,
         _value: &Document,
     ) -> Result<(), SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "document types are not supported by rpcv2Cbor protocol".into(),
-        })
+        Err(SerdeError::unsupported(
+            "document types are not supported by rpcv2Cbor protocol",
+        ))
     }
 
     fn write_null(&mut self, schema: &Schema<'_>) -> Result<(), SerdeError> {

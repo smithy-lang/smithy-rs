@@ -131,9 +131,10 @@ impl<'a> DocumentShapeDeserializer<'a> {
 /// Builds a `TypeMismatch` error message for a read that expected one
 /// kind of value and found another.
 fn type_mismatch(expected: &str, found: &Document) -> SerdeError {
-    SerdeError::TypeMismatch {
-        message: format!("expected {expected} document, got {}", kind_name(found)),
-    }
+    SerdeError::type_mismatch(format!(
+        "expected {expected} document, got {}",
+        kind_name(found)
+    ))
 }
 
 /// Human-readable name for a [`Document`] variant, used in error
