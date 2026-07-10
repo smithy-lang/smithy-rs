@@ -36,7 +36,7 @@ class UserAgentDecorator : ClientCodegenDecorator {
         codegenContext: ClientCodegenContext,
         baseCustomizations: List<ConfigCustomization>,
     ): List<ConfigCustomization> {
-        return baseCustomizations + AppNameCustomization(codegenContext)
+        return baseCustomizations + AppNameCustomization(codegenContext) + FrameworkMetadataCustomization(codegenContext)
     }
 
     override fun serviceRuntimePluginCustomizations(
@@ -48,6 +48,17 @@ class UserAgentDecorator : ClientCodegenDecorator {
         return listOf(
             adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
                 rust("${section.serviceConfigBuilder}.set_app_name(${section.sdkConfig}.app_name().cloned());")
+            },
+            adhocCustomization<SdkConfigSection.CopySdkConfigToClientConfig> { section ->
+                // Framework metadata is additive (each entry self-identifies a distinct library),
+                // so copy every entry from the shared config rather than replacing.
+                rust(
+                    """
+                    for framework_metadata in ${section.sdkConfig}.framework_metadata() {
+                        ${section.serviceConfigBuilder}.push_framework_metadata(framework_metadata.clone());
+                    }
+                    """,
+                )
             },
         )
     }
@@ -81,6 +92,12 @@ class UserAgentDecorator : ClientCodegenDecorator {
             rustTemplate(
                 "pub use #{AppName};",
                 "AppName" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("app_name::AppName"),
+            )
+            // Re-export the framework metadata type so third-party libraries can self-identify in the
+            // user agent without taking an explicit dependency on `aws-types`.
+            rustTemplate(
+                "pub use #{FrameworkMetadata};",
+                "FrameworkMetadata" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("sdk_ua_metadata::FrameworkMetadata"),
             )
         }
     }
@@ -176,6 +193,96 @@ class UserAgentDecorator : ClientCodegenDecorator {
                         rustTemplate(
                             """
                             self.config.store_put(#{AwsUserAgent}::for_tests());
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                else -> emptySection
+            }
+    }
+
+    private class FrameworkMetadataCustomization(codegenContext: ClientCodegenContext) : ConfigCustomization() {
+        private val runtimeConfig = codegenContext.runtimeConfig
+        private val codegenScope =
+            arrayOf(
+                *preludeScope,
+                "FrameworkMetadata" to AwsRuntimeType.awsTypes(runtimeConfig).resolve("sdk_ua_metadata::FrameworkMetadata"),
+            )
+
+        override fun section(section: ServiceConfig): Writable =
+            when (section) {
+                is ServiceConfig.BuilderImpl ->
+                    writable {
+                        rustTemplate(
+                            """
+                            /// Appends framework metadata to the user agent.
+                            ///
+                            /// This _optional_ metadata identifies a software framework or third-party library
+                            /// that is being used with the client. It is rendered into the user agent string
+                            /// (as `lib/{name}/{version}`) so that libraries built on top of the AWS SDK can
+                            /// self-identify in the requests they make. Multiple entries may be added; each call
+                            /// appends another entry rather than replacing previous ones.
+                            ///
+                            /// Entries are de-duplicated on `(name, version)`, rendered in first-seen order, and
+                            /// the total number of unique entries included in the user agent is capped (currently
+                            /// at 10); additional entries beyond the cap are dropped with a warning.
+                            pub fn framework_metadata(mut self, framework_metadata: #{FrameworkMetadata}) -> Self {
+                                self.push_framework_metadata(framework_metadata);
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+
+                        rustTemplate(
+                            """
+                            /// Appends framework metadata to the user agent.
+                            ///
+                            /// This _optional_ metadata identifies a software framework or third-party library
+                            /// that is being used with the client. It is rendered into the user agent string
+                            /// (as `lib/{name}/{version}`) so that libraries built on top of the AWS SDK can
+                            /// self-identify in the requests they make. Multiple entries may be added; each call
+                            /// appends another entry rather than replacing previous ones.
+                            pub fn push_framework_metadata(&mut self, framework_metadata: #{FrameworkMetadata}) -> &mut Self {
+                                self.config.store_append(framework_metadata);
+                                self
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                is ServiceConfig.BuilderFromConfigBag ->
+                    writable {
+                        rustTemplate(
+                            """
+                            for framework_metadata in ${section.configBag}.load::<#{FrameworkMetadata}>() {
+                                ${section.builder}.push_framework_metadata(framework_metadata.clone());
+                            }
+                            """,
+                            *codegenScope,
+                        )
+                    }
+
+                is ServiceConfig.ConfigImpl ->
+                    writable {
+                        rustTemplate(
+                            """
+                            /// Returns the framework metadata that has been configured, if any.
+                            ///
+                            /// This _optional_ metadata identifies software frameworks or third-party libraries
+                            /// being used with the client, rendered into the user agent as `lib/{name}/{version}`.
+                            /// Entries are returned in first-seen (insertion) order, matching the order they are
+                            /// rendered into the user agent.
+                            pub fn framework_metadata(&self) -> #{Vec}<&#{FrameworkMetadata}> {
+                                // `StoreAppend` loads entries newest-first; reverse to first-seen order so
+                                // this getter agrees with both the user agent and `SdkConfig::framework_metadata`.
+                                let mut entries: #{Vec}<&#{FrameworkMetadata}> =
+                                    self.config.load::<#{FrameworkMetadata}>().collect();
+                                entries.reverse();
+                                entries
+                            }
                             """,
                             *codegenScope,
                         )

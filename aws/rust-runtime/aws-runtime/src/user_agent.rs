@@ -511,52 +511,12 @@ impl fmt::Display for ConfigMetadata {
     }
 }
 
-#[doc(hidden)]
 /// Metadata about a software framework that is being used with the SDK.
-#[derive(Clone, Debug)]
-#[non_exhaustive]
-pub struct FrameworkMetadata {
-    name: Cow<'static, str>,
-    version: Option<Cow<'static, str>>,
-    additional: AdditionalMetadataList,
-}
-
-impl FrameworkMetadata {
-    /// Creates `FrameworkMetadata`.
-    ///
-    /// This will result in `InvalidMetadataValue` if the given value isn't alphanumeric or
-    /// has characters other than the following:
-    /// ```text
-    /// !#$%&'*+-.^_`|~
-    /// ```
-    pub fn new(
-        name: impl Into<Cow<'static, str>>,
-        version: Option<Cow<'static, str>>,
-    ) -> Result<Self, InvalidMetadataValue> {
-        Ok(Self {
-            name: validate_metadata(name.into())?,
-            version: version.map(validate_metadata).transpose()?,
-            additional: Default::default(),
-        })
-    }
-
-    /// Bundles additional arbitrary metadata with this framework metadata.
-    pub fn with_additional(mut self, metadata: AdditionalMetadata) -> Self {
-        self.additional.push(metadata);
-        self
-    }
-}
-
-impl fmt::Display for FrameworkMetadata {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // framework-metadata = "lib/" name ["/" version] *(RWS additional-metadata)
-        if let Some(version) = &self.version {
-            write!(f, "lib/{}/{}{}", self.name, version, self.additional)
-        } else {
-            write!(f, "lib/{}{}", self.name, self.additional)
-        }
-    }
-}
+///
+/// This is a type alias for [`aws_types::sdk_ua_metadata::FrameworkMetadata`]. The canonical
+/// definition now lives in `aws-types`; this alias is kept as a breadcrumb so existing code that
+/// referred to `aws_runtime::user_agent::FrameworkMetadata` continues to compile.
+pub type FrameworkMetadata = aws_types::sdk_ua_metadata::FrameworkMetadata;
 
 #[derive(Clone, Debug)]
 struct OsMetadata {
@@ -611,7 +571,6 @@ mod test {
     use aws_types::app_name::AppName;
     use aws_types::build_metadata::OsFamily;
     use aws_types::os_shim_internal::Env;
-    use std::borrow::Cow;
 
     fn make_deterministic(ua: &mut AwsUserAgent) {
         // hard code some variable things for a deterministic test
@@ -668,20 +627,16 @@ mod test {
             version: "123",
         };
         let mut ua = AwsUserAgent::new_from_environment(Env::from_slice(&[]), api_metadata)
-            .with_framework_metadata(
-                FrameworkMetadata::new("some-framework", Some(Cow::Borrowed("1.3")))
-                    .unwrap()
-                    .with_additional(AdditionalMetadata::new("something").unwrap()),
-            )
-            .with_framework_metadata(FrameworkMetadata::new("other", None).unwrap());
+            .with_framework_metadata(FrameworkMetadata::new("some-framework", Some("1.3")).unwrap())
+            .with_framework_metadata(FrameworkMetadata::new("other", None::<&str>).unwrap());
         make_deterministic(&mut ua);
         assert_eq!(
             ua.aws_ua_header(),
-            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 lib/other"
         );
         assert_eq!(
             ua.ua_header(),
-            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 md/something lib/other"
+            "aws-sdk-rust/0.1 ua/0.1 api/dynamodb/123 os/macos/1.15 lang/rust/1.50.0 lib/some-framework/1.3 lib/other"
         );
     }
 

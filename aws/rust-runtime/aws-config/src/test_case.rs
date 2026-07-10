@@ -181,7 +181,7 @@ pub(crate) trait RunTestProvider {
     fn run_provider(
         &self,
         provider_config: ProviderConfig,
-    ) -> Pin<Box<dyn Future<Output = Result<Self::Output, Self::Error>> + Send + 'static>>;
+    ) -> ResultFuture<Self::Output, Self::Error>;
 }
 
 type ResultFuture<O, E> = Pin<Box<dyn Future<Output = Result<O, E>> + Send + 'static>>;
