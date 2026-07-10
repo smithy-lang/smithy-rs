@@ -503,12 +503,7 @@ mod tests {
                 .last_refresh_attempt
                 .lock()
                 .unwrap()
-                .map(|time| {
-                    DateTime::try_from(time)
-                        .unwrap()
-                        .fmt(Format::DateTime)
-                        .unwrap()
-                })
+                .map(|time| DateTime::from(time).fmt(Format::DateTime).unwrap())
         }
     }
 

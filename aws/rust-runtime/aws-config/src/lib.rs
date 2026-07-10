@@ -104,6 +104,7 @@ pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
     region::Region,
+    sdk_ua_metadata::{FrameworkMetadata, InvalidFrameworkMetadata},
     SdkConfig,
 };
 /// Load default sources for all configuration with override support
@@ -244,6 +245,7 @@ mod loader {
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::SigningRegionSet;
     use aws_types::sdk_config::SharedHttpClient;
+    use aws_types::sdk_ua_metadata::FrameworkMetadata;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
@@ -277,6 +279,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        framework_metadata: Vec<FrameworkMetadata>,
         auth_scheme_preference: Option<AuthSchemePreference>,
         sigv4a_signing_region_set: Option<SigningRegionSet>,
         identity_cache: Option<SharedIdentityCache>,
@@ -619,6 +622,34 @@ mod loader {
             self
         }
 
+        /// Appends framework metadata to the user agent.
+        ///
+        /// This _optional_ metadata identifies a software framework or third-party library that is
+        /// being used with the SDK. It is rendered into the user agent (as `lib/{name}/{version}`)
+        /// so that libraries built on top of the AWS SDK can self-identify in the requests they
+        /// make. Each call appends another entry rather than replacing previous ones.
+        ///
+        /// Unlike the app name, framework metadata has no environment variable or profile source;
+        /// it can only be set programmatically.
+        ///
+        /// Entries are de-duplicated on `(name, version)`, rendered in first-seen order, and the
+        /// total number of unique entries included in the user agent is capped (currently at 10);
+        /// additional entries beyond the cap are dropped with a warning.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_config::FrameworkMetadata;
+        /// let config = aws_config::from_env()
+        ///     .framework_metadata(FrameworkMetadata::new("some-framework", Some("1.0")).expect("valid framework metadata"))
+        ///     .load().await;
+        /// # }
+        /// ```
+        pub fn framework_metadata(mut self, framework_metadata: FrameworkMetadata) -> Self {
+            self.framework_metadata.push(framework_metadata);
+            self
+        }
+
         /// Provides the ability to programmatically override the profile files that get loaded by the SDK.
         ///
         /// The [`Default`] for `ProfileFiles` includes the default SDK config and credential files located in
@@ -922,9 +953,19 @@ mod loader {
             };
 
             let profiles = conf.profile().await;
+            let ignore_configured_endpoint_urls = if self.endpoint_url.is_some() {
+                // If an endpoint URL is set programmatically, the ignore flag is irrelevant
+                // because programmatic config always takes precedence.
+                false
+            } else {
+                ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                    .await
+                    .unwrap_or_default()
+            };
             let service_config = EnvServiceConfig {
                 env: conf.env(),
                 env_config_sections: profiles.cloned().unwrap_or_default(),
+                ignore_configured_endpoint_urls,
             };
             let mut builder = SdkConfig::builder()
                 .region(region.clone())
@@ -947,26 +988,18 @@ mod loader {
             let endpoint_url = if self.endpoint_url.is_some() {
                 builder.insert_origin("endpoint_url", Origin::shared_config());
                 self.endpoint_url
+            } else if ignore_configured_endpoint_urls {
+                // If yes, log a trace and return `None`.
+                tracing::trace!(
+                    "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                    NOTE: Endpoint URLs set programmatically WILL still be respected"
+                );
+                None
             } else {
-                // Otherwise, check to see if we should ignore EP URLs set in the environment.
-                let ignore_configured_endpoint_urls =
-                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
-                        .await
-                        .unwrap_or_default();
-
-                if ignore_configured_endpoint_urls {
-                    // If yes, log a trace and return `None`.
-                    tracing::trace!(
-                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
-                        NOTE: Endpoint URLs set programmatically WILL still be respected"
-                    );
-                    None
-                } else {
-                    // Otherwise, attempt to resolve one.
-                    let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
-                    builder.insert_origin("endpoint_url", origin);
-                    v
-                }
+                // Otherwise, attempt to resolve one.
+                let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
+                builder.insert_origin("endpoint_url", origin);
+                v
             };
 
             let token_provider = match self.token_provider {
@@ -998,6 +1031,7 @@ mod loader {
             builder.set_http_client(self.http_client);
             builder.set_protocol(self.protocol);
             builder.set_app_name(app_name);
+            builder.set_framework_metadata(self.framework_metadata);
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
@@ -1066,14 +1100,20 @@ mod loader {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     impl ConfigLoader {
-        pub(crate) fn env(mut self, env: Env) -> Self {
+        /// Override the environment variables used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn env(mut self, env: Env) -> Self {
             self.env = Some(env);
             self
         }
 
-        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+        /// Override the filesystem used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn fs(mut self, fs: Fs) -> Self {
             self.fs = Some(fs);
             self
         }
@@ -1272,6 +1312,20 @@ mod loader {
             let app_name = AppName::new("my-app-name").unwrap();
             let conf = base_conf().app_name(app_name.clone()).load().await;
             assert_eq!(Some(&app_name), conf.app_name());
+        }
+
+        #[tokio::test]
+        async fn framework_metadata() {
+            use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+            let one = FrameworkMetadata::new("framework-one", Some("1.0")).unwrap();
+            let two = FrameworkMetadata::new("framework-two", Some("2.0")).unwrap();
+            let conf = base_conf()
+                .framework_metadata(one.clone())
+                .framework_metadata(two.clone())
+                .load()
+                .await;
+            assert_eq!(&[one, two], conf.framework_metadata());
         }
 
         #[tokio::test]

@@ -17,7 +17,7 @@
                                 "2"
                             ],
                             "user-agent": [
-                                "aws-sdk-rust/0.123.test os/windows/XPSP3 lang/rust/1.50.0"
+                                "aws-sdk-rust/0.123.test ua/0.1 api/test-service/0.123 os/windows/XPSP3 lang/rust/1.50.0 m/E md/http#replaying-client"
                             ],
                             "content-type": [
                                 "application/json"

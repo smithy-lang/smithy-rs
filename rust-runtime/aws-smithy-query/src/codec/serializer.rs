@@ -10,15 +10,43 @@ use aws_smithy_types::{BigDecimal, BigInteger, DateTime, Document};
 use std::fmt::Write;
 use urlencoding::encode;
 
+/// A collection path segment, kept `Copy` so it can be formatted directly into
+/// the output/prefix without an intermediate `String` allocation.
+/// - `Index(i)` — a list element: renders as `i`.
+/// - `Entry(i, name)` — a map key/value: renders as `i.name`.
+#[derive(Clone, Copy)]
+enum Segment {
+    Index(usize),
+    Entry(usize, &'static str),
+}
+
+impl std::fmt::Display for Segment {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Segment::Index(i) => write!(f, "{i}"),
+            Segment::Entry(i, name) => write!(f, "{i}.{name}"),
+        }
+    }
+}
+
 enum CollectionContext {
     List {
         index: usize,
+        /// Schema of this list's element member. When an element is itself a
+        /// nested aggregate, codegen invokes `write_list`/`write_map` with a
+        /// member-less placeholder (`prelude::DOCUMENT`); the child recovers its
+        /// own `@xmlName`/member chain from this stashed schema. `None` when the
+        /// element is a scalar.
+        member_schema: Option<&'static Schema>,
     },
     Map {
         index: usize,
         expecting_key: bool,
         key_name: &'static str,
         value_name: &'static str,
+        /// Schema of this map's value member — used by a nested inner aggregate
+        /// value the same way as `List::member_schema`. `None` for scalar values.
+        value_schema: Option<&'static Schema>,
     },
 }
 
@@ -74,12 +102,47 @@ impl QueryShapeSerializer {
             .unwrap_or(default)
     }
 
+    /// Resolves the schema to use for a nested aggregate's own element-name
+    /// resolution. Codegen emits nested list/map values with a member-less
+    /// placeholder (`prelude::DOCUMENT`), so when `schema` carries no member
+    /// info we substitute the real inner schema the enclosing collection stashed
+    /// (`List::member_schema` for a list element, `Map::value_schema` for a map
+    /// value). Mirrors the XML serializer's `effective_schema`. Falls back to
+    /// `schema` when there's nothing to inherit.
+    fn effective_collection_schema<'a>(&self, schema: &'a Schema) -> &'a Schema {
+        if schema.member().is_some() || schema.key().is_some() {
+            return schema;
+        }
+        let inherited = match self.context_stack.last() {
+            Some(CollectionContext::List { member_schema, .. }) => *member_schema,
+            Some(CollectionContext::Map {
+                expecting_key: false,
+                value_schema,
+                ..
+            }) => *value_schema,
+            _ => None,
+        };
+        inherited.unwrap_or(schema)
+    }
+
     fn push_prefix(&mut self, segment: &str) {
         let prev_len = self.prefix.len();
         if !self.prefix.is_empty() {
             self.prefix.push('.');
         }
         self.prefix.push_str(segment);
+        self.prefix_lengths.push(prev_len);
+    }
+
+    /// Like [`Self::push_prefix`] but formats a [`Segment`] directly onto the
+    /// prefix, avoiding an intermediate `String`.
+    fn push_prefix_segment(&mut self, segment: Segment) {
+        let prev_len = self.prefix.len();
+        if !self.prefix.is_empty() {
+            self.prefix.push('.');
+        }
+        // Writing to a String is infallible.
+        let _ = write!(self.prefix, "{segment}");
         self.prefix_lengths.push(prev_len);
     }
 
@@ -91,29 +154,33 @@ impl QueryShapeSerializer {
     /// Returns the path segment for the current collection element and advances the
     /// cursor: a 1-based index for lists, `<index>.<key|value_name>` for maps. Returns
     /// `None` when not inside a collection.
-    fn next_collection_segment(&mut self) -> Option<String> {
+    ///
+    /// Returns a `Copy` [`Segment`] rather than an owned `String` so callers can
+    /// format it directly into `output`/`prefix` without a per-element allocation.
+    fn next_collection_segment(&mut self) -> Option<Segment> {
         let ctx = self.context_stack.last_mut()?;
         Some(match ctx {
-            CollectionContext::List { index } => {
-                let s = index.to_string();
+            CollectionContext::List { index, .. } => {
+                let seg = Segment::Index(*index);
                 *index += 1;
-                s
+                seg
             }
             CollectionContext::Map {
                 index,
                 expecting_key,
                 key_name,
                 value_name,
+                ..
             } => {
                 if *expecting_key {
-                    let s = format!("{}.{}", index, key_name);
+                    let seg = Segment::Entry(*index, key_name);
                     *expecting_key = false;
-                    s
+                    seg
                 } else {
-                    let s = format!("{}.{}", index, value_name);
+                    let seg = Segment::Entry(*index, value_name);
                     *expecting_key = true;
                     *index += 1;
-                    s
+                    seg
                 }
             }
         })
@@ -136,6 +203,15 @@ impl QueryShapeSerializer {
             }
             None => {
                 let name = self.wire_name(schema);
+                // A named scalar written outside a collection must resolve to a
+                // non-empty parameter name; an empty name would emit `&=value`
+                // (or `&prefix.=value`), a malformed query param. In practice
+                // codegen always supplies a member/xmlName here — this guards
+                // against a future caller passing a member-less schema.
+                debug_assert!(
+                    !name.is_empty(),
+                    "awsQuery scalar has no wire name (would emit an empty param name)"
+                );
                 if self.prefix.is_empty() {
                     self.output.push_str(name);
                 } else {
@@ -165,8 +241,8 @@ impl ShapeSerializer for QueryShapeSerializer {
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(idx_str) = self.next_collection_segment() {
-            self.push_prefix(&idx_str);
+        } else if let Some(seg) = self.next_collection_segment() {
+            self.push_prefix_segment(seg);
             true
         } else {
             false
@@ -183,23 +259,29 @@ impl ShapeSerializer for QueryShapeSerializer {
         schema: &Schema,
         write_elements: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // Resolve the inner schema BEFORE `next_collection_segment` mutates the
+        // enclosing collection's cursor (a nested list arrives with a member-less
+        // `prelude::DOCUMENT`; recover its real `@xmlName`/member chain here).
+        let effective = self.effective_collection_schema(schema);
         let flat = schema.xml_flattened();
         let is_member = schema.member_name().is_some();
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(idx_str) = self.next_collection_segment() {
-            self.push_prefix(&idx_str);
+        } else if let Some(seg) = self.next_collection_segment() {
+            self.push_prefix_segment(seg);
             true
         } else {
             false
         };
         if !flat {
-            let member_name = Self::collection_member_name(schema.member(), "member");
+            let member_name = Self::collection_member_name(effective.member(), "member");
             self.push_prefix(member_name);
         }
-        self.context_stack
-            .push(CollectionContext::List { index: 1 });
+        self.context_stack.push(CollectionContext::List {
+            index: 1,
+            member_schema: effective.member_static(),
+        });
         let output_len_before = self.output.len();
         write_elements(self)?;
         let wrote_elements = self.output.len() > output_len_before;
@@ -223,13 +305,17 @@ impl ShapeSerializer for QueryShapeSerializer {
         schema: &Schema,
         write_entries: &dyn Fn(&mut dyn ShapeSerializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
+        // Resolve the inner schema BEFORE `next_collection_segment` mutates the
+        // enclosing collection's cursor (a nested map arrives with a member-less
+        // `prelude::DOCUMENT`; recover its real key/value chain here).
+        let effective = self.effective_collection_schema(schema);
         let flat = schema.xml_flattened();
         let is_member = schema.member_name().is_some();
         let pushed_index = if is_member {
             self.push_prefix(self.wire_name(schema));
             false
-        } else if let Some(idx_str) = self.next_collection_segment() {
-            self.push_prefix(&idx_str);
+        } else if let Some(seg) = self.next_collection_segment() {
+            self.push_prefix_segment(seg);
             true
         } else {
             false
@@ -237,13 +323,14 @@ impl ShapeSerializer for QueryShapeSerializer {
         if !flat {
             self.push_prefix("entry");
         }
-        let key_name = Self::collection_member_name(schema.key(), "key");
-        let value_name = Self::collection_member_name(schema.member(), "value");
+        let key_name = Self::collection_member_name(effective.key(), "key");
+        let value_name = Self::collection_member_name(effective.member(), "value");
         self.context_stack.push(CollectionContext::Map {
             index: 1,
             expecting_key: true,
             key_name,
             value_name,
+            value_schema: effective.member_static(),
         });
         write_entries(self)?;
         self.context_stack.pop();
@@ -700,6 +787,105 @@ mod cross_validation {
         let mut ser = QueryShapeSerializer::new("Op", "1.0");
         ser.write_struct(&FIRST, &Inner).unwrap();
         assert_eq!(String::from_utf8(ser.finish()).unwrap(), expected);
+    }
+
+    #[test]
+    fn nested_renamed_inner_list_member_matches_legacy() {
+        // Regression: a `map<string, list<string>>` whose inner list member has
+        // `@xmlName("item")`. Codegen invokes the inner `write_list` with a
+        // member-less `prelude::DOCUMENT`, so the rename must be recovered from
+        // the outer map's value-member schema (threaded via `value_schema`).
+        // Previously this fell back to "member"; now it must honor "item" and
+        // match the legacy `QueryWriter`.
+        static INNER_MEMBER: Schema = Schema::new_member(
+            shape_id!("test", "L$member"),
+            ShapeType::String,
+            "member",
+            0,
+        )
+        .with_xml_name("item");
+        // The map's value member is a list carrying the renamed inner member.
+        static VALUE_LIST: Schema =
+            Schema::new_member(shape_id!("test", "M$value"), ShapeType::List, "value", 1)
+                .with_list_member(&INNER_MEMBER);
+        static KEY: Schema =
+            Schema::new_member(shape_id!("test", "M$key"), ShapeType::String, "key", 0);
+        static OUTER_MAP: Schema =
+            Schema::new_member(shape_id!("test", "I"), ShapeType::Map, "MapOfLists", 0)
+                .with_map_members(&KEY, &VALUE_LIST);
+
+        let mut ser = QueryShapeSerializer::new("Op", "1.0");
+        ser.write_map(&OUTER_MAP, &|s| {
+            s.write_string(&aws_smithy_schema::prelude::STRING, "bar")?;
+            // codegen emits `write_list(&prelude::DOCUMENT, ..)` for the inner list
+            s.write_list(&aws_smithy_schema::prelude::DOCUMENT, &|inner| {
+                inner.write_string(&aws_smithy_schema::prelude::STRING, "C")?;
+                inner.write_string(&aws_smithy_schema::prelude::STRING, "D")
+            })
+        })
+        .unwrap();
+        let schema_out = String::from_utf8(ser.finish()).unwrap();
+
+        let mut expected = String::new();
+        let mut writer = QueryWriter::new(&mut expected, "Op", "1.0");
+        let mut map = writer.prefix("MapOfLists").start_map(false, "key", "value");
+        {
+            let mut list = map.entry("bar").start_list(false, Some("item"));
+            list.entry().string("C");
+            list.entry().string("D");
+            list.finish();
+        }
+        map.finish();
+        writer.finish();
+
+        assert_eq!(schema_out, expected);
+        assert_eq!(
+            schema_out,
+            "Action=Op&Version=1.0&MapOfLists.entry.1.key=bar\
+             &MapOfLists.entry.1.value.item.1=C\
+             &MapOfLists.entry.1.value.item.2=D"
+        );
+    }
+
+    #[test]
+    fn nested_renamed_inner_map_members_matches_legacy() {
+        // Same fix for a `map<string, map<string, string>>` whose INNER map has
+        // `@xmlName` on its key/value members. The inner `write_map` gets
+        // `prelude::DOCUMENT`; the key/value renames come from the outer map's
+        // value-member schema.
+        static INNER_KEY: Schema =
+            Schema::new_member(shape_id!("test", "IM$key"), ShapeType::String, "key", 0)
+                .with_xml_name("K");
+        static INNER_VALUE: Schema =
+            Schema::new_member(shape_id!("test", "IM$value"), ShapeType::String, "value", 1)
+                .with_xml_name("V");
+        // Outer map value member is itself a map with renamed key/value.
+        static VALUE_MAP: Schema =
+            Schema::new_member(shape_id!("test", "M$value"), ShapeType::Map, "value", 1)
+                .with_map_members(&INNER_KEY, &INNER_VALUE);
+        static OUTER_KEY: Schema =
+            Schema::new_member(shape_id!("test", "M$key"), ShapeType::String, "key", 0);
+        static OUTER_MAP: Schema =
+            Schema::new_member(shape_id!("test", "I"), ShapeType::Map, "MapOfMaps", 0)
+                .with_map_members(&OUTER_KEY, &VALUE_MAP);
+
+        let mut ser = QueryShapeSerializer::new("Op", "1.0");
+        ser.write_map(&OUTER_MAP, &|s| {
+            s.write_string(&aws_smithy_schema::prelude::STRING, "outer")?;
+            s.write_map(&aws_smithy_schema::prelude::DOCUMENT, &|inner| {
+                inner.write_string(&aws_smithy_schema::prelude::STRING, "ik")?;
+                inner.write_string(&aws_smithy_schema::prelude::STRING, "iv")
+            })
+        })
+        .unwrap();
+        let schema_out = String::from_utf8(ser.finish()).unwrap();
+
+        assert_eq!(
+            schema_out,
+            "Action=Op&Version=1.0&MapOfMaps.entry.1.key=outer\
+             &MapOfMaps.entry.1.value.entry.1.K=ik\
+             &MapOfMaps.entry.1.value.entry.1.V=iv"
+        );
     }
 }
 

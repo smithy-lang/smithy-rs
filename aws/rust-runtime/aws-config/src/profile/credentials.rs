@@ -183,6 +183,10 @@ impl ProfileFileCredentialsProvider {
                                         chain: None,
                                     })
                                 }
+                                ProfileFileError::MissingProfile { .. }
+                                | ProfileFileError::TokenProviderConfig { .. } => {
+                                    Err(CredentialsError::not_loaded(format!("{}", &err)))
+                                }
                                 _ => Err(CredentialsError::invalid_configuration(format!(
                                     "ProfileFile provider could not be built: {}",
                                     &err
