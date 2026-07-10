@@ -1,4 +1,5 @@
 aws-smithy-xml -> chacha20
+aws-smithy-query -> chacha20
 aws-smithy-protocol-test -> chacha20
 aws-smithy-mocks -> chacha20
 aws-smithy-http-client -> chacha20
