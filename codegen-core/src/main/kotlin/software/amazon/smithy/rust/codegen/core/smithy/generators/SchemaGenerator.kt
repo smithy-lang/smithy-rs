@@ -143,23 +143,7 @@ class SchemaGenerator(
     /** Renders only the schema statics (no impl blocks, no SerializableStruct, no deserialize). */
     fun renderSchemaOnly() {
         val symbol = symbolProvider.toSymbol(shape)
-        val codegenScope =
-            arrayOf(
-                "Schema" to smithySchema.resolve("Schema"),
-                "ShapeId" to smithySchema.resolve("ShapeId"),
-                "ShapeType" to smithySchema.resolve("ShapeType"),
-            )
         val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
-        val ns = shape.id.namespace
-        val name = shape.id.name
-        val fqn = shape.id.toString()
-        val escapedFqn = fqn.replace("#", "##")
-        writer.rustTemplate(
-            """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
-            """,
-            *codegenScope,
-        )
         renderMemberSchemas(writer, schemaPrefix)
         renderSchemaStatic(writer, schemaPrefix, symbol.name)
     }
@@ -175,17 +159,6 @@ class SchemaGenerator(
 
         val schemaPrefix = this.schemaPrefix ?: symbol.name.uppercase()
 
-        // Write module-level statics and the schema unit struct
-        val ns = shape.id.namespace
-        val name = shape.id.name
-        val fqn = shape.id.toString()
-        val escapedFqn = fqn.replace("#", "##")
-        writer.rustTemplate(
-            """
-            static ${schemaPrefix}_SCHEMA_ID: #{ShapeId}<'static> = #{ShapeId}::from_parts("$escapedFqn", "$ns", "$name");
-            """,
-            *codegenScope,
-        )
         renderMemberSchemas(writer, schemaPrefix)
 
         // Generate the static Schema value
@@ -940,7 +913,7 @@ class SchemaGenerator(
                                 }
                             }
                         }
-                        rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                        rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                     } else {
                         rust("Ok(builder.build())")
                     }
@@ -1090,7 +1063,7 @@ class SchemaGenerator(
                                     """
                                     if body.is_empty() {
                                         return Self::builder().build()
-                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()));
                                     }
                                     """,
                                 )
@@ -1151,7 +1124,7 @@ class SchemaGenerator(
                     "build" to
                         writable {
                             if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                                rust("Self::builder().build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                                rust("Self::builder().build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                             } else {
                                 rust("Ok(Self::builder().build())")
                             }
@@ -1413,7 +1386,7 @@ class SchemaGenerator(
                 "buildExpr" to
                     writable {
                         if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                         } else {
                             rust("Ok(builder.build())")
                         }
@@ -1457,7 +1430,7 @@ class SchemaGenerator(
                 "buildExpr" to
                     writable {
                         if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                         } else {
                             rust("Ok(builder.build())")
                         }
@@ -1483,7 +1456,7 @@ class SchemaGenerator(
                 "buildExpr" to
                     writable {
                         if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                            rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                         } else {
                             rust("Ok(builder.build())")
                         }
@@ -1501,7 +1474,7 @@ class SchemaGenerator(
                     "buildExpr" to
                         writable {
                             if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                             } else {
                                 rust("Ok(builder.build())")
                             }
@@ -1523,7 +1496,7 @@ class SchemaGenerator(
                                     """
                                     if body.is_empty() {
                                         return builder.build()
-                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() });
+                                            .map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()));
                                     }
                                     """,
                                 )
@@ -1561,7 +1534,7 @@ class SchemaGenerator(
                     "buildExpr" to
                         writable {
                             if (BuilderGenerator.hasFallibleBuilder(structShape, symbolProvider)) {
-                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::Custom { message: e.to_string() })")
+                                rust("builder.build().map_err(|e| aws_smithy_schema::serde::SerdeError::custom(e.to_string()))")
                             } else {
                                 rust("Ok(builder.build())")
                             }
@@ -2386,8 +2359,20 @@ class SchemaGenerator(
         val codegenScope =
             arrayOf(
                 "Schema" to smithySchema.resolve("Schema"),
+                "ShapeId" to smithySchema.resolve("ShapeId"),
                 "ShapeType" to smithySchema.resolve("ShapeType"),
             )
+
+        // The shape ID is constructed inline in the `Schema::new_*` call below
+        // rather than referencing a separate `static ..._SCHEMA_ID`. `ShapeId`
+        // is not `Copy`, so moving it out of a `static` into another `static`
+        // initializer would fail (a `const` context cannot call `.clone()`).
+        // Constructing it inline moves a `const` temporary into the `const fn`
+        // constructor, which is allowed — the same pattern member schemas use.
+        val ns = shape.id.namespace
+        val name = shape.id.name
+        val escapedFqn = shape.id.toString().replace("#", "##")
+        val schemaIdExpr = """#{ShapeId}::from_parts("$escapedFqn", "$ns", "$name")"""
 
         when (shape) {
             is StructureShape, is UnionShape -> {
@@ -2421,7 +2406,7 @@ class SchemaGenerator(
                             map
                         });
                         static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
-                            ${schemaPrefix}_SCHEMA_ID,
+                            $schemaIdExpr,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
                         )$traitChain
@@ -2435,7 +2420,7 @@ class SchemaGenerator(
                     writer.rustTemplate(
                         """
                         static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_struct(
-                            ${schemaPrefix}_SCHEMA_ID,
+                            $schemaIdExpr,
                             #{ShapeType}::${shapeTypeVariant(shape)},
                             $membersArray,
                         )$traitChain;
@@ -2449,7 +2434,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_list(
-                        ${schemaPrefix}_SCHEMA_ID,
+                        $schemaIdExpr,
                         &${schemaPrefix}_MEMBER,
                     );
                     """,
@@ -2461,7 +2446,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new_map(
-                        ${schemaPrefix}_SCHEMA_ID,
+                        $schemaIdExpr,
                         &${schemaPrefix}_KEY,
                         &${schemaPrefix}_VALUE,
                     );
@@ -2474,7 +2459,7 @@ class SchemaGenerator(
                 writer.rustTemplate(
                     """
                     static ${schemaPrefix}_SCHEMA: #{Schema}<'static> = #{Schema}::new(
-                        ${schemaPrefix}_SCHEMA_ID,
+                        $schemaIdExpr,
                         #{ShapeType}::${shapeTypeVariant(shape)},
                     );
                     """,
