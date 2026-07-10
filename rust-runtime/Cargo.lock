@@ -818,7 +818,6 @@ dependencies = [
  "aws-smithy-xml 0.61.1",
  "criterion",
  "urlencoding",
- "xmlparser",
 ]
 
 [[package]]
