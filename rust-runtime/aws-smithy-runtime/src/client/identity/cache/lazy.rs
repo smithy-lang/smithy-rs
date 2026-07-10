@@ -15,6 +15,8 @@ use aws_smithy_runtime_api::client::identity::{
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
 use aws_smithy_runtime_api::shared::IntoShared;
 use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::retry::RetryConfig;
+use aws_smithy_types::timeout::TimeoutConfig;
 use aws_smithy_types::DateTime;
 use std::collections::HashMap;
 use std::fmt;
@@ -22,11 +24,61 @@ use std::sync::RwLock;
 use std::time::Duration;
 use tracing::Instrument;
 
-const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_EXPIRATION: Duration = Duration::from_secs(15 * 60);
 const DEFAULT_BUFFER_TIME: Duration = Duration::from_secs(10);
 const DEFAULT_BUFFER_TIME_JITTER_FRACTION: fn() -> f64 = || fastrand::f64() * 0.5;
 const DEFAULT_MAX_PARTITIONS: usize = 64;
+
+/// Computes a worst-case load timeout that ensures the inner provider's retry strategy
+/// has enough time to exhaust all configured attempts before the cache kills the future.
+///
+/// This is intentionally pessimistic: it assumes every attempt hits the connect timeout
+/// ceiling and every backoff delay is the maximum for that iteration. The resulting value
+/// is a safety net — in practice, credential resolution completes well before this
+/// deadline.
+///
+/// Formula: sum of worst-case backoffs + per-attempt ceiling (connect_timeout × 2)
+fn pessimistic_load_timeout(config_bag: &ConfigBag) -> Duration {
+    let retry_config = config_bag
+        .load::<RetryConfig>()
+        .cloned()
+        .unwrap_or_else(RetryConfig::standard);
+    let timeout_config = config_bag
+        .load::<TimeoutConfig>()
+        .cloned()
+        .unwrap_or_else(TimeoutConfig::disabled);
+
+    let attempts = retry_config.max_attempts();
+    let initial_backoff = retry_config.initial_backoff().as_secs_f64();
+    let max_backoff = retry_config.max_backoff().as_secs_f64();
+
+    // Worst-case total backoff: sum of min(initial * 2^i, max_backoff) for each retry
+    let total_backoff: f64 = (0..attempts.saturating_sub(1))
+        .map(|i| (initial_backoff * 2.0_f64.powi(i as i32)).min(max_backoff))
+        .sum();
+
+    // Per-attempt ceiling: connect_timeout × 2.
+    //
+    // connect_timeout is the SDK's configured upper bound on establishing a connection.
+    // Once connected, credential endpoints respond quickly. We double it to cover: connection
+    // establishment + TLS completion + request send + server processing + response read.
+    //
+    // Note: read_timeout is intentionally NOT used here. A cross-SDK initiative will
+    // introduce a default read_timeout that may contain a large value (e.g., several mins)
+    // intended as a blackhole-detection safety net for outer service calls. Using it
+    // in this formula would inflate the load timeout far beyond what credential
+    // endpoints actually need.
+    let connect = timeout_config
+        .connect_timeout()
+        .unwrap_or(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+        .as_secs_f64();
+    let per_attempt = connect * 2.0;
+    let total_attempts = attempts as f64 * per_attempt;
+
+    // Floor: ensure at least one attempt's worth of budget even if max_attempts is 0.
+    let computed = total_backoff + total_attempts;
+    Duration::from_secs_f64(computed.max(per_attempt))
+}
 
 /// Builder for lazy identity caching.
 #[derive(Default, Debug)]
@@ -70,7 +122,12 @@ impl LazyCacheBuilder {
 
     /// Timeout for identity resolution.
     ///
-    /// Defaults to 5 seconds.
+    /// When not set, the timeout is derived from the configured `RetryConfig` and
+    /// `TimeoutConfig` to ensure the inner provider's retry strategy has enough time
+    /// to complete. Setting this explicitly overrides that computation.
+    ///
+    /// With default settings (3 attempts, 3.1s connect timeout), the derived timeout
+    /// is approximately 22 seconds.
     pub fn load_timeout(mut self, timeout: Duration) -> Self {
         self.set_load_timeout(Some(timeout));
         self
@@ -78,7 +135,12 @@ impl LazyCacheBuilder {
 
     /// Timeout for identity resolution.
     ///
-    /// Defaults to 5 seconds.
+    /// When not set, the timeout is derived from the configured `RetryConfig` and
+    /// `TimeoutConfig` to ensure the inner provider's retry strategy has enough time
+    /// to complete. Setting this explicitly overrides that computation.
+    ///
+    /// With default settings (3 attempts, 3.1s connect timeout), the derived timeout
+    /// is approximately 22 seconds.
     pub fn set_load_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
         self.load_timeout = timeout;
         self
@@ -210,7 +272,7 @@ impl LazyCacheBuilder {
             "default_expiration must be at least 15 minutes"
         );
         LazyCache::new(
-            self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
+            self.load_timeout,
             self.buffer_time.unwrap_or(DEFAULT_BUFFER_TIME),
             self.buffer_time_jitter_fraction
                 .unwrap_or(DEFAULT_BUFFER_TIME_JITTER_FRACTION),
@@ -269,7 +331,9 @@ impl CachePartitions {
 #[derive(Debug)]
 struct LazyCache {
     partitions: CachePartitions,
-    load_timeout: Duration,
+    /// Explicit load timeout override. If `None`, derived from `RetryConfig` + `TimeoutConfig`
+    /// in the `ConfigBag` at resolution time.
+    load_timeout: Option<Duration>,
     buffer_time: Duration,
     buffer_time_jitter_fraction: fn() -> f64,
     default_expiration: Duration,
@@ -277,7 +341,7 @@ struct LazyCache {
 
 impl LazyCache {
     fn new(
-        load_timeout: Duration,
+        load_timeout: Option<Duration>,
         buffer_time: Duration,
         buffer_time_jitter_fraction: fn() -> f64,
         default_expiration: Duration,
@@ -353,8 +417,15 @@ impl ResolveCachedIdentity for LazyCache {
         );
 
         let now = time_source.now();
-        let timeout_future = sleep_impl.sleep(self.load_timeout);
-        let load_timeout = self.load_timeout;
+        let load_timeout = self
+            .load_timeout
+            .unwrap_or_else(|| pessimistic_load_timeout(config_bag));
+        tracing::debug!(
+            load_timeout=?load_timeout,
+            explicitly_configured=self.load_timeout.is_some(),
+            "identity cache load timeout"
+        );
+        let timeout_future = sleep_impl.sleep(load_timeout);
         let partition = resolver.cache_partition();
         let cache = self.partitions.partition(partition);
         let default_expiration = self.default_expiration;
@@ -451,6 +522,8 @@ mod tests {
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
     use tracing::info;
 
+    const LOAD_TIMEOUT_FOR_TESTS: Duration = Duration::from_secs(5);
+
     const BUFFER_TIME_NO_JITTER: fn() -> f64 = || 0_f64;
 
     struct ResolverFn<F>(F);
@@ -505,7 +578,7 @@ mod tests {
 
         let identity_resolver = SharedIdentityResolver::new(Resolver(Mutex::new(load_list)));
         let cache = LazyCache::new(
-            DEFAULT_LOAD_TIMEOUT,
+            Some(LOAD_TIMEOUT_FOR_TESTS),
             DEFAULT_BUFFER_TIME,
             buffer_time_jitter_fraction,
             DEFAULT_EXPIRATION,
@@ -551,7 +624,7 @@ mod tests {
             IdentityFuture::ready(Ok(test_identity(1000)))
         }));
         let cache = LazyCache::new(
-            DEFAULT_LOAD_TIMEOUT,
+            Some(LOAD_TIMEOUT_FOR_TESTS),
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
             DEFAULT_EXPIRATION,
@@ -690,7 +763,7 @@ mod tests {
             })
         }));
         let cache = LazyCache::new(
-            Duration::from_secs(5),
+            Some(Duration::from_secs(5)),
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
             DEFAULT_EXPIRATION,
@@ -833,7 +906,7 @@ mod tests {
             .unwrap();
         // Create a cache with max_partitions=2
         let cache = LazyCache::new(
-            DEFAULT_LOAD_TIMEOUT,
+            Some(LOAD_TIMEOUT_FOR_TESTS),
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
             DEFAULT_EXPIRATION,
@@ -931,7 +1004,7 @@ mod tests {
             .unwrap();
         // Mimics the operation-scoped cache used for config overrides
         let cache = LazyCache::new(
-            DEFAULT_LOAD_TIMEOUT,
+            Some(LOAD_TIMEOUT_FOR_TESTS),
             DEFAULT_BUFFER_TIME,
             BUFFER_TIME_NO_JITTER,
             DEFAULT_EXPIRATION,
@@ -1004,5 +1077,80 @@ mod tests {
     #[should_panic(expected = "max_partitions must be greater than 0")]
     fn max_partitions_zero_panics() {
         LazyCacheBuilder::new().max_partitions(0);
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_default_config() {
+        // Default: 3 attempts, 1s initial_backoff, 20s max_backoff, 3.1s connect
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard());
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // backoff: 1+2 = 3s, attempts: 3 * 6.2 = 18.6s, total = 21.6s
+        assert!(
+            timeout > Duration::from_secs(21) && timeout < Duration::from_secs(22),
+            "expected ~21.6s, got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_five_attempts() {
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard().with_max_attempts(5));
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // backoff: 1+2+4+8 = 15s, attempts: 5 * 6.2 = 31s, total = 46s
+        assert!(
+            timeout > Duration::from_secs(45) && timeout < Duration::from_secs(47),
+            "expected ~46s, got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_zero_attempts_has_floor() {
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard().with_max_attempts(0));
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // Floor: per_attempt = 3.1 * 2 = 6.2s
+        assert!(
+            timeout >= Duration::from_secs(6) && timeout < Duration::from_secs(7),
+            "expected ~6.2s floor, got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_no_config_in_bag_uses_defaults() {
+        // Empty config bag — falls back to RetryConfig::standard() and TimeoutConfig::disabled()
+        let config_bag = ConfigBag::base();
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // standard = 3 attempts, disabled timeout → uses DEFAULT_CONNECT_TIMEOUT (3.1s)
+        // Same as default config: ~21.6s
+        assert!(
+            timeout > Duration::from_secs(21) && timeout < Duration::from_secs(22),
+            "expected ~21.6s, got {:?}",
+            timeout
+        );
     }
 }
