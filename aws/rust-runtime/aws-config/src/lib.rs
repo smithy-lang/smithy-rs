@@ -941,6 +941,18 @@ mod loader {
                 .unwrap_or_else(|| TimeoutConfig::builder().build());
             timeout_config.take_defaults_from(&base_config);
 
+            let (retry_config, retry_config_explicitly_set) = match self.retry_config {
+                Some(rc) => (rc, true),
+                None => (
+                    retry_config::default_provider()
+                        .configure(&conf)
+                        .retry_config()
+                        .await,
+                    false,
+                ),
+            };
+            let conf = conf.with_retry_config(retry_config.clone());
+
             let credentials_provider = match self.credentials_provider {
                 TriStateOption::Set(provider) => Some(provider),
                 TriStateOption::NotSet => {
@@ -973,15 +985,9 @@ mod loader {
                 .time_source(time_source)
                 .service_config(service_config);
 
-            let retry_config = if let Some(retry_config) = self.retry_config {
+            if retry_config_explicitly_set {
                 builder.insert_origin("retry_config", Origin::shared_config());
-                retry_config
-            } else {
-                retry_config::default_provider()
-                    .configure(&conf)
-                    .retry_config()
-                    .await
-            };
+            }
             builder = builder.retry_config(retry_config);
 
             // If an endpoint URL is set programmatically, then our work is done.
@@ -1528,6 +1534,59 @@ mod loader {
                 .load()
                 .await;
             assert_eq!(Some("http://localhost"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn retry_config_propagated_to_inner_sts_client() {
+            let request_count = Arc::new(AtomicUsize::new(0));
+            let counter = request_count.clone();
+
+            // Return STS Throttling error for every request
+            let http_client = infallible_client_fn(move |_req| {
+                counter.fetch_add(1, Ordering::Relaxed);
+                http::Response::builder()
+                    .status(400)
+                    .body(
+                        r#"<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+                            <Error>
+                                <Type>Sender</Type>
+                                <Code>Throttling</Code>
+                                <Message>Rate exceeded</Message>
+                            </Error>
+                            <RequestId>test-request-id</RequestId>
+                        </ErrorResponse>"#,
+                    )
+                    .unwrap()
+            });
+
+            // Set up web identity token env vars + AWS_MAX_ATTEMPTS=5
+            let env = Env::from_slice(&[
+                ("AWS_WEB_IDENTITY_TOKEN_FILE", "/token.jwt"),
+                ("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/test-role"),
+                ("AWS_ROLE_SESSION_NAME", "test-session"),
+                ("AWS_REGION", "us-east-1"),
+                ("AWS_MAX_ATTEMPTS", "5"),
+            ]);
+            let fs = Fs::from_slice(&[("/token.jwt", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test")]);
+
+            let config = defaults(BehaviorVersion::latest())
+                .sleep_impl(InstantSleep)
+                .http_client(http_client)
+                .env(env)
+                .fs(fs)
+                .load()
+                .await;
+
+            // Attempt to load credentials — will fail because all responses are throttled
+            let _ = config
+                .credentials_provider()
+                .unwrap()
+                .provide_credentials()
+                .await;
+
+            // The inner STS client should have made 5 attempts (not the default 3),
+            // proving that AWS_MAX_ATTEMPTS propagated to the inner STS client.
+            assert_eq!(5, request_count.load(Ordering::Relaxed));
         }
     }
 }
