@@ -982,19 +982,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                     if (httpBindingResolver.isRpcProtocol()) {
                                         rustTemplate(
                                             """
-                                            {
-                                                let mut receiver = receiver;
-                                                if let Some(_initial_event) = receiver
-                                                    .try_recv_initial(#{InitialMessageType}::Request)
-                                                    .await
-                                                    .map_err(
-                                                        |ev_error| #{RequestRejection}::ConstraintViolation(
-                                                            #{AllowUselessConversion}
-                                                            format!("{ev_error}").into()
-                                                        )
-                                                    )? {
-                                                    #{parseInitialRequest}
-                                                }
+                                            let mut receiver = receiver;
+                                            if let Some(_initial_event) = receiver
+                                                .try_recv_initial(#{InitialMessageType}::Request)
+                                                .await
+                                                .map_err(
+                                                    |ev_error| #{RequestRejection}::ConstraintViolation(
+                                                        #{AllowUselessConversion}
+                                                        format!("{ev_error}").into()
+                                                    )
+                                                )? {
+                                                #{parseInitialRequest}
                                             }
                                             """,
                                             "Deserializer" to deserializer,
