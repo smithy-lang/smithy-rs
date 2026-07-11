@@ -28,14 +28,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.61.1"
+version = "0.62.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
  "aws-smithy-types",
  "aws-smithy-xml",
  "urlencoding",
- "xmlparser",
 ]
 
 [[package]]
@@ -84,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.0"
+version = "1.6.1"
 dependencies = [
  "base64-simd",
  "bytes",

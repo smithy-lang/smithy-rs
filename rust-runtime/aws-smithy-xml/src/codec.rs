@@ -17,7 +17,7 @@ use std::sync::Arc;
 mod deserializer;
 mod serializer;
 
-pub use deserializer::XmlDeserializer;
+pub use deserializer::{find_depth2_element_slice_by, XmlDeserializer};
 pub use serializer::XmlSerializer;
 
 /// Configuration for XML codec behavior.
