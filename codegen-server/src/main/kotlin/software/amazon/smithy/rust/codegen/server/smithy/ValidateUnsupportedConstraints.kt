@@ -21,6 +21,7 @@ import software.amazon.smithy.model.shapes.SetShape
 import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.ShortShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.traits.RangeTrait
 import software.amazon.smithy.model.traits.StreamingTrait
@@ -416,7 +417,7 @@ fun validateUnsupportedConstraints(
     val unsupportedConstraintOnNonErrorShapeReachableViaAnEventStreamSet =
         eventStreamShapes
             .flatMap { walker.walkShapes(it) }
-            .filterMapShapesToTraits(allConstraintTraits)
+            .filterMapShapesToTraits(allConstraintTraits - setOf(EnumTrait::class.java))
             .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
             .toSet()
     val eventStreamErrors =
@@ -428,7 +429,7 @@ fun validateUnsupportedConstraints(
         eventStreamErrors
             .flatMap { it }
             .flatMap { walker.walkShapes(it) }
-            .filterMapShapesToTraits(allConstraintTraits)
+            .filterMapShapesToTraits(allConstraintTraits - setOf(EnumTrait::class.java))
             .map { (shape, trait) -> UnsupportedConstraintOnShapeReachableViaAnEventStream(shape, trait) }
             .toSet()
     val unsupportedConstraintShapeReachableViaAnEventStreamSet =
