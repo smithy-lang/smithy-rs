@@ -123,6 +123,13 @@ data class ServerCodegenConfig(
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
     val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
+    /**
+     * When true, a union JSON body whose object did not set any recognized variant
+     * (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a
+     * deserialization error. Off by default, opt in only for services that have shipped
+     * clients depending on the lenient behavior.
+     */
+    val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -131,6 +138,7 @@ data class ServerCodegenConfig(
         private const val DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS = false
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
+        private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
 
         /**
@@ -171,6 +179,7 @@ data class ServerCodegenConfig(
                 "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
                 "addValidationExceptionToConstrainedOperations",
                 "alwaysSendEventStreamInitialResponse",
+                "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
             )
@@ -214,6 +223,11 @@ data class ServerCodegenConfig(
                     node.get().getBooleanMemberOrDefault(
                         "alwaysSendEventStreamInitialResponse",
                         DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
+                    ),
+                allowMissingUnionVariant =
+                    node.get().getBooleanMemberOrDefault(
+                        "allowMissingUnionVariant",
+                        DEFAULT_ALLOW_MISSING_UNION_VARIANT,
                     ),
                 http1x =
                     node.get().getBooleanMemberOrDefault(
