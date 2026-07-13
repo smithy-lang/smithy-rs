@@ -256,6 +256,13 @@ impl<'a> XmlDeserializer<'a> {
                         && tag_content
                             .get(tag_name.len())
                             .is_none_or(|&b| b == b' ' || b == b'>' || b == b'/');
+                    if opens_our_tag && is_self_closing && depth == 0 {
+                        // The target element is itself self-closing (e.g.
+                        // `<Foo/>`) — there is no matching close tag, so the
+                        // element slice ends just past this `>`.
+                        let end = el_start + pos + gt + 1;
+                        return &input[el_start..end];
+                    }
                     if opens_our_tag && !is_self_closing {
                         depth += 1;
                     }
@@ -297,6 +304,42 @@ impl<'a> XmlDeserializer<'a> {
                 other => other,
             })
     }
+}
+
+/// Locate a depth-2 XML element (a direct child of the document root) whose
+/// local name satisfies `predicate`, returning the byte slice covering it
+/// (`<El>...</El>`, inclusive of tags). The document root itself is also
+/// considered, so an "unwrapped" envelope whose root already matches is found.
+///
+/// Returns `None` if the body is not valid UTF-8, is not parseable as XML, or
+/// contains no matching element — callers decide how to fall back.
+///
+/// Robust to start-tag attributes (e.g. `<Error xmlns="...">`), nested
+/// same-name elements, comments, and CDATA, which a naive substring search
+/// would mishandle. Both the AWS REST XML error path (`name == "Error"`) and
+/// the awsQuery response path (`name.ends_with("Result") || name == "Error"`)
+/// build on this.
+pub fn find_depth2_element_slice_by(
+    body: &[u8],
+    predicate: impl Fn(&str) -> bool,
+) -> Option<&[u8]> {
+    let mut doc = Document::try_from(body).ok()?;
+    let mut root = doc.root_element().ok()?;
+    // Unwrapped envelope: the root element itself matches. Its start/end tags
+    // are already at the body boundaries, so return the whole body.
+    if predicate(root.start_el().local()) {
+        return Some(body);
+    }
+    // Wrapped envelope: scan the root's direct children for a match.
+    while let Some(tag) = root.next_tag() {
+        let local = tag.start_el().local();
+        if predicate(local) {
+            // `local` is a `&str` borrowed from `body`, satisfying the
+            // pointer-containment invariant of `find_element_slice`.
+            return Some(XmlDeserializer::find_element_slice(body, local));
+        }
+    }
+    None
 }
 
 impl ShapeDeserializer for XmlDeserializer<'_> {
@@ -1519,6 +1562,41 @@ mod tests {
             .expect("must not panic on multi-byte UTF-8 inside map elements");
 
         assert_eq!(entries, vec![("Б".to_owned(), String::new())]);
+    }
+
+    #[test]
+    fn find_depth2_by_predicate_wrapped() {
+        let xml = b"<Resp><FooResult><A>1</A></FooResult><Metadata/></Resp>";
+        let got = find_depth2_element_slice_by(xml, |n| n.ends_with("Result"));
+        assert_eq!(got, Some(&b"<FooResult><A>1</A></FooResult>"[..]));
+    }
+
+    #[test]
+    fn find_depth2_by_predicate_self_closing() {
+        // Regression: a self-closing target element must return just `<Foo/>`,
+        // not everything from the element to the end of the document.
+        let xml = b"<Resp><FooResult/><Metadata><Id>r</Id></Metadata></Resp>";
+        let got = find_depth2_element_slice_by(xml, |n| n.ends_with("Result"));
+        assert_eq!(got, Some(&b"<FooResult/>"[..]));
+    }
+
+    #[test]
+    fn find_depth2_by_predicate_root_match() {
+        // Unwrapped envelope: the root itself matches — return the whole body.
+        let xml = b"<Error><Code>Boom</Code></Error>";
+        let got = find_depth2_element_slice_by(xml, |n| n == "Error");
+        assert_eq!(got, Some(&xml[..]));
+    }
+
+    #[test]
+    fn find_depth2_by_predicate_no_match() {
+        let xml = b"<Resp><Metadata/></Resp>";
+        assert_eq!(find_depth2_element_slice_by(xml, |n| n == "Error"), None);
+    }
+
+    #[test]
+    fn find_depth2_by_predicate_invalid_xml() {
+        assert_eq!(find_depth2_element_slice_by(b"not xml", |_| true), None);
     }
 
     // -------- Specialized collection-helper override tests --------
