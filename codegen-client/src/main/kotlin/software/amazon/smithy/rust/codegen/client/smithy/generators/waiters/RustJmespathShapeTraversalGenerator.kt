@@ -37,6 +37,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
+import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -516,7 +517,7 @@ class RustJmespathShapeTraversalGenerator(
                                     // The wildcard arm below handles it.
                                     val matchArms =
                                         outputShape.allMembers.keys
-                                            .filter { it.toPascalCase() != "Unknown" }
+                                            .filter { it.toPascalCase() != UnionGenerator.UNKNOWN_VARIANT_NAME }
                                             .joinToString("\n") { memberName ->
                                                 val variantName = memberName.toPascalCase()
                                                 "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
