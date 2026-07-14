@@ -59,7 +59,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.text.NumberFormat
 
 /**
