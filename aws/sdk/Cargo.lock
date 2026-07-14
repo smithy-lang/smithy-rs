@@ -344,7 +344,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "aws-config"
-version = "1.9.0"
+version = "1.10.0"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.8.1"
+version = "1.9.0"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -1511,9 +1511,13 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.61.1"
+version = "0.62.0"
 dependencies = [
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
  "aws-smithy-types",
+ "aws-smithy-xml",
+ "criterion",
  "urlencoding",
 ]
 
@@ -1641,7 +1645,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.61.1"
+version = "0.62.0"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api",
@@ -1654,7 +1658,7 @@ dependencies = [
 
 [[package]]
 name = "aws-types"
-version = "1.4.0"
+version = "1.5.0"
 dependencies = [
  "aws-credential-types",
  "aws-smithy-async",
