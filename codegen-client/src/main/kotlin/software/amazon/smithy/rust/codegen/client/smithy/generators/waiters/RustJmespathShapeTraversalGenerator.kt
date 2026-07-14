@@ -37,7 +37,6 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
 import software.amazon.smithy.model.traits.EnumTrait
-import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.client.smithy.ClientCodegenContext
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.RustType
@@ -512,16 +511,12 @@ class RustJmespathShapeTraversalGenerator(
                                     // Generate a match that returns the active variant name.
                                     val unionSym = symbolProvider.toSymbol(outputShape)
 
-                                    // Filter out "Unknown" to avoid generating a match arm that
-                                    // collides with the synthetic unit variant added by client codegen.
-                                    // The wildcard arm below handles it.
                                     val matchArms =
-                                        outputShape.allMembers.keys
-                                            .filter { it.toPascalCase() != UnionGenerator.UNKNOWN_VARIANT_NAME }
-                                            .joinToString("\n") { memberName ->
-                                                val variantName = memberName.toPascalCase()
-                                                "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
-                                            }
+                                        outputShape.members().joinToString("\n") { member ->
+                                            val variantName = symbolProvider.toSymbol(member).name
+                                            val wireName = member.memberName
+                                            "${unionSym.rustType().render()}::$variantName(_) => ${wireName.dq()}.to_string(),"
+                                        }
                                     rust(
                                         """let $ident = vec![match ${arg.identifier} {
                                          |$matchArms
