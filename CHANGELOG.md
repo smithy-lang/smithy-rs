@@ -1,4 +1,28 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 14th, 2026
+===============
+**New this release:**
+- :tada: (server, @lauzadis) Support enum-typed members in server event stream unions. Previously, the server codegen rejected any model with an `enum`-trait shape reachable through an event stream, flagging it as an unsupported constraint. The `enum` trait is now excluded from that check, and the generated code is updated so it actually compiles and behaves correctly: event stream members skip the `MaybeConstrained`/builder unconstrained-type wrapping, and the generated unmarshaller calls `build()` on the parsed payload so a constraint violation surfaces as an unmarshalling error. Related: [smithy-lang/smithy#1388](https://github.com/smithy-lang/smithy/issues/1388).
+- :tada: (server, @lauzadis) Add a `codegen.allowMissingUnionVariant` configuration (boolean, default `false`). When `true`, a union JSON body whose object did not set any recognized variant (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a deserialization error. Opt in only for services that have shipped clients depending on the lenient behavior. Client codegen is unaffected.
+- :tada: (client, [aws-sdk-rust#146](https://github.com/awslabs/aws-sdk-rust/issues/146)) Add support for third-party libraries to self-identify in the SDK user agent via framework metadata, addressing the long-standing request to customize the user agent ([aws-sdk-rust#146](https://github.com/awslabs/aws-sdk-rust/issues/146)).
+
+    A new public `FrameworkMetadata` type (re-exported as `aws_config::FrameworkMetadata` and on each client's `config` module) can be set on the client config builder, on `SdkConfig`, and via `aws_config::ConfigLoader::framework_metadata`:
+
+    ```rust
+    let config = aws_config::from_env()
+        .framework_metadata(FrameworkMetadata::new("some-framework", Some("1.0"))?)
+        .load()
+        .await;
+    ```
+
+    Framework metadata is additive — multiple libraries (and the application) can each self-identify without clobbering one another. The name/version are validated against the same charset as `AppName` (rejecting, not sanitizing, invalid characters to prevent header injection). The `UserAgentInterceptor` de-duplicates entries on `(name, version)` preserving first-seen order, caps the total at 10 unique entries, and renders each as `lib/{name}/{version}` in the `x-amz-user-agent` header.
+- :bug: (all, [smithy-rs#4435](https://github.com/smithy-lang/smithy-rs/issues/4435)) Gate event-stream `try_recv_initial` to RPC protocols (`awsJson`, `awsQuery`, `rpcv2Cbor`) on both the client fluent builder and the server protocol generator. Previously, all event-stream operations performed an unconditional `try_recv_initial`, which can hang indefinitely on REST-bound operations whose streams take a long time to produce their first event. This change is a stopgap; the planned permanent fix tracked in #4435 will instead surface initial messages only when explicitly requested.
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lauzadis
+
+
 July 7th, 2026
 ==============
 **Breaking Changes:**
