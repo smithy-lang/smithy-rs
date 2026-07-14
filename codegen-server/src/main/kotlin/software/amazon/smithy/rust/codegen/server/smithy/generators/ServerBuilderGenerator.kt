@@ -43,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.traits.SyntheticInputTrait
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
+import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.letIf
 import software.amazon.smithy.rust.codegen.core.util.redactIfNecessary
 import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
@@ -322,11 +323,11 @@ class ServerBuilderGenerator(
         member: MemberShape,
     ) {
         check(publicConstrainedTypes)
-        val symbol = symbolProvider.toSymbol(member)
         val memberName = symbolProvider.toMemberName(member)
+        val symbol = symbolProvider.toSymbol(member)
 
         val hasBox = symbol.mapRustType { it.stripOuter<RustType.Option>() }.isRustBoxed()
-        val wrapInMaybeConstrained = takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
+        val wrapInMaybeConstrained = !member.isEventStream(model) && takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)
 
         writer.documentShape(member, model)
         writer.deprecatedShape(member)
@@ -492,29 +493,33 @@ class ServerBuilderGenerator(
      * All builder members are optional, but only some are `Option<T>`s where `T` needs to be constrained.
      */
     private fun builderMemberSymbol(member: MemberShape): Symbol =
-        if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
-            val strippedOption =
-                if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
-                    constrainedShapeSymbolProvider.toSymbol(member)
-                } else {
-                    pubCrateConstrainedShapeSymbolProvider.toSymbol(member)
-                }
-                    // Strip the `Option` in case the member is not `required`.
-                    .mapRustType { it.stripOuter<RustType.Option>() }
-
-            val hadBox = strippedOption.isRustBoxed()
-            strippedOption
-                // Strip the `Box` in case the member can reach itself recursively.
-                .mapRustType { it.stripOuter<RustType.Box>() }
-                // Wrap it in the Cow-like `constrained::MaybeConstrained` type, since we know the target member shape can
-                // reach a constrained shape.
-                .makeMaybeConstrained()
-                // Box it in case the member can reach itself recursively.
-                .letIf(hadBox) { it.makeRustBoxed() }
-                // Ensure we always end up with an `Option`.
-                .makeOptional()
+        if (member.isEventStream(model)) {
+            symbolProvider.toSymbol(member).makeOptional()
         } else {
-            constrainedShapeSymbolProvider.toSymbol(member).makeOptional()
+            if (takeInUnconstrainedTypes && member.targetCanReachConstrainedShape(model, symbolProvider)) {
+                val strippedOption =
+                    if (member.hasConstraintTraitOrTargetHasConstraintTrait(model, symbolProvider)) {
+                        constrainedShapeSymbolProvider.toSymbol(member)
+                    } else {
+                        pubCrateConstrainedShapeSymbolProvider.toSymbol(member)
+                    }
+                        // Strip the `Option` in case the member is not `required`.
+                        .mapRustType { it.stripOuter<RustType.Option>() }
+
+                val hadBox = strippedOption.isRustBoxed()
+                strippedOption
+                    // Strip the `Box` in case the member can reach itself recursively.
+                    .mapRustType { it.stripOuter<RustType.Box>() }
+                    // Wrap it in the Cow-like `constrained::MaybeConstrained` type, since we know the target member shape can
+                    // reach a constrained shape.
+                    .makeMaybeConstrained()
+                    // Box it in case the member can reach itself recursively.
+                    .letIf(hadBox) { it.makeRustBoxed() }
+                    // Ensure we always end up with an `Option`.
+                    .makeOptional()
+            } else {
+                constrainedShapeSymbolProvider.toSymbol(member).makeOptional()
+            }
         }
 
     /**
@@ -547,8 +552,11 @@ class ServerBuilderGenerator(
                     // Write the modifier(s).
 
                     // 1. Enforce constraint traits of data from incoming requests.
-                    serverBuilderConstraintViolations.builderConstraintViolationForMember(member)?.also { constraintViolation ->
-                        enforceConstraints(this, member, constraintViolation)
+                    if (!member.isEventStream(model)) {
+                        serverBuilderConstraintViolations.builderConstraintViolationForMember(member)
+                            ?.also { constraintViolation ->
+                                enforceConstraints(this, member, constraintViolation)
+                            }
                     }
 
                     if (member.hasNonNullDefault()) {
