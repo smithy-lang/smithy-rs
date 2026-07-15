@@ -29,15 +29,13 @@ on:
         required: true
         type: boolean
     secrets:
-      RELEASE_AUTOMATION_BOT_PAT:
-        required: true
-      RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN:
-        required: true
       CANARY_GITHUB_ACTIONS_ROLE_ARN:
         required: true
       CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME:
         required: true
       SMITHY_RS_ECR_PUSH_ROLE_ARN:
+        required: true
+      SMITHY_RS_RELEASE_OPS_ROLE_ARN:
         required: true
       MAVEN_CENTRAL_GPG_PUBLIC_KEY_SECRET_ARN:
         required: true
@@ -154,6 +152,9 @@ jobs:
     - acquire-base-image
     - check-semver-hazards
     - release-ci
+    permissions:
+      id-token: write
+      contents: read
     # We need `always` here otherwise this job won't run if the previous job has been skipped
     # See https://samanpavel.medium.com/github-actions-conditional-job-execution-e6aa363d2867
     if: |
@@ -166,10 +167,24 @@ jobs:
       new_release_series: ${{ steps.branch-push.outputs.new_release_series }}
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
+        role-session-name: GitHubActions-ReleaseBranch
+        aws-region: us-west-2
+    - name: Fetch smithy-rs PAT from Secrets Manager
+      id: secrets
+      run: |
+        token=$(aws secretsmanager get-secret-value \
+          --secret-id prod/aws-rust-sdk-team/github/pat/smithy-rs \
+          --query SecretString --output text)
+        echo "::add-mask::$token"
+        echo "SMITHY_RS_PAT=$token" >> "$GITHUB_OUTPUT"
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        token: ${{ steps.secrets.outputs.SMITHY_RS_PAT }}
         fetch-depth: 0
     - name: Get or create release branch
       id: branch-push
@@ -186,6 +201,9 @@ jobs:
     name: Release
     needs:
     - get-or-create-release-branch
+    permissions:
+      id-token: write
+      contents: read
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for an explanation as to why
     # we need this here _even though_ the job we depend on is never skipped.
     if: |
@@ -199,12 +217,32 @@ jobs:
       uses: dtolnay/rust-toolchain@master
       with:
         toolchain: ${{ env.rust_version }}
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
+        role-session-name: GitHubActions-Release
+        aws-region: us-west-2
+    - name: Fetch release credentials from Secrets Manager
+      id: secrets
+      run: |
+        pat=$(aws secretsmanager get-secret-value \
+          --secret-id prod/aws-rust-sdk-team/github/pat/smithy-rs \
+          --query SecretString --output text)
+        echo "::add-mask::$pat"
+        echo "SMITHY_RS_PAT=$pat" >> "$GITHUB_OUTPUT"
+
+        crates_token=$(aws secretsmanager get-secret-value \
+          --secret-id cratesio/user/v1-automation/access-token \
+          --query SecretString --output text)
+        echo "::add-mask::$crates_token"
+        echo "CRATES_IO_TOKEN=$crates_token" >> "$GITHUB_OUTPUT"
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
         ref: ${{ inputs.commit_sha }}
         path: smithy-rs
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        token: ${{ steps.secrets.outputs.SMITHY_RS_PAT }}
         fetch-depth: 0
     - name: Generate release artifacts
       uses: ./smithy-rs/.github/actions/docker-build
@@ -250,7 +288,7 @@ jobs:
       shell: bash
       working-directory: smithy-rs-release/crates-to-publish
       env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_CRATESIO_TOKEN }}
+        CARGO_REGISTRY_TOKEN: ${{ steps.secrets.outputs.CRATES_IO_TOKEN }}
       run: |
         cargo install --path "$(realpath ../smithy-rs/tools/ci-build/publisher)"
         # Verify the publisher tool installed successfully
@@ -272,7 +310,7 @@ jobs:
     - name: Tag release
       uses: actions/github-script@v7
       with:
-        github-token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        github-token: ${{ steps.secrets.outputs.SMITHY_RS_PAT }}
         script: |
           const createReleaseScript = require("./smithy-rs/.github/workflows/release-scripts/create-release.js");
           await createReleaseScript({
@@ -366,8 +404,6 @@ jobs:
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
     if: inputs.dry_run == false && always() && needs.release.result == 'success'
     uses: ./.github/workflows/backport-pull-request.yml
-    secrets:
-      RELEASE_AUTOMATION_BOT_PAT: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
 
   publish-build-image:
     name: Publish new smithy-rs-build-image tag to ECR

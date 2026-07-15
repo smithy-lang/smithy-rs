@@ -20,8 +20,6 @@ on:
         required: true
       SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
-      RELEASE_AUTOMATION_BOT_PAT:
-        required: true
 
 jobs:
   save-docker-login-token:
@@ -88,14 +86,31 @@ jobs:
     needs:
     - save-docker-login-token
     - acquire-base-image
+    permissions:
+      id-token: write
+      contents: read
     runs-on: ubuntu-latest
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
+        role-session-name: GitHubActions-LockfilePr
+        aws-region: us-west-2
+    - name: Fetch smithy-rs PAT from Secrets Manager
+      id: secrets
+      run: |
+        token=$(aws secretsmanager get-secret-value \
+          --secret-id prod/aws-rust-sdk-team/github/pat/smithy-rs \
+          --query SecretString --output text)
+        echo "::add-mask::$token"
+        echo "SMITHY_RS_PAT=$token" >> "$GITHUB_OUTPUT"
     - name: Checkout smithy-rs
       uses: actions/checkout@v4
       with:
         path: smithy-rs
-        token: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        token: ${{ steps.secrets.outputs.SMITHY_RS_PAT }}
     - name: Create branch name for updating lockfiles
       id: branch-name-for-updating-lockfiles
       shell: bash
@@ -114,7 +129,7 @@ jobs:
       working-directory: smithy-rs
       shell: bash
       env:
-        GITHUB_TOKEN: ${{ secrets.RELEASE_AUTOMATION_BOT_PAT }}
+        GITHUB_TOKEN: ${{ steps.secrets.outputs.SMITHY_RS_PAT }}
       run: |
         echo -e 'If CI fails, commit the necessary fixes to this PR until all checks pass.\n\nIf changes are required to [crateNameToLastKnownWorkingVersions](https://github.com/smithy-lang/smithy-rs/blob/92916b5484cdfef9ff58540ebf5e845eeeccf860/aws/sdk/build.gradle.kts#L504), revert the first commit in the PR, run `./gradlew aws:sdk:cargoUpdateAllLockfiles`, and commit the updated lockfiles.' | \
         gh pr create \
