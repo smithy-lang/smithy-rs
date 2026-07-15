@@ -951,7 +951,9 @@ mod loader {
                     false,
                 ),
             };
-            let conf = conf.with_retry_config(retry_config.clone());
+            let conf = conf
+                .with_retry_config(retry_config.clone())
+                .with_timeout_config(timeout_config.clone());
 
             let credentials_provider = match self.credentials_provider {
                 TriStateOption::Set(provider) => Some(provider),
@@ -1134,14 +1136,20 @@ mod loader {
         use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
         use aws_smithy_http_client::test_util::{infallible_client_fn, NeverClient};
         use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+        use aws_smithy_runtime_api::client::identity::{
+            ResolveCachedIdentity, SharedIdentityResolver,
+        };
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
         use aws_types::app_name::AppName;
         use aws_types::origin::Origin;
         use aws_types::os_shim_internal::{Env, Fs};
         use aws_types::sdk_config::{RequestChecksumCalculation, ResponseChecksumValidation};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::time::Duration;
 
         #[tokio::test]
         async fn provider_config_used() {
@@ -1591,13 +1599,6 @@ mod loader {
 
         #[tokio::test]
         async fn pessimistic_load_timeout_allows_retries_to_complete() {
-            use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
-            use aws_smithy_runtime_api::client::identity::{
-                ResolveCachedIdentity, SharedIdentityResolver,
-            };
-            use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
-            use std::time::Duration;
-
             let (time_source, sleep_impl) = tick_advance_time_and_sleep();
 
             let request_count = Arc::new(AtomicUsize::new(0));
