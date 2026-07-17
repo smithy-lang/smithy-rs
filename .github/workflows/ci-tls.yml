@@ -51,6 +51,9 @@ jobs:
       uses: actions/checkout@v4
       with:
         repository: wbond/badtls.io
+        # badtls.io master is currently broken: scripts/generate.py imports
+        # cert_dh512 after the file was removed. Pin until upstream fixes it.
+        ref: 03279f919a5aafb13d8cb48d18ae09c244d7561c
         path: ./badtls.io
     - name: Checkout badssl
       uses: actions/checkout@v4
