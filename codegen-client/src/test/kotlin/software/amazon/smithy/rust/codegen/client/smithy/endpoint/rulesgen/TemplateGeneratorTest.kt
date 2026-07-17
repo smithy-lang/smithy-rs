@@ -72,4 +72,14 @@ internal class TemplateGeneratorTest {
     fun testMultipartTemplate() {
         assertTemplateEquals("https://{Region}.{Bucket}.foo.com", "https://REGIONBorrowed.BUCKETBorrowed.foo.com")
     }
+
+    @Test
+    fun testSingleCharStaticSegmentApostrophe() {
+        assertTemplateEquals("'{Region}' is bad", "'REGIONBorrowed' is bad")
+    }
+
+    @Test
+    fun testSingleCharStaticSegmentBackslash() {
+        assertTemplateEquals("\\{Region}\\end", "\\REGIONBorrowed\\end")
+    }
 }
