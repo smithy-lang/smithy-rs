@@ -581,4 +581,52 @@ class ServerHttpSensitivityGeneratorTest {
         assertEquals(greedyLabel.segmentIndex, 2)
         assertEquals(greedyLabel.endOffset, 7)
     }
+
+    @Test
+    fun `response fmt with sensitive header uses sensitivity MakeSensitive`() {
+        val model =
+            """
+            namespace test
+
+            @http(method: "GET", uri: "/sensitives/{id}")
+            operation GetSensitive {
+                input: GetSensitiveInput,
+                output: GetSensitiveOutput,
+            }
+
+            structure GetSensitiveInput {
+                @required
+                @httpLabel
+                id: String,
+            }
+
+            @sensitive
+            string SensitiveString
+
+            structure GetSensitiveOutput {
+                @httpHeader("sensitive")
+                sensitive: SensitiveString,
+            }
+            """.asSmithyModel()
+        val operation = model.operationShapes.toList()[0]
+        val generator = ServerHttpSensitivityGenerator(model, operation, ServerTestRuntimeConfig)
+        val responseFmt = generator.responseFmt()
+
+        val testProject = TestWorkspace.testProject(serverTestSymbolProvider(model))
+        testProject.testModule {
+            unitTest("response_fmt_compiles") {
+                rustTemplate(
+                    """
+                    fn assert_response_fmt(_fmt: #{ResponseFmt:W}) {}
+                    let fmt = #{ResponseFmtValue:W};
+                    assert_response_fmt(fmt);
+                    """,
+                    "ResponseFmt" to responseFmt.type,
+                    "ResponseFmtValue" to responseFmt.value,
+                    *codegenScope,
+                )
+            }
+        }
+        testProject.compileAndTest()
+    }
 }

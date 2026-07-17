@@ -42,7 +42,7 @@ class StatusCodeSensitivity(private val sensitive: Boolean, runtimeConfig: Runti
     fun type(): Writable =
         writable {
             if (sensitive) {
-                rustTemplate("#{SmithyHttpServer}::instrumentation::MakeSensitive", *codegenScope)
+                rustTemplate("#{SmithyHttpServer}::instrumentation::sensitivity::MakeSensitive", *codegenScope)
             } else {
                 rustTemplate("#{SmithyHttpServer}::instrumentation::MakeIdentity", *codegenScope)
             }
