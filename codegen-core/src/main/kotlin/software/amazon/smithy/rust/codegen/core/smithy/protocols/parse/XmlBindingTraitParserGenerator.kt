@@ -19,6 +19,7 @@ import software.amazon.smithy.model.shapes.MapShape
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.NumberShape
 import software.amazon.smithy.model.shapes.OperationShape
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
@@ -28,10 +29,12 @@ import software.amazon.smithy.model.traits.TimestampFormatTrait
 import software.amazon.smithy.model.traits.XmlFlattenedTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
 import software.amazon.smithy.rust.codegen.core.rustlang.CargoDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.conditionalBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.escape
+import software.amazon.smithy.rust.codegen.core.rustlang.render
 import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlockTemplate
@@ -41,6 +44,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.withBlockTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
+import software.amazon.smithy.rust.codegen.core.smithy.SimpleShapes
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
@@ -49,6 +53,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.isRustBoxed
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlMemberIndex
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.XmlNameIndex
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.PANIC
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.expectMember
@@ -70,6 +75,17 @@ data class OperationWrapperContext(
 class XmlBindingTraitParserGenerator(
     codegenContext: CodegenContext,
     private val xmlErrors: RuntimeType,
+    /**
+     * Maps a shape onto the symbol that the parser should produce for it. On the client this is the
+     * shape's regular Rust type; on the server, for shapes that reach a constrained shape, this is
+     * the unconstrained wrapper newtype so the parsed value can flow into the builder as
+     * `MaybeConstrained::Unconstrained(...)` and have its constraint checks deferred to build time.
+     * Mirrors the same hook in [JsonParserGenerator]. Defaults to the regular symbol so positional
+     * (trailing-lambda) constructions keep working.
+     */
+    private val returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
+        ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
+    },
     private val writeOperationWrapper: RustWriter.(OperationWrapperContext, OperationInnerWriteable) -> Unit,
 ) : StructuredDataParserGenerator {
     /** Abstraction to represent an XML element name */
@@ -142,10 +158,17 @@ class XmlBindingTraitParserGenerator(
         check(shape is UnionShape || shape is StructureShape) {
             "payload parser should only be used on structures & unions"
         }
+        // The inner `parseStructure` / `parseUnion` resolve their return type through
+        // `returnSymbolToParse`, which on server codegen for constrained-reachable shapes is the
+        // unconstrained builder rather than the constrained final shape. The wrapper that calls
+        // this helper (`shape_<op>_input.rs`) is also generated through `returnSymbolToParse`, so
+        // the two need to agree — otherwise the outer signature expects `Option<Builder>` while
+        // this helper still claims to return the constrained final shape.
+        val returnSymbol = returnSymbolToParse(shape).symbol
         return protocolFunctions.deserializeFn(member) { fnName ->
             rustBlock(
                 "pub fn $fnName(inp: &[u8]) -> std::result::Result<#1T, #2T>",
-                symbolProvider.toSymbol(shape),
+                returnSymbol,
                 xmlDecodeError,
             ) {
                 // for payloads, first look at the member trait
@@ -333,7 +356,27 @@ class XmlBindingTraitParserGenerator(
             withBlock("let $temp =", ";") {
                 parseAttributeMember(member, outerCtx)
             }
-            rust("$builder.${symbolProvider.toMemberName(member)} = $temp;")
+            // Route through the builder's setter, mirroring the data-member path. The setter knows
+            // how to lift `Inner -> MaybeConstrained<T>` when the target reaches a constrained
+            // shape (via the `From<Inner>` impls emitted by the constrained generators) and is a
+            // no-op for unconstrained scalars. The setter's signature differs between optional and
+            // required members though: optional takes `Option<impl Into<…>>` and accepts the
+            // parsed `Option<Inner>` directly, while required takes `impl Into<…>` and rejects
+            // `Option`. For the required case, only invoke the setter when the attribute is
+            // present; absent attributes leave the builder's field at `None` so `build()` can
+            // report the missing-required member like every other path.
+            val isOptional = symbolProvider.toSymbol(member).isOptional()
+            if (isOptional) {
+                rust("$builder = $builder.${member.setterName()}($temp);")
+            } else {
+                rust(
+                    """
+                    if let Some(__attrib_value) = $temp {
+                        $builder = $builder.${member.setterName()}(__attrib_value);
+                    }
+                    """,
+                )
+            }
         }
         // No need to generate a parse loop if there are no non-attribute members
         if (members.dataMembers.isEmpty()) {
@@ -343,11 +386,18 @@ class XmlBindingTraitParserGenerator(
             members.dataMembers.forEach { member ->
                 case(member) {
                     val temp = safeName()
+                    // The setter the generated builder emits for a *required* member takes the bare
+                    // value (`impl Into<T>`), not `Option<T>`: required-ness is enforced when `build()`
+                    // runs, not at the setter site. Wrapping the parsed value in `Some(...)`
+                    // unconditionally produces `Option<T>` and rustc rejects the call. Respect the
+                    // member's natural optionality so optional members still flow as `Some(value)`
+                    // and required members flow as the bare value.
+                    val memberIsOptional = symbolProvider.toSymbol(member).isOptional()
                     withBlock("let $temp =", ";") {
                         parseMember(
                             member,
                             ctx.copy(accum = "$builder.${symbolProvider.toMemberName(member)}.take()"),
-                            forceOptional = true,
+                            forceOptional = memberIsOptional,
                         )
                     }
                     rust("$builder = $builder.${member.setterName()}($temp);")
@@ -457,12 +507,19 @@ class XmlBindingTraitParserGenerator(
         shape: UnionShape,
         ctx: Ctx,
     ) {
-        val symbol = symbolProvider.toSymbol(shape)
+        // For server codegen of constrained-reachable unions, `returnSymbolToParse` resolves to the
+        // `<Name>Unconstrained` enum emitted by [UnconstrainedUnionGenerator]. Its variants share
+        // their identifiers with the user-facing union's variants but each holds the unconstrained
+        // inner type the per-member parsers actually produce — so by constructing variants on the
+        // unconstrained enum here, the builder's `From<<Name>Unconstrained> for MaybeConstrained`
+        // impl handles the lift. For client codegen and for unions that don't reach a constrained
+        // shape, this stays at the regular union symbol.
+        val returnSymbol = returnSymbolToParse(shape).symbol
         val nestedParser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 rustBlockTemplate(
                     "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
-                    *codegenScope, "Shape" to symbol,
+                    *codegenScope, "Shape" to returnSymbol,
                 ) {
                     rustTemplate(
                         """
@@ -473,31 +530,31 @@ class XmlBindingTraitParserGenerator(
                         *codegenScope,
                     )
                     val members = shape.members()
-                    rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to symbol)
+                    rustTemplate("let mut base: Option<#{Shape}> = None;", *codegenScope, "Shape" to returnSymbol)
                     parseLoop(Ctx(tag = "decoder", accum = null), ignoreUnexpected = false) { ctx ->
                         members.forEach { member ->
                             val variantName = symbolProvider.toMemberName(member)
                             case(member) {
                                 if (member.isTargetUnit()) {
-                                    rust("base = Some(#T::$variantName);", symbol)
+                                    rust("base = Some(#T::$variantName);", returnSymbol)
                                 } else {
                                     val current =
                                         """
                                         (match base.take() {
                                             None => None,
-                                            Some(${format(symbol)}::$variantName(inner)) => Some(inner),
+                                            Some(${format(returnSymbol)}::$variantName(inner)) => Some(inner),
                                             Some(_) => return Err(#{XmlDecodeError}::custom("mixed variants"))
                                         })
                                         """
                                     withBlock("let tmp =", ";") {
                                         parseMember(member, ctx.copy(accum = current.trim()))
                                     }
-                                    rust("base = Some(#T::$variantName(tmp));", symbol)
+                                    rust("base = Some(#T::$variantName(tmp));", returnSymbol)
                                 }
                             }
                         }
                         when (target.renderUnknownVariant()) {
-                            true -> rust("_unknown => base = Some(#T::${UnionGenerator.UNKNOWN_VARIANT_NAME}),", symbol)
+                            true -> rust("_unknown => base = Some(#T::${UnionGenerator.UNKNOWN_VARIANT_NAME}),", returnSymbol)
                             false ->
                                 rustTemplate(
                                     """variant => return Err(#{XmlDecodeError}::custom(format!("unexpected union variant: {variant:?}")))""",
@@ -535,13 +592,20 @@ class XmlBindingTraitParserGenerator(
         shape: StructureShape,
         ctx: Ctx,
     ) {
+        // The helper instantiates the constrained shape's builder either way — that's where the
+        // member setters live — but its declared return type goes through `returnSymbolToParse`. For
+        // server codegen with a constrained-reachable structure that resolves to the builder symbol
+        // itself; the input builder's setter for the parent member then accepts the builder via
+        // `From<Builder> for MaybeConstrained<Constrained>`. Client codegen keeps the structure
+        // symbol unchanged.
         val symbol = symbolProvider.toSymbol(shape)
+        val returnSymbol = returnSymbolToParse(shape).symbol
         val nestedParser =
             protocolFunctions.deserializeFn(shape) { fnName ->
                 Attribute.AllowNeedlessQuestionMark.render(this)
                 rustBlockTemplate(
                     "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Shape}, #{XmlDecodeError}>",
-                    *codegenScope, "Shape" to symbol,
+                    *codegenScope, "Shape" to returnSymbol,
                 ) {
                     rustTemplate(
                         """
@@ -581,12 +645,13 @@ class XmlBindingTraitParserGenerator(
         ctx: Ctx,
     ) {
         val member = target.member
+        val (returnSymbol, returnUnconstrained) = returnSymbolToParse(target)
         val listParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
                     "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{List}, #{XmlDecodeError}>",
                     *codegenScope,
-                    "List" to symbolProvider.toSymbol(target),
+                    "List" to returnSymbol,
                 ) {
                     rustTemplate(
                         """
@@ -604,7 +669,14 @@ class XmlBindingTraitParserGenerator(
                             }
                         }
                     }
-                    rust("Ok(out)")
+                    // For server codegen the helper's return type is the unconstrained wrapper newtype that
+                    // accepts a `Vec` directly via its tuple constructor; for client codegen it is just the
+                    // `Vec`, so emitting it unwrapped lines up with both.
+                    if (returnUnconstrained) {
+                        rust("Ok(#T(out))", returnSymbol)
+                    } else {
+                        rust("Ok(out)")
+                    }
                 }
             }
         rust("#T(&mut ${ctx.tag}, depth + 1)", listParser)
@@ -615,13 +687,42 @@ class XmlBindingTraitParserGenerator(
         ctx: Ctx,
     ) {
         val list = safeName("list")
-        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlDecodeError) {
+        val (returnSymbol, returnUnconstrained) = returnSymbolToParse(target)
+        withBlock("Result::<#T, #T>::Ok({", "})", returnSymbol, xmlDecodeError) {
             val accum = ctx.accum ?: throw CodegenException("Need accum to parse flat list")
-            rustTemplate("""let mut $list = $accum.unwrap_or_default();""", *codegenScope)
+            if (returnUnconstrained) {
+                // The builder field for a constrained-reachable list is
+                // `Option<MaybeConstrained<Wrapper>>`. `MaybeConstrained` is an enum (not a tuple
+                // newtype, and it doesn't implement `Default`), so the unconstrained branch can't
+                // use `.unwrap_or_default()` / `.0`. Pattern-match instead so that the in-progress
+                // `Unconstrained` accumulator's inner `Vec` is reused and any other state — including
+                // the first parsed element being absent — falls back to an empty `Vec`. We don't
+                // expect to see a fully-`Constrained` value at parse time (the parser only ever
+                // writes `Unconstrained`), so that arm panics if reached, mirroring how the existing
+                // server-builder codegen handles the same invariant elsewhere.
+                rustTemplate(
+                    """
+                    let mut $list = match $accum {
+                        Some(#{MaybeConstrained}::Unconstrained(unconstrained)) => unconstrained.0,
+                        Some(#{MaybeConstrained}::Constrained(_)) => unreachable!("server-side XML parser never writes a constrained value back to a flat-list accumulator; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
+                        None => #{Vec}::new(),
+                    };
+                    """,
+                    *codegenScope,
+                    "MaybeConstrained" to RuntimeType.MaybeConstrained,
+                    "Vec" to RuntimeType.Vec,
+                )
+            } else {
+                rustTemplate("""let mut $list = $accum.unwrap_or_default();""", *codegenScope)
+            }
             withBlock("$list.push(", ");") {
                 parseMember(target.member, ctx)
             }
-            rust(list)
+            if (returnUnconstrained) {
+                rust("#T($list)", returnSymbol)
+            } else {
+                rust(list)
+            }
         }
     }
 
@@ -629,12 +730,13 @@ class XmlBindingTraitParserGenerator(
         target: MapShape,
         ctx: Ctx,
     ) {
+        val (returnSymbol, returnUnconstrained) = returnSymbolToParse(target)
         val mapParser =
             protocolFunctions.deserializeFn(target) { fnName ->
                 rustBlockTemplate(
                     "pub fn $fnName(decoder: &mut #{ScopedDecoder}, depth: u32) -> #{Result}<#{Map}, #{XmlDecodeError}>",
                     *codegenScope,
-                    "Map" to symbolProvider.toSymbol(target),
+                    "Map" to returnSymbol,
                 ) {
                     rustTemplate(
                         """
@@ -650,7 +752,11 @@ class XmlBindingTraitParserGenerator(
                             rust("#T(&mut ${ctx.tag}, &mut out, depth)?;", mapEntryParser(target, ctx))
                         }
                     }
-                    rust("Ok(out)")
+                    if (returnUnconstrained) {
+                        rust("Ok(#T(out))", returnSymbol)
+                    } else {
+                        rust("Ok(out)")
+                    }
                 }
             }
         rust("#T(&mut ${ctx.tag}, depth + 1)", mapParser)
@@ -662,17 +768,40 @@ class XmlBindingTraitParserGenerator(
     ) {
         val map = safeName("map")
         val entryDecoder = mapEntryParser(target, ctx)
-        withBlock("Result::<#T, #T>::Ok({", "})", symbolProvider.toSymbol(target), xmlDecodeError) {
+        val (returnSymbol, returnUnconstrained) = returnSymbolToParse(target)
+        withBlock("Result::<#T, #T>::Ok({", "})", returnSymbol, xmlDecodeError) {
             val accum = ctx.accum ?: throw CodegenException("need accum to parse flat map")
-            rustTemplate(
-                """
-                let mut $map = $accum.unwrap_or_default();
-                #{decoder}(&mut tag, &mut $map, depth)?;
-                $map
-                """,
-                *codegenScope,
-                "decoder" to entryDecoder,
-            )
+            if (returnUnconstrained) {
+                // See `parseFlatList` for the matching analysis: the builder field is
+                // `Option<MaybeConstrained<Wrapper>>` and `MaybeConstrained` is an enum that does
+                // not implement `Default`, so the unconstrained-branch can't use
+                // `.unwrap_or_default()` / `.0`.
+                rustTemplate(
+                    """
+                    let mut $map = match $accum {
+                        Some(#{MaybeConstrained}::Unconstrained(unconstrained)) => unconstrained.0,
+                        Some(#{MaybeConstrained}::Constrained(_)) => unreachable!("server-side XML parser never writes a constrained value back to a flat-map accumulator; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues"),
+                        None => #{HashMap}::new(),
+                    };
+                    #{decoder}(&mut tag, &mut $map, depth)?;
+                    """,
+                    *codegenScope,
+                    "MaybeConstrained" to RuntimeType.MaybeConstrained,
+                    "HashMap" to RuntimeType.HashMap,
+                    "decoder" to entryDecoder,
+                )
+                rust("#T($map)", returnSymbol)
+            } else {
+                rustTemplate(
+                    """
+                    let mut $map = $accum.unwrap_or_default();
+                    #{decoder}(&mut tag, &mut $map, depth)?;
+                    $map
+                    """,
+                    *codegenScope,
+                    "decoder" to entryDecoder,
+                )
+            }
         }
     }
 
@@ -680,11 +809,23 @@ class XmlBindingTraitParserGenerator(
         target: MapShape,
         ctx: Ctx,
     ): RuntimeType {
+        // `parseMap` / `parseFlatMap` keep their accumulator as a raw `HashMap` (even when the map's
+        // own return symbol is the constrained wrapper, the wrapper is only constructed at the end of
+        // those functions), so this helper takes a `&mut HashMap<...>` rather than the wrapper —
+        // otherwise `.insert(...)` would target a tuple newtype that has no such method. The key and
+        // value types are resolved through `returnSymbolToParse` so that constrained-reachable
+        // members come through as their unconstrained equivalents.
         return protocolFunctions.deserializeFn(target, "entry") { fnName ->
+            val keyShape = model.expectShape(target.key.target)
+            val valueShape = model.expectShape(target.value.target)
+            val keyType = returnSymbolToParse(keyShape).symbol
+            val valueType = returnSymbolToParse(valueShape).symbol
             rustBlockTemplate(
-                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{Map}, depth: u32) -> #{Result}<(), #{XmlDecodeError}>",
+                "pub fn $fnName(decoder: &mut #{ScopedDecoder}, out: &mut #{HashMap}<#{Key}, #{Value}>, depth: u32) -> #{Result}<(), #{XmlDecodeError}>",
                 *codegenScope,
-                "Map" to symbolProvider.toSymbol(target),
+                "HashMap" to RuntimeType.HashMap,
+                "Key" to keyType,
+                "Value" to valueType,
             ) {
                 rustTemplate(
                     """
@@ -694,12 +835,8 @@ class XmlBindingTraitParserGenerator(
                     """,
                     *codegenScope,
                 )
-                val keySymbol = symbolProvider.toSymbol(target.key)
-                rust("let mut k: Option<#T> = None;", keySymbol)
-                rust(
-                    "let mut v: Option<#T> = None;",
-                    symbolProvider.toSymbol(model.expectShape(target.value.target)),
-                )
+                rust("let mut k: Option<#T> = None;", keyType)
+                rust("let mut v: Option<#T> = None;", valueType)
                 parseLoop(Ctx("decoder", accum = null)) {
                     case(target.key) {
                         withBlock("k = Some(", ")") {
@@ -768,9 +905,26 @@ class XmlBindingTraitParserGenerator(
             }
 
             is NumberShape, is BooleanShape -> {
+                // The symbol may resolve to a constrained wrapper newtype on the server side when
+                // `@range` (numbers) is applied to the shape, but `aws_smithy_types::primitive::Parse`
+                // is only implemented on the canonical primitive (`i32`, `i64`, `bool`, …). Parse via
+                // the underlying primitive and let the builder run the constraint check — the input
+                // builder accepts the unconstrained value through `MaybeConstrained::Unconstrained` and
+                // unconstrained-target structures (e.g. output bodies) hold the primitive directly.
+                val parseTargetType =
+                    if (symbolProvider.toSymbol(shape).rustType() is RustType.Opaque) {
+                        SimpleShapes[shape::class]?.render()
+                            ?: throw CodegenException("unsupported NumberShape kind for primitive parsing: $shape")
+                    } else {
+                        null
+                    }
                 rustBlock("") {
                     withBlockTemplate(
-                        "<#{shape} as #{aws_smithy_types}::primitive::Parse>::parse_smithy_primitive(",
+                        if (parseTargetType != null) {
+                            "<$parseTargetType as #{aws_smithy_types}::primitive::Parse>::parse_smithy_primitive("
+                        } else {
+                            "<#{shape} as #{aws_smithy_types}::primitive::Parse>::parse_smithy_primitive("
+                        },
                         ")",
                         *codegenScope,
                         "shape" to symbolProvider.toSymbol(shape),
@@ -821,21 +975,20 @@ class XmlBindingTraitParserGenerator(
         shape: StringShape,
         provider: Writable,
     ) {
-        withBlock("Result::<#T, #T>::Ok(", ")", symbolProvider.toSymbol(shape), xmlDecodeError) {
-            if (shape.hasTrait<EnumTrait>()) {
+        val symbol = symbolProvider.toSymbol(shape)
+        // Any opaque string shape on the server — `@pattern` / `@length` newtypes and closed enums alike —
+        // wraps a `String` whose only `String -> T` conversion is `TryFrom`. Producing the wrapper here
+        // would force the parser to enforce constraints at decode time and would not type-match the
+        // builder's `MaybeConstrained::Unconstrained(String)` lift. Emit the raw `String` instead and
+        // defer the constraint check to the builder. Client open enums (which implement `From<&str>`)
+        // still resolve to the enum type directly.
+        val isConstrainedOnServer = target == CodegenTarget.SERVER && symbol.rustType() is RustType.Opaque
+        val resultType: Any = if (isConstrainedOnServer) RuntimeType.String else symbol
+        withBlock("Result::<#T, #T>::Ok(", ")", resultType, xmlDecodeError) {
+            if (shape.hasTrait<EnumTrait>() && !isConstrainedOnServer) {
                 val enumSymbol = symbolProvider.toSymbol(shape)
-                if (convertsToEnumInServer(shape)) {
-                    withBlock("#T::try_from(", ")", enumSymbol) {
-                        provider()
-                    }
-                    rustTemplate(
-                        """.map_err(|e| #{XmlDecodeError}::custom(format!("unknown variant {e}")))?""",
-                        *codegenScope,
-                    )
-                } else {
-                    withBlock("#T::from(", ")", enumSymbol) {
-                        provider()
-                    }
+                withBlock("#T::from(", ")", enumSymbol) {
+                    provider()
                 }
             } else {
                 provider()
@@ -844,9 +997,6 @@ class XmlBindingTraitParserGenerator(
             }
         }
     }
-
-    private fun convertsToEnumInServer(shape: StringShape) =
-        target == CodegenTarget.SERVER && shape.hasTrait<EnumTrait>()
 
     private fun MemberShape.xmlName(): XmlName {
         return XmlName(xmlIndex.memberName(this))
