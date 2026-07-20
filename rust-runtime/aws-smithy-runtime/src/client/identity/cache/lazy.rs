@@ -32,12 +32,13 @@ const DEFAULT_MAX_PARTITIONS: usize = 64;
 /// Computes a worst-case load timeout that ensures the inner provider's retry strategy
 /// has enough time to exhaust all configured attempts before the cache kills the future.
 ///
-/// This is intentionally pessimistic: it assumes every attempt hits the connect timeout
-/// ceiling and every backoff delay is the maximum for that iteration. The resulting value
-/// is a safety net — in practice, credential resolution completes well before this
-/// deadline.
+/// This is intentionally pessimistic: it assumes every attempt runs to its per-attempt ceiling
+/// and every backoff delay is the maximum for that iteration. The resulting value is a safety
+/// net — in practice, credential resolution completes well before this deadline.
 ///
-/// Formula: sum of worst-case backoffs + per-attempt ceiling (connect_timeout × 2)
+/// Formula: sum of worst-case backoffs + `attempts × per_attempt`, where the per-attempt ceiling
+/// is `max(connect_timeout × 2, operation_attempt_timeout)` and `connect_timeout` is floored at
+/// the default connect timeout.
 fn pessimistic_load_timeout(config_bag: &ConfigBag) -> Duration {
     let retry_config = config_bag
         .load::<RetryConfig>()
@@ -57,22 +58,32 @@ fn pessimistic_load_timeout(config_bag: &ConfigBag) -> Duration {
         .map(|i| (initial_backoff * 2.0_f64.powi(i as i32)).min(max_backoff))
         .sum();
 
-    // Per-attempt ceiling: connect_timeout × 2.
+    // Per-attempt ceiling: the worst-case duration of a single credential-fetch attempt.
     //
-    // connect_timeout is the SDK's configured upper bound on establishing a connection.
-    // Once connected, credential endpoints respond quickly. We double it to cover: connection
-    // establishment + TLS completion + request send + server processing + response read.
+    // connect_timeout only bounds establishing a connection, so we double it to approximate a
+    // full attempt (connection establishment + TLS completion + request send + server processing
+    // + response read). The connect base is floored at DEFAULT_CONNECT_TIMEOUT so an aggressively
+    // low connect_timeout can't shrink the safety net below the default-derived value.
     //
-    // Note: read_timeout is intentionally NOT used here. A cross-SDK initiative will
-    // introduce a default read_timeout that may contain a large value (e.g., several mins)
-    // intended as a blackhole-detection safety net for outer service calls. Using it
-    // in this formula would inflate the load timeout far beyond what credential
-    // endpoints actually need.
+    // operation_attempt_timeout, when configured, is already a full-attempt ceiling enforced on
+    // the inner client, so it is used as-is (NOT doubled). We take whichever is larger so the
+    // cache never fires before the inner client's own per-attempt timeout could.
+    //
+    // Note: read_timeout and operation_timeout are intentionally NOT used here. read_timeout will
+    // gain a large default (a blackhole-detection safety net for outer service calls) that would
+    // inflate this timeout far beyond what credential endpoints need. operation_timeout is a
+    // total, outer-scoped budget that can only cap the inner op, so ignoring it keeps this a safe
+    // upper bound.
     let connect = timeout_config
         .connect_timeout()
         .unwrap_or(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+        .max(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
         .as_secs_f64();
-    let per_attempt = connect * 2.0;
+    let attempt_ceiling = timeout_config
+        .operation_attempt_timeout()
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0);
+    let per_attempt = (connect * 2.0).max(attempt_ceiling);
     let total_attempts = attempts as f64 * per_attempt;
 
     // Floor: ensure at least one attempt's worth of budget even if max_attempts is 0.
@@ -1147,6 +1158,75 @@ mod tests {
         let timeout = pessimistic_load_timeout(&config_bag);
         // standard = 3 attempts, disabled timeout → uses DEFAULT_CONNECT_TIMEOUT (3.1s)
         // Same as default config: ~21.6s
+        assert!(
+            timeout > Duration::from_secs(21) && timeout < Duration::from_secs(22),
+            "expected ~21.6s, got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_low_connect_is_floored_at_default() {
+        // An aggressively low connect_timeout must not shrink the safety net below the
+        // default-derived value: the connect base is floored at DEFAULT_CONNECT_TIMEOUT (3.1s).
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard());
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(Duration::from_secs(1))
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // Floored connect = 3.1s → per_attempt = 6.2s; backoff 1+2 = 3s; 3 * 6.2 = 18.6s → ~21.6s
+        assert!(
+            timeout > Duration::from_secs(21) && timeout < Duration::from_secs(22),
+            "expected ~21.6s (floored), got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_uses_operation_attempt_timeout_when_larger() {
+        // operation_attempt_timeout is a full-attempt ceiling enforced by the inner orchestrator;
+        // when larger than connect × 2 it becomes the per-attempt term (used as-is, NOT doubled)
+        // so the cache doesn't fire before the inner per-attempt timeout could.
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard());
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+                .operation_attempt_timeout(Duration::from_secs(30))
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // per_attempt = max(6.2, 30) = 30s; backoff 1+2 = 3s; 3 * 30 = 90s → ~93s
+        assert!(
+            timeout > Duration::from_secs(92) && timeout < Duration::from_secs(94),
+            "expected ~93s, got {:?}",
+            timeout
+        );
+    }
+
+    #[test]
+    fn pessimistic_load_timeout_ignores_operation_attempt_timeout_when_smaller() {
+        // A small operation_attempt_timeout must not shrink the per-attempt term below the
+        // connect-based estimate; connect × 2 wins.
+        let mut config_bag = ConfigBag::base();
+        config_bag
+            .interceptor_state()
+            .store_put(RetryConfig::standard());
+        config_bag.interceptor_state().store_put(
+            TimeoutConfig::builder()
+                .connect_timeout(crate::client::defaults::DEFAULT_CONNECT_TIMEOUT)
+                .operation_attempt_timeout(Duration::from_secs(1))
+                .build(),
+        );
+        let timeout = pessimistic_load_timeout(&config_bag);
+        // per_attempt = max(6.2, 1) = 6.2s → ~21.6s
         assert!(
             timeout > Duration::from_secs(21) && timeout < Duration::from_secs(22),
             "expected ~21.6s, got {:?}",
