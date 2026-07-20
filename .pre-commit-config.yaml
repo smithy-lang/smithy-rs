@@ -7,7 +7,7 @@ repos:
     exclude: ^aws/rust-runtime/(aws-sigv4/aws-sig-v4-test-suite/|aws-config/test-data/default-provider-chain/eks_pod_identity_credentials/fs/token.jwt$)
   - id: trailing-whitespace
 - repo: https://github.com/macisamuele/language-formatters-pre-commit-hooks
-  rev: v2.11.0
+  rev: v2.14.0
   hooks:
   - id: pretty-format-yaml
     args: [--autofix, --indent, '2']
