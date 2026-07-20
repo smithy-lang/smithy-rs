@@ -17,6 +17,21 @@ fun ClientCodegenDecorator.onlyApplyTo(serviceId: String): List<ClientCodegenDec
         },
     )
 
+/**
+ * Only apply this decorator to services whose shape ID is in the given namespace.
+ *
+ * This is useful for services that periodically bump their API version, which is encoded in the
+ * service shape name (e.g. `com.amazonaws.route53#AWSDnsV20130401` becoming
+ * `com.amazonaws.route53#AWSDnsV20130527`). Matching on the namespace keeps the decorator applied
+ * across such version bumps, since exactly one service is defined per model file.
+ */
+fun ClientCodegenDecorator.onlyApplyToNamespace(namespace: String): List<ClientCodegenDecorator> =
+    listOf(
+        ConditionalDecorator(this) { _, serviceShapeId ->
+            serviceShapeId?.toShapeId()?.namespace == namespace
+        },
+    )
+
 /** Only apply this decorator to the given list of service IDs */
 fun ClientCodegenDecorator.onlyApplyToList(serviceIds: List<String>): List<ClientCodegenDecorator> =
     serviceIds.map {
