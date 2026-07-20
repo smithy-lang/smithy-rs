@@ -444,6 +444,16 @@ impl ProviderConfig {
     }
 
     /// Override the retry config for this configuration
+    ///
+    /// This is honored by the inner clients (e.g. STS, SSO) used by credential providers in the
+    /// default chain.
+    ///
+    /// Note: this value is consumed while building the provider and is **not** reflected in the
+    /// outer client's configuration. When such a provider is passed to the config loader's
+    /// `credentials_provider(...)`, the identity cache derives its `load_timeout` from the outer
+    /// client's `RetryConfig`, so it cannot see the retry count set here. If this provider retries
+    /// more than the outer client, set the identity cache's `load_timeout` explicitly to avoid
+    /// cutting credential resolution short.
     pub fn with_retry_config(self, retry_config: RetryConfig) -> Self {
         ProviderConfig {
             retry_config: Some(retry_config),
@@ -456,6 +466,14 @@ impl ProviderConfig {
     /// This is honored by the inner clients (e.g. STS, SSO) used by credential providers in the
     /// default chain, allowing a caller to explicitly control credential-resolution timeouts
     /// independently of the outer service client.
+    ///
+    /// Note: like [`with_retry_config`](Self::with_retry_config), this value is consumed while
+    /// building the provider and is **not** reflected in the outer client's configuration. When
+    /// such a provider is passed to the config loader's `credentials_provider(...)`, the identity
+    /// cache derives its `load_timeout` from the outer client's `TimeoutConfig` (the connect and
+    /// operation-attempt timeouts), so it cannot see the timeouts set here. If this provider uses
+    /// longer timeouts than the outer client, set the identity cache's `load_timeout` explicitly
+    /// to avoid cutting credential resolution short.
     pub fn with_timeout_config(self, timeout_config: TimeoutConfig) -> Self {
         ProviderConfig {
             timeout_config: Some(timeout_config),
