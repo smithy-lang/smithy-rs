@@ -59,7 +59,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.util.dq
 import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.orNull
-import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import java.text.NumberFormat
 
 /**
@@ -512,9 +511,10 @@ class RustJmespathShapeTraversalGenerator(
                                     val unionSym = symbolProvider.toSymbol(outputShape)
 
                                     val matchArms =
-                                        outputShape.allMembers.keys.joinToString("\n") { memberName ->
-                                            val variantName = memberName.toPascalCase()
-                                            "${unionSym.rustType().render()}::$variantName(_) => ${memberName.dq()}.to_string(),"
+                                        outputShape.members().joinToString("\n") { member ->
+                                            val variantName = symbolProvider.toSymbol(member).name
+                                            val wireName = member.memberName
+                                            "${unionSym.rustType().render()}::$variantName(_) => ${wireName.dq()}.to_string(),"
                                         }
                                     rust(
                                         """let $ident = vec![match ${arg.identifier} {
