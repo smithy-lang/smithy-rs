@@ -87,6 +87,7 @@ class EndpointBddGenerator(
                 "clippy::useless_asref",
                 "clippy::redundant_closure_call",
                 "clippy::clone_on_copy",
+                "clippy::single_char_add_str",
             )
     }
 

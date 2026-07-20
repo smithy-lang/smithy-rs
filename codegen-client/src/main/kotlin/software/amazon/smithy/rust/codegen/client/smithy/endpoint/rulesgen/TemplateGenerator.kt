@@ -48,22 +48,6 @@ class TemplateGenerator(
      */
     private val multipartElementGenerator: (Expression, Ownership) -> Writable = exprGenerator,
 ) : TemplateVisitor<Writable> {
-    private fun rustCharLiteral(char: Char): String =
-        when (char) {
-            '\\' -> "'\\\\'"
-            '\'' -> "'\\''"
-            '\n' -> "'\\n'"
-            '\r' -> "'\\r'"
-            '\t' -> "'\\t'"
-            '\u0000' -> "'\\0'"
-            else ->
-                if (char.isISOControl()) {
-                    "'\\u{${char.code.toString(16)}}'"
-                } else {
-                    "'$char'"
-                }
-        }
-
     override fun visitStaticTemplate(value: String) =
         writable {
             // In the case of a static template, return the literal string, eg. `"foo"`.
@@ -79,10 +63,8 @@ class TemplateGenerator(
 
     override fun visitStaticElement(str: String) =
         writable {
-            when (str.length) {
-                0 -> {}
-                1 -> rust("out.push(${rustCharLiteral(str.single())});")
-                else -> rust("out.push_str(${str.dq()});")
+            if (str.isNotEmpty()) {
+                rust("out.push_str(${str.dq()});")
             }
         }
 
