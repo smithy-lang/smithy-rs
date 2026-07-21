@@ -22,6 +22,7 @@ internal class TemplateGeneratorTest {
     private fun assertTemplateEquals(
         template: String,
         result: String,
+        runClippy: Boolean = false,
     ) {
         val literalTemplate = Template.fromString(template)
         // For testing,
@@ -50,7 +51,7 @@ internal class TemplateGeneratorTest {
                 writable { literalTemplate.accept(ownedGenerator).forEach { part -> part(this) } },
             )
         }
-        project.compileAndTest()
+        project.compileAndTest(runClippy = runClippy)
     }
 
     @Test
@@ -71,5 +72,20 @@ internal class TemplateGeneratorTest {
     @Test
     fun testMultipartTemplate() {
         assertTemplateEquals("https://{Region}.{Bucket}.foo.com", "https://REGIONBorrowed.BUCKETBorrowed.foo.com")
+    }
+
+    @Test
+    fun testSingleCharStaticSegmentApostrophe() {
+        assertTemplateEquals("'{Region}' is bad", "'REGIONBorrowed' is bad")
+    }
+
+    @Test
+    fun testSingleCharStaticSegmentBackslash() {
+        assertTemplateEquals("\\{Region}\\end", "\\REGIONBorrowed\\end")
+    }
+
+    @Test
+    fun testSingleCharStaticSegmentClippyClean() {
+        assertTemplateEquals(".{Region}", ".REGIONBorrowed", runClippy = true)
     }
 }

@@ -106,4 +106,76 @@ class BddCodegenTest {
         // `mismatched types: expected str, found Option<_>` from the wrap.
         clientIntegrationTest(model)
     }
+
+    @Test
+    fun `templates with escape-sensitive characters compile`() {
+        val nodes =
+            BddTestHelpers.encodeNodes(
+                listOf(
+                    BddTestHelpers.Node(
+                        0,
+                        BddTestHelpers.resultRef(1),
+                        BddTestHelpers.resultRef(2),
+                    ),
+                ),
+            )
+
+        val model =
+            """
+            namespace test
+
+            use aws.protocols#restJson1
+            use smithy.rules#clientContextParams
+            use smithy.rules#endpointBdd
+
+            @clientContextParams(
+                Stage: { type: "string", documentation: "stage docs" }
+            )
+            @endpointBdd({
+                "version": "1.1",
+                "parameters": {
+                    "Stage": {
+                        "required": false,
+                        "documentation": "Deployment stage",
+                        "type": "string"
+                    }
+                },
+                "conditions": [
+                    {
+                        "fn": "isSet",
+                        "argv": [{ "ref": "Stage" }]
+                    }
+                ],
+                "results": [
+                    {
+                        "conditions": [],
+                        "error": "'{Stage}' is not a valid stage. Valid values are 'prod' or 'gamma'.",
+                        "type": "error"
+                    },
+                    {
+                        "conditions": [],
+                        "endpoint": {
+                            "url": "https://prod.example.com",
+                            "properties": {},
+                            "headers": {}
+                        },
+                        "type": "endpoint"
+                    }
+                ],
+                "root": 2,
+                "nodeCount": 2,
+                "nodes": "$nodes"
+            })
+            @restJson1
+            service QuotedBddErrorService {
+                version: "2022-01-01"
+                operations: [Ping]
+            }
+
+            @http(method: "GET", uri: "/ping")
+            operation Ping {}
+            """.trimIndent().asSmithyModel(smithyVersion = "2")
+
+        clientIntegrationTest(model)
+    }
 }
