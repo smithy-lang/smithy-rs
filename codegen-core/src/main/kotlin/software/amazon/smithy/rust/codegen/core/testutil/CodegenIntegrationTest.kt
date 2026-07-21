@@ -125,8 +125,13 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                 return this
             }
 
-            fun rpcV2CborExcludeLegacyOperationNameRoute(enabled: Boolean = true): Builder {
-                settings.add(RpcV2CborExcludeLegacyOperationNameRoute(enabled))
+            fun allowMissingUnionVariant(enabled: Boolean = true): Builder {
+                settings.add(AllowMissingUnionVariant(enabled))
+                return this
+            }
+
+            fun rpcV2CborAddCapitalizedRoute(enabled: Boolean = true): Builder {
+                settings.add(RpcV2CborAddCapitalizedRoute(enabled))
                 return this
             }
 
@@ -168,10 +173,17 @@ class ServerAdditionalSettings private constructor(settings: List<AdditionalSett
                     .build()
         }
 
-        private data class RpcV2CborExcludeLegacyOperationNameRoute(val enabled: Boolean) : AdditionalSettings() {
+        private data class AllowMissingUnionVariant(val enabled: Boolean) : AdditionalSettings() {
             override fun toObjectNode(): ObjectNode =
                 ObjectNode.builder()
-                    .withMember("rpcV2CborExcludeLegacyOperationNameRoute", enabled)
+                    .withMember("allowMissingUnionVariant", enabled)
+                    .build()
+        }
+
+        private data class RpcV2CborAddCapitalizedRoute(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("rpcV2CborAddCapitalizedRoute", enabled)
                     .build()
         }
 

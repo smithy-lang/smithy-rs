@@ -418,6 +418,10 @@ class ClientProtocolTestGenerator(
                             val ctor = if (noWrap) "new().with_no_error_wrapping(true)" else "new()"
                             smithyXml.resolve("protocol::aws_rest_xml::AwsRestXmlProtocol") to ctor
                         }
+                        protocol == software.amazon.smithy.aws.traits.protocols.AwsQueryTrait.ID -> {
+                            val smithyQuery = CargoDependency.smithyQuery(codegenContext.runtimeConfig).toType()
+                            smithyQuery.resolve("protocol::AwsQueryProtocol") to "new(${codegenContext.serviceShape.version.dq()})"
+                        }
                         protocol == software.amazon.smithy.protocol.traits.Rpcv2CborTrait.ID ->
                             smithyCbor.resolve("protocol::RpcV2CborProtocol") to "new()"
                         else -> return@writable

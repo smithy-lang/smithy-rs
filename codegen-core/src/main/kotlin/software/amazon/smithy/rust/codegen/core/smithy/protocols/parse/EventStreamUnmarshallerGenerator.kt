@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -32,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -237,6 +239,20 @@ class EventStreamUnmarshallerGenerator(
                 withBlock("let parsed = ", ";") {
                     renderParseProtocolPayload(unionMember)
                 }
+                // When the payload structure transitively reaches an enum shape, the server payload parser
+                // returns a builder. For payloads with no enum-reachable members the parser already
+                // returns the constrained struct, and calling `.build()` would be a type error.
+                if (codegenTarget == CodegenTarget.SERVER && payloadReachesEnumTrait(unionStruct)) {
+                    rustTemplate(
+                        """
+                        let parsed = parsed.build()
+                            .map_err(|err| {
+                                #{Error}::unmarshalling(format!("failed to unmarshall ${unionMember.memberName} due to constraint violation: {}", err))
+                            })?;
+                        """,
+                        *codegenScope,
+                    )
+                }
                 rustTemplate(
                     "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
                     "Output" to unionSymbol,
@@ -297,6 +313,9 @@ class EventStreamUnmarshallerGenerator(
             }
         }
     }
+
+    private fun payloadReachesEnumTrait(payload: StructureShape): Boolean =
+        DirectedWalker(model).walkShapes(payload).any { it.hasTrait<EnumTrait>() }
 
     private fun RustWriter.renderUnmarshallEventHeader(member: MemberShape) {
         withBlock("builder = builder.${member.setterName()}(", ");") {

@@ -216,34 +216,11 @@ impl AwsRestXmlProtocol {
 /// same-name elements, comments, and CDATA sections — all of which a naive
 /// `body_str.find("<Error>")` substring match would mishandle.
 pub fn find_error_element_slice(body: &[u8]) -> &[u8] {
-    // `Document::try_from` validates UTF-8 internally and constructs the
-    // tokenizer over `body`. Non-UTF-8 service responses are out of spec;
-    // fall back to the full body so downstream parsing produces a
-    // malformed-error result rather than panicking.
-    let mut doc = match Document::try_from(body) {
-        Ok(d) => d,
-        Err(_) => return body,
-    };
-    let mut root = match doc.root_element() {
-        Ok(r) => r,
-        Err(_) => return body,
-    };
-    // Unwrapped envelope: the root element IS `<Error>`. Return body
-    // unchanged — the root's start/end tags are already at the boundaries.
-    if root.start_el().local() == "Error" {
-        return body;
-    }
-    // Wrapped envelope: scan the root's children for `<Error>`.
-    while let Some(tag) = root.next_tag() {
-        if tag.start_el().local() == "Error" {
-            // `start_el().local()` returns a `&str` whose pointer lies inside
-            // `s` (and therefore inside `body`). That satisfies the
-            // pointer-containment invariant of `find_element_slice`.
-            let el_local = tag.start_el().local();
-            return XmlDeserializer::find_element_slice(body, el_local);
-        }
-    }
-    body
+    // Depth-2 `<Error>` (wrapped) or the root itself (unwrapped). Fall back to
+    // the full body when the response isn't valid UTF-8/XML or has no `<Error>`,
+    // so downstream parsing produces a malformed-error result rather than
+    // panicking.
+    crate::codec::find_depth2_element_slice_by(body, |name| name == "Error").unwrap_or(body)
 }
 
 impl Default for AwsRestXmlProtocol {

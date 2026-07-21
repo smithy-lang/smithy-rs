@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -78,22 +79,30 @@ class ServerServiceGenerator(
     private val requestSpecsModuleName = "request_specs"
 
     /**
-     * Associate each operation with functions that return its request spec(s).
-     * Most protocols have one spec per operation, but RpcV2Cbor may have two (verbatim + legacy PascalCase)
-     * when dual-route registration is enabled.
+     * Associate each operation with the functions that return its request spec(s).
+     *
+     * All protocols contribute one primary spec via [ServerProtocol.serverRouterRequestSpec].
+     * [ServerRpcV2CborProtocol] may additionally register a legacy capitalized alias
+     * (see [ServerRpcV2CborProtocol.additionalRouterRequestSpecAliases]) - a knob scoped
+     * to that protocol and gated behind the `rpcV2CborAddCapitalizedRoute` setting.
      */
     private val requestSpecMap: Map<OperationShape, List<Pair<String, Writable>>> =
         operations.associateWith { operationShape ->
             val operationName = symbolProvider.toSymbol(operationShape).name
-            val specs =
-                protocol.serverRouterRequestSpecs(
-                    operationShape,
-                    operationName,
-                    serviceId.name,
-                    smithyHttpServer.resolve("routing::request_spec"),
-                )
-            // Generate a unique function name for each spec.
-            // The `_$index` suffix assumes no operation name collides with `<name>_<index>`; theoretical, negligible.
+            val requestSpecModule = smithyHttpServer.resolve("routing::request_spec")
+            val primarySpec =
+                protocol.serverRouterRequestSpec(operationShape, operationName, serviceId.name, requestSpecModule)
+            val aliasSpecs =
+                if (protocol is ServerRpcV2CborProtocol) {
+                    protocol.additionalRouterRequestSpecAliases(operationShape, serviceId.name)
+                } else {
+                    emptyList()
+                }
+            val specs = listOf(primarySpec) + aliasSpecs
+            // Generate a unique function name for each spec. The `_$index` suffix on alias functions
+            // can only collide with a user-modeled operation named `<primary>_<index>`, which is
+            // vanishingly unlikely (`_` is uncommon in operation names and the numeric suffix
+            // rarer still).
             val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
             specs.mapIndexed { index, spec ->
                 val functionName = if (index == 0) baseFunctionName else "${baseFunctionName}_$index"
@@ -106,7 +115,7 @@ class ServerServiceGenerator(
                             }
                             """,
                             "Spec" to spec,
-                            "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
+                            "SpecType" to protocol.serverRouterRequestSpecType(requestSpecModule),
                         )
                     }
                 Pair(functionName, functionBody)

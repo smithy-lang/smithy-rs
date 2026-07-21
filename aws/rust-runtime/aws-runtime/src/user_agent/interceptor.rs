@@ -148,6 +148,39 @@ impl Intercept for UserAgentInterceptor {
             ua.set_app_name(app_name.clone());
         }
 
+        // Drain customer-supplied framework metadata appended via `StoreAppend`.
+        //
+        // `ConfigBag::load` over a `StoreAppend` type yields every appended value across ALL config
+        // layers in reverse insertion order (newest-first), e.g. entries copied in from `SdkConfig`
+        // followed by client-level entries come back last-to-first. To present entries to the
+        // customer in deterministic first-seen (insertion) order, we collect and reverse the
+        // iterator. We dedup on the exact (name, version) pair, preserving first-seen order, and
+        // cap the total number of unique entries at 10.
+        const MAX_FRAMEWORK_METADATA: usize = 10;
+        let appended: Vec<&aws_types::sdk_ua_metadata::FrameworkMetadata> = cfg
+            .load::<aws_types::sdk_ua_metadata::FrameworkMetadata>()
+            .collect();
+        let mut seen = std::collections::HashSet::new();
+        let mut kept = 0usize;
+        for md in appended.into_iter().rev() {
+            let key = (md.name().to_owned(), md.version().map(|v| v.to_owned()));
+            if !seen.insert(key) {
+                // Duplicate (name, version) -- skip.
+                continue;
+            }
+            if kept >= MAX_FRAMEWORK_METADATA {
+                tracing::warn!(
+                    "More than {MAX_FRAMEWORK_METADATA} unique framework metadata entries \
+                     were configured; only the first {MAX_FRAMEWORK_METADATA} will be included \
+                     in the user agent."
+                );
+                break;
+            }
+            // `md` is already the canonical `FrameworkMetadata` type, so no conversion is needed.
+            ua.add_framework_metadata(md.clone());
+            kept += 1;
+        }
+
         cfg.interceptor_state().store_put(ua);
 
         Ok(())
@@ -396,6 +429,211 @@ mod tests {
         assert!(
             aws_ua_header.contains(app_value),
             "expected `{aws_ua_header}` to contain `{app_value}`"
+        );
+    }
+
+    fn run_interceptor_with_framework_metadata(
+        entries: Vec<aws_types::sdk_ua_metadata::FrameworkMetadata>,
+    ) -> String {
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut context = context();
+
+        let api_metadata = ApiMetadata::new("some-service", "some-version");
+        let mut layer = Layer::new("test");
+        layer.store_put(api_metadata);
+        for entry in entries {
+            layer.store_append(entry);
+        }
+        let mut config = ConfigBag::of_layers(vec![layer]);
+
+        let interceptor = UserAgentInterceptor::new();
+        let ctx = Into::into(&context);
+        interceptor
+            .read_after_serialization(&ctx, &rc, &mut config)
+            .unwrap();
+        let mut ctx = Into::into(&mut context);
+        interceptor
+            .modify_before_signing(&mut ctx, &rc, &mut config)
+            .unwrap();
+
+        expect_header(&context, "x-amz-user-agent").to_string()
+    }
+
+    #[test]
+    fn test_framework_metadata() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        let header = run_interceptor_with_framework_metadata(vec![
+            FrameworkMetadata::new("framework-one", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("framework-two", Some("2.0")).unwrap(),
+        ]);
+
+        assert!(
+            header.contains("lib/framework-one/1.0"),
+            "expected `{header}` to contain `lib/framework-one/1.0`"
+        );
+        assert!(
+            header.contains("lib/framework-two/2.0"),
+            "expected `{header}` to contain `lib/framework-two/2.0`"
+        );
+        // First-seen order must be preserved.
+        let pos_one = header.find("lib/framework-one/1.0").unwrap();
+        let pos_two = header.find("lib/framework-two/2.0").unwrap();
+        assert!(
+            pos_one < pos_two,
+            "expected framework-one before framework-two in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_dedup() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        let header = run_interceptor_with_framework_metadata(vec![
+            FrameworkMetadata::new("dup-framework", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("dup-framework", Some("1.0")).unwrap(),
+        ]);
+
+        assert_eq!(
+            1,
+            header.matches("lib/dup-framework/1.0").count(),
+            "expected `lib/dup-framework/1.0` to appear exactly once in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_cap() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        let entries = (0..15)
+            .map(|i| FrameworkMetadata::new(format!("framework-{i}"), Some("1.0")).unwrap())
+            .collect();
+        let header = run_interceptor_with_framework_metadata(entries);
+
+        let count = header.matches("lib/framework-").count();
+        assert_eq!(
+            10, count,
+            "expected at most 10 framework metadata entries, found {count} in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_cap_boundary() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        // Exactly 10 unique entries: all retained.
+        let ten = (0..10)
+            .map(|i| FrameworkMetadata::new(format!("fw-{i}"), Some("1.0")).unwrap())
+            .collect();
+        let header = run_interceptor_with_framework_metadata(ten);
+        for i in 0..10 {
+            assert!(
+                header.contains(&format!("lib/fw-{i}/1.0")),
+                "expected `lib/fw-{i}/1.0` in `{header}`"
+            );
+        }
+
+        // Eleven unique entries: the first 10 (first-seen) are retained, the 11th is dropped.
+        let eleven = (0..11)
+            .map(|i| FrameworkMetadata::new(format!("gw-{i}"), Some("1.0")).unwrap())
+            .collect();
+        let header = run_interceptor_with_framework_metadata(eleven);
+        assert_eq!(
+            10,
+            header.matches("lib/gw-").count(),
+            "expected exactly 10 entries in `{header}`"
+        );
+        assert!(
+            !header.contains("lib/gw-10/1.0"),
+            "the 11th entry should be dropped in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_dedup_preserves_first_occurrence_order() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        // A duplicate of an earlier entry must not reorder the surviving entries.
+        let header = run_interceptor_with_framework_metadata(vec![
+            FrameworkMetadata::new("a", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("b", Some("1.0")).unwrap(),
+            FrameworkMetadata::new("a", Some("1.0")).unwrap(), // duplicate of the first
+            FrameworkMetadata::new("c", Some("1.0")).unwrap(),
+        ]);
+
+        let pa = header.find("lib/a/1.0").expect("a present");
+        let pb = header.find("lib/b/1.0").expect("b present");
+        let pc = header.find("lib/c/1.0").expect("c present");
+        assert!(
+            pa < pb && pb < pc,
+            "expected first-seen order a, b, c in `{header}`"
+        );
+        assert_eq!(
+            1,
+            header.matches("lib/a/1.0").count(),
+            "duplicate entry should appear once in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_no_version() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        let header = run_interceptor_with_framework_metadata(vec![FrameworkMetadata::new(
+            "noversion-framework",
+            None::<&str>,
+        )
+        .unwrap()]);
+
+        assert!(
+            header.contains("lib/noversion-framework"),
+            "expected `lib/noversion-framework` in `{header}`"
+        );
+        assert!(
+            !header.contains("lib/noversion-framework/"),
+            "expected no trailing slash for a versionless entry in `{header}`"
+        );
+    }
+
+    #[test]
+    fn test_framework_metadata_across_layers_preserves_first_seen_order() {
+        use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut context = context();
+
+        // Simulate the real flow: entries copied in from `SdkConfig` live in an earlier (base)
+        // layer, and client-level entries are appended in a later layer. First-seen order must be
+        // preserved across both layers despite `StoreAppend` loading newest-first.
+        let mut base_layer = Layer::new("from_sdk_config");
+        base_layer.store_put(ApiMetadata::new("some-service", "some-version"));
+        base_layer.store_append(FrameworkMetadata::new("from-sdk-config", Some("1.0")).unwrap());
+
+        let mut client_layer = Layer::new("from_client");
+        client_layer.store_append(FrameworkMetadata::new("from-client", Some("2.0")).unwrap());
+
+        let mut config = ConfigBag::of_layers(vec![base_layer, client_layer]);
+
+        let interceptor = UserAgentInterceptor::new();
+        let ctx = Into::into(&context);
+        interceptor
+            .read_after_serialization(&ctx, &rc, &mut config)
+            .unwrap();
+        let mut ctx = Into::into(&mut context);
+        interceptor
+            .modify_before_signing(&mut ctx, &rc, &mut config)
+            .unwrap();
+        let header = expect_header(&context, "x-amz-user-agent");
+
+        let pos_sdk = header
+            .find("lib/from-sdk-config/1.0")
+            .expect("sdk-config entry present");
+        let pos_client = header
+            .find("lib/from-client/2.0")
+            .expect("client entry present");
+        assert!(
+            pos_sdk < pos_client,
+            "expected the SdkConfig entry before the client entry in `{header}`"
         );
     }
 

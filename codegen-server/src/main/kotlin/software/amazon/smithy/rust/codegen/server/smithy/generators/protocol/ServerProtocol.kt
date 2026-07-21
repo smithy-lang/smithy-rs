@@ -144,6 +144,7 @@ fun jsonParserGenerator(
         listOf(
             ServerRequestBeforeBoxingDeserializedMemberConvertToMaybeConstrainedJsonParserCustomization(codegenContext),
         ) + additionalParserCustomizations,
+        allowMissingUnionVariant = codegenContext.settings.codegenConfig.allowMissingUnionVariant,
     )
 
 class ServerAwsJsonProtocol(
