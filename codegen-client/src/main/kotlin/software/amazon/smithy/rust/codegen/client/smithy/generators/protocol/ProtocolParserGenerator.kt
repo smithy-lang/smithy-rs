@@ -115,6 +115,7 @@ class ProtocolParserGenerator(
                         "generic_builder",
                         "_response_status",
                         "_response_headers",
+                        "_response_body",
                     ),
                 )
                 rust("let generic = generic_builder.build();")

@@ -28,7 +28,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.62.7"
+version = "0.62.8"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-schema",
@@ -73,7 +73,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "aws-smithy-runtime-api",
  "aws-smithy-types",
@@ -82,7 +82,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.4.9"
+version = "1.6.0"
 dependencies = [
  "base64-simd",
  "bytes",

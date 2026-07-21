@@ -5,9 +5,12 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -505,8 +508,25 @@ class SchemaGeneratorTest {
             @trait(selector: "structure")
             structure myAnnotationCustomTrait {}
 
+            @trait(selector: "structure")
+            structure myComplexTrait {
+                items: ComplexItems,
+                count: Integer,
+                enabled: Boolean,
+                nested: NestedSetting
+            }
+
+            list ComplexItems {
+                member: String
+            }
+
+            structure NestedSetting {
+                inner: String
+            }
+
             @myCustomTrait(setting: "hello")
             @myAnnotationCustomTrait
+            @myComplexTrait(items: ["a", "b"], count: 3, enabled: true, nested: { inner: "deep" })
             structure Tagged {
                 value: String
             }
@@ -520,6 +540,7 @@ class SchemaGeneratorTest {
                 setOf(
                     software.amazon.smithy.model.shapes.ShapeId.from("test#myCustomTrait"),
                     software.amazon.smithy.model.shapes.ShapeId.from("test#myAnnotationCustomTrait"),
+                    software.amazon.smithy.model.shapes.ShapeId.from("test#myComplexTrait"),
                 ),
             )
         val project = TestWorkspace.testProject(customProvider)
@@ -530,32 +551,103 @@ class SchemaGeneratorTest {
                 "unknown_traits",
                 """
                 use aws_smithy_schema::{DocumentTrait, Trait};
+                use aws_smithy_types::Document;
                 let s = Tagged::SCHEMA;
 
                 // Unknown traits are stored in the fallback TraitMap
                 let traits = s.traits().expect("should have a fallback trait map");
 
-                // Complex custom trait is stored as DocumentTrait
+                // A structured (object-valued) custom trait is stored as a DocumentTrait
+                // whose value preserves the structure (NOT flattened to a JSON string).
                 let custom_id = aws_smithy_schema::shape_id!("test", "myCustomTrait");
                 let custom = traits.get(&custom_id).expect("should include custom trait");
                 let doc_trait = custom.as_any().downcast_ref::<DocumentTrait>()
                     .expect("unknown complex trait should be a DocumentTrait");
                 match doc_trait.value() {
-                    aws_smithy_types::Document::String(json) => {
-                        assert!(json.contains("hello"), "should contain the setting value: {json}");
+                    Document::Object(obj) => match obj.get("setting") {
+                        Some(Document::String(s)) => assert_eq!(s, "hello"),
+                        other => panic!("expected setting=String(hello), got: {other:?}"),
+                    },
+                    other => panic!("expected Document::Object, got: {other:?}"),
+                }
+
+                // A richly-structured custom trait round-trips arrays, numbers, bools,
+                // and nested objects as structured Document values.
+                let complex_id = aws_smithy_schema::shape_id!("test", "myComplexTrait");
+                let complex = traits.get(&complex_id).expect("should include complex trait");
+                let complex_doc = complex.as_any().downcast_ref::<DocumentTrait>()
+                    .expect("complex trait should be a DocumentTrait");
+                let obj = match complex_doc.value() {
+                    Document::Object(obj) => obj,
+                    other => panic!("expected Document::Object, got: {other:?}"),
+                };
+                match obj.get("items") {
+                    Some(Document::Array(items)) => {
+                        let strings: Vec<&str> = items.iter().map(|d| match d {
+                            Document::String(s) => s.as_str(),
+                            other => panic!("expected Document::String element, got: {other:?}"),
+                        }).collect();
+                        assert_eq!(strings, vec!["a", "b"]);
                     }
-                    other => panic!("expected Document::String, got: {other:?}"),
+                    other => panic!("expected items=Array, got: {other:?}"),
+                }
+                match obj.get("count") {
+                    Some(Document::Number(aws_smithy_types::Number::PosInt(n))) => assert_eq!(*n, 3),
+                    other => panic!("expected count=Number::PosInt, got: {other:?}"),
+                }
+                match obj.get("enabled") {
+                    Some(Document::Bool(b)) => assert!(*b),
+                    other => panic!("expected enabled=Bool, got: {other:?}"),
+                }
+                match obj.get("nested") {
+                    Some(Document::Object(inner)) => match inner.get("inner") {
+                        Some(Document::String(s)) => assert_eq!(s, "deep"),
+                        other => panic!("expected nested.inner=String, got: {other:?}"),
+                    },
+                    other => panic!("expected nested=Object, got: {other:?}"),
                 }
 
                 // Annotation custom trait is stored as AnnotationTrait
                 let ann_id = aws_smithy_schema::shape_id!("test", "myAnnotationCustomTrait");
                 assert!(traits.get(&ann_id).is_some(), "should include annotation custom trait");
 
-                assert_eq!(traits.len(), 2);
+                assert_eq!(traits.len(), 3);
                 """,
             )
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `nested aggregate recursive through a struct keeps its resolved element schema and xmlName`() {
+        // Wrapper -> values: OuterList -> (element) InnerMap -> value: Wrapper. The
+        // cycle passes through the struct Wrapper, which carries its own ::SCHEMA
+        // constant, so it is not an aggregate cycle: the serializer references
+        // InnerMap's resolved nested schema constant (preserving @xmlName on the map
+        // value) instead of substituting prelude::DOCUMENT. The model has no document
+        // shapes, so any prelude::DOCUMENT in the generated schema would mean the
+        // element's member traits were dropped.
+        val nestedModel =
+            """
+            namespace test
+            structure Wrapper { values: OuterList }
+            list OuterList { member: InnerMap }
+            map InnerMap {
+                key: String,
+                @xmlName("CustomValue")
+                value: Wrapper
+            }
+            """.asSmithyModel()
+        val nestedContext = testCodegenContext(nestedModel)
+        val writer = RustWriter.forModule("model")
+        SchemaGenerator(nestedContext, writer, nestedModel.lookup<StructureShape>("test#Wrapper")).render()
+        val rendered = writer.toString()
+
+        // The InnerMap element keeps its resolved schema; no prelude::DOCUMENT
+        // substitution for a model with no document shapes.
+        rendered shouldNotContain "prelude::DOCUMENT"
+        // The resolved nested schema carries the map value's @xmlName.
+        rendered shouldContain "with_xml_name(\"CustomValue\")"
     }
 
     @Test

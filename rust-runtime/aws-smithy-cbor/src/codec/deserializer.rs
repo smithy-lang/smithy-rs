@@ -82,8 +82,8 @@ impl<'a> CborDeserializer<'a> {
 impl ShapeDeserializer for CborDeserializer<'_> {
     fn read_struct(
         &mut self,
-        schema: &Schema,
-        consumer: &mut dyn FnMut(&Schema, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
+        schema: &Schema<'_>,
+        consumer: &mut dyn FnMut(&Schema<'_>, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         // Empty input (e.g., empty HTTP response body) is treated as an empty struct
         if self.decoder.position() >= self.input_len {
@@ -117,7 +117,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn read_list(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(&mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.check_depth()?;
@@ -143,7 +143,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 
     fn read_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
         consumer: &mut dyn FnMut(String, &mut dyn ShapeDeserializer) -> Result<(), SerdeError>,
     ) -> Result<(), SerdeError> {
         self.check_depth()?;
@@ -168,65 +168,65 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         Ok(())
     }
 
-    fn read_boolean(&mut self, _schema: &Schema) -> Result<bool, SerdeError> {
+    fn read_boolean(&mut self, _schema: &Schema<'_>) -> Result<bool, SerdeError> {
         self.decoder.boolean().map_err(deser_err)
     }
 
-    fn read_byte(&mut self, _schema: &Schema) -> Result<i8, SerdeError> {
+    fn read_byte(&mut self, _schema: &Schema<'_>) -> Result<i8, SerdeError> {
         self.decoder.byte().map_err(deser_err)
     }
 
-    fn read_short(&mut self, _schema: &Schema) -> Result<i16, SerdeError> {
+    fn read_short(&mut self, _schema: &Schema<'_>) -> Result<i16, SerdeError> {
         self.decoder.short().map_err(deser_err)
     }
 
-    fn read_integer(&mut self, _schema: &Schema) -> Result<i32, SerdeError> {
+    fn read_integer(&mut self, _schema: &Schema<'_>) -> Result<i32, SerdeError> {
         self.decoder.integer().map_err(deser_err)
     }
 
-    fn read_long(&mut self, _schema: &Schema) -> Result<i64, SerdeError> {
+    fn read_long(&mut self, _schema: &Schema<'_>) -> Result<i64, SerdeError> {
         self.decoder.long().map_err(deser_err)
     }
 
-    fn read_float(&mut self, _schema: &Schema) -> Result<f32, SerdeError> {
+    fn read_float(&mut self, _schema: &Schema<'_>) -> Result<f32, SerdeError> {
         self.decoder.float().map_err(deser_err)
     }
 
-    fn read_double(&mut self, _schema: &Schema) -> Result<f64, SerdeError> {
+    fn read_double(&mut self, _schema: &Schema<'_>) -> Result<f64, SerdeError> {
         self.decoder.double().map_err(deser_err)
     }
 
-    fn read_big_integer(&mut self, _schema: &Schema) -> Result<BigInteger, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big integer not yet supported (smithy-rs#4611)".into(),
-        })
+    fn read_big_integer(&mut self, _schema: &Schema<'_>) -> Result<BigInteger, SerdeError> {
+        Err(SerdeError::unsupported(
+            "CBOR big integer not yet supported (smithy-rs#4611)",
+        ))
     }
 
-    fn read_big_decimal(&mut self, _schema: &Schema) -> Result<BigDecimal, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "CBOR big decimal not yet supported (smithy-rs#4611)".into(),
-        })
+    fn read_big_decimal(&mut self, _schema: &Schema<'_>) -> Result<BigDecimal, SerdeError> {
+        Err(SerdeError::unsupported(
+            "CBOR big decimal not yet supported (smithy-rs#4611)",
+        ))
     }
 
-    fn read_string(&mut self, _schema: &Schema) -> Result<String, SerdeError> {
+    fn read_string(&mut self, _schema: &Schema<'_>) -> Result<String, SerdeError> {
         self.decoder
             .str()
             .map(|cow| cow.into_owned())
             .map_err(deser_err)
     }
 
-    fn read_blob(&mut self, _schema: &Schema) -> Result<Blob, SerdeError> {
+    fn read_blob(&mut self, _schema: &Schema<'_>) -> Result<Blob, SerdeError> {
         self.decoder.blob().map_err(deser_err)
     }
 
-    fn read_timestamp(&mut self, _schema: &Schema) -> Result<DateTime, SerdeError> {
+    fn read_timestamp(&mut self, _schema: &Schema<'_>) -> Result<DateTime, SerdeError> {
         self.decoder.timestamp().map_err(deser_err)
     }
 
-    fn read_document(&mut self, _schema: &Schema) -> Result<Document, SerdeError> {
-        Err(SerdeError::UnsupportedOperation {
-            message: "document types are not supported by rpcv2Cbor protocol".into(),
-        })
+    fn read_document(&mut self, _schema: &Schema<'_>) -> Result<Document, SerdeError> {
+        Err(SerdeError::unsupported(
+            "document types are not supported by rpcv2Cbor protocol",
+        ))
     }
 
     fn is_null(&self) -> bool {
@@ -250,25 +250,25 @@ impl ShapeDeserializer for CborDeserializer<'_> {
         }
     }
 
-    fn read_string_list(&mut self, _schema: &Schema) -> Result<Vec<String>, SerdeError> {
+    fn read_string_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<String>, SerdeError> {
         self.read_list_items(|dec| dec.str().map(|c| c.into_owned()).map_err(deser_err))
     }
 
-    fn read_blob_list(&mut self, _schema: &Schema) -> Result<Vec<Blob>, SerdeError> {
+    fn read_blob_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<Blob>, SerdeError> {
         self.read_list_items(|dec| dec.blob().map_err(deser_err))
     }
 
-    fn read_integer_list(&mut self, _schema: &Schema) -> Result<Vec<i32>, SerdeError> {
+    fn read_integer_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i32>, SerdeError> {
         self.read_list_items(|dec| dec.integer().map_err(deser_err))
     }
 
-    fn read_long_list(&mut self, _schema: &Schema) -> Result<Vec<i64>, SerdeError> {
+    fn read_long_list(&mut self, _schema: &Schema<'_>) -> Result<Vec<i64>, SerdeError> {
         self.read_list_items(|dec| dec.long().map_err(deser_err))
     }
 
     fn read_string_string_map(
         &mut self,
-        _schema: &Schema,
+        _schema: &Schema<'_>,
     ) -> Result<std::collections::HashMap<String, String>, SerdeError> {
         self.check_depth()?;
         let len = self.decoder.map().map_err(deser_err)?;
@@ -303,9 +303,7 @@ impl ShapeDeserializer for CborDeserializer<'_> {
 }
 
 fn deser_err(e: crate::decode::DeserializeError) -> SerdeError {
-    SerdeError::InvalidInput {
-        message: e.to_string(),
-    }
+    SerdeError::invalid_input(e.to_string())
 }
 
 #[cfg(test)]
@@ -331,7 +329,7 @@ mod tests {
     fn test_read_boolean() {
         let bytes = make_deser(|s| s.write_boolean(&BOOLEAN, true).unwrap());
         let mut de = CborDeserializer::new(&bytes, 128);
-        assert_eq!(de.read_boolean(&BOOLEAN).unwrap(), true);
+        assert!(de.read_boolean(&BOOLEAN).unwrap());
     }
 
     #[test]
@@ -604,7 +602,7 @@ mod tests {
 
         let mut de = CborDeserializer::new(&bytes, 128);
         fn recursive_consumer(
-            _member: &Schema,
+            _member: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             static MEMBER: Schema =
@@ -638,7 +636,7 @@ mod tests {
 
         let mut de = CborDeserializer::new(&bytes, 128);
         fn recursive_consumer(
-            _member: &Schema,
+            _member: &Schema<'_>,
             deser: &mut dyn ShapeDeserializer,
         ) -> Result<(), SerdeError> {
             static MEMBER: Schema =
@@ -743,5 +741,335 @@ mod tests {
         .unwrap();
         assert_eq!(map.get("a"), Some(&Some("hello".to_string())));
         assert_eq!(map.get("b"), Some(&None));
+    }
+
+    // --- Union deserialization: union-in-union, empty / unknown-only union ---
+    //
+    // Mirrors the generated union deserializer: read_struct over a
+    // ShapeType::Union schema, dispatch on member_index(), and ok_or_else when
+    // no variant was set. A union-valued member recurses into the inner union's
+    // own deserialize (its own self-contained read_struct). Because the CBOR
+    // read_struct reads its own map header and terminator, the recursion is
+    // safe and an empty / unknown-only union produces a clean error, never a
+    // panic or a corrupted stream. Both definite- and indefinite-length maps
+    // are exercised.
+
+    static U_INNER_LAMBDA: Schema = Schema::new_member(
+        shape_id!("test", "InnerUnion"),
+        ShapeType::String,
+        "lambda",
+        0,
+    );
+    static U_INNER_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "InnerUnion"),
+        ShapeType::Union,
+        &[&U_INNER_LAMBDA],
+    );
+    static U_OUTER_MCP: Schema =
+        Schema::new_member(shape_id!("test", "OuterUnion"), ShapeType::Union, "mcp", 0);
+    static U_OUTER_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "OuterUnion"),
+        ShapeType::Union,
+        &[&U_OUTER_MCP],
+    );
+
+    #[derive(Debug, PartialEq)]
+    enum InnerUnion {
+        Lambda(String),
+        Unknown,
+    }
+    #[derive(Debug, PartialEq)]
+    enum OuterUnion {
+        Mcp(InnerUnion),
+        Unknown,
+    }
+
+    fn deser_inner_union(deser: &mut dyn ShapeDeserializer) -> Result<InnerUnion, SerdeError> {
+        let mut result: Option<InnerUnion> = None;
+        deser.read_struct(&U_INNER_SCHEMA, &mut |member, d| {
+            result = Some(match member.member_index() {
+                Some(0) => InnerUnion::Lambda(d.read_string(member)?),
+                _ => InnerUnion::Unknown,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    fn deser_outer_union(deser: &mut dyn ShapeDeserializer) -> Result<OuterUnion, SerdeError> {
+        let mut result: Option<OuterUnion> = None;
+        deser.read_struct(&U_OUTER_SCHEMA, &mut |member, d| {
+            result = Some(match member.member_index() {
+                // union-valued member recurses into the inner union's own deserialize
+                Some(0) => OuterUnion::Mcp(deser_inner_union(d)?),
+                _ => OuterUnion::Unknown,
+            });
+            Ok(())
+        })?;
+        result.ok_or_else(|| SerdeError::custom("expected a union variant"))
+    }
+
+    #[test]
+    fn union_in_union_definite_map() {
+        // outer {mcp: inner {lambda: "arn"}} as definite-length maps.
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(1)
+            .str("mcp")
+            .map(1)
+            .str("lambda")
+            .str("arn:aws:lambda:fn");
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        assert_eq!(
+            deser_outer_union(&mut de).expect("union-in-union must deserialize"),
+            OuterUnion::Mcp(InnerUnion::Lambda("arn:aws:lambda:fn".to_string()))
+        );
+    }
+
+    #[test]
+    fn union_in_union_indefinite_map() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.begin_map()
+            .str("mcp")
+            .begin_map()
+            .str("lambda")
+            .str("arn:aws:lambda:fn")
+            .end()
+            .end();
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        assert_eq!(
+            deser_outer_union(&mut de).expect("union-in-union (indefinite) must deserialize"),
+            OuterUnion::Mcp(InnerUnion::Lambda("arn:aws:lambda:fn".to_string()))
+        );
+    }
+
+    static U_HOLDER_CHOICE: Schema =
+        Schema::new_member(shape_id!("test", "Holder"), ShapeType::Union, "choice", 0);
+    static U_HOLDER_TRAILING: Schema = Schema::new_member(
+        shape_id!("test", "Holder"),
+        ShapeType::String,
+        "trailing",
+        1,
+    );
+    static U_HOLDER_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "Holder"),
+        ShapeType::Structure,
+        &[&U_HOLDER_CHOICE, &U_HOLDER_TRAILING],
+    );
+
+    #[test]
+    fn nested_union_leaves_decoder_positioned_for_trailing_sibling() {
+        // {choice: {mcp: {lambda: "x"}}, trailing: "ok"} — the trailing sibling
+        // must still parse after the nested union is read.
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(2)
+            .str("choice")
+            .map(1)
+            .str("mcp")
+            .map(1)
+            .str("lambda")
+            .str("x")
+            .str("trailing")
+            .str("ok");
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut choice: Option<OuterUnion> = None;
+        let mut trailing: Option<String> = None;
+        de.read_struct(&U_HOLDER_SCHEMA, &mut |member, d| {
+            match member.member_index() {
+                Some(0) => choice = Some(deser_outer_union(d)?),
+                Some(1) => trailing = Some(d.read_string(member)?),
+                _ => {}
+            }
+            Ok(())
+        })
+        .expect("holder with a nested union must parse");
+        assert_eq!(
+            choice,
+            Some(OuterUnion::Mcp(InnerUnion::Lambda("x".to_string())))
+        );
+        assert_eq!(
+            trailing,
+            Some("ok".to_string()),
+            "trailing sibling must survive: the nested union read must leave the decoder positioned correctly"
+        );
+    }
+
+    #[test]
+    fn empty_union_definite_map_yields_clean_error() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(0);
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let err = deser_inner_union(&mut de).unwrap_err();
+        assert!(
+            err.to_string().contains("expected a union variant"),
+            "empty definite union map must be a clean error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn empty_union_indefinite_map_yields_clean_error() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.begin_map().end();
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let err = deser_inner_union(&mut de).unwrap_err();
+        assert!(
+            err.to_string().contains("expected a union variant"),
+            "empty indefinite union map must be a clean error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn union_with_only_unknown_member_yields_clean_error() {
+        // A union map whose sole key matches no member is skipped; no variant
+        // is set, so a clean error results (no panic).
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(1).str("zzz").str("ignored");
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let err = deser_inner_union(&mut de).unwrap_err();
+        assert!(
+            err.to_string().contains("expected a union variant"),
+            "unknown-only union must be a clean error, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn list_of_union_in_union() {
+        let mut e = crate::Encoder::new(Vec::new());
+        e.array(2)
+            .map(1)
+            .str("mcp")
+            .map(1)
+            .str("lambda")
+            .str("a")
+            .map(1)
+            .str("mcp")
+            .map(1)
+            .str("lambda")
+            .str("b");
+        let bytes = e.into_writer();
+        let list_schema = Schema::new(shape_id!("test", "L"), ShapeType::List);
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut out = Vec::new();
+        de.read_list(&list_schema, &mut |el| {
+            out.push(deser_outer_union(el)?);
+            Ok(())
+        })
+        .expect("list of union-in-union must deserialize");
+        assert_eq!(
+            out,
+            vec![
+                OuterUnion::Mcp(InnerUnion::Lambda("a".to_string())),
+                OuterUnion::Mcp(InnerUnion::Lambda("b".to_string())),
+            ]
+        );
+    }
+
+    #[test]
+    fn null_valued_union_member_yields_clean_error_not_panic() {
+        // Unlike JSON (whose read_struct skips explicit-null members before
+        // dispatching), CBOR read_struct passes the null value straight to the
+        // consumer. A realistic CBOR union carries exactly one non-null member,
+        // so a null-valued member is malformed; the generated deserializer
+        // reads it with the variant's typed read_* and gets a clean type error.
+        // The important property for bug parity is that this is a clean error,
+        // never a panic or a corrupted stream.
+        let mut e = crate::Encoder::new(Vec::new());
+        e.map(1).str("lambda").null();
+        let bytes = e.into_writer();
+        let mut de = CborDeserializer::new(&bytes, 128);
+        assert!(
+            deser_inner_union(&mut de).is_err(),
+            "a null-valued union member must be a clean error, not a panic"
+        );
+    }
+
+    // --- Required value-type members are serialized even when equal to the
+    // zero/default (bool false). Mirrors the generated non-optional branch
+    // `{ let val = &self.x; ser.write_boolean(..) }` (unconditional, never a
+    // skip-if-default). Shapes the ELB
+    // `LoadBalancerAttributes { ConnectionDraining { Enabled = false } }` case:
+    // the nested structure member is present and `enabled=false` is on the wire.
+
+    static B_CD_ENABLED: Schema = Schema::new_member(
+        shape_id!("test", "ConnectionDraining$enabled"),
+        ShapeType::Boolean,
+        "enabled",
+        0,
+    );
+    static B_CD_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "ConnectionDraining"),
+        ShapeType::Structure,
+        &[&B_CD_ENABLED],
+    );
+    static B_LBA_CD: Schema = Schema::new_member(
+        shape_id!("test", "LoadBalancerAttributes$connectionDraining"),
+        ShapeType::Structure,
+        "connectionDraining",
+        0,
+    );
+    static B_LBA_SCHEMA: Schema = Schema::new_struct(
+        shape_id!("test", "LoadBalancerAttributes"),
+        ShapeType::Structure,
+        &[&B_LBA_CD],
+    );
+
+    struct BConnectionDraining {
+        enabled: bool,
+    }
+    impl SerializableStruct for BConnectionDraining {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            let val = &self.enabled;
+            s.write_boolean(&B_CD_ENABLED, *val)
+        }
+    }
+    struct BLoadBalancerAttributes {
+        connection_draining: BConnectionDraining,
+    }
+    impl SerializableStruct for BLoadBalancerAttributes {
+        fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+            s.write_struct(&B_LBA_CD, &self.connection_draining)
+        }
+    }
+
+    #[test]
+    fn required_value_type_false_bool_is_serialized() {
+        let bytes = make_deser(|s| {
+            s.write_struct(
+                &B_LBA_SCHEMA,
+                &BLoadBalancerAttributes {
+                    connection_draining: BConnectionDraining { enabled: false },
+                },
+            )
+            .unwrap()
+        });
+        // Read back: `enabled=false` (Some) proves the member was written to the
+        // wire; if it had been dropped, the inner consumer would never fire.
+        let mut de = CborDeserializer::new(&bytes, 128);
+        let mut cd_seen = false;
+        let mut enabled: Option<bool> = None;
+        de.read_struct(&B_LBA_SCHEMA, &mut |m, d| {
+            if m.member_name() == Some("connectionDraining") {
+                cd_seen = true;
+                d.read_struct(&B_CD_SCHEMA, &mut |im, id| {
+                    if im.member_name() == Some("enabled") {
+                        enabled = Some(id.read_boolean(im)?);
+                    }
+                    Ok(())
+                })?;
+            }
+            Ok(())
+        })
+        .unwrap();
+        assert!(cd_seen, "outer connectionDraining member must be present");
+        assert_eq!(
+            enabled,
+            Some(false),
+            "required value-type enabled=false must be serialized, not dropped"
+        );
     }
 }
