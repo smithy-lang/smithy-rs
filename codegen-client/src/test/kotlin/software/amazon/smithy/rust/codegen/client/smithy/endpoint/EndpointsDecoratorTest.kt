@@ -449,4 +449,59 @@ class EndpointsDecoratorTest {
         failure.output shouldContain "https://failingtest.com"
         "cargo clippy".runWithWarnings(testDir)
     }
+
+    val quotedErrorMessageModel =
+        """
+        namespace test
+
+        use smithy.rules#endpointRuleSet
+        use smithy.rules#clientContextParams
+        use aws.protocols#awsJson1_1
+
+        @awsJson1_1
+        @endpointRuleSet({
+            "version": "1.0",
+            "parameters": {
+                "Stage": { "required": false, "type": "string" }
+            },
+            "rules": [
+                {
+                    "conditions": [{ "fn": "isSet", "argv": [{ "ref": "Stage" }] }],
+                    "rules": [
+                        {
+                            "conditions": [
+                                { "fn": "stringEquals", "argv": [{ "ref": "Stage" }, "prod"] }
+                            ],
+                            "endpoint": { "url": "https://prod.example.com" },
+                            "type": "endpoint"
+                        },
+                        {
+                            "conditions": [],
+                            "error": "'{Stage}' is not a valid stage. Valid values are 'prod' or 'gamma'.",
+                            "type": "error"
+                        }
+                    ],
+                    "type": "tree"
+                },
+                {
+                    "conditions": [],
+                    "error": "Stage must be provided",
+                    "type": "error"
+                }
+            ]
+        })
+        @clientContextParams(
+            Stage: { documentation: "stage docs", type: "string" }
+        )
+        service QuotedErrorService {
+            operations: [Ping]
+        }
+
+        operation Ping {}
+        """.asSmithyModel(disableValidation = true)
+
+    @Test
+    fun `endpoint rule templates with escape-sensitive characters compile`() {
+        clientIntegrationTest(quotedErrorMessageModel)
+    }
 }
