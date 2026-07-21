@@ -124,6 +124,11 @@ val allCodegenTests = listOf(
         "pokemon-service-awsjson-client",
         dependsOn = listOf("pokemon-awsjson.smithy", "pokemon-common.smithy"),
     ),
+    ClientTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-cbor-client",
+        dependsOn = listOf("pokemon-cbor.smithy", "pokemon-common.smithy"),
+    ),
     ClientTest("aws.protocoltests.misc#QueryCompatService", "query-compat-test", dependsOn = listOf("aws-json-query-compat.smithy")),
 ).map(ClientTest::toCodegenTest)
 

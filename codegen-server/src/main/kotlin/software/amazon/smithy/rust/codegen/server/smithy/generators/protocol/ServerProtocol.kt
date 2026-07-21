@@ -61,6 +61,24 @@ interface ServerProtocol : Protocol {
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String
 
+    /**
+     * Detection priority when a service supports multiple protocols; lower is checked first.
+     *
+     * This mirrors the runtime `ProtocolMeta::PRIORITY` on the corresponding routing service, and is
+     * used to order the `ProtocolChain` emitted for multi-protocol services. The public protocols are
+     * spaced by 1000 so downstream (e.g. internal) protocols can slot in between by overriding this.
+     */
+    val protocolPriority: Int
+        get() =
+            when (protocolShapeId.toString()) {
+                "smithy.protocols#rpcv2Cbor" -> 1000
+                "aws.protocols#awsJson1_1" -> 2000
+                "aws.protocols#awsJson1_0" -> 3000
+                "aws.protocols#restJson1" -> 4000
+                "aws.protocols#restXml" -> 5000
+                else -> 100_000 // Unknown protocols go last unless they override this.
+            }
+
     /** Returns the Rust marker struct enjoying `OperationShape`. */
     fun markerStruct(): RuntimeType
 
