@@ -531,7 +531,6 @@ class ServerServiceGenerator(
         writable {
             val functions =
                 writable {
-                    // Flatten all spec functions from all operations (may have multiple per operation for RpcV2Cbor)
                     for (specFunctions in requestSpecMap.values) {
                         for ((_, function) in specFunctions) {
                             rustTemplate(
