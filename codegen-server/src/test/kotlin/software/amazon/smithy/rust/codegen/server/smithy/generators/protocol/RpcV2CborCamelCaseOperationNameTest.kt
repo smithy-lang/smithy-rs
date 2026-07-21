@@ -80,14 +80,13 @@ class RpcV2CborCamelCaseOperationNameTest {
      * Both URIs should return 200.
      */
     @Test
-    fun `default behavior registers dual routes for backward compatibility`() {
+    fun `default behavior registers only the verbatim route`() {
         val serviceShape = model.expectShape(ShapeId.from("test#Example"))
         serverIntegrationTest(
             model,
             params =
                 IntegrationTestParams(
                     service = serviceShape.id.toString(),
-                    // Explicitly NOT setting rpcV2CborExcludeLegacyOperationNameRoute (defaults to false)
                 ),
         ) { codegenContext, rustCrate ->
             val codegenScope =
@@ -133,8 +132,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     *codegenScope,
                 )
 
-                // Test that camelCase operation name in URI returns 200 (verbatim route)
-                tokioTest("default_camel_case_operation_succeeds") {
+                tokioTest("default_camel_case_verbatim_route_succeeds") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -147,8 +145,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"value": "test"}"##);
 
-                        // With default settings, the router registers both routes.
-                        // The spec-compliant verbatim URI should match.
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/getFoo")
                             .method("POST")
@@ -161,20 +157,23 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        // Default behavior: camelCase URI matches the verbatim route -> 200
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for camelCase operation name 'getFoo' with default settings, got status {}",
-                            response.status()
-                        );
+                        assert!(response.status().is_success());
+
+                        #{ReadBodyBytes:W}
+                        let data: #{HashMap}<String, #{SerdeJson}::Value> =
+                            #{Ciborium}::de::from_reader(body.as_ref()).expect("could not deserialize response");
+                        let result = data.get("result")
+                            .and_then(|r| r.as_str())
+                            .expect("result field missing");
+                        assert_eq!(result, "got: test");
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
+                        "ReadBodyBytes" to ServerHttpTestHelpers.httpBodyToBytes(codegenContext.runtimeConfig, "body", "response"),
                     )
                 }
 
-                // Test that PascalCase operation name in URI also succeeds (legacy route for backward compat)
-                tokioTest("default_pascal_case_uri_succeeds_for_backward_compat") {
+                tokioTest("default_capitalized_uri_returns_404") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -187,8 +186,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"value": "test"}"##);
 
-                        // With default settings, the legacy PascalCase route is also registered.
-                        // This ensures backward compatibility with clients using the old URI format.
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/GetFoo")
                             .method("POST")
@@ -201,20 +198,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        // Default behavior: PascalCase URI matches the legacy route -> 200
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for PascalCase URI 'GetFoo' with default settings (legacy route), got status {}",
-                            response.status()
-                        );
+                        assert_eq!(response.status(), #{Http}::StatusCode::NOT_FOUND);
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                     )
                 }
 
-                // Test that UpperCamelCase operations work (Smithy name == PascalCase symbol name, single route)
-                tokioTest("default_upper_camel_case_operation_works") {
+                tokioTest("default_already_capitalized_operation_works") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -227,7 +218,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"data": "hello"}"##);
 
-                        // For operations already in UpperCamelCase, the verbatim name matches the symbol name
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/UpperCaseOp")
                             .method("POST")
@@ -240,19 +230,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for UpperCamelCase operation name, got status {}",
-                            response.status()
-                        );
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                     )
                 }
 
-                // Test that acronym operation (myAPIOp -> MyAPIOp) is reachable via verbatim route
-                tokioTest("default_acronym_operation_verbatim_route_succeeds") {
+                tokioTest("default_acronym_verbatim_route_succeeds") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -265,7 +250,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
 
-                        // Verbatim route: myAPIOp (Smithy shape name)
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/myAPIOp")
                             .method("POST")
@@ -278,19 +262,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for verbatim URI 'myAPIOp' with default settings, got status {}",
-                            response.status()
-                        );
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                     )
                 }
 
-                // Test that acronym operation (myAPIOp -> MyAPIOp) is also reachable via legacy PascalCase route
-                tokioTest("default_acronym_operation_pascal_case_route_succeeds") {
+                tokioTest("default_acronym_capitalized_uri_returns_404") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -303,7 +282,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
 
-                        // Legacy PascalCase route: MyAPIOp (Rust symbol name)
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/MyAPIOp")
                             .method("POST")
@@ -316,11 +294,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for PascalCase URI 'MyAPIOp' with default settings (legacy route), got status {}",
-                            response.status()
-                        );
+                        assert_eq!(response.status(), #{Http}::StatusCode::NOT_FOUND);
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
@@ -343,7 +317,7 @@ class RpcV2CborCamelCaseOperationNameTest {
      * Use this opt-out once clients have migrated to the correct URIs.
      */
     @Test
-    fun `opt-out excludes legacy route and registers only verbatim route`() {
+    fun `opt-in registers both verbatim and legacy capitalized routes`() {
         val serviceShape = model.expectShape(ShapeId.from("test#Example"))
         serverIntegrationTest(
             model,
@@ -352,7 +326,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     service = serviceShape.id.toString(),
                     additionalSettings =
                         ServerAdditionalSettings.builder()
-                            .rpcV2CborExcludeLegacyOperationNameRoute(true)
+                            .rpcV2CborAddCapitalizedRoute(true)
                             .toObjectNode(),
                 ),
         ) { codegenContext, rustCrate ->
@@ -399,8 +373,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                     *codegenScope,
                 )
 
-                // Test that camelCase operation name in URI succeeds (verbatim route only)
-                tokioTest("optout_camel_case_operation_routes_successfully") {
+                tokioTest("optin_camel_case_verbatim_route_succeeds") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -413,8 +386,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"value": "test"}"##);
 
-                        // With opt-out setting, only the verbatim route is registered.
-                        // The client sends camelCase "getFoo", which matches.
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/getFoo")
                             .method("POST")
@@ -427,28 +398,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for camelCase operation name 'getFoo' with opt-out setting, got status {}",
-                            response.status()
-                        );
-
-                        #{ReadBodyBytes:W}
-                        let data: #{HashMap}<String, #{SerdeJson}::Value> =
-                            #{Ciborium}::de::from_reader(body.as_ref()).expect("could not deserialize response");
-                        let result = data.get("result")
-                            .and_then(|r| r.as_str())
-                            .expect("result field missing");
-                        assert_eq!(result, "got: test");
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
-                        "ReadBodyBytes" to ServerHttpTestHelpers.httpBodyToBytes(codegenContext.runtimeConfig, "body", "response"),
                     )
                 }
 
-                // Test that PascalCase operation name in URI returns 404 (legacy route excluded)
-                tokioTest("optout_pascal_case_uri_returns_404") {
+                tokioTest("optin_capitalized_alias_route_succeeds") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -461,7 +418,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"value": "test"}"##);
 
-                        // With opt-out setting, the legacy PascalCase route is NOT registered.
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/GetFoo")
                             .method("POST")
@@ -474,20 +430,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        // Opt-out behavior: PascalCase URI does NOT match (legacy route excluded) -> 404
-                        assert_eq!(
-                            response.status(),
-                            #{Http}::StatusCode::NOT_FOUND,
-                            "Expected 404 for PascalCase URI 'GetFoo' with opt-out setting (legacy route excluded)"
-                        );
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                     )
                 }
 
-                // Test that UpperCamelCase operations still work with opt-out (single route, names match)
-                tokioTest("optout_upper_camel_case_operation_works") {
+                tokioTest("optin_already_capitalized_operation_works") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -500,7 +450,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"data": "hello"}"##);
 
-                        // For operations already in UpperCamelCase, the verbatim name matches the symbol name
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/UpperCaseOp")
                             .method("POST")
@@ -513,19 +462,14 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for UpperCamelCase operation name with opt-out setting, got status {}",
-                            response.status()
-                        );
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
                     )
                 }
 
-                // Test that acronym operation (myAPIOp -> MyAPIOp) is reachable via verbatim route with opt-out
-                tokioTest("optout_acronym_operation_verbatim_route_succeeds") {
+                tokioTest("optin_acronym_capitalized_alias_route_succeeds") {
                     rustTemplate(
                         """
                         let config = crate::ExampleConfig::builder().build();
@@ -538,45 +482,6 @@ class RpcV2CborCamelCaseOperationNameTest {
 
                         let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
 
-                        // Verbatim route: myAPIOp (Smithy shape name)
-                        let request = #{Http}::Request::builder()
-                            .uri("/service/Example/operation/myAPIOp")
-                            .method("POST")
-                            .header("content-type", "application/cbor")
-                            .header("Smithy-Protocol", "rpc-v2-cbor")
-                            .body(#{CreateBody:W})
-                            .expect("Failed to build request");
-
-                        let response = #{Tower}::ServiceExt::oneshot(service, request)
-                            .await
-                            .expect("Failed to call service");
-
-                        assert!(
-                            response.status().is_success(),
-                            "Expected success for verbatim URI 'myAPIOp' with opt-out setting, got status {}",
-                            response.status()
-                        );
-                        """,
-                        *codegenScope,
-                        "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),
-                    )
-                }
-
-                // Test that acronym operation PascalCase route returns 404 with opt-out
-                tokioTest("optout_acronym_operation_pascal_case_route_returns_404") {
-                    rustTemplate(
-                        """
-                        let config = crate::ExampleConfig::builder().build();
-                        let service = crate::Example::builder(config)
-                            .get_foo(get_foo_handler)
-                            .upper_case_op(upper_case_op_handler)
-                            .my_api_op(my_api_op_handler)
-                            .build()
-                            .expect("could not build service");
-
-                        let cbor_data = create_cbor_input(r##"{"param": "test"}"##);
-
-                        // Legacy PascalCase route: MyAPIOp (Rust symbol name) - should NOT be registered with opt-out
                         let request = #{Http}::Request::builder()
                             .uri("/service/Example/operation/MyAPIOp")
                             .method("POST")
@@ -589,12 +494,7 @@ class RpcV2CborCamelCaseOperationNameTest {
                             .await
                             .expect("Failed to call service");
 
-                        // Opt-out behavior: PascalCase URI does NOT match (legacy route excluded) -> 404
-                        assert_eq!(
-                            response.status(),
-                            #{Http}::StatusCode::NOT_FOUND,
-                            "Expected 404 for PascalCase URI 'MyAPIOp' with opt-out setting (legacy route excluded)"
-                        );
+                        assert!(response.status().is_success());
                         """,
                         *codegenScope,
                         "CreateBody" to ServerHttpTestHelpers.createBodyFromBytes(codegenContext, "cbor_data"),

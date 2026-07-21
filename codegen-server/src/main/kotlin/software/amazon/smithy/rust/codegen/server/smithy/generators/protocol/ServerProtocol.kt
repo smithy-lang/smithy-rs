@@ -80,21 +80,6 @@ interface ServerProtocol : Protocol {
     ): Writable
 
     /**
-     * Returns a list of writables for the `RequestSpec`s for an operation.
-     * Most protocols return a single spec, but some (like RpcV2Cbor) may return multiple
-     * specs to register an operation under multiple router keys (e.g., both the verbatim
-     * Smithy operation name and the PascalCased symbol name for backward compatibility).
-     *
-     * The default implementation delegates to [serverRouterRequestSpec] and returns a single-element list.
-     */
-    fun serverRouterRequestSpecs(
-        operationShape: OperationShape,
-        operationName: String,
-        serviceName: String,
-        requestSpecModule: RuntimeType,
-    ): List<Writable> = listOf(serverRouterRequestSpec(operationShape, operationName, serviceName, requestSpecModule))
-
-    /**
      * Returns the Rust type of the `RequestSpec` for an operation.
      */
     fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType
@@ -379,71 +364,48 @@ class ServerRpcV2CborProtocol(
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
     /**
-     * Delegates to [serverRouterRequestSpecs] and returns the first (primary) spec.
-     * This keeps the `"{service}.{verbatimName}"` format in a single place.
+     * The RPC v2 CBOR router keys its map by `"{service}.{operationName}"`, where `operationName`
+     * is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the URI that the
+     * spec-compliant client generates. See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
      */
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ) = serverRouterRequestSpecs(operationShape, operationName, serviceName, requestSpecModule).first()
+    ) = writable {
+        rust("$serviceName.${operationShape.id.name}".dq())
+    }
 
     /**
-     * Returns the list of router request specs for an RpcV2Cbor operation.
+     * Returns any additional router keys under which this operation should also be registered.
      *
-     * Per the smithy-rpc-v2 spec (https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html),
-     * the client builds the request URI using the verbatim Smithy operation shape name (operationShape.id.name),
-     * NOT the PascalCased Rust symbol name. The server's verbatim route key (`{service}.{operationShape.id.name}`)
-     * matches the client's generated URI path (`/service/{service}/operation/{operationShape.id.name}`) in
-     * codegen-core's RpcV2Cbor.kt.
+     * When `rpcV2CborAddCapitalizedRoute` is `true` and the Rust symbol name differs from the
+     * verbatim Smithy operation name (e.g. `getFoo` -> `GetFoo`), a legacy alias is registered so
+     * callers that were previously reaching the server via the capitalized URI continue to work.
+     * When the flag is `false` (default) or the names match (already-capitalized operations),
+     * no additional aliases are registered.
      *
-     * The `rpcV2CborExcludeLegacyOperationNameRoute` setting controls which routes are registered:
-     * - When FALSE (default): if the PascalCased symbol name differs from the verbatim Smithy name,
-     *   register BOTH routes for backward compatibility. Operations already in UpperCamelCase
-     *   (where names match) get a single route.
-     * - When TRUE (opt-out): register ONLY the spec-compliant verbatim route. Use this to drop
-     *   the legacy PascalCased alias once clients have migrated.
+     * The alias key can never collide with another operation's primary key: Smithy's core
+     * `ShapeIdConflict` validator rejects any model that defines two operation shape IDs in the
+     * same namespace differing only by case (e.g. both `getFoo` and `GetFoo`), and operations
+     * cannot be renamed via traits.
      *
-     * ## Collision Safety
-     *
-     * The legacy PascalCase alias (`{service}.{PascalCaseName}`) can never collide with another
-     * operation's native key. Smithy's core `ShapeIdConflict` validator rejects any model that
-     * defines two operation shape IDs differing only by case within the same namespace (e.g.,
-     * both `getFoo` and `GetFoo`). Since operations cannot be renamed via traits, the PascalCased
-     * transformation of one operation name can never equal the verbatim name of another.
-     *
-     * See https://github.com/smithy-lang/smithy-rs/issues/4731
+     * See https://github.com/smithy-lang/smithy-rs/issues/4731.
      */
-    override fun serverRouterRequestSpecs(
+    fun additionalRouterRequestSpecAliases(
         operationShape: OperationShape,
-        operationName: String,
         serviceName: String,
-        requestSpecModule: RuntimeType,
     ): List<Writable> {
+        if (!serverCodegenContext.settings.codegenConfig.rpcV2CborAddCapitalizedRoute) {
+            return emptyList()
+        }
         val verbatimOperationName = operationShape.id.name
-        val pascalCasedSymbolName = operationName  // This is already the PascalCased symbol name
-
-        val excludeLegacyRoute = serverCodegenContext.settings.codegenConfig.rpcV2CborExcludeLegacyOperationNameRoute
-
-        // Primary route: always use the spec-compliant verbatim operation name
-        val primaryRoute = writable {
-            rust("$serviceName.$verbatimOperationName".dq())
+        val capitalizedOperationName = verbatimOperationName.replaceFirstChar { it.uppercase() }
+        if (verbatimOperationName == capitalizedOperationName) {
+            return emptyList()
         }
-
-        // Check if names differ (e.g., getFoo vs GetFoo)
-        val namesDiffer = verbatimOperationName != pascalCasedSymbolName
-
-        return if (namesDiffer && !excludeLegacyRoute) {
-            // Register both routes: verbatim (spec-compliant) and legacy PascalCase (backward compat)
-            val legacyRoute = writable {
-                rust("$serviceName.$pascalCasedSymbolName".dq())
-            }
-            listOf(primaryRoute, legacyRoute)
-        } else {
-            // Either names are the same, or legacy route is excluded via opt-out flag
-            listOf(primaryRoute)
-        }
+        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
