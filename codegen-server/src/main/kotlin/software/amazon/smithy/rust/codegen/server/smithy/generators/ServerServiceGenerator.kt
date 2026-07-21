@@ -78,6 +78,8 @@ class ServerServiceGenerator(
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
 
+    private val usedRequestSpecFunctionNames = mutableSetOf<String>()
+
     /**
      * Associate each operation with the functions that return its request spec(s).
      *
@@ -99,13 +101,9 @@ class ServerServiceGenerator(
                     emptyList()
                 }
             val specs = listOf(primarySpec) + aliasSpecs
-            // Generate a unique function name for each spec. The `_$index` suffix on alias functions
-            // can only collide with a user-modeled operation named `<primary>_<index>`, which is
-            // vanishingly unlikely (`_` is uncommon in operation names and the numeric suffix
-            // rarer still).
             val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
             specs.mapIndexed { index, spec ->
-                val functionName = if (index == 0) baseFunctionName else "${baseFunctionName}_$index"
+                val functionName = allocateRequestSpecFunctionName(baseFunctionName, index)
                 val functionBody =
                     writable {
                         rustTemplate(
@@ -121,6 +119,30 @@ class ServerServiceGenerator(
                 Pair(functionName, functionBody)
             }
         }
+
+    private fun allocateRequestSpecFunctionName(
+        baseFunctionName: String,
+        specIndex: Int,
+    ): String {
+        val preferredName =
+            when (specIndex) {
+                0 -> baseFunctionName
+                1 -> "${baseFunctionName}_alias"
+                else -> "${baseFunctionName}_alias_$specIndex"
+            }
+        return generateUniqueRequestSpecFunctionName(preferredName)
+    }
+
+    private fun generateUniqueRequestSpecFunctionName(preferredName: String): String {
+        var collisionIndex = 0
+        while (true) {
+            val candidate = if (collisionIndex == 0) preferredName else "${preferredName}_$collisionIndex"
+            if (usedRequestSpecFunctionNames.add(candidate)) {
+                return candidate
+            }
+            collisionIndex += 1
+        }
+    }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable =
