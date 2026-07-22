@@ -41,6 +41,7 @@
 //! [`HttpClient`]: aws_smithy_runtime_api::client::http::HttpClient
 
 mod admission;
+mod balance;
 pub(crate) mod connection;
 mod handshake;
 pub(crate) mod stats;
