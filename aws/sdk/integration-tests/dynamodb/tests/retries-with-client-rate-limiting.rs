@@ -204,16 +204,20 @@ async fn test_adaptive_retries_with_throttling_errors() {
     )
     .await;
 
-    // Retry 2.1: throttling still uses 1s base, rate limiter behavior unchanged
+    // Retry 2.1: throttling errors now charge only 1 token against the adaptive
+    // rate limiter (vs. the legacy 10-token RetryTimeout cost), so the
+    // rate-limiter-induced delay is far smaller. op1 drops to 4s and op2 only
+    // adds ~0.86s of rate-limiter backoff (cumulative ~4.862s) rather than the
+    // legacy ~10s.
     adaptive_retries_with_throttling(
         BehaviorVersion::latest(),
         base_config.with_retry_spec(
             RetrySpec::v2_1().with_non_throttling_initial_backoff(Duration::from_millis(25)),
         ),
         "throttle_v2_1",
-        Duration::from_secs(38),
-        Duration::from_secs(47),
-        Duration::from_secs(49),
+        Duration::from_secs(4),
+        Duration::from_millis(4700),
+        Duration::from_millis(5000),
     )
     .await;
 }

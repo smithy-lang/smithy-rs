@@ -235,7 +235,7 @@ impl RetryStrategy for StandardRetryStrategy {
         let classifier_result = run_classifiers_on_ctx(retry_classifiers, ctx);
 
         // (adaptive only): update fill rate
-        // NOTE: SEP indicates doing bookkeeping before asking if we should retry. We need to know if
+        // NOTE: the retry spec indicates doing bookkeeping before asking if we should retry. We need to know if
         // the error was a throttling error though to do adaptive retry bookkeeping so we take
         // advantage of that information being available via the classifier result
         let error_kind = error_kind(&classifier_result);
@@ -336,7 +336,20 @@ fn check_rate_limiter_for_delay(
     kind: ErrorKind,
 ) -> Option<Duration> {
     if let Some(crl) = StandardRetryStrategy::adaptive_retry_rate_limiter(runtime_components, cfg) {
-        let retry_reason = if kind == ErrorKind::ThrottlingError {
+        // Retry Behavior 2.1: the adaptive client-side rate limiter is a
+        // requests-per-second limiter, so per the spec it charges a uniform
+        // 1 token per send attempt (same as an initial request). The legacy
+        // 5/10-token retry costs, charged against a cold-start capacity
+        // floored at MIN_CAPACITY (1.0), deadlocked retries and starved
+        // throughput. Scope this to V2.1 so pre-2.1 adaptive behavior is
+        // unchanged.
+        let is_v2_1 = cfg
+            .load::<RetryConfig>()
+            .and_then(|rc| rc.retry_spec())
+            .is_some_and(|s| s.is_at_least(RetrySpec::V2_1));
+        let retry_reason = if is_v2_1 {
+            RequestReason::InitialRequest
+        } else if kind == ErrorKind::ThrottlingError {
             RequestReason::RetryTimeout
         } else {
             RequestReason::Retry
