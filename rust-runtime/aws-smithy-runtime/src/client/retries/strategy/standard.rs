@@ -336,20 +336,21 @@ fn check_rate_limiter_for_delay(
     kind: ErrorKind,
 ) -> Option<Duration> {
     if let Some(crl) = StandardRetryStrategy::adaptive_retry_rate_limiter(runtime_components, cfg) {
-        // Retry Behavior 2.1: the adaptive client-side rate limiter is a
-        // requests-per-second limiter, so per the spec it charges a uniform
-        // 1 token per send attempt (same as an initial request). The legacy
-        // 5/10-token retry costs, charged against a cold-start capacity
-        // floored at MIN_CAPACITY (1.0), deadlocked retries and starved
-        // throughput. Scope this to V2.1 so pre-2.1 adaptive behavior is
-        // unchanged.
+        // Retry Behavior 2.1 acquires one adaptive send token per attempt in the
+        // orchestrator's send loop (GetSendToken: sleep-then-re-acquire, so
+        // capacity is never driven negative). The rate limiter therefore must
+        // NOT also fold an acquire delay into the retry backoff here; the
+        // x-amz-retry-after / exponential backoff is applied on its own below.
+        // Pre-2.1 keeps the legacy behavior of folding the acquire delay (with
+        // the 5/10-token retry costs) into the backoff.
         let is_v2_1 = cfg
             .load::<RetryConfig>()
             .and_then(|rc| rc.retry_spec())
             .is_some_and(|s| s.is_at_least(RetrySpec::V2_1));
-        let retry_reason = if is_v2_1 {
-            RequestReason::InitialRequest
-        } else if kind == ErrorKind::ThrottlingError {
+        if is_v2_1 {
+            return None;
+        }
+        let retry_reason = if kind == ErrorKind::ThrottlingError {
             RequestReason::RetryTimeout
         } else {
             RequestReason::Retry
