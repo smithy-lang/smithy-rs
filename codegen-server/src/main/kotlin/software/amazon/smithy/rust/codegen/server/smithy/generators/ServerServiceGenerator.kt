@@ -26,6 +26,7 @@ import software.amazon.smithy.rust.codegen.core.util.toSnakeCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Error as ErrorModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Input as InputModule
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRustModule.Output as OutputModule
@@ -77,32 +78,71 @@ class ServerServiceGenerator(
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
 
-    /** Associate each operation with a function that returns its request spec. */
-    private val requestSpecMap: Map<OperationShape, Pair<String, Writable>> =
+    private val usedRequestSpecFunctionNames = mutableSetOf<String>()
+
+    /**
+     * Associate each operation with the functions that return its request spec(s).
+     *
+     * All protocols contribute one primary spec via [ServerProtocol.serverRouterRequestSpec].
+     * [ServerRpcV2CborProtocol] may additionally register a legacy capitalized alias
+     * (see [ServerRpcV2CborProtocol.additionalRouterRequestSpecAliases]) - a knob scoped
+     * to that protocol and gated behind the `rpcV2CborAddCapitalizedRoute` setting.
+     */
+    private val requestSpecMap: Map<OperationShape, List<Pair<String, Writable>>> =
         operations.associateWith { operationShape ->
             val operationName = symbolProvider.toSymbol(operationShape).name
-            val spec =
-                protocol.serverRouterRequestSpec(
-                    operationShape,
-                    operationName,
-                    serviceId.name,
-                    smithyHttpServer.resolve("routing::request_spec"),
-                )
-            val functionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
-            val functionBody =
-                writable {
-                    rustTemplate(
-                        """
-                        fn $functionName() -> #{SpecType} {
-                            #{Spec:W}
-                        }
-                        """,
-                        "Spec" to spec,
-                        "SpecType" to protocol.serverRouterRequestSpecType(smithyHttpServer.resolve("routing::request_spec")),
-                    )
+            val requestSpecModule = smithyHttpServer.resolve("routing::request_spec")
+            val primarySpec =
+                protocol.serverRouterRequestSpec(operationShape, operationName, serviceId.name, requestSpecModule)
+            val aliasSpecs =
+                if (protocol is ServerRpcV2CborProtocol) {
+                    protocol.additionalRouterRequestSpecAliases(operationShape, serviceId.name)
+                } else {
+                    emptyList()
                 }
-            Pair(functionName, functionBody)
+            val specs = listOf(primarySpec) + aliasSpecs
+            val baseFunctionName = RustReservedWords.escapeIfNeeded(operationName.toSnakeCase())
+            specs.mapIndexed { index, spec ->
+                val functionName = allocateRequestSpecFunctionName(baseFunctionName, index)
+                val functionBody =
+                    writable {
+                        rustTemplate(
+                            """
+                            fn $functionName() -> #{SpecType} {
+                                #{Spec:W}
+                            }
+                            """,
+                            "Spec" to spec,
+                            "SpecType" to protocol.serverRouterRequestSpecType(requestSpecModule),
+                        )
+                    }
+                Pair(functionName, functionBody)
+            }
         }
+
+    private fun allocateRequestSpecFunctionName(
+        baseFunctionName: String,
+        specIndex: Int,
+    ): String {
+        val preferredName =
+            when (specIndex) {
+                0 -> baseFunctionName
+                1 -> "${baseFunctionName}_alias"
+                else -> "${baseFunctionName}_alias_$specIndex"
+            }
+        return generateUniqueRequestSpecFunctionName(preferredName)
+    }
+
+    private fun generateUniqueRequestSpecFunctionName(preferredName: String): String {
+        var collisionIndex = 0
+        while (true) {
+            val candidate = if (collisionIndex == 0) preferredName else "${preferredName}_$collisionIndex"
+            if (usedRequestSpecFunctionNames.add(candidate)) {
+                return candidate
+            }
+            collisionIndex += 1
+        }
+    }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
     private fun builderSetters(): Writable =
@@ -271,6 +311,33 @@ class ServerServiceGenerator(
             }
         }
 
+    /**
+     * Emits route entries for an operation's request specs, handling clone vs move semantics.
+     *
+     * For operations with a single route spec (most protocols, or UpperCamelCase RpcV2Cbor ops),
+     * the handler is moved. For operations with multiple specs (RpcV2Cbor dual-route), earlier
+     * specs clone the handler and only the last spec moves it.
+     *
+     * This keeps single-route generated code byte-identical to before and deduplicates the
+     * clone-vs-move logic between buildMethod() and buildUncheckedMethod().
+     *
+     * @param specFunctions List of (functionName, Writable) for this operation's route specs
+     * @param emitHandlerExpr Lambda that emits the handler expression (different for build vs build_unchecked)
+     */
+    private fun RustWriter.emitRouteEntries(
+        specFunctions: List<Pair<String, Writable>>,
+        emitHandlerExpr: RustWriter.(isClone: Boolean) -> Unit,
+    ) {
+        // Register all route specs for this operation (may be multiple for RpcV2Cbor dual-route).
+        // Use move semantics for the last (or only) spec; clone only when there are earlier specs.
+        specFunctions.forEachIndexed { index, (specBuilderFunctionName, _) ->
+            val isLast = index == specFunctions.size - 1
+            rust("($requestSpecsModuleName::$specBuilderFunctionName(), ")
+            emitHandlerExpr(!isLast)
+            rust("),")
+        }
+    }
+
     private fun buildMethod(): Writable =
         writable {
             val missingOperationsVariableName = "missing_operation_names"
@@ -294,12 +361,11 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                        rust(
-                            """
-                            ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.expect($expectMessageVariableName)),
-                            """,
-                        )
+                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        emitRouteEntries(specFunctions) { isClone ->
+                            val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            rust("$accessor.expect($expectMessageVariableName)")
+                        }
                     }
                 }
 
@@ -384,20 +450,20 @@ class ServerServiceGenerator(
                 writable {
                     for (operationShape in operations) {
                         val fieldName = builderFieldNames[operationShape]!!
-                        val (specBuilderFunctionName, _) = requestSpecMap.getValue(operationShape)
-                        rustTemplate(
-                            """
-                            (
-                                $requestSpecsModuleName::$specBuilderFunctionName(),
-                                self.$fieldName.unwrap_or_else(|| {
+                        val specFunctions = requestSpecMap.getValue(operationShape)
+                        emitRouteEntries(specFunctions) { isClone ->
+                            val accessor = if (isClone) "self.$fieldName.clone()" else "self.$fieldName"
+                            rustTemplate(
+                                """
+                                $accessor.unwrap_or_else(|| {
                                     let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
                                     #{SmithyHttpServer}::routing::Route::new(svc)
                                 })
-                            ),
-                            """,
-                            "SmithyHttpServer" to smithyHttpServer,
-                            "Protocol" to protocol.markerStruct(),
-                        )
+                                """,
+                                "SmithyHttpServer" to smithyHttpServer,
+                                "Protocol" to protocol.markerStruct(),
+                            )
+                        }
                     }
                 }
             rustTemplate(
@@ -465,13 +531,15 @@ class ServerServiceGenerator(
         writable {
             val functions =
                 writable {
-                    for ((_, function) in requestSpecMap.values) {
-                        rustTemplate(
-                            """
-                            pub(super) #{Function:W}
-                            """,
-                            "Function" to function,
-                        )
+                    for (specFunctions in requestSpecMap.values) {
+                        for ((_, function) in specFunctions) {
+                            rustTemplate(
+                                """
+                                pub(super) #{Function:W}
+                                """,
+                                "Function" to function,
+                            )
+                        }
                     }
                 }
             rustTemplate(

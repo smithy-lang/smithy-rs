@@ -364,17 +364,49 @@ class ServerRpcV2CborProtocol(
         ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
             .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRouter")
 
+    /**
+     * The RPC v2 CBOR router keys its map by `"{service}.{operationName}"`, where `operationName`
+     * is the verbatim Smithy operation shape name (e.g. `getFoo`) - matching the URI that the
+     * spec-compliant client generates. See https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html.
+     */
     override fun serverRouterRequestSpec(
         operationShape: OperationShape,
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        // This is just the key used by the router's map to store and look up operations, it's completely arbitrary.
-        // We use the same key used by the awsJson1.x routers for simplicity.
-        // The router will extract the service name and the operation name from the URI, build this key, and lookup the
-        // operation stored there.
-        rust("$serviceName.$operationName".dq())
+        rust("$serviceName.${operationShape.id.name}".dq())
+    }
+
+    /**
+     * Returns any additional router keys under which this operation should also be registered.
+     *
+     * When `rpcV2CborAddCapitalizedRoute` is `true` and the Rust symbol name differs from the
+     * verbatim Smithy operation name (e.g. `getFoo` -> `GetFoo`), a legacy alias is registered so
+     * callers that were previously reaching the server via the capitalized URI continue to work.
+     * When the flag is `false` (default) or the names match (already-capitalized operations),
+     * no additional aliases are registered.
+     *
+     * The alias key can never collide with another operation's primary key: Smithy's core
+     * `ShapeIdConflict` validator rejects any model that defines two operation shape IDs in the
+     * same namespace differing only by case (e.g. both `getFoo` and `GetFoo`), and operations
+     * cannot be renamed via traits.
+     *
+     * See https://github.com/smithy-lang/smithy-rs/issues/4731.
+     */
+    fun additionalRouterRequestSpecAliases(
+        operationShape: OperationShape,
+        serviceName: String,
+    ): List<Writable> {
+        if (!serverCodegenContext.settings.codegenConfig.rpcV2CborAddCapitalizedRoute) {
+            return emptyList()
+        }
+        val verbatimOperationName = operationShape.id.name
+        val capitalizedOperationName = verbatimOperationName.replaceFirstChar { it.uppercase() }
+        if (verbatimOperationName == capitalizedOperationName) {
+            return emptyList()
+        }
+        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
     }
 
     override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
