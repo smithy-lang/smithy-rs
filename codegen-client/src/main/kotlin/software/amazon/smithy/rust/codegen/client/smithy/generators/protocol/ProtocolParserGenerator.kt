@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationCus
 import software.amazon.smithy.rust.codegen.client.smithy.generators.OperationSection
 import software.amazon.smithy.rust.codegen.client.smithy.generators.http.ResponseBindingGenerator
 import software.amazon.smithy.rust.codegen.core.rustlang.Attribute
+import software.amazon.smithy.rust.codegen.core.rustlang.RustType
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.assignment
@@ -33,6 +34,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.HttpLocation
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolFunctions
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.StructuredDataParserGenerator
+import software.amazon.smithy.rust.codegen.core.smithy.rustType
 import software.amazon.smithy.rust.codegen.core.smithy.transformers.operationErrors
 import software.amazon.smithy.rust.codegen.core.util.UNREACHABLE
 import software.amazon.smithy.rust.codegen.core.util.dq
@@ -163,10 +165,11 @@ class ProtocolParserGenerator(
                                     }
                                 }
                                 val errorMessageMember = errorShape.errorMessageMember()
-                                // If the message member is optional and wasn't set, we set a generic error message.
+                                // If the message member is optional, is of `String` Rust type and wasn't set, we set a generic error message.
                                 if (errorMessageMember != null) {
                                     val symbol = symbolProvider.toSymbol(errorMessageMember)
-                                    if (symbol.isOptional()) {
+                                    val currentRustType = symbol.rustType()
+                                    if (symbol.isOptional() && currentRustType == RustType.String) {
                                         rust(
                                             """
                                             if tmp.message.is_none() {
