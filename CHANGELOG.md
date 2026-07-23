@@ -1,4 +1,34 @@
 <!-- Do not manually edit this file. Use the `changelogger` tool. -->
+July 23rd, 2026
+===============
+**New this release:**
+- :bug: (client, [smithy-rs#4749](https://github.com/smithy-lang/smithy-rs/issues/4749)) Fix two retry-behavior bugs:
+    - Under Retry Behavior 2.1, `adaptive` retry mode now acquires a client-side rate-limiter send token before every send, including retries. Previously a retry computed a rate-limiter delay but sent without acquiring a token, so the adaptive rate limiter under-throttled retried requests. Pre-2.1 adaptive behavior — still the default today, until 2.1 becomes the default (see [aws-sdk-rust#1431](https://github.com/awslabs/aws-sdk-rust/discussions/1431)) — is unchanged.
+    - Honor the server-directed `x-amz-retry-after` header on responses that are retryable purely by HTTP status (e.g. a bare 500). This is enabled by a new `ClassifyRetry::classify_retry_v2`, which additionally receives the `RetryAction` accumulated by earlier-running classifiers and can refine it. It has a default implementation that delegates to `classify_retry`, so existing classifiers are unaffected.
+- :bug: (client, [smithy-rs#4741](https://github.com/smithy-lang/smithy-rs/issues/4741), @mark-creamer-amazon) Fix `keys()` JMESPath codegen for union shapes by using the symbol provider's resolved variant names instead of raw member names. This correctly handles modeled Unknown members (which get renamed to avoid colliding with the synthetic Unknown unit variant) and preserves the original wire name in the match output.
+- :bug: (client, @lauzmata) Fix endpoint rules codegen emitting invalid Rust when a templated static segment
+    is a single character requiring escape in a Rust `char` literal (e.g. `'`, `"`,
+    `\`). Previously produced `out.push(''');` in `internals.rs`; now always emits
+    `out.push_str(...)` with proper string escaping.
+- (client) Replace the hardcoded 5-second identity cache `load_timeout` with a pessimistic timeout derived from the configured `RetryConfig` and `TimeoutConfig`. The new default ensures the inner credential provider's retry strategy has enough time to exhaust all configured attempts before the cache kills the resolution future. With default settings (3 attempts, 3.1s connect timeout), the derived timeout is approximately 22 seconds. Customers who explicitly set `load_timeout` are unaffected.
+
+    If you rely on the legacy 5-second timeout behavior, you can restore it explicitly:
+
+    ```rust
+    use aws_smithy_runtime::client::identity::IdentityCache;
+    use std::time::Duration;
+
+    IdentityCache::lazy()
+        .load_timeout(Duration::from_secs(5))
+        .build()
+    ```
+
+**Contributors**
+Thank you for your contributions! ❤
+- @lauzmata
+- @mark-creamer-amazon ([smithy-rs#4741](https://github.com/smithy-lang/smithy-rs/issues/4741))
+
+
 July 14th, 2026
 ===============
 **New this release:**
