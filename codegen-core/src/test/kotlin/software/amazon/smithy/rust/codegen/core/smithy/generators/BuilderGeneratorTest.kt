@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators
 
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.codegen.core.Symbol
 import software.amazon.smithy.model.Model
@@ -29,6 +30,8 @@ import software.amazon.smithy.rust.codegen.core.testutil.compileAndTest
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.testutil.unitTest
 import software.amazon.smithy.rust.codegen.core.util.lookup
+import kotlin.io.path.extension
+import kotlin.io.path.readText
 
 internal class BuilderGeneratorTest {
     private val model = StructureGeneratorTest.model
@@ -36,6 +39,7 @@ internal class BuilderGeneratorTest {
     private val struct = StructureGeneratorTest.struct
     private val credentials = StructureGeneratorTest.credentials
     private val secretStructure = StructureGeneratorTest.secretStructure
+    private val errorStruct = StructureGeneratorTest.error
 
     @Test
     fun `generate builders`() {
@@ -159,6 +163,31 @@ internal class BuilderGeneratorTest {
             BuilderGenerator(model, provider, secretStructure, emptyList()).render(this)
         }
         project.compileAndTest()
+    }
+
+    @Test
+    fun `don't add serde to error types`() {
+        val provider = testSymbolProvider(model)
+        val project = TestWorkspace.testProject(provider)
+        project.moduleFor(errorStruct) {
+            rust("##![allow(deprecated)]")
+            StructureGenerator(model, provider, this, errorStruct, emptyList(), StructSettings(false)).render()
+            implBlock(provider.toSymbol(errorStruct)) {
+                BuilderGenerator.renderConvenienceMethod(this, provider, errorStruct)
+            }
+        }
+        project.withModule(provider.moduleForBuilder(errorStruct)) {
+            BuilderGenerator(model, provider, errorStruct, emptyList()).render(this)
+        }
+        project.compileAndTest()
+
+        // checks if there is a serde derive in the code
+        project.generatedFiles().forEach {
+            if (it.extension == "rs") {
+                val file = project.baseDir.resolve(it).toFile().readText()
+                Assertions.assertFalse(file.contains("serde::"))
+            }
+        }
     }
 
     @Test
