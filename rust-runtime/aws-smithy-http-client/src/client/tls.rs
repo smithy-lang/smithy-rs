@@ -5,6 +5,9 @@
 use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 use crate::HttpClientError;
 
+#[cfg(feature = "__rustls")]
+pub use rustls_pki_types::ServerName;
+
 /// Choice of underlying cryptography library
 #[derive(Debug, PartialEq, Clone)]
 #[non_exhaustive]
@@ -25,6 +28,9 @@ impl Eq for Provider {}
 pub struct TlsContext {
     #[allow(unused)]
     trust_store: TrustStore,
+    #[allow(unused)]
+    #[cfg(feature = "__rustls")]
+    additional_server_names: Vec<ServerName<'static>>,
 }
 
 impl TlsContext {
@@ -44,12 +50,16 @@ impl Default for TlsContext {
 #[derive(Debug)]
 pub struct TlsContextBuilder {
     trust_store: TrustStore,
+    #[cfg(feature = "__rustls")]
+    additional_server_names: Vec<ServerName<'static>>,
 }
 
 impl TlsContextBuilder {
     fn new() -> Self {
         TlsContextBuilder {
             trust_store: TrustStore::default(),
+            #[cfg(feature = "__rustls")]
+            additional_server_names: Vec::default(),
         }
     }
 
@@ -59,10 +69,22 @@ impl TlsContextBuilder {
         self
     }
 
+    /// Configure additional server names to accept during TLS certificate verification.
+    #[cfg(feature = "__rustls")]
+    pub fn with_additional_server_names(
+        mut self,
+        additional_server_names: Vec<ServerName<'static>>,
+    ) -> Self {
+        self.additional_server_names = additional_server_names;
+        self
+    }
+
     /// Build a new [TlsContext]
     pub fn build(self) -> Result<TlsContext, HttpClientError> {
         Ok(TlsContext {
             trust_store: self.trust_store,
+            #[cfg(feature = "__rustls")]
+            additional_server_names: self.additional_server_names,
         })
     }
 }
