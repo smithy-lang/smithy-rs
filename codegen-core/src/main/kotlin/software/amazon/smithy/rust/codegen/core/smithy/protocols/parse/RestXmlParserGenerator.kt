@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.protocols.parse
 
+import software.amazon.smithy.model.shapes.Shape
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
@@ -17,10 +18,18 @@ import software.amazon.smithy.rust.codegen.core.util.orNull
 class RestXmlParserGenerator(
     codegenContext: CodegenContext,
     xmlErrors: RuntimeType,
+    /**
+     * Forwarded to [XmlBindingTraitParserGenerator]; see the docstring there. Server protocols pass
+     * a function that resolves constrained-reachable shapes to their unconstrained wrappers.
+     */
+    returnSymbolToParse: (Shape) -> ReturnSymbolToParse = { shape ->
+        ReturnSymbolToParse(codegenContext.symbolProvider.toSymbol(shape), false)
+    },
     private val xmlBindingTraitParserGenerator: XmlBindingTraitParserGenerator =
         XmlBindingTraitParserGenerator(
             codegenContext,
             xmlErrors,
+            returnSymbolToParse,
         ) { context, inner ->
             val shapeName = context.outputShapeName
             // Get the non-synthetic version of the outputShape and check to see if it has the `AllowInvalidXmlRoot` trait
