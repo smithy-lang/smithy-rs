@@ -307,6 +307,106 @@ async fn test_s2n_tls_custom_ca() {
     run_tls_test(&client).await.unwrap()
 }
 
+// Test: connecting to 127.0.0.1 fails (cert SANs only contain "localhost" and "sdktest.com")
+#[cfg(feature = "rustls-aws-lc")]
+#[should_panic(expected = "InvalidCertificate")]
+#[tokio::test]
+async fn test_additional_server_names_ip_without_alt_names_fails() {
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to 127.0.0.1 with a non-matching additional server name fails (cert SANs only contain "localhost" and "sdktest.com")
+#[cfg(feature = "rustls-aws-lc")]
+#[should_panic(expected = "InvalidCertificate")]
+#[tokio::test]
+async fn test_additional_server_names_with_wrong_alt_name_fails() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![
+            ServerName::try_from("wrong.example.com".to_string()).unwrap()
+        ])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to 127.0.0.1 succeeds when "localhost" is configured as an additional server name
+#[cfg(feature = "rustls-aws-lc")]
+#[tokio::test]
+async fn test_additional_server_names_with_matching_alt_name_succeeds() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![ServerName::try_from("localhost".to_string()).unwrap()])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to localhost (which matches the cert) still works when additional server names are configured
+#[cfg(feature = "rustls-aws-lc")]
+#[tokio::test]
+async fn test_additional_server_names_primary_name_still_works() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![
+            ServerName::try_from("sdktest.com".to_string()).unwrap()
+        ])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::Rustls(
+            tls::rustls_provider::CryptoMode::AwsLc,
+        ))
+        .tls_context(tls_context)
+        .build_https();
+
+    // Connect via localhost — primary name verification should pass without needing the fallback
+    run_tls_test(&client).await.unwrap()
+}
+
 async fn run_tls_test(client: &dyn HttpClient) -> Result<(), BoxError> {
     run_tls_test_with_idle_timeout(client, None).await
 }
@@ -340,5 +440,28 @@ async fn run_tls_test_with_idle_timeout(
         tokio::time::sleep(Duration::from_secs(2)).await;
         assert_eq!(server.conn_count(), 0);
     }
+    Ok(())
+}
+
+/// Like `run_tls_test` but connects via 127.0.0.1 instead of localhost.
+/// The test cert's SANs only include "localhost" and "sdktest.com", so
+/// connecting by IP will fail hostname verification unless additional
+/// server names are configured.
+async fn run_tls_test_to_ip(client: &dyn HttpClient) -> Result<(), BoxError> {
+    let server = server().await?;
+    let endpoint = format!("https://127.0.0.1:{}/", server.listen_addr.port());
+
+    let connector_settings = HttpConnectorSettings::builder().build();
+    let runtime_components = RuntimeComponentsBuilder::for_tests()
+        .with_time_source(Some(SystemTimeSource::new()))
+        .build()
+        .unwrap();
+    let connector = client.http_connector(&connector_settings, &runtime_components);
+    let mut response = connector.call(HttpRequest::get(endpoint).unwrap()).await?;
+
+    let sdk_body = response.take_body();
+    let body_stream = ByteStream::new(sdk_body);
+    let resp_bytes = body_stream.collect().await?.into_bytes();
+    assert_eq!(b"Hello TLS!", &resp_bytes[..]);
     Ok(())
 }
