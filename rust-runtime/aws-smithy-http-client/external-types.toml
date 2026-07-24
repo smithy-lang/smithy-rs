@@ -23,4 +23,6 @@ allowed_external_types = [
     "tokio::net::tcp::stream::TcpStream",
     "hyper_util::rt::tokio::TokioIo",
 
+    "rustls_pki_types::server_name::ServerName",
+
 ]
