@@ -65,7 +65,7 @@ interface ServerProtocol : Protocol {
      * Detection priority when a service supports multiple protocols; lower is checked first.
      *
      * This mirrors the runtime `ProtocolMeta::PRIORITY` on the corresponding routing service, and is
-     * used to order the `ProtocolChain` emitted for multi-protocol services. The public protocols are
+     * used to order the `ProtocolLayer` stack emitted for multi-protocol services. The public protocols are
      * spaced by 1000 so downstream (e.g. internal) protocols can slot in between by overriding this.
      */
     val protocolPriority: Int

@@ -163,7 +163,7 @@ class ServerServiceGenerator(
      * Protocol info for multi-protocol router generation, derived entirely from each
      * [`ServerProtocol`] and sorted by detection priority (lowest number first).
      *
-     * Everything needed to emit a protocol into the `ProtocolChain` — its marker struct,
+     * Everything needed to emit a protocol into the Tower layer stack — its marker struct,
      * router type, module path, and priority — comes from the protocol itself, so
      * downstream/internal protocols (e.g. Coral) work without any special-casing here.
      */
@@ -179,8 +179,8 @@ class ServerServiceGenerator(
                     priority = proto.protocolPriority,
                 )
             }
-            // Ascending priority == chain (detection) order. This is the single source of
-            // ordering truth; the runtime `ProtocolChain` order guard verifies it at compile time.
+            // Ascending priority == outer-to-inner layer order. This is the single source of
+            // ordering truth; the runtime layer order guard verifies it at compile time.
             .sortedBy { it.priority }
     }
 
@@ -195,7 +195,7 @@ class ServerServiceGenerator(
     /**
      * The `RoutingService<Router<S>, Marker>` type for a protocol, as a `Writable`.
      *
-     * This is the per-protocol slot type stored in the `ProtocolChain`. It is built directly
+     * This is the per-protocol service type wrapped by `ProtocolLayer`. It is built directly
      * from the protocol's router type and marker struct rather than a hardcoded alias, so any
      * protocol — including downstream ones — is supported uniformly.
      */
@@ -213,7 +213,7 @@ class ServerServiceGenerator(
      * Generate the router type alias for this service.
      *
      * For single-protocol services, this generates a type alias wrapping `RoutingService`.
-     * For multi-protocol services, this generates a type alias wrapping a `ProtocolChain`.
+     * For multi-protocol services, this generates a type alias wrapping a `ProtocolService`.
      *
      * The router is generic over `S`, the service type stored in the underlying router.
      * This defaults to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
@@ -221,16 +221,16 @@ class ServerServiceGenerator(
     private fun routerTypeAlias(): Writable =
         writable {
             if (isMultiProtocol) {
-                // Build the nested `ProtocolChain` type in ascending priority order:
-                //   ProtocolChain<Slot1, ProtocolChain<Slot2, ... Fallback<DefaultNotFoundService>>>
+                // Build the nested `ProtocolService` type in ascending priority order:
+                //   ProtocolService<Slot1, ProtocolService<Slot2, ... Fallback<DefaultNotFoundService>>>
                 // where Slot1 is the highest-priority (lowest number) protocol, checked first.
                 val protocolInfos = getProtocolInfo()
 
-                val chainType =
+                val serviceType =
                     writable {
                         for (protoInfo in protocolInfos) {
                             rustTemplate(
-                                "#{SmithyHttpServer}::routing::ProtocolChain<#{Slot:W}, ",
+                                "#{SmithyHttpServer}::routing::ProtocolService<#{Slot:W}, ",
                                 *codegenScope,
                                 "Slot" to protoInfo.routingServiceType(),
                             )
@@ -253,10 +253,10 @@ class ServerServiceGenerator(
                     ///
                     /// The type parameter `S` is the service type stored in the underlying routers,
                     /// defaulting to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
-                    pub type $routerName<S = #{SmithyHttpServer}::routing::Route> = #{ChainType:W};
+                    pub type $routerName<S = #{SmithyHttpServer}::routing::Route> = #{ServiceType:W};
                     """,
                     *codegenScope,
-                    "ChainType" to chainType,
+                    "ServiceType" to serviceType,
                 )
             } else {
                 // Single-protocol: generate type alias for RoutingService
@@ -730,27 +730,23 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the ProtocolChain construction. `push` prepends (new head is checked
-        // first), so we push in reverse priority order (lowest priority first) starting from
-        // the `Fallback` terminal; the resulting chain is in ascending priority order.
+        // Install Tower protocol layers in ascending detection-priority order.
+        // ServiceBuilder preserves declaration order, so the highest-priority
+        // protocol is the outermost service and the fallback is innermost.
         val multiProtocolConstruction =
             writable {
-                // Bring the `Push` builder trait into scope for the `.push(..)` calls below.
-                rustTemplate("use #{SmithyHttpServer}::routing::Push;", *codegenScope)
-                rustTemplate(
-                    "let router = #{SmithyHttpServer}::routing::Fallback::not_found()",
-                    *codegenScope,
-                )
-                for (protoInfo in protocolInfos.reversed()) {
+                rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
+                for (protoInfo in protocolInfos) {
                     val svcVarName = "${protoInfo.modulePath}_svc"
                     rustTemplate(
-                        """
-                        .push($svcVarName)
-                        """,
+                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new($svcVarName))",
                         *codegenScope,
                     )
                 }
-                rust(";")
+                rustTemplate(
+                    ".service(#{SmithyHttpServer}::routing::Fallback::not_found());",
+                    *codegenScope,
+                )
             }
 
         rustTemplate(
@@ -790,7 +786,7 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine into a ProtocolChain (ascending priority order)
+                // Combine routers into a Tower layer stack (ascending priority order)
                 #{MultiProtocolConstruction:W}
 
                 Ok($serviceName { svc: router })
@@ -964,27 +960,23 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the ProtocolChain construction. `push` prepends (new head is checked
-        // first), so we push in reverse priority order (lowest priority first) starting from
-        // the `Fallback` terminal; the resulting chain is in ascending priority order.
+        // Install Tower protocol layers in ascending detection-priority order.
+        // ServiceBuilder preserves declaration order, so the highest-priority
+        // protocol is the outermost service and the fallback is innermost.
         val multiProtocolConstruction =
             writable {
-                // Bring the `Push` builder trait into scope for the `.push(..)` calls below.
-                rustTemplate("use #{SmithyHttpServer}::routing::Push;", *codegenScope)
-                rustTemplate(
-                    "let router = #{SmithyHttpServer}::routing::Fallback::not_found()",
-                    *codegenScope,
-                )
-                for (protoInfo in protocolInfos.reversed()) {
+                rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
+                for (protoInfo in protocolInfos) {
                     val svcVarName = "${protoInfo.modulePath}_svc"
                     rustTemplate(
-                        """
-                        .push($svcVarName)
-                        """,
+                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new($svcVarName))",
                         *codegenScope,
                     )
                 }
-                rust(";")
+                rustTemplate(
+                    ".service(#{SmithyHttpServer}::routing::Fallback::not_found());",
+                    *codegenScope,
+                )
             }
 
         rustTemplate(
@@ -1011,7 +1003,7 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine into a ProtocolChain (ascending priority order)
+                // Combine routers into a Tower layer stack (ascending priority order)
                 #{MultiProtocolConstruction:W}
 
                 $serviceName { svc: router }

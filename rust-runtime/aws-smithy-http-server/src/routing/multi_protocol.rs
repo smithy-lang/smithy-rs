@@ -6,18 +6,19 @@
 //! Multi-protocol routing support for Smithy services.
 //!
 //! A single service can support several Smithy protocols simultaneously (e.g.
-//! RestJson1, RpcV2Cbor). Protocols are composed into a [`ProtocolChain`]: each
-//! link holds one protocol slot and delegates to the rest of the chain when the
-//! slot declines the request. The chain terminates in a [`Fallback`] wrapping a
-//! user-supplied fallback service (defaulting to [`DefaultNotFoundService`]).
+//! RestJson1, RpcV2Cbor). Each protocol is installed with a [`ProtocolLayer`],
+//! producing a statically nested [`ProtocolService`] stack. A service checks its
+//! protocol and delegates misses to the inner service. The stack terminates in a
+//! [`Fallback`] wrapping a user-supplied fallback service (defaulting to
+//! [`DefaultNotFoundService`]).
 //!
 //! # Ordering
 //!
 //! Each protocol declares a [`ProtocolMeta::PRIORITY`] (lower is checked first).
-//! The chain is walked head-to-tail, so composition order must be ascending by
-//! priority. A compile-time guard ([`ProtocolChain`]'s `_ORDER_OK`) rejects a
-//! misordered chain. The concrete public protocols are spaced by 1000 to leave
-//! room for additional (e.g. internal) protocols to slot in between:
+//! The outermost service runs first, so layers must be nested in ascending
+//! priority order. A compile-time guard rejects a misordered stack. The concrete
+//! public protocols are spaced by 1000 to leave room for additional (e.g.
+//! internal) protocols to slot in between:
 //!
 //! | Protocol   | Priority | Detection                                   |
 //! |------------|----------|---------------------------------------------|
@@ -29,20 +30,21 @@
 //!
 //! # Extensibility
 //!
-//! [`ProtocolChain`] is open: any type implementing [`ProtocolSlot`] can be a
-//! link, including protocols defined in downstream crates. Such a protocol
-//! declares its own `PRIORITY` and is spliced into the chain at the appropriate
-//! position; nothing in this crate needs to know about it.
+//! [`ProtocolLayer`] is open: any type implementing [`ProtocolSlot`] can be
+//! installed, including protocols defined in downstream crates. Such a protocol
+//! declares its own `PRIORITY` and is placed at the appropriate layer in the
+//! stack; nothing in this crate needs to know about it.
 
 use std::{
     convert::Infallible,
     future::Future,
-    pin::Pin,
     task::{Context, Poll},
 };
 
+use futures_util::future::Either;
+
 use http::{Request, Response};
-use tower::Service;
+use tower::{Layer, Service};
 
 use crate::{
     body::BoxBody,
@@ -58,7 +60,7 @@ use crate::{
 
 /// The Smithy [Shape ID](https://smithy.io/2.0/spec/model.html#shape-id) of the
 /// protocol that handled a request, inserted into request extensions by
-/// [`ProtocolChain`] before dispatching.
+/// [`ProtocolService`] before dispatching.
 ///
 /// Handlers can read it to determine which protocol was selected:
 ///
@@ -80,11 +82,11 @@ pub struct SelectedProtocol(pub &'static str);
 // ProtocolMeta (non-generic protocol metadata)
 // ============================================================================
 
-/// Compile-time metadata for a protocol slot, independent of the request/response
-/// types. Split out from [`ProtocolSlot`] so the ordering guard and protocol-id
-/// collection can be expressed without the `B`/`RespBody`/`E` type parameters.
+/// Compile-time metadata for a protocol slot, independent of request and response
+/// types. This lets [`ProtocolLayer`] validate ordering before those types are
+/// known.
 pub trait ProtocolMeta {
-    /// Detection priority; lower is checked earlier in the chain. Public
+    /// Detection priority; lower is checked earlier in the layer stack. Public
     /// protocols use multiples of 1000 (see the module table) so downstream
     /// protocols can slot in between.
     const PRIORITY: u16;
@@ -93,16 +95,6 @@ pub trait ProtocolMeta {
     /// `"aws.protocols#restJson1"`). Inserted into request extensions as
     /// [`SelectedProtocol`] when this slot handles a request.
     fn protocol_id(&self) -> &'static str;
-}
-
-/// An unused slot carries no protocol and parks at the end of the priority order.
-impl ProtocolMeta for () {
-    const PRIORITY: u16 = u16::MAX;
-
-    #[inline(always)]
-    fn protocol_id(&self) -> &'static str {
-        "" // never used: `()`'s `can_handle` always returns `None`
-    }
 }
 
 // ============================================================================
@@ -114,8 +106,7 @@ impl ProtocolMeta for () {
 /// The `Match` associated type carries any work done during detection through to
 /// [`call`](ProtocolSlot::call), avoiding recomputation. For cheap header-only
 /// detection it is `()`; for protocols that must match a route it caches the
-/// matched service. The unused slot `()` uses `Infallible`, so its detection
-/// branch is provably dead and eliminated by the compiler.
+/// matched service.
 pub trait ProtocolSlot<B, RespBody, E>: ProtocolMeta {
     /// The future returned by [`call`](ProtocolSlot::call).
     type Future: Future<Output = Result<Response<RespBody>, E>>;
@@ -128,22 +119,6 @@ pub trait ProtocolSlot<B, RespBody, E>: ProtocolMeta {
 
     /// Handles the request using the proof from [`can_handle`](ProtocolSlot::can_handle).
     fn call(&mut self, req: Request<B>, matched: Self::Match) -> Self::Future;
-}
-
-/// Unused protocol slot. `Option<Infallible>` can only be `None`, so the chain's
-/// `if let Some(..)` branch for this slot is dead code the compiler removes.
-impl<B, RespBody, E> ProtocolSlot<B, RespBody, E> for () {
-    type Future = std::future::Pending<Result<Response<RespBody>, E>>;
-    type Match = Infallible;
-
-    #[inline(always)]
-    fn can_handle(&self, _req: &Request<B>) -> Option<Self::Match> {
-        None
-    }
-
-    fn call(&mut self, _req: Request<B>, matched: Self::Match) -> Self::Future {
-        match matched {} // Infallible can never be constructed
-    }
 }
 
 // ============================================================================
@@ -188,32 +163,26 @@ impl<B> Service<Request<B>> for DefaultNotFoundService {
 }
 
 // ============================================================================
-// ProtocolStack (chain terminal-or-link, carries HEAD_PRIORITY)
+// ProtocolStack (layer-stack metadata)
 // ============================================================================
 
-/// Implemented by every valid chain shape ([`Fallback`] terminal and
-/// [`ProtocolChain`] links). Exposes the priority of the chain's first slot so
-/// the next link out can assert the chain stays in ascending priority order.
+/// Implemented by every valid protocol service stack: a [`Fallback`] terminal or
+/// a [`ProtocolService`] wrapper. Exposes the outermost protocol priority so the
+/// next [`ProtocolLayer`] can assert ascending priority order.
 pub trait ProtocolStack {
-    /// Priority of the first protocol slot in this (sub)chain; `u16::MAX` for a
-    /// bare [`Fallback`] terminal (no slots).
+    /// Priority of the outermost protocol in this stack; `u16::MAX` for a bare
+    /// [`Fallback`] terminal.
     const HEAD_PRIORITY: u16;
 }
 
-/// Collects the shape IDs of every protocol in a chain, in chain (priority) order.
-pub trait ProtocolIds {
-    /// Returns the ordered list of protocol shape IDs this chain supports.
-    fn protocol_ids(&self) -> Vec<&'static str>;
-}
-
 // ============================================================================
-// Fallback (chain terminal)
+// Fallback (layer-stack terminal)
 // ============================================================================
 
-/// Terminal of a [`ProtocolChain`]: the service invoked when no protocol matches.
+/// Innermost service invoked when no protocol matches.
 ///
-/// Wrapping the user's fallback gives the chain a typed end that participates in
-/// the priority-order guard (as `HEAD_PRIORITY = u16::MAX`).
+/// Wrapping the user's fallback gives the layer stack a typed end that
+/// participates in the priority-order guard (`HEAD_PRIORITY = u16::MAX`).
 #[derive(Debug, Clone, Copy)]
 pub struct Fallback<F> {
     inner: F,
@@ -245,12 +214,6 @@ impl<F> ProtocolStack for Fallback<F> {
     const HEAD_PRIORITY: u16 = u16::MAX;
 }
 
-impl<F> ProtocolIds for Fallback<F> {
-    fn protocol_ids(&self) -> Vec<&'static str> {
-        Vec::new()
-    }
-}
-
 impl<B, F, RespBody, E> Service<Request<B>> for Fallback<F>
 where
     F: Service<Request<B>, Response = Response<RespBody>, Error = E>,
@@ -269,136 +232,93 @@ where
 }
 
 // ============================================================================
-// ProtocolChain (one link: try `head`, else delegate to `tail`)
+// ProtocolLayer / ProtocolService
 // ============================================================================
 
-/// One link of a multi-protocol chain: try `head`, and if it declines, delegate
-/// to `tail` (the rest of the chain, ending in a [`Fallback`]).
+/// A Tower layer that adds one protocol-routing service in front of an inner
+/// service.
 ///
-/// Composition order is priority order: `head` is checked before anything in
-/// `tail`. A compile-time guard rejects chains where a higher-priority slot is
-/// placed behind a lower-priority one.
+/// Nest layers in protocol detection order, with the highest-priority protocol
+/// outermost. The resulting [`ProtocolService`] checks its protocol and delegates
+/// requests it cannot handle to the inner service.
 #[derive(Clone, Debug)]
-pub struct ProtocolChain<Head, Tail> {
-    head: Head,
-    tail: Tail,
+pub struct ProtocolLayer<P> {
+    protocol: P,
 }
 
-impl<Head, Tail> ProtocolChain<Head, Tail> {
-    /// Creates a chain link. Prefer [`Push::push`] for building chains.
-    pub fn new(head: Head, tail: Tail) -> Self {
-        ProtocolChain { head, tail }
+impl<P> ProtocolLayer<P> {
+    /// Creates a layer for `protocol`.
+    pub fn new(protocol: P) -> Self {
+        Self { protocol }
     }
 }
 
-// Compile-time order guard. Evaluating this const fails the build if a
-// higher-priority slot (`head`) sits ahead of a lower-priority `tail`. `()`
-// uses `PRIORITY = u16::MAX`, so unused slots never trip it.
-impl<Head: ProtocolMeta, Tail: ProtocolStack> ProtocolChain<Head, Tail> {
+impl<P, Inner> Layer<Inner> for ProtocolLayer<P>
+where
+    P: Clone + ProtocolMeta,
+    Inner: ProtocolStack,
+{
+    type Service = ProtocolService<P, Inner>;
+
+    fn layer(&self, inner: Inner) -> Self::Service {
+        let service = ProtocolService {
+            protocol: self.protocol.clone(),
+            inner,
+        };
+        let () = ProtocolService::<P, Inner>::_ORDER_OK;
+        service
+    }
+}
+
+/// The service produced by [`ProtocolLayer`].
+///
+/// It checks `protocol` first and delegates misses to `inner`. The compile-time
+/// ordering guard rejects a layer stack whose protocols are not in ascending
+/// priority order.
+#[derive(Clone, Debug)]
+pub struct ProtocolService<P, Inner> {
+    protocol: P,
+    inner: Inner,
+}
+
+// Compile-time order guard. Evaluating this const fails the build if an outer
+// protocol has a lower selection priority than the inner stack.
+impl<P: ProtocolMeta, Inner: ProtocolStack> ProtocolService<P, Inner> {
     const _ORDER_OK: () = assert!(
-        Head::PRIORITY <= Tail::HEAD_PRIORITY,
-        "protocol chain is out of priority order: a higher-priority protocol is placed after a lower-priority one",
+        P::PRIORITY <= Inner::HEAD_PRIORITY,
+        "protocol layers are out of priority order: a higher-priority protocol is placed inside a lower-priority protocol",
     );
 }
 
-impl<Head: ProtocolMeta, Tail: ProtocolStack> ProtocolStack for ProtocolChain<Head, Tail> {
-    const HEAD_PRIORITY: u16 = Head::PRIORITY;
+impl<P: ProtocolMeta, Inner: ProtocolStack> ProtocolStack for ProtocolService<P, Inner> {
+    const HEAD_PRIORITY: u16 = P::PRIORITY;
 }
 
-impl<Head: ProtocolMeta, Tail: ProtocolIds> ProtocolIds for ProtocolChain<Head, Tail> {
-    fn protocol_ids(&self) -> Vec<&'static str> {
-        let mut ids = Vec::new();
-        ids.push(self.head.protocol_id());
-        ids.extend(self.tail.protocol_ids());
-        ids
-    }
-}
-
-impl<B, Head, Tail, RespBody, E> Service<Request<B>> for ProtocolChain<Head, Tail>
+impl<B, P, Inner, RespBody, E> Service<Request<B>> for ProtocolService<P, Inner>
 where
-    Head: ProtocolSlot<B, RespBody, E>,
-    Tail: ProtocolStack + Service<Request<B>, Response = Response<RespBody>, Error = E>,
-    Tail::Future: Future<Output = Result<Response<RespBody>, E>>,
+    P: ProtocolSlot<B, RespBody, E>,
+    Inner: ProtocolStack + Service<Request<B>, Response = Response<RespBody>, Error = E>,
+    Inner::Future: Future<Output = Result<Response<RespBody>, E>>,
 {
     type Response = Response<RespBody>;
     type Error = E;
-    type Future = ProtocolChainFuture<Head::Future, Tail::Future>;
+    type Future = Either<P::Future, Inner::Future>;
 
     fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, mut req: Request<B>) -> Self::Future {
-        // Force evaluation of the compile-time order guard.
-        let () = Self::_ORDER_OK;
-
-        // For a `()` head the compiler sees `if let Some(_) = None::<Infallible>`
-        // and removes this branch entirely.
-        if let Some(matched) = self.head.can_handle(&req) {
-            let id = self.head.protocol_id();
+        if let Some(matched) = self.protocol.can_handle(&req) {
+            let id = self.protocol.protocol_id();
             tracing::debug!(protocol = %id, "multi-protocol routing: request matched protocol");
             req.extensions_mut().insert(SelectedProtocol(id));
-            ProtocolChainFuture::Head {
-                fut: self.head.call(req, matched),
-            }
+            Either::Left(self.protocol.call(req, matched))
         } else {
-            ProtocolChainFuture::Tail {
-                fut: self.tail.call(req),
-            }
+            Either::Right(self.inner.call(req))
         }
     }
 }
-
-pin_project_lite::pin_project! {
-    /// Response future for [`ProtocolChain`]: either the matched head's future or
-    /// the tail's.
-    #[project = ProtocolChainFutureProj]
-    pub enum ProtocolChainFuture<HeadFut, TailFut> {
-        Head { #[pin] fut: HeadFut },
-        Tail { #[pin] fut: TailFut },
-    }
-}
-
-impl<HeadFut, TailFut, RespBody, E> Future for ProtocolChainFuture<HeadFut, TailFut>
-where
-    HeadFut: Future<Output = Result<Response<RespBody>, E>>,
-    TailFut: Future<Output = Result<Response<RespBody>, E>>,
-{
-    type Output = Result<Response<RespBody>, E>;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match self.project() {
-            ProtocolChainFutureProj::Head { fut } => fut.poll(cx),
-            ProtocolChainFutureProj::Tail { fut } => fut.poll(cx),
-        }
-    }
-}
-
-// ============================================================================
-// Builder (Push)
-// ============================================================================
-
-/// Prepends a protocol slot to a chain, making it the new head (checked first).
-///
-/// Because `push` prepends, build a chain by pushing the **lowest**-priority
-/// protocol first and the **highest**-priority (lowest number) last, so the
-/// resulting chain is in ascending priority order:
-///
-/// ```ignore
-/// // RpcV2Cbor(1000) -> RestJson1(4000) -> Fallback
-/// let chain = Fallback::not_found()
-///     .push(rest_json1_routing_service) // 4000, pushed first
-///     .push(cbor_routing_service);      // 1000, pushed last -> head
-/// ```
-pub trait Push: Sized {
-    /// Prepends `slot`, returning a new chain with `slot` as head and `self` as tail.
-    fn push<S>(self, slot: S) -> ProtocolChain<S, Self> {
-        ProtocolChain { head: slot, tail: self }
-    }
-}
-
-impl<F> Push for Fallback<F> {}
-impl<Head, Tail> Push for ProtocolChain<Head, Tail> {}
 
 // ============================================================================
 // ProtocolSlot / ProtocolMeta impls for the public routing services
@@ -434,13 +354,24 @@ macro_rules! impl_header_detected_slot {
     };
 }
 
-impl_header_detected_slot!(CborRoutingService, crate::protocol::rpc_v2_cbor::RpcV2Cbor, 1000, is_rpc_v2_cbor);
-impl_header_detected_slot!(AwsJson11RoutingService, crate::protocol::aws_json_11::AwsJson1_1, 2000, |req| {
-    has_aws_json_target(req) && is_aws_json_11_content_type(req)
-});
-impl_header_detected_slot!(AwsJson10RoutingService, crate::protocol::aws_json_10::AwsJson1_0, 3000, |req| {
-    has_aws_json_target(req) && is_aws_json_10_content_type(req)
-});
+impl_header_detected_slot!(
+    CborRoutingService,
+    crate::protocol::rpc_v2_cbor::RpcV2Cbor,
+    1000,
+    is_rpc_v2_cbor
+);
+impl_header_detected_slot!(
+    AwsJson11RoutingService,
+    crate::protocol::aws_json_11::AwsJson1_1,
+    2000,
+    |req| { has_aws_json_target(req) && is_aws_json_11_content_type(req) }
+);
+impl_header_detected_slot!(
+    AwsJson10RoutingService,
+    crate::protocol::aws_json_10::AwsJson1_0,
+    3000,
+    |req| { has_aws_json_target(req) && is_aws_json_10_content_type(req) }
+);
 
 /// RestJson1 - content-type + route matching (expensive). `Match` caches the
 /// matched route so it isn't recomputed in `call`.
@@ -646,26 +577,6 @@ mod tests {
     }
 
     #[test]
-    fn test_protocol_slot_for_unit_returns_none() {
-        let mut unit: () = ();
-        let req = Request::builder()
-            .method(http::Method::GET)
-            .uri("/foo")
-            .body(())
-            .unwrap();
-
-        let result: Option<Infallible> = ProtocolSlot::<(), BoxBody, Infallible>::can_handle(&unit, &req);
-        assert!(result.is_none());
-        let _ = &mut unit;
-    }
-
-    #[test]
-    fn test_unit_meta_parks_at_end() {
-        assert_eq!(<() as ProtocolMeta>::PRIORITY, u16::MAX);
-        assert_eq!(().protocol_id(), "");
-    }
-
-    #[test]
     fn test_default_not_found_service() {
         let mut service = DefaultNotFoundService;
         let waker = futures_util::task::noop_waker();
@@ -678,12 +589,10 @@ mod tests {
 
     #[test]
     fn test_fallback_terminal_head_priority_is_max() {
-        assert_eq!(<Fallback<DefaultNotFoundService> as ProtocolStack>::HEAD_PRIORITY, u16::MAX);
-    }
-
-    #[test]
-    fn test_fallback_protocol_ids_empty() {
-        assert!(Fallback::not_found().protocol_ids().is_empty());
+        assert_eq!(
+            <Fallback<DefaultNotFoundService> as ProtocolStack>::HEAD_PRIORITY,
+            u16::MAX
+        );
     }
 
     #[test]
@@ -705,26 +614,19 @@ mod tests {
     }
 
     #[test]
-    fn test_chain_builds_and_reports_ids_in_priority_order() {
+    fn test_layers_build_in_priority_order() {
         use crate::routing::request_spec::RequestSpec;
 
-        // Build using the same reverse-push order codegen will use.
         let rest_router: RestRouter<()> = Vec::<(RequestSpec, ())>::new().into_iter().collect();
         let cbor_router: RpcV2CborRouter<()> = Vec::<(&'static str, ())>::new().into_iter().collect();
 
-        let chain = Fallback::not_found()
-            .push(RestJson1RoutingService::new(rest_router))
-            .push(CborRoutingService::new(cbor_router));
+        let service = ProtocolLayer::new(CborRoutingService::new(cbor_router))
+            .layer(ProtocolLayer::new(RestJson1RoutingService::new(rest_router)).layer(Fallback::not_found()));
 
-        assert_eq!(
-            chain.protocol_ids(),
-            vec!["smithy.protocols#rpcv2Cbor", "aws.protocols#restJson1"]
-        );
-
-        // The chain's head priority is RpcV2Cbor's (1000), read off the concrete type.
+        // The outer service priority is RpcV2Cbor's (1000), read off the concrete type.
         fn head_priority<T: ProtocolStack>(_: &T) -> u16 {
             T::HEAD_PRIORITY
         }
-        assert_eq!(head_priority(&chain), 1000);
+        assert_eq!(head_priority(&service), 1000);
     }
 }

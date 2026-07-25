@@ -55,8 +55,8 @@ pub use self::{
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
     multi_protocol::{
         AwsJson10RoutingService, AwsJson11RoutingService, CborRoutingService, DefaultNotFoundService, Fallback,
-        ProtocolChain, ProtocolChainFuture, ProtocolIds, ProtocolMeta, ProtocolSlot, ProtocolStack, Push,
-        RestJson1RoutingService, RestXmlRoutingService, SelectedProtocol,
+        ProtocolLayer, ProtocolMeta, ProtocolService, ProtocolSlot, ProtocolStack, RestJson1RoutingService,
+        RestXmlRoutingService, SelectedProtocol,
     },
     route::Route,
 };
