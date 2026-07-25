@@ -54,6 +54,7 @@ import software.amazon.smithy.rust.codegen.core.util.hasTrait
 import software.amazon.smithy.rust.codegen.core.util.isEventStream
 import software.amazon.smithy.rust.codegen.core.util.runCommand
 import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerCodegenDecorator
+import software.amazon.smithy.rust.codegen.server.smithy.customize.ServerProtocolOrderDecorator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionConstraintViolationGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.CollectionTraitInfo
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ConstrainedBlobGenerator
@@ -85,6 +86,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.Ser
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolOrder
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.ConstrainedMemberTransform
@@ -203,7 +205,13 @@ open class ServerCodegenVisitor(
                 val protoCodegenContext = codegenContext.copy(protocol = protoShape)
                 factory.buildProtocolGenerator(protoCodegenContext)
             }
-        allProtocols = allProtocolGenerators.map { it.protocol }
+        val discoveredProtocols = allProtocolGenerators.map { it.protocol }
+        val selectedProtocolIds = discoveredProtocols.mapTo(linkedSetOf()) { it.protocolShapeId }
+        val protocolOrderConstraints =
+            (codegenDecorator as? ServerProtocolOrderDecorator)
+                ?.protocolOrderConstraints(service.id, selectedProtocolIds)
+                .orEmpty()
+        allProtocols = ServerProtocolOrder.resolve(discoveredProtocols, protocolOrderConstraints)
     }
 
     /**
@@ -305,9 +313,8 @@ open class ServerCodegenVisitor(
             codegenDecorator.libRsCustomizations(codegenContext, listOf()),
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/1287): Remove once the server codegen is far enough along.
             requireDocs = false,
-            // Order protocols by detection priority (most specific first). `protocolPriority` is the
-            // single source of ordering truth, mirrored by the runtime `ProtocolMeta::PRIORITY`.
-            protocols = allProtocols.sortedBy { it.protocolPriority }.map { it.protocolShapeId },
+            // Reuse the canonical detection order resolved from built-in defaults and decorator constraints.
+            protocols = allProtocols.map { it.protocolShapeId },
         )
         try {
             "cargo fmt".runCommand(
@@ -414,10 +421,10 @@ open class ServerCodegenVisitor(
     private fun collectionShape(shape: CollectionShape) {
         val renderUnconstrainedList =
             shape.isReachableFromOperationInput() &&
-                    shape.canReachConstrainedShape(
-                        model,
-                        codegenContext.symbolProvider,
-                    )
+                shape.canReachConstrainedShape(
+                    model,
+                    codegenContext.symbolProvider,
+                )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedList) {
@@ -478,10 +485,10 @@ open class ServerCodegenVisitor(
     override fun mapShape(shape: MapShape) {
         val renderUnconstrainedMap =
             shape.isReachableFromOperationInput() &&
-                    shape.canReachConstrainedShape(
-                        model,
-                        codegenContext.symbolProvider,
-                    )
+                shape.canReachConstrainedShape(
+                    model,
+                    codegenContext.symbolProvider,
+                )
         val isDirectlyConstrained = shape.isDirectlyConstrained(codegenContext.symbolProvider)
 
         if (renderUnconstrainedMap) {

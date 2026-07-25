@@ -9,31 +9,16 @@
 //! RestJson1, RpcV2Cbor). Each protocol is installed with a [`ProtocolLayer`],
 //! producing a statically nested [`ProtocolService`] stack. A service checks its
 //! protocol and delegates misses to the inner service. The stack terminates in a
-//! [`Fallback`] wrapping a user-supplied fallback service (defaulting to
-//! [`DefaultNotFoundService`]).
+//! user-supplied service, with [`DefaultNotFoundService`] providing the generated
+//! default.
 //!
-//! # Ordering
-//!
-//! Each protocol declares a [`ProtocolMeta::PRIORITY`] (lower is checked first).
-//! The outermost service runs first, so layers must be nested in ascending
-//! priority order. A compile-time guard rejects a misordered stack. The concrete
-//! public protocols are spaced by 1000 to leave room for additional (e.g.
-//! internal) protocols to slot in between:
-//!
-//! | Protocol   | Priority | Detection                                   |
-//! |------------|----------|---------------------------------------------|
-//! | RpcV2Cbor  | 1000     | `smithy-protocol: rpc-v2-cbor` header       |
-//! | AwsJson1.1 | 2000     | `x-amz-target` + `application/x-amz-json-1.1`|
-//! | AwsJson1.0 | 3000     | `x-amz-target` + `application/x-amz-json-1.0`|
-//! | RestJson1  | 4000     | content-type + route matching               |
-//! | RestXml    | 5000     | content-type + route matching               |
-//!
-//! # Extensibility
+//! Protocols are checked from the outermost service inward. Generated servers
+//! determine that order during code generation from the built-in protocol order
+//! and decorator-provided relative constraints.
 //!
 //! [`ProtocolLayer`] is open: any type implementing [`ProtocolSlot`] can be
-//! installed, including protocols defined in downstream crates. Such a protocol
-//! declares its own `PRIORITY` and is placed at the appropriate layer in the
-//! stack; nothing in this crate needs to know about it.
+//! installed, including protocols defined in downstream crates. Nothing in this
+//! crate needs to know about those protocols or assign them numeric priorities.
 
 use std::{
     convert::Infallible,
@@ -79,46 +64,31 @@ use crate::{
 pub struct SelectedProtocol(pub &'static str);
 
 // ============================================================================
-// ProtocolMeta (non-generic protocol metadata)
-// ============================================================================
-
-/// Compile-time metadata for a protocol slot, independent of request and response
-/// types. This lets [`ProtocolLayer`] validate ordering before those types are
-/// known.
-pub trait ProtocolMeta {
-    /// Detection priority; lower is checked earlier in the layer stack. Public
-    /// protocols use multiples of 1000 (see the module table) so downstream
-    /// protocols can slot in between.
-    const PRIORITY: u16;
-
-    /// The absolute Smithy shape ID of this protocol (e.g.
-    /// `"aws.protocols#restJson1"`). Inserted into request extensions as
-    /// [`SelectedProtocol`] when this slot handles a request.
-    fn protocol_id(&self) -> &'static str;
-}
-
-// ============================================================================
 // ProtocolSlot (zero-cost protocol detection)
 // ============================================================================
 
 /// A protocol slot: detects whether it can handle a request, and if so, handles it.
 ///
 /// The `Match` associated type carries any work done during detection through to
-/// [`call`](ProtocolSlot::call), avoiding recomputation. For cheap header-only
-/// detection it is `()`; for protocols that must match a route it caches the
-/// matched service.
-pub trait ProtocolSlot<B, RespBody, E>: ProtocolMeta {
-    /// The future returned by [`call`](ProtocolSlot::call).
+/// [`call_matched`](ProtocolSlot::call_matched), avoiding recomputation. For cheap
+/// header-only detection it is `()`; for protocols that must match a route it
+/// caches the matched service.
+pub trait ProtocolSlot<B, RespBody, E> {
+    /// The future returned by [`call_matched`](ProtocolSlot::call_matched).
     type Future: Future<Output = Result<Response<RespBody>, E>>;
 
     /// Proof the request can be handled, carried from detection into handling.
     type Match;
 
+    /// The absolute Smithy shape ID of this protocol. This is inserted into
+    /// request extensions as [`SelectedProtocol`] when the slot handles a request.
+    fn protocol_id(&self) -> &'static str;
+
     /// Returns `Some` with the match proof if this protocol can handle `req`.
     fn can_handle(&self, req: &Request<B>) -> Option<Self::Match>;
 
     /// Handles the request using the proof from [`can_handle`](ProtocolSlot::can_handle).
-    fn call(&mut self, req: Request<B>, matched: Self::Match) -> Self::Future;
+    fn call_matched(&mut self, req: Request<B>, matched: Self::Match) -> Self::Future;
 }
 
 // ============================================================================
@@ -163,75 +133,6 @@ impl<B> Service<Request<B>> for DefaultNotFoundService {
 }
 
 // ============================================================================
-// ProtocolStack (layer-stack metadata)
-// ============================================================================
-
-/// Implemented by every valid protocol service stack: a [`Fallback`] terminal or
-/// a [`ProtocolService`] wrapper. Exposes the outermost protocol priority so the
-/// next [`ProtocolLayer`] can assert ascending priority order.
-pub trait ProtocolStack {
-    /// Priority of the outermost protocol in this stack; `u16::MAX` for a bare
-    /// [`Fallback`] terminal.
-    const HEAD_PRIORITY: u16;
-}
-
-// ============================================================================
-// Fallback (layer-stack terminal)
-// ============================================================================
-
-/// Innermost service invoked when no protocol matches.
-///
-/// Wrapping the user's fallback gives the layer stack a typed end that
-/// participates in the priority-order guard (`HEAD_PRIORITY = u16::MAX`).
-#[derive(Debug, Clone, Copy)]
-pub struct Fallback<F> {
-    inner: F,
-}
-
-impl Fallback<DefaultNotFoundService> {
-    /// Creates a terminal using [`DefaultNotFoundService`].
-    pub fn not_found() -> Self {
-        Fallback {
-            inner: DefaultNotFoundService,
-        }
-    }
-}
-
-impl Default for Fallback<DefaultNotFoundService> {
-    fn default() -> Self {
-        Self::not_found()
-    }
-}
-
-impl<F> Fallback<F> {
-    /// Creates a terminal using a custom fallback service.
-    pub fn new(inner: F) -> Self {
-        Fallback { inner }
-    }
-}
-
-impl<F> ProtocolStack for Fallback<F> {
-    const HEAD_PRIORITY: u16 = u16::MAX;
-}
-
-impl<B, F, RespBody, E> Service<Request<B>> for Fallback<F>
-where
-    F: Service<Request<B>, Response = Response<RespBody>, Error = E>,
-{
-    type Response = Response<RespBody>;
-    type Error = E;
-    type Future = F::Future;
-
-    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        self.inner.poll_ready(cx)
-    }
-
-    fn call(&mut self, req: Request<B>) -> Self::Future {
-        self.inner.call(req)
-    }
-}
-
-// ============================================================================
 // ProtocolLayer / ProtocolService
 // ============================================================================
 
@@ -255,49 +156,31 @@ impl<P> ProtocolLayer<P> {
 
 impl<P, Inner> Layer<Inner> for ProtocolLayer<P>
 where
-    P: Clone + ProtocolMeta,
-    Inner: ProtocolStack,
+    P: Clone,
 {
     type Service = ProtocolService<P, Inner>;
 
     fn layer(&self, inner: Inner) -> Self::Service {
-        let service = ProtocolService {
+        ProtocolService {
             protocol: self.protocol.clone(),
             inner,
-        };
-        let () = ProtocolService::<P, Inner>::_ORDER_OK;
-        service
+        }
     }
 }
 
 /// The service produced by [`ProtocolLayer`].
 ///
-/// It checks `protocol` first and delegates misses to `inner`. The compile-time
-/// ordering guard rejects a layer stack whose protocols are not in ascending
-/// priority order.
+/// It checks `protocol` first and delegates misses to `inner`.
 #[derive(Clone, Debug)]
 pub struct ProtocolService<P, Inner> {
     protocol: P,
     inner: Inner,
 }
 
-// Compile-time order guard. Evaluating this const fails the build if an outer
-// protocol has a lower selection priority than the inner stack.
-impl<P: ProtocolMeta, Inner: ProtocolStack> ProtocolService<P, Inner> {
-    const _ORDER_OK: () = assert!(
-        P::PRIORITY <= Inner::HEAD_PRIORITY,
-        "protocol layers are out of priority order: a higher-priority protocol is placed inside a lower-priority protocol",
-    );
-}
-
-impl<P: ProtocolMeta, Inner: ProtocolStack> ProtocolStack for ProtocolService<P, Inner> {
-    const HEAD_PRIORITY: u16 = P::PRIORITY;
-}
-
 impl<B, P, Inner, RespBody, E> Service<Request<B>> for ProtocolService<P, Inner>
 where
     P: ProtocolSlot<B, RespBody, E>,
-    Inner: ProtocolStack + Service<Request<B>, Response = Response<RespBody>, Error = E>,
+    Inner: Service<Request<B>, Response = Response<RespBody>, Error = E>,
     Inner::Future: Future<Output = Result<Response<RespBody>, E>>,
 {
     type Response = Response<RespBody>;
@@ -313,7 +196,7 @@ where
             let id = self.protocol.protocol_id();
             tracing::debug!(protocol = %id, "multi-protocol routing: request matched protocol");
             req.extensions_mut().insert(SelectedProtocol(id));
-            Either::Left(self.protocol.call(req, matched))
+            Either::Left(self.protocol.call_matched(req, matched))
         } else {
             Either::Right(self.inner.call(req))
         }
@@ -321,18 +204,15 @@ where
 }
 
 // ============================================================================
-// ProtocolSlot / ProtocolMeta impls for the public routing services
+// ProtocolSlot impls for the public routing services
 // ============================================================================
 
-macro_rules! impl_header_detected_slot {
-    ($alias:ident, $protocol:path, $priority:literal, $can_handle:expr) => {
-        impl<S> ProtocolMeta for $alias<S> {
-            const PRIORITY: u16 = $priority;
-            fn protocol_id(&self) -> &'static str {
-                <$protocol as ProtocolShape>::ID.absolute()
-            }
-        }
+fn routing_service_protocol_id<R, P: ProtocolShape>(_: &RoutingService<R, P>) -> &'static str {
+    P::ID.absolute()
+}
 
+macro_rules! impl_header_detected_slot {
+    ($alias:ident, $can_handle:expr) => {
         impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for $alias<S>
         where
             $alias<S>: Service<Request<B>, Response = Response<RespBody>, Error = E>,
@@ -341,47 +221,33 @@ macro_rules! impl_header_detected_slot {
             type Future = <$alias<S> as Service<Request<B>>>::Future;
             type Match = ();
 
+            fn protocol_id(&self) -> &'static str {
+                routing_service_protocol_id(self)
+            }
+
             #[inline]
             fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
                 let can: fn(&Request<B>) -> bool = $can_handle;
                 can(req).then_some(())
             }
 
-            fn call(&mut self, req: Request<B>, _matched: Self::Match) -> Self::Future {
+            fn call_matched(&mut self, req: Request<B>, _matched: Self::Match) -> Self::Future {
                 Service::call(self, req)
             }
         }
     };
 }
 
-impl_header_detected_slot!(
-    CborRoutingService,
-    crate::protocol::rpc_v2_cbor::RpcV2Cbor,
-    1000,
-    is_rpc_v2_cbor
-);
-impl_header_detected_slot!(
-    AwsJson11RoutingService,
-    crate::protocol::aws_json_11::AwsJson1_1,
-    2000,
-    |req| { has_aws_json_target(req) && is_aws_json_11_content_type(req) }
-);
-impl_header_detected_slot!(
-    AwsJson10RoutingService,
-    crate::protocol::aws_json_10::AwsJson1_0,
-    3000,
-    |req| { has_aws_json_target(req) && is_aws_json_10_content_type(req) }
-);
+impl_header_detected_slot!(CborRoutingService, is_rpc_v2_cbor);
+impl_header_detected_slot!(AwsJson11RoutingService, |req| {
+    has_aws_json_target(req) && is_aws_json_11_content_type(req)
+});
+impl_header_detected_slot!(AwsJson10RoutingService, |req| {
+    has_aws_json_target(req) && is_aws_json_10_content_type(req)
+});
 
 /// RestJson1 - content-type + route matching (expensive). `Match` caches the
-/// matched route so it isn't recomputed in `call`.
-impl<S> ProtocolMeta for RestJson1RoutingService<S> {
-    const PRIORITY: u16 = 4000;
-    fn protocol_id(&self) -> &'static str {
-        <crate::protocol::rest_json_1::RestJson1 as ProtocolShape>::ID.absolute()
-    }
-}
-
+/// matched route so it isn't recomputed in `call_matched`.
 impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for RestJson1RoutingService<S>
 where
     RestRouter<S>: Router<B, Service = S>,
@@ -390,6 +256,10 @@ where
 {
     type Future = <S as Service<Request<B>>>::Future;
     type Match = S;
+
+    fn protocol_id(&self) -> &'static str {
+        routing_service_protocol_id(self)
+    }
 
     #[inline]
     fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
@@ -401,20 +271,13 @@ where
         }
     }
 
-    fn call(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
+    fn call_matched(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
         matched.call(req)
     }
 }
 
 /// RestXml - content-type + route matching (expensive). `Match` caches the
-/// matched route so it isn't recomputed in `call`.
-impl<S> ProtocolMeta for RestXmlRoutingService<S> {
-    const PRIORITY: u16 = 5000;
-    fn protocol_id(&self) -> &'static str {
-        <crate::protocol::rest_xml::RestXml as ProtocolShape>::ID.absolute()
-    }
-}
-
+/// matched route so it isn't recomputed in `call_matched`.
 impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for RestXmlRoutingService<S>
 where
     RestRouter<S>: Router<B, Service = S>,
@@ -423,6 +286,10 @@ where
 {
     type Future = <S as Service<Request<B>>>::Future;
     type Match = S;
+
+    fn protocol_id(&self) -> &'static str {
+        routing_service_protocol_id(self)
+    }
 
     #[inline]
     fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
@@ -434,7 +301,7 @@ where
         }
     }
 
-    fn call(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
+    fn call_matched(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
         matched.call(req)
     }
 }
@@ -588,14 +455,6 @@ mod tests {
     }
 
     #[test]
-    fn test_fallback_terminal_head_priority_is_max() {
-        assert_eq!(
-            <Fallback<DefaultNotFoundService> as ProtocolStack>::HEAD_PRIORITY,
-            u16::MAX
-        );
-    }
-
-    #[test]
     fn test_selected_protocol_is_extension_friendly() {
         // Copy + 'static so it can live in http extensions.
         let a = SelectedProtocol("aws.protocols#restJson1");
@@ -605,28 +464,13 @@ mod tests {
     }
 
     #[test]
-    fn test_public_protocol_priorities_are_spaced_by_1000() {
-        assert_eq!(<CborRoutingService<()> as ProtocolMeta>::PRIORITY, 1000);
-        assert_eq!(<AwsJson11RoutingService<()> as ProtocolMeta>::PRIORITY, 2000);
-        assert_eq!(<AwsJson10RoutingService<()> as ProtocolMeta>::PRIORITY, 3000);
-        assert_eq!(<RestJson1RoutingService<()> as ProtocolMeta>::PRIORITY, 4000);
-        assert_eq!(<RestXmlRoutingService<()> as ProtocolMeta>::PRIORITY, 5000);
-    }
-
-    #[test]
-    fn test_layers_build_in_priority_order() {
+    fn test_layers_build_with_direct_terminal_service() {
         use crate::routing::request_spec::RequestSpec;
 
         let rest_router: RestRouter<()> = Vec::<(RequestSpec, ())>::new().into_iter().collect();
         let cbor_router: RpcV2CborRouter<()> = Vec::<(&'static str, ())>::new().into_iter().collect();
 
-        let service = ProtocolLayer::new(CborRoutingService::new(cbor_router))
-            .layer(ProtocolLayer::new(RestJson1RoutingService::new(rest_router)).layer(Fallback::not_found()));
-
-        // The outer service priority is RpcV2Cbor's (1000), read off the concrete type.
-        fn head_priority<T: ProtocolStack>(_: &T) -> u16 {
-            T::HEAD_PRIORITY
-        }
-        assert_eq!(head_priority(&service), 1000);
+        let _service = ProtocolLayer::new(CborRoutingService::new(cbor_router))
+            .layer(ProtocolLayer::new(RestJson1RoutingService::new(rest_router)).layer(DefaultNotFoundService));
     }
 }

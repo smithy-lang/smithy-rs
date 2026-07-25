@@ -160,28 +160,21 @@ class ServerServiceGenerator(
     }
 
     /**
-     * Protocol info for multi-protocol router generation, derived entirely from each
-     * [`ServerProtocol`] and sorted by detection priority (lowest number first).
+     * Protocol info for multi-protocol router generation, preserving the canonical order resolved by codegen.
      *
-     * Everything needed to emit a protocol into the Tower layer stack — its marker struct,
-     * router type, module path, and priority — comes from the protocol itself, so
-     * downstream/internal protocols (e.g. Coral) work without any special-casing here.
+     * Everything needed to emit a protocol into the Tower layer stack comes from the protocol itself, so
+     * downstream protocols work without any special-casing here.
      */
     private fun getProtocolInfo(): List<ProtocolRouterInfo> {
         if (!isMultiProtocol) return emptyList()
 
-        return allProtocols
-            .map { proto ->
-                ProtocolRouterInfo(
-                    modulePath = proto.protocolModulePath,
-                    markerStruct = proto.markerStruct(),
-                    routerType = proto.routerType(),
-                    priority = proto.protocolPriority,
-                )
-            }
-            // Ascending priority == outer-to-inner layer order. This is the single source of
-            // ordering truth; the runtime layer order guard verifies it at compile time.
-            .sortedBy { it.priority }
+        return allProtocols.map { proto ->
+            ProtocolRouterInfo(
+                modulePath = proto.protocolModulePath,
+                markerStruct = proto.markerStruct(),
+                routerType = proto.routerType(),
+            )
+        }
     }
 
     /** Helper data class for protocol router info. */
@@ -189,7 +182,6 @@ class ServerServiceGenerator(
         val modulePath: String,
         val markerStruct: RuntimeType,
         val routerType: RuntimeType,
-        val priority: Int,
     )
 
     /**
@@ -221,9 +213,9 @@ class ServerServiceGenerator(
     private fun routerTypeAlias(): Writable =
         writable {
             if (isMultiProtocol) {
-                // Build the nested `ProtocolService` type in ascending priority order:
-                //   ProtocolService<Slot1, ProtocolService<Slot2, ... Fallback<DefaultNotFoundService>>>
-                // where Slot1 is the highest-priority (lowest number) protocol, checked first.
+                // Build the nested `ProtocolService` type in canonical detection order:
+                //   ProtocolService<Slot1, ProtocolService<Slot2, ... DefaultNotFoundService>>
+                // where Slot1 is checked first.
                 val protocolInfos = getProtocolInfo()
 
                 val serviceType =
@@ -236,7 +228,7 @@ class ServerServiceGenerator(
                             )
                         }
                         rustTemplate(
-                            "#{SmithyHttpServer}::routing::Fallback<#{SmithyHttpServer}::routing::DefaultNotFoundService>",
+                            "#{SmithyHttpServer}::routing::DefaultNotFoundService",
                             *codegenScope,
                         )
                         // Close one `>` per protocol slot opened above.
@@ -249,7 +241,7 @@ class ServerServiceGenerator(
                     ///
                     /// This type handles routing requests to the appropriate protocol handler
                     /// based on request characteristics (headers, content-type, URI path). Protocols
-                    /// are checked in detection-priority order: ${protocolInfos.joinToString(", ") { it.modulePath }}.
+                    /// are checked in detection order: ${protocolInfos.joinToString(", ") { it.modulePath }}.
                     ///
                     /// The type parameter `S` is the service type stored in the underlying routers,
                     /// defaulting to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
@@ -730,9 +722,9 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Install Tower protocol layers in ascending detection-priority order.
-        // ServiceBuilder preserves declaration order, so the highest-priority
-        // protocol is the outermost service and the fallback is innermost.
+        // Install Tower protocol layers in canonical detection order.
+        // ServiceBuilder preserves declaration order, so the first protocol is
+        // the outermost service and the default not-found service is innermost.
         val multiProtocolConstruction =
             writable {
                 rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
@@ -744,7 +736,7 @@ class ServerServiceGenerator(
                     )
                 }
                 rustTemplate(
-                    ".service(#{SmithyHttpServer}::routing::Fallback::not_found());",
+                    ".service(#{SmithyHttpServer}::routing::DefaultNotFoundService);",
                     *codegenScope,
                 )
             }
@@ -786,7 +778,7 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine routers into a Tower layer stack (ascending priority order)
+                // Combine routers into a Tower layer stack (canonical detection order)
                 #{MultiProtocolConstruction:W}
 
                 Ok($serviceName { svc: router })
@@ -960,9 +952,9 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Install Tower protocol layers in ascending detection-priority order.
-        // ServiceBuilder preserves declaration order, so the highest-priority
-        // protocol is the outermost service and the fallback is innermost.
+        // Install Tower protocol layers in canonical detection order.
+        // ServiceBuilder preserves declaration order, so the first protocol is
+        // the outermost service and the default not-found service is innermost.
         val multiProtocolConstruction =
             writable {
                 rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
@@ -974,7 +966,7 @@ class ServerServiceGenerator(
                     )
                 }
                 rustTemplate(
-                    ".service(#{SmithyHttpServer}::routing::Fallback::not_found());",
+                    ".service(#{SmithyHttpServer}::routing::DefaultNotFoundService);",
                     *codegenScope,
                 )
             }
@@ -1003,7 +995,7 @@ class ServerServiceGenerator(
                 // Wrap each router in RoutingService and apply user's layer
                 #{RoutingServiceConstructions:W}
 
-                // Combine routers into a Tower layer stack (ascending priority order)
+                // Combine routers into a Tower layer stack (canonical detection order)
                 #{MultiProtocolConstruction:W}
 
                 $serviceName { svc: router }
