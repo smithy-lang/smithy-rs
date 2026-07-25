@@ -122,8 +122,6 @@ class ServerHttpBoundProtocolGenerator(
     protocol: ServerProtocol,
     customizations: List<ServerHttpBoundProtocolCustomization> = listOf(),
     additionalHttpBindingCustomizations: List<HttpBindingCustomization> = listOf(),
-    /** Protocol suffix for multi-protocol support (e.g., "_RestJson1"). Null for single-protocol services. */
-    protocolSuffix: String? = null,
 ) :
     ServerProtocolGenerator(
         protocol,
@@ -132,15 +130,12 @@ class ServerHttpBoundProtocolGenerator(
             protocol,
             customizations,
             additionalHttpBindingCustomizations,
-            protocolSuffix,
         ),
     )
 
 class ServerHttpBoundProtocolPayloadGenerator(
     codegenContext: ServerCodegenContext,
     protocol: ServerProtocol,
-    /** Protocol suffix for multi-protocol support (e.g., "_RestJson1"). Null for single-protocol services. */
-    protocolSuffix: String? = null,
 ) :
     ProtocolPayloadGenerator by HttpBoundProtocolPayloadGenerator(
         codegenContext,
@@ -167,7 +162,6 @@ class ServerHttpBoundProtocolPayloadGenerator(
                 "event_stream" to eventStreamWithInitialResponse(codegenContext, protocol, params),
             )
         },
-        protocolSuffix = protocolSuffix,
     )
 
 /*
@@ -179,8 +173,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val protocol: ServerProtocol,
     private val customizations: List<ServerHttpBoundProtocolCustomization>,
     private val additionalHttpBindingCustomizations: List<HttpBindingCustomization>,
-    /** Protocol suffix for multi-protocol support (e.g., "_RestJson1"). Null for single-protocol services. */
-    protocolSuffix: String? = null,
 ) {
     private val logger = Logger.getLogger(javaClass.name)
     private val symbolProvider = codegenContext.symbolProvider
@@ -190,8 +182,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    // Protocol suffix for multi-protocol support (passed explicitly, null for single-protocol)
-    private val protocolSuffix: String? = protocolSuffix
+    // Protocol suffix for multi-protocol support, read from the protocol object
+    private val protocolSuffix: String? = protocol.protocolSuffix
 
     // Multi-protocol mode is indicated by having a protocol suffix
     private val isMultiProtocol: Boolean = protocolSuffix != null
@@ -204,7 +196,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             protocol,
             this.customizations,
             additionalHttpBindingCustomizations + customizations,
-            protocolSuffix,
         )
     }
 
@@ -661,7 +652,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             ?: serverRenderHttpResponseCode(httpTraitStatusCode)(this)
 
         operationShape.outputShape(model).findStreamingMember(model)?.let { streamingMember ->
-            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol, protocolSuffix)
+            val payloadGenerator = ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
 
             // Event streams vs blob streams require different handling in http@1:
             // - Event streams (MessageStreamAdapter) yield Frame<Bytes> and use StreamBody::new() directly
@@ -701,7 +692,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         }
             ?: run {
                 val payloadGenerator =
-                    ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol, protocolSuffix)
+                    ServerHttpBoundProtocolPayloadGenerator(codegenContext, protocol)
                 withBlockTemplate("let payload = ", ";") {
                     payloadGenerator.generatePayload(this, "output", operationShape)
                 }
@@ -1111,10 +1102,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                                 }
                                 """,
                                 "Deserializer" to deserializer,
-                                "InitialMessageType" to
-                                        RuntimeType.smithyHttp(runtimeConfig)
-                                            .resolve("event_stream::InitialMessageType"),
-                                "parseInitialRequest" to parseInitialRequest,
+                                "readInitialRequest" to readInitialRequest,
                                 "AllowUselessConversion" to Attribute.AllowClippyUselessConversion.writable(),
                                 "eventStreamBodyInto" to eventStreamBodyInto(),
                                 *codegenScope,

@@ -10,7 +10,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRestXmlProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader.Companion.protocolSuffixForCodegenContext
 
 /*
  * RestXml server-side protocol factory. This factory creates the [ServerHttpProtocolGenerator]
@@ -26,7 +25,6 @@ class ServerRestXmlFactory(
             codegenContext,
             ServerRestXmlProtocol(codegenContext),
             additionalServerHttpBoundProtocolCustomizations,
-            protocolSuffix = protocolSuffixForCodegenContext(codegenContext),
         )
 
     override fun support(): ProtocolSupport {

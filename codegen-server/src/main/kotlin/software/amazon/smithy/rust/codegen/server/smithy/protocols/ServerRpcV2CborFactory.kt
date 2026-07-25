@@ -11,7 +11,6 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.Protocol
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.ProtocolGeneratorFactory
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerRpcV2CborProtocol
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader.Companion.protocolSuffixForCodegenContext
 
 class ServerRpcV2CborFactory(
     private val additionalServerHttpBoundProtocolCustomizations: List<ServerHttpBoundProtocolCustomization> =
@@ -26,7 +25,6 @@ class ServerRpcV2CborFactory(
             ServerRpcV2CborProtocol(codegenContext),
             additionalServerHttpBoundProtocolCustomizations,
             additionalHttpBindingCustomizations = additionalHttpBindingCustomizations,
-            protocolSuffix = protocolSuffixForCodegenContext(codegenContext),
         )
 
     override fun support(): ProtocolSupport {

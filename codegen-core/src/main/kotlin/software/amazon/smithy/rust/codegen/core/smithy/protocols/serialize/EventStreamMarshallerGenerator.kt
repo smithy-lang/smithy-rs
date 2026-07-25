@@ -55,7 +55,9 @@ open class EventStreamMarshallerGenerator(
     private val unionShape: UnionShape,
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
-    /** Protocol suffix for multi-protocol support (e.g., "_RestJson1", "_RpcV2Cbor"). Null for single-protocol services. */
+    /** Whether to use schema-based serde for event stream marshalling. */
+    private val useSchemaSerde: Boolean = false,
+    /** Protocol suffix for multi-protocol support (e.g., "RestJson1", "RpcV2Cbor"). Null for single-protocol services. */
     private val protocolSuffix: String? = null,
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)

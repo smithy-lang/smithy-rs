@@ -198,6 +198,7 @@ where
             req.extensions_mut().insert(SelectedProtocol(id));
             Either::Left(self.protocol.call_matched(req, matched))
         } else {
+            // TODO: we haven't called ready on the inner service.
             Either::Right(self.inner.call(req))
         }
     }
@@ -211,7 +212,7 @@ fn routing_service_protocol_id<R, P: ProtocolShape>(_: &RoutingService<R, P>) ->
     P::ID.absolute()
 }
 
-macro_rules! impl_header_detected_slot {
+macro_rules! impl_header_detection_protocol {
     ($alias:ident, $can_handle:expr) => {
         impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for $alias<S>
         where
@@ -238,73 +239,48 @@ macro_rules! impl_header_detected_slot {
     };
 }
 
-impl_header_detected_slot!(CborRoutingService, is_rpc_v2_cbor);
-impl_header_detected_slot!(AwsJson11RoutingService, |req| {
-    has_aws_json_target(req) && is_aws_json_11_content_type(req)
-});
-impl_header_detected_slot!(AwsJson10RoutingService, |req| {
-    has_aws_json_target(req) && is_aws_json_10_content_type(req)
-});
+impl_header_detection_protocol!(CborRoutingService, is_rpc_v2_cbor);
+impl_header_detection_protocol!(AwsJson11RoutingService, is_aws_json_11);
+impl_header_detection_protocol!(AwsJson10RoutingService, is_aws_json_10);
 
-/// RestJson1 - content-type + route matching (expensive). `Match` caches the
-/// matched route so it isn't recomputed in `call_matched`.
-impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for RestJson1RoutingService<S>
-where
-    RestRouter<S>: Router<B, Service = S>,
-    S: Clone + Service<Request<B>, Response = Response<RespBody>, Error = E>,
-    <S as Service<Request<B>>>::Future: Future<Output = Result<Response<RespBody>, E>>,
-{
-    type Future = <S as Service<Request<B>>>::Future;
-    type Match = S;
+/// Macro for route-matching protocols that also check content-type.
+/// Content-type is checked first (cheap) before route matching (expensive).
+/// `Match` caches the matched route so it isn't recomputed in `call_matched`.
+macro_rules! impl_route_matching_protocol {
+    ($alias:ident, $content_type_check:expr) => {
+        impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for $alias<S>
+        where
+            RestRouter<S>: Router<B, Service = S>,
+            S: Clone + Service<Request<B>, Response = Response<RespBody>, Error = E>,
+            <S as Service<Request<B>>>::Future: Future<Output = Result<Response<RespBody>, E>>,
+        {
+            type Future = <S as Service<Request<B>>>::Future;
+            type Match = S;
 
-    fn protocol_id(&self) -> &'static str {
-        routing_service_protocol_id(self)
-    }
+            fn protocol_id(&self) -> &'static str {
+                routing_service_protocol_id(self)
+            }
 
-    #[inline]
-    fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
-        let matched = self.router().match_route(req).ok()?;
-        if is_json_content_type(req) {
-            Some(matched)
-        } else {
-            None
+            #[inline]
+            fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
+                let check: fn(&Request<B>) -> bool = $content_type_check;
+                if check(req) {
+                    let matched = self.router().match_route(req).ok()?;
+                    Some(matched)
+                } else {
+                    None
+                }
+            }
+
+            fn call_matched(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
+                matched.call(req)
+            }
         }
-    }
-
-    fn call_matched(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
-        matched.call(req)
-    }
+    };
 }
 
-/// RestXml - content-type + route matching (expensive). `Match` caches the
-/// matched route so it isn't recomputed in `call_matched`.
-impl<S, B, RespBody, E> ProtocolSlot<B, RespBody, E> for RestXmlRoutingService<S>
-where
-    RestRouter<S>: Router<B, Service = S>,
-    S: Clone + Service<Request<B>, Response = Response<RespBody>, Error = E>,
-    <S as Service<Request<B>>>::Future: Future<Output = Result<Response<RespBody>, E>>,
-{
-    type Future = <S as Service<Request<B>>>::Future;
-    type Match = S;
-
-    fn protocol_id(&self) -> &'static str {
-        routing_service_protocol_id(self)
-    }
-
-    #[inline]
-    fn can_handle(&self, req: &Request<B>) -> Option<Self::Match> {
-        let matched = self.router().match_route(req).ok()?;
-        if is_xml_content_type(req) {
-            Some(matched)
-        } else {
-            None
-        }
-    }
-
-    fn call_matched(&mut self, req: Request<B>, mut matched: Self::Match) -> Self::Future {
-        matched.call(req)
-    }
-}
+impl_route_matching_protocol!(RestJson1RoutingService, is_json_content_type);
+impl_route_matching_protocol!(RestXmlRoutingService, is_xml_content_type);
 
 // ============================================================================
 // Protocol detection functions
@@ -340,6 +316,16 @@ fn is_aws_json_11_content_type<B>(req: &Request<B>) -> bool {
         .and_then(|v| v.to_str().ok())
         .map(|v| v.starts_with("application/x-amz-json-1.1"))
         .unwrap_or(false)
+}
+
+/// Combined check for AWS JSON 1.0: has target header AND correct content-type.
+fn is_aws_json_10<B>(req: &Request<B>) -> bool {
+    has_aws_json_target(req) && is_aws_json_10_content_type(req)
+}
+
+/// Combined check for AWS JSON 1.1: has target header AND correct content-type.
+fn is_aws_json_11<B>(req: &Request<B>) -> bool {
+    has_aws_json_target(req) && is_aws_json_11_content_type(req)
 }
 
 /// Check if Content-Type indicates JSON (for RestJson1).

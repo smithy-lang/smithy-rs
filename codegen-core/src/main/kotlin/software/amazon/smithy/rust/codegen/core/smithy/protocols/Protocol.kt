@@ -28,6 +28,15 @@ interface Protocol {
     val defaultTimestampFormat: TimestampFormatTrait.Format
 
     /**
+     * Protocol suffix for multi-protocol code generation (e.g., "RestJson1", "RpcV2Cbor").
+     * Non-null when the service supports multiple protocols, used to disambiguate generated symbols
+     * (like event stream marshallers) that would otherwise collide.
+     * Null for single-protocol services. Defaults to null (client codegen never needs this).
+     */
+    val protocolSuffix: String?
+        get() = null
+
+    /**
      * Returns additional HTTP headers that should be included in HTTP requests for the given operation for this protocol.
      *
      * These MUST all be lowercase, or the application will panic, as per

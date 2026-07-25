@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.server.smithy.generators.protocol
 
+import software.amazon.smithy.model.knowledge.ServiceIndex
 import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.Shape
@@ -42,6 +43,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.restJsonFieldNa
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.CborSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.StructuredDataSerializerGenerator
 import software.amazon.smithy.rust.codegen.core.util.dq
+import software.amazon.smithy.rust.codegen.core.util.toPascalCase
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCargoDependency
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
 import software.amazon.smithy.rust.codegen.server.smithy.ServerRuntimeType
@@ -57,6 +59,14 @@ import software.amazon.smithy.rust.codegen.server.smithy.targetCanReachConstrain
 interface ServerProtocol : Protocol {
     /** The protocol's ShapeId for code generation purposes (e.g., aws.protocols#restJson1). */
     val protocolShapeId: ShapeId
+
+    /**
+     * Protocol suffix for multi-protocol code generation (e.g., "RestJson1", "RpcV2Cbor").
+     * Non-null when the service supports multiple protocols, used to disambiguate generated symbols
+     * (like event stream marshallers) that would otherwise collide.
+     * Null for single-protocol services.
+     */
+    override val protocolSuffix: String?
 
     /** The path such that `aws_smithy_http_server::protocol::$path` points to the protocol's module. */
     val protocolModulePath: String
@@ -151,6 +161,22 @@ fun jsonParserGenerator(
         allowMissingUnionVariant = codegenContext.settings.codegenConfig.allowMissingUnionVariant,
     )
 
+/**
+ * Computes the protocol suffix for a given codegen context.
+ * Returns a PascalCase suffix (e.g., "RestJson1") when the service supports multiple protocols,
+ * or null for single-protocol services.
+ *
+ * Individual protocol classes can override `protocolSuffix` if they need custom behavior.
+ */
+fun computeProtocolSuffix(codegenContext: ServerCodegenContext): String? {
+    val serviceProtocols = ServiceIndex.of(codegenContext.model).getProtocols(codegenContext.serviceShape)
+    return if (serviceProtocols.size > 1) {
+        codegenContext.protocol.name.toPascalCase()
+    } else {
+        null
+    }
+}
+
 class ServerAwsJsonProtocol(
     private val serverCodegenContext: ServerCodegenContext,
     awsJsonVersion: AwsJsonVersion,
@@ -159,6 +185,7 @@ class ServerAwsJsonProtocol(
     private val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+    override val protocolSuffix: String? = computeProtocolSuffix(serverCodegenContext)
 
     override val protocolModulePath: String
         get() =
@@ -245,6 +272,7 @@ class ServerRestJsonProtocol(
     val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+    override val protocolSuffix: String? = computeProtocolSuffix(serverCodegenContext)
 
     override val protocolModulePath: String = "rest_json_1"
 
@@ -288,11 +316,12 @@ class ServerRestJsonProtocol(
 }
 
 class ServerRestXmlProtocol(
-    codegenContext: CodegenContext,
-) : RestXml(codegenContext), ServerProtocol {
-    val runtimeConfig = codegenContext.runtimeConfig
+    private val serverCodegenContext: ServerCodegenContext,
+) : RestXml(serverCodegenContext), ServerProtocol {
+    val runtimeConfig = serverCodegenContext.runtimeConfig
 
-    override val protocolShapeId: ShapeId = codegenContext.protocol
+    override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+    override val protocolSuffix: String? = computeProtocolSuffix(serverCodegenContext)
 
     override val protocolModulePath = "rest_xml"
 
@@ -330,6 +359,7 @@ class ServerRpcV2CborProtocol(
     val runtimeConfig = codegenContext.runtimeConfig
 
     override val protocolShapeId: ShapeId = serverCodegenContext.protocol
+    override val protocolSuffix: String? = computeProtocolSuffix(serverCodegenContext)
 
     override val protocolModulePath = "rpc_v2_cbor"
 
