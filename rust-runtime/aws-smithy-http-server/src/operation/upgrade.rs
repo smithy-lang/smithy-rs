@@ -63,6 +63,50 @@ where
     }
 }
 
+/// A [`Plugin`] that converts a Smithy operation [`Service`] into an HTTP service using an
+/// explicitly selected protocol.
+///
+/// Unlike [`UpgradePlugin`], this plugin does not use [`ServiceShape::Protocol`]. This allows a
+/// multi-protocol service to upgrade the same modeled operation service once for each supported
+/// protocol.
+#[derive(Debug, Clone)]
+pub struct ProtocolUpgradePlugin<Protocol, Extractors> {
+    _protocol: PhantomData<Protocol>,
+    _extractors: PhantomData<Extractors>,
+}
+
+impl<Protocol, Extractors> Default for ProtocolUpgradePlugin<Protocol, Extractors> {
+    fn default() -> Self {
+        Self {
+            _protocol: PhantomData,
+            _extractors: PhantomData,
+        }
+    }
+}
+
+impl<Protocol, Extractors> ProtocolUpgradePlugin<Protocol, Extractors> {
+    /// Creates a new [`ProtocolUpgradePlugin`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<Ser, Op, T, Protocol, Extractors> Plugin<Ser, Op, T> for ProtocolUpgradePlugin<Protocol, Extractors>
+where
+    Ser: ServiceShape,
+    Op: OperationShape,
+{
+    type Output = Upgrade<Protocol, (Op::Input, Extractors), T>;
+
+    fn apply(&self, inner: T) -> Self::Output {
+        Upgrade {
+            _protocol: PhantomData,
+            _input: PhantomData,
+            inner,
+        }
+    }
+}
+
 /// A [`Service`] responsible for wrapping an operation [`Service`] accepting and returning Smithy
 /// types, and converting it into a [`Service`] accepting and returning [`http`] types.
 pub struct Upgrade<Protocol, Input, S> {

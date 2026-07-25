@@ -75,9 +75,17 @@ class ServerServiceGenerator(
     /** Associate each operation with the name of the corresponding Zero-Sized Type (ZST) struct name. */
     private val operationStructNames = operations.associateWith { symbolProvider.toSymbol(it).name.toPascalCase() }
 
+    private val protocolRoutesName = "${serviceName}ProtocolRoutes"
+
     /** A `Writable` block of "field: Type" for the builder. */
     private val builderFields =
-        builderFieldNames.values.map { name -> "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>" }
+        builderFieldNames.values.map { name ->
+            if (isMultiProtocol) {
+                "$name: Option<$protocolRoutesName<Body>>"
+            } else {
+                "$name: Option<#{SmithyHttpServer}::routing::Route<Body>>"
+            }
+        }
 
     /** The name of the local private module containing the functions that return the request for each operation */
     private val requestSpecsModuleName = "request_specs"
@@ -275,13 +283,179 @@ class ServerServiceGenerator(
         }
 
     /** A `Writable` block containing all the `Handler` and `Operation` setters for the builder. */
+    private fun protocolRoutes(): Writable =
+        writable {
+            if (isMultiProtocol) {
+                val fields =
+                    writable {
+                        for (protoInfo in getProtocolInfo()) {
+                            rustTemplate(
+                                "${protoInfo.modulePath}: #{SmithyHttpServer}::routing::Route<Body>,",
+                                *codegenScope,
+                            )
+                        }
+                    }
+                rustTemplate(
+                    """
+                    struct $protocolRoutesName<Body> {
+                        #{Fields:W}
+                    }
+                    """,
+                    "Fields" to fields,
+                )
+            }
+        }
+
+    private fun protocolUpgradeBounds(operationType: String): Writable =
+        writable {
+            if (!isMultiProtocol) {
+                rustTemplate(
+                    """
+                    #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
+                        crate::operation_shape::$operationType,
+                        ModelPl::Output
+                    >,
+                    HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                        $serviceName<L>,
+                        crate::operation_shape::$operationType,
+                        <
+                            #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
+                            as #{SmithyHttpServer}::plugin::Plugin<
+                                $serviceName<L>,
+                                crate::operation_shape::$operationType,
+                                ModelPl::Output
+                            >
+                        >::Output
+                    >,
+
+                    HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                    <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                rust("ModelPl::Output: Clone,")
+                for (protoInfo in getProtocolInfo()) {
+                    rustTemplate(
+                        """
+                        #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
+                            $serviceName<L>,
+                            crate::operation_shape::$operationType,
+                            ModelPl::Output
+                        >,
+                        HttpPl: #{SmithyHttpServer}::plugin::Plugin<
+                            $serviceName<L>,
+                            crate::operation_shape::$operationType,
+                            <
+                                #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>
+                                as #{SmithyHttpServer}::plugin::Plugin<
+                                    $serviceName<L>,
+                                    crate::operation_shape::$operationType,
+                                    ModelPl::Output
+                                >
+                            >::Output
+                        >,
+                        <
+                            HttpPl as #{SmithyHttpServer}::plugin::Plugin<
+                                $serviceName<L>,
+                                crate::operation_shape::$operationType,
+                                <
+                                    #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>
+                                    as #{SmithyHttpServer}::plugin::Plugin<
+                                        $serviceName<L>,
+                                        crate::operation_shape::$operationType,
+                                        ModelPl::Output
+                                    >
+                                >::Output
+                            >
+                        >::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        <<
+                            HttpPl as #{SmithyHttpServer}::plugin::Plugin<
+                                $serviceName<L>,
+                                crate::operation_shape::$operationType,
+                                <
+                                    #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>
+                                    as #{SmithyHttpServer}::plugin::Plugin<
+                                        $serviceName<L>,
+                                        crate::operation_shape::$operationType,
+                                        ModelPl::Output
+                                    >
+                                >::Output
+                            >
+                        >::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                        """,
+                        *codegenScope,
+                        "Protocol" to protoInfo.markerStruct,
+                    )
+                }
+            }
+        }
+
+    private fun protocolRouteConstruction(fieldName: String): Writable =
+        writable {
+            if (!isMultiProtocol) {
+                rustTemplate(
+                    """
+                    let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
+                    let svc = self.http_plugin.apply(svc);
+                    self.${fieldName}_custom(svc)
+                    """,
+                    *codegenScope,
+                )
+            } else {
+                val protocolInfos = getProtocolInfo()
+                for ((index, protoInfo) in protocolInfos.withIndex()) {
+                    val modeledService = if (index == protocolInfos.lastIndex) "svc" else "svc.clone()"
+                    val protocolService = "${protoInfo.modulePath}_svc"
+                    val protocolRoute = "${protoInfo.modulePath}_route"
+                    rustTemplate(
+                        """
+                        let $protocolService = #{SmithyHttpServer}::operation::ProtocolUpgradePlugin::<#{Protocol}, UpgradeExtractors>::new().apply($modeledService);
+                        let $protocolService = self.http_plugin.apply($protocolService);
+                        let $protocolRoute = #{SmithyHttpServer}::routing::Route::new($protocolService);
+                        """,
+                        *codegenScope,
+                        "Protocol" to protoInfo.markerStruct,
+                    )
+                }
+                rust("self.$fieldName = Some($protocolRoutesName {")
+                for (protoInfo in protocolInfos) {
+                    rust("${protoInfo.modulePath}: ${protoInfo.modulePath}_route,")
+                }
+                rust("});")
+                rust("self")
+            }
+        }
+
+    private fun customSetter(fieldName: String): Writable =
+        writable {
+            if (!isMultiProtocol) {
+                rustTemplate(
+                    """
+                    /// Sets an operation to a custom HTTP [`Service`](#{Tower}::Service) not constrained by the Smithy contract.
+                    fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
+                    where
+                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
+                        S::Future: Send + 'static,
+                    {
+                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
+                        self
+                    }
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+
     private fun builderSetters(): Writable =
         writable {
             for ((operationShape, structName) in operationStructNames) {
-                val fieldName = builderFieldNames[operationShape]
+                val fieldName = builderFieldNames.getValue(operationShape)
                 val docHandler = DocHandlerGenerator(codegenContext, operationShape, "handler", "///")
                 val handler = docHandler.docSignature()
                 val handlerFixed = docHandler.docFixedSignature()
+                val selfReceiver = if (isMultiProtocol) "mut self" else "self"
                 val unwrapConfigBuilder =
                     if (isConfigBuilderFallible) {
                         ".expect(\"config failed to build\")"
@@ -298,7 +472,7 @@ class ServerServiceGenerator(
                     /// ## Example
                     ///
                     /// ```no_run
-                    /// use $crateName::{$serviceName, ${serviceName}Config};
+                    /// use $crateName::{$serviceName, ${serviceName}Config, $routerName};
                     ///
                     #{HandlerImports:W}
                     ///
@@ -313,7 +487,7 @@ class ServerServiceGenerator(
                     /// ## let app: $serviceName<$routerName> = app;
                     /// ```
                     ///
-                    pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>(self, handler: HandlerType) -> Self
+                    pub fn $fieldName<HandlerType, HandlerExtractors, UpgradeExtractors>($selfReceiver, handler: HandlerType) -> Self
                     where
                         HandlerType: #{SmithyHttpServer}::operation::Handler<crate::operation_shape::$structName, HandlerExtractors>,
 
@@ -322,35 +496,14 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::IntoService<crate::operation_shape::$structName, HandlerType>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            ModelPl::Output
-                        >,
-                        HttpPl: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
-                        >,
-
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                        #{ProtocolUpgradeBounds:W}
 
                     {
                         use #{SmithyHttpServer}::operation::OperationShapeExt;
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_handler(handler);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
-                        let svc = self.http_plugin.apply(svc);
-                        self.${fieldName}_custom(svc)
+                        #{ProtocolRouteConstruction:W}
                     }
 
                     /// Sets the [`$structName`](crate::operation_shape::$structName) operation.
@@ -361,7 +514,7 @@ class ServerServiceGenerator(
                     /// ## Example
                     ///
                     /// ```no_run
-                    /// use $crateName::{$serviceName, ${serviceName}Config};
+                    /// use $crateName::{$serviceName, ${serviceName}Config, $routerName};
                     ///
                     #{HandlerImports:W}
                     ///
@@ -377,7 +530,7 @@ class ServerServiceGenerator(
                     /// ## let app: $serviceName<$routerName> = app;
                     /// ```
                     ///
-                    pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>(self, service: S) -> Self
+                    pub fn ${fieldName}_service<S, ServiceExtractors, UpgradeExtractors>($selfReceiver, service: S) -> Self
                     where
                         S: #{SmithyHttpServer}::operation::OperationService<crate::operation_shape::$structName, ServiceExtractors>,
 
@@ -386,53 +539,26 @@ class ServerServiceGenerator(
                             crate::operation_shape::$structName,
                             #{SmithyHttpServer}::operation::Normalize<crate::operation_shape::$structName, S>
                         >,
-                        #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            ModelPl::Output
-                        >,
-                        HttpPl: #{SmithyHttpServer}::plugin::Plugin<
-                            $serviceName<L>,
-                            crate::operation_shape::$structName,
-                            <
-                                #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>
-                                as #{SmithyHttpServer}::plugin::Plugin<
-                                    $serviceName<L>,
-                                    crate::operation_shape::$structName,
-                                    ModelPl::Output
-                                >
-                            >::Output
-                        >,
-
-                        HttpPl::Output: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        <HttpPl::Output as #{Tower}::Service<#{Http}::Request<Body>>>::Future: Send + 'static,
+                        #{ProtocolUpgradeBounds:W}
 
                     {
                         use #{SmithyHttpServer}::operation::OperationShapeExt;
                         use #{SmithyHttpServer}::plugin::Plugin;
                         let svc = crate::operation_shape::$structName::from_service(service);
                         let svc = self.model_plugin.apply(svc);
-                        let svc = #{SmithyHttpServer}::operation::UpgradePlugin::<UpgradeExtractors>::new().apply(svc);
-                        let svc = self.http_plugin.apply(svc);
-                        self.${fieldName}_custom(svc)
+                        #{ProtocolRouteConstruction:W}
                     }
 
-                    /// Sets the [`$structName`](crate::operation_shape::$structName) to a custom [`Service`](tower::Service).
-                    /// not constrained by the Smithy contract.
-                    fn ${fieldName}_custom<S>(mut self, svc: S) -> Self
-                    where
-                        S: #{Tower}::Service<#{Http}::Request<Body>, Response = #{Http}::Response<#{SmithyHttpServer}::body::BoxBody>, Error = ::std::convert::Infallible> + Clone + Send + 'static,
-                        S::Future: Send + 'static,
-                    {
-                        self.$fieldName = Some(#{SmithyHttpServer}::routing::Route::new(svc));
-                        self
-                    }
+                    #{CustomSetter:W}
                     """,
                     "Router" to protocol.routerType(),
                     "Protocol" to protocol.markerStruct(),
                     "Handler" to handler,
                     "HandlerFixed" to handlerFixed,
                     "HandlerImports" to handlerImports(crateName, operations),
+                    "ProtocolUpgradeBounds" to protocolUpgradeBounds(structName),
+                    "ProtocolRouteConstruction" to protocolRouteConstruction(fieldName),
+                    "CustomSetter" to customSetter(fieldName),
                     *codegenScope,
                 )
 
@@ -548,6 +674,18 @@ class ServerServiceGenerator(
                 }
             }
 
+        val routeInitializations =
+            writable {
+                for (operationShape in operations) {
+                    val fieldName = builderFieldNames.getValue(operationShape)
+                    rust("let $protocolRoutesName {")
+                    for (protoInfo in protocolInfos) {
+                        rust("${protoInfo.modulePath}: ${fieldName}_${protoInfo.modulePath},")
+                    }
+                    rust("} = self.$fieldName.expect($expectMessageVariableName);")
+                }
+            }
+
         // Generate router construction for each protocol
         val routerConstructions =
             writable {
@@ -561,7 +699,7 @@ class ServerServiceGenerator(
                                 val (specBuilderFunctionName, _) = specsMap.getValue(operationShape)
                                 rust(
                                     """
-                                    ($requestSpecsModuleName::$specBuilderFunctionName(), self.$fieldName.clone().expect($expectMessageVariableName)),
+                                    ($requestSpecsModuleName::$specBuilderFunctionName(), ${fieldName}_${protoInfo.modulePath}),
                                     """,
                                 )
                             }
@@ -643,6 +781,7 @@ class ServerServiceGenerator(
                 }
                 let $expectMessageVariableName = "this should never panic since we are supposed to check beforehand that a handler has been registered for this operation; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues";
 
+                #{RouteInitializations:W}
                 #{PatternInitializations:W}
 
                 // Build router for each protocol
@@ -659,6 +798,7 @@ class ServerServiceGenerator(
             """,
             *codegenScope,
             "NullabilityChecks" to nullabilityChecks,
+            "RouteInitializations" to routeInitializations,
             "PatternInitializations" to patternInitializations(),
             "RouterConstructions" to routerConstructions,
             "RoutingServiceConstructions" to routingServiceConstructions,
@@ -752,8 +892,30 @@ class ServerServiceGenerator(
     /** Render build_unchecked for multi-protocol services. */
     private fun RustWriter.renderMultiProtocolBuildUncheckedMethod() {
         val protocolInfos = getProtocolInfo()
-        // Use the first protocol as the default for MissingFailure
-        val defaultProtocol = protocolInfos.first()
+
+        val routeInitializations =
+            writable {
+                for (operationShape in operations) {
+                    val fieldName = builderFieldNames.getValue(operationShape)
+                    rust("let $protocolRoutesName {")
+                    for (protoInfo in protocolInfos) {
+                        rust("${protoInfo.modulePath}: ${fieldName}_${protoInfo.modulePath},")
+                    }
+                    rust("} = self.$fieldName.unwrap_or_else(|| $protocolRoutesName {")
+                    for (protoInfo in protocolInfos) {
+                        rustTemplate(
+                            """
+                            ${protoInfo.modulePath}: #{SmithyHttpServer}::routing::Route::new(
+                                #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default()
+                            ),
+                            """,
+                            *codegenScope,
+                            "Protocol" to protoInfo.markerStruct,
+                        )
+                    }
+                    rust("});")
+                }
+            }
 
         // Generate router construction for each protocol
         val routerConstructions =
@@ -766,18 +928,13 @@ class ServerServiceGenerator(
                             for (operationShape in operations) {
                                 val fieldName = builderFieldNames[operationShape]!!
                                 val (specBuilderFunctionName, _) = specsMap.getValue(operationShape)
-                                rustTemplate(
+                                rust(
                                     """
                                     (
                                         $requestSpecsModuleName::$specBuilderFunctionName(),
-                                        self.$fieldName.clone().unwrap_or_else(|| {
-                                            let svc = #{SmithyHttpServer}::operation::MissingFailure::<#{Protocol}>::default();
-                                            #{SmithyHttpServer}::routing::Route::new(svc)
-                                        })
+                                        ${fieldName}_${protoInfo.modulePath}
                                     ),
                                     """,
-                                    "SmithyHttpServer" to smithyHttpServer,
-                                    "Protocol" to protoInfo.markerStruct,
                                 )
                             }
                         }
@@ -846,6 +1003,8 @@ class ServerServiceGenerator(
                 L: #{Tower}::Layer<#{SmithyHttpServer}::routing::Route<Body>>,
                 L::Service: Clone,
             {
+                #{RouteInitializations:W}
+
                 // Build router for each protocol
                 #{RouterConstructions:W}
 
@@ -859,6 +1018,7 @@ class ServerServiceGenerator(
             }
             """,
             *codegenScope,
+            "RouteInitializations" to routeInitializations,
             "RouterConstructions" to routerConstructions,
             "RoutingServiceConstructions" to routingServiceConstructions,
             "MultiProtocolConstruction" to multiProtocolConstruction,
@@ -1281,6 +1441,8 @@ class ServerServiceGenerator(
             """
             #{RouterTypeAlias:W}
 
+            #{ProtocolRoutes:W}
+
             #{Builder:W}
 
             #{MissingOperationsError:W}
@@ -1294,6 +1456,7 @@ class ServerServiceGenerator(
             #{ServiceImpl}
             """,
             "RouterTypeAlias" to routerTypeAlias(),
+            "ProtocolRoutes" to protocolRoutes(),
             "Builder" to builder(),
             "MissingOperationsError" to missingOperationsError(),
             "RequestSpecs" to requestSpecsModule(),
