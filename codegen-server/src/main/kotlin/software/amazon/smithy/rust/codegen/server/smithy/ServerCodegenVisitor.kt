@@ -115,7 +115,7 @@ open class ServerCodegenVisitor(
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
 
-    // Multi-protocol support: Store all protocol generators for services with multiple protocols
+    // Protocol generators selected for this service.
     protected var allProtocolGenerators: List<ServerProtocolGenerator>
     protected var allProtocols: List<ServerProtocol>
     protected var isMultiProtocol: Boolean = false
@@ -155,14 +155,13 @@ open class ServerCodegenVisitor(
                 ),
             )
 
-        // Get all matching protocols for multi-protocol support
         val allProtocolPairs = serverProtocolLoader.protocolsFor(context.model, service)
         isMultiProtocol = allProtocolPairs.size > 1
 
-        // Use the first protocol as the primary (for backwards compatibility)
+        // Initialize shared codegen state with the first discovered protocol;
+        // per-protocol generators receive copies with their own protocol selected.
         val (protocolShape, protocolGeneratorFactory) = allProtocolPairs.first()
 
-        // Create the codegenContext (protocol-agnostic, no multi-protocol state stored here)
         codegenContext =
             ServerCodegenContext(
                 model,
@@ -730,18 +729,16 @@ open class ServerCodegenVisitor(
      *  - Additional structure shapes via `postprocessGenerateAdditionalStructures`
      */
     override fun operationShape(shape: OperationShape) {
-        // Generate errors (protocol-independent) - ONCE
+        // Generate protocol-independent operation artifacts, then render serialization
+        // and deserialization for each selected protocol.
         rustCrate.withModule(ServerRustModule.Error) {
             ServerOperationErrorGenerator(model, codegenContext.symbolProvider, shape).render(this)
         }
 
-        // Generate operation shapes (protocol-independent) - ONCE
         rustCrate.withModule(ServerRustModule.OperationShape) {
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
 
-        // Generate protocol-specific ser/de - FOR EACH PROTOCOL
-        // generateSharedTypes is true only for the first protocol to avoid duplicate type definitions
         for ((index, protoGenerator) in allProtocolGenerators.withIndex()) {
             val generateSharedTypes = (index == 0)
             rustCrate.withModule(ServerRustModule.Operation) {

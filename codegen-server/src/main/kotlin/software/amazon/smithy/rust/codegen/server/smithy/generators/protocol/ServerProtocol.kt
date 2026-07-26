@@ -61,9 +61,7 @@ interface ServerProtocol : Protocol {
     val protocolShapeId: ShapeId
 
     /**
-     * Protocol suffix for multi-protocol code generation (e.g., "RestJson1", "RpcV2Cbor").
-     * Non-null when the service supports multiple protocols, used to disambiguate generated symbols
-     * (like event stream marshallers) that would otherwise collide.
+     * Protocol-name suffix used for multi-protocol generated symbols.
      * Null for single-protocol services.
      */
     override val protocolSuffix: String?
@@ -162,11 +160,8 @@ fun jsonParserGenerator(
     )
 
 /**
- * Computes the protocol suffix for a given codegen context.
- * Returns a PascalCase suffix (e.g., "RestJson1") when the service supports multiple protocols,
- * or null for single-protocol services.
- *
- * Individual protocol classes can override `protocolSuffix` if they need custom behavior.
+ * Returns a PascalCase suffix based on the protocol's local shape name for
+ * multi-protocol services, or null for single-protocol services.
  */
 fun computeProtocolSuffix(codegenContext: ServerCodegenContext): String? {
     val serviceProtocols = ServiceIndex.of(codegenContext.model).getProtocols(codegenContext.serviceShape)

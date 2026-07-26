@@ -1,0 +1,22 @@
+error[E0308]: mismatched types
+  --> tests/compile_fail/detector_cannot_dispatch.rs:36:20
+   |
+36 |         route.call(req);  // ERROR: cannot move out of `*req` which is behind a shared reference
+   |               ---- ^^^ expected `Request<B>`, found `&Request<B>`
+   |               |
+   |               arguments to this method are incorrect
+   |
+   = note: expected struct `http::Request<B>`
+           found reference `&http::Request<B>`
+help: the return type of this call is `&http::Request<B>` due to the type of the argument passed
+  --> tests/compile_fail/detector_cannot_dispatch.rs:36:9
+   |
+36 |         route.call(req);  // ERROR: cannot move out of `*req` which is behind a shared reference
+   |         ^^^^^^^^^^^---^
+   |                    |
+   |                    this argument influences the return type of `call`
+note: method defined here
+  --> $CARGO/tower-service-$VERSION/src/lib.rs
+   |
+   |     fn call(&mut self, req: Request) -> Self::Future;
+   |        ^^^^

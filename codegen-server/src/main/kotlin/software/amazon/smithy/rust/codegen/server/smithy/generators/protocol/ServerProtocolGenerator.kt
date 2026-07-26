@@ -17,10 +17,7 @@ open class ServerProtocolGenerator(
      * The server implementation uses this method to generate implementations of the `from_request` and `into_response`
      * traits for operation input and output shapes, respectively.
      *
-     * @param operationWriter The writer to generate code into
-     * @param operationShape The operation to generate code for
-     * @param generateSharedTypes If true, generate shared types like InputFuture. In multi-protocol mode,
-     *                            this should be true only for the first protocol to avoid duplicate definitions.
+     * @param generateSharedTypes whether protocol-independent supporting types should be emitted by this invocation
      */
     fun renderOperation(
         operationWriter: RustWriter,

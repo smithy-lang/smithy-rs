@@ -117,10 +117,7 @@ class ServerServiceGenerator(
             Pair(functionName, functionBody)
         }
 
-    /**
-     * For multi-protocol support: Generate request specs for each protocol.
-     * Maps protocol module path -> (operation -> (function name, function body))
-     */
+    /** Request specifications grouped by protocol module and operation. */
     private val multiProtocolRequestSpecMap: Map<String, Map<OperationShape, Pair<String, Writable>>> by lazy {
         if (!isMultiProtocol) {
             emptyMap()
@@ -137,7 +134,7 @@ class ServerServiceGenerator(
                                 serviceId.name,
                                 smithyHttpServer.resolve("routing::request_spec"),
                             )
-                        // Add protocol suffix to function name to avoid collisions
+                        // Append the protocol module path to avoid function-name collisions.
                         val functionName =
                             RustReservedWords.escapeIfNeeded(operationName.toSnakeCase()) + "_" + protoModulePath
                         val functionBody =
@@ -159,12 +156,7 @@ class ServerServiceGenerator(
         }
     }
 
-    /**
-     * Protocol info for multi-protocol router generation, preserving the canonical order resolved by codegen.
-     *
-     * Everything needed to emit a protocol into the Tower layer stack comes from the protocol itself, so
-     * downstream protocols work without any special-casing here.
-     */
+    /** Router metadata for each selected protocol, in canonical detection order. */
     private fun getProtocolInfo(): List<ProtocolRouterInfo> {
         if (!isMultiProtocol) return emptyList()
 
@@ -185,53 +177,59 @@ class ServerServiceGenerator(
     )
 
     /**
-     * The `RoutingService<Router<S>, Marker>` type for a protocol, as a `Writable`.
-     *
-     * This is the per-protocol service type wrapped by `ProtocolLayer`. It is built directly
-     * from the protocol's router type and marker struct rather than a hardcoded alias, so any
-     * protocol — including downstream ones — is supported uniformly.
+     * Returns the marker and router type arguments for
+     * `ProtocolService<Marker, Router<S>, Inner>`.
      */
-    private fun ProtocolRouterInfo.routingServiceType(): Writable =
+    private fun ProtocolRouterInfo.protocolServiceTypeParams(): Writable =
         writable {
             rustTemplate(
-                "#{SmithyHttpServer}::routing::RoutingService<#{Router}<S>, #{Marker}>",
-                *codegenScope,
+                "#{Marker}, #{Router}<S>",
                 "Router" to routerType,
                 "Marker" to markerStruct,
             )
         }
 
+    /** Applies the configured route layer to each protocol router. */
+    private fun routingServiceConstructions(protocolInfos: List<ProtocolRouterInfo>): Writable =
+        writable {
+            for (protoInfo in protocolInfos) {
+                val routerVarName = "${protoInfo.modulePath}_router"
+                rustTemplate(
+                    """
+                    let $routerVarName = $routerVarName.layer(&self.layer);
+                    """,
+                    *codegenScope,
+                )
+            }
+        }
+
     /**
-     * Generate the router type alias for this service.
+     * Generates the service router alias.
      *
-     * For single-protocol services, this generates a type alias wrapping `RoutingService`.
-     * For multi-protocol services, this generates a type alias wrapping a `ProtocolService`.
-     *
-     * The router is generic over `S`, the service type stored in the underlying router.
-     * This defaults to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
+     * Multi-protocol aliases nest `ProtocolService<Marker, Router<S>, Inner>` and
+     * terminate in `DefaultNotFoundService`; single-protocol aliases wrap `RoutingService`.
      */
     private fun routerTypeAlias(): Writable =
         writable {
             if (isMultiProtocol) {
-                // Build the nested `ProtocolService` type in canonical detection order:
-                //   ProtocolService<Slot1, ProtocolService<Slot2, ... DefaultNotFoundService>>
-                // where Slot1 is checked first.
+                // Build nested `ProtocolService<Marker, Router<S>, Inner>` types in canonical
+                // detection order, with the first protocol outermost.
                 val protocolInfos = getProtocolInfo()
 
                 val serviceType =
                     writable {
                         for (protoInfo in protocolInfos) {
                             rustTemplate(
-                                "#{SmithyHttpServer}::routing::ProtocolService<#{Slot:W}, ",
+                                "#{SmithyHttpServer}::routing::ProtocolService<#{Params:W}, ",
                                 *codegenScope,
-                                "Slot" to protoInfo.routingServiceType(),
+                                "Params" to protoInfo.protocolServiceTypeParams(),
                             )
                         }
                         rustTemplate(
                             "#{SmithyHttpServer}::routing::DefaultNotFoundService",
                             *codegenScope,
                         )
-                        // Close one `>` per protocol slot opened above.
+                        // Close one nested ProtocolService type per protocol.
                         rust(protocolInfos.joinToString("") { ">" })
                     }
 
@@ -239,12 +237,10 @@ class ServerServiceGenerator(
                     """
                     /// Type alias for the multi-protocol router used by this service.
                     ///
-                    /// This type handles routing requests to the appropriate protocol handler
-                    /// based on request characteristics (headers, content-type, URI path). Protocols
-                    /// are checked in detection order: ${protocolInfos.joinToString(", ") { it.modulePath }}.
+                    /// Protocol detectors are evaluated in the service's configured detection order.
+                    /// A matching detector dispatches through its associated router.
                     ///
-                    /// The type parameter `S` is the service type stored in the underlying routers,
-                    /// defaulting to `Route` (which uses `hyper::body::Incoming`) for standard HTTP server use cases.
+                    /// `S` is the service type stored by each protocol router and defaults to `Route`.
                     pub type $routerName<S = #{SmithyHttpServer}::routing::Route> = #{ServiceType:W};
                     """,
                     *codegenScope,
@@ -645,7 +641,7 @@ class ServerServiceGenerator(
         )
     }
 
-    /** Render the build method for multi-protocol services. */
+    /** Renders `build` for a multi-protocol service. */
     private fun RustWriter.renderMultiProtocolBuildMethod() {
         val missingOperationsVariableName = "missing_operation_names"
         val expectMessageVariableName = "unexpected_error_msg"
@@ -706,21 +702,7 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the RoutingService construction with layer application for each protocol
-        val routingServiceConstructions =
-            writable {
-                for (protoInfo in protocolInfos) {
-                    val routerVarName = "${protoInfo.modulePath}_router"
-                    val svcVarName = "${protoInfo.modulePath}_svc"
-                    rustTemplate(
-                        """
-                        let $svcVarName = #{SmithyHttpServer}::routing::RoutingService::new($routerVarName);
-                        let $svcVarName = $svcVarName.map(|s| s.layer(&self.layer));
-                        """,
-                        *codegenScope,
-                    )
-                }
-            }
+        val routingServiceConstructions = routingServiceConstructions(protocolInfos)
 
         // Install Tower protocol layers in canonical detection order.
         // ServiceBuilder preserves declaration order, so the first protocol is
@@ -729,10 +711,11 @@ class ServerServiceGenerator(
             writable {
                 rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
                 for (protoInfo in protocolInfos) {
-                    val svcVarName = "${protoInfo.modulePath}_svc"
+                    val routerVarName = "${protoInfo.modulePath}_router"
                     rustTemplate(
-                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new($svcVarName))",
+                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new(#{Marker}, $routerVarName))",
                         *codegenScope,
+                        "Marker" to protoInfo.markerStruct,
                     )
                 }
                 rustTemplate(
@@ -745,12 +728,12 @@ class ServerServiceGenerator(
             """
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
             ///
-            /// This service supports multiple protocols: ${protocolInfos.joinToString(", ") { it.modulePath }}.
+            /// Requests are dispatched among the generated protocols in detection order.
             ///
             /// Forgetting to register a handler for one or more operations will result in an error.
             ///
-            /// Check out [`$builderName::build_unchecked`] if you'd prefer the service to return status code 500 when an
-            /// unspecified route is requested.
+            /// Use [`build_unchecked`](Self::build_unchecked) to allow unregistered modeled
+            /// operations; requests to those operations return status code 500.
             pub fn build(self) -> #{Result}<
                 $serviceName<$routerName<L::Service>>,
                 MissingOperationsError,
@@ -772,13 +755,12 @@ class ServerServiceGenerator(
                 #{RouteInitializations:W}
                 #{PatternInitializations:W}
 
-                // Build router for each protocol
                 #{RouterConstructions:W}
 
-                // Wrap each router in RoutingService and apply user's layer
+                // Apply the configured layer to each protocol router.
                 #{RoutingServiceConstructions:W}
 
-                // Combine routers into a Tower layer stack (canonical detection order)
+                // Nest protocol services in detection order.
                 #{MultiProtocolConstruction:W}
 
                 Ok($serviceName { svc: router })
@@ -877,7 +859,7 @@ class ServerServiceGenerator(
         )
     }
 
-    /** Render build_unchecked for multi-protocol services. */
+    /** Renders `build_unchecked` for a multi-protocol service. */
     private fun RustWriter.renderMultiProtocolBuildUncheckedMethod() {
         val protocolInfos = getProtocolInfo()
 
@@ -936,21 +918,7 @@ class ServerServiceGenerator(
                 }
             }
 
-        // Generate the RoutingService construction with layer application for each protocol
-        val routingServiceConstructions =
-            writable {
-                for (protoInfo in protocolInfos) {
-                    val routerVarName = "${protoInfo.modulePath}_router"
-                    val svcVarName = "${protoInfo.modulePath}_svc"
-                    rustTemplate(
-                        """
-                        let $svcVarName = #{SmithyHttpServer}::routing::RoutingService::new($routerVarName);
-                        let $svcVarName = $svcVarName.map(|s| s.layer(&self.layer));
-                        """,
-                        *codegenScope,
-                    )
-                }
-            }
+        val routingServiceConstructions = routingServiceConstructions(protocolInfos)
 
         // Install Tower protocol layers in canonical detection order.
         // ServiceBuilder preserves declaration order, so the first protocol is
@@ -959,10 +927,11 @@ class ServerServiceGenerator(
             writable {
                 rustTemplate("let router = #{Tower}::ServiceBuilder::new()", *codegenScope)
                 for (protoInfo in protocolInfos) {
-                    val svcVarName = "${protoInfo.modulePath}_svc"
+                    val routerVarName = "${protoInfo.modulePath}_router"
                     rustTemplate(
-                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new($svcVarName))",
+                        ".layer(#{SmithyHttpServer}::routing::ProtocolLayer::new(#{Marker}, $routerVarName))",
                         *codegenScope,
+                        "Marker" to protoInfo.markerStruct,
                     )
                 }
                 rustTemplate(
@@ -976,7 +945,7 @@ class ServerServiceGenerator(
             /// Constructs a [`$serviceName`] from the arguments provided to the builder.
             /// Operations without a handler default to returning 500 Internal Server Error to the caller.
             ///
-            /// This service supports multiple protocols: ${protocolInfos.joinToString(", ") { it.modulePath }}.
+            /// Requests are dispatched among the generated protocols in detection order.
             ///
             /// Check out [`$builderName::build`] if you'd prefer the builder to fail if one or more operations do
             /// not have a registered handler.
@@ -989,13 +958,12 @@ class ServerServiceGenerator(
             {
                 #{RouteInitializations:W}
 
-                // Build router for each protocol
                 #{RouterConstructions:W}
 
-                // Wrap each router in RoutingService and apply user's layer
+                // Apply the configured layer to each protocol router.
                 #{RoutingServiceConstructions:W}
 
-                // Combine routers into a Tower layer stack (canonical detection order)
+                // Nest protocol services in detection order.
                 #{MultiProtocolConstruction:W}
 
                 $serviceName { svc: router }

@@ -47,10 +47,8 @@ class ProtocolFunctions(
         val serDeModule = RustModule.pubCrate("protocol_serde")
 
         /**
-         * Generate a protocol-specific module name from a protocol ShapeId.
-         * For example: aws.protocols#restJson1 -> protocol_serde_rest_json1
-         *
-         * This is only used for server-side code generation.
+         * Generates a serde module name from the protocol shape's local name.
+         * For example, `aws.protocols#restJson1` becomes `protocol_serde_rest_json1`.
          */
         fun serDeModuleForProtocol(protocol: software.amazon.smithy.model.shapes.ShapeId): RustModule.LeafModule {
             val protocolName = protocol.name.toSnakeCase()
@@ -58,11 +56,8 @@ class ProtocolFunctions(
         }
 
         /**
-         * Generate a protocol suffix for multi-protocol code generation.
-         * For example: aws.protocols#restJson1 -> RestJson1
-         *
-         * This is used to differentiate between generated types (like event stream marshallers)
-         * when a service supports multiple protocols.
+         * Generates a PascalCase suffix from the protocol shape's local name.
+         * For example, `aws.protocols#restJson1` becomes `RestJson1`.
          */
         fun protocolSuffix(protocol: software.amazon.smithy.model.shapes.ShapeId): String {
             return protocol.name.toPascalCase()
@@ -94,13 +89,7 @@ class ProtocolFunctions(
                 block(fnName)
             }
 
-        /**
-         * Generate a cross-operation function with a protocol-specific module name.
-         * This is used by server-side code generation to create protocol-specific modules
-         * (e.g., protocol_serde_rest_json1, protocol_serde_rpcv2_cbor).
-         *
-         * For client-side code, use the regular crossOperationFn instead.
-         */
+        /** Generates a cross-operation function in the serde module selected for `target`. */
         fun crossOperationFn(
             fnName: String,
             protocol: software.amazon.smithy.model.shapes.ShapeId,

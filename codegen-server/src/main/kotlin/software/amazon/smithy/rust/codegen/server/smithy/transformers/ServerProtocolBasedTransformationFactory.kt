@@ -42,12 +42,10 @@ object ServerProtocolBasedTransformationFactory {
             return model
         }
 
-        // Check if this is a multi-protocol service. If so, don't remove traits that other protocols need.
-        // The RPC v2 CBOR protocol should ignore HTTP-specific traits rather than requiring their removal.
+        // Preserve modeled HTTP traits when multiple protocols are generated because
+        // another protocol may consume them; RPC v2 CBOR uses synthetic HTTP bindings.
         val protocols = ServiceIndex.of(model).getProtocols(service)
         if (protocols.size > 1) {
-            // Multi-protocol service: don't remove HTTP traits that REST protocols need.
-            // RPC v2 CBOR will use its own HttpBindingResolver that generates synthetic HTTP traits.
             return model
         }
 

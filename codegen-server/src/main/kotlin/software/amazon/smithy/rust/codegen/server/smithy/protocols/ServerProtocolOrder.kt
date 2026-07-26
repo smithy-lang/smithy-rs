@@ -28,10 +28,9 @@ internal object ServerProtocolOrder {
         )
 
     /**
-     * Applies the built-in order and decorator-contributed relative constraints.
-     *
-     * Constraints are active only when both referenced protocols are selected by the service. Unconstrained
-     * protocols use the built-in order first, followed by protocol shape ID for deterministic downstream ordering.
+     * Applies built-in ordering edges and decorator-contributed relative constraints.
+     * Constraints apply only when both protocols are selected. Ties between currently available
+     * protocols are broken by built-in order and then protocol shape ID.
      */
     fun resolve(
         protocols: List<ServerProtocol>,

@@ -96,7 +96,7 @@ class ServerBuilderGenerator(
     private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
     private val protocols: List<ServerProtocol>,
 ) {
-    // For backwards compatibility, provide a single-protocol constructor
+    // Convenience constructor for callers generating one protocol.
     constructor(
         codegenContext: ServerCodegenContext,
         shape: StructureShape,
@@ -104,7 +104,7 @@ class ServerBuilderGenerator(
         protocol: ServerProtocol,
     ) : this(codegenContext, shape, customValidationExceptionWithReasonConversionGenerator, listOf(protocol))
 
-    // Primary protocol for cases where we need a single protocol reference
+    // Protocol used by generated types that are not protocol-parameterized.
     private val primaryProtocol: ServerProtocol = protocols.first()
     companion object {
         /**

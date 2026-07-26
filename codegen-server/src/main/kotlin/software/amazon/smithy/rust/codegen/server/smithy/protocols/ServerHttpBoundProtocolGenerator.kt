@@ -182,10 +182,8 @@ class ServerHttpBoundProtocolTraitImplGenerator(
     private val httpBindingResolver = protocol.httpBindingResolver
     private val protocolFunctions = ProtocolFunctions(codegenContext)
 
-    // Protocol suffix for multi-protocol support, read from the protocol object
+    // A non-null suffix selects protocol-parameterized shared types.
     private val protocolSuffix: String? = protocol.protocolSuffix
-
-    // Multi-protocol mode is indicated by having a protocol suffix
     private val isMultiProtocol: Boolean = protocolSuffix != null
 
     fun withHttpBindingCustomizations(
@@ -290,13 +288,14 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         if (isMultiProtocol) {
-            // Multi-protocol mode: generate generic InputFuture<P> struct only once (controlled by generateSharedTypes)
+            // Share InputFuture<P> across the protocol-specific FromRequest implementations.
             if (generateSharedTypes) {
                 rustTemplate(
                     """
                     #{PinProjectLite}::pin_project! {
-                        /// A [`Future`](std::future::Future) aggregating the body bytes of a [`Request`] and constructing the
-                        /// [`${inputSymbol.name}`](#{I}) using modelled bindings.
+                        /// A [`Future`](std::future::Future) that aggregates an [`http::Request`] body
+                        /// and constructs the operation input from modeled bindings.
+                        /// `P` selects the protocol-specific runtime error type.
                         pub struct $inputFuture<P>
                         where
                             P: #{SmithyHttpServer}::protocol::OperationError,

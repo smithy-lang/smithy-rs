@@ -29,10 +29,7 @@ open class ProtocolLoader<T, C : CodegenContext>(private val supportedProtocols:
         return matchingProtocols.first()
     }
 
-    /**
-     * Returns ALL matching protocols for a service, enabling multi-protocol code generation.
-     * This is used when a service defines multiple protocols (e.g., both RestJson1 and RpcV2Cbor).
-     */
+    /** Returns the loader-supported protocols declared by the service, in loader order. */
     fun protocolsFor(
         model: Model,
         serviceShape: ServiceShape,
