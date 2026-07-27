@@ -28,7 +28,7 @@ use http::{Request, Response};
 use pin_project_lite::pin_project;
 use tower::{Layer, Service};
 
-use crate::{body::BoxBody, protocol::ProtocolShape, routing::Router};
+use crate::{body::BoxBody, protocol::ProtocolShape, response::IntoResponse, routing::Router};
 
 // ============================================================================
 // SelectedProtocol (request extension)
@@ -65,8 +65,8 @@ pub enum DetectionResult<S> {
 ///
 /// Returning `None` delegates to the inner service. `Detected` selects this
 /// protocol and lets [`ProtocolService`] resolve the route; a failed lookup
-/// returns this protocol's unknown-operation response. `Matched` supplies the
-/// selected route directly.
+/// produces the protocol-specific error via the router's `IntoResponse` impl.
+/// `Matched` supplies the selected route directly.
 ///
 /// # Borrowing constraint
 ///
@@ -81,12 +81,6 @@ pub trait ProtocolDetector<B, S> {
     /// The `router` is provided for protocols that pre-match the route and return
     /// `Matched(route)`. Other protocols can ignore it and return `Detected`.
     fn detect(&self, req: &Request<B>, router: &impl Router<B, Service = S>) -> Option<DetectionResult<S>>;
-
-    /// Returns this protocol's unknown-operation response.
-    ///
-    /// [`ProtocolService`] uses it after `Detected` when route lookup fails and
-    /// returns it without invoking the inner service.
-    fn unknown_operation_response(&self) -> Response<BoxBody>;
 }
 
 // ============================================================================
@@ -175,6 +169,7 @@ impl<B, P, R, S, Inner, RespBody, E> Service<Request<B>> for ProtocolService<P, 
 where
     P: ProtocolDetector<B, S>,
     R: Router<B, Service = S>,
+    R::Error: IntoResponse<P>,
     S: Service<Request<B>, Response = Response<RespBody>, Error = E>,
     S::Future: Future<Output = Result<Response<RespBody>, E>>,
     Inner: Service<Request<B>, Response = Response<RespBody>, Error = E>,
@@ -209,11 +204,11 @@ where
                     Ok(mut route) => ProtocolServiceFuture::Route {
                         future: route.call(req),
                     },
-                    Err(_err) => {
+                    Err(error) => {
                         // Protocol owns this request but operation is unknown.
-                        // Return protocol-specific rejection — NEVER fall through.
+                        // Use the router's protocol-specific error response — NEVER fall through.
                         tracing::debug!(protocol = %id, "multi-protocol: unknown operation for detected protocol");
-                        let rejection = self.protocol.unknown_operation_response().map(RespBody::from);
+                        let rejection = error.into_response().map(RespBody::from);
                         ProtocolServiceFuture::Rejection {
                             response: Some(Ok(rejection)),
                         }
@@ -280,7 +275,7 @@ where
 /// If the route doesn't exist, it's an "unknown operation" error for this protocol,
 /// NOT a fall-through to the next protocol.
 macro_rules! impl_header_detection_protocol {
-    ($marker:ty, $detect:expr, $rejection:expr) => {
+    ($marker:ty, $detect:expr) => {
         impl<B, S: Clone> ProtocolDetector<B, S> for $marker {
             fn protocol_id(&self) -> &'static str {
                 <$marker as ProtocolShape>::ID.absolute()
@@ -295,29 +290,21 @@ macro_rules! impl_header_detection_protocol {
                     None
                 }
             }
-
-            fn unknown_operation_response(&self) -> Response<BoxBody> {
-                let build: fn() -> Response<BoxBody> = $rejection;
-                build()
-            }
         }
     };
 }
 
 impl_header_detection_protocol!(
     crate::protocol::aws_json_11::AwsJson1_1,
-    is_aws_json_11,
-    unknown_operation_aws_json_11
+    is_aws_json_11
 );
 impl_header_detection_protocol!(
     crate::protocol::aws_json_10::AwsJson1_0,
-    is_aws_json_10,
-    unknown_operation_aws_json_10
+    is_aws_json_10
 );
 impl_header_detection_protocol!(
     crate::protocol::rpc_v2_cbor::RpcV2Cbor,
-    is_rpc_v2_cbor,
-    unknown_operation_rpc_v2_cbor
+    is_rpc_v2_cbor
 );
 
 /// Macro for route-matching protocols.
@@ -328,7 +315,7 @@ impl_header_detection_protocol!(
 /// because content-type alone is not enough to definitively claim a request
 /// (e.g., any JSON POST could look like RestJson1).
 macro_rules! impl_route_matching_protocol {
-    ($marker:ty, $content_type_check:expr, $rejection:expr) => {
+    ($marker:ty, $content_type_check:expr) => {
         impl<B, S: Clone> ProtocolDetector<B, S> for $marker {
             fn protocol_id(&self) -> &'static str {
                 <$marker as ProtocolShape>::ID.absolute()
@@ -343,27 +330,17 @@ macro_rules! impl_route_matching_protocol {
                     None
                 }
             }
-
-            fn unknown_operation_response(&self) -> Response<BoxBody> {
-                // Route-matching protocols only return `Matched` or `None`, never
-                // `Detected`, so this should never be called. But we implement
-                // it for correctness.
-                let build: fn() -> Response<BoxBody> = $rejection;
-                build()
-            }
         }
     };
 }
 
 impl_route_matching_protocol!(
     crate::protocol::rest_json_1::RestJson1,
-    is_json_content_type,
-    unknown_operation_rest_json
+    is_json_content_type
 );
 impl_route_matching_protocol!(
     crate::protocol::rest_xml::RestXml,
-    is_xml_content_type,
-    unknown_operation_rest_xml
+    is_xml_content_type
 );
 
 // ============================================================================
@@ -454,64 +431,6 @@ fn is_xml_content_type<B>(req: &Request<B>) -> bool {
         .unwrap_or(false)
 }
 
-// ============================================================================
-// Protocol-specific "unknown operation" rejection responses
-// ============================================================================
-
-use crate::body::{empty, to_boxed};
-use crate::extension::RuntimeErrorExtension;
-use crate::routing::UNKNOWN_OPERATION_EXCEPTION;
-
-/// RPC v2 CBOR unknown operation response: 404 with `application/cbor` content type.
-fn unknown_operation_rpc_v2_cbor() -> Response<BoxBody> {
-    Response::builder()
-        .status(http::StatusCode::NOT_FOUND)
-        .header(http::header::CONTENT_TYPE, "application/cbor")
-        .extension(RuntimeErrorExtension::new(UNKNOWN_OPERATION_EXCEPTION.to_string()))
-        .body(empty())
-        .expect("valid response")
-}
-
-/// AWS JSON 1.1 unknown operation response: 404 with `application/x-amz-json-1.1`.
-fn unknown_operation_aws_json_11() -> Response<BoxBody> {
-    Response::builder()
-        .status(http::StatusCode::NOT_FOUND)
-        .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.1")
-        .extension(RuntimeErrorExtension::new(UNKNOWN_OPERATION_EXCEPTION.to_string()))
-        .body(empty())
-        .expect("valid response")
-}
-
-/// AWS JSON 1.0 unknown operation response: 404 with `application/x-amz-json-1.0`.
-fn unknown_operation_aws_json_10() -> Response<BoxBody> {
-    Response::builder()
-        .status(http::StatusCode::NOT_FOUND)
-        .header(http::header::CONTENT_TYPE, "application/x-amz-json-1.0")
-        .extension(RuntimeErrorExtension::new(UNKNOWN_OPERATION_EXCEPTION.to_string()))
-        .body(empty())
-        .expect("valid response")
-}
-
-/// RestJson1 unknown operation response: 404 with `application/json`.
-fn unknown_operation_rest_json() -> Response<BoxBody> {
-    Response::builder()
-        .status(http::StatusCode::NOT_FOUND)
-        .header(http::header::CONTENT_TYPE, "application/json")
-        .header("X-Amzn-Errortype", UNKNOWN_OPERATION_EXCEPTION)
-        .extension(RuntimeErrorExtension::new(UNKNOWN_OPERATION_EXCEPTION.to_string()))
-        .body(to_boxed("{}"))
-        .expect("valid response")
-}
-
-/// RestXml unknown operation response: 404 with `application/xml`.
-fn unknown_operation_rest_xml() -> Response<BoxBody> {
-    Response::builder()
-        .status(http::StatusCode::NOT_FOUND)
-        .header(http::header::CONTENT_TYPE, "application/xml")
-        .extension(RuntimeErrorExtension::new(UNKNOWN_OPERATION_EXCEPTION.to_string()))
-        .body(empty())
-        .expect("valid response")
-}
 
 #[cfg(test)]
 mod tests {

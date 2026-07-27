@@ -36,10 +36,6 @@ where
         route.call(req);  // ERROR: cannot move out of `*req` which is behind a shared reference
         None
     }
-
-    fn unknown_operation_response(&self) -> Response<BoxBody> {
-        unimplemented!()
-    }
 }
 
 fn main() {}
