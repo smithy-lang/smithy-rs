@@ -6,7 +6,7 @@ use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 use crate::HttpClientError;
 
 #[cfg(feature = "__rustls")]
-pub use rustls_pki_types::ServerName;
+pub use rustls_provider::{InvalidServerName, ServerName};
 
 /// Choice of underlying cryptography library
 #[derive(Debug, PartialEq, Clone)]
@@ -28,9 +28,9 @@ impl Eq for Provider {}
 pub struct TlsContext {
     #[allow(unused)]
     trust_store: TrustStore,
-    #[allow(unused)]
+    // TODO(s2n-tls): Wire up additional_server_names for the s2n-tls provider.
     #[cfg(feature = "__rustls")]
-    additional_server_names: Vec<ServerName<'static>>,
+    additional_server_names: Vec<ServerName>,
 }
 
 impl TlsContext {
@@ -51,7 +51,7 @@ impl Default for TlsContext {
 pub struct TlsContextBuilder {
     trust_store: TrustStore,
     #[cfg(feature = "__rustls")]
-    additional_server_names: Vec<ServerName<'static>>,
+    additional_server_names: Vec<ServerName>,
 }
 
 impl TlsContextBuilder {
@@ -73,7 +73,7 @@ impl TlsContextBuilder {
     #[cfg(feature = "__rustls")]
     pub fn with_additional_server_names(
         mut self,
-        additional_server_names: Vec<ServerName<'static>>,
+        additional_server_names: Vec<ServerName>,
     ) -> Self {
         self.additional_server_names = additional_server_names;
         self

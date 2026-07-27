@@ -2,6 +2,8 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use std::fmt;
+
 use crate::client::tls::Provider;
 use rustls::crypto::CryptoProvider;
 
@@ -93,6 +95,66 @@ impl Provider {
     }
 }
 
+/// A server name for TLS connections.
+///
+/// This represents a DNS hostname or IP address used for TLS Server Name
+/// Indication (SNI) and certificate verification.
+///
+/// # Examples
+///
+/// ```
+/// use aws_smithy_http_client::tls::ServerName;
+///
+/// let name = ServerName::try_from("example.com").unwrap();
+/// let ip_name = ServerName::try_from("127.0.0.1").unwrap();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ServerName(rustls_pki_types::ServerName<'static>);
+
+impl ServerName {
+    pub(crate) fn inner(&self) -> &rustls_pki_types::ServerName<'static> {
+        &self.0
+    }
+}
+
+/// Error returned when a server name string is invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidServerName {
+    name: String,
+}
+
+impl fmt::Display for InvalidServerName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid server name: {:?}", self.name)
+    }
+}
+
+impl std::error::Error for InvalidServerName {}
+
+impl TryFrom<String> for ServerName {
+    type Error = InvalidServerName;
+
+    fn try_from(name: String) -> Result<Self, Self::Error> {
+        match rustls_pki_types::ServerName::try_from(name.as_str()) {
+            Ok(sn) => Ok(ServerName(sn.to_owned())),
+            Err(_) => Err(InvalidServerName { name }),
+        }
+    }
+}
+
+impl TryFrom<&str> for ServerName {
+    type Error = InvalidServerName;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
+        match rustls_pki_types::ServerName::try_from(name) {
+            Ok(sn) => Ok(ServerName(sn.to_owned())),
+            Err(_) => Err(InvalidServerName {
+                name: name.to_owned(),
+            }),
+        }
+    }
+}
+
 pub(crate) mod build_connector {
     use crate::client::tls::rustls_provider::CryptoMode;
     use crate::tls::TlsContext;
@@ -105,7 +167,7 @@ pub(crate) mod build_connector {
     use rustls_native_certs::CertificateResult;
     use rustls_pki_types::pem::PemObject;
     use rustls_pki_types::CertificateDer;
-    use rustls_pki_types::ServerName;
+    use rustls_pki_types::ServerName as RustlsServerName;
     use std::sync::Arc;
     use std::sync::LazyLock;
 
@@ -175,8 +237,11 @@ pub(crate) mod build_connector {
             roots
         }
 
-        fn additional_server_names(&self) -> Vec<ServerName<'static>> {
-            self.additional_server_names.clone()
+        fn additional_server_names(&self) -> Vec<RustlsServerName<'static>> {
+            self.additional_server_names
+                .iter()
+                .map(|name| name.inner().clone())
+                .collect()
         }
     }
 
@@ -239,7 +304,7 @@ pub(crate) mod build_connector {
     #[derive(Debug)]
     struct ServerVerifier {
         web_pki_server_verifier: Arc<WebPkiServerVerifier>,
-        additional_server_names: Vec<ServerName<'static>>,
+        additional_server_names: Vec<RustlsServerName<'static>>,
     }
 
     impl ServerCertVerifier for ServerVerifier {
@@ -247,7 +312,7 @@ pub(crate) mod build_connector {
             &self,
             end_entity: &CertificateDer<'_>,
             intermediates: &[CertificateDer<'_>],
-            server_name: &ServerName<'_>,
+            server_name: &RustlsServerName<'_>,
             ocsp_response: &[u8],
             now: rustls_pki_types::UnixTime,
         ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
@@ -456,7 +521,7 @@ pub(crate) mod connect {
             dst: Uri,
             intercept: hyper_util::client::proxy::matcher::Intercept,
         ) -> Connecting {
-            use rustls_pki_types::ServerName;
+            use rustls_pki_types::ServerName as RustlsServerName;
             // For HTTPS through HTTP proxy, we need to:
             // 1. Establish CONNECT tunnel using the HTTPS connector
             // 2. Perform manual TLS handshake over the tunneled stream
@@ -489,7 +554,7 @@ pub(crate) mod connect {
                     .host()
                     .ok_or("missing host in URI for TLS handshake")?;
 
-                let server_name = ServerName::try_from(host.to_owned()).map_err(|e| {
+                let server_name = RustlsServerName::try_from(host.to_owned()).map_err(|e| {
                     BoxError::from(format!("invalid server name for TLS handshake: {e}"))
                 })?;
 
