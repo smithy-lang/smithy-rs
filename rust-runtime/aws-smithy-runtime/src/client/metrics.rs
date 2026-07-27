@@ -15,7 +15,42 @@ use aws_smithy_runtime_api::client::{
     runtime_plugin::RuntimePlugin,
 };
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
+use aws_smithy_types::telemetry::CapturedTelemetryAttributes;
 use std::{borrow::Cow, sync::Arc, time::SystemTime};
+
+/// Sets the outcome attributes (`error.type` and `http.response.status_code`) on `attrs` from a
+/// finalizer-phase context.
+fn add_outcome_attrs(
+    attrs: &mut Attributes,
+    context: &aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef<
+        '_,
+    >,
+) {
+    // Coarse category only; the error is type-erased here, so the modeled name isn't reachable.
+    // Absent on success, per OTel convention.
+    if let Some(Err(err)) = context.output_or_error() {
+        let category = if err.is_timeout_error() {
+            "timeout"
+        } else if err.is_connector_error() {
+            "connector"
+        } else if err.is_response_error() {
+            "response"
+        } else if err.is_operation_error() {
+            "operation"
+        } else {
+            "other"
+        };
+        attrs.set("error.type", AttributeValue::String(category.into()));
+    }
+
+    // Raw HTTP status code, whenever a response reached us.
+    if let Some(response) = context.response() {
+        attrs.set(
+            "http.response.status_code",
+            AttributeValue::I64(i64::from(response.status().as_u16())),
+        );
+    }
+}
 
 /// Struct to hold metric data in the ConfigBag
 #[derive(Debug, Clone)]
@@ -85,6 +120,13 @@ impl MetricsInterceptor {
             attributes.set("rpc.service", AttributeValue::String(md.service().into()));
             attributes.set("rpc.method", AttributeValue::String(md.name().into()));
 
+            // Merge any operation-input members the customer opted in to record.
+            if let Some(captured) = cfg.load::<CapturedTelemetryAttributes>() {
+                for (name, value) in captured.iter() {
+                    attributes.set(name, AttributeValue::String(value.into()));
+                }
+            }
+
             Some(attributes)
         } else {
             None
@@ -129,7 +171,7 @@ impl Intercept for MetricsInterceptor {
 
     fn read_after_execution(
         &self,
-        _context: &aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef<'_>,
+        context: &aws_smithy_runtime_api::client::interceptors::context::FinalizerInterceptorContextRef<'_>,
         _runtime_components: &aws_smithy_runtime_api::client::runtime_components::RuntimeComponents,
         cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> Result<(), aws_smithy_runtime_api::box_error::BoxError> {
@@ -137,7 +179,24 @@ impl Intercept for MetricsInterceptor {
 
         let attributes = self.get_attrs_from_cfg(cfg);
 
-        if let Some(attrs) = attributes {
+        if let Some(mut attrs) = attributes {
+            // The outcome is only known at the finalizer, so it is set here rather than in
+            // `get_attrs_from_cfg` (which also serves the per-attempt path).
+            add_outcome_attrs(&mut attrs, context);
+
+            // Real transferred bytes, counted per frame (see `telemetry_bytes`); Content-Length
+            // is absent or 0 for streaming bodies.
+            if let Some(bytes) = cfg.load::<crate::client::telemetry_bytes::TransferredBytes>() {
+                attrs.set(
+                    "http.request.body.size",
+                    AttributeValue::I64(bytes.request_bytes() as i64),
+                );
+                attrs.set(
+                    "http.response.body.size",
+                    AttributeValue::I64(bytes.response_bytes() as i64),
+                );
+            }
+
             let call_end = self.time_source.now();
             let call_duration = call_end.duration_since(measurements.call_start);
             if let Ok(elapsed) = call_duration {
@@ -213,7 +272,11 @@ impl RuntimePlugin for MetricsRuntimePlugin {
         if let Ok(interceptor) = interceptor {
             Cow::Owned(
                 RuntimeComponentsBuilder::new("Metrics")
-                    .with_interceptor(SharedInterceptor::permanent(interceptor)),
+                    .with_interceptor(SharedInterceptor::permanent(interceptor))
+                    // Counts transferred bytes into the bag for the metrics interceptor to read.
+                    .with_interceptor(SharedInterceptor::permanent(
+                        crate::client::telemetry_bytes::TelemetryBytesInterceptor,
+                    )),
             )
         } else {
             Cow::Owned(RuntimeComponentsBuilder::new("Metrics"))
