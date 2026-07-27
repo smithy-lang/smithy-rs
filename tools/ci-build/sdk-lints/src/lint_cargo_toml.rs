@@ -279,7 +279,6 @@ impl StableCratesExposeStableCrates {
             "bytes",
             "http-body",
             "aws-smithy-eventstream",
-            "rustls-pki-types",
         ] {
             stable_crates.insert(crte.replace('-', "_"));
         }
