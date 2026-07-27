@@ -344,7 +344,7 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "aws-config"
-version = "1.10.0"
+version = "1.10.1"
 dependencies = [
  "aws-credential-types",
  "aws-runtime",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "aws-runtime"
-version = "1.9.0"
+version = "1.9.1"
 dependencies = [
  "arbitrary",
  "aws-credential-types",
@@ -880,7 +880,6 @@ dependencies = [
  "aws-runtime",
  "aws-smithy-async",
  "aws-smithy-http",
- "aws-smithy-http-client",
  "aws-smithy-json",
  "aws-smithy-observability",
  "aws-smithy-runtime",
@@ -892,12 +891,10 @@ dependencies = [
  "fastrand 2.4.1",
  "http 0.2.12",
  "http 1.4.2",
- "pretty_assertions",
  "proptest",
  "regex-lite",
  "tokio",
  "tracing",
- "tracing-test",
 ]
 
 [[package]]
@@ -1523,7 +1520,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.12.0"
+version = "1.12.1"
 dependencies = [
  "approx",
  "aws-smithy-async",
@@ -1553,7 +1550,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime-api"
-version = "1.13.0"
+version = "1.14.0"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-runtime-api-macros",
