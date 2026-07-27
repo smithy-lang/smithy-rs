@@ -20,29 +20,43 @@ use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use http_body_1x::{Body, Frame};
 use std::mem;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
+
+// A u64 counter shared across the request/response body wraps. `AtomicU64` is avoided because
+// it is unavailable on 32-bit targets (e.g. powerpc); a `Mutex` works everywhere and the
+// per-frame update rate makes contention a non-issue.
+type Counter = Arc<Mutex<u64>>;
+
+fn add(counter: &Counter, n: u64) {
+    if let Ok(mut total) = counter.lock() {
+        *total += n;
+    }
+}
+
+fn get(counter: &Counter) -> u64 {
+    counter.lock().map(|t| *t).unwrap_or_default()
+}
 
 /// Shared, thread-safe byte counters for a single operation, stored in the `ConfigBag`.
 ///
 /// Request and response are wrapped in different phases and may be polled from different
-/// tasks, so the counters are atomic and shared via `Arc`.
+/// tasks, so the counters are shared via `Arc`.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct TransferredBytes {
-    request: Arc<AtomicU64>,
-    response: Arc<AtomicU64>,
+    request: Counter,
+    response: Counter,
 }
 
 impl TransferredBytes {
     /// Bytes observed flowing through the request body so far.
     pub(crate) fn request_bytes(&self) -> u64 {
-        self.request.load(Ordering::Relaxed)
+        get(&self.request)
     }
 
     /// Bytes observed flowing through the response body so far.
     pub(crate) fn response_bytes(&self) -> u64 {
-        self.response.load(Ordering::Relaxed)
+        get(&self.response)
     }
 }
 
@@ -54,7 +68,7 @@ impl Storable for TransferredBytes {
 /// Contents are forwarded unchanged.
 struct CountingBody<B> {
     inner: B,
-    counter: Arc<AtomicU64>,
+    counter: Counter,
 }
 
 impl<B> Body for CountingBody<B>
@@ -73,7 +87,7 @@ where
             Poll::Ready(Some(Ok(frame))) => {
                 if let Some(data) = frame.data_ref() {
                     // Count only data frames; trailers carry no payload bytes.
-                    this.counter.fetch_add(data.len() as u64, Ordering::Relaxed);
+                    add(&this.counter, data.len() as u64);
                 }
                 Poll::Ready(Some(Ok(frame)))
             }
@@ -91,7 +105,7 @@ where
 }
 
 /// Wraps `body` so bytes flowing through it accumulate into `counter`, preserving contents.
-fn wrap(body: SdkBody, counter: Arc<AtomicU64>) -> SdkBody {
+fn wrap(body: SdkBody, counter: Counter) -> SdkBody {
     body.map_preserve_contents(move |b| {
         SdkBody::from_body_1_x(CountingBody {
             inner: b,
@@ -159,7 +173,7 @@ mod test {
     #[tokio::test]
     async fn counts_all_bytes_flowing_through_a_streaming_body() {
         // A streaming body has no Content-Length, so the wrapper must count the real bytes.
-        let counter = Arc::new(AtomicU64::new(0));
+        let counter = Counter::default();
         let stream = futures_util::stream::iter(vec![
             Ok::<_, BoxError>(bytes::Bytes::from_static(b"hello ")),
             Ok(bytes::Bytes::from_static(b"world")),
@@ -171,14 +185,14 @@ mod test {
 
         drain(wrap(streaming, counter.clone())).await;
 
-        assert_eq!(11, counter.load(Ordering::Relaxed));
+        assert_eq!(11, get(&counter));
     }
 
     #[tokio::test]
     async fn empty_body_counts_zero() {
-        let counter = Arc::new(AtomicU64::new(0));
+        let counter = Counter::default();
         drain(wrap(SdkBody::empty(), counter.clone())).await;
-        assert_eq!(0, counter.load(Ordering::Relaxed));
+        assert_eq!(0, get(&counter));
     }
 
     #[test]
