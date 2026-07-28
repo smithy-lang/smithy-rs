@@ -95,6 +95,8 @@ data class ClientCodegenConfig(
     /** If true, adds `endpoint_url`/`set_endpoint_url` methods to the service config */
     val includeEndpointUrlConfig: Boolean = DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG,
     val enableUserConfigurableRuntimePlugins: Boolean = DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS,
+    /** If true, adds `rustls` as a default feature on generated crates (legacy behavior) */
+    val includeLegacyClient: Boolean = DEFAULT_ENABLE_LEGACY_CLIENT,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode, DEFAULT_FLATTEN_ACCESSORS,
     ) {
@@ -104,6 +106,7 @@ data class ClientCodegenConfig(
         private const val DEFAULT_ADD_MESSAGE_TO_ERRORS = true
         private const val DEFAULT_INCLUDE_ENDPOINT_URL_CONFIG = true
         private const val DEFAULT_ENABLE_USER_CONFIGURABLE_RUNTIME_PLUGINS = true
+        private const val DEFAULT_ENABLE_LEGACY_CLIENT = true
         private const val DEFAULT_NULLABILITY_CHECK_MODE = "CLIENT"
 
         // Note: only clients default to true, servers default to false
@@ -138,6 +141,9 @@ data class ClientCodegenConfig(
                     NullableIndex.CheckMode.valueOf(
                         node.get().getStringMemberOrDefault("nullabilityCheckMode", DEFAULT_NULLABILITY_CHECK_MODE),
                     ),
+                includeLegacyClient =
+                    node.get()
+                        .getBooleanMemberOrDefault("includeLegacyClient", DEFAULT_ENABLE_LEGACY_CLIENT),
             )
         } else {
             ClientCodegenConfig(

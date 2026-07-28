@@ -87,7 +87,19 @@ sealed class AdditionalSettings {
 class ClientAdditionalSettings private constructor(settings: List<AdditionalSettings>) :
     AdditionalSettings.CoreAdditionalSettings(settings) {
         class Builder : CoreAdditionalSettings.Builder<ClientAdditionalSettings>() {
+            fun includeLegacyClient(enabled: Boolean = true): Builder {
+                settings.add(includeLegacyClient(enabled))
+                return this
+            }
+
             override fun build(): ClientAdditionalSettings = ClientAdditionalSettings(settings)
+        }
+
+        private data class includeLegacyClient(val enabled: Boolean) : AdditionalSettings() {
+            override fun toObjectNode(): ObjectNode =
+                ObjectNode.builder()
+                    .withMember("includeLegacyClient", enabled)
+                    .build()
         }
 
         // Additional settings that are specific to client generation should be defined here.
