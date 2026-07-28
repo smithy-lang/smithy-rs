@@ -66,7 +66,7 @@ class TelemetryInputCaptureDecoratorTest {
         }
 
         structure TestOutput { }
-        """.asSmithyModel()
+        """.asSmithyModel(smithyVersion = "2")
 
     @Test
     fun `named input member is captured into the config bag`() {

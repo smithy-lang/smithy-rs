@@ -40,8 +40,12 @@ impl CapturedTelemetryAttributes {
     }
 
     /// Inserts a captured value under `name`, replacing any existing value for that name.
-    pub fn insert(&mut self, name: impl Into<Arc<str>>, value: impl Into<Arc<str>>) {
-        self.values.insert(name.into(), value.into());
+    ///
+    /// Takes `impl AsRef<str>` so the public API doesn't commit to the internal storage type;
+    /// values are cloned into the backing representation here.
+    pub fn insert(&mut self, name: impl AsRef<str>, value: impl AsRef<str>) {
+        self.values
+            .insert(Arc::from(name.as_ref()), Arc::from(value.as_ref()));
     }
 
     /// Returns the captured value for `name`, if one was captured.
@@ -78,9 +82,12 @@ pub struct RequestedTelemetryAttributes {
 
 impl RequestedTelemetryAttributes {
     /// Creates a selection from an iterator of member names.
-    pub fn new(names: impl IntoIterator<Item = impl Into<Arc<str>>>) -> Self {
+    ///
+    /// Takes `impl AsRef<str>` items so the public API doesn't commit to the internal storage
+    /// type; names are cloned into the backing representation here.
+    pub fn new(names: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         Self {
-            names: names.into_iter().map(Into::into).collect(),
+            names: names.into_iter().map(|n| Arc::from(n.as_ref())).collect(),
         }
     }
 
