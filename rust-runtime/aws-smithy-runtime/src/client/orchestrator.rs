@@ -15,6 +15,7 @@ use auth::{resolve_identity, sign_request};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
+use aws_smithy_runtime_api::client::identity::ResolveCachedIdentity;
 use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output, RewindResult,
 };
@@ -30,7 +31,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 };
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{MergeRetryConfig, RetryConfig, RetrySpec};
 use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use endpoints::apply_endpoint;
@@ -48,6 +49,22 @@ mod http;
 
 /// Utility for making one-off unmodeled requests with the orchestrator.
 pub mod operation;
+
+/// Config-bag marker signaling that the resolved identity was rejected by the target service
+/// (an `ExpiredToken` / `InvalidToken` authentication failure) and should be invalidated.
+///
+/// An AWS per-operation interceptor sets this after detecting the failure; it is **data-free** and
+/// carries no credential material. The orchestrator honors it after `read_after_deserialization` by
+/// calling [`ResolveCachedIdentity::invalidate`](aws_smithy_runtime_api::client::identity::ResolveCachedIdentity::invalidate)
+/// with the in-scope signing identity, then consumes it (`unset`) so a stale marker can't affect the
+/// next attempt.
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct InvalidateResolvedIdentity;
+
+impl Storable for InvalidateResolvedIdentity {
+    type Storer = StoreReplace<Self>;
+}
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
@@ -543,6 +560,16 @@ async fn try_attempt(
 
     ctx.enter_after_deserialization_phase();
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
+
+    // F-INVAL-1: an AWS interceptor may flag (via `InvalidateResolvedIdentity`) that the service
+    // rejected the resolved identity (ExpiredToken/InvalidToken). Honor it with the in-scope
+    // signing identity, then consume the marker so a stale flag can't affect the next attempt.
+    // `invalidate` is a trait-default no-op for caches that don't support it.
+    if cfg.load::<InvalidateResolvedIdentity>().is_some() {
+        runtime_components.identity_cache().invalidate(&identity);
+        cfg.interceptor_state()
+            .unset::<InvalidateResolvedIdentity>();
+    }
 }
 
 async fn finally_attempt(
