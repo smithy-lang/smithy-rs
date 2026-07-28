@@ -65,6 +65,18 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a>;
 
+    /// Invalidates a cached identity that a downstream service rejected as no longer valid.
+    ///
+    /// Called by the orchestrator after an authentication failure (`ExpiredToken` / `InvalidToken`)
+    /// with the in-scope signing identity. The default implementation is a no-op; caches that
+    /// support static stability (e.g. the AWS `StaticStabilityCache`) override it to route the next
+    /// resolution through a mandatory refresh. The rejected identity is opaque and matched by
+    /// allocation identity ([`Identity::ptr_eq`]), so this carries no credential material and works
+    /// for credentials and bearer tokens alike.
+    fn invalidate(&self, rejected: &Identity) {
+        let _ = rejected;
+    }
+
     #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
     fn validate_base_client_config(
         &self,
@@ -106,6 +118,10 @@ impl ResolveCachedIdentity for SharedIdentityCache {
     ) -> IdentityFuture<'a> {
         self.0
             .resolve_cached_identity(resolver, runtime_components, config_bag)
+    }
+
+    fn invalidate(&self, rejected: &Identity) {
+        self.0.invalidate(rejected)
     }
 }
 
@@ -301,6 +317,18 @@ impl Identity {
         self.properties
             .get(&TypeId::of::<T>())
             .and_then(|b| b.downcast_ref())
+    }
+
+    /// Returns `true` if `self` and `other` share the same underlying identity data allocation.
+    ///
+    /// This compares the `Arc<dyn Any>` data pointers (allocation identity), **not** the data
+    /// contents. Cloning an `Identity` shares its `data` `Arc`, so a served clone compares equal
+    /// to the cached identity it came from; a subsequent refresh installs a *new* allocation and
+    /// therefore compares unequal. This makes it a generation guard for cache invalidation
+    /// ([`ResolveCachedIdentity::invalidate`]): it works for any identity data (credentials and
+    /// bearer tokens alike) and inspects no credential material.
+    pub fn ptr_eq(&self, other: &Identity) -> bool {
+        Arc::ptr_eq(&self.data, &other.data)
     }
 }
 
