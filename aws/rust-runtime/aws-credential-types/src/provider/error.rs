@@ -46,6 +46,12 @@ pub struct Unhandled {
     source: Box<dyn Error + Send + Sync + 'static>,
 }
 
+/// Details for [`CredentialsError::Unrecoverable`]
+#[derive(Debug)]
+pub struct Unrecoverable {
+    source: Box<dyn Error + Send + Sync + 'static>,
+}
+
 /// Error returned when credentials failed to load.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -76,6 +82,11 @@ pub enum CredentialsError {
     /// - Returned data not UTF-8
     /// - A provider returns data that is missing required fields
     Unhandled(Unhandled),
+
+    /// The credentials provider experienced a terminal, non-recoverable error that retrying or
+    /// serving cached credentials cannot resolve — the caller must act (e.g. re-authenticate,
+    /// `aws sso login`). Bypasses refresh backoff and static stability.
+    Unrecoverable(Unrecoverable),
 }
 
 impl CredentialsError {
@@ -132,6 +143,22 @@ impl CredentialsError {
     pub fn provider_timed_out(timeout_duration: Duration) -> Self {
         Self::ProviderTimedOut(ProviderTimedOut { timeout_duration })
     }
+
+    /// The credentials provider experienced a terminal, non-recoverable error.
+    ///
+    /// Retrying or serving cached credentials will not help; the caller must act (for example,
+    /// re-authenticate). This bypasses refresh backoff and static stability.
+    pub fn unrecoverable(source: impl Into<Box<dyn Error + Send + Sync + 'static>>) -> Self {
+        Self::Unrecoverable(Unrecoverable {
+            source: source.into(),
+        })
+    }
+
+    /// Returns `true` if this is a terminal, non-recoverable error
+    /// ([`CredentialsError::Unrecoverable`]).
+    pub fn is_unrecoverable(&self) -> bool {
+        matches!(self, Self::Unrecoverable(_))
+    }
 }
 
 impl fmt::Display for CredentialsError {
@@ -154,6 +181,12 @@ impl fmt::Display for CredentialsError {
             CredentialsError::Unhandled(_) => {
                 write!(f, "unexpected credentials error")
             }
+            CredentialsError::Unrecoverable(_) => {
+                write!(
+                    f,
+                    "a non-recoverable error occurred while loading credentials"
+                )
+            }
         }
     }
 }
@@ -168,6 +201,7 @@ impl Error for CredentialsError {
             CredentialsError::InvalidConfiguration(details) => Some(details.source.as_ref() as _),
             CredentialsError::ProviderError(details) => Some(details.source.as_ref() as _),
             CredentialsError::Unhandled(details) => Some(details.source.as_ref() as _),
+            CredentialsError::Unrecoverable(details) => Some(details.source.as_ref() as _),
         }
     }
 }

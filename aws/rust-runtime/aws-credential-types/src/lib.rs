@@ -28,7 +28,7 @@ mod credentials_impl;
 pub mod provider;
 pub mod token_fn;
 
-pub use credentials_impl::{Credentials, CredentialsBuilder};
+pub use credentials_impl::{Credentials, CredentialsBuilder, StaticStabilityEligible};
 
 /// AWS Access Token
 ///
