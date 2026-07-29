@@ -6,6 +6,7 @@
 use aws_credential_types::attributes::AccountId;
 use aws_credential_types::provider::{self, error::CredentialsError};
 use aws_credential_types::Credentials as AwsCredentials;
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::types::{AssumedRoleUser, Credentials as StsCredentials};
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -32,7 +33,9 @@ pub(crate) fn into_credentials(
     if let Some(AssumedRoleUser { arn, .. }) = assumed_role_user {
         builder.set_account_id(Some(parse_account_id(&arn)?));
     }
-    Ok(builder.build())
+    let mut creds = builder.build();
+    creds.set_property(StaticStabilityEligible);
+    Ok(creds)
 }
 
 /// Create a default STS session name
