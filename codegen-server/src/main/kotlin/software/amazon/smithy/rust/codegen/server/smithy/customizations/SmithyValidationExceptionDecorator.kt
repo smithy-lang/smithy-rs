@@ -36,6 +36,7 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationEx
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isKeyConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isValueConstrained
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverProtocolSerdeModule
 import software.amazon.smithy.rust.codegen.server.smithy.validationErrorMessage
 
 /**
@@ -71,6 +72,8 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
 
     override fun renderImplFromConstraintViolationForRequestRejection(protocol: ServerProtocol): Writable =
         writable {
+            val serDeModule =
+                serverProtocolSerdeModule(protocol.protocolShapeId, codegenContext.isMultiProtocol)
             rustTemplate(
                 """
                 impl #{From}<ConstraintViolation> for #{RequestRejection} {
@@ -81,7 +84,7 @@ class SmithyValidationExceptionConversionGenerator(private val codegenContext: S
                             field_list: Some(vec![first_validation_exception_field]),
                         };
                         Self::ConstraintViolation(
-                            crate::protocol_serde::shape_validation_exception::ser_validation_exception_error(&validation_exception)
+                            crate::${serDeModule.name}::shape_validation_exception::ser_validation_exception_error(&validation_exception)
                                 .expect("validation exceptions should never fail to serialize; please file a bug report under https://github.com/smithy-lang/smithy-rs/issues")
                         )
                     }

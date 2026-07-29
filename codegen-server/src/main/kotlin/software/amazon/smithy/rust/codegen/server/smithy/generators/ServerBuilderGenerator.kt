@@ -94,8 +94,16 @@ class ServerBuilderGenerator(
     val codegenContext: ServerCodegenContext,
     private val shape: StructureShape,
     private val customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
-    private val protocol: ServerProtocol,
+    private val protocols: List<ServerProtocol>,
 ) {
+    // Convenience constructor for callers generating one protocol.
+    constructor(
+        codegenContext: ServerCodegenContext,
+        shape: StructureShape,
+        customValidationExceptionWithReasonConversionGenerator: ValidationExceptionConversionGenerator,
+        protocol: ServerProtocol,
+    ) : this(codegenContext, shape, customValidationExceptionWithReasonConversionGenerator, listOf(protocol))
+
     companion object {
         /**
          * Returns whether a structure shape, whose builder has been generated with [ServerBuilderGenerator], requires a
@@ -157,7 +165,6 @@ class ServerBuilderGenerator(
 
     private val codegenScope =
         arrayOf(
-            "RequestRejection" to protocol.requestRejection(codegenContext.runtimeConfig),
             "Structure" to structureSymbol,
             "From" to RuntimeType.From,
             "TryFrom" to RuntimeType.TryFrom,
@@ -232,13 +239,17 @@ class ServerBuilderGenerator(
     }
 
     private fun renderImplFromConstraintViolationForRequestRejection(writer: RustWriter) {
-        writer.rustTemplate(
-            """
-            #{Converter:W}
-            """,
-            "Converter" to
-                customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
-        )
+        protocols
+            .distinctBy { it.requestRejection(runtimeConfig).path }
+            .forEach { protocol ->
+                writer.rustTemplate(
+                    """
+                    #{Converter:W}
+                    """,
+                    "Converter" to
+                        customValidationExceptionWithReasonConversionGenerator.renderImplFromConstraintViolationForRequestRejection(protocol),
+                )
+            }
     }
 
     private fun renderImplFromBuilderForMaybeConstrained(writer: RustWriter) {

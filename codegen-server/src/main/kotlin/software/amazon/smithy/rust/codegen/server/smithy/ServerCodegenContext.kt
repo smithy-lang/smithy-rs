@@ -36,6 +36,8 @@ data class ServerCodegenContext(
     val constrainedShapeSymbolProvider: RustSymbolProvider,
     val constraintViolationSymbolProvider: ConstraintViolationSymbolProvider,
     val pubCrateConstrainedShapeSymbolProvider: PubCrateConstrainedShapeSymbolProvider,
+    /** Whether this server is generating more than one protocol. */
+    val isMultiProtocol: Boolean = false,
 ) : CodegenContext(
         model, symbolProvider, moduleDocProvider, serviceShape, protocol, settings, CodegenTarget.SERVER,
     ) {

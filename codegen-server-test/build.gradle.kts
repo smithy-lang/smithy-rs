@@ -150,7 +150,20 @@ val customCodegenTests = "custom-test-models".let { customModels ->
     ).bothHttpVersions()
 }
 
-val allCodegenTests = commonCodegenTests + customCodegenTests
+val multiProtocolCodegenTests = listOf(
+    CodegenTest(
+        "com.aws.example#PokemonService",
+        "pokemon-service-multi-protocol-server-sdk",
+        imports = listOf(
+            "../codegen-core/common-test-models/pokemon.smithy",
+            "../codegen-core/common-test-models/pokemon-common.smithy",
+            "custom-test-models/pokemon-multi-protocol.smithy",
+        ),
+        extraCodegenConfig = """"http-1x": true, "debugMode": true""",
+    ),
+)
+
+val allCodegenTests = commonCodegenTests + customCodegenTests + multiProtocolCodegenTests
 
 project.registerGenerateSmithyBuildTask(rootProject, pluginName, allCodegenTests)
 project.registerGenerateCargoWorkspaceTask(rootProject, pluginName, allCodegenTests, workingDirUnderBuildDir)

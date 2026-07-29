@@ -25,6 +25,37 @@ import java.util.logging.Logger
 
 typealias ServerProtocolMap = ProtocolMap<ServerProtocolGenerator, ServerCodegenContext>
 
+/** A relative ordering constraint contributed by a server codegen decorator. */
+sealed class ProtocolOrderConstraint {
+    abstract val protocol: ShapeId
+    abstract val relativeTo: ShapeId
+
+    /** Places [protocol] before [relativeTo] when both protocols are selected by the service. */
+    data class Before(
+        override val protocol: ShapeId,
+        override val relativeTo: ShapeId,
+    ) : ProtocolOrderConstraint()
+
+    /** Places [protocol] after [relativeTo] when both protocols are selected by the service. */
+    data class After(
+        override val protocol: ShapeId,
+        override val relativeTo: ShapeId,
+    ) : ProtocolOrderConstraint()
+}
+
+/**
+ * Optional server decorator capability for contributing relative protocol ordering constraints.
+ *
+ * Implement this interface instead of [ServerCodegenDecorator] when a decorator needs to position a protocol. The
+ * constraints from all participating decorators are combined before code generation.
+ */
+interface ServerProtocolOrderDecorator : ServerCodegenDecorator {
+    fun protocolOrderConstraints(
+        serviceId: ShapeId,
+        selectedProtocols: Set<ShapeId>,
+    ): List<ProtocolOrderConstraint>
+}
+
 /**
  * [ServerCodegenDecorator] allows downstream users to customize code generation.
  */
@@ -86,7 +117,7 @@ interface ServerCodegenDecorator : CoreCodegenDecorator<ServerCodegenContext, Se
  */
 class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     CombinedCoreCodegenDecorator<ServerCodegenContext, ServerRustSettings, ServerCodegenDecorator>(decorators),
-    ServerCodegenDecorator {
+    ServerProtocolOrderDecorator {
     private val orderedDecorators = decorators.sortedBy { it.order }
 
     override val name: String
@@ -100,6 +131,14 @@ class CombinedServerCodegenDecorator(decorators: List<ServerCodegenDecorator>) :
     ): ServerProtocolMap =
         combineCustomizations(currentProtocols) { decorator, protocolMap ->
             decorator.protocols(serviceId, protocolMap)
+        }
+
+    override fun protocolOrderConstraints(
+        serviceId: ShapeId,
+        selectedProtocols: Set<ShapeId>,
+    ): List<ProtocolOrderConstraint> =
+        orderedDecorators.filterIsInstance<ServerProtocolOrderDecorator>().flatMap { decorator ->
+            decorator.protocolOrderConstraints(serviceId, selectedProtocols)
         }
 
     override fun httpCustomizations(
