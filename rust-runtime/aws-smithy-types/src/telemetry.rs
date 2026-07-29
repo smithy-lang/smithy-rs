@@ -69,45 +69,46 @@ impl Storable for CapturedTelemetryAttributes {
 /// The operation-input member names a customer has opted in to for telemetry, split into two
 /// independent policies.
 ///
-/// Capture and recording are separate decisions:
-/// * **record** — the value is captured *and* attached to the built-in client metrics as an
-///   attribute. This is the common case (`always_record_attributes`).
-/// * **capture-only** — the value is captured into `CapturedTelemetryAttributes` so a custom
-///   interceptor can read it during the operation, but it is *not* attached to the built-in
-///   metrics (`capture_operation_input_attributes`). This keeps a high-cardinality value out of
-///   the metric label set while still making it available in-process.
+/// Every requested member is *captured* into `CapturedTelemetryAttributes` on the config bag; the
+/// two sets differ only in whether the value is also *emitted* on the built-in client metrics:
+/// * **emit** — the value is captured *and* attached to the built-in client metrics as an
+///   attribute. This is the common case (`emit_input_attributes`).
+/// * **capture-only** — the value is captured so a custom interceptor can read it during the
+///   operation, but it is *not* attached to the built-in metrics (`capture_input_attributes`).
+///   This keeps a high-cardinality value out of the metric label set while still making it
+///   available in-process.
 ///
 /// The generated per-operation interceptor captures the *union* of both sets; the built-in metrics
-/// implementation records only the *record* set. Absent unless the customer opts in, so both are a
+/// implementation emits only the *emit* set. Absent unless the customer opts in, so both are a
 /// no-op by default.
 ///
 /// Names are the Smithy member names (e.g. `"Bucket"`), matched by generated code against the
 /// operation's input members.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RequestedTelemetryAttributes {
-    record: Vec<Arc<str>>,
+    emit: Vec<Arc<str>>,
     capture_only: Vec<Arc<str>>,
 }
 
 impl RequestedTelemetryAttributes {
-    /// Creates a selection whose members are both captured and recorded on the metrics.
+    /// Creates a selection whose members are both captured and emitted on the metrics.
     ///
     /// Takes `impl AsRef<str>` items so the public API doesn't commit to the internal storage
     /// type; names are cloned into the backing representation here.
     pub fn new(names: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
         Self {
-            record: names.into_iter().map(|n| Arc::from(n.as_ref())).collect(),
+            emit: names.into_iter().map(|n| Arc::from(n.as_ref())).collect(),
             capture_only: Vec::new(),
         }
     }
 
-    /// Adds member names to the *record* set (captured and attached to the built-in metrics).
-    pub fn record(&mut self, names: impl IntoIterator<Item = impl AsRef<str>>) {
-        self.record
+    /// Adds member names to the *emit* set (captured and attached to the built-in metrics).
+    pub fn emit(&mut self, names: impl IntoIterator<Item = impl AsRef<str>>) {
+        self.emit
             .extend(names.into_iter().map(|n| Arc::from(n.as_ref())));
     }
 
-    /// Adds member names to the *capture-only* set (captured for in-process reads, not recorded on
+    /// Adds member names to the *capture-only* set (captured for in-process reads, not emitted on
     /// the built-in metrics).
     pub fn capture_only(&mut self, names: impl IntoIterator<Item = impl AsRef<str>>) {
         self.capture_only
@@ -116,20 +117,20 @@ impl RequestedTelemetryAttributes {
 
     /// Returns `true` if `name` should be captured (in either set).
     pub fn should_capture(&self, name: &str) -> bool {
-        self.record
+        self.emit
             .iter()
             .chain(self.capture_only.iter())
             .any(|n| n.as_ref() == name)
     }
 
-    /// Returns `true` if `name` should be recorded on the built-in metrics.
-    pub fn should_record(&self, name: &str) -> bool {
-        self.record.iter().any(|n| n.as_ref() == name)
+    /// Returns `true` if `name` should be emitted on the built-in metrics.
+    pub fn should_emit(&self, name: &str) -> bool {
+        self.emit.iter().any(|n| n.as_ref() == name)
     }
 
     /// Returns `true` if nothing is requested for capture in either set.
     pub fn is_empty(&self) -> bool {
-        self.record.is_empty() && self.capture_only.is_empty()
+        self.emit.is_empty() && self.capture_only.is_empty()
     }
 }
 
@@ -172,13 +173,13 @@ mod tests {
     }
 
     #[test]
-    fn record_set_is_captured_and_recorded() {
+    fn emit_set_is_captured_and_emitted() {
         let requested = RequestedTelemetryAttributes::new(["Bucket", "Key"]);
-        // Members in the record set are both captured and recorded.
+        // Members in the emit set are both captured and emitted.
         assert!(requested.should_capture("Bucket"));
-        assert!(requested.should_record("Bucket"));
+        assert!(requested.should_emit("Bucket"));
         assert!(requested.should_capture("Key"));
-        assert!(requested.should_record("Key"));
+        assert!(requested.should_emit("Key"));
         assert!(!requested.should_capture("VersionId"));
         assert!(!requested.is_empty());
 
@@ -188,18 +189,18 @@ mod tests {
     }
 
     #[test]
-    fn capture_only_set_is_captured_but_not_recorded() {
+    fn capture_only_set_is_captured_but_not_emitted() {
         let mut requested = RequestedTelemetryAttributes::default();
-        requested.record(["Bucket"]);
+        requested.emit(["Bucket"]);
         requested.capture_only(["Prefix"]);
 
-        // Prefix is captured for in-process reads but must not be recorded on the metrics.
+        // Prefix is captured for in-process reads but must not be emitted on the metrics.
         assert!(requested.should_capture("Prefix"));
-        assert!(!requested.should_record("Prefix"));
+        assert!(!requested.should_emit("Prefix"));
 
-        // Bucket stays both captured and recorded.
+        // Bucket stays both captured and emitted.
         assert!(requested.should_capture("Bucket"));
-        assert!(requested.should_record("Bucket"));
+        assert!(requested.should_emit("Bucket"));
 
         assert!(!requested.is_empty());
     }

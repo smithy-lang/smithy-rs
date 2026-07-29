@@ -135,7 +135,7 @@ impl MetricsInterceptor {
             attributes.set("rpc.service", AttributeValue::String(md.service().into()));
             attributes.set("rpc.method", AttributeValue::String(md.name().into()));
 
-            // Merge captured input members that the customer opted in to *record*. Capture-only
+            // Merge captured input members that the customer opted in to *emit*. Capture-only
             // members are present in the bag for in-process reads but are deliberately excluded
             // from the metric label set.
             if let (Some(captured), Some(requested)) = (
@@ -143,7 +143,7 @@ impl MetricsInterceptor {
                 cfg.load::<RequestedTelemetryAttributes>(),
             ) {
                 for (name, value) in captured.iter() {
-                    if requested.should_record(name) {
+                    if requested.should_emit(name) {
                         attributes.set(name, AttributeValue::String(value.into()));
                     }
                 }
@@ -402,7 +402,7 @@ mod test {
     }
 
     #[test]
-    fn recorded_members_are_merged_onto_attrs() {
+    fn emitted_members_are_merged_onto_attrs() {
         let mut captured = CapturedTelemetryAttributes::new();
         captured.insert("Bucket", "my-bucket");
 
@@ -415,13 +415,13 @@ mod test {
             .get_attrs_from_cfg(&cfg_with(layer))
             .expect("metadata present");
 
-        // The recorded input member rides alongside the built-in rpc.* attributes.
+        // The emitted input member rides alongside the built-in rpc.* attributes.
         assert_eq!(Some("my-bucket"), string_attr(&attrs, "Bucket"));
         assert_eq!(Some("S3"), string_attr(&attrs, "rpc.service"));
     }
 
     #[test]
-    fn capture_only_members_are_not_recorded() {
+    fn capture_only_members_are_not_emitted() {
         // A value captured for in-process reads must not land on the metric.
         let mut captured = CapturedTelemetryAttributes::new();
         captured.insert("Prefix", "logs/");
@@ -440,7 +440,7 @@ mod test {
 
         assert!(
             attrs.get("Prefix").is_none(),
-            "capture-only member must not be recorded on the metric"
+            "capture-only member must not be emitted on the metric"
         );
     }
 

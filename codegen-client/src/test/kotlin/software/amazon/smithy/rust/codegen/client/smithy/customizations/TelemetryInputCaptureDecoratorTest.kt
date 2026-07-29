@@ -123,7 +123,7 @@ class TelemetryInputCaptureDecoratorTest {
                             // Opt in: name every member. Only `bucket` is eligible; `secret` has a
                             // @sensitive target shape and `kind` is an enum, so neither may be
                             // captured even though they are named here.
-                            .always_record_attributes(["bucket", "secret", "kind"])
+                            .emit_input_attributes(["bucket", "secret", "kind"])
                             .interceptor(observer.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -182,7 +182,7 @@ class TelemetryInputCaptureDecoratorTest {
                 Attribute.TokioTest.render(this)
                 rustTemplate(
                     """
-                    async fn record_and_capture_only_compose() {
+                    async fn emit_and_capture_only_compose() {
                         let (http_client, _r) = #{capture_request}(Some(
                             #{http_1x}::Response::builder()
                                 .status(200)
@@ -191,13 +191,13 @@ class TelemetryInputCaptureDecoratorTest {
                         ));
 
                         let observer = ObserveCaptured::default();
-                        // `bucket` is recorded; `requiredName` is capture-only. Both should be
+                        // `bucket` is emitted; `requiredName` is capture-only. Both should be
                         // captured into the bag (the interceptor captures the union of both sets).
                         let config = $moduleName::Config::builder()
                             .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
-                            .always_record_attributes(["bucket"])
-                            .capture_operation_input_attributes(["requiredName"])
+                            .emit_input_attributes(["bucket"])
+                            .capture_input_attributes(["requiredName"])
                             .interceptor(observer.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);
@@ -211,7 +211,7 @@ class TelemetryInputCaptureDecoratorTest {
                         assert_eq!(
                             observer.bucket.lock().unwrap().as_deref(),
                             Some("example-bucket"),
-                            "recorded member should be captured",
+                            "emitted member should be captured",
                         );
                         assert_eq!(
                             observer.required_name.lock().unwrap().as_deref(),
@@ -266,7 +266,7 @@ class TelemetryInputCaptureDecoratorTest {
                         ));
 
                         let observer = ObserveCaptured::default();
-                        // No always_record_attributes call: capture is off.
+                        // No emit_input_attributes call: capture is off.
                         let config = $moduleName::Config::builder()
                             .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
@@ -355,7 +355,7 @@ class TelemetryInputCaptureDecoratorTest {
                         let config = $moduleName::Config::builder()
                             .endpoint_url("http://localhost:1234")
                             .http_client(http_client.clone())
-                            .always_record_attributes(["bucket"])
+                            .emit_input_attributes(["bucket"])
                             .interceptor(observer.clone())
                             .build();
                         let client = $moduleName::Client::from_conf(config);

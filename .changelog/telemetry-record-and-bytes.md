@@ -6,8 +6,8 @@ breaking: false
 new_feature: true
 bug_fix: false
 ---
-Record captured telemetry attributes and transfer sizes on the built-in client metrics. Values
-captured via `always_record_attributes([...])` are now recorded as attributes on
+Emit captured telemetry attributes and transfer sizes on the built-in client metrics. Values
+selected via `emit_input_attributes([...])` are now attached as attributes on
 `smithy.client.call.duration` and `smithy.client.call.attempt.duration`. The operation-duration metric additionally
 carries the outcome as `error.type` (a coarse category, set only on failure) and the raw
 `http.status_code` when a response was received. Real transferred-byte counts are recorded on their
@@ -16,9 +16,9 @@ frame and emitted when the body completes — so a streaming body reports its tr
 `0` that content-length reports for it.
 
 ```rust,ignore
-// The same opt-in that captures a member now also records it on the built-in metrics.
+// The same opt-in that captures a member now also emits it on the built-in metrics.
 let config = aws_sdk_s3::Config::builder()
-    .always_record_attributes(["Bucket"])
+    .emit_input_attributes(["Bucket"])
     // ...
     .build();
 
