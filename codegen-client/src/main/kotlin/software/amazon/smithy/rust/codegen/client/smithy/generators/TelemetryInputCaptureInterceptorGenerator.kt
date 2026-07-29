@@ -6,6 +6,7 @@
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
 import software.amazon.smithy.model.shapes.EnumShape
+import software.amazon.smithy.model.shapes.MemberShape
 import software.amazon.smithy.model.shapes.OperationShape
 import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.traits.EnumTrait
@@ -77,8 +78,12 @@ class TelemetryInputCaptureInterceptorGenerator(
      * they render as Rust enum types (not `String`), so they have no `Deref` for the `as_deref()`
      * capture arm, and they are not the free-form resource identifiers this feature targets.
      */
-    private fun eligibleMembers(operationShape: OperationShape) =
-        operationShape.inputShape(model).members().filter { member ->
+    private fun eligibleMembers(operationShape: OperationShape): List<MemberShape> {
+        val inputShape = operationShape.inputShape(model)
+        // `@sensitive` on the input structure itself marks the whole shape sensitive, so none of
+        // its members may be captured — not just members (or their targets) carrying the trait.
+        if (inputShape.hasTrait(SensitiveTrait::class.java)) return emptyList()
+        return inputShape.members().filter { member ->
             val target = model.expectShape(member.target)
             !member.hasTrait(SensitiveTrait::class.java) &&
                 !target.hasTrait(SensitiveTrait::class.java) &&
@@ -86,6 +91,7 @@ class TelemetryInputCaptureInterceptorGenerator(
                 target !is EnumShape &&
                 !target.hasTrait(EnumTrait::class.java)
         }
+    }
 
     /**
      * Returns `null` when the operation has no eligible members — nothing to generate, so no
@@ -151,7 +157,7 @@ class TelemetryInputCaptureInterceptorGenerator(
                 val smithyName = member.memberName
                 rustTemplate(
                     """
-                    if requested.contains(${smithyName.dq()}) {
+                    if requested.should_capture(${smithyName.dq()}) {
                         if let #{Some}(value) = input.$memberName.as_deref() {
                             captured.insert(${smithyName.dq()}, value);
                         }

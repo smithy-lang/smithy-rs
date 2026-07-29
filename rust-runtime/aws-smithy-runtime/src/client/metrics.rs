@@ -15,10 +15,10 @@ use aws_smithy_runtime_api::client::{
     runtime_plugin::RuntimePlugin,
 };
 use aws_smithy_types::config_bag::{FrozenLayer, Layer, Storable, StoreReplace};
-use aws_smithy_types::telemetry::CapturedTelemetryAttributes;
+use aws_smithy_types::telemetry::{CapturedTelemetryAttributes, RequestedTelemetryAttributes};
 use std::{borrow::Cow, sync::Arc, time::SystemTime};
 
-/// Sets the outcome attributes (`error.type` and `http.response.status_code`) on `attrs` from a
+/// Sets the outcome attributes (`error.type` and `http.status_code`) on `attrs` from a
 /// finalizer-phase context.
 fn add_outcome_attrs(
     attrs: &mut Attributes,
@@ -46,7 +46,7 @@ fn add_outcome_attrs(
     // Raw HTTP status code, whenever a response reached us.
     if let Some(response) = context.response() {
         attrs.set(
-            "http.response.status_code",
+            "http.status_code",
             AttributeValue::I64(i64::from(response.status().as_u16())),
         );
     }
@@ -69,6 +69,11 @@ impl Storable for MeasurementsContainer {
 pub(crate) struct OperationTelemetry {
     pub(crate) operation_duration: Arc<dyn Histogram>,
     pub(crate) attempt_duration: Arc<dyn Histogram>,
+    // Body sizes are their own instruments rather than attributes on the duration histogram: body
+    // size is near-unique per call, so attaching it as a label would fragment the duration metric
+    // into one time series per byte count.
+    pub(crate) request_body_size: Arc<dyn Histogram>,
+    pub(crate) response_body_size: Arc<dyn Histogram>,
 }
 
 impl OperationTelemetry {
@@ -87,6 +92,16 @@ impl OperationTelemetry {
                 .create_histogram("smithy.client.call.attempt.duration")
                 .set_units("s")
                 .set_description("The time it takes to connect to the service, send the request, and get back HTTP status code and headers (including time queued waiting to be sent)")
+                .build(),
+            request_body_size: meter
+                .create_histogram("http.client.request.body.size")
+                .set_units("By")
+                .set_description("Size of the transferred request body, in bytes")
+                .build(),
+            response_body_size: meter
+                .create_histogram("http.client.response.body.size")
+                .set_units("By")
+                .set_description("Size of the transferred response body, in bytes")
                 .build(),
         })
     }
@@ -120,10 +135,17 @@ impl MetricsInterceptor {
             attributes.set("rpc.service", AttributeValue::String(md.service().into()));
             attributes.set("rpc.method", AttributeValue::String(md.name().into()));
 
-            // Merge any operation-input members the customer opted in to record.
-            if let Some(captured) = cfg.load::<CapturedTelemetryAttributes>() {
+            // Merge captured input members that the customer opted in to *record*. Capture-only
+            // members are present in the bag for in-process reads but are deliberately excluded
+            // from the metric label set.
+            if let (Some(captured), Some(requested)) = (
+                cfg.load::<CapturedTelemetryAttributes>(),
+                cfg.load::<RequestedTelemetryAttributes>(),
+            ) {
                 for (name, value) in captured.iter() {
-                    attributes.set(name, AttributeValue::String(value.into()));
+                    if requested.should_record(name) {
+                        attributes.set(name, AttributeValue::String(value.into()));
+                    }
                 }
             }
 
@@ -184,18 +206,8 @@ impl Intercept for MetricsInterceptor {
             // `get_attrs_from_cfg` (which also serves the per-attempt path).
             add_outcome_attrs(&mut attrs, context);
 
-            // Real transferred bytes, counted per frame (see `telemetry_bytes`); Content-Length
-            // is absent or 0 for streaming bodies.
-            if let Some(bytes) = cfg.load::<crate::client::telemetry_bytes::TransferredBytes>() {
-                attrs.set(
-                    "http.request.body.size",
-                    AttributeValue::I64(bytes.request_bytes() as i64),
-                );
-                attrs.set(
-                    "http.response.body.size",
-                    AttributeValue::I64(bytes.response_bytes() as i64),
-                );
-            }
+            // Transferred byte sizes are recorded on their own instruments by the byte
+            // interceptor (see `telemetry_bytes`), not as attributes on the duration histogram.
 
             let call_end = self.time_source.now();
             let call_duration = call_end.duration_since(measurements.call_start);
@@ -390,21 +402,46 @@ mod test {
     }
 
     #[test]
-    fn captured_members_are_merged_onto_attrs() {
+    fn recorded_members_are_merged_onto_attrs() {
         let mut captured = CapturedTelemetryAttributes::new();
         captured.insert("Bucket", "my-bucket");
 
         let mut layer = Layer::new("test");
         layer.store_put(Metadata::new("GetObject", "S3"));
         layer.store_put(captured);
+        layer.store_put(RequestedTelemetryAttributes::new(["Bucket"]));
 
         let attrs = interceptor()
             .get_attrs_from_cfg(&cfg_with(layer))
             .expect("metadata present");
 
-        // The captured input member rides alongside the built-in rpc.* attributes.
+        // The recorded input member rides alongside the built-in rpc.* attributes.
         assert_eq!(Some("my-bucket"), string_attr(&attrs, "Bucket"));
         assert_eq!(Some("S3"), string_attr(&attrs, "rpc.service"));
+    }
+
+    #[test]
+    fn capture_only_members_are_not_recorded() {
+        // A value captured for in-process reads must not land on the metric.
+        let mut captured = CapturedTelemetryAttributes::new();
+        captured.insert("Prefix", "logs/");
+
+        let mut requested = RequestedTelemetryAttributes::default();
+        requested.capture_only(["Prefix"]);
+
+        let mut layer = Layer::new("test");
+        layer.store_put(Metadata::new("GetObject", "S3"));
+        layer.store_put(captured);
+        layer.store_put(requested);
+
+        let attrs = interceptor()
+            .get_attrs_from_cfg(&cfg_with(layer))
+            .expect("metadata present");
+
+        assert!(
+            attrs.get("Prefix").is_none(),
+            "capture-only member must not be recorded on the metric"
+        );
     }
 
     #[test]
@@ -453,7 +490,7 @@ mod test {
 
         // error.type is absent on success (OTel convention); status code is present.
         assert!(attrs.get("error.type").is_none());
-        assert_eq!(Some(200), i64_attr(&attrs, "http.response.status_code"));
+        assert_eq!(Some(200), i64_attr(&attrs, "http.status_code"));
     }
 
     #[test]
@@ -482,7 +519,7 @@ mod test {
         add_outcome_attrs(&mut attrs, &(&ctx).into());
 
         // No response reached us, so there is no HTTP status code to record.
-        assert!(attrs.get("http.response.status_code").is_none());
+        assert!(attrs.get("http.status_code").is_none());
         assert_eq!(Some("connector"), string_attr(&attrs, "error.type"));
     }
 }

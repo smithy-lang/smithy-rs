@@ -10,8 +10,8 @@ Record captured telemetry attributes and transfer sizes on the built-in client m
 captured via `always_record_attributes([...])` are now merged onto `smithy.client.call.duration` and
 `smithy.client.call.attempt.duration` as attributes. The operation-duration metric additionally
 carries the outcome as `error.type` (a coarse category, set only on failure) and the raw
-`http.response.status_code` when a response was received, plus real transferred-byte counts as
-`http.request.body.size`/`http.response.body.size` (counted per frame, so streaming bodies are
+`http.status_code` when a response was received, plus real transferred-byte counts as
+`http.request_content_length`/`http.response_content_length` (counted per frame, so streaming bodies are
 measured correctly rather than reported as content-length `0`).
 
 ```rust,ignore
@@ -23,6 +23,6 @@ let config = aws_sdk_s3::Config::builder()
 
 // `smithy.client.call.duration` is now emitted with, e.g.:
 //   rpc.service="S3", rpc.method="GetObject", Bucket="my-bucket",
-//   error.type="connector" (on failure), http.response.status_code=200,
-//   http.request.body.size=0, http.response.body.size=1024
+//   error.type="connector" (on failure), http.status_code=200,
+//   http.request_content_length=0, http.response_content_length=1024
 ```
