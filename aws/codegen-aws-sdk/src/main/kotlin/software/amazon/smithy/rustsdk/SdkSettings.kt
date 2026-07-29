@@ -115,7 +115,7 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
      * default HTTPS client is selected purely via BehaviorVersion without the legacy rustls dependency.
      */
     val includeLegacyClient: Boolean
-        get() = awsSdk?.getBooleanMember("includeLegacyClient")?.orNull()?.value ?: true
+        get() = awsSdk?.getBooleanMember("includeLegacyClient")?.orNull()?.value ?: false
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)
