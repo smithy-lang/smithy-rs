@@ -16,6 +16,7 @@ pub struct BehaviorVersion {
 }
 
 #[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq)]
+#[allow(dead_code)] // Variants are constructed behind feature gates
 enum Inner {
     // IMPORTANT: Order matters here for the `Ord` derive. Newer versions go to the bottom.
     V2023_11_09,
@@ -55,10 +56,19 @@ impl BehaviorVersion {
         }
     }
 
+    // NOTE: Behavior versions prior to v2026_01_12 are gated behind the `legacy-client` feature.
+    // Using a pre-v2026_01_12 BehaviorVersion without the legacy TLS stack (`tls-rustls`) results
+    // in no HTTP client being configured at runtime. The default HTTP client plugin resolves
+    // pre-v2026_01_12 versions exclusively through the `connector-hyper-0-14-x` feature (the
+    // legacy hyper 0.14 stack), which is only enabled via `tls-rustls`. Without it, the client
+    // resolution falls through to None and no HTTP client is available. By gating access to old
+    // versions, we prevent users from silently ending up with no HTTP client.
+
     /// Behavior version for August 7th, 2025.
     ///
     /// This version updates the default HTTPS client to support proxy environment variables
     /// (e.g. `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY`) by default.
+    #[cfg(feature = "legacy-client")]
     #[deprecated(
         since = "1.10.0",
         note = "Superseded by v2026_01_12, which enables retries by default for AWS SDK clients and sets a 3.1s connect timeout for all clients."
@@ -80,6 +90,7 @@ impl BehaviorVersion {
     /// feature flags manually to keep the legacy Hyper stack as the default. Specifically the
     /// `aws-smithy-runtime/tls-rustls` feature flag combined with an older behavior version.
     /// </div>
+    #[cfg(feature = "legacy-client")]
     #[deprecated(
         since = "1.9.0",
         note = "Superseded by v2025_08_07, which enables automatic HTTP(S) proxy support from environment variables in the default HTTPS client."
@@ -95,6 +106,7 @@ impl BehaviorVersion {
     /// This version enables stalled stream protection for uploads (request bodies) by default.
     ///
     /// When a new behavior major version is released, this method will be deprecated.
+    #[cfg(feature = "legacy-client")]
     #[deprecated(
         since = "1.8.0",
         note = "Superseded by v2025_01_17, which updates the default HTTPS client stack."
@@ -106,6 +118,7 @@ impl BehaviorVersion {
     }
 
     /// Behavior version for November 9th, 2023.
+    #[cfg(feature = "legacy-client")]
     #[deprecated(
         since = "1.4.0",
         note = "Superseded by v2024_03_28, which enabled stalled stream protection for uploads (request bodies) by default."
@@ -133,6 +146,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(feature = "legacy-client")]
     #[allow(deprecated)]
     fn version_comparison() {
         assert!(BehaviorVersion::latest() == BehaviorVersion::latest());
@@ -146,6 +160,20 @@ mod tests {
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_08_07()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2026_01_12()));
         assert!(!BehaviorVersion::v2023_11_09().is_at_least(BehaviorVersion::v2024_03_28()));
+        assert!(Inner::V2024_03_28 > Inner::V2023_11_09);
+        assert!(Inner::V2023_11_09 < Inner::V2024_03_28);
+        assert!(Inner::V2024_03_28 < Inner::V2025_01_17);
+        assert!(Inner::V2025_01_17 < Inner::V2025_08_07);
+        assert!(Inner::V2025_08_07 < Inner::V2026_01_12);
+    }
+
+    #[test]
+    #[cfg(not(feature = "legacy-client"))]
+    #[allow(deprecated)]
+    fn version_comparison() {
+        assert!(BehaviorVersion::latest() == BehaviorVersion::latest());
+        assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::latest()));
+        assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2026_01_12()));
         assert!(Inner::V2024_03_28 > Inner::V2023_11_09);
         assert!(Inner::V2023_11_09 < Inner::V2024_03_28);
         assert!(Inner::V2024_03_28 < Inner::V2025_01_17);

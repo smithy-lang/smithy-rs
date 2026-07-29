@@ -37,7 +37,7 @@
 //! #   }
 //! # }
 //! # async fn docs() {
-//! let config = aws_config::load_defaults(BehaviorVersion::v2023_11_09()).await;
+//! let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
 //! let client = aws_sdk_dynamodb::Client::new(&config);
 //! # }
 //! ```
@@ -197,7 +197,7 @@ pub async fn load_from_env() -> SdkConfig {
 /// ```no_run
 /// # async fn create_config() {
 /// use aws_config::BehaviorVersion;
-/// let config = aws_config::defaults(BehaviorVersion::v2023_11_09())
+/// let config = aws_config::defaults(BehaviorVersion::latest())
 ///     .region("us-east-1")
 ///     .load()
 ///     .await;
@@ -1059,10 +1059,13 @@ mod loader {
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
+                    #[cfg(feature = "legacy-client")]
                     #[allow(deprecated)]
                     Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
                         Some(IdentityCache::lazy().build())
                     }
+                    #[cfg(not(feature = "legacy-client"))]
+                    Some(_) => Some(IdentityCache::lazy().build()),
                     _ => None,
                 },
                 Some(user_cache) => Some(user_cache),
@@ -1401,7 +1404,7 @@ mod loader {
             assert!(config.identity_cache().is_some());
         }
 
-        #[cfg(feature = "default-https-client")]
+        #[cfg(all(feature = "default-https-client", feature = "legacy-client"))]
         #[allow(deprecated)]
         #[tokio::test]
         async fn identity_cache_old_behavior_version() {
