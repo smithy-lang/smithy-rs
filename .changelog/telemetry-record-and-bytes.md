@@ -7,8 +7,8 @@ new_feature: true
 bug_fix: false
 ---
 Record captured telemetry attributes and transfer sizes on the built-in client metrics. Values
-captured via `always_record_attributes([...])` are now merged onto `smithy.client.call.duration` and
-`smithy.client.call.attempt.duration` as attributes. The operation-duration metric additionally
+captured via `always_record_attributes([...])` are now recorded as attributes on
+`smithy.client.call.duration` and `smithy.client.call.attempt.duration`. The operation-duration metric additionally
 carries the outcome as `error.type` (a coarse category, set only on failure) and the raw
 `http.status_code` when a response was received. Real transferred-byte counts are recorded on their
 own histograms, `smithy.client.call.request.size` / `smithy.client.call.response.size`, counted per

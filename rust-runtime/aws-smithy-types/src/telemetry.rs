@@ -26,8 +26,8 @@ use std::sync::Arc;
 /// A set of string-keyed values selected from an operation's input, carried through the `ConfigBag`
 /// for telemetry.
 ///
-/// Keys and values are `Arc<str>` so that cloning the bag — as happens when it propagates through
-/// config-bag layers — stays cheap regardless of value length.
+/// Cheap to clone regardless of value length, so propagating it as the `ConfigBag` moves through
+/// config-bag layers stays inexpensive.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CapturedTelemetryAttributes {
     values: HashMap<Arc<str>, Arc<str>>,
