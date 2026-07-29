@@ -22,9 +22,9 @@ exceptions = [
     { allow = ["OpenSSL"], name = "ring", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-sys", version = "*" },
     { allow = ["OpenSSL"], name = "aws-lc-fips-sys", version = "*" },
-    { allow = ["BlueOak-1.0.0"], name = "minicbor", version = "<=2.2.2" },
-    # Safe to bump as long as license does not change -------------^
-    # See D105255799.
+    { allow = ["BlueOak-1.0.0"], name = "minicbor", version = "<3.0.0" },
+    # Allows any 2.x release; a 3.0 major bump will trip this so we can re-check
+    # the license (relicensing typically happens at major versions). See D105255799.
 ]
 
 [[licenses.clarify]]
