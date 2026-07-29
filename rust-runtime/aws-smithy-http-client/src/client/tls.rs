@@ -2,11 +2,10 @@
  * Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
  * SPDX-License-Identifier: Apache-2.0
  */
+use std::fmt;
+
 use crate::cfg::{cfg_rustls, cfg_s2n_tls};
 use crate::HttpClientError;
-
-#[cfg(feature = "__rustls")]
-pub use rustls_provider::{InvalidServerName, ServerName};
 
 /// Choice of underlying cryptography library
 #[derive(Debug, PartialEq, Clone)]
@@ -28,8 +27,6 @@ impl Eq for Provider {}
 pub struct TlsContext {
     #[allow(unused)]
     trust_store: TrustStore,
-    // TODO(s2n-tls): Wire up additional_server_names for the s2n-tls provider.
-    #[cfg(feature = "__rustls")]
     additional_server_names: Vec<ServerName>,
 }
 
@@ -50,7 +47,6 @@ impl Default for TlsContext {
 #[derive(Debug)]
 pub struct TlsContextBuilder {
     trust_store: TrustStore,
-    #[cfg(feature = "__rustls")]
     additional_server_names: Vec<ServerName>,
 }
 
@@ -58,7 +54,6 @@ impl TlsContextBuilder {
     fn new() -> Self {
         TlsContextBuilder {
             trust_store: TrustStore::default(),
-            #[cfg(feature = "__rustls")]
             additional_server_names: Vec::default(),
         }
     }
@@ -70,7 +65,6 @@ impl TlsContextBuilder {
     }
 
     /// Configure additional server names to accept during TLS certificate verification.
-    #[cfg(feature = "__rustls")]
     pub fn with_additional_server_names(
         mut self,
         additional_server_names: Vec<ServerName>,
@@ -83,7 +77,6 @@ impl TlsContextBuilder {
     pub fn build(self) -> Result<TlsContext, HttpClientError> {
         Ok(TlsContext {
             trust_store: self.trust_store,
-            #[cfg(feature = "__rustls")]
             additional_server_names: self.additional_server_names,
         })
     }
@@ -155,6 +148,66 @@ impl Default for TrustStore {
         Self {
             enable_native_roots: true,
             custom_certs: Vec::new(),
+        }
+    }
+}
+
+/// A server name for TLS connections.
+///
+/// This represents a DNS hostname or IP address used for TLS Server Name
+/// Indication (SNI) and certificate verification.
+///
+/// # Examples
+///
+/// ```
+/// use aws_smithy_http_client::tls::ServerName;
+///
+/// let name = ServerName::try_from("example.com").unwrap();
+/// let ip_name = ServerName::try_from("127.0.0.1").unwrap();
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ServerName(rustls_pki_types::ServerName<'static>);
+
+impl ServerName {
+    pub(crate) fn inner(&self) -> &rustls_pki_types::ServerName<'static> {
+        &self.0
+    }
+}
+
+/// Error returned when a server name string is invalid.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InvalidServerName {
+    name: String,
+}
+
+impl fmt::Display for InvalidServerName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "invalid server name: {:?}", self.name)
+    }
+}
+
+impl std::error::Error for InvalidServerName {}
+
+impl TryFrom<String> for ServerName {
+    type Error = InvalidServerName;
+
+    fn try_from(name: String) -> Result<Self, Self::Error> {
+        match rustls_pki_types::ServerName::try_from(name.as_str()) {
+            Ok(sn) => Ok(ServerName(sn.to_owned())),
+            Err(_) => Err(InvalidServerName { name }),
+        }
+    }
+}
+
+impl TryFrom<&str> for ServerName {
+    type Error = InvalidServerName;
+
+    fn try_from(name: &str) -> Result<Self, Self::Error> {
+        match rustls_pki_types::ServerName::try_from(name) {
+            Ok(sn) => Ok(ServerName(sn.to_owned())),
+            Err(_) => Err(InvalidServerName {
+                name: name.to_owned(),
+            }),
         }
     }
 }
