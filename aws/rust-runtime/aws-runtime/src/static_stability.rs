@@ -360,11 +360,12 @@ fn lifetime(expiry: SystemTime, now: SystemTime) -> Duration {
     expiry.duration_since(now).unwrap_or_default()
 }
 
-/// SEP F-REFRESH-1 advisory window tiers, scaled by remaining credential lifetime.
+/// SEP F-REFRESH-1 advisory window tiers, selected by remaining credential lifetime:
+/// `<= 20min -> 5min`, `> 20min && < 90min -> 15min`, `>= 90min -> 60min`.
 fn advisory_window_for(lifetime: Duration) -> Duration {
-    if lifetime <= Duration::from_secs(60 * 60) {
+    if lifetime <= Duration::from_secs(20 * 60) {
         Duration::from_secs(5 * 60)
-    } else if lifetime <= Duration::from_secs(6 * 60 * 60) {
+    } else if lifetime < Duration::from_secs(90 * 60) {
         Duration::from_secs(15 * 60)
     } else {
         Duration::from_secs(60 * 60)
@@ -448,5 +449,251 @@ impl StaticStabilityCacheBuilder {
             non_recoverable: Some(non_recoverable),
         };
         SharedIdentityCache::new(cache)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Cherry-picked scenarios from the SEP's modeled `credential-refresh-tests.json` suite,
+    //! implemented idiomatically (the SEP permits this) against a `ManualTimeSource` + mock source.
+    use super::*;
+    use aws_smithy_async::test_util::{instant_time_and_sleep, ManualTimeSource};
+    use aws_smithy_runtime_api::shared::IntoShared;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    #[derive(Debug, Clone, PartialEq)]
+    struct TestCreds {
+        id: u32,
+    }
+
+    fn epoch(secs: u64) -> SystemTime {
+        SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    /// Build an identity with a distinguishing id, an absolute expiration, and (optionally) the
+    /// static-stability eligibility marker.
+    fn identity(id: u32, expiry_secs: u64, eligible: bool) -> Identity {
+        let mut b = Identity::builder()
+            .data(TestCreds { id })
+            .expiration(epoch(expiry_secs));
+        if eligible {
+            b = b.property(StaticStabilityEligible);
+        }
+        b.build().unwrap()
+    }
+
+    fn id_of(identity: &Identity) -> u32 {
+        identity.data::<TestCreds>().unwrap().id
+    }
+
+    /// Mock credential source: returns queued results in order and counts how many times it is
+    /// actually contacted (so tests can assert `sourceContacted`).
+    #[derive(Debug)]
+    struct MockSource {
+        results: Mutex<Vec<Result<Identity, BoxError>>>,
+        contacts: Arc<AtomicUsize>,
+    }
+
+    impl ResolveIdentity for MockSource {
+        fn resolve_identity<'a>(
+            &'a self,
+            _rc: &'a RuntimeComponents,
+            _cfg: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
+            self.contacts.fetch_add(1, Ordering::SeqCst);
+            let mut list = self.results.lock().unwrap();
+            let next = if list.is_empty() {
+                Err("mock source: no more results".into())
+            } else {
+                list.remove(0)
+            };
+            IdentityFuture::ready(next)
+        }
+    }
+
+    struct Harness {
+        cache: SharedIdentityCache,
+        resolver: SharedIdentityResolver,
+        components: RuntimeComponents,
+        config_bag: ConfigBag,
+        time: ManualTimeSource,
+        contacts: Arc<AtomicUsize>,
+    }
+
+    impl Harness {
+        fn new(results: Vec<Result<Identity, BoxError>>) -> Self {
+            let time = ManualTimeSource::new(epoch(0));
+            // `instant_time_and_sleep` gives a controllable sleep; its own clock is unused here
+            // because the mock source resolves immediately, so the timeout future never fires.
+            let (_unused, sleep) = instant_time_and_sleep(epoch(0));
+            let components = RuntimeComponentsBuilder::for_tests()
+                .with_time_source(Some(time.clone()))
+                .with_sleep_impl(Some(sleep))
+                .build()
+                .unwrap();
+            let contacts = Arc::new(AtomicUsize::new(0));
+            let resolver = SharedIdentityResolver::new(MockSource {
+                results: Mutex::new(results),
+                contacts: contacts.clone(),
+            });
+            let cache = StaticStabilityCache::builder()
+                .time_source(time.clone().into_shared())
+                .build();
+            Self {
+                cache,
+                resolver,
+                components,
+                config_bag: ConfigBag::base(),
+                time,
+                contacts,
+            }
+        }
+
+        /// One `getCredentials` step: returns the result and whether the source was contacted.
+        async fn get(&self) -> (Result<Identity, BoxError>, bool) {
+            let before = self.contacts.load(Ordering::SeqCst);
+            let result = self
+                .cache
+                .resolve_cached_identity(self.resolver.clone(), &self.components, &self.config_bag)
+                .await;
+            let contacted = self.contacts.load(Ordering::SeqCst) > before;
+            (result, contacted)
+        }
+
+        fn advance_to(&self, secs: u64) {
+            self.time.set_time(epoch(secs));
+        }
+    }
+
+    // Window selection (advisoryWindowSeconds): SEP table
+    // <=20min -> 5min, >20 && <90 -> 15min, >=90 -> 60min.
+    #[test]
+    fn advisory_window_selection() {
+        let m = |mins: u64| Duration::from_secs(mins * 60);
+        assert_eq!(advisory_window_for(m(10)), m(5));
+        assert_eq!(advisory_window_for(m(20)), m(5)); // boundary, inclusive
+        assert_eq!(advisory_window_for(m(21)), m(15));
+        assert_eq!(advisory_window_for(m(60)), m(15));
+        assert_eq!(advisory_window_for(m(89)), m(15));
+        assert_eq!(advisory_window_for(m(90)), m(60)); // boundary
+        assert_eq!(advisory_window_for(m(6 * 60)), m(60));
+    }
+
+    // given: valid — cached credentials within neither refresh window.
+    // expected: result=cachedCredentials, sourceContacted=false.
+    #[tokio::test]
+    async fn cached_valid_returns_cached_without_source_contact() {
+        // lifetime 3600s (60min) -> advisory 15min: advisory_at=2700, mandatory_at=3540.
+        let h = Harness::new(vec![Ok(identity(1, 3600, true))]);
+        let (r, contacted) = h.get().await; // State 1: initial fetch
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(contacted);
+
+        h.advance_to(1000); // < advisory_at -> State 2 valid
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(!contacted, "valid cached creds must not contact the source");
+    }
+
+    // given: advisory — within the advisory window; refresh succeeds.
+    // expected: result=newCredentials, sourceContacted=true.
+    #[tokio::test]
+    async fn advisory_window_refreshes() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Ok(identity(2, 7200, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3000); // 2700 <= now < 3540 -> advisory
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            2,
+            "advisory window: single caller refreshes"
+        );
+        assert!(contacted);
+    }
+
+    // given: expired; refresh errors (recoverable). The static-stability core.
+    // expected: serve cached (stale), then rate-limited (sourceContacted=false) during backoff.
+    #[tokio::test]
+    async fn refresh_failure_serves_cached_then_rate_limits() {
+        let h = Harness::new(vec![Ok(identity(1, 3600, true)), Err("STS 503".into())]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700); // expired -> mandatory refresh -> errors
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "eligible: serve stale on failed refresh (F-STABILITY-1)"
+        );
+        assert!(contacted, "a refresh was attempted");
+
+        h.advance_to(3800); // still within backoff (>= 300s) -> rate-limited
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(
+            !contacted,
+            "rate-limited: must not contact source during backoff (F-STABILITY-2)"
+        );
+    }
+
+    // given: expired; refresh returns a non-recoverable error.
+    // expected: result=nonRecoverableError (raised, not swallowed); no serve-cached.
+    #[tokio::test]
+    async fn non_recoverable_error_is_raised() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Err(CredentialsError::unrecoverable("expired SSO token").into()),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700);
+        let (r, contacted) = h.get().await;
+        assert!(
+            r.is_err(),
+            "non-recoverable error must be raised (F-FASTFAIL-1)"
+        );
+        assert!(contacted);
+    }
+
+    // invalidate: the target service rejected the served identity.
+    // expected: the next getCredentials takes the mandatory path and refreshes.
+    #[tokio::test]
+    async fn invalidate_forces_refresh_on_next_resolve() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Ok(identity(2, 7200, true)),
+        ]);
+        let served = h.get().await.0.unwrap();
+        assert_eq!(id_of(&served), 1);
+
+        h.cache.invalidate(&served); // service rejected id=1
+
+        // now is still 0 (< the original advisory_at), but invalidate collapsed the windows.
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            2,
+            "invalidation must force a refresh (F-INVAL-1)"
+        );
+        assert!(contacted);
+    }
+
+    // Ineligible (custom/process) identity: plain LazyCache behavior — no serve-stale.
+    // expected: a failed refresh after expiry raises rather than serving stale.
+    #[tokio::test]
+    async fn ineligible_error_after_expiry_is_raised() {
+        let h = Harness::new(vec![Ok(identity(1, 3600, false)), Err("transient".into())]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700); // expired
+        let (r, _contacted) = h.get().await;
+        assert!(
+            r.is_err(),
+            "ineligible creds must not be served past expiry on failure (F-STABILITY-3)"
+        );
     }
 }
