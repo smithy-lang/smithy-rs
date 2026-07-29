@@ -40,13 +40,32 @@ fun ClientCodegenDecorator.onlyApplyToList(serviceIds: List<String>): List<Clien
         }
     }
 
-/** Apply this decorator to all services but the one identified by ID */
-fun ClientCodegenDecorator.applyExceptFor(serviceId: String): List<ClientCodegenDecorator> =
-    listOf(
+/** Apply this decorator to all services except those identified by the given IDs */
+fun ClientCodegenDecorator.applyExceptFor(vararg serviceIds: String): List<ClientCodegenDecorator> {
+    val excluded = serviceIds.map { ShapeId.from(it) }.toSet()
+    return listOf(
         ConditionalDecorator(this) { _, serviceShapeId ->
-            serviceShapeId != ShapeId.from(serviceId)
+            serviceShapeId !in excluded
         },
     )
+}
+
+/**
+ * Apply this decorator to all services except those in the given namespaces.
+ *
+ * Like [onlyApplyToNamespace], matching on the namespace rather than the exact shape ID keeps the
+ * exclusion stable across service API version bumps, which are encoded in the service shape name
+ * (e.g. `AWSSecurityTokenServiceV20110615`). Exactly one service is defined per model file, so the
+ * namespace uniquely identifies the excluded service.
+ */
+fun ClientCodegenDecorator.applyExceptForNamespaces(vararg namespaces: String): List<ClientCodegenDecorator> {
+    val excluded = namespaces.toSet()
+    return listOf(
+        ConditionalDecorator(this) { _, serviceShapeId ->
+            serviceShapeId?.toShapeId()?.namespace !in excluded
+        },
+    )
+}
 
 /** Apply the given decorators only to this service ID */
 fun String.applyDecorators(vararg decorators: ClientCodegenDecorator): List<ClientCodegenDecorator> =
