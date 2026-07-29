@@ -457,7 +457,8 @@ mod tests {
     //! Cherry-picked scenarios from the SEP's modeled `credential-refresh-tests.json` suite,
     //! implemented idiomatically (the SEP permits this) against a `ManualTimeSource` + mock source.
     use super::*;
-    use aws_smithy_async::test_util::{instant_time_and_sleep, ManualTimeSource};
+    use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
+    use aws_smithy_async::test_util::ManualTimeSource;
     use aws_smithy_runtime_api::shared::IntoShared;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -523,9 +524,9 @@ mod tests {
     impl Harness {
         fn new(results: Vec<Result<Identity, BoxError>>) -> Self {
             let time = ManualTimeSource::new(epoch(0));
-            // `instant_time_and_sleep` gives a controllable sleep; its own clock is unused here
-            // because the mock source resolves immediately, so the timeout future never fires.
-            let (_unused, sleep) = instant_time_and_sleep(epoch(0));
+            // A tick-advance sleep never fires unless explicitly ticked, so the (immediately
+            // resolving) mock source always wins the refresh Timeout race — no spurious timeouts.
+            let (_tick, sleep) = tick_advance_time_and_sleep();
             let components = RuntimeComponentsBuilder::for_tests()
                 .with_time_source(Some(time.clone()))
                 .with_sleep_impl(Some(sleep))
@@ -694,6 +695,230 @@ mod tests {
         assert!(
             r.is_err(),
             "ineligible creds must not be served past expiry on failure (F-STABILITY-3)"
+        );
+    }
+
+    // given: none; the initial fetch fails.
+    // expected: result=noCredentialsError (nothing cached to fall back on) — State 1.
+    #[tokio::test]
+    async fn initial_fetch_failure_raises() {
+        let h = Harness::new(vec![Err("IMDS unreachable".into())]);
+        let (r, contacted) = h.get().await;
+        assert!(r.is_err(), "initial fetch failure must raise (State 1)");
+        assert!(contacted);
+    }
+
+    // given: mandatory — within the mandatory window (not yet expired); refresh succeeds.
+    // expected: result=newCredentials, sourceContacted=true (States 4/5, success).
+    #[tokio::test]
+    async fn mandatory_refresh_success() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Ok(identity(2, 7200, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3550); // 3540 (mandatory_at) <= now < 3600 (expiry)
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 2);
+        assert!(contacted);
+    }
+
+    // given: expired; the source returns Ok but with an already-past expiration (staleCredentials),
+    // e.g. IMDS serving stale HOSM creds. Treated as a failed refresh.
+    // expected: serve the *previous* cached creds + back off (not the stale response).
+    #[tokio::test]
+    async fn stale_response_treated_as_failed_refresh() {
+        // second entry: id=2 but expiry 3600 (<= now once expired) -> "stale".
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Ok(identity(2, 3600, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700); // both id=1 and the stale id=2 are past expiry
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "stale Ok response is a failed refresh; serve previous"
+        );
+        assert!(contacted);
+
+        h.advance_to(3800); // backoff in effect
+        let (_r, contacted) = h.get().await;
+        assert!(!contacted, "backoff applies after a stale response too");
+    }
+
+    // Recovery: once the backoff elapses, a later refresh is attempted and succeeds.
+    #[tokio::test]
+    async fn recovery_after_backoff() {
+        let h = Harness::new(vec![
+            Ok(identity(1, 3600, true)),
+            Err("transient".into()),
+            Ok(identity(2, 7200, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700); // expired -> failed refresh -> serve cached + backoff (<= 600s)
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700 + 601); // past the max backoff -> refresh retried
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            2,
+            "refresh retried and succeeded once backoff elapsed"
+        );
+        assert!(contacted);
+    }
+
+    // A source that reports no expiration gets the default expiration (15 min), so it is cached
+    // and served rather than re-fetched on every call.
+    #[tokio::test]
+    async fn no_expiry_uses_default_expiration() {
+        let no_expiry = Identity::builder()
+            .data(TestCreds { id: 1 })
+            .property(StaticStabilityEligible)
+            .build()
+            .unwrap();
+        assert_eq!(no_expiry.expiration(), None);
+        let h = Harness::new(vec![Ok(no_expiry)]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        // default_expiration is 15 min -> advisory window 5 min -> valid well before then.
+        h.advance_to(9 * 60);
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(
+            !contacted,
+            "no-expiry creds are cached via default_expiration, not re-fetched"
+        );
+    }
+
+    // invalidate with an identity that isn't the cached one (stale rejection / superseded by a
+    // concurrent refresh) is a no-op — the ptr_eq generation guard.
+    #[tokio::test]
+    async fn invalidate_non_matching_is_noop() {
+        let h = Harness::new(vec![Ok(identity(1, 3600, true))]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        let other = identity(99, 3600, true); // a different allocation
+        h.cache.invalidate(&other);
+
+        // still valid; the non-matching invalidate did nothing.
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(
+            !contacted,
+            "invalidate on a non-cached identity must be a no-op (ptr_eq guard)"
+        );
+    }
+
+    // Behavioral advisory-window selection: short-lived creds (<=20 min) get the 5-min window.
+    #[tokio::test]
+    async fn advisory_window_short_lifetime() {
+        // lifetime 900s (15 min) -> advisory 5 min (300s): advisory_at=600, mandatory_at=840.
+        let h = Harness::new(vec![
+            Ok(identity(1, 900, true)),
+            Ok(identity(2, 7200, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(500); // < 600 -> still valid
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(!contacted, "before the 5-min window: valid, no refresh");
+
+        h.advance_to(650); // 600 <= now < 840 -> advisory window opened
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 2);
+        assert!(contacted, "inside the 5-min window: refresh");
+    }
+
+    /// A source whose resolution blocks on a gate until released — for concurrency tests.
+    #[derive(Debug)]
+    struct GatedSource {
+        gate: Arc<tokio::sync::Notify>,
+        contacts: Arc<AtomicUsize>,
+        results: Mutex<Vec<Result<Identity, BoxError>>>,
+    }
+
+    impl ResolveIdentity for GatedSource {
+        fn resolve_identity<'a>(
+            &'a self,
+            _rc: &'a RuntimeComponents,
+            _cfg: &'a ConfigBag,
+        ) -> IdentityFuture<'a> {
+            let next = self.results.lock().unwrap().remove(0);
+            let (gate, contacts) = (self.gate.clone(), self.contacts.clone());
+            IdentityFuture::new(async move {
+                contacts.fetch_add(1, Ordering::SeqCst);
+                gate.notified().await; // block until released
+                next
+            })
+        }
+    }
+
+    // SEP Concurrency Test 1: within the advisory window, only ONE caller refreshes; the others
+    // return cached immediately without waiting or contacting the source (non-blocking single-flight).
+    #[tokio::test]
+    async fn advisory_concurrent_single_flight() {
+        let time = ManualTimeSource::new(epoch(0));
+        // Tick-advance sleep: never ticked here, so the refresh Timeout never fires and a
+        // gate-blocked source stays blocked until the driver releases it (deterministic, no real time).
+        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contacts = Arc::new(AtomicUsize::new(0));
+        let resolver = SharedIdentityResolver::new(GatedSource {
+            gate: gate.clone(),
+            contacts: contacts.clone(),
+            results: Mutex::new(vec![
+                Ok(identity(1, 3600, true)),
+                Ok(identity(2, 7200, true)),
+            ]),
+        });
+        let cache = StaticStabilityCache::builder()
+            .time_source(time.clone().into_shared())
+            .build();
+
+        // Seed (State 1): permit exactly one source resolution for the initial fetch.
+        gate.notify_one();
+        let seed = cache
+            .resolve_cached_identity(resolver.clone(), &components, &cfg)
+            .await
+            .unwrap();
+        assert_eq!(id_of(&seed), 1);
+        assert_eq!(contacts.load(Ordering::SeqCst), 1);
+
+        time.set_time(epoch(3000)); // advisory window (2700 <= now < 3540)
+
+        // Two concurrent advisory callers + a driver that releases the single in-flight refresh.
+        let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get2 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let driver = async {
+            tokio::task::yield_now().await;
+            gate.notify_one();
+        };
+        let (r1, r2, ()) = tokio::join!(get1, get2, driver);
+
+        let mut ids = [id_of(&r1.unwrap()), id_of(&r2.unwrap())];
+        ids.sort();
+        assert_eq!(
+            ids,
+            [1, 2],
+            "one caller refreshed (id=2), the other served cached (id=1)"
+        );
+        assert_eq!(
+            contacts.load(Ordering::SeqCst),
+            2,
+            "single-flight: only one refresh contacted the source (F-REFRESH-2)"
         );
     }
 }
