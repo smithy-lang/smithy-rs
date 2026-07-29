@@ -1196,6 +1196,7 @@ pub(crate) mod test {
     async fn retry_connect_timeouts() {
         use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
         // Legacy: 1s backoff, total > 1s
+        #[cfg(feature = "legacy-client")]
         #[allow(deprecated)]
         retry_connect_timeouts_for_bv(
             BehaviorVersion::v2024_03_28(),

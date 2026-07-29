@@ -1043,10 +1043,13 @@ mod loader {
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
+                    #[cfg(feature = "legacy-client")]
                     #[allow(deprecated)]
                     Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
                         Some(IdentityCache::lazy().build())
                     }
+                    #[cfg(not(feature = "legacy-client"))]
+                    Some(_) => Some(IdentityCache::lazy().build()),
                     _ => None,
                 },
                 Some(user_cache) => Some(user_cache),
