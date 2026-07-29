@@ -921,4 +921,118 @@ mod tests {
             "single-flight: only one refresh contacted the source (F-REFRESH-2)"
         );
     }
+
+    // A failed refresh in the advisory window (creds still valid) serves cached + backs off, without
+    // blocking the caller. Distinct from the mandatory/expired failure path.
+    #[tokio::test]
+    async fn advisory_refresh_failure_backs_off_without_blocking() {
+        let h = Harness::new(vec![Ok(identity(1, 3600, true)), Err("transient".into())]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3000); // advisory window; creds still valid (exp 3600)
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "advisory refresh failed: serve still-valid cached"
+        );
+        assert!(contacted, "advisory refresh was attempted");
+
+        h.advance_to(3100); // still advisory, within backoff
+        let (r, contacted) = h.get().await;
+        assert_eq!(id_of(&r.unwrap()), 1);
+        assert!(!contacted, "advisory backoff: no source contact");
+    }
+
+    // Behavioral advisory-window selection: assert the window opens exactly at `expiry - window`.
+    async fn assert_advisory_window(lifetime_secs: u64, window_secs: u64) {
+        let h = Harness::new(vec![
+            Ok(identity(1, lifetime_secs, true)),
+            Ok(identity(2, lifetime_secs + 100_000, true)),
+        ]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1); // seed at now=0
+
+        h.advance_to(lifetime_secs - window_secs - 1); // just before the window opens
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "lifetime {lifetime_secs}s: valid before the {window_secs}s advisory window"
+        );
+        assert!(!contacted);
+
+        h.advance_to(lifetime_secs - window_secs + 1); // just inside the window
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            2,
+            "lifetime {lifetime_secs}s: refresh inside the {window_secs}s advisory window"
+        );
+        assert!(contacted);
+    }
+
+    #[tokio::test]
+    async fn advisory_window_matrix_behavioral() {
+        // SEP table, verified behaviorally through getCredentials.
+        assert_advisory_window(15 * 60, 5 * 60).await; // <= 20 min  -> 5 min
+        assert_advisory_window(30 * 60, 15 * 60).await; // 20..90 min -> 15 min
+        assert_advisory_window(120 * 60, 60 * 60).await; // >= 90 min  -> 60 min
+    }
+
+    // SEP Concurrency Test 2: within the mandatory window / expired, one caller refreshes and all
+    // others WAIT for it and reuse the result (no additional source contacts).
+    #[tokio::test]
+    async fn mandatory_concurrent_single_flight_all_reuse() {
+        let time = ManualTimeSource::new(epoch(0));
+        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contacts = Arc::new(AtomicUsize::new(0));
+        let resolver = SharedIdentityResolver::new(GatedSource {
+            gate: gate.clone(),
+            contacts: contacts.clone(),
+            results: Mutex::new(vec![
+                Ok(identity(1, 3600, true)),
+                Ok(identity(2, 10_000, true)),
+            ]),
+        });
+        let cache = StaticStabilityCache::builder()
+            .time_source(time.clone().into_shared())
+            .build();
+
+        gate.notify_one();
+        let seed = cache
+            .resolve_cached_identity(resolver.clone(), &components, &cfg)
+            .await
+            .unwrap();
+        assert_eq!(id_of(&seed), 1);
+        assert_eq!(contacts.load(Ordering::SeqCst), 1);
+
+        time.set_time(epoch(3700)); // expired -> mandatory path (blocking lock + recheck)
+
+        // Three concurrent callers + a driver that releases the single in-flight refresh.
+        let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get2 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get3 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let driver = async {
+            tokio::task::yield_now().await;
+            gate.notify_one();
+        };
+        let (r1, r2, r3, ()) = tokio::join!(get1, get2, get3, driver);
+
+        // Every caller receives the one refreshed identity; only one refresh contacted the source.
+        assert_eq!(id_of(&r1.unwrap()), 2);
+        assert_eq!(id_of(&r2.unwrap()), 2);
+        assert_eq!(id_of(&r3.unwrap()), 2);
+        assert_eq!(
+            contacts.load(Ordering::SeqCst),
+            2,
+            "one refresh shared by all waiters (F-REFRESH-2)"
+        );
+    }
 }
