@@ -77,3 +77,78 @@ where
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use aws_smithy_runtime_api::client::interceptors::context::{Error, Input, InterceptorContext};
+    use aws_smithy_runtime_api::client::orchestrator::OrchestratorError;
+    use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
+    use aws_smithy_types::error::ErrorMetadata;
+
+    /// A minimal operation error carrying a modeled error code.
+    #[derive(Debug)]
+    struct CodedError {
+        metadata: ErrorMetadata,
+    }
+
+    impl CodedError {
+        fn new(code: &'static str) -> Self {
+            Self {
+                metadata: ErrorMetadata::builder().code(code).build(),
+            }
+        }
+    }
+
+    impl fmt::Display for CodedError {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "coded error")
+        }
+    }
+
+    impl StdError for CodedError {}
+
+    impl ProvideErrorMetadata for CodedError {
+        fn meta(&self) -> &ErrorMetadata {
+            &self.metadata
+        }
+    }
+
+    /// Runs the interceptor against a deserialized operation error with the given code and reports
+    /// whether it set the `InvalidateResolvedIdentity` marker.
+    fn sets_invalidate_marker(code: &'static str) -> bool {
+        let interceptor = CredentialAuthFailureInterceptor::<CodedError>::new();
+        let rc = RuntimeComponentsBuilder::for_tests().build().unwrap();
+        let mut cfg = ConfigBag::base();
+        let mut ctx = InterceptorContext::new(Input::doesnt_matter());
+        ctx.set_output_or_error(Err(OrchestratorError::operation(Error::erase(
+            CodedError::new(code),
+        ))));
+        let ctx_ref = AfterDeserializationInterceptorContextRef::from(&ctx);
+        interceptor
+            .read_after_deserialization(&ctx_ref, &rc, &mut cfg)
+            .unwrap();
+        cfg.load::<InvalidateResolvedIdentity>().is_some()
+    }
+
+    #[test]
+    fn triggers_on_expired_and_invalid_token_only() {
+        assert!(
+            sets_invalidate_marker("ExpiredToken"),
+            "ExpiredToken must trigger invalidation"
+        );
+        assert!(
+            sets_invalidate_marker("InvalidToken"),
+            "InvalidToken must trigger invalidation"
+        );
+        // AccessDenied is authorization, not credential validity — must NOT invalidate.
+        assert!(
+            !sets_invalidate_marker("AccessDenied"),
+            "AccessDenied is authz, not credential validity"
+        );
+        assert!(
+            !sets_invalidate_marker("ThrottlingException"),
+            "unrelated errors must not trigger invalidation"
+        );
+    }
+}

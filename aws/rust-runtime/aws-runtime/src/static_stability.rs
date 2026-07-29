@@ -1035,4 +1035,33 @@ mod tests {
             "one refresh shared by all waiters (F-REFRESH-2)"
         );
     }
+
+    // SEP §Invalidate: Invalidate() MUST NOT clear or bypass the refresh backoff. If a refresh
+    // already failed and the backoff hasn't elapsed, the next getCredentials returns cached without
+    // contacting the source — even after an invalidate.
+    #[tokio::test]
+    async fn invalidate_preserves_active_backoff() {
+        let h = Harness::new(vec![Ok(identity(1, 3600, true)), Err("STS 503".into())]);
+        assert_eq!(id_of(&h.get().await.0.unwrap()), 1);
+
+        h.advance_to(3700); // expired -> failed refresh -> serve cached + backoff
+        let (r, contacted) = h.get().await;
+        let served = r.unwrap();
+        assert_eq!(id_of(&served), 1);
+        assert!(contacted);
+
+        h.cache.invalidate(&served); // invalidate while backoff is active
+
+        h.advance_to(3800); // still within backoff (>= 300s)
+        let (r, contacted) = h.get().await;
+        assert_eq!(
+            id_of(&r.unwrap()),
+            1,
+            "invalidate must not bypass the refresh backoff"
+        );
+        assert!(
+            !contacted,
+            "backoff preserved after invalidate: no source contact"
+        );
+    }
 }
