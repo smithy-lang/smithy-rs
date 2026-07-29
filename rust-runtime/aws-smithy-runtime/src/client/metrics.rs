@@ -94,12 +94,12 @@ impl OperationTelemetry {
                 .set_description("The time it takes to connect to the service, send the request, and get back HTTP status code and headers (including time queued waiting to be sent)")
                 .build(),
             request_body_size: meter
-                .create_histogram("http.client.request.body.size")
+                .create_histogram("smithy.client.call.request.size")
                 .set_units("By")
                 .set_description("Size of the transferred request body, in bytes")
                 .build(),
             response_body_size: meter
-                .create_histogram("http.client.response.body.size")
+                .create_histogram("smithy.client.call.response.size")
                 .set_units("By")
                 .set_description("Size of the transferred response body, in bytes")
                 .build(),

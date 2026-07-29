@@ -10,8 +10,8 @@
 //! body records its total to a dedicated histogram *on completion* (when the body is dropped), so a
 //! streaming body is measured once fully consumed rather than read as `0` at operation-return time.
 //!
-//! Body size is recorded as its own instrument (`http.client.request.body.size` /
-//! `http.client.response.body.size`) rather than as an attribute on the call-duration histogram:
+//! Body size is recorded as its own instrument (`smithy.client.call.request.size` /
+//! `smithy.client.call.response.size`) rather than as an attribute on the call-duration histogram:
 //! body size is near-unique per call, so attaching it as a label would fragment the duration metric
 //! into one time series per byte count.
 
