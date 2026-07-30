@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-cbor"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-runtime-api 1.14.0",
  "aws-smithy-schema 0.2.0",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-dns"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-smithy-runtime-api 1.14.0",
  "criterion",
@@ -512,7 +512,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "aws-smithy-async 1.3.0",
  "aws-smithy-protocol-test",
@@ -651,7 +651,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-server-python"
-version = "0.68.0"
+version = "0.68.1"
 dependencies = [
  "aws-smithy-http 0.64.0",
  "aws-smithy-json 0.63.0",
@@ -699,7 +699,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-json"
-version = "0.63.0"
+version = "0.63.1"
 dependencies = [
  "aws-smithy-runtime-api 1.14.0",
  "aws-smithy-schema 0.2.0",
@@ -786,7 +786,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-observability-otel"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "async-global-executor",
  "async-task",
@@ -819,7 +819,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-query"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-runtime-api 1.14.0",
  "aws-smithy-schema 0.2.0",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-runtime"
-version = "1.12.1"
+version = "1.12.2"
 dependencies = [
  "approx",
  "aws-smithy-async 1.3.0",
@@ -926,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-schema"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "aws-smithy-runtime-api 1.14.0",
  "aws-smithy-types 1.6.2",
@@ -1030,7 +1030,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-xml"
-version = "0.62.0"
+version = "0.62.1"
 dependencies = [
  "aws-smithy-protocol-test",
  "aws-smithy-runtime-api 1.14.0",
