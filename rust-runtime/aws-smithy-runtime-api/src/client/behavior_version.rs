@@ -23,7 +23,6 @@ enum Inner {
     V2025_01_17,
     V2025_08_07,
     V2026_01_12,
-    V2026_08_01,
 }
 
 impl BehaviorVersion {
@@ -36,24 +35,9 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::v2026_08_01`]
+    /// The latest version is currently [`BehaviorVersion::v2026_01_12`]
     pub fn latest() -> Self {
-        Self::v2026_08_01()
-    }
-
-    /// Behavior version for August 1st, 2026.
-    ///
-    /// This version installs the static-stability credentials cache (`StaticStabilityCache`) as the
-    /// default identity cache for AWS clients: on a failed credential refresh, previously-resolved
-    /// credentials are served past expiration (subject to backoff) so applications keep signing
-    /// requests through a credential-source outage.
-    ///
-    /// NOTE: the exact release date encoded in `v2026_08_01` is provisional and will be finalized
-    /// at release.
-    pub fn v2026_08_01() -> Self {
-        Self {
-            inner: Inner::V2026_08_01,
-        }
+        Self::v2026_01_12()
     }
 
     /// Behavior version for January 12th, 2026.

@@ -225,7 +225,6 @@ mod loader {
     use aws_credential_types::Credentials;
     use aws_smithy_async::rt::sleep::{default_async_sleep, AsyncSleep, SharedAsyncSleep};
     use aws_smithy_async::time::{SharedTimeSource, TimeSource};
-    use aws_smithy_runtime::client::identity::IdentityCache;
     use aws_smithy_runtime_api::client::auth::AuthSchemePreference;
     use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
     use aws_smithy_runtime_api::client::http::HttpClient;
@@ -1043,15 +1042,12 @@ mod loader {
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
-                    // Static-stability credentials cache (D-BV / F-DEFAULT-1): the new default
-                    // identity cache for AWS clients. Sits above today's lazy() tier and, like it,
-                    // loses to an explicit `.identity_cache(..)`.
-                    Some(bv) if bv.is_at_least(BehaviorVersion::v2026_08_01()) => {
-                        Some(aws_runtime::static_stability::StaticStabilityCache::builder().build())
-                    }
+                    // Static-stability credentials cache (D-NOBV / F-DEFAULT-1): replaces
+                    // `IdentityCache::lazy()` at the existing threshold — no *new* BehaviorVersion.
+                    // An explicit `.identity_cache(..)` still wins.
                     #[allow(deprecated)]
                     Some(bv) if bv.is_at_least(BehaviorVersion::v2024_03_28()) => {
-                        Some(IdentityCache::lazy().build())
+                        Some(aws_runtime::static_stability::StaticStabilityCache::builder().build())
                     }
                     _ => None,
                 },

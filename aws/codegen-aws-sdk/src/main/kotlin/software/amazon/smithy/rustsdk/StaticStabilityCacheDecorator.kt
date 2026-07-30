@@ -12,7 +12,6 @@ import software.amazon.smithy.rust.codegen.client.smithy.generators.ServiceRunti
 import software.amazon.smithy.rust.codegen.core.rustlang.Writable
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
-import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 
 /**
  * Installs [`StaticStabilityCache`] as the default identity cache for AWS clients built *without*
@@ -20,8 +19,9 @@ import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
  *
  * It is registered on the generated `ServiceRuntimePlugin`, which runs at `Order::Defaults`, so it
  * overrides the generic smithy `LazyCache` default but still loses to an explicit customer
- * `.identity_cache(..)` (which lands in the `Order::Overrides` layer). It is gated on
- * `BehaviorVersion >= v2026_08_01` so older behavior versions keep `LazyCache`.
+ * `.identity_cache(..)` (which lands in the `Order::Overrides` layer). It is installed
+ * unconditionally (D-NOBV) — `StaticStabilityCache` is the default AWS identity cache, not gated
+ * behind a new `BehaviorVersion`.
  *
  * `aws-config` clients (Route A) get the cache from `ConfigLoader::load()` instead, which outranks
  * this (same type, same result).
@@ -45,30 +45,21 @@ private class StaticStabilityCacheCustomization(
             "StaticStabilityCache" to
                 AwsRuntimeType.awsRuntime(runtimeConfig)
                     .resolve("static_stability::StaticStabilityCache"),
-            "BehaviorVersion" to
-                RuntimeType.smithyRuntimeApiClient(runtimeConfig)
-                    .resolve("client::behavior_version::BehaviorVersion"),
         )
 
     override fun section(section: ServiceRuntimePluginSection): Writable =
         writable {
             when (section) {
                 // Runs inside `ServiceRuntimePlugin::new`, where `runtime_components`
-                // (a &mut RuntimeComponentsBuilder) and the service `Config` are in scope.
+                // (a &mut RuntimeComponentsBuilder) is in scope.
                 is ServiceRuntimePluginSection.RegisterRuntimeComponents -> {
                     rustTemplate(
                         """
                         // Order::Defaults -> overrides the smithy LazyCache default; a customer's
-                        // explicit .identity_cache(..) (Order::Overrides) still wins. BV-gated so
-                        // older behavior versions keep LazyCache.
-                        if ${section.serviceConfigName}
-                            .behavior_version
-                            .map(|bv| bv.is_at_least(#{BehaviorVersion}::v2026_08_01()))
-                            .unwrap_or(false)
-                        {
-                            runtime_components
-                                .set_identity_cache(Some(#{StaticStabilityCache}::builder().build()));
-                        }
+                        // explicit .identity_cache(..) (Order::Overrides) still wins. Installed
+                        // unconditionally (D-NOBV): the default AWS identity cache.
+                        runtime_components
+                            .set_identity_cache(Some(#{StaticStabilityCache}::builder().build()));
                         """,
                         *codegenScope,
                     )
