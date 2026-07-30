@@ -53,6 +53,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             UserAgentDecorator(),
             SigV4AuthDecorator(),
             StaticStabilityCacheDecorator(),
+            CredentialAuthFailureInterceptorDecorator(),
             HttpRequestChecksumDecorator(),
             HttpResponseChecksumDecorator(),
             IntegrationTestDecorator(),
