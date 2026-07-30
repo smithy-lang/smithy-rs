@@ -96,6 +96,13 @@ jobs:
         - action: check-core-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
         - action: check-rust-runtimes
+          action-arguments: rust-runtime
+          label: check-rust-runtimes-smithy
+          runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
+        - action: check-rust-runtimes
+          action-arguments: aws/rust-runtime
+          label: check-rust-runtimes-aws
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
@@ -138,6 +145,8 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
 
   # Separate from the main checks above because it uses aws-sdk-rust from GitHub
   check-semver-hazards:
@@ -174,7 +183,29 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
+        # `check-aws-config` is split into a one-time `base` leg plus 4 parallel `featureset`
+        # legs that shard the expensive `cargo hack` feature-powersets via `--partition i/4`.
+        # The union runs exactly the same checks as the old single leg (see tools/ci-scripts/
+        # check-aws-config), but as 5 parallel legs instead of one ~28-minute serial job.
         - action: check-aws-config
+          action-arguments: base
+          label: check-aws-config-base
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 1/4
+          label: check-aws-config-featureset-1
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 2/4
+          label: check-aws-config-featureset-2
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 3/4
+          label: check-aws-config-featureset-3
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 4/4
+          label: check-aws-config-featureset-4
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
@@ -200,6 +231,8 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
 
   test-rust-windows:
     name: Rust Tests on Windows

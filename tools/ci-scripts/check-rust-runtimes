@@ -13,6 +13,15 @@ set -eux
 
 : "$RUST_NIGHTLY_VERSION"
 
+# Optional first argument selects a single runtime workspace to check, so CI can run
+# `rust-runtime` and `aws/rust-runtime` as two parallel matrix legs instead of one serial job.
+# With no argument, both are checked (local dev and any non-matrix caller).
+if [[ $# -gt 0 ]]; then
+    runtime_paths=("$1")
+else
+    runtime_paths=("rust-runtime" "aws/rust-runtime")
+fi
+
 cd smithy-rs
 
 echo -e "# ${C_YELLOW}Auditing runtime crate version numbers...${C_RESET}"
@@ -31,9 +40,7 @@ fi
 # Array to collect MSRV mismatches
 msrv_mismatches=()
 
-for runtime_path in \
-    "rust-runtime" \
-    "aws/rust-runtime"
+for runtime_path in "${runtime_paths[@]}"
 do
     echo -e "# ${C_YELLOW}Testing ${runtime_path}...${C_RESET}"
     pushd "${runtime_path}" &>/dev/null
