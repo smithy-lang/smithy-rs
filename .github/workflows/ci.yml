@@ -77,7 +77,8 @@ jobs:
   # Test the code generator and other parts (styles and lints) that don't require
   # code to have already been generated in order to run.
   test-codegen:
-    name: Test Codegen
+    # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
+    name: Test Codegen / ${{ matrix.test.label || matrix.test.action }}
     runs-on: ${{ matrix.test.runner }}
     timeout-minutes: 35
     # To avoid repeating setup boilerplate, we have the actual test commands
@@ -133,8 +134,7 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-codegen-version
           runner: smithy_ubuntu-latest_8-core
-        # Guards that the check-aws-config feature-powerset partitioning is a complete, disjoint
-        # cover (see tools/ci-scripts/check-aws-config-partition-coverage). Cheap; no generated SDK.
+        # Guards that the check-aws-config --partition legs cover the whole powerset (cheap; no SDK)
         - action: check-aws-config-partition-coverage
           runner: smithy_ubuntu-latest_8-core
     steps:
@@ -176,7 +176,8 @@ jobs:
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
   test-sdk:
-    name: Test the SDK
+    # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
+    name: Test the SDK / ${{ matrix.test.label || matrix.test.action }}
     needs: generate
     runs-on: ${{ matrix.test.runner }}
     timeout-minutes: 45
@@ -187,10 +188,8 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
-        # `check-aws-config` is split into a one-time `base` leg plus 4 parallel `featureset`
-        # legs that shard the expensive `cargo hack` feature-powersets via `--partition i/4`.
-        # The union runs exactly the same checks as the old single leg (see tools/ci-scripts/
-        # check-aws-config), but as 5 parallel legs instead of one ~28-minute serial job.
+        # check-aws-config split into a `base` leg + 4 `--partition` featureset legs; the union
+        # runs the same checks as the old single leg, but in parallel. See ci-scripts/check-aws-config.
         - action: check-aws-config
           action-arguments: base
           label: check-aws-config-base

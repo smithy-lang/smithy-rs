@@ -3,22 +3,8 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Guards the `check-aws-config` feature-powerset partitioning (see tools/ci-scripts/
-# check-aws-config, MODE=featureset). Splitting the powerset across N `cargo hack --partition`
-# legs is only safe if the legs form a COMPLETE and DISJOINT cover of the full powerset — every
-# feature combination runs in exactly one leg, none dropped, none duplicated. If that breaks
-# (a cargo-hack without `--partition`, the flag in the wrong position so it is silently ignored,
-# or an upstream behavior change), coverage would shrink while CI stayed green.
-#
-# This regression bit us once: cargo-hack 0.6.27 has no `--partition` flag (added in 0.6.31),
-# so the featureset legs errored with "unexpected argument '--partition'". This test would have
-# caught that at near-zero cost.
-#
-# It runs two cheap assertions, neither of which needs the generated SDK:
-#   1. The installed cargo-hack actually supports `--partition` (the exact regression above).
-#   2. Partitioning is a complete, disjoint cover. Verified on a small standalone crate at
-#      `--depth 1` (~a handful of combinations, compiles in seconds). Partitioning is a
-#      crate-independent property of cargo-hack, so proving it here proves it for aws-config.
+# Checks that the check-aws-config `--partition` legs cover the full feature powerset exactly
+# once, so partitioning can't silently drop coverage. Cheap; no generated SDK needed.
 
 C_RED='\033[1;31m'
 C_GREEN='\033[1;32m'
@@ -34,7 +20,7 @@ PROBE_DIR="rust-runtime/aws-smithy-types"
 
 echo -e "${C_YELLOW}# Guarding check-aws-config partition coverage (N=${N})...${C_RESET}"
 
-# --- Assertion 1: the flag exists (the exact 0.6.27 regression) --------------------------------
+# cargo-hack must support --partition (missing before 0.6.31)
 if ! cargo hack --help 2>&1 | grep -q -- '--partition'; then
     echo -e "${C_RED}FAIL: installed cargo-hack has no --partition flag (needs >= 0.6.31).${C_RESET}"
     cargo hack --version || true
@@ -42,7 +28,7 @@ if ! cargo hack --help 2>&1 | grep -q -- '--partition'; then
 fi
 echo "cargo-hack supports --partition: $(cargo hack --version)"
 
-# --- Assertion 2: partitions are a complete, disjoint cover ------------------------------------
+# Check the partitions are a complete, disjoint cover of the powerset
 pushd "${PROBE_DIR}" &>/dev/null
 
 # cargo-hack prints `info: running ... (k/TOTAL)` for combos IN the partition and
@@ -58,9 +44,7 @@ for (( i=1; i<=N; i++ )); do
     cargo hack --partition "${i}/${N}" "${HACK_ARGS[@]}" >"${log}" 2>&1 || {
         echo -e "${C_RED}FAIL: partition ${i}/${N} invocation errored:${C_RESET}"; cat "${log}"; exit 1; }
 
-    # `|| true` on every grep: a partition may legitimately run or skip zero combinations
-    # (e.g. an empty trailing partition when TOTAL < N), and grep exits 1 on no match, which
-    # would otherwise abort under `set -e`.
+    # `|| true`: a partition may run or skip zero combos, and grep exits 1 on no match under `set -e`
     ran="$(grep -c 'info: running '  "${log}" || true)"
     skipped="$(grep -c 'info: skipping ' "${log}" || true)"
     seen=$(( ran + skipped ))

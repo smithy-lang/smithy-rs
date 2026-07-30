@@ -12,10 +12,8 @@ inputs:
   action-arguments:
     description: Arguments to pass to the action
     required: false
-  # A filesystem/cache-safe identifier for this leg, used for the artifact name and the Rust
-  # cache key. Defaults to `action`. Set this when several matrix legs share the same `action`
-  # but pass different `action-arguments` (e.g. partitioned check-aws-config), so they don't
-  # collide on one artifact name / cache key. Must contain no slashes or spaces.
+  # Cache-safe slug for the artifact name and cache key (no slashes/spaces); defaults to `action`.
+  # Set it when legs share an `action` but differ by `action-arguments`, so they don't collide.
   label:
     description: Unique slug for artifact name and cache key; defaults to action
     required: false
@@ -42,10 +40,7 @@ runs:
        # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:
-      # Include the action name so each matrix leg gets its own cache entry. Keying only on
-      # `github.job` made all legs of a matrix job (e.g. the 8 `test-sdk` legs, which compile
-      # different crate sets) contend for one write-once key, so most legs restored a stale or
-      # cold cache. Per-action keys give each leg its own warm target.
+      # Per-leg key: keying only on `github.job` made a job's matrix legs contend for one cache
       shared-key: ${{ runner.os }}-${{ github.job }}-${{ inputs.label != '' && inputs.label || inputs.action }}
       workspaces: |
         . smithy-rs-target

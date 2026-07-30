@@ -9,15 +9,8 @@ C_RESET='\033[0m'
 
 set -eux
 
-# Selects which portion of the aws-config checks to run. Splitting the work lets CI run the
-# expensive `cargo hack` feature-powersets as several parallel matrix legs instead of one
-# ~28-minute serial job. The union of `base` + every `featureset <i/N>` runs exactly the same
-# commands as `all`.
-#   all                  - everything (default; local dev and any non-matrix caller)
-#   base                 - the one-time checks (clippy/test/doc/minimal-versions/external-types/
-#                          tree/each-feature/wasm), i.e. everything except the two powersets
-#   featureset [i/N]     - only the two `cargo hack` feature-powerset passes, optionally sharded
-#                          to partition i of N via `cargo hack --partition`
+# Which checks to run so CI can parallelize the powersets: `all` (default), `base` (everything
+# except the powersets), or `featureset [i/N]` (only the powersets, optionally partitioned).
 MODE="${1:-all}"
 PARTITION="${2:-}"
 
@@ -64,10 +57,8 @@ if [[ "${MODE}" == "all" || "${MODE}" == "base" ]]; then
 fi
 
 if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
-    # `--partition M/N` shards the powerset across N legs (requires cargo-hack >= 0.6.31).
-    # NOTE: `--partition` is a cargo-hack flag and MUST come before the `check`/`test`
-    # subcommand, otherwise it is forwarded to cargo and fails with "unexpected argument".
-    # Empty PARTITION runs the full set.
+    # `--partition M/N` shards the powerset (needs cargo-hack >= 0.6.31) and MUST come before the
+    # subcommand, else it's forwarded to cargo and fails. Empty PARTITION runs the full set.
     partition_arg=()
     if [[ -n "${PARTITION}" ]]; then
         partition_arg=(--partition "${PARTITION}")

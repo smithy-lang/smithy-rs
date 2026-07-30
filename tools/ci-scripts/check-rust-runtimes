@@ -13,9 +13,8 @@ set -eux
 
 : "$RUST_NIGHTLY_VERSION"
 
-# Optional first argument selects a single runtime workspace to check, so CI can run
-# `rust-runtime` and `aws/rust-runtime` as two parallel matrix legs instead of one serial job.
-# With no argument, both are checked (local dev and any non-matrix caller).
+# Optional arg selects one runtime workspace so CI can run rust-runtime and aws/rust-runtime as
+# parallel legs; with no arg both are checked (local dev and any non-matrix caller).
 if [[ $# -gt 0 ]]; then
     runtime_paths=("$1")
 else
