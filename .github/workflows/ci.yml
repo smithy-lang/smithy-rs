@@ -133,6 +133,10 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-codegen-version
           runner: smithy_ubuntu-latest_8-core
+        # Guards that the check-aws-config feature-powerset partitioning is a complete, disjoint
+        # cover (see tools/ci-scripts/check-aws-config-partition-coverage). Cheap; no generated SDK.
+        - action: check-aws-config-partition-coverage
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4

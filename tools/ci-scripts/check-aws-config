@@ -64,7 +64,10 @@ if [[ "${MODE}" == "all" || "${MODE}" == "base" ]]; then
 fi
 
 if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
-    # `--partition i/N` shards the powerset across N legs; empty PARTITION runs the full set.
+    # `--partition M/N` shards the powerset across N legs (requires cargo-hack >= 0.6.31).
+    # NOTE: `--partition` is a cargo-hack flag and MUST come before the `check`/`test`
+    # subcommand, otherwise it is forwarded to cargo and fails with "unexpected argument".
+    # Empty PARTITION runs the full set.
     partition_arg=()
     if [[ -n "${PARTITION}" ]]; then
         partition_arg=(--partition "${PARTITION}")
@@ -72,12 +75,12 @@ if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
 
     # the crate has `allow-compilation` which needs to be deprecated
     echo "${C_YELLOW}## Checking every combination of features${C_RESET}"
-    cargo hack check --feature-powerset --exclude-all-features --exclude-features allow-compilation "${partition_arg[@]}"
+    cargo hack "${partition_arg[@]}" check --feature-powerset --exclude-all-features --exclude-features allow-compilation
 
     # This check will check other individual features and no-default-features
     # grouping these features because they don't interact
     echo "${C_YELLOW}## Testing feature powerset (grouped)${C_RESET}"
-    cargo hack test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client "${partition_arg[@]}"
+    cargo hack "${partition_arg[@]}" test --feature-powerset --exclude-all-features --exclude-features allow-compilation --group-features rt-tokio,client-hyper,rustls,default-https-client
 fi
 
 popd &>/dev/null

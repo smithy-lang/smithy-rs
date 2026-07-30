@@ -128,7 +128,7 @@ RUN cargo install --locked --path tools/ci-build/changelogger && \
 FROM install_rust AS cargo_tools
 ARG cargo_deny_version=0.16.4
 ARG cargo_udeps_version=0.1.56
-ARG cargo_hack_version=0.6.27
+ARG cargo_hack_version=0.6.31
 ARG cargo_minimal_versions_version=0.1.27
 ARG cargo_check_external_types_version=0.5.0
 ARG maturin_version=1.5.1

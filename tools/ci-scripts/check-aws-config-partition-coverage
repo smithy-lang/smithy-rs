@@ -1,0 +1,93 @@
+#!/bin/bash
+#
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Guards the `check-aws-config` feature-powerset partitioning (see tools/ci-scripts/
+# check-aws-config, MODE=featureset). Splitting the powerset across N `cargo hack --partition`
+# legs is only safe if the legs form a COMPLETE and DISJOINT cover of the full powerset — every
+# feature combination runs in exactly one leg, none dropped, none duplicated. If that breaks
+# (a cargo-hack without `--partition`, the flag in the wrong position so it is silently ignored,
+# or an upstream behavior change), coverage would shrink while CI stayed green.
+#
+# This regression bit us once: cargo-hack 0.6.27 has no `--partition` flag (added in 0.6.31),
+# so the featureset legs errored with "unexpected argument '--partition'". This test would have
+# caught that at near-zero cost.
+#
+# It runs two cheap assertions, neither of which needs the generated SDK:
+#   1. The installed cargo-hack actually supports `--partition` (the exact regression above).
+#   2. Partitioning is a complete, disjoint cover. Verified on a small standalone crate at
+#      `--depth 1` (~a handful of combinations, compiles in seconds). Partitioning is a
+#      crate-independent property of cargo-hack, so proving it here proves it for aws-config.
+
+C_RED='\033[1;31m'
+C_GREEN='\033[1;32m'
+C_YELLOW='\033[1;33m'
+C_RESET='\033[0m'
+
+set -euo pipefail
+cd smithy-rs
+
+N="${1:-4}"   # number of partitions; keep in sync with the check-aws-config matrix in ci.yml
+# A crate that builds standalone (no generated SDK needed) so this test can run in test-codegen.
+PROBE_DIR="rust-runtime/aws-smithy-types"
+
+echo -e "${C_YELLOW}# Guarding check-aws-config partition coverage (N=${N})...${C_RESET}"
+
+# --- Assertion 1: the flag exists (the exact 0.6.27 regression) --------------------------------
+if ! cargo hack --help 2>&1 | grep -q -- '--partition'; then
+    echo -e "${C_RED}FAIL: installed cargo-hack has no --partition flag (needs >= 0.6.31).${C_RESET}"
+    cargo hack --version || true
+    exit 1
+fi
+echo "cargo-hack supports --partition: $(cargo hack --version)"
+
+# --- Assertion 2: partitions are a complete, disjoint cover ------------------------------------
+pushd "${PROBE_DIR}" &>/dev/null
+
+# cargo-hack prints `info: running ... (k/TOTAL)` for combos IN the partition and
+# `info: skipping ... (k/TOTAL)` for combos NOT in it. --depth 1 keeps the set tiny and fast.
+HACK_ARGS=(check --feature-powerset --exclude-all-features --depth 1)
+
+total_run=0
+union_file="$(mktemp)"
+TOTAL=""
+for (( i=1; i<=N; i++ )); do
+    log="$(mktemp)"
+    # --partition MUST precede the subcommand, or it is forwarded to cargo and errors.
+    cargo hack --partition "${i}/${N}" "${HACK_ARGS[@]}" >"${log}" 2>&1 || {
+        echo -e "${C_RED}FAIL: partition ${i}/${N} invocation errored:${C_RESET}"; cat "${log}"; exit 1; }
+
+    # `|| true` on every grep: a partition may legitimately run or skip zero combinations
+    # (e.g. an empty trailing partition when TOTAL < N), and grep exits 1 on no match, which
+    # would otherwise abort under `set -e`.
+    ran="$(grep -c 'info: running '  "${log}" || true)"
+    skipped="$(grep -c 'info: skipping ' "${log}" || true)"
+    seen=$(( ran + skipped ))
+    echo "  partition ${i}/${N}: ran=${ran} skipped=${skipped} (accounted ${seen})"
+
+    # Every partition sees the same full set as its denominator.
+    if [[ -z "${TOTAL}" ]]; then TOTAL="${seen}"; fi
+    if [[ "${seen}" -ne "${TOTAL}" ]]; then
+        echo -e "${C_RED}FAIL: partition ${i}/${N} accounted ${seen}, expected ${TOTAL}.${C_RESET}"; exit 1
+    fi
+
+    (grep 'info: running ' "${log}" || true) | sed -E 's/.*running .(cargo[^`]*). on.*/\1/' >>"${union_file}"
+    total_run=$(( total_run + ran ))
+done
+
+# Completeness: the partitions together run the whole set.
+if [[ "${total_run}" -ne "${TOTAL}" ]]; then
+    echo -e "${C_RED}FAIL: partitions ran ${total_run} combinations but the full set is ${TOTAL} — coverage lost.${C_RESET}"
+    exit 1
+fi
+
+# Disjointness: no combination runs in more than one partition.
+distinct="$(sort -u "${union_file}" | wc -l | tr -d ' ')"
+if [[ "${distinct}" -ne "${TOTAL}" ]]; then
+    echo -e "${C_RED}FAIL: partitions overlap — ${total_run} runs but ${distinct} distinct combinations.${C_RESET}"
+    exit 1
+fi
+
+popd &>/dev/null
+echo -e "${C_GREEN}PASS: ${N} partitions are a complete, disjoint cover of all ${TOTAL} combinations.${C_RESET}"
