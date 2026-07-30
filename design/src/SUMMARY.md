@@ -21,6 +21,7 @@
   - [Accessing Un-modelled Data](./server/from_parts.md)
   - [The Anatomy of a Service](./server/anatomy.md)
   - [Generating Common Service Code](./server/code_generation.md)
+  - [Multi-protocol Server Code Generation](./server/multi_protocol_codegen.md)
 
 - [RFCs](./rfcs/overview.md)
   - [RFC-0001: Sharing configuration between multiple clients](./rfcs/rfc0001_shared_config.md)

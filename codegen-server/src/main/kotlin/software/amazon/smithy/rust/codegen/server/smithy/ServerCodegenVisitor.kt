@@ -31,7 +31,6 @@ import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.ErrorTrait
 import software.amazon.smithy.model.traits.LengthTrait
 import software.amazon.smithy.model.transform.ModelTransformer
-import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.rustlang.RustWriter
 import software.amazon.smithy.rust.codegen.core.rustlang.implBlock
 import software.amazon.smithy.rust.codegen.core.rustlang.rustBlock
@@ -85,13 +84,13 @@ import software.amazon.smithy.rust.codegen.server.smithy.generators.Unconstraine
 import software.amazon.smithy.rust.codegen.server.smithy.generators.UnconstrainedUnionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.ValidationExceptionConversionGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.isBuilderFallible
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocol
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolGenerator
 import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.ServerProtocolTestGenerator
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverEventStreamSerdeModule
-import software.amazon.smithy.rust.codegen.server.smithy.generators.protocol.serverProtocolSerdeModule
-import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolCodegenTransformer
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ProtocolScopedRenderer
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.SelectedServerProtocol
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.SelectedServerProtocols
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolLoader
+import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolModules
 import software.amazon.smithy.rust.codegen.server.smithy.protocols.ServerProtocolOrder
 import software.amazon.smithy.rust.codegen.server.smithy.traits.isReachableFromOperationInput
 import software.amazon.smithy.rust.codegen.server.smithy.transformers.AttachValidationExceptionToConstrainedOperationInputs
@@ -120,19 +119,10 @@ open class ServerCodegenVisitor(
     protected var protocolGeneratorFactory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>
     protected var protocolGenerator: ServerProtocolGenerator
     protected var validationExceptionConversionGenerator: ValidationExceptionConversionGenerator
-    private lateinit var protocolCodegenTransformer: ServerProtocolCodegenTransformer
-
-    protected data class SelectedServerProtocol(
-        val factory: ProtocolGeneratorFactory<ServerProtocolGenerator, ServerCodegenContext>,
-        val context: ServerCodegenContext,
-        val generator: ServerProtocolGenerator,
-        val protocolSerdeModule: RustModule.LeafModule,
-    ) {
-        val protocol: ServerProtocol = generator.protocol
-    }
+    private lateinit var protocolScopedRenderer: ProtocolScopedRenderer<SelectedServerProtocol>
 
     /** Loader-supported protocols selected for this service, in detection order. */
-    protected var selectedProtocols: List<SelectedServerProtocol>
+    private var selectedProtocols: SelectedServerProtocols
 
     init {
         val rustSymbolProviderConfig =
@@ -219,19 +209,20 @@ open class ServerCodegenVisitor(
         val orderedProtocolIds =
             ServerProtocolOrder.resolve(factoriesByProtocol.keys.toList(), protocolOrderConstraints)
         selectedProtocols =
-            orderedProtocolIds.map { protocolId ->
-                val factory = factoriesByProtocol.getValue(protocolId)
-                val protocolContext = contextFor(protocolId)
-                val protocolSerdeModule = serverProtocolSerdeModule(protocolId, isMultiProtocol)
-                SelectedServerProtocol(
-                    factory,
-                    protocolContext,
-                    factory.buildProtocolGenerator(protocolContext),
-                    protocolSerdeModule,
-                )
-            }
+            SelectedServerProtocols(
+                orderedProtocolIds.map { protocolId ->
+                    val factory = factoriesByProtocol.getValue(protocolId)
+                    val protocolContext = contextFor(protocolId)
+                    SelectedServerProtocol(
+                        factory,
+                        protocolContext,
+                        factory.buildProtocolGenerator(protocolContext),
+                        ServerProtocolModules.forProtocol(protocolId, isMultiProtocol),
+                    )
+                },
+            )
 
-        val primaryProtocol = selectedProtocols.first()
+        val primaryProtocol = selectedProtocols.primary
         codegenContext = primaryProtocol.context
         protocolGeneratorFactory = primaryProtocol.factory
         protocolGenerator = primaryProtocol.generator
@@ -255,9 +246,11 @@ open class ServerCodegenVisitor(
                 settings.codegenConfig,
                 codegenContext.expectModuleDocProvider(),
             )
-        protocolCodegenTransformer =
-            ServerProtocolCodegenTransformer(
+        protocolScopedRenderer =
+            ProtocolScopedRenderer(
                 rustCrate,
+                selectedProtocols,
+                SelectedServerProtocol::modules,
                 settings.codegenConfig.debugMode,
             )
     }
@@ -785,21 +778,8 @@ open class ServerCodegenVisitor(
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
 
-        for ((index, selectedProtocol) in selectedProtocols.withIndex()) {
-            val generateSharedTypes = index == 0
-            rustCrate.withModule(ServerRustModule.Operation) {
-                if (selectedProtocols.size == 1) {
-                    selectedProtocol.generator.renderOperation(this, shape, generateSharedTypes)
-                } else {
-                    protocolCodegenTransformer.renderOperation(
-                        this,
-                        selectedProtocol.protocolSerdeModule,
-                        serverEventStreamSerdeModule(selectedProtocol.protocol.protocolShapeId, isMultiProtocol = true),
-                    ) {
-                        selectedProtocol.generator.renderOperation(this, shape, generateSharedTypes)
-                    }
-                }
-            }
+        protocolScopedRenderer.renderEach(ServerRustModule.Operation) { scope ->
+            scope.protocol.generator.renderOperation(this, shape, generateSharedTypes = scope.isPrimary)
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)

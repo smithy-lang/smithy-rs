@@ -28,30 +28,30 @@ internal class ServerProtocolCodegenTransformer(
     private val writerFactory = RustWriter.factory(debugMode)
     private val renderedDependencies = mutableSetOf<String>()
 
-    fun renderOperation(
-        operationWriter: RustWriter,
-        protocolSerdeModule: RustModule.LeafModule,
-        eventStreamSerdeModule: RustModule.LeafModule,
+    fun render(
+        destinationWriter: RustWriter,
+        destinationModule: RustModule,
+        protocolModules: ServerProtocolModules,
         writable: Writable,
     ) {
         val temporaryWriter =
             writerFactory.apply(
-                "src/operation.rs",
-                operationWriter.namespace,
+                destinationModule.definitionFile(),
+                destinationWriter.namespace,
             )
         writable(temporaryWriter)
 
         val roots =
             mapOf(
-                ProtocolFunctions.serDeModule to protocolSerdeModule,
-                LEGACY_EVENT_STREAM_SERDE_MODULE to eventStreamSerdeModule,
+                ProtocolFunctions.serDeModule to protocolModules.serde,
+                LEGACY_EVENT_STREAM_SERDE_MODULE to protocolModules.eventStreamSerde,
             )
-        operationWriter.writeWithNoFormatting(rewrite(temporaryWriter.generatedBody(), roots))
-        materializeDependencies(operationWriter, temporaryWriter.dependencies.map(RustDependency::fromSymbolDependency), roots)
+        destinationWriter.writeWithNoFormatting(rewrite(temporaryWriter.generatedBody(), roots))
+        materializeDependencies(destinationWriter, temporaryWriter.dependencies.map(RustDependency::fromSymbolDependency), roots)
     }
 
     private fun materializeDependencies(
-        operationWriter: RustWriter,
+        destinationWriter: RustWriter,
         initialDependencies: List<RustDependency>,
         roots: Map<RustModule.LeafModule, RustModule.LeafModule>,
     ) {
@@ -84,7 +84,7 @@ internal class ServerProtocolCodegenTransformer(
                             .forEach(::addDependency)
                     }
                 }
-                else -> operationWriter.addDependency(dependency)
+                else -> destinationWriter.addDependency(dependency)
             }
         }
     }
