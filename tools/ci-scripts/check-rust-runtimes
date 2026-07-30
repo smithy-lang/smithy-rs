@@ -47,8 +47,10 @@ do
     echo -e "## ${C_YELLOW}Running 'cargo clippy' on ${runtime_path}...${C_RESET}"
     cargo clippy --all-features
 
-    echo -e "## ${C_YELLOW}Running 'cargo test' on ${runtime_path}...${C_RESET}"
-    cargo test --all-features
+    echo -e "## ${C_YELLOW}Running 'cargo nextest run' on ${runtime_path}...${C_RESET}"
+    cargo nextest run --all-features
+    # nextest does not run doctests, so run them separately to keep coverage
+    cargo test --all-features --doc
 
     echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
 

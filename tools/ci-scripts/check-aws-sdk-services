@@ -17,9 +17,12 @@ if [ "$ENABLE_SMOKETESTS" = "true" ]; then
     # Invoking `cargo test` at the root directory implicitly checks for the validity
     # of the top-level `Cargo.toml`
     echo "${C_YELLOW}## Running smoketests...${C_RESET}"
-    RUSTFLAGS="--cfg smoketests" cargo test --all-features
+    RUSTFLAGS="--cfg smoketests" cargo nextest run --all-features
+    RUSTFLAGS="--cfg smoketests" cargo test --all-features --doc
 else
-    cargo test --all-features
+    cargo nextest run --all-features
+    # nextest does not run doctests, so run them separately to keep coverage
+    cargo test --all-features --doc
 fi
 
 # TODO reenable these tests when they have lockfiles

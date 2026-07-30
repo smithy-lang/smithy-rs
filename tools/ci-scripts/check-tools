@@ -18,7 +18,9 @@ function test_tool {
     echo -e "${C_YELLOW}Testing ${tool_path}...${C_RESET}"
     pushd "${tool_path}" &>/dev/null
     cargo +"${rust_version}" clippy --all-features
-    cargo +"${rust_version}" test --all-features
+    cargo +"${rust_version}" nextest run --all-features
+    # nextest does not run doctests, so run them separately to keep coverage
+    cargo +"${rust_version}" test --all-features --doc
     popd &>/dev/null
 }
 

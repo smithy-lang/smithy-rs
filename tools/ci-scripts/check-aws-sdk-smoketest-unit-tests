@@ -6,11 +6,14 @@
 
 set -eux
 cd aws-sdk-smoketest
-cargo test --all-features
+cargo nextest run --all-features
+# nextest does not run doctests, so run them separately to keep coverage
+cargo test --all-features --doc
 
 for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then
         echo "#### Testing ${test_dir}..."
-        cargo test --all-features --manifest-path "${test_dir}/Cargo.toml"
+        cargo nextest run --all-features --manifest-path "${test_dir}/Cargo.toml"
+        cargo test --all-features --doc --manifest-path "${test_dir}/Cargo.toml"
     fi
 done
