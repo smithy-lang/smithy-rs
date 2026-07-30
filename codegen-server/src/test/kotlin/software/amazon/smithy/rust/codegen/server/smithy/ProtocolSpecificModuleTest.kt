@@ -86,16 +86,35 @@ class ProtocolSpecificModuleTest {
 
         generatedServers.forEach { generatedServer ->
             val root = generatedServer.path.toFile()
-            root.resolve("src/protocol_serde_rpcv2_cbor").isDirectory shouldBe true
-            root.resolve("src/protocol_serde_rest_json1").isDirectory shouldBe true
+            root.resolve("src/protocol_rpcv2_cbor/serde").isDirectory shouldBe true
+            root.resolve("src/protocol_rest_json1/serde").isDirectory shouldBe true
+            root.resolve("src/protocol_rpcv2_cbor/operations.rs").isFile shouldBe true
+            root.resolve("src/protocol_rest_json1/operations.rs").isFile shouldBe true
 
             val source = generatedSource(root)
-            source shouldContain "crate::protocol_serde_rpcv2_cbor::shape_validation_exception"
-            source shouldContain "crate::protocol_serde_rest_json1::shape_validation_exception"
-            root.resolve("src/event_stream_serde_rpcv2_cbor.rs").isFile shouldBe true
-            root.resolve("src/event_stream_serde_rest_json1.rs").isFile shouldBe true
-            source shouldContain "crate::event_stream_serde_rpcv2_cbor::"
-            source shouldContain "crate::event_stream_serde_rest_json1::"
+            source shouldContain "crate::protocol_rpcv2_cbor::serde::shape_validation_exception"
+            source shouldContain "crate::protocol_rest_json1::serde::shape_validation_exception"
+            root.resolve("src/protocol_rpcv2_cbor/event_stream_serde.rs").isFile shouldBe true
+            root.resolve("src/protocol_rest_json1/event_stream_serde.rs").isFile shouldBe true
+            source shouldContain "crate::protocol_rpcv2_cbor::event_stream_serde::"
+            source shouldContain "crate::protocol_rest_json1::event_stream_serde::"
+            listOf("operation.rs", "input.rs").forEach { sharedFile ->
+                root.resolve("src/$sharedFile").readText().also { sharedSource ->
+                    sharedSource shouldNotContain "protocol_rpcv2_cbor::serde"
+                    sharedSource shouldNotContain "protocol_rest_json1::serde"
+                }
+            }
+            val protocolRoots = listOf("protocol_rpcv2_cbor", "protocol_rest_json1")
+            protocolRoots.forEach { owner ->
+                val ownedSource =
+                    root.resolve("src/$owner").walkTopDown()
+                        .filter { it.isFile && it.extension == "rs" }
+                        .joinToString("\n") { it.readText() }
+                protocolRoots.filterNot { it == owner }.forEach { other ->
+                    ownedSource shouldNotContain "crate::$other::serde"
+                    ownedSource shouldNotContain "crate::$other::event_stream_serde"
+                }
+            }
             source shouldNotContain "MarshallerForRpcv2Cbor"
             source shouldNotContain "MarshallerForRestJson1"
             val serviceSource = root.resolve("src/service.rs").readText()

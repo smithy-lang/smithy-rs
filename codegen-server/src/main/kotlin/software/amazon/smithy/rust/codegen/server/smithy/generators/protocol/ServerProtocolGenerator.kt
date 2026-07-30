@@ -19,6 +19,13 @@ open class ServerProtocolGenerator(
      *
      * @param generateSharedTypes whether protocol-independent supporting types should be emitted by this invocation
      */
+    fun renderSharedOperationTypes(
+        operationWriter: RustWriter,
+        operationShape: OperationShape,
+    ) {
+        traitGenerator.generateSharedTypes(operationWriter, operationShape)
+    }
+
     fun renderOperation(
         operationWriter: RustWriter,
         operationShape: OperationShape,

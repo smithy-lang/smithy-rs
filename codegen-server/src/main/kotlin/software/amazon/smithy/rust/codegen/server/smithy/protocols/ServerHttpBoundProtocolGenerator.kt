@@ -223,6 +223,17 @@ class ServerHttpBoundProtocolTraitImplGenerator(
             *preludeScope,
         )
 
+    fun generateSharedTypes(
+        operationWriter: RustWriter,
+        operationShape: OperationShape,
+    ) {
+        if (!isMultiProtocol) {
+            return
+        }
+        val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
+        operationWriter.renderSharedInputFuture(inputSymbol)
+    }
+
     fun generateTraitImpls(
         operationWriter: RustWriter,
         operationShape: OperationShape,
@@ -231,7 +242,43 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         val inputSymbol = symbolProvider.toSymbol(operationShape.inputShape(model))
         val outputSymbol = symbolProvider.toSymbol(operationShape.outputShape(model))
 
-        operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape, generateSharedTypes)
+        if (isMultiProtocol && generateSharedTypes) {
+            operationWriter.renderSharedInputFuture(inputSymbol)
+        }
+        operationWriter.renderTraits(inputSymbol, outputSymbol, operationShape)
+    }
+
+    private fun RustWriter.renderSharedInputFuture(inputSymbol: Symbol) {
+        val inputFuture = "${inputSymbol.name}Future"
+        rustTemplate(
+            """
+            #{PinProjectLite}::pin_project! {
+                /// A [`Future`](std::future::Future) that aggregates an [`http::Request`] body
+                /// and constructs the operation input from modeled bindings.
+                /// `P` selects the protocol-specific runtime error type.
+                pub struct $inputFuture<P>
+                where
+                    P: #{SmithyHttpServer}::protocol::OperationError,
+                {
+                    pub(crate) inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>> + Send>>
+                }
+            }
+
+            impl<P> std::future::Future for $inputFuture<P>
+            where
+                P: #{SmithyHttpServer}::protocol::OperationError,
+            {
+                type Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>;
+
+                fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+                    let this = self.project();
+                    this.inner.as_mut().poll(cx)
+                }
+            }
+            """,
+            *codegenScope,
+            "I" to inputSymbol,
+        )
     }
 
     /*
@@ -247,7 +294,6 @@ class ServerHttpBoundProtocolTraitImplGenerator(
         inputSymbol: Symbol,
         outputSymbol: Symbol,
         operationShape: OperationShape,
-        generateSharedTypes: Boolean = true,
     ) {
         val verifyAcceptHeader =
             writable {
@@ -285,40 +331,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
 
         // TODO(https://github.com/smithy-lang/smithy-rs/issues/2238): Remove the `Pin<Box<dyn Future>>` and replace with thin wrapper around `Collect`.
         if (isMultiProtocol) {
-            // Share InputFuture<P> across the protocol-specific FromRequest implementations.
-            if (generateSharedTypes) {
-                rustTemplate(
-                    """
-                    #{PinProjectLite}::pin_project! {
-                        /// A [`Future`](std::future::Future) that aggregates an [`http::Request`] body
-                        /// and constructs the operation input from modeled bindings.
-                        /// `P` selects the protocol-specific runtime error type.
-                        pub struct $inputFuture<P>
-                        where
-                            P: #{SmithyHttpServer}::protocol::OperationError,
-                        {
-                            inner: std::pin::Pin<Box<dyn std::future::Future<Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>> + Send>>
-                        }
-                    }
-
-                    impl<P> std::future::Future for $inputFuture<P>
-                    where
-                        P: #{SmithyHttpServer}::protocol::OperationError,
-                    {
-                        type Output = Result<#{I}, <P as #{SmithyHttpServer}::protocol::OperationError>::RuntimeError>;
-
-                        fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
-                            let this = self.project();
-                            this.inner.as_mut().poll(cx)
-                        }
-                    }
-                    """,
-                    *codegenScope,
-                    "I" to inputSymbol,
-                )
-            }
-
-            // Generate FromRequest impl for this protocol (always)
+            // Generate FromRequest impl for this protocol. The shared future lives in `crate::operation`.
             rustTemplate(
                 """
                 impl<B> #{SmithyHttpServer}::request::FromRequest<#{Marker}, B> for #{I}
@@ -330,7 +343,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                     #{RequestRejection} : From<<B as #{SmithyHttpServer}::body::HttpBody>::Error>
                 {
                     type Rejection = #{RuntimeError};
-                    type Future = $inputFuture<#{Marker}>;
+                    type Future = crate::operation::$inputFuture<#{Marker}>;
 
                     fn from_request(request: #{http}::Request<B>) -> Self::Future {
                         let fut = async move {
@@ -343,7 +356,7 @@ class ServerHttpBoundProtocolTraitImplGenerator(
                             #{Tracing}::debug!(error = %e, "failed to deserialize request");
                             #{RuntimeError}::from(e)
                         });
-                        $inputFuture {
+                        crate::operation::$inputFuture {
                             inner: Box::pin(fut)
                         }
                     }

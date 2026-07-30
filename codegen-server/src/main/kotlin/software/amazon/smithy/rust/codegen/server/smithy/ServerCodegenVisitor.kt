@@ -415,7 +415,7 @@ open class ServerCodegenVisitor(
                     codegenContext,
                     shape,
                     validationExceptionConversionGenerator,
-                    selectedProtocols.map { it.protocol },
+                    selectedProtocols.map { it.target },
                 )
             serverBuilderGenerator.render(rustCrate, writer)
 
@@ -778,8 +778,17 @@ open class ServerCodegenVisitor(
             ServerOperationGenerator(shape, codegenContext).render(this)
         }
 
-        protocolScopedRenderer.renderEach(ServerRustModule.Operation) { scope ->
-            scope.protocol.generator.renderOperation(this, shape, generateSharedTypes = scope.isPrimary)
+        if (selectedProtocols.isMultiProtocol) {
+            rustCrate.withModule(ServerRustModule.Operation) {
+                selectedProtocols.primary.generator.renderSharedOperationTypes(this, shape)
+            }
+        }
+        protocolScopedRenderer.renderEach({ it.modules.operations }) { scope ->
+            scope.protocol.generator.renderOperation(
+                this,
+                shape,
+                generateSharedTypes = !selectedProtocols.isMultiProtocol,
+            )
         }
 
         codegenDecorator.postprocessOperationGenerateAdditionalStructures(shape)

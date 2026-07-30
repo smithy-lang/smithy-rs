@@ -127,29 +127,35 @@ interface ServerProtocol : Protocol {
     fun deserializePayloadErrorType(binding: HttpBindingDescriptor): RuntimeType
 }
 
-/** Returns the legacy serde module, or a server protocol-specific module when isolation is required. */
+/** Returns the private module that owns all generated artifacts for one protocol. */
+fun serverProtocolRootModule(protocolId: ShapeId): RustModule.LeafModule =
+    RustModule.private("protocol_${protocolId.name.toSnakeCase()}")
+
+/** Returns the legacy serde module, or the private serde module owned by one protocol. */
 fun serverProtocolSerdeModule(
     protocolId: ShapeId,
     isMultiProtocol: Boolean,
 ): RustModule.LeafModule =
     if (isMultiProtocol) {
-        RustModule.pubCrate("protocol_serde_${protocolId.name.toSnakeCase()}")
+        RustModule.private("serde", parent = serverProtocolRootModule(protocolId))
     } else {
         ProtocolFunctions.serDeModule
     }
 
-/** Returns the legacy event-stream module, or a protocol-specific server module. */
+/** Returns the legacy event-stream module, or the private event-stream module owned by one protocol. */
 fun serverEventStreamSerdeModule(
     protocolId: ShapeId,
     isMultiProtocol: Boolean,
 ): RustModule.LeafModule =
-    RustModule.private(
-        if (isMultiProtocol) {
-            "event_stream_serde_${protocolId.name.toSnakeCase()}"
-        } else {
-            "event_stream_serde"
-        },
-    )
+    if (isMultiProtocol) {
+        RustModule.private("event_stream_serde", parent = serverProtocolRootModule(protocolId))
+    } else {
+        RustModule.private("event_stream_serde")
+    }
+
+/** Returns the private module containing one protocol's operation and validation trait implementations. */
+fun serverProtocolOperationsModule(protocolId: ShapeId): RustModule.LeafModule =
+    RustModule.private("operations", parent = serverProtocolRootModule(protocolId))
 
 fun returnSymbolToParseFn(codegenContext: ServerCodegenContext): (Shape) -> ReturnSymbolToParse {
     fun returnSymbolToParse(shape: Shape): ReturnSymbolToParse =

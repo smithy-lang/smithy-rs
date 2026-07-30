@@ -67,9 +67,11 @@ flowchart TB
     Rewrite --> Crate
     Dependencies --> Crate
 
-    Crate --> Operation["operation.rs<br/>protocol trait implementations"]
-    Crate --> Serde["protocol_serde_PROTOCOL<br/>serializers and parsers"]
-    Crate --> EventStream["event_stream_serde_PROTOCOL<br/>event-stream helpers"]
+    Crate --> Operation["operation.rs<br/>shared operation support types"]
+    Crate --> ProtocolRoot["private protocol_PROTOCOL root"]
+    ProtocolRoot --> ProtocolOperations["operations.rs<br/>protocol trait implementations"]
+    ProtocolRoot --> Serde["serde/<br/>serializers and parsers"]
+    ProtocolRoot --> EventStream["event_stream_serde.rs<br/>event-stream helpers"]
 ```
 
 The important boundary is `ProtocolScopedRenderer`. Callers provide an ordered protocol collection, a destination Rust
@@ -105,6 +107,7 @@ callbacks should instead use the protocol carried by their `ProtocolRenderScope`
 
 ```kotlin
 data class ServerProtocolModules(
+    val operations: RustModule.LeafModule,
     val serde: RustModule.LeafModule,
     val eventStreamSerde: RustModule.LeafModule,
 )
@@ -113,11 +116,14 @@ data class ServerProtocolModules(
 For a single protocol, these resolve to the legacy modules. For multiple protocols, the protocol ID determines the
 module suffix.
 
-| Mode | Serde module | Event-stream module |
-|---|---|---|
-| Single protocol | `protocol_serde` | `event_stream_serde` |
-| REST JSON in multi-protocol mode | `protocol_serde_rest_json1` | `event_stream_serde_rest_json1` |
-| RPC v2 CBOR in multi-protocol mode | `protocol_serde_rpcv2_cbor` | `event_stream_serde_rpcv2_cbor` |
+| Mode | Operations module | Serde module | Event-stream module |
+|---|---|---|---|
+| Single protocol | `operation` | `protocol_serde` | `event_stream_serde` |
+| REST JSON in multi-protocol mode | `protocol_rest_json1::operations` | `protocol_rest_json1::serde` | `protocol_rest_json1::event_stream_serde` |
+| RPC v2 CBOR in multi-protocol mode | `protocol_rpcv2_cbor::operations` | `protocol_rpcv2_cbor::serde` | `protocol_rpcv2_cbor::event_stream_serde` |
+
+In multi-protocol mode, each `protocol_PROTOCOL` root and all three child modules are private. Rust privacy permits
+children within one protocol root to collaborate while preventing another protocol root from naming its serde child.
 
 ### `ProtocolScopedRenderer`
 
@@ -131,8 +137,8 @@ Its callback receives a `ProtocolRenderScope<T>` containing:
 - The total protocol count.
 - Whether this is the primary invocation.
 
-The operation generator currently uses `isPrimary` to emit shared supporting types exactly once. A future cleanup may
-split shared generation from per-protocol generation and remove this transitional flag.
+Shared operation support types are emitted separately into `crate::operation`. Protocol-specific trait and validation
+impls are emitted into the current protocol's private `operations` module.
 
 ### `ServerProtocolCodegenTransformer`
 
@@ -145,11 +151,16 @@ The visitor first renders protocol-independent operation artifacts. It then dele
 to one scoped callback:
 
 ```kotlin
-protocolScopedRenderer.renderEach(ServerRustModule.Operation) { scope ->
+if (selectedProtocols.isMultiProtocol) {
+    rustCrate.withModule(ServerRustModule.Operation) {
+        selectedProtocols.primary.generator.renderSharedOperationTypes(this, operationShape)
+    }
+}
+protocolScopedRenderer.renderEach({ it.modules.operations }) { scope ->
     scope.protocol.generator.renderOperation(
         this,
         operationShape,
-        generateSharedTypes = scope.isPrimary,
+        generateSharedTypes = !selectedProtocols.isMultiProtocol,
     )
 }
 ```
@@ -173,14 +184,15 @@ sequenceDiagram
         C->>G: callback(real writer, primary scope)
         G-->>C: legacy source and dependencies
     else Multiple protocols
+        V->>C: emit shared InputFuture types into operation.rs
         loop Each protocol in detection order
-            R->>T: render(destination, protocol modules)
+            R->>T: render(private protocol operations module, protocol modules)
             T->>G: callback(temporary writer, protocol scope)
-            G-->>T: source and dependency roots
+            G-->>T: protocol impl source and dependency roots
             T->>T: rewrite fixed module paths
             T->>T: recursively materialize inline dependencies
-            T->>C: append operation source
-            T->>C: write relocated dependencies
+            T->>C: append impls under private protocol root
+            T->>C: write private serde and event-stream dependencies
         end
     end
 ```
@@ -198,8 +210,8 @@ For multi-protocol generation, the transformer performs these steps:
 3. Define a root mapping:
 
    ```text
-   crate::protocol_serde     -> crate::protocol_serde_PROTOCOL
-   crate::event_stream_serde -> crate::event_stream_serde_PROTOCOL
+   crate::protocol_serde     -> crate::protocol_PROTOCOL::serde
+   crate::event_stream_serde -> crate::protocol_PROTOCOL::event_stream_serde
    ```
 
 4. Rewrite the captured operation source and append it to the real destination writer.
@@ -226,8 +238,8 @@ flowchart LR
     Collision --> Scope["Protocol-scoped capture and relocation"]
 
     subgraph After["Protocol-owned dependency graphs"]
-        B1["protocol_serde_rest_json1<br/>shape_x::serialize"]
-        B2["protocol_serde_rpcv2_cbor<br/>shape_x::serialize"]
+        B1["protocol_rest_json1::serde<br/>shape_x::serialize"]
+        B2["protocol_rpcv2_cbor::serde<br/>shape_x::serialize"]
     end
 
     Scope --> B1
@@ -242,18 +254,33 @@ A service supporting REST JSON and RPC v2 CBOR produces a layout similar to:
 
 ```text
 src/
-├── operation.rs
-├── protocol_serde_rest_json1/
-│   └── shape_*.rs
-├── protocol_serde_rpcv2_cbor/
-│   └── shape_*.rs
-├── event_stream_serde_rest_json1.rs
-├── event_stream_serde_rpcv2_cbor.rs
+├── operation.rs                         # Shared InputFuture<P> types
+├── protocol_rest_json1/
+│   ├── operations.rs                    # RestJson1 impl blocks
+│   ├── serde/
+│   │   └── shape_*.rs
+│   └── event_stream_serde.rs
+├── protocol_rpcv2_cbor/
+│   ├── operations.rs                    # RpcV2Cbor impl blocks
+│   ├── serde/
+│   │   └── shape_*.rs
+│   └── event_stream_serde.rs
 └── service.rs
 ```
 
-`operation.rs` contains the protocol-specific `FromRequest` and `IntoResponse` implementations. Those implementations
-refer to the corresponding protocol-owned serde and event-stream modules.
+`operation.rs` contains only shared operation support types in multi-protocol mode. Each private protocol root owns its
+`FromRequest`, `IntoResponse`, and validation-conversion impls together with the serde and event-stream modules those
+impls call. Trait impls apply crate-wide even though their containing modules are private.
+
+## Rust-enforced protocol isolation
+
+The module layout makes cross-protocol serde calls a Rust privacy error. Within a protocol root, `operations` can access
+its sibling `serde` and `event_stream_serde` modules because all are descendants of the same private root. An operation
+under `protocol_rpcv2_cbor`, however, cannot name `protocol_rest_json1::serde` because that child module is private to
+the REST JSON root.
+
+Generated serde functions may retain their existing visibility because the private `serde` module is the effective
+boundary. Shared model, input, output, and runtime types remain accessible to every protocol.
 
 ## Invariants
 
@@ -265,8 +292,10 @@ The implementation relies on the following invariants:
 4. Multi-protocol callbacks emit source and dependencies only through the supplied writer.
 5. Every fixed protocol-owned module root is included in the transformer's mapping.
 6. Recursive inline dependencies are relocated before they reach normal crate-level deduplication.
-7. Protocol-independent supporting types are emitted once.
-8. Non-inline dependencies remain crate-wide and are transferred unchanged.
+7. Protocol-independent supporting types are emitted once into `crate::operation`.
+8. Protocol-specific operation and validation impls are emitted beneath the owning private protocol root.
+9. Another protocol cannot name an owning protocol's private serde or event-stream child modules.
+10. Non-inline dependencies remain crate-wide and are transferred unchanged.
 
 ## Why this is not a `MultiProtocolRustWriter`
 
@@ -303,9 +332,9 @@ is not required by the current server implementation.
 
 ### Shared and protocol-specific output
 
-Some operation generation currently emits a shared generic type and protocol-specific trait implementations in one
-method. `ProtocolRenderScope.isPrimary` prevents duplicate shared output. A cleaner future API would have distinct
-`renderSharedOperation` and `renderProtocolOperation` phases.
+Shared generic future types are rendered into `crate::operation` before per-protocol rendering. Protocol-specific trait
+impls are then rendered into each private protocol `operations` module. Public associated types therefore remain
+reachable while protocol-owned serde stays private.
 
 ### Service routing layout
 
@@ -322,19 +351,23 @@ When adding another protocol-dependent generation step:
    fixed serde modules or inline dependencies.
 3. Emit all scoped source and dependencies through the callback's writer.
 4. Use `scope.protocol` rather than the visitor's primary `codegenContext`.
-5. Use `scope.isPrimary` only for genuinely shared output.
-6. Add any new fixed module root to `ServerProtocolModules` and the transformer mapping.
-7. Test two protocols that generate the same inline dependency name with different bodies.
-8. Verify that single-protocol generated module names remain unchanged.
+5. Render genuinely shared output into a shared module before entering the protocol-scoped callback.
+6. Add any new protocol-owned artifact class beneath the private protocol root.
+7. Add any new fixed module root to `ServerProtocolModules` and the transformer mapping.
+8. Test two protocols that generate the same inline dependency name with different bodies.
+9. Add a compile-failure test proving a foreign protocol root cannot access the new private child module.
+10. Verify that single-protocol generated module names remain unchanged.
 
 ## Validation strategy
 
 The focused tests cover complementary properties:
 
 - `ProtocolScopedRendererTest` generates colliding nested inline dependencies with different bodies and compiles both
-  implementations in one Rust crate.
-- `ProtocolSpecificModuleTest` checks legacy single-protocol modules, protocol-specific multi-protocol modules,
-  event-stream helper isolation, generated service ordering, and runtime dispatch.
+  implementations in one Rust crate. It also deliberately generates a protocol B call into protocol A serde and proves
+  that Rust rejects it because A's `serde` module is private.
+- `ProtocolSpecificModuleTest` checks legacy single-protocol modules, private multi-protocol roots, event-stream helper
+  isolation, generated service ordering, and runtime dispatch. It audits every protocol-owned source tree to ensure it
+  does not reference another selected protocol's serde or event-stream root.
 - `ServerProtocolOrderTest` checks canonical protocol ordering and constraints.
 
 Compilation alone is not sufficient: a collision can compile while retaining the wrong protocol body. Tests must assert
