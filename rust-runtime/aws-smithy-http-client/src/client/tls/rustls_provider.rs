@@ -178,7 +178,7 @@ pub(crate) mod build_connector {
         fn additional_server_names(&self) -> Vec<RustlsServerName<'static>> {
             self.additional_server_names
                 .iter()
-                .map(|name| name.inner().clone())
+                .map(|name| name.0.clone())
                 .collect()
         }
     }
