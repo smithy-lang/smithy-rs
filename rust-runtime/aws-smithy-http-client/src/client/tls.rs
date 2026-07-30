@@ -27,6 +27,7 @@ impl Eq for Provider {}
 pub struct TlsContext {
     #[allow(unused)]
     trust_store: TrustStore,
+    #[allow(unused)]
     additional_server_names: Vec<ServerName>,
 }
 
@@ -167,12 +168,6 @@ impl Default for TrustStore {
 /// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ServerName(rustls_pki_types::ServerName<'static>);
-
-impl ServerName {
-    pub(crate) fn inner(&self) -> &rustls_pki_types::ServerName<'static> {
-        &self.0
-    }
-}
 
 /// Error returned when a server name string is invalid.
 #[derive(Debug, Clone, PartialEq, Eq)]

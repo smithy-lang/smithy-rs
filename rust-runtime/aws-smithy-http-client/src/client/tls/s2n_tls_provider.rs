@@ -72,7 +72,7 @@ pub(crate) mod build_connector {
     ///    a reference name like `foo.example.com` (but not `bar.foo.example.com`)
     ///
     /// This mirrors s2n-tls's default `s2n_default_verify_host` behavior in
-    /// https://github.com/aws/s2n-tls/blob/main/tls/s2n_connection.c.
+    /// <https://github.com/aws/s2n-tls/blob/main/tls/s2n_connection.c>.
     fn matches_host_name(accepted: &str, presented: &str) -> bool {
         // Case-insensitive exact match
         if accepted.eq_ignore_ascii_case(presented) {
@@ -150,7 +150,7 @@ pub(crate) mod build_connector {
                     let additional_server_names: Vec<String> = self
                         .additional_server_names
                         .iter()
-                        .map(|name| name.inner().to_str().into_owned())
+                        .map(|name| name.0.to_str().into_owned())
                         .collect();
                     config
                         .set_connection_initializer(AdditionalServerNamesInitializer {
@@ -186,7 +186,7 @@ pub(crate) mod build_connector {
         use super::matches_host_name;
 
         /// Tests modeled after s2n-tls's `s2n_default_verify_host` behavior in
-        /// https://github.com/aws/s2n-tls/blob/main/tls/s2n_connection.c
+        /// <https://github.com/aws/s2n-tls/blob/main/tls/s2n_connection.c>
         #[test]
         fn exact_match() {
             assert!(matches_host_name("foo.example.com", "foo.example.com"));
