@@ -56,11 +56,11 @@ open class EventStreamMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     private val payloadContentType: String,
     private val useSchemaSerde: Boolean = false,
+    protected val eventStreamSerdeModule: RustModule.LeafModule = RustModule.eventStreamSerdeModule(),
 ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val codegenScope =
         arrayOf(
             *preludeScope,
@@ -402,6 +402,6 @@ open class EventStreamMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Marshaller")
+        return eventStreamSerdeModule.toType().resolve("${symbol.name.toPascalCase()}Marshaller")
     }
 }

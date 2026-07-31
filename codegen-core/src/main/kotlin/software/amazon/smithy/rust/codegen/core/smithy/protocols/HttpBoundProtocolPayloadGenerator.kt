@@ -62,6 +62,7 @@ class HttpBoundProtocolPayloadGenerator(
     private val model = codegenContext.model
     private val runtimeConfig = codegenContext.runtimeConfig
     private val target = codegenContext.target
+    private val eventStreamSerdeModule = codegenContext.eventStreamSerdeModule
     private val httpBindingResolver = protocol.httpBindingResolver
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val codegenScope =
@@ -269,6 +270,7 @@ class HttpBoundProtocolPayloadGenerator(
                 serializerGenerator,
                 payloadContentType,
                 useSchemaSerde = eventStreamUseSchemaSerde,
+                eventStreamSerdeModule = eventStreamSerdeModule,
             ).render()
 
         val eventStreamMarshallerGenerator =
@@ -281,6 +283,7 @@ class HttpBoundProtocolPayloadGenerator(
                 serializerGenerator,
                 payloadContentType,
                 useSchemaSerde = eventStreamUseSchemaSerde,
+                eventStreamSerdeModule = eventStreamSerdeModule,
             )
 
         // TODO(EventStream): [RPC] For server, RPC protocols need to send an initial message with the

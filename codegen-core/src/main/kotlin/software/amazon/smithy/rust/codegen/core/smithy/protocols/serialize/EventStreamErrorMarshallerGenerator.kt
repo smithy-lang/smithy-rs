@@ -43,7 +43,18 @@ class EventStreamErrorMarshallerGenerator(
     private val serializerGenerator: StructuredDataSerializerGenerator,
     payloadContentType: String,
     private val useSchemaSerde: Boolean = false,
-) : EventStreamMarshallerGenerator(model, target, runtimeConfig, symbolProvider, unionShape, serializerGenerator, payloadContentType, useSchemaSerde) {
+    eventStreamSerdeModule: RustModule.LeafModule = RustModule.eventStreamSerdeModule(),
+) : EventStreamMarshallerGenerator(
+        model,
+        target,
+        runtimeConfig,
+        symbolProvider,
+        unionShape,
+        serializerGenerator,
+        payloadContentType,
+        useSchemaSerde,
+        eventStreamSerdeModule,
+    ) {
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
     private val smithySchema = RuntimeType.smithySchema(runtimeConfig)
@@ -54,7 +65,6 @@ class EventStreamErrorMarshallerGenerator(
         } else {
             symbolProvider.symbolForEventStreamError(unionShape)
         }
-    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope =
         arrayOf(
@@ -185,6 +195,6 @@ class EventStreamErrorMarshallerGenerator(
 
     private fun UnionShape.eventStreamMarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}ErrorMarshaller")
+        return eventStreamSerdeModule.toType().resolve("${symbol.name.toPascalCase()}ErrorMarshaller")
     }
 }

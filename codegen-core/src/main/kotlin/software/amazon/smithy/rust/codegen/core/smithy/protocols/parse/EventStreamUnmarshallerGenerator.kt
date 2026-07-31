@@ -70,7 +70,7 @@ class EventStreamUnmarshallerGenerator(
         }
     private val smithyEventStream = RuntimeType.smithyEventStream(runtimeConfig)
     private val smithyTypes = RuntimeType.smithyTypes(runtimeConfig)
-    private val eventStreamSerdeModule = RustModule.eventStreamSerdeModule()
+    private val eventStreamSerdeModule = codegenContext.eventStreamSerdeModule
     private val codegenScope =
         arrayOf(
             "Blob" to RuntimeType.blob(runtimeConfig),
@@ -593,6 +593,6 @@ class EventStreamUnmarshallerGenerator(
 
     private fun UnionShape.eventStreamUnmarshallerType(): RuntimeType {
         val symbol = symbolProvider.toSymbol(this)
-        return RuntimeType("crate::event_stream_serde::${symbol.name.toPascalCase()}Unmarshaller")
+        return eventStreamSerdeModule.toType().resolve("${symbol.name.toPascalCase()}Unmarshaller")
     }
 }

@@ -165,6 +165,7 @@ fun renderClientEventStreamBody(
             serializerGenerator,
             payloadContentType,
             useSchemaSerde = useSchemaSerde,
+            eventStreamSerdeModule = codegenContext.eventStreamSerdeModule,
         ).render()
     val eventStreamMarshallerGenerator =
         software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.EventStreamMarshallerGenerator(
@@ -176,6 +177,7 @@ fun renderClientEventStreamBody(
             serializerGenerator,
             payloadContentType,
             useSchemaSerde = useSchemaSerde,
+            eventStreamSerdeModule = codegenContext.eventStreamSerdeModule,
         )
     val params =
         EventStreamBodyParams(

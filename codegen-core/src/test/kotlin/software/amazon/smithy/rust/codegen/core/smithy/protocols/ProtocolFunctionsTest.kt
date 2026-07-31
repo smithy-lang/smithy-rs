@@ -7,7 +7,11 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.model.shapes.Shape
+import software.amazon.smithy.rust.codegen.core.rustlang.InlineDependency
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -100,5 +104,27 @@ class ProtocolFunctionsTest {
         test("test#SomeStruct1", "some_struct1")
         test("test#SomeUnion1", "some_union1")
         test("test#SomeStruct1\$some_string", "some_string")
+    }
+
+    @Test
+    fun `generates protocol functions in the context serde module`() {
+        val serdeModule = RustModule.private("serde", parent = RustModule.private("protocol_test"))
+        val codegenContext = testCodegenContext(testModel, protocolSerdeModule = serdeModule)
+        val protocolFunctions = ProtocolFunctions(codegenContext)
+        val shape: Shape = testModel.lookup("test#SomeStruct1")
+
+        val serializeFn = protocolFunctions.serializeFn(shape) {}
+        val deserializeFn = protocolFunctions.deserializeFn(shape) {}
+        val crossOperationFn = protocolFunctions.crossOperationFn("shared") {}
+
+        serializeFn.path shouldBe "crate::protocol_test::serde::shape_some_struct1::ser_some_struct1"
+        deserializeFn.path shouldBe "crate::protocol_test::serde::shape_some_struct1::de_some_struct1"
+        crossOperationFn.path shouldBe "crate::protocol_test::serde::shared"
+
+        (serializeFn.dependency as InlineDependency).module.fullyQualifiedPath() shouldBe
+            "crate::protocol_test::serde::shape_some_struct1"
+        (deserializeFn.dependency as InlineDependency).module.fullyQualifiedPath() shouldBe
+            "crate::protocol_test::serde::shape_some_struct1"
+        (crossOperationFn.dependency as InlineDependency).module shouldBe serdeModule
     }
 }

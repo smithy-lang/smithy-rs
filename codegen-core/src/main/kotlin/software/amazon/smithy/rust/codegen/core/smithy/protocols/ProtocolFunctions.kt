@@ -38,6 +38,8 @@ typealias ProtocolFnWritable = RustWriter.(String) -> Unit
 class ProtocolFunctions(
     private val codegenContext: CodegenContext,
 ) {
+    private val serDeModule = codegenContext.protocolSerdeModule
+
     companion object {
         val serDeModule = RustModule.pubCrate("protocol_serde")
 
@@ -49,6 +51,14 @@ class ProtocolFunctions(
                 block(fnName)
             }
     }
+
+    fun crossOperationFn(
+        fnName: String,
+        block: ProtocolFnWritable,
+    ): RuntimeType =
+        RuntimeType.forInlineFun(fnName, serDeModule) {
+            block(fnName)
+        }
 
     private enum class FnType {
         Serialize,

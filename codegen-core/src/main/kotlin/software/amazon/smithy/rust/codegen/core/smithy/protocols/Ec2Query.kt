@@ -20,6 +20,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.protocols.serialize.Struc
 
 class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val ec2QueryErrors: RuntimeType = RuntimeType.ec2QueryErrors(runtimeConfig)
     private val errorScope =
         arrayOf(
@@ -51,7 +52,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         Ec2QuerySerializerGenerator(codegenContext)
 
     override fun parseHttpErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
+        protocolFunctions.crossOperationFn("parse_http_error_metadata") { fnName ->
             rustBlockTemplate(
                 "pub fn $fnName(_response_status: u16, _response_headers: &#{Headers}, response_body: &[u8]) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,
@@ -61,7 +62,7 @@ class Ec2QueryProtocol(private val codegenContext: CodegenContext) : Protocol {
         }
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") {
+        protocolFunctions.crossOperationFn("parse_event_stream_error_metadata") {
             rustBlockTemplate(
                 "pub fn parse_event_stream_error_metadata(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{XmlDecodeError}>",
                 *errorScope,

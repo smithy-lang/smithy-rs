@@ -150,6 +150,7 @@ open class RpcV2Cbor(
     private val parserCustomization: List<CborParserCustomization> = listOf(),
 ) : Protocol {
     private val runtimeConfig = codegenContext.runtimeConfig
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
 
     override val httpBindingResolver: HttpBindingResolver =
         RpcV2CborHttpBindingResolver(
@@ -209,7 +210,7 @@ open class RpcV2Cbor(
         RuntimeType.cborErrors(runtimeConfig).resolve("parse_error_metadata")
 
     override fun parseEventStreamErrorMetadata(operationShape: OperationShape): RuntimeType =
-        ProtocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
+        protocolFunctions.crossOperationFn("parse_event_stream_error_metadata") { fnName ->
             rustTemplate(
                 """
                 pub fn $fnName(payload: &#{Bytes}) -> #{Result}<#{ErrorMetadataBuilder}, #{DeserializeError}> {

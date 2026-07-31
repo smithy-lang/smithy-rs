@@ -42,6 +42,7 @@ class ResponseDeserializerGenerator(
     private val runtimeConfig = codegenContext.runtimeConfig
     private val httpBindingResolver = protocol.httpBindingResolver
     private val parserGenerator = ProtocolParserGenerator(codegenContext, protocol)
+    private val protocolFunctions = ProtocolFunctions(codegenContext)
     private val schemaExclusive = SchemaSerdeAllowlist.usesSchemaSerdeExclusively(codegenContext)
 
     private val codegenScope by lazy {
@@ -627,7 +628,7 @@ class ResponseDeserializerGenerator(
     }
 
     private fun typeEraseResult(): RuntimeType =
-        ProtocolFunctions.crossOperationFn("type_erase_result") { fnName ->
+        protocolFunctions.crossOperationFn("type_erase_result") { fnName ->
             rustTemplate(
                 """
                 pub(crate) fn $fnName<O, E>(result: #{Result}<O, E>) -> #{Result}<#{Output}, #{OrchestratorError}<#{Error}>>
