@@ -274,7 +274,9 @@ mod test {
     make_test!(web_identity_token_env);
     make_test!(web_identity_source_profile_no_env);
     make_test!(web_identity_token_invalid_jwt);
-    make_test!(web_identity_token_source_profile);
+    make_test!(web_identity_token_source_profile, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(web_identity_token_profile);
     make_test!(profile_name);
     make_test!(profile_overrides_web_identity);
@@ -287,7 +289,9 @@ mod test {
     make_test!(imds_default_chain_success, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
     });
-    make_test!(imds_assume_role);
+    make_test!(imds_assume_role, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(imds_config_with_no_creds, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
     });
@@ -295,7 +299,9 @@ mod test {
     make_test!(imds_default_chain_retries, builder: |config| {
         config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
     });
-    make_test!(ecs_assume_role);
+    make_test!(ecs_assume_role, builder: |config| {
+        config.with_time_source(StaticTimeSource::new(UNIX_EPOCH))
+    });
     make_test!(ecs_credentials);
     make_test!(ecs_credentials_invalid_profile);
 
