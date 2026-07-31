@@ -37,6 +37,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
+use tracing::Instrument;
 
 /// SEP mandatory refresh window (blocking refresh point before expiration).
 const DEFAULT_MANDATORY_WINDOW: Duration = Duration::from_secs(60);
@@ -138,22 +139,31 @@ impl StaticStabilityCache {
             .load_timeout
             .unwrap_or_else(|| pessimistic_load_timeout(config_bag));
         let timeout_future = sleep_impl.sleep(load_timeout);
-        let refreshed: Result<Identity, BoxError> = match Timeout::new(
-            resolver.resolve_identity(runtime_components, config_bag),
-            timeout_future,
-        )
-        .await
-        {
-            // Success with fresh credentials.
-            Ok(Ok(id)) if !expired(id.expiration(), now) => Ok(id),
-            // An `Ok` response with expiration <= now is treated as a failed refresh (retain + back off).
-            Ok(Ok(_stale)) => Err("credential source returned already-expired credentials".into()),
-            Ok(Err(e)) => Err(e),
-            // Timeout: converts a *hung* source into a serve-cached decision (recoverable).
-            Err(_elapsed) => {
-                Err(format!("credential resolution timed out after {:?}", load_timeout).into())
+        // Mirror LazyCache's `lazy_load_identity` span so identity-load telemetry is unchanged
+        // now that `StaticStabilityCache` is the default cache. Only the source call is
+        // instrumented — a cache hit is served before `refresh` and never opens the span.
+        let refreshed: Result<Identity, BoxError> = async move {
+            match Timeout::new(
+                resolver.resolve_identity(runtime_components, config_bag),
+                timeout_future,
+            )
+            .await
+            {
+                // Success with fresh credentials.
+                Ok(Ok(id)) if !expired(id.expiration(), now) => Ok(id),
+                // An `Ok` response with expiration <= now is treated as a failed refresh (retain + back off).
+                Ok(Ok(_stale)) => {
+                    Err("credential source returned already-expired credentials".into())
+                }
+                Ok(Err(e)) => Err(e),
+                // Timeout: converts a *hung* source into a serve-cached decision (recoverable).
+                Err(_elapsed) => {
+                    Err(format!("credential resolution timed out after {:?}", load_timeout).into())
+                }
             }
-        };
+        }
+        .instrument(tracing::debug_span!("lazy_load_identity"))
+        .await;
 
         match refreshed {
             Ok(id) => {
