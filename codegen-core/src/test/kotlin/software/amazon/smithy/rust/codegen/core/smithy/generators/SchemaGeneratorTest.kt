@@ -103,6 +103,48 @@ class SchemaGeneratorTest {
         list LongList {
             member: Long
         }
+
+        structure SparseNestedAggregates {
+            listOfSparseLists: ListOfSparseStringList,
+            mapOfSparseLists: MapOfSparseStringList,
+            sparseListOfSparseLists: SparseListOfSparseStringList,
+            listOfSparseMaps: ListOfSparseStringMap,
+            mapOfSparseMaps: MapOfSparseStringMap
+        }
+
+        list ListOfSparseStringList {
+            member: SparseStringList
+        }
+
+        @sparse
+        list SparseStringList {
+            member: String
+        }
+
+        map MapOfSparseStringList {
+            key: String,
+            value: SparseStringList
+        }
+
+        @sparse
+        list SparseListOfSparseStringList {
+            member: SparseStringList
+        }
+
+        list ListOfSparseStringMap {
+            member: SparseStringMap
+        }
+
+        @sparse
+        map SparseStringMap {
+            key: String,
+            value: String
+        }
+
+        map MapOfSparseStringMap {
+            key: String,
+            value: SparseStringMap
+        }
         """.asSmithyModel()
 
     private val provider = testSymbolProvider(model)
@@ -898,6 +940,81 @@ class SchemaGeneratorTest {
                 let mm = result.map_of_maps.expect("map_of_maps");
                 let inner = mm.get("outer").expect("outer");
                 assert_eq!(inner.get("k1"), Some(&"v1".to_string()));
+                """,
+            )
+        }
+        project.compileAndTest()
+    }
+
+    @Test
+    fun `json round trip with nested sparse aggregates`() {
+        val project = TestWorkspace.testProject(provider)
+        val shape = model.lookup<StructureShape>("test#SparseNestedAggregates")
+        project.useShapeWriter(shape) {
+            renderStructWithSchema(this, model, provider, codegenContext, shape, project)
+            rustTemplate(
+                "use #{JsonCodec};",
+                "JsonCodec" to RuntimeType.smithyJson(codegenContext.runtimeConfig).resolve("codec::JsonCodec"),
+            )
+            unitTest(
+                "nested_sparse_aggregates_round_trip",
+                """
+                use aws_smithy_schema::serde::{SerializableStruct, ShapeSerializer};
+                use aws_smithy_json::codec::{JsonCodec, JsonCodecSettings};
+                use aws_smithy_schema::codec::Codec;
+                use std::collections::HashMap;
+
+                // `@sparse` applies to the collection that carries it, at any nesting depth, so
+                // every inner collection below generates as a collection of `Option`s even when the
+                // collection containing it is dense. This is the shape that broke `iotsitewise`:
+                // `list RowList { member: Result }` where `Result` is an `@sparse list<String>`.
+                let mut map_of_sparse_lists = HashMap::new();
+                map_of_sparse_lists.insert("row".to_string(), vec![Some("v".to_string()), None]);
+
+                let mut sparse_map = HashMap::new();
+                sparse_map.insert("present".to_string(), Some("yes".to_string()));
+                sparse_map.insert("absent".to_string(), None);
+
+                let mut map_of_sparse_maps = HashMap::new();
+                map_of_sparse_maps.insert("outer".to_string(), sparse_map.clone());
+
+                let original = SparseNestedAggregates {
+                    // dense list of sparse lists
+                    list_of_sparse_lists: Some(vec![vec![Some("a".to_string()), None]]),
+                    // map whose value is a sparse list
+                    map_of_sparse_lists: Some(map_of_sparse_lists),
+                    // sparse list of sparse lists
+                    sparse_list_of_sparse_lists: Some(vec![Some(vec![None, Some("b".to_string())]), None]),
+                    // dense list of sparse maps
+                    list_of_sparse_maps: Some(vec![sparse_map]),
+                    // map whose value is a sparse map
+                    map_of_sparse_maps: Some(map_of_sparse_maps),
+                };
+
+                let codec = JsonCodec::new(JsonCodecSettings::default());
+                let mut ser = codec.create_serializer();
+                ser.write_struct(SparseNestedAggregates::SCHEMA, &original).expect("serialization");
+                let bytes = ser.finish();
+
+                let mut deser = codec.create_deserializer(&bytes);
+                let result = SparseNestedAggregates::deserialize(&mut deser).expect("deserialization");
+
+                // Nulls inside the nested sparse collections must survive as `None`.
+                let lol = result.list_of_sparse_lists.expect("list_of_sparse_lists");
+                assert_eq!(lol, vec![vec![Some("a".to_string()), None]]);
+
+                let mol = result.map_of_sparse_lists.expect("map_of_sparse_lists");
+                assert_eq!(mol.get("row"), Some(&vec![Some("v".to_string()), None]));
+
+                let slol = result.sparse_list_of_sparse_lists.expect("sparse_list_of_sparse_lists");
+                assert_eq!(slol, vec![Some(vec![None, Some("b".to_string())]), None]);
+
+                let lom = result.list_of_sparse_maps.expect("list_of_sparse_maps");
+                assert_eq!(lom[0].get("present"), Some(&Some("yes".to_string())));
+                assert_eq!(lom[0].get("absent"), Some(&None));
+
+                let mom = result.map_of_sparse_maps.expect("map_of_sparse_maps");
+                assert_eq!(mom.get("outer").expect("outer").get("absent"), Some(&None));
                 """,
             )
         }
