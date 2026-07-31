@@ -48,7 +48,7 @@ do
     cargo clippy --all-features
 
     echo -e "## ${C_YELLOW}Running 'cargo nextest run' on ${runtime_path}...${C_RESET}"
-    cargo nextest run --all-features
+    cargo nextest run --no-tests=pass --all-features
     # nextest does not run doctests, so run them separately to keep coverage
     cargo test --all-features --doc
 

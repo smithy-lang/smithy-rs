@@ -18,7 +18,7 @@ function test_tool {
     echo -e "${C_YELLOW}Testing ${tool_path}...${C_RESET}"
     pushd "${tool_path}" &>/dev/null
     cargo +"${rust_version}" clippy --all-features
-    cargo +"${rust_version}" nextest run --all-features
+    cargo +"${rust_version}" nextest run --no-tests=pass --all-features
     # nextest does not run doctests, so run them separately to keep coverage -- but only for
     # crates with a library target (`cargo test --doc` errors on binary-only crates).
     if [[ -f "src/lib.rs" ]]; then

@@ -35,7 +35,7 @@ for sdk in aws-sdk-rust/sdk/*; do
     if ls "$sdk/tests" | grep -v '^endpoint_tests\.rs$'; then
       echo -e "${C_YELLOW}# Testing ${sdk}...${C_RESET}"
       pushd "$sdk" &>/dev/null
-      cargo nextest run --all-features
+      cargo nextest run --no-tests=pass --all-features
       # nextest does not run doctests, so run them separately to keep coverage
       cargo test --all-features --doc
       popd &>/dev/null
