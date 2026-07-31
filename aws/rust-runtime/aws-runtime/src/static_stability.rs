@@ -5,16 +5,16 @@
 
 //! Static-stability credentials caching for AWS clients.
 //!
-//! [`StaticStabilityCache`] is the default identity cache for AWS clients (installed by codegen and
+//! `StaticStabilityCache` is the default identity cache for AWS clients (installed by codegen and
 //! `aws-config`). It is a retain-always, partition-keyed cache that provides *static stability*: on
 //! a failed credential refresh it keeps serving the previously-resolved identity past expiration
 //! (subject to backoff), so applications continue signing requests through a credential-source
-//! outage. It caches any [`Identity`] — credentials and bearer tokens alike — and reads its
+//! outage. It caches any `Identity` — credentials and bearer tokens alike — and reads its
 //! static-stability eligibility from a generic identity property, never downcasting to a concrete
 //! credential type.
 //!
-//! The [`invalidation`] submodule carries the auth-failure detection half of invalidation
-//! (F-INVAL-1); the cache's [`ResolveCachedIdentity::invalidate`] is the action half.
+//! The `invalidation` submodule carries the auth-failure detection half of invalidation
+//! (F-INVAL-1); the cache's `ResolveCachedIdentity::invalidate` is the action half.
 
 pub mod invalidation;
 
