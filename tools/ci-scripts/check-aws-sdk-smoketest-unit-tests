@@ -14,6 +14,9 @@ for test_dir in tests/*; do
     if [ -f "${test_dir}/Cargo.toml" ]; then
         echo "#### Testing ${test_dir}..."
         cargo nextest run --all-features --manifest-path "${test_dir}/Cargo.toml"
-        cargo test --all-features --doc --manifest-path "${test_dir}/Cargo.toml"
+        # doctests only for crates with a library target (--doc errors on binary-only crates)
+        if [ -f "${test_dir}/src/lib.rs" ]; then
+            cargo test --all-features --doc --manifest-path "${test_dir}/Cargo.toml"
+        fi
     fi
 done

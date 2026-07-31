@@ -19,8 +19,11 @@ function test_tool {
     pushd "${tool_path}" &>/dev/null
     cargo +"${rust_version}" clippy --all-features
     cargo +"${rust_version}" nextest run --all-features
-    # nextest does not run doctests, so run them separately to keep coverage
-    cargo +"${rust_version}" test --all-features --doc
+    # nextest does not run doctests, so run them separately to keep coverage -- but only for
+    # crates with a library target (`cargo test --doc` errors on binary-only crates).
+    if [[ -f "src/lib.rs" ]]; then
+        cargo +"${rust_version}" test --all-features --doc
+    fi
     popd &>/dev/null
 }
 
