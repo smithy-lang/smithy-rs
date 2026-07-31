@@ -67,6 +67,11 @@ val generateBuildEnvironmentConstants = tasks.register("generateBuildEnvironment
     // Specify that the task generates sources.
     val outputDir = generatedSrcDir.get().asFile
     outputs.dir(outputDir)
+    // Track `gradle.properties` as an input so the generated constants (notably `rust.msrv`) are
+    // regenerated when it changes. Without this the task is considered up-to-date on its output
+    // alone, so `BuildEnvironment.MSRV` goes stale after an MSRV bump (and the generated
+    // `rust-toolchain.toml` keeps pinning the old compiler version).
+    inputs.file("${rootDir}/gradle.properties")
 
     doLast {
         // Load properties from `gradle.properties`.
