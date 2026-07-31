@@ -9,6 +9,9 @@ C_RED='\033[1;31m'
 C_YELLOW='\033[1;33m'
 C_RESET='\033[0m'
 
+# shellcheck source=/dev/null
+source "$(dirname "${BASH_SOURCE[0]}")/lib-doctest-helper.sh"
+
 set -eux
 
 : "$RUST_NIGHTLY_VERSION"
@@ -49,8 +52,8 @@ do
 
     echo -e "## ${C_YELLOW}Running 'cargo nextest run' on ${runtime_path}...${C_RESET}"
     cargo nextest run --no-tests=pass --all-features
-    # nextest does not run doctests, so run them separately to keep coverage
-    cargo test --all-features --doc
+    # nextest does not run doctests, so run them separately (only where a lib target exists)
+    run_doctests_if_lib ""
 
     echo -e "## ${C_YELLOW}Running 'cargo doc' on ${runtime_path}...${C_RESET}"
 
