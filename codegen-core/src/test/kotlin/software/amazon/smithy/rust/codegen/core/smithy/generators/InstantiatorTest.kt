@@ -100,7 +100,7 @@ class InstantiatorTest {
         override fun hasFallibleBuilder(shape: StructureShape) =
             BuilderGenerator.hasFallibleBuilder(shape, codegenContext.symbolProvider)
 
-        override fun setterName(memberShape: MemberShape) = memberShape.setterName()
+        override fun setterName(memberShape: MemberShape) = memberShape.setterName(codegenContext.symbolProvider)
 
         override fun doesSetterTakeInOption(memberShape: MemberShape) = true
     }

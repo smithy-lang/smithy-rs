@@ -15,6 +15,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstantiator
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 
 class ClientBuilderInstantiator(private val clientCodegenContext: ClientCodegenContext) : BuilderInstantiator {
     override fun setField(
@@ -23,6 +24,10 @@ class ClientBuilderInstantiator(private val clientCodegenContext: ClientCodegenC
         field: MemberShape,
     ): Writable {
         return setFieldWithSetter(builder, value, field)
+    }
+
+    override fun setterProvider(field: MemberShape): String {
+        return field.setterName(clientCodegenContext.symbolProvider)
     }
 
     /**
