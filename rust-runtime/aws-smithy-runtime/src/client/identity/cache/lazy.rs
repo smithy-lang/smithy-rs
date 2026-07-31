@@ -39,7 +39,8 @@ const DEFAULT_MAX_PARTITIONS: usize = 64;
 /// Formula: sum of worst-case backoffs + `attempts × per_attempt`, where the per-attempt ceiling
 /// is `max(connect_timeout × 2, operation_attempt_timeout)` and `connect_timeout` is floored at
 /// the default connect timeout.
-fn pessimistic_load_timeout(config_bag: &ConfigBag) -> Duration {
+#[doc(hidden)]
+pub fn pessimistic_load_timeout(config_bag: &ConfigBag) -> Duration {
     let retry_config = config_bag
         .load::<RetryConfig>()
         .cloned()

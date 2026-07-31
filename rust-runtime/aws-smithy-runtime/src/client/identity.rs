@@ -4,6 +4,8 @@
  */
 
 mod cache;
+#[doc(hidden)]
+pub use cache::pessimistic_load_timeout;
 pub use cache::{IdentityCache, LazyCacheBuilder};
 
 /// Identity resolver implementation for "no auth".

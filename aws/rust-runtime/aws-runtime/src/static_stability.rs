@@ -23,6 +23,7 @@ use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_runtime::client::identity::pessimistic_load_timeout;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::{
     Identity, IdentityCachePartition, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
@@ -37,9 +38,6 @@ use std::fmt;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
 
-/// Timeout bounding a single credential-source resolution (inherited from `LazyCache`; converts a
-/// *hung* source into a serve-cached decision). Not SEP-specified.
-const DEFAULT_LOAD_TIMEOUT: Duration = Duration::from_secs(5);
 /// SEP mandatory refresh window (blocking refresh point before expiration).
 const DEFAULT_MANDATORY_WINDOW: Duration = Duration::from_secs(60);
 /// Synthetic expiration for identities that don't report one (matches `LazyCache`).
@@ -66,7 +64,7 @@ pub struct StaticStabilityCache {
     // Used by `invalidate`, which receives no `RuntimeComponents`; the resolve path prefers the
     // time source from `RuntimeComponents`.
     time_source: SharedTimeSource,
-    load_timeout: Duration,
+    load_timeout: Option<Duration>,
     mandatory_window: Duration,
     default_expiration: Duration,
     non_recoverable: Option<NonRecoverablePredicate>,
@@ -134,7 +132,12 @@ impl StaticStabilityCache {
         let prev = part.state.lock().unwrap().cached.clone();
 
         let sleep_impl = runtime_components.sleep_impl().expect("validated");
-        let timeout_future = sleep_impl.sleep(self.load_timeout);
+        // Match LazyCache: with no explicit timeout, derive a pessimistic one from the configured
+        // retry/timeout so the source's own retries can finish before the cache kills the future.
+        let load_timeout = self
+            .load_timeout
+            .unwrap_or_else(|| pessimistic_load_timeout(config_bag));
+        let timeout_future = sleep_impl.sleep(load_timeout);
         let refreshed: Result<Identity, BoxError> = match Timeout::new(
             resolver.resolve_identity(runtime_components, config_bag),
             timeout_future,
@@ -147,11 +150,9 @@ impl StaticStabilityCache {
             Ok(Ok(_stale)) => Err("credential source returned already-expired credentials".into()),
             Ok(Err(e)) => Err(e),
             // Timeout: converts a *hung* source into a serve-cached decision (recoverable).
-            Err(_elapsed) => Err(format!(
-                "credential resolution timed out after {:?}",
-                self.load_timeout
-            )
-            .into()),
+            Err(_elapsed) => {
+                Err(format!("credential resolution timed out after {:?}", load_timeout).into())
+            }
         };
 
         match refreshed {
@@ -412,7 +413,8 @@ impl StaticStabilityCacheBuilder {
         self
     }
 
-    /// Sets the timeout bounding a single credential-source resolution (default 5s).
+    /// Sets the timeout bounding a single credential-source resolution. When unset, a pessimistic
+    /// timeout is derived from the configured retry/timeout (matching `LazyCache`).
     pub fn load_timeout(mut self, load_timeout: Duration) -> Self {
         self.load_timeout = Some(load_timeout);
         self
@@ -443,7 +445,7 @@ impl StaticStabilityCacheBuilder {
             partitions: RwLock::new(HashMap::new()),
             max_partitions: self.max_partitions.unwrap_or(DEFAULT_MAX_PARTITIONS),
             time_source: self.time_source.unwrap_or_default(),
-            load_timeout: self.load_timeout.unwrap_or(DEFAULT_LOAD_TIMEOUT),
+            load_timeout: self.load_timeout,
             mandatory_window: self.mandatory_window.unwrap_or(DEFAULT_MANDATORY_WINDOW),
             default_expiration: self.default_expiration.unwrap_or(DEFAULT_EXPIRATION),
             non_recoverable: Some(non_recoverable),

@@ -12,6 +12,8 @@ use aws_smithy_types::config_bag::ConfigBag;
 
 mod lazy;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
+#[doc(hidden)]
+pub use lazy::pessimistic_load_timeout;
 pub use lazy::LazyCacheBuilder;
 
 /// Identity cache configuration.
