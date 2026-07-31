@@ -22,7 +22,7 @@ use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_async::time::SharedTimeSource;
+use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime::client::identity::pessimistic_load_timeout;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::{
@@ -418,8 +418,11 @@ pub struct StaticStabilityCacheBuilder {
 
 impl StaticStabilityCacheBuilder {
     /// Sets the time source used by `invalidate` (which receives no runtime components).
-    pub fn time_source(mut self, time_source: SharedTimeSource) -> Self {
-        self.time_source = Some(time_source);
+    ///
+    /// `resolve_cached_identity` prefers the time source from `RuntimeComponents`; this only
+    /// backstops `invalidate`. Mirrors `LazyCacheBuilder::time_source`.
+    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
+        self.time_source = Some(SharedTimeSource::new(time_source));
         self
     }
 
@@ -550,7 +553,7 @@ mod tests {
                 contacts: contacts.clone(),
             });
             let cache = StaticStabilityCache::builder()
-                .time_source(time.clone().into_shared())
+                .time_source(time.clone())
                 .build();
             Self {
                 cache,
@@ -897,7 +900,7 @@ mod tests {
             ]),
         });
         let cache = StaticStabilityCache::builder()
-            .time_source(time.clone().into_shared())
+            .time_source(time.clone())
             .build();
 
         // Seed (State 1): permit exactly one source resolution for the initial fetch.
@@ -1014,7 +1017,7 @@ mod tests {
             ]),
         });
         let cache = StaticStabilityCache::builder()
-            .time_source(time.clone().into_shared())
+            .time_source(time.clone())
             .build();
 
         gate.notify_one();
