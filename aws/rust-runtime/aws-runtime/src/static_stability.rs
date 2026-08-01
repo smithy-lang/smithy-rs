@@ -474,7 +474,6 @@ mod tests {
     use super::*;
     use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
     use aws_smithy_async::test_util::ManualTimeSource;
-    use aws_smithy_runtime_api::shared::IntoShared;
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Debug, Clone, PartialEq)]
