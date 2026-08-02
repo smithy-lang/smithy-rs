@@ -31,20 +31,24 @@ jobs:
     - name: Checkout smithy-rs
       uses: actions/checkout@v3
       with:
+        persist-credentials: false
         path: ./smithy-rs
     - name: Checkout trytls
       uses: actions/checkout@v3
       with:
+        persist-credentials: false
         repository: ouspg/trytls
         path: ./trytls
     - name: Checkout badtls
       uses: actions/checkout@v3
       with:
+        persist-credentials: false
         repository: wbond/badtls.io
         path: ./badtls.io
     - name: Checkout badssl
       uses: actions/checkout@v3
       with:
+        persist-credentials: false
         repository: chromium/badssl.com
         path: ./badssl.com
     - name: Install Rust

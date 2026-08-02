@@ -23,6 +23,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
+        persist-credentials: false
         path: smithy-rs
     - name: Acquire base image
       id: acquire
