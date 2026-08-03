@@ -32,6 +32,8 @@ jobs:
     permissions:
       id-token: write
       contents: read
+      # Needed to push the build image to the public GHCR mirror that fork PRs pull from
+      packages: write
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - name: Checkout
@@ -62,6 +64,17 @@ jobs:
         pwd
         IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
         ./.github/scripts/upload-build-image.sh $IMAGE_TAG
+    # Mirror the image to public GHCR so fork PRs (which can't authenticate to ECR) can pull it
+    # anonymously instead of rebuilding it from scratch. Uses the built-in GITHUB_TOKEN.
+    - name: Mirror image to public GHCR
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
+        echo "${GITHUB_TOKEN}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+        GHCR_IMAGE="ghcr.io/smithy-lang/smithy-rs-build-image:${IMAGE_TAG}"
+        docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${GHCR_IMAGE}"
+        docker push "${GHCR_IMAGE}"
 
   # Run the shared CI after a Docker build image has been uploaded to ECR
   ci:

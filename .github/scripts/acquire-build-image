@@ -17,6 +17,9 @@ AWS_ACCOUNT_ID="686190543447"
 AWS_REGION="us-west-2"
 ECR_REPOSITORY="smithy-rs-build-image"
 REMOTE_BASE_IMAGE_NAME = f"{AWS_ACCOUNT_ID}.dkr.ecr.{AWS_REGION}.amazonaws.com/{ECR_REPOSITORY}"
+# Public mirror of the build image. Fork PRs can't authenticate to ECR, but this is public so
+# they can pull it anonymously instead of rebuilding the image from scratch (~45m).
+GHCR_BASE_IMAGE_NAME = "ghcr.io/smithy-lang/smithy-rs-build-image"
 LOCAL_BASE_IMAGE_NAME = "smithy-rs-base-image"
 LOCAL_TAG = "local"
 
@@ -231,20 +234,32 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
             else:
                 announce("Failed to pull remote image, which can happen if it doesn't exist.")
 
-            if not context.allow_local_build:
-                announce("Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.")
-                return 1
+            # Before falling back to an expensive local build (the fork-PR case, where ECR auth
+            # is unavailable), try the public GHCR mirror. It's public, so a fork PR can pull it
+            # anonymously -- no credentials needed. On success, tag it as the local base image
+            # and fall through to the shared build-image step below.
+            announce("Attempting to pull the public GHCR image...")
+            ghcr_result = docker_pull_with_retry(shell, GHCR_BASE_IMAGE_NAME, context.image_tag)
+            if ghcr_result == DockerPullResult.SUCCESS:
+                announce("Successfully pulled the public GHCR image!")
+                shell.docker_tag(GHCR_BASE_IMAGE_NAME, context.image_tag, LOCAL_BASE_IMAGE_NAME, context.image_tag)
+            else:
+                announce("GHCR image unavailable; a local build is required.")
 
-            announce("Building a new image locally.")
-            shell.docker_build_base_image(context.image_tag, context.docker_image_path)
+                if not context.allow_local_build:
+                    announce("Local build turned off by ALLOW_LOCAL_BUILD env var. Aborting.")
+                    return 1
 
-            if context.github_actions:
-                announce("Saving base image for use in later jobs...")
-                shell.docker_save(
-                    LOCAL_BASE_IMAGE_NAME,
-                    context.image_tag,
-                    context.start_path + "/smithy-rs-base-image"
-                )
+                announce("Building a new image locally.")
+                shell.docker_build_base_image(context.image_tag, context.docker_image_path)
+
+                if context.github_actions:
+                    announce("Saving base image for use in later jobs...")
+                    shell.docker_save(
+                        LOCAL_BASE_IMAGE_NAME,
+                        context.image_tag,
+                        context.start_path + "/smithy-rs-base-image"
+                    )
         else:
             announce("Successfully pulled remote image!")
             shell.docker_tag(REMOTE_BASE_IMAGE_NAME, context.image_tag, LOCAL_BASE_IMAGE_NAME, context.image_tag)
@@ -300,7 +315,12 @@ class SelfTest(unittest.TestCase):
 
     def test_docker_login(self):
         shell = self.mock_shell()
+        shell.platform.return_value = Platform.X86_64
+        # ECR then GHCR both miss; we only care that docker_login was called for ECR auth
+        shell.docker_image_exists_locally.side_effect = [False]
+        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND, DockerPullResult.NOT_FOUND]
         acquire_build_image(self.test_context(
+            allow_local_build=True,
             encrypted_docker_password="jA0ECQMCvYU/JxsX3g/70j0BxbLLW8QaFWWb/DqY9gPhTuEN/xdYVxaoDnV6Fha+lAWdT7xN0qZr5DHPBalLfVvvM1SEXRBI8qnfXyGI",
             docker_passphrase="secret"), shell)
         shell.docker_login.assert_called_with("payload")
@@ -443,9 +463,10 @@ class SelfTest(unittest.TestCase):
     def test_image_local_build(self):
         context = self.test_context(allow_local_build=True)
         shell = self.mock_shell()
-        shell.platform.side_effect = [Platform.X86_64]
+        shell.platform.return_value = Platform.X86_64
         shell.docker_image_exists_locally.side_effect = [False]
-        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
+        # First pull is ECR (not found), second is the GHCR fallback (also not found) -> local build
+        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND, DockerPullResult.NOT_FOUND]
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
@@ -464,7 +485,8 @@ class SelfTest(unittest.TestCase):
     def test_image_local_build_architecture_mismatch(self):
         context = self.test_context(allow_local_build=True)
         shell = self.mock_shell()
-        shell.platform.side_effect = [Platform.ARM_64]
+        # ARM short-circuits both the ECR and GHCR pulls to a mismatch -> local build
+        shell.platform.return_value = Platform.ARM_64
         shell.docker_image_exists_locally.side_effect = [False]
 
         self.assertEqual(0, acquire_build_image(context, shell))
@@ -483,9 +505,10 @@ class SelfTest(unittest.TestCase):
     def test_image_local_build_github_actions(self):
         context = self.test_context(allow_local_build=True, github_actions=True)
         shell = self.mock_shell()
-        shell.platform.side_effect = [Platform.X86_64]
+        shell.platform.return_value = Platform.X86_64
         shell.docker_image_exists_locally.side_effect = [False]
-        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
+        # ECR not found, then GHCR fallback not found -> local build
+        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND, DockerPullResult.NOT_FOUND]
 
         self.assertEqual(0, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
@@ -506,9 +529,10 @@ class SelfTest(unittest.TestCase):
     def test_image_fail_local_build_disabled(self):
         context = self.test_context(allow_local_build=False)
         shell = self.mock_shell()
-        shell.platform.side_effect = [Platform.X86_64]
+        shell.platform.return_value = Platform.X86_64
         shell.docker_image_exists_locally.side_effect = [False]
-        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND]
+        # ECR miss, then GHCR fallback miss; local build disabled -> fail
+        shell.docker_pull.side_effect = [DockerPullResult.NOT_FOUND, DockerPullResult.NOT_FOUND]
 
         self.assertEqual(1, acquire_build_image(context, shell))
         shell.docker_image_exists_locally.assert_called_once()
@@ -534,6 +558,28 @@ class SelfTest(unittest.TestCase):
         shell.docker_save.assert_not_called()
         shell.docker_tag.assert_has_calls([
             call(REMOTE_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, "someimagetag"),
+            call(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
+        ])
+        shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
+
+    # When:
+    #  - the base image doesn't exist locally
+    #  - ECR pull fails (the fork-PR case: no ECR auth), but the public GHCR image exists
+    #  - local builds are disabled
+    # It should: pull from GHCR, tag it, and NOT build locally
+    def test_pull_ghcr_fallback(self):
+        context = self.test_context(allow_local_build=False)
+        shell = self.mock_shell()
+        shell.platform.return_value = Platform.X86_64
+        shell.docker_image_exists_locally.side_effect = [False]
+        # ECR unauthenticated (fork), then GHCR succeeds
+        shell.docker_pull.side_effect = [DockerPullResult.UNAUTHENTICATED, DockerPullResult.SUCCESS]
+
+        self.assertEqual(0, acquire_build_image(context, shell))
+        shell.docker_build_base_image.assert_not_called()
+        shell.docker_save.assert_not_called()
+        shell.docker_tag.assert_has_calls([
+            call(GHCR_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, "someimagetag"),
             call(LOCAL_BASE_IMAGE_NAME, "someimagetag", LOCAL_BASE_IMAGE_NAME, LOCAL_TAG)
         ])
         shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
