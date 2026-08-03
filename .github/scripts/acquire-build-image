@@ -234,10 +234,8 @@ def acquire_build_image(context=Context.default(), shell=Shell()):
             else:
                 announce("Failed to pull remote image, which can happen if it doesn't exist.")
 
-            # Before falling back to an expensive local build (the fork-PR case, where ECR auth
-            # is unavailable), try the public GHCR mirror. It's public, so a fork PR can pull it
-            # anonymously -- no credentials needed. On success, tag it as the local base image
-            # and fall through to the shared build-image step below.
+            # Try the public GHCR mirror before an expensive local build. This is the fork-PR case:
+            # no ECR auth, but GHCR is public so it can be pulled anonymously.
             announce("Attempting to pull the public GHCR image...")
             ghcr_result = docker_pull_with_retry(shell, GHCR_BASE_IMAGE_NAME, context.image_tag)
             if ghcr_result == DockerPullResult.SUCCESS:
@@ -562,11 +560,7 @@ class SelfTest(unittest.TestCase):
         ])
         shell.docker_build_build_image.assert_called_with("123", "/tmp/test/tools-path/ci-build")
 
-    # When:
-    #  - the base image doesn't exist locally
-    #  - ECR pull fails (the fork-PR case: no ECR auth), but the public GHCR image exists
-    #  - local builds are disabled
-    # It should: pull from GHCR, tag it, and NOT build locally
+    # It should: when ECR pull fails (the fork case) but the GHCR image exists, pull from GHCR and NOT build locally
     def test_pull_ghcr_fallback(self):
         context = self.test_context(allow_local_build=False)
         shell = self.mock_shell()

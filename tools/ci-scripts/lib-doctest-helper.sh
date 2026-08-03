@@ -3,27 +3,19 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 #
-# Shared helper for the nextest-based test scripts. Since `cargo nextest run` does not run
-# doctests, those scripts run `cargo test --doc` separately -- but `--doc` errors on packages
-# that have no doctest-capable library (binary-only crates, and `cdylib`/`staticlib`-only crates
-# like the wasm test crates). This helper runs `--doc` only when a package has a plain `lib`
-# target, so the doctest step is a no-op rather than an error on those crates.
+# `cargo nextest run` doesn't run doctests, so the nextest-based scripts run `cargo test --doc`
+# too -- but that errors on crates with no plain `lib` target (bin-only, and cdylib/staticlib
+# wasm crates). This helper runs `--doc` only when the target package has a `lib`, skipping it
+# otherwise.
 
-# Runs `cargo [+toolchain] test --doc <extra args...>` iff the package that `--doc` would target
-# has a plain `lib` target. Pass the toolchain (or "") first.
-#   run_doctests_if_lib "<toolchain-or-empty>" [extra cargo args...]
-#
-# Note: `cargo metadata --no-deps` returns EVERY workspace member, not just the one being tested,
-# so we can't just check "does any package have a lib". We resolve the target package by the
-# manifest `--doc` will use -- the `--manifest-path` arg if given, else `<cwd>/Cargo.toml` -- and
-# check only that package's target kinds. `--doc` works only for the plain `lib` kind (not
-# `bin`, `cdylib`, `staticlib`, or `proc-macro`).
+# run_doctests_if_lib "<toolchain-or-empty>" [extra cargo args...]
 run_doctests_if_lib() {
     local toolchain="$1"; shift
     local toolchain_arg=()
     [[ -n "${toolchain}" ]] && toolchain_arg=("+${toolchain}")
 
-    # Determine the manifest that `cargo test --doc "$@"` will target.
+    # The package `--doc` targets is the one whose manifest is --manifest-path, else <cwd>/Cargo.toml.
+    # cargo metadata --no-deps lists every workspace member, so match on that manifest specifically.
     local manifest="${PWD}/Cargo.toml"
     local prev=""
     for arg in "$@"; do

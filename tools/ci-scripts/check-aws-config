@@ -62,7 +62,7 @@ if [[ "${MODE}" == "all" || "${MODE}" == "base" ]]; then
 fi
 
 if [[ "${MODE}" == "all" || "${MODE}" == "featureset" ]]; then
-    # `--partition M/N` shards the powerset (needs cargo-hack >= 0.6.31) and MUST come before the
+    # `--partition M/N` shards the powerset (needs cargo-hack >= 0.6.31) and must come before the
     # subcommand, else it's forwarded to cargo and fails. Empty PARTITION runs the full set.
     partition_arg=()
     if [[ -n "${PARTITION}" ]]; then
