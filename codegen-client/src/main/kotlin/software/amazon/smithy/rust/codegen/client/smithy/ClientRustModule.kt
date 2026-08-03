@@ -128,7 +128,16 @@ class ClientModuleDocProvider(
             ClientRustModule.config -> strDoc("Configuration for $serviceName.")
             ClientRustModule.Config.auth -> strDoc("Types needed to configure auth scheme resolution.")
             ClientRustModule.Config.endpoint -> strDoc("Types needed to configure endpoint resolution.")
-            ClientRustModule.Config.retry -> strDoc("Retry configuration.")
+            ClientRustModule.Config.retry ->
+                strDoc(
+                    "Retry configuration.\n\n" +
+                        "[`RetryConfig`](crate::config::retry::RetryConfig) sets the number of retry attempts and the " +
+                        "backoff between them. Retries are additionally bounded by a retry token bucket (a shared " +
+                        "retry quota): [`TokenBucket`](crate::config::retry::TokenBucket) " +
+                        "holds the tokens and [`RetryPartition`](crate::config::retry::RetryPartition) determines which " +
+                        "clients and operations share one. To size the token bucket or give a workload its own, use " +
+                        "[`Builder::retry_partition`](crate::config::Builder::retry_partition).",
+                )
             ClientRustModule.Config.timeout -> strDoc("Timeout configuration.")
             ClientRustModule.Config.http -> strDoc("HTTP request and response types.")
             ClientRustModule.Config.interceptors -> strDoc("Types needed to implement [`Intercept`](crate::config::Intercept).")
