@@ -360,6 +360,22 @@ impl ProviderConfig {
         self.behavior_version
     }
 
+    /// True when the resolved [`BehaviorVersion`] opts into cache-owned static stability
+    /// (`>= v2026_08_01`).
+    ///
+    /// At that version the AWS default identity cache is [`StaticStabilityCache`], which owns
+    /// serve-cached-on-failure. Built-in credential providers use this to (a) stamp
+    /// `StaticStabilityEligible` so the cache recognizes them, and (b) drop their own provider-level
+    /// static-stability logic (e.g. IMDS). When the behavior version is unknown (`None`) or older,
+    /// this returns `false`, preserving legacy provider-level behavior.
+    ///
+    /// [`StaticStabilityCache`]: aws_runtime::static_stability::StaticStabilityCache
+    pub(crate) fn static_stability_via_cache(&self) -> bool {
+        self.behavior_version
+            .map(|bv| bv.is_at_least(BehaviorVersion::v2026_08_01()))
+            .unwrap_or(false)
+    }
+
     /// Sets the behavior version for this provider config.
     pub fn with_behavior_version(mut self, behavior_version: Option<BehaviorVersion>) -> Self {
         self.behavior_version = behavior_version;

@@ -16,10 +16,18 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{self, error::CredentialsError, future, ProvideCredentials};
 use aws_credential_types::Credentials;
 use aws_credential_types::StaticStabilityEligible;
+use aws_smithy_async::time::SharedTimeSource;
 use aws_types::os_shim_internal::Env;
 use std::borrow::Cow;
 use std::error::Error as StdError;
 use std::fmt;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, SystemTime};
+
+const CREDENTIAL_EXPIRATION_INTERVAL: Duration = Duration::from_secs(10 * 60);
+const WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY: &str =
+    "Attempting credential expiration extension due to a credential service availability issue. \
+    A refresh of these credentials will be attempted again within the next";
 
 #[derive(Debug)]
 struct ImdsCommunicationError {
@@ -46,6 +54,14 @@ pub struct ImdsCredentialsProvider {
     client: Client,
     env: Env,
     profile: Option<String>,
+    time_source: SharedTimeSource,
+    last_retrieved_credentials: Arc<RwLock<Option<Credentials>>>,
+    // When `true` (BehaviorVersion < v2026_08_01, or unknown), this provider owns static
+    // stability: it extends expiration on stale IMDS credentials and serves the last-retrieved
+    // credentials if a refresh fails. When `false` (BV >= v2026_08_01), the `StaticStabilityCache`
+    // owns that behavior, so this provider is a plain fetch-once leaf that reports the true expiry
+    // and stamps `StaticStabilityEligible`.
+    provider_static_stability: bool,
 }
 
 /// Builder for [`ImdsCredentialsProvider`]
@@ -54,6 +70,7 @@ pub struct Builder {
     provider_config: Option<ProviderConfig>,
     profile_override: Option<String>,
     imds_override: Option<imds::Client>,
+    last_retrieved_credentials: Option<Credentials>,
 }
 
 impl Builder {
@@ -87,10 +104,20 @@ impl Builder {
         self
     }
 
+    #[allow(dead_code)]
+    #[cfg(test)]
+    fn last_retrieved_credentials(mut self, credentials: Credentials) -> Self {
+        self.last_retrieved_credentials = Some(credentials);
+        self
+    }
+
     /// Create an [`ImdsCredentialsProvider`] from this builder.
     pub fn build(self) -> ImdsCredentialsProvider {
         let provider_config = self.provider_config.unwrap_or_default();
         let env = provider_config.env();
+        // BV >= v2026_08_01 => the StaticStabilityCache owns serve-cached-on-failure, so this
+        // provider drops its own (provider-level) static stability. Older/unknown BV keeps it.
+        let provider_static_stability = !provider_config.static_stability_via_cache();
         let client = self
             .imds_override
             .unwrap_or_else(|| imds::Client::builder().configure(&provider_config).build());
@@ -98,6 +125,9 @@ impl Builder {
             client,
             env,
             profile: self.profile_override,
+            time_source: provider_config.time_source(),
+            last_retrieved_credentials: Arc::new(RwLock::new(self.last_retrieved_credentials)),
+            provider_static_stability,
         }
     }
 }
@@ -111,7 +141,17 @@ impl ProvideCredentials for ImdsCredentialsProvider {
     where
         Self: 'a,
     {
-        future::ProvideCredentials::new(self.retrieve_credentials())
+        future::ProvideCredentials::new(self.credentials())
+    }
+
+    fn fallback_on_interrupt(&self) -> Option<Credentials> {
+        // Only meaningful under provider-level static stability (legacy BV). When the cache owns
+        // static stability (BV >= v2026_08_01), there is no provider-level fallback.
+        if self.provider_static_stability {
+            self.last_retrieved_credentials.read().unwrap().clone()
+        } else {
+            None
+        }
     }
 }
 
@@ -154,6 +194,36 @@ impl ImdsCredentialsProvider {
         }
     }
 
+    // Extend the cached expiration time if necessary
+    //
+    // This allows continued use of the credentials even when IMDS returns expired ones.
+    fn maybe_extend_expiration(&self, expiration: SystemTime) -> SystemTime {
+        let now = self.time_source.now();
+        // If credentials from IMDS are not stale, use them as they are.
+        if now < expiration {
+            return expiration;
+        }
+
+        let mut rng = fastrand::Rng::with_seed(
+            now.duration_since(SystemTime::UNIX_EPOCH)
+                .expect("now should be after UNIX EPOCH")
+                .as_secs(),
+        );
+        // Calculate credentials' refresh offset with jitter, which should be less than 15 minutes
+        // the smallest amount of time credentials are valid for.
+        // Setting it to something longer than that may have the risk of the credentials expiring
+        // before the next refresh.
+        let refresh_offset = CREDENTIAL_EXPIRATION_INTERVAL + Duration::from_secs(rng.u64(0..=300));
+        let new_expiry = now + refresh_offset;
+
+        tracing::warn!(
+            "{WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY} {:.2} minutes.",
+            refresh_offset.as_secs_f64() / 60.0,
+        );
+
+        new_expiry
+    }
+
     async fn retrieve_credentials(&self) -> provider::Result {
         if self.imds_disabled() {
             let err = format!(
@@ -187,6 +257,14 @@ impl ImdsCredentialsProvider {
             })) => {
                 // TODO(IMDSv2.X): Use `account_id` once the design is finalized
                 let _ = account_id;
+                // Under provider-level static stability (legacy BV), extend a stale expiration so
+                // the credentials remain usable; otherwise report the true expiration and let the
+                // StaticStabilityCache decide whether to serve them past expiry.
+                let expiration = if self.provider_static_stability {
+                    self.maybe_extend_expiration(expiration)
+                } else {
+                    expiration
+                };
                 let creds = Credentials::new(
                     access_key_id,
                     secret_access_key,
@@ -194,6 +272,9 @@ impl ImdsCredentialsProvider {
                     expiration.into(),
                     "IMDSv2",
                 );
+                if self.provider_static_stability {
+                    *self.last_retrieved_credentials.write().unwrap() = Some(creds.clone());
+                }
                 Ok(creds)
             }
             Ok(JsonCredentials::Error { code, message })
@@ -214,9 +295,30 @@ impl ImdsCredentialsProvider {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsImds);
+            // Unconditional: `StaticStabilityEligible` is a passive marker read only by
+            // `StaticStabilityCache`, which is installed only for BV >= v2026_08_01. Under older
+            // BVs no cache reads it, so stamping is an inert no-op — the cache-install gate is the
+            // single point of bifurcation.
             creds.set_property(StaticStabilityEligible);
             creds
         })
+    }
+
+    async fn credentials(&self) -> provider::Result {
+        // When the StaticStabilityCache owns static stability (BV >= v2026_08_01), this provider is
+        // a plain fetch: surface refresh errors and let the cache serve previously-cached creds.
+        if !self.provider_static_stability {
+            return self.retrieve_credentials().await;
+        }
+        // Legacy provider-level static stability: any failure while retrieving credentials MUST NOT
+        // impede use of existing credentials.
+        match self.retrieve_credentials().await {
+            creds @ Ok(_) => creds,
+            err => match &*self.last_retrieved_credentials.read().unwrap() {
+                Some(creds) => Ok(creds.clone()),
+                _ => err,
+            },
+        }
     }
 }
 
@@ -233,6 +335,7 @@ mod test {
     use aws_smithy_http_client::test_util::{ReplayEvent, StaticReplayClient};
     use aws_smithy_types::body::SdkBody;
     use std::time::{Duration, UNIX_EPOCH};
+    use tracing_test::traced_test;
 
     const TOKEN_A: &str = "token_a";
 
@@ -272,6 +375,7 @@ mod test {
     }
 
     #[tokio::test]
+    #[traced_test]
     async fn credentials_not_stale_should_be_used_as_they_are() {
         let http_client = StaticReplayClient::new(vec![
             ReplayEvent::new(
@@ -311,9 +415,13 @@ mod test {
             UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
         );
         http_client.assert_requests_match(&[]);
+
+        // There should not be logs indicating credentials are extended for stability.
+        assert!(!logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
     #[tokio::test]
-    async fn expired_credentials_are_reported_with_true_expiry() {
+    #[traced_test]
+    async fn expired_credentials_should_be_extended() {
         let http_client = StaticReplayClient::new(vec![
                 ReplayEvent::new(
                     token_request("http://169.254.169.254", 21600),
@@ -329,7 +437,7 @@ mod test {
                 ),
             ]);
 
-        // set to 2021-09-21T17:41:25Z, well after the fetched credentials' expiry (2021-09-21T04:16:53Z)
+        // set to 2021-09-21T17:41:25Z that renders fetched credentials already expired (2021-09-21T04:16:53Z)
         let time_of_request_to_fetch_credentials = UNIX_EPOCH + Duration::from_secs(1632246085);
         let (time_source, sleep) = instant_time_and_sleep(time_of_request_to_fetch_credentials);
 
@@ -345,18 +453,35 @@ mod test {
             .imds_client(client)
             .build();
         let creds = provider.provide_credentials().await.expect("valid creds");
-        // Provider-level static stability is retired: IMDS reports the TRUE (already-past)
-        // expiration rather than rewriting it. The cache decides whether to serve past expiry.
-        assert_eq!(
-            creds.expiry(),
-            UNIX_EPOCH.checked_add(Duration::from_secs(1632197813))
-        );
+        assert!(creds.expiry().unwrap() > time_of_request_to_fetch_credentials);
         http_client.assert_requests_match(&[]);
+
+        // We should inform customers that expired credentials are being used for stability.
+        assert!(logs_contain(WARNING_FOR_EXTENDING_CREDENTIALS_EXPIRY));
     }
 
     #[tokio::test]
     #[cfg(feature = "default-https-client")]
-    async fn read_timeout_during_credentials_refresh_should_error() {
+    async fn read_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint("http://240.0.0.0")
+            .unwrap()
+            .build();
+        let expected = aws_credential_types::Credentials::for_tests();
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            // seed fallback credentials for testing
+            .last_retrieved_credentials(expected.clone())
+            .build();
+        let actual = provider.provide_credentials().await;
+        assert_eq!(actual.unwrap(), expected);
+    }
+
+    #[tokio::test]
+    #[cfg(feature = "default-https-client")]
+    async fn read_timeout_during_credentials_refresh_should_error_without_last_retrieved_credentials(
+    ) {
         let client = crate::imds::Client::builder()
             // 240.* can never be resolved
             .endpoint("http://240.0.0.0")
@@ -364,9 +489,8 @@ mod test {
             .build();
         let provider = ImdsCredentialsProvider::builder()
             .imds_client(client)
+            // no fallback credentials provided
             .build();
-        // No provider-level fallback: an unreachable IMDS surfaces as an error (the cache, not the
-        // provider, serves previously-cached credentials).
         let actual = provider.provide_credentials().await;
         assert!(
             matches!(actual, Err(CredentialsError::CredentialsNotLoaded(_))),
@@ -374,10 +498,47 @@ mod test {
         );
     }
 
+    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
+    #[cfg_attr(windows, ignore)]
     #[tokio::test]
-    async fn imds_500_during_refresh_surfaces_error() {
+    #[cfg(feature = "default-https-client")]
+    async fn external_timeout_during_credentials_refresh_should_yield_last_retrieved_credentials() {
+        use aws_smithy_async::rt::sleep::AsyncSleep;
+        let client = crate::imds::Client::builder()
+            // 240.* can never be resolved
+            .endpoint("http://240.0.0.0")
+            .unwrap()
+            .build();
+        let expected = aws_credential_types::Credentials::for_tests();
+        let provider = ImdsCredentialsProvider::builder()
+            .imds_client(client)
+            .configure(&ProviderConfig::no_configuration())
+            // seed fallback credentials for testing
+            .last_retrieved_credentials(expected.clone())
+            .build();
+        let sleeper = aws_smithy_async::rt::sleep::TokioSleep::new();
+        let timeout = aws_smithy_async::future::timeout::Timeout::new(
+            provider.provide_credentials(),
+            // make sure `sleeper.sleep` will be timed out first by setting a shorter duration than connect timeout
+            sleeper.sleep(std::time::Duration::from_millis(100)),
+        );
+        match timeout.await {
+            Ok(_) => panic!("provide_credentials completed before timeout future"),
+            Err(_err) => match provider.fallback_on_interrupt() {
+                Some(actual) => assert_eq!(actual, expected),
+                None => panic!(
+                    "provide_credentials timed out and no credentials returned from fallback_on_interrupt"
+                ),
+            },
+        };
+    }
+
+    #[tokio::test]
+    async fn fallback_credentials_should_be_used_when_imds_returns_500_during_credentials_refresh()
+    {
         let http_client = StaticReplayClient::new(vec![
-                // The next three request/response pairs correspond to the first `provide_credentials`.
+                // The next three request/response pairs will correspond to the first call to `provide_credentials`.
+                // During the call, it populates last_retrieved_credentials.
                 ReplayEvent::new(
                     token_request("http://169.254.169.254", 21600),
                     token_response(21600, TOKEN_A),
@@ -390,7 +551,8 @@ mod test {
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/profile-name", TOKEN_A),
                     imds_response("{\n  \"Code\" : \"Success\",\n  \"LastUpdated\" : \"2021-09-20T21:42:26Z\",\n  \"Type\" : \"AWS-HMAC\",\n  \"AccessKeyId\" : \"ASIARTEST\",\n  \"SecretAccessKey\" : \"testsecret\",\n  \"Token\" : \"testtoken\",\n  \"Expiration\" : \"2021-09-21T04:16:53Z\"\n}"),
                 ),
-                // The second call gets a 500 from IMDS.
+                // The following request/response pair corresponds to the second call to `provide_credentials`.
+                // During the call, IMDS returns response code 500.
                 ReplayEvent::new(
                     imds_request("http://169.254.169.254/latest/meta-data/iam/security-credentials/", TOKEN_A),
                     http::Response::builder().status(500).body(SdkBody::empty()).unwrap(),
@@ -402,10 +564,9 @@ mod test {
             .build();
         let creds1 = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds1.access_key_id(), "ASIARTEST");
-        // Provider-level static stability is retired: the 500 is NOT masked by previously-retrieved
-        // credentials. Serving cached credentials on failure is now the cache's responsibility.
-        let err = provider.provide_credentials().await;
-        assert!(err.is_err(), "expected an error, got: {err:?}");
+        // `creds1` should be returned as fallback credentials and assigned to `creds2`
+        let creds2 = provider.provide_credentials().await.expect("valid creds");
+        assert_eq!(creds1, creds2);
         http_client.assert_requests_match(&[]);
     }
 
