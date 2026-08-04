@@ -404,6 +404,8 @@ jobs:
     # See https://github.com/actions/runner/issues/2205#issuecomment-1381988186 for details on the workaround
     if: inputs.dry_run == false && always() && needs.release.result == 'success'
     uses: ./.github/workflows/backport-pull-request.yml
+    secrets:
+      SMITHY_RS_RELEASE_OPS_ROLE_ARN: ${{ secrets.SMITHY_RS_RELEASE_OPS_ROLE_ARN }}
 
   publish-build-image:
     name: Publish new smithy-rs-build-image tag to ECR

@@ -8,6 +8,9 @@ on:
   workflow_dispatch:
   # can also be manually triggered when a patch fix is merged into the release branch and needs to be back-ported
   workflow_call:
+    secrets:
+      SMITHY_RS_RELEASE_OPS_ROLE_ARN:
+        required: true
 
 # OIDC permissions needed to assume the release-ops role in AWS.
 permissions:

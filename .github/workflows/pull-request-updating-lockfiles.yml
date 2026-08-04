@@ -20,6 +20,8 @@ on:
         required: true
       SMITHY_RS_ECR_PUSH_ROLE_ARN:
         required: true
+      SMITHY_RS_RELEASE_OPS_ROLE_ARN:
+        required: true
 
 jobs:
   save-docker-login-token:
