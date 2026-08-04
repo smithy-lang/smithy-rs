@@ -37,6 +37,15 @@ runs:
       key: ${{ runner.os }}-gradle-${{ hashFiles('gradle/caches/**/*', 'gradle/wrapper/**/*') }}
       restore-keys: |
         ${{ runner.os }}-gradle-
+  # Cargo registry (index + downloaded crate sources) shared across containerized legs. ci-action
+  # seeds this from the image's baked-in registry on a miss, so a cold cache never regresses.
+  - name: Cargo registry cache
+    uses: actions/cache@v4
+    with:
+      path: cargo-registry
+      key: ${{ runner.os }}-cargo-registry-${{ hashFiles('smithy-rs/**/Cargo.lock') }}
+      restore-keys: |
+        ${{ runner.os }}-cargo-registry-
        # Pinned to the commit hash of v2.7.3
   - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
     with:

@@ -18,4 +18,10 @@ services:
     - type: bind
       source: ${GRADLE_CACHE_PATH}
       target: /home/build/.gradle
+    # Persist the cargo registry (index + downloaded crate sources) across CI runs so containerized
+    # legs don't re-download dependencies. CARGO_HOME lives in the image, so ci-action seeds this
+    # host dir from the image's baked-in registry on a cold cache to avoid hiding it.
+    - type: bind
+      source: ${CARGO_REGISTRY_PATH}
+      target: /opt/cargo/registry
     command: [/bin/bash, -c, --, sleep infinity]
