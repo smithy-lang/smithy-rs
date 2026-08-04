@@ -303,7 +303,19 @@ jobs:
       fail-fast: false
       matrix:
         test:
+        # check-only-aws-sdk-services `cargo check`s ~300 service crates; shard it across parallel
+        # legs. See ci-scripts/check-only-aws-sdk-services.
         - action: check-only-aws-sdk-services
+          action-arguments: 1/3
+          label: check-only-aws-sdk-services-1
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-only-aws-sdk-services
+          action-arguments: 2/3
+          label: check-only-aws-sdk-services-2
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-only-aws-sdk-services
+          action-arguments: 3/3
+          label: check-only-aws-sdk-services-3
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-cargo-deny
           runner: smithy_ubuntu-latest_8-core
@@ -317,6 +329,8 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
 
   test-rust-windows:
     name: Rust Tests on Windows
