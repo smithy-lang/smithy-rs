@@ -14,6 +14,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.CoreRustSettings
 import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import java.util.Optional
+import java.util.logging.Logger
 
 /*
  * [ServerRustSettings] and [ServerCodegenConfig] classes.
@@ -99,6 +100,14 @@ data class ServerRustSettings(
  *   request body. Set to `0` to disable the limit (the historical behavior; not recommended, as
  *   it allows memory exhaustion via `Transfer-Encoding: chunked` or very large `Content-Length`
  *   values). Default is `0` (no limit) for backwards compatibility.
+ * [rpcV2CborAddCapitalizedRoute]: When false (default), the RPCv2 CBOR server router registers
+ *   only the spec-compliant verbatim route derived from the Smithy operation shape name
+ *   (e.g., `Example.getFoo`). When true, an additional legacy alias with the first character
+ *   capitalized is also registered (e.g., `Example.GetFoo`) for operations whose Rust symbol
+ *   name differs from the verbatim Smithy operation name. Set this to `true` to preserve
+ *   compatibility with clients that were previously reaching the server via the capitalized URI
+ *   (which was the only route the server registered before the fix for
+ *   https://github.com/smithy-lang/smithy-rs/issues/4731).
  */
 data class ServerCodegenConfig(
     override val formatTimeoutSeconds: Int = DEFAULT_FORMAT_TIMEOUT_SECONDS,
@@ -122,6 +131,14 @@ data class ServerCodegenConfig(
     val alwaysSendEventStreamInitialResponse: Boolean = DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
     val http1x: Boolean = DEFAULT_HTTP_1X,
     val requestBodyMaxBytes: Long = DEFAULT_REQUEST_BODY_MAX_BYTES,
+    /**
+     * When true, a union JSON body whose object did not set any recognized variant
+     * (e.g. `{}` or `{"unknownKey": ...}`) parses to `Ok(None)` rather than returning a
+     * deserialization error. Off by default, opt in only for services that have shipped
+     * clients depending on the lenient behavior.
+     */
+    val allowMissingUnionVariant: Boolean = DEFAULT_ALLOW_MISSING_UNION_VARIANT,
+    val rpcV2CborAddCapitalizedRoute: Boolean = DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
 ) : CoreCodegenConfig(
         formatTimeoutSeconds, debugMode,
     ) {
@@ -130,6 +147,7 @@ data class ServerCodegenConfig(
         private const val DEFAULT_IGNORE_UNSUPPORTED_CONSTRAINTS = false
         private val defaultExperimentalCustomValidationExceptionWithReasonPleaseDoNotUse = null
         private const val DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE = false
+        private const val DEFAULT_ALLOW_MISSING_UNION_VARIANT = false
         const val DEFAULT_HTTP_1X = false
 
         /**
@@ -140,6 +158,15 @@ data class ServerCodegenConfig(
          * memory-exhaustion denial-of-service attacks via unbounded request bodies.
          */
         const val DEFAULT_REQUEST_BODY_MAX_BYTES: Long = 0L
+
+        /**
+         * Default value for `rpcV2CborAddCapitalizedRoute`.
+         *
+         * When false (default), the RPCv2 CBOR router registers only the spec-compliant verbatim
+         * route. When true, an additional legacy capitalized alias is registered for operations
+         * whose Rust symbol name differs from the verbatim Smithy operation name.
+         */
+        const val DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE = false
 
         /**
          * Configuration key for the HTTP 1.x flag.
@@ -161,6 +188,9 @@ data class ServerCodegenConfig(
         /** Configuration key for the per-request body size limit. */
         const val REQUEST_BODY_MAX_BYTES_CONFIG_KEY = "requestBodyMaxBytes"
 
+        /** Configuration key for the RPCv2 CBOR opt-in flag that adds a legacy capitalized route alias. */
+        const val RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY = "rpcV2CborAddCapitalizedRoute"
+
         private val KNOWN_CONFIG_KEYS =
             setOf(
                 "formatTimeoutSeconds",
@@ -170,8 +200,10 @@ data class ServerCodegenConfig(
                 "experimentalCustomValidationExceptionWithReasonPleaseDoNotUse",
                 "addValidationExceptionToConstrainedOperations",
                 "alwaysSendEventStreamInitialResponse",
+                "allowMissingUnionVariant",
                 HTTP_1X_CONFIG_KEY,
                 REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
+                RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
             )
 
         fun fromCodegenConfigAndNode(
@@ -182,7 +214,7 @@ data class ServerCodegenConfig(
             val configNode = node.get()
             val unknownKeys = configNode.members.keys.map { it.toString() }.filter { it !in KNOWN_CONFIG_KEYS }
             if (unknownKeys.isNotEmpty()) {
-                throw IllegalArgumentException(
+                Logger.getLogger("ServerCodegenConfig").warning(
                     "Unknown codegen configuration key(s): ${unknownKeys.joinToString(", ")}. " +
                         "Known keys are: ${KNOWN_CONFIG_KEYS.joinToString(", ")}. ",
                 )
@@ -214,6 +246,11 @@ data class ServerCodegenConfig(
                         "alwaysSendEventStreamInitialResponse",
                         DEFAULT_SEND_EVENT_STREAM_INITIAL_RESPONSE,
                     ),
+                allowMissingUnionVariant =
+                    node.get().getBooleanMemberOrDefault(
+                        "allowMissingUnionVariant",
+                        DEFAULT_ALLOW_MISSING_UNION_VARIANT,
+                    ),
                 http1x =
                     node.get().getBooleanMemberOrDefault(
                         HTTP_1X_CONFIG_KEY,
@@ -224,6 +261,11 @@ data class ServerCodegenConfig(
                         REQUEST_BODY_MAX_BYTES_CONFIG_KEY,
                         DEFAULT_REQUEST_BODY_MAX_BYTES,
                     ).toLong(),
+                rpcV2CborAddCapitalizedRoute =
+                    node.get().getBooleanMemberOrDefault(
+                        RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE_CONFIG_KEY,
+                        DEFAULT_RPC_V2_CBOR_ADD_CAPITALIZED_ROUTE,
+                    ),
             ).also {
                 require(it.requestBodyMaxBytes >= 0) {
                     "`$REQUEST_BODY_MAX_BYTES_CONFIG_KEY` must be non-negative, got ${it.requestBodyMaxBytes}"

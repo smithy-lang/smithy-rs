@@ -18,6 +18,7 @@ allowed_external_types = [
     "aws_smithy_types::checksum_config::ResponseChecksumValidation",
     "aws_smithy_types::checksum_config::RequestChecksumCalculation",
     "aws_smithy_types::config_bag::storable::Storable",
+    "aws_smithy_types::config_bag::storable::StoreAppend",
     "aws_smithy_types::config_bag::storable::StoreReplace",
     "aws_smithy_types::error::metadata::Builder",
     "aws_smithy_types::retry::RetryConfig",

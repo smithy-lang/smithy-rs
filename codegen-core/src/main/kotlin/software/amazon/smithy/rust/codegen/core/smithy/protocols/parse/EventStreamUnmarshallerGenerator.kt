@@ -20,6 +20,7 @@ import software.amazon.smithy.model.shapes.StringShape
 import software.amazon.smithy.model.shapes.StructureShape
 import software.amazon.smithy.model.shapes.TimestampShape
 import software.amazon.smithy.model.shapes.UnionShape
+import software.amazon.smithy.model.traits.EnumTrait
 import software.amazon.smithy.model.traits.EventHeaderTrait
 import software.amazon.smithy.model.traits.EventPayloadTrait
 import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
@@ -32,6 +33,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.withBlock
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenTarget
+import software.amazon.smithy.rust.codegen.core.smithy.DirectedWalker
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.generators.UnionGenerator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.renderUnknownVariant
@@ -237,6 +239,20 @@ class EventStreamUnmarshallerGenerator(
                 withBlock("let parsed = ", ";") {
                     renderParseProtocolPayload(unionMember)
                 }
+                // When the payload structure transitively reaches an enum shape, the server payload parser
+                // returns a builder. For payloads with no enum-reachable members the parser already
+                // returns the constrained struct, and calling `.build()` would be a type error.
+                if (codegenTarget == CodegenTarget.SERVER && payloadReachesEnumTrait(unionStruct)) {
+                    rustTemplate(
+                        """
+                        let parsed = parsed.build()
+                            .map_err(|err| {
+                                #{Error}::unmarshalling(format!("failed to unmarshall ${unionMember.memberName} due to constraint violation: {}", err))
+                            })?;
+                        """,
+                        *codegenScope,
+                    )
+                }
                 rustTemplate(
                     "Ok(#{UnmarshalledMessage}::Event(#{Output}::$unionMemberName(parsed)))",
                     "Output" to unionSymbol,
@@ -297,6 +313,9 @@ class EventStreamUnmarshallerGenerator(
             }
         }
     }
+
+    private fun payloadReachesEnumTrait(payload: StructureShape): Boolean =
+        DirectedWalker(model).walkShapes(payload).any { it.hasTrait<EnumTrait>() }
 
     private fun RustWriter.renderUnmarshallEventHeader(member: MemberShape) {
         withBlock("builder = builder.${member.setterName()}(", ");") {
@@ -428,24 +447,56 @@ class EventStreamUnmarshallerGenerator(
                         CodegenTarget.CLIENT -> {
                             val target = model.expectShape(member.target, StructureShape::class.java)
                             if (useSchemaSerde) {
-                                rustTemplate(
-                                    """
-                                    let mut err = {
-                                        let codec = self.protocol.payload_codec()
-                                            .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
-                                        let mut deser = codec.create_deserializer(&message.payload()[..]);
-                                        #{Target}::deserialize(&mut *deser).map_err(|err| {
-                                            #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
-                                        })?
-                                    };
-                                    err.meta = generic;
-                                    return Ok(#{UnmarshalledMessage}::Error(
-                                        #{OpError}::${member.target.name.toPascalCase()}(err)
-                                    ))
-                                    """,
-                                    "Target" to symbolProvider.toSymbol(target),
-                                    *codegenScope,
-                                )
+                                // For protocols that wrap error responses
+                                // in a transport envelope (e.g., REST XML's
+                                // `<ErrorResponse><Error>...</Error></ErrorResponse>`),
+                                // strip the envelope before handing the body
+                                // to the schema-serde codec. JSON protocols
+                                // return null and the codec consumes the
+                                // payload directly. Mirrors the regular HTTP
+                                // error path in `ResponseDeserializerGenerator`.
+                                val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
+                                if (errorBodyContentsFn != null) {
+                                    rustTemplate(
+                                        """
+                                        let mut err = {
+                                            let error_body = #{error_body_contents}(&message.payload()[..]);
+                                            let codec = self.protocol.payload_codec()
+                                                .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                                            let mut deser = codec.create_deserializer(error_body);
+                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?
+                                        };
+                                        err.meta = generic;
+                                        return Ok(#{UnmarshalledMessage}::Error(
+                                            #{OpError}::${member.target.name.toPascalCase()}(err)
+                                        ))
+                                        """,
+                                        "error_body_contents" to errorBodyContentsFn,
+                                        "Target" to symbolProvider.toSymbol(target),
+                                        *codegenScope,
+                                    )
+                                } else {
+                                    rustTemplate(
+                                        """
+                                        let mut err = {
+                                            let codec = self.protocol.payload_codec()
+                                                .ok_or_else(|| #{Error}::unmarshalling("protocol has no payload codec"))?;
+                                            let mut deser = codec.create_deserializer(&message.payload()[..]);
+                                            #{Target}::deserialize(&mut *deser).map_err(|err| {
+                                                #{Error}::unmarshalling(format!("failed to unmarshall ${member.memberName}: {err}"))
+                                            })?
+                                        };
+                                        err.meta = generic;
+                                        return Ok(#{UnmarshalledMessage}::Error(
+                                            #{OpError}::${member.target.name.toPascalCase()}(err)
+                                        ))
+                                        """,
+                                        "Target" to symbolProvider.toSymbol(target),
+                                        *codegenScope,
+                                    )
+                                }
                             } else {
                                 val parser = protocol.structuredDataParser().errorParser(target)
                                 if (parser != null) {

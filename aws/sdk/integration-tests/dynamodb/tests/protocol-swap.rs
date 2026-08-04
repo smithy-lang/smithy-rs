@@ -12,7 +12,7 @@
 //! `SchemaSerdeAllowlist`. With the allowlist empty on main, DynamoDB's
 //! config builder does not expose `protocol(...)` and these tests cannot
 //! compile. Once awsJson1_0 (or DynamoDB specifically) is re-added to the
-//! allowlist, uncomment the block below.
+//! allowlist, uncomment the blocks below.
 //! See: codegen-client/.../customizations/SchemaDecorator.kt
 
 // --- BEGIN schema-serde protocol-swap tests (disabled) ---
@@ -151,3 +151,97 @@ async fn swap_to_rest_json_protocol() {
 }
 */
 // --- END schema-serde protocol-swap tests (disabled) ---
+
+// --- BEGIN XML protocol swap test (disabled) ---
+// Cross-family swap (JSON RPC → XML REST) is the strongest demonstration of
+// the SEP's serialization-from-shape decoupling. Generated DynamoDB code
+// emits `Schema` statics + `SerializableStruct` impls and defers wire-format
+// choice to whatever `ClientProtocol` is in the config bag. Plugging in
+// `AwsRestXmlProtocol` walks those same shapes through XML serialization.
+//
+// Disabled for the same reason as the block above: the runtime `protocol(...)`
+// setter is only generated while DynamoDB is on the schema-serde allowlist.
+// With the allowlist empty the setter is absent, so this test cannot compile.
+// Re-enable it together with the block above once awsJson1_0 returns to the
+// allowlist.
+/*
+use aws_sdk_dynamodb::config::{
+    BehaviorVersion, Credentials, Region, StalledStreamProtectionConfig,
+};
+use aws_smithy_http_client::test_util::capture_request;
+
+fn xml_swap_base_config() -> aws_sdk_dynamodb::config::Builder {
+    aws_sdk_dynamodb::config::Builder::new()
+        .behavior_version(BehaviorVersion::latest())
+        .region(Region::new("us-east-1"))
+        .credentials_provider(Credentials::for_tests())
+        .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
+        .endpoint_url("http://localhost:8000")
+}
+
+/// Plug `AwsRestXmlProtocol` (REST + XML body) into a service whose codegen
+/// targets `awsJson1_0` (RPC + JSON body). DynamoDB carries no
+/// `@http`/HTTP-binding traits on its operations, so the XML protocol's
+/// `HttpBindingProtocol` path falls through to body-only XML serialization
+/// (no labels, no query params, no header bindings, default URI of `/`).
+///
+/// Asserts:
+///   1. Content-Type flips to `application/xml`.
+///   2. `X-Amz-Target` is absent — that's an awsJson RPC convention, not an
+///      XML protocol concern.
+///   3. The body is well-formed XML containing the input's member values.
+///
+/// The resulting request would not be accepted by a real DynamoDB server
+/// (wrong wire format, wrong HTTP method). That's expected — the swap is
+/// for protocol migrations, downgrade pinning, and shape codegen, not for
+/// talking to live DynamoDB over XML.
+#[tokio::test]
+async fn swap_to_rest_xml_protocol() {
+    let (http_client, rx) = capture_request(None);
+    let xml_protocol = aws_smithy_xml::protocol::aws_rest_xml::AwsRestXmlProtocol::new();
+    let conf = xml_swap_base_config()
+        .http_client(http_client)
+        .protocol(xml_protocol)
+        .build();
+    let client = aws_sdk_dynamodb::Client::from_conf(conf);
+
+    // ListTables has a small, scalar-only input (Option<String>, Option<i32>).
+    // Avoids exercising unions / nested complex shapes that would be
+    // orthogonal to the protocol-swap mechanic under test.
+    let _ = client
+        .list_tables()
+        .exclusive_start_table_name("LastSeenTable")
+        .limit(10)
+        .send()
+        .await;
+
+    let request = rx.expect_request();
+
+    // restXml's body codec content type
+    assert_eq!(
+        request.headers().get("content-type").unwrap(),
+        "application/xml",
+        "restXml swap should set Content-Type: application/xml"
+    );
+
+    // X-Amz-Target is an awsJson convention; restXml does not emit it
+    assert!(
+        request.headers().get("x-amz-target").is_none(),
+        "restXml swap should not set X-Amz-Target"
+    );
+
+    // Body must be valid UTF-8 XML containing the input member values.
+    let body =
+        std::str::from_utf8(request.body().bytes().unwrap()).expect("body should be valid UTF-8");
+    assert!(body.starts_with('<'), "expected XML body, got: {body:?}");
+    assert!(
+        body.contains("<ExclusiveStartTableName>LastSeenTable</ExclusiveStartTableName>"),
+        "expected ExclusiveStartTableName element in body: {body}"
+    );
+    assert!(
+        body.contains("<Limit>10</Limit>"),
+        "expected Limit element in body: {body}"
+    );
+}
+*/
+// --- END XML protocol swap test (disabled) ---

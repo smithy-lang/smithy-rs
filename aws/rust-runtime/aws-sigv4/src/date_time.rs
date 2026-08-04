@@ -59,7 +59,7 @@ pub(crate) mod test_parsers {
     pub(crate) fn parse_date_time(date_time_str: &str) -> Result<SystemTime, ParseError> {
         let date_time = PrimitiveDateTime::parse(
             date_time_str,
-            &format_description::parse(DATE_TIME_FORMAT).unwrap(),
+            &format_description::parse_borrowed::<2>(DATE_TIME_FORMAT).unwrap(),
         )
         .map_err(|err| ParseError(err.to_string().into()))?
         .assume_utc();
@@ -69,8 +69,11 @@ pub(crate) mod test_parsers {
     /// Parses `YYYYMMDD` formatted dates into a `SystemTime`.
     pub(crate) fn parse_date(date_str: &str) -> Result<SystemTime, ParseError> {
         let date_time = PrimitiveDateTime::new(
-            Date::parse(date_str, &format_description::parse(DATE_FORMAT).unwrap())
-                .map_err(|err| ParseError(err.to_string().into()))?,
+            Date::parse(
+                date_str,
+                &format_description::parse_borrowed::<2>(DATE_FORMAT).unwrap(),
+            )
+            .map_err(|err| ParseError(err.to_string().into()))?,
             Time::from_hms(0, 0, 0).unwrap(),
         )
         .assume_utc();

@@ -266,11 +266,7 @@ mod test {
             Ok(())
         }
 
-        fn write_blob(
-            &mut self,
-            _schema: &Schema,
-            _value: &aws_smithy_types::Blob,
-        ) -> Result<(), SerdeError> {
+        fn write_blob(&mut self, _schema: &Schema, _value: &[u8]) -> Result<(), SerdeError> {
             Ok(())
         }
 

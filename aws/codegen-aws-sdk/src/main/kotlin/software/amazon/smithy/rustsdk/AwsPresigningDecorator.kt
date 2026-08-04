@@ -49,6 +49,7 @@ import software.amazon.smithy.rust.codegen.core.util.cloneOperation
 import software.amazon.smithy.rust.codegen.core.util.expectTrait
 import software.amazon.smithy.rust.codegen.core.util.thenSingletonListOf
 import software.amazon.smithy.rustsdk.traits.PresignableTrait
+import java.util.stream.Collectors
 
 private val presigningTypes: Array<Pair<String, Any>> =
     arrayOf(
@@ -133,7 +134,7 @@ class AwsPresigningDecorator internal constructor(
         val presignableOps =
             model.shapes()
                 .filter { shape -> shape is OperationShape && presignableOperations.containsKey(shape.id) }
-                .toList()
+                .collect(Collectors.toList())
         return model.toBuilder().also { builder ->
             for (op in presignableOps) {
                 builder.cloneOperation(model, op, ::syntheticShapeId)

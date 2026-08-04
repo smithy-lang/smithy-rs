@@ -178,6 +178,8 @@ internal class EndpointResolverGenerator(
             "clippy::redundant_pattern_matching",
             // we generate `if (s.as_ref() as &str) == ("arn:") { ... }`, and `s` can be either `String` or `&str`
             "clippy::useless_asref",
+            // multipart template rendering may emit `push_str(".")` for single-character static segments
+            "clippy::single_char_add_str",
         )
     private val context = Context(registry, runtimeConfig)
 

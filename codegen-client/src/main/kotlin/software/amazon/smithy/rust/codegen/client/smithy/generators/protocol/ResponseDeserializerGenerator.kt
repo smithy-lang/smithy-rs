@@ -163,15 +163,23 @@ class ResponseDeserializerGenerator(
                 let result = (|| -> ::std::result::Result<#{ConcreteOutput}, #{E}> {
                     // Read header-bound members while the body is still in the response.
                     // deserialize_with_response sets the streaming blob member to a placeholder.
+                    let _response_headers = response.headers();
                     let mut output = {
                         let protocol = _cfg.load::<#{SharedClientProtocol}>()
                             .expect("a SharedClientProtocol is required");
                         let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                             .map_err(#{E}::unhandled)?;
                         #{ConcreteOutput}::deserialize_with_response(
-                            &mut *deser, response.headers(), response.status().as_u16(), &[],
+                            &mut *deser, _response_headers, response.status().as_u16(), &[],
                         ).map_err(#{E}::unhandled)?
                     };
+                    // Run MutateOutput so service-specific accessors (e.g. S3's
+                    // request-id reader that checks both `x-amz-request-id` and
+                    // `x-amzn-requestid`) populate synthetic members like
+                    // `_request_id` after deserialize_with_response. The schema-serde
+                    // gating in BaseRequestIdDecorator emits direct field access here
+                    // because `output` is the built Output struct.
+                    #{MutateOutput}
                     // Now take ownership of the body and replace the placeholder
                     let mut body = #{SdkBody}::taken();
                     std::mem::swap(&mut body, response.body_mut());
@@ -189,6 +197,13 @@ class ResponseDeserializerGenerator(
             "BeforeParseResponse" to
                 writable {
                     writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                },
+            "MutateOutput" to
+                writable {
+                    writeCustomizations(
+                        customizations,
+                        OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
+                    )
                 },
         )
     }
@@ -386,25 +401,35 @@ class ResponseDeserializerGenerator(
         rustTemplate(
             """
             let (success, status) = (response.status().is_success(), response.status().as_u16());
+            // Load body and headers BEFORE BeforeParseResponse so customizations
+            // (e.g., S3's `body_is_error` check that detects errors returned with
+            // HTTP 200) can inspect them. The legacy non-streaming path also
+            // loads `body` before firing this hook.
+            let body = response.body().bytes().expect("body loaded");
+            let headers = response.headers();
             ##[allow(unused_mut)]
             let mut force_error = false;
             #{BeforeParseResponse}
             if !success && status != $successCode || force_error {
-                let headers = response.headers();
-                let body = response.body().bytes().expect("body loaded");
             """,
             *codegenScope,
             "BeforeParseResponse" to
                 writable {
-                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", body = null))
+                    writeCustomizations(customizations, OperationSection.BeforeParseResponse(customizations, "response", "force_error", "body"))
                 },
         )
         renderSchemaErrorParsing(operationShape, customizations)
 
         // Always use deserialize_with_response — it handles both HTTP-bound members
         // (headers, status code) and body members. When there are no HTTP bindings,
-        // it trivially delegates to deserialize(). This ensures synthetic members
-        // (e.g., request_id from x-amzn-requestid) are always read from headers.
+        // it trivially delegates to deserialize(). After deserialize_with_response,
+        // run `MutateOutput` customizations so service-specific header readers
+        // (e.g. S3's request-id decorator that checks `x-amz-request-id` /
+        // `x-amzn-requestid` with fallback) populate synthetic members like
+        // `_request_id`. This mirrors the streaming path and the legacy
+        // non-streaming path; without it, S3 responses leave `_request_id` as
+        // `None` because the schema-serde synthetic-member read uses only the
+        // default `x-amzn-requestid` header.
         rustTemplate(
             """
             } else {
@@ -412,19 +437,31 @@ class ResponseDeserializerGenerator(
                     .expect("a SharedClientProtocol is required");
                 let mut deser = protocol.deserialize_response(response, $operationName::OUTPUT_SCHEMA, _cfg)
                     .map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
-                let body = response.body().bytes().expect("body loaded");
-                let output = #{ConcreteOutput}::deserialize_with_response(
+                // body and headers are already in scope from the top of the function;
+                // alias `headers` as `_response_headers` so MutateOutput
+                // customizations have a stable name to read from.
+                let _response_headers = headers;
+                ##[allow(unused_mut)]
+                let mut output = #{ConcreteOutput}::deserialize_with_response(
                     &mut *deser,
-                    response.headers(),
+                    _response_headers,
                     response.status().into(),
                     body,
                 ).map_err(|e| #{OrchestratorError}::other(#{BoxError}::from(e)))?;
+                #{MutateOutput}
                 #{Ok}(#{Output}::erase(output))
             }
             """,
             *codegenScope,
             "BoxError" to RuntimeType.boxError(runtimeConfig),
             "ConcreteOutput" to outputSymbol,
+            "MutateOutput" to
+                writable {
+                    writeCustomizations(
+                        customizations,
+                        OperationSection.MutateOutput(customizations, operationShape, "_response_headers"),
+                    )
+                },
         )
     }
 
@@ -461,6 +498,7 @@ class ResponseDeserializerGenerator(
         )
 
         if (errors.isNotEmpty()) {
+            val errorBodyContentsFn = protocol.errorBodyContents(operationShape)
             rustTemplate(
                 """
                 let error_code = match generic.code() {
@@ -475,6 +513,12 @@ class ResponseDeserializerGenerator(
                 "BoxError" to RuntimeType.boxError(runtimeConfig),
                 "error_symbol" to errorSymbol,
             )
+            if (errorBodyContentsFn != null) {
+                rustTemplate(
+                    "let error_body = #{error_body_contents}(body);",
+                    "error_body_contents" to errorBodyContentsFn,
+                )
+            }
             rustTemplate("let err = match error_code {")
             for (error in errors) {
                 val errorShape = model.expectShape(error.id, StructureShape::class.java)
@@ -484,21 +528,41 @@ class ResponseDeserializerGenerator(
                 val errorMessageMember = errorShape.errorMessageMember()
 
                 rustTemplate("$errorCode => #{error_symbol}::$variantName({", "error_symbol" to errorSymbol)
-                rustTemplate(
-                    """
-                    let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
-                        .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
-                    {
-                        #{Ok}(val) => val,
-                        #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
-                    };
-                    tmp.meta = generic;
-                    """,
-                    *codegenScope,
-                    "BoxError" to RuntimeType.boxError(runtimeConfig),
-                    "error_symbol" to errorSymbol,
-                    "ErrorType" to errorType,
-                )
+                if (errorBodyContentsFn != null) {
+                    rustTemplate(
+                        """
+                        let mut deser = protocol.payload_codec()
+                            .expect("protocol has a payload codec")
+                            .create_deserializer(error_body);
+                        let mut tmp = match #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), error_body)
+                        {
+                            #{Ok}(val) => val,
+                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                        };
+                        tmp.meta = generic;
+                        """,
+                        *codegenScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "error_symbol" to errorSymbol,
+                        "ErrorType" to errorType,
+                    )
+                } else {
+                    rustTemplate(
+                        """
+                        let mut tmp = match protocol.deserialize_response(response, #{ErrorType}::SCHEMA, _cfg)
+                            .and_then(|mut deser| #{ErrorType}::deserialize_with_response(&mut *deser, response.headers(), response.status().into(), body))
+                        {
+                            #{Ok}(val) => val,
+                            #{Err}(e) => return #{Err}(#{OrchestratorError}::other(#{BoxError}::from(e))),
+                        };
+                        tmp.meta = generic;
+                        """,
+                        *codegenScope,
+                        "BoxError" to RuntimeType.boxError(runtimeConfig),
+                        "error_symbol" to errorSymbol,
+                        "ErrorType" to errorType,
+                    )
+                }
                 if (errorMessageMember != null) {
                     val symbol = symbolProvider.toSymbol(errorMessageMember)
                     if (symbol.isOptional()) {

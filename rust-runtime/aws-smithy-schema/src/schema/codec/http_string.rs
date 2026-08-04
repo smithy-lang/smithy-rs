@@ -178,13 +178,13 @@ impl ShapeSerializer for HttpStringSerializer {
         Ok(())
     }
 
-    fn write_blob(&mut self, _schema: &Schema, value: &Blob) -> Result<(), SerdeError> {
+    fn write_blob(&mut self, _schema: &Schema, value: &[u8]) -> Result<(), SerdeError> {
         if !self.output.is_empty() {
             self.output.push(',');
         }
         // Blobs are base64-encoded for string serialization
         self.output
-            .push_str(&aws_smithy_types::base64::encode(value.as_ref()));
+            .push_str(&aws_smithy_types::base64::encode(value));
         Ok(())
     }
 
@@ -511,7 +511,7 @@ mod tests {
     fn test_serialize_blob() {
         let mut ser = HttpStringSerializer::new();
         let blob = Blob::new(vec![1, 2, 3, 4]);
-        ser.write_blob(&BLOB, &blob).unwrap();
+        ser.write_blob(&BLOB, blob.as_ref()).unwrap();
         // Base64 encoding of [1, 2, 3, 4]
         assert_eq!(ser.finish(), "AQIDBA==");
     }

@@ -91,6 +91,18 @@ class SdkSettings private constructor(private val awsSdk: ObjectNode?) {
 
     val requireEndpointResolver: Boolean
         get() = awsSdkBuild
+
+    /**
+     * Whether to enable endpoint-based auth scheme resolution for the service being generated.
+     *
+     * When `true`, the [EndpointBasedAuthSchemeDecorator] is applied even if the service is not in the allowlist.
+     * This is intended for services that need partition-specific auth resolution (e.g. sigv4a vs sigv4) driven by
+     * endpoint rules and cannot express that statically in their model.
+     */
+    val endpointBasedAuthSchemeEnabled: Boolean
+        get() =
+            awsSdk?.getObjectMember("endpointBasedAuthScheme")?.orNull()
+                ?.getBooleanMember("enabled")?.orNull()?.value ?: false
 }
 
 fun ClientCodegenContext.sdkSettings() = SdkSettings.from(this.settings)

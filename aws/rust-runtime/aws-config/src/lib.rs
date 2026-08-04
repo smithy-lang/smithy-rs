@@ -104,6 +104,7 @@ pub use aws_smithy_runtime_api::client::behavior_version::BehaviorVersion;
 pub use aws_types::{
     app_name::{AppName, InvalidAppName},
     region::Region,
+    sdk_ua_metadata::{FrameworkMetadata, InvalidFrameworkMetadata},
     SdkConfig,
 };
 /// Load default sources for all configuration with override support
@@ -244,6 +245,7 @@ mod loader {
     use aws_types::os_shim_internal::{Env, Fs};
     use aws_types::region::SigningRegionSet;
     use aws_types::sdk_config::SharedHttpClient;
+    use aws_types::sdk_ua_metadata::FrameworkMetadata;
     use aws_types::SdkConfig;
 
     use crate::default_provider::{
@@ -277,6 +279,7 @@ mod loader {
     #[derive(Default, Debug)]
     pub struct ConfigLoader {
         app_name: Option<AppName>,
+        framework_metadata: Vec<FrameworkMetadata>,
         auth_scheme_preference: Option<AuthSchemePreference>,
         sigv4a_signing_region_set: Option<SigningRegionSet>,
         identity_cache: Option<SharedIdentityCache>,
@@ -619,6 +622,34 @@ mod loader {
             self
         }
 
+        /// Appends framework metadata to the user agent.
+        ///
+        /// This _optional_ metadata identifies a software framework or third-party library that is
+        /// being used with the SDK. It is rendered into the user agent (as `lib/{name}/{version}`)
+        /// so that libraries built on top of the AWS SDK can self-identify in the requests they
+        /// make. Each call appends another entry rather than replacing previous ones.
+        ///
+        /// Unlike the app name, framework metadata has no environment variable or profile source;
+        /// it can only be set programmatically.
+        ///
+        /// Entries are de-duplicated on `(name, version)`, rendered in first-seen order, and the
+        /// total number of unique entries included in the user agent is capped (currently at 10);
+        /// additional entries beyond the cap are dropped with a warning.
+        ///
+        /// # Examples
+        /// ```no_run
+        /// # async fn create_config() {
+        /// use aws_config::FrameworkMetadata;
+        /// let config = aws_config::from_env()
+        ///     .framework_metadata(FrameworkMetadata::new("some-framework", Some("1.0")).expect("valid framework metadata"))
+        ///     .load().await;
+        /// # }
+        /// ```
+        pub fn framework_metadata(mut self, framework_metadata: FrameworkMetadata) -> Self {
+            self.framework_metadata.push(framework_metadata);
+            self
+        }
+
         /// Provides the ability to programmatically override the profile files that get loaded by the SDK.
         ///
         /// The [`Default`] for `ProfileFiles` includes the default SDK config and credential files located in
@@ -910,6 +941,20 @@ mod loader {
                 .unwrap_or_else(|| TimeoutConfig::builder().build());
             timeout_config.take_defaults_from(&base_config);
 
+            let (retry_config, retry_config_explicitly_set) = match self.retry_config {
+                Some(rc) => (rc, true),
+                None => (
+                    retry_config::default_provider()
+                        .configure(&conf)
+                        .retry_config()
+                        .await,
+                    false,
+                ),
+            };
+            let conf = conf
+                .with_retry_config(retry_config.clone())
+                .with_timeout_config(timeout_config.clone());
+
             let credentials_provider = match self.credentials_provider {
                 TriStateOption::Set(provider) => Some(provider),
                 TriStateOption::NotSet => {
@@ -922,9 +967,19 @@ mod loader {
             };
 
             let profiles = conf.profile().await;
+            let ignore_configured_endpoint_urls = if self.endpoint_url.is_some() {
+                // If an endpoint URL is set programmatically, the ignore flag is irrelevant
+                // because programmatic config always takes precedence.
+                false
+            } else {
+                ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
+                    .await
+                    .unwrap_or_default()
+            };
             let service_config = EnvServiceConfig {
                 env: conf.env(),
                 env_config_sections: profiles.cloned().unwrap_or_default(),
+                ignore_configured_endpoint_urls,
             };
             let mut builder = SdkConfig::builder()
                 .region(region.clone())
@@ -932,41 +987,27 @@ mod loader {
                 .time_source(time_source)
                 .service_config(service_config);
 
-            let retry_config = if let Some(retry_config) = self.retry_config {
+            if retry_config_explicitly_set {
                 builder.insert_origin("retry_config", Origin::shared_config());
-                retry_config
-            } else {
-                retry_config::default_provider()
-                    .configure(&conf)
-                    .retry_config()
-                    .await
-            };
+            }
             builder = builder.retry_config(retry_config);
 
             // If an endpoint URL is set programmatically, then our work is done.
             let endpoint_url = if self.endpoint_url.is_some() {
                 builder.insert_origin("endpoint_url", Origin::shared_config());
                 self.endpoint_url
+            } else if ignore_configured_endpoint_urls {
+                // If yes, log a trace and return `None`.
+                tracing::trace!(
+                    "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
+                    NOTE: Endpoint URLs set programmatically WILL still be respected"
+                );
+                None
             } else {
-                // Otherwise, check to see if we should ignore EP URLs set in the environment.
-                let ignore_configured_endpoint_urls =
-                    ignore_ep::ignore_configured_endpoint_urls_provider(&conf)
-                        .await
-                        .unwrap_or_default();
-
-                if ignore_configured_endpoint_urls {
-                    // If yes, log a trace and return `None`.
-                    tracing::trace!(
-                        "`ignore_configured_endpoint_urls` is set, any endpoint URLs configured in the environment will be ignored. \
-                        NOTE: Endpoint URLs set programmatically WILL still be respected"
-                    );
-                    None
-                } else {
-                    // Otherwise, attempt to resolve one.
-                    let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
-                    builder.insert_origin("endpoint_url", origin);
-                    v
-                }
+                // Otherwise, attempt to resolve one.
+                let (v, origin) = endpoint_url::endpoint_url_provider_with_origin(&conf).await;
+                builder.insert_origin("endpoint_url", origin);
+                v
             };
 
             let token_provider = match self.token_provider {
@@ -998,6 +1039,7 @@ mod loader {
             builder.set_http_client(self.http_client);
             builder.set_protocol(self.protocol);
             builder.set_app_name(app_name);
+            builder.set_framework_metadata(self.framework_metadata);
 
             let identity_cache = match self.identity_cache {
                 None => match self.behavior_version {
@@ -1066,14 +1108,20 @@ mod loader {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(any(test, feature = "test-util"))]
     impl ConfigLoader {
-        pub(crate) fn env(mut self, env: Env) -> Self {
+        /// Override the environment variables used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn env(mut self, env: Env) -> Self {
             self.env = Some(env);
             self
         }
 
-        pub(crate) fn fs(mut self, fs: Fs) -> Self {
+        /// Override the filesystem used during config resolution.
+        ///
+        /// This is intended for testing only.
+        pub fn fs(mut self, fs: Fs) -> Self {
             self.fs = Some(fs);
             self
         }
@@ -1088,14 +1136,20 @@ mod loader {
         use crate::{defaults, ConfigLoader};
         use aws_credential_types::provider::ProvideCredentials;
         use aws_smithy_async::rt::sleep::TokioSleep;
+        use aws_smithy_async::test_util::tick_advance_sleep::tick_advance_time_and_sleep;
         use aws_smithy_http_client::test_util::{infallible_client_fn, NeverClient};
         use aws_smithy_runtime::test_util::capture_test_logs::capture_test_logs;
+        use aws_smithy_runtime_api::client::identity::{
+            ResolveCachedIdentity, SharedIdentityResolver,
+        };
+        use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
         use aws_types::app_name::AppName;
         use aws_types::origin::Origin;
         use aws_types::os_shim_internal::{Env, Fs};
         use aws_types::sdk_config::{RequestChecksumCalculation, ResponseChecksumValidation};
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
+        use std::time::Duration;
 
         #[tokio::test]
         async fn provider_config_used() {
@@ -1272,6 +1326,20 @@ mod loader {
             let app_name = AppName::new("my-app-name").unwrap();
             let conf = base_conf().app_name(app_name.clone()).load().await;
             assert_eq!(Some(&app_name), conf.app_name());
+        }
+
+        #[tokio::test]
+        async fn framework_metadata() {
+            use aws_types::sdk_ua_metadata::FrameworkMetadata;
+
+            let one = FrameworkMetadata::new("framework-one", Some("1.0")).unwrap();
+            let two = FrameworkMetadata::new("framework-two", Some("2.0")).unwrap();
+            let conf = base_conf()
+                .framework_metadata(one.clone())
+                .framework_metadata(two.clone())
+                .load()
+                .await;
+            assert_eq!(&[one, two], conf.framework_metadata());
         }
 
         #[tokio::test]
@@ -1474,6 +1542,162 @@ mod loader {
                 .load()
                 .await;
             assert_eq!(Some("http://localhost"), config.endpoint_url());
+        }
+
+        #[tokio::test]
+        async fn retry_config_propagated_to_inner_sts_client() {
+            let request_count = Arc::new(AtomicUsize::new(0));
+            let counter = request_count.clone();
+
+            // Return STS Throttling error for every request
+            let http_client = infallible_client_fn(move |_req| {
+                counter.fetch_add(1, Ordering::Relaxed);
+                http::Response::builder()
+                    .status(400)
+                    .body(
+                        r#"<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+                            <Error>
+                                <Type>Sender</Type>
+                                <Code>Throttling</Code>
+                                <Message>Rate exceeded</Message>
+                            </Error>
+                            <RequestId>test-request-id</RequestId>
+                        </ErrorResponse>"#,
+                    )
+                    .unwrap()
+            });
+
+            // Set up web identity token env vars + AWS_MAX_ATTEMPTS=5
+            let env = Env::from_slice(&[
+                ("AWS_WEB_IDENTITY_TOKEN_FILE", "/token.jwt"),
+                ("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/test-role"),
+                ("AWS_ROLE_SESSION_NAME", "test-session"),
+                ("AWS_REGION", "us-east-1"),
+                ("AWS_MAX_ATTEMPTS", "5"),
+            ]);
+            let fs = Fs::from_slice(&[("/token.jwt", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test")]);
+
+            let config = defaults(BehaviorVersion::latest())
+                .sleep_impl(InstantSleep)
+                .http_client(http_client)
+                .env(env)
+                .fs(fs)
+                .load()
+                .await;
+
+            // Attempt to load credentials — will fail because all responses are throttled
+            let _ = config
+                .credentials_provider()
+                .unwrap()
+                .provide_credentials()
+                .await;
+
+            // The inner STS client should have made 5 attempts (not the default 3),
+            // proving that AWS_MAX_ATTEMPTS propagated to the inner STS client.
+            assert_eq!(5, request_count.load(Ordering::Relaxed));
+        }
+
+        #[tokio::test]
+        async fn pessimistic_load_timeout_allows_retries_to_complete() {
+            let (time_source, sleep_impl) = tick_advance_time_and_sleep();
+
+            let request_count = Arc::new(AtomicUsize::new(0));
+            let counter = request_count.clone();
+
+            // Return STS Throttling error for first 4 attempts, succeed on 5th
+            let http_client = infallible_client_fn(move |_req| {
+                let count = counter.fetch_add(1, Ordering::Relaxed) + 1;
+                if count < 5 {
+                    http::Response::builder()
+                        .status(400)
+                        .body(
+                            r#"<ErrorResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+                                <Error>
+                                    <Type>Sender</Type>
+                                    <Code>Throttling</Code>
+                                    <Message>Rate exceeded</Message>
+                                </Error>
+                                <RequestId>test-request-id</RequestId>
+                            </ErrorResponse>"#,
+                        )
+                        .unwrap()
+                } else {
+                    http::Response::builder()
+                        .status(200)
+                        .body(
+                            r#"<AssumeRoleWithWebIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">
+                                <AssumeRoleWithWebIdentityResult>
+                                    <Credentials>
+                                        <AccessKeyId>ASIATESTACCESSKEYID</AccessKeyId>
+                                        <SecretAccessKey>TESTSECRETKEY</SecretAccessKey>
+                                        <SessionToken>TESTSESSIONTOKEN</SessionToken>
+                                        <Expiration>2099-01-01T00:00:00Z</Expiration>
+                                    </Credentials>
+                                </AssumeRoleWithWebIdentityResult>
+                            </AssumeRoleWithWebIdentityResponse>"#,
+                        )
+                        .unwrap()
+                }
+            });
+
+            let env = Env::from_slice(&[
+                ("AWS_WEB_IDENTITY_TOKEN_FILE", "/token.jwt"),
+                ("AWS_ROLE_ARN", "arn:aws:iam::123456789012:role/test-role"),
+                ("AWS_ROLE_SESSION_NAME", "test-session"),
+                ("AWS_REGION", "us-east-1"),
+                ("AWS_MAX_ATTEMPTS", "5"),
+            ]);
+            let fs = Fs::from_slice(&[("/token.jwt", "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.test")]);
+
+            let config = defaults(BehaviorVersion::latest())
+                .sleep_impl(sleep_impl.clone())
+                .time_source(time_source.clone())
+                .http_client(http_client)
+                .env(env)
+                .fs(fs)
+                .load()
+                .await;
+
+            // Exercise the LazyCache path by calling resolve_cached_identity directly,
+            // which is what the orchestrator does during an operation.
+            let identity_cache = config
+                .identity_cache()
+                .expect("identity cache should be set");
+            let credentials_provider = config.credentials_provider().unwrap();
+            let identity_resolver = SharedIdentityResolver::new(credentials_provider.clone());
+
+            let runtime_components = RuntimeComponentsBuilder::for_tests()
+                .with_time_source(Some(time_source.clone()))
+                .with_sleep_impl(Some(sleep_impl.clone()))
+                .build()
+                .unwrap();
+
+            let mut config_bag = aws_smithy_types::config_bag::ConfigBag::base();
+            config_bag
+                .interceptor_state()
+                .store_put(aws_smithy_types::retry::RetryConfig::standard().with_max_attempts(5));
+
+            // Spawn identity resolution through the cache (includes timeout)
+            let task = tokio::spawn(async move {
+                identity_cache
+                    .resolve_cached_identity(identity_resolver, &runtime_components, &config_bag)
+                    .await
+            });
+            tokio::task::yield_now().await;
+
+            // Advance time enough for all retry backoffs to complete.
+            // 5 attempts with 1s exponential backoff: 1+2+4+8 = 15s total backoff.
+            // This exceeds the old 5s load_timeout but fits within the pessimistic
+            // timeout (~46s for 5 attempts with 3.1s connect_timeout).
+            time_source.tick(Duration::from_secs(60)).await;
+
+            let identity = task
+                .await
+                .unwrap()
+                .expect("identity should resolve — pessimistic timeout gives retries room");
+
+            assert!(identity.expiration().is_some());
+            assert_eq!(5, request_count.load(Ordering::Relaxed));
         }
     }
 }

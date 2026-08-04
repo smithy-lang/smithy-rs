@@ -17,7 +17,9 @@
 //! Abstractions for Smithy
 //! [XML Binding Traits](https://smithy.io/2.0/spec/protocol-traits.html#xml-bindings)
 
+pub mod codec;
 pub mod decode;
 pub mod encode;
 mod escape;
+pub mod protocol;
 mod unescape;

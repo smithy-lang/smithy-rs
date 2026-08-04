@@ -16,6 +16,9 @@
 
 //! Abstractions for the Smithy AWS Query protocol
 
+pub mod codec;
+pub mod protocol;
+
 use aws_smithy_types::date_time::{DateTimeFormatError, Format};
 use aws_smithy_types::primitive::Encoder;
 use aws_smithy_types::{DateTime, Number};
