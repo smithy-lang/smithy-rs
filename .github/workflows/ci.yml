@@ -39,6 +39,42 @@ env:
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
 jobs:
+  # Detects whether a pull request changes anything that could affect the runtime crates, so the
+  # runtime-only jobs (Windows, exotic platforms) can skip their expensive steps on PRs that only
+  # touch docs/CI/changelog. Outputs `rust=true` for any non-PR event (push, schedule) and on any
+  # error, so those cases always run the full checks.
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.detect.outputs.rust }}
+    steps:
+    - name: Detect Rust changes
+      id: detect
+      uses: actions/github-script@v7
+      with:
+        script: |
+          if (context.eventName !== 'pull_request') {
+            core.setOutput('rust', 'true');
+            return;
+          }
+          // Runtime jobs only exercise the runtime crates, so skip when every changed file is inert
+          // (docs, changelog, CI config, design). Default to running on any error.
+          const inert = /^(design\/|\.github\/|\.changelog\/|CHANGELOG|.*\.md$)/;
+          try {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const rust = files.some(f => !inert.test(f.filename));
+            core.setOutput('rust', rust ? 'true' : 'false');
+          } catch (e) {
+            core.warning(`change detection failed, running checks anyway: ${e}`);
+            core.setOutput('rust', 'true');
+          }
+
   # Generates the artifacts most test-sdk legs need: the ~23-service smoketest SDK and the release
   # bundle. The full ~300-service SDK is generated separately in `generate-full` so that the legs
   # that only need the smoketest SDK don't wait on it.
@@ -284,6 +320,7 @@ jobs:
 
   test-rust-windows:
     name: Rust Tests on Windows
+    needs: detect-changes
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -297,19 +334,24 @@ jobs:
         ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.7.3
     - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: |
           .
           tools
     - uses: dtolnay/rust-toolchain@master
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
       # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
+    - if: needs.detect-changes.outputs.rust == 'true'
+      run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - if: needs.detect-changes.outputs.rust == 'true'
+      run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: tools/ci-scripts/test-windows.sh
 
@@ -319,6 +361,7 @@ jobs:
   # complicated setup involving architecture emulation.
   test-exotic-platform-support:
     name: Exotic platform support
+    needs: detect-changes
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -362,12 +405,14 @@ jobs:
         ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.7.3
     - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
         workspaces: |
           .
           tools
     - uses: dtolnay/rust-toolchain@master
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
@@ -376,13 +421,14 @@ jobs:
       run: |
         echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
         echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
-      if: matrix.target == 'i686-unknown-linux-gnu'
+      if: needs.detect-changes.outputs.rust == 'true' && matrix.target == 'i686-unknown-linux-gnu'
     - name: Sets OpenSSL env vars on ppc and ppc64
       run: |
         echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
-      if: matrix.target != 'i686-unknown-linux-gnu'
+      if: needs.detect-changes.outputs.rust == 'true' && matrix.target != 'i686-unknown-linux-gnu'
     - name: Configure cross
       shell: bash
+      if: needs.detect-changes.outputs.rust == 'true'
       # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
       # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
@@ -406,15 +452,19 @@ jobs:
         passthrough = ["OPENSSL_DIR"]
         EOF
     - name: Build Smithy-rs rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross build -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
     - name: Build AWS rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross build -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
     - name: Test Smithy-rs rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace ${{ matrix.test_aws_features }}
 
@@ -518,6 +568,7 @@ jobs:
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
     needs:
+    - detect-changes
     - generate
     - generate-full
     - test-codegen
