@@ -10,109 +10,29 @@
 
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
-use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
-use aws_smithy_async::time::SystemTimeSource;
+mod common;
+
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionId, ConnectionScript,
     ConnectionTestHarness, EndpointPlan, Http1Response, Http1Script, ManualGate, SocketScript,
 };
-use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
 use aws_smithy_runtime_api::client::http::{
-    HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
+    HttpClient, HttpConnectorSettings, SharedHttpConnector,
 };
-use aws_smithy_runtime_api::client::orchestrator::{HttpRequest, HttpResponse};
-use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_runtime_api::client::runtime_components::{
-    RuntimeComponents, RuntimeComponentsBuilder,
-};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::ErrorKind;
+use common::client as test_client;
+use common::client::{BackendConfig, HttpClientBackend, HyperUtilLegacyPool};
 use http_body_util::BodyExt;
 use std::borrow::Cow;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
-const WAIT: Duration = Duration::from_secs(5);
-
-#[derive(Clone, Copy, Debug, Default)]
-struct BackendConfig {
-    pool_idle_timeout: Option<Duration>,
-}
-
-trait HttpClientBackend {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient;
-}
-
-/// Hyper 1.x through `hyper_util::client::legacy::Client`.
-///
-/// "Legacy" is Hyper Util's module name and does not refer to smithy-rs's `hyper-014` feature.
-#[derive(Clone, Copy, Debug)]
-struct HyperUtilLegacyPool;
-
-impl HttpClientBackend for HyperUtilLegacyPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = Builder::new();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.pool_idle_timeout(pool_idle_timeout);
-        }
-        builder.build_http()
-    }
-}
-
-fn runtime_components() -> RuntimeComponents {
-    RuntimeComponentsBuilder::for_tests()
-        .with_time_source(Some(SystemTimeSource::new()))
-        .with_sleep_impl(Some(SharedAsyncSleep::new(TokioSleep::new())))
-        .build()
-        .expect("valid runtime components")
-}
-
-fn connector(client: &SharedHttpClient, settings: HttpConnectorSettings) -> SharedHttpConnector {
-    client.http_connector(&settings, &runtime_components())
-}
-
-fn default_connector(client: &SharedHttpClient) -> SharedHttpConnector {
-    connector(client, HttpConnectorSettings::builder().build())
-}
-
-async fn send_request(
-    connector: &SharedHttpConnector,
-    request: HttpRequest,
-) -> Result<HttpResponse, ConnectorError> {
-    tokio::time::timeout(WAIT, connector.call(request))
-        .await
-        .expect("request should finish within the outer deadline")
-}
-
-async fn send_and_collect(connector: &SharedHttpConnector, request: HttpRequest) -> (u16, Vec<u8>) {
-    let response = send_request(connector, request)
-        .await
-        .expect("request should succeed");
-    collect_response(response).await
-}
-
-async fn get_and_collect(connector: &SharedHttpConnector, url: &str) -> (u16, Vec<u8>) {
-    send_and_collect(
-        connector,
-        HttpRequest::get(url).expect("valid HTTP request"),
-    )
-    .await
-}
-
-async fn collect_response(response: HttpResponse) -> (u16, Vec<u8>) {
-    let status = response.status().as_u16();
-    let body = tokio::time::timeout(WAIT, response.into_body().collect())
-        .await
-        .expect("response body should finish within the outer deadline")
-        .expect("response body should be readable")
-        .to_bytes()
-        .to_vec();
-    (status, body)
-}
 
 fn request_with_body(url: &str, body: &[u8]) -> HttpRequest {
     let mut request = HttpRequest::new(SdkBody::from(body.to_vec()));
@@ -131,7 +51,7 @@ async fn get_and_collect_with_capture(
     let capture = CaptureSmithyConnection::new();
     let mut request = HttpRequest::get(url).expect("valid HTTP request");
     request.add_extension(capture.clone());
-    let (status, body) = send_and_collect(connector, request).await;
+    let (status, body) = test_client::send_and_collect(connector, request).await;
     let metadata = capture
         .get()
         .expect("CaptureSmithyConnection should contain connection metadata");
@@ -166,10 +86,11 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
         for expected in [b"first".as_slice(), b"second", b"third"] {
-            let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+            let (status, body) =
+                test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
             assert_eq!(status, 200);
             assert_eq!(body, expected);
         }
@@ -210,14 +131,15 @@ mod reuse_and_lifecycle {
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
         });
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"first".as_slice()));
         let first_connection = http1_request_connection_ids(&harness)[0];
 
         harness
-            .wait_for_event(WAIT, |event| {
+            .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
                     ConnectionEvent::ConnectionClosed {
@@ -229,7 +151,8 @@ mod reuse_and_lifecycle {
             .await
             .expect("the client should close the evicted idle connection");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -270,25 +193,26 @@ mod reuse_and_lifecycle {
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
         });
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let first_response = send_request(
+        let first_response = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
         .await
         .expect("first request should return response headers");
         body_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the first response should reach its body gate");
 
         tokio::time::sleep(idle_timeout * 3).await;
         body_gate.release();
-        let (status, body) = collect_response(first_response).await;
+        let (status, body) = test_client::collect_response(first_response).await;
         assert_eq!((status, body.as_slice()), (200, b"first-body".as_slice()));
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -324,20 +248,21 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let first_response = send_request(
+        let first_response = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
         .await
         .expect("first request should return response headers");
         body_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the first response should reach its body gate");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -348,7 +273,7 @@ mod reuse_and_lifecycle {
         );
 
         body_gate.release();
-        let (status, body) = collect_response(first_response).await;
+        let (status, body) = test_client::collect_response(first_response).await;
         assert_eq!((status, body.as_slice()), (200, b"held-body".as_slice()));
 
         drop(connector);
@@ -391,9 +316,9 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let mut first_response = send_request(
+        let mut first_response = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
@@ -414,7 +339,8 @@ mod reuse_and_lifecycle {
         );
         drop(first_response);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -462,9 +388,9 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let mut first_response = send_request(
+        let mut first_response = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
@@ -487,7 +413,7 @@ mod reuse_and_lifecycle {
         drop(first_response);
 
         harness
-            .wait_for_event(WAIT, |event| {
+            .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
                     ConnectionEvent::ConnectionClosed {
@@ -499,7 +425,8 @@ mod reuse_and_lifecycle {
             .await
             .expect("dropping the incomplete body should close the connection");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -548,19 +475,20 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"first".as_slice()));
         close_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the server should be ready to close the idle connection");
         let first_connection = http1_request_connection_ids(&harness)[0];
 
         close_gate.release();
         harness
-            .wait_for_event(WAIT, |event| {
+            .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
                     ConnectionEvent::ConnectionClosed {
@@ -572,7 +500,8 @@ mod reuse_and_lifecycle {
             .await
             .expect("the server should close the first connection");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -618,13 +547,14 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"closing".as_slice()));
         let first_connection = http1_request_connection_ids(&harness)[0];
         harness
-            .wait_for_event(WAIT, |event| {
+            .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
                     ConnectionEvent::ConnectionClosed {
@@ -636,7 +566,8 @@ mod reuse_and_lifecycle {
             .await
             .expect("the client should close a connection marked Connection: close");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"fresh".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -671,13 +602,13 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
         let url = format!(
             "{}/some/path?key=value",
             harness.endpoint_url().trim_end_matches('/')
         );
 
-        let (status, body) = get_and_collect(&connector, &url).await;
+        let (status, body) = test_client::get_and_collect(&connector, &url).await;
         assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
 
         let requests = harness.http_requests();
@@ -715,7 +646,7 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
         let ip_url = harness.endpoint_url();
         let localhost_url = format!("http://localhost:{}/", harness.port());
 
@@ -725,7 +656,7 @@ mod routing_and_status {
             (&ip_url, b"ip-b".as_slice()),
             (&localhost_url, b"localhost-b".as_slice()),
         ] {
-            let (status, body) = get_and_collect(&connector, url).await;
+            let (status, body) = test_client::get_and_collect(&connector, url).await;
             assert_eq!(status, 200);
             assert_eq!(body, expected);
         }
@@ -778,12 +709,14 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (503, b"unavailable".as_slice()));
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"recovered".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -824,7 +757,7 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
         let (status, body, metadata) =
             get_and_collect_with_capture(&connector, &harness.endpoint_url()).await;
@@ -841,7 +774,8 @@ mod connection_metadata {
 
         metadata.poison();
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -880,16 +814,16 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
         let capture = CaptureSmithyConnection::new();
         let mut request = HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request");
         request.add_extension(capture.clone());
 
-        let first_response = send_request(&connector, request)
+        let first_response = test_client::send_request(&connector, request)
             .await
             .expect("first request should return response headers");
         body_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the active response should reach its body gate");
         let first_connection = http1_request_connection_ids(&harness)[0];
@@ -899,10 +833,10 @@ mod connection_metadata {
             .poison();
 
         body_gate.release();
-        let (status, body) = collect_response(first_response).await;
+        let (status, body) = test_client::collect_response(first_response).await;
         assert_eq!((status, body.as_slice()), (200, b"first-body".as_slice()));
         harness
-            .wait_for_event(WAIT, |event| {
+            .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
                     ConnectionEvent::ConnectionClosed {
@@ -914,7 +848,8 @@ mod connection_metadata {
             .await
             .expect("the poisoned connection should retire after its active body completes");
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
         let connection_ids = http1_request_connection_ids(&harness);
         assert_eq!(connection_ids.len(), 2);
@@ -948,14 +883,15 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
         let (status, body, metadata) =
             get_and_collect_with_capture(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"first".as_slice()));
         drop(metadata);
 
-        let (status, body) = get_and_collect(&connector, &harness.endpoint_url()).await;
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
         assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
 
         let connection_ids = http1_request_connection_ids(&harness);
@@ -1002,9 +938,9 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let error = send_request(
+        let error = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
@@ -1029,10 +965,10 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
         let request_body = b"complete request body";
 
-        let error = send_request(
+        let error = test_client::send_request(
             &connector,
             request_with_body(&harness.endpoint_url(), request_body),
         )
@@ -1080,9 +1016,9 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let mut response = send_request(
+        let mut response = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
@@ -1090,7 +1026,7 @@ mod failures_and_timeouts {
         .expect("response headers should complete before the reset");
         assert_eq!(response.status().as_u16(), 200);
         reset_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the response should reach its reset gate");
         let frame = response
@@ -1107,7 +1043,7 @@ mod failures_and_timeouts {
         );
 
         reset_gate.release();
-        tokio::time::timeout(WAIT, response.into_body().collect())
+        tokio::time::timeout(test_client::WAIT, response.into_body().collect())
             .await
             .expect("response body should fail within the outer deadline")
             .expect_err("reset should fail collection of the remaining response body");
@@ -1135,9 +1071,9 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = default_connector(&client);
+        let connector = test_client::default_connector(&client);
 
-        let error = send_request(
+        let error = test_client::send_request(
             &connector,
             HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
         )
@@ -1173,7 +1109,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = connector(
+        let connector = test_client::connector(
             &client,
             HttpConnectorSettings::builder()
                 .read_timeout(read_timeout)
@@ -1183,7 +1119,7 @@ mod failures_and_timeouts {
         let request_task = tokio::spawn({
             let connector = connector.clone();
             async move {
-                send_request(
+                test_client::send_request(
                     &connector,
                     HttpRequest::get(url).expect("valid HTTP request"),
                 )
@@ -1192,10 +1128,10 @@ mod failures_and_timeouts {
         });
 
         silent_gate
-            .wait_until_reached(WAIT)
+            .wait_until_reached(test_client::WAIT)
             .await
             .expect("the server should receive the request and remain silent");
-        let error = tokio::time::timeout(WAIT, request_task)
+        let error = tokio::time::timeout(test_client::WAIT, request_task)
             .await
             .expect("request should finish within the outer deadline")
             .expect("request task should not panic")
