@@ -11,6 +11,12 @@ set -e
 echo "### Testing the connection-level wire harness"
 cargo test --features wire-mock,default-client --test connection_harness_test
 
+echo "### Testing HTTP/1.1 connection behavior"
+cargo test --features wire-mock,default-client --test h1_connection_behavior_test
+
+echo "### Checking HTTP proxy tests without a TLS provider"
+cargo test --no-default-features --features default-client --test proxy_tests --no-run
+
 echo "### Testing unstable custom rustls crypto provider"
 # Enabling ring because the tests use it as the "custom" provider, and it transitively enables __rustls
 RUSTFLAGS="--cfg aws_sdk_unstable" cargo test --features rustls-ring

@@ -3,6 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+//! Self-tests for the connection test harness.
+//!
+//! These tests verify the public test utility's scripting, synchronization, event recording,
+//! failure reporting, and cleanup behavior. They do not define production HTTP client or
+//! connection pool behavior.
+
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
 use aws_smithy_http_client::test_util::wire::connection::{
@@ -497,6 +503,25 @@ async fn unbounded_http_service_handles_multiple_connections() {
     }
     harness.wait_for_tcp_accepts(4, WAIT).await.unwrap();
     harness.shutdown().await.unwrap();
+}
+
+#[tokio::test]
+async fn await_client_close_must_be_final() {
+    let error = ConnectionTestHarness::builder()
+        .endpoint(
+            IP1,
+            SocketScript::new()
+                .await_client_close()
+                .write_all("unreachable"),
+        )
+        .build()
+        .await
+        .expect_err("actions after await_client_close must be rejected");
+
+    assert_eq!(
+        error.to_string(),
+        "SocketScript::await_client_close must be the final action"
+    );
 }
 
 #[tokio::test]

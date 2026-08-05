@@ -687,6 +687,14 @@ impl SocketScript {
         self
     }
 
+    /// Waits for the client to close and fails if it sends more bytes.
+    ///
+    /// This is a terminal action.
+    pub fn await_client_close(mut self) -> Self {
+        self.actions.push(Action::AwaitClientClose);
+        self
+    }
+
     /// Closes the connection normally.
     pub fn close(mut self) -> Self {
         self.actions.push(Action::Close);
@@ -712,6 +720,11 @@ impl SocketScript {
                         "SocketScript::read_until limit is shorter than its delimiter",
                     ));
                 }
+            }
+            if matches!(action, Action::AwaitClientClose) && index + 1 != self.actions.len() {
+                return Err(HarnessError::new(
+                    "SocketScript::await_client_close must be the final action",
+                ));
             }
             if matches!(action, Action::Close | Action::Reset) && index + 1 != self.actions.len() {
                 return Err(HarnessError::new(
