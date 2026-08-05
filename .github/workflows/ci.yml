@@ -155,9 +155,17 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-core-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
+        # The rust-runtime workspace is split by phase: the whole-workspace passes (clippy, nextest,
+        # doc, minimal-versions) and the slower per-crate `additional-ci` feature-combination tests
+        # run as parallel legs. aws/rust-runtime is small enough to stay a single leg.
         - action: check-rust-runtimes
-          action-arguments: rust-runtime
+          action-arguments: rust-runtime workspace
           label: check-rust-runtimes-smithy
+          runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
+        - action: check-rust-runtimes
+          action-arguments: rust-runtime additional
+          label: check-rust-runtimes-smithy-additional
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
         - action: check-rust-runtimes
