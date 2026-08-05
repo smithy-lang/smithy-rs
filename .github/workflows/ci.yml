@@ -350,6 +350,9 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
+      # Point vcpkg's binary cache at a stable path we can persist across runs. Without this it
+      # defaults to the runner's ephemeral home dir, so the OpenSSL build (~6 min) repeats every run.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
     steps:
     - uses: actions/checkout@v4
       with:
@@ -368,8 +371,19 @@ jobs:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
       # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
+    # Restore the prebuilt OpenSSL binary so `vcpkg install` below is a cache hit instead of a
+    # ~6 min from-source build. Keyed on the package spec so a version bump busts the cache.
+    - name: Cache vcpkg OpenSSL
+      if: needs.detect-changes.outputs.rust == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}\vcpkg-cache
+        key: ${{ runner.os }}-vcpkg-openssl-x64-windows-static-md
     - if: needs.detect-changes.outputs.rust == 'true'
       run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - if: needs.detect-changes.outputs.rust == 'true'
+      # vcpkg requires the binary cache directory to exist before it will write to it
+      run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE
     - if: needs.detect-changes.outputs.rust == 'true'
       run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
