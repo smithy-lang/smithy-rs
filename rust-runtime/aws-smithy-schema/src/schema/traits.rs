@@ -21,11 +21,11 @@ macro_rules! annotation_trait {
 
         impl $name {
             /// The Shape ID for this trait.
-            pub const TRAIT_ID: ShapeId = crate::shape_id!($ns, $trait_name);
+            pub const TRAIT_ID: ShapeId<'static> = crate::shape_id!($ns, $trait_name);
         }
 
         impl Trait for $name {
-            fn trait_id(&self) -> &ShapeId { &Self::TRAIT_ID }
+            fn trait_id(&self) -> &ShapeId<'static> { &Self::TRAIT_ID }
             fn as_any(&self) -> &dyn Any { self }
         }
     };
@@ -43,7 +43,7 @@ macro_rules! string_trait {
         #[allow(dead_code)] // Used by generated schema code
         impl $name {
             /// The Shape ID for this trait.
-            pub const TRAIT_ID: ShapeId = crate::shape_id!($ns, $trait_name);
+            pub const TRAIT_ID: ShapeId<'static> = crate::shape_id!($ns, $trait_name);
 
             /// Creates a new instance.
             pub const fn new(value: &'static str) -> Self {
@@ -57,7 +57,7 @@ macro_rules! string_trait {
         }
 
         impl Trait for $name {
-            fn trait_id(&self) -> &ShapeId { &Self::TRAIT_ID }
+            fn trait_id(&self) -> &ShapeId<'static> { &Self::TRAIT_ID }
             fn as_any(&self) -> &dyn Any { self }
         }
     };
@@ -114,7 +114,7 @@ pub struct XmlNamespaceTrait {
 #[allow(dead_code)] // Used by generated schema code
 impl XmlNamespaceTrait {
     /// The Shape ID for this trait.
-    pub const TRAIT_ID: ShapeId = crate::shape_id!("smithy.api", "xmlNamespace");
+    pub const TRAIT_ID: ShapeId<'static> = crate::shape_id!("smithy.api", "xmlNamespace");
 
     /// Creates a new `XmlNamespaceTrait`.
     pub const fn new(uri: &'static str, prefix: Option<&'static str>) -> Self {
@@ -136,7 +136,7 @@ impl XmlNamespaceTrait {
 }
 
 impl Trait for XmlNamespaceTrait {
-    fn trait_id(&self) -> &ShapeId {
+    fn trait_id(&self) -> &ShapeId<'static> {
         &Self::TRAIT_ID
     }
     fn as_any(&self) -> &dyn Any {
@@ -167,7 +167,7 @@ pub enum TimestampFormat {
 #[allow(dead_code)] // Used by generated schema code
 impl TimestampFormatTrait {
     /// The Shape ID for this trait.
-    pub const TRAIT_ID: ShapeId = crate::shape_id!("smithy.api", "timestampFormat");
+    pub const TRAIT_ID: ShapeId<'static> = crate::shape_id!("smithy.api", "timestampFormat");
 
     /// Creates a new instance.
     pub const fn new(format: TimestampFormat) -> Self {
@@ -181,7 +181,7 @@ impl TimestampFormatTrait {
 }
 
 impl Trait for TimestampFormatTrait {
-    fn trait_id(&self) -> &ShapeId {
+    fn trait_id(&self) -> &ShapeId<'static> {
         &Self::TRAIT_ID
     }
     fn as_any(&self) -> &dyn Any {

@@ -66,7 +66,7 @@ interface StructuredDataSerializerGenerator {
      * Generate a serializer for a document.
      *
      * ```rust
-     * fn serialize_document(input: &Document) -> Vec<u8> {
+     * fn serialize_document(input: &Document) -> Result<Vec<u8>, Error> {
      *     ...
      * }
      * ```
