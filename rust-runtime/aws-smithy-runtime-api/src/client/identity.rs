@@ -65,6 +65,13 @@ pub trait ResolveCachedIdentity: fmt::Debug + Send + Sync {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a>;
 
+    /// Marks the cached identity for refresh.
+    ///
+    /// The default implementation is a no-op; caches override it to support invalidation.
+    fn invalidate(&self, rejected: &Identity) {
+        let _ = rejected;
+    }
+
     #[doc = include_str!("../../rustdoc/validate_base_client_config.md")]
     fn validate_base_client_config(
         &self,
@@ -106,6 +113,10 @@ impl ResolveCachedIdentity for SharedIdentityCache {
     ) -> IdentityFuture<'a> {
         self.0
             .resolve_cached_identity(resolver, runtime_components, config_bag)
+    }
+
+    fn invalidate(&self, rejected: &Identity) {
+        self.0.invalidate(rejected)
     }
 }
 
@@ -302,6 +313,15 @@ impl Identity {
             .get(&TypeId::of::<T>())
             .and_then(|b| b.downcast_ref())
     }
+
+    /// Returns `true` if `self` and `other` share the same underlying identity data allocation.
+    ///
+    /// Compares the `Arc` data-pointer (allocation identity), **not** the data contents: clones of
+    /// an `Identity` share their `data` allocation and compare equal, while independently built
+    /// `Identity` values compare unequal even when their contents are identical.
+    pub fn ptr_eq(&self, other: &Identity) -> bool {
+        Arc::ptr_eq(&self.data, &other.data)
+    }
 }
 
 impl Debug for Identity {
@@ -484,5 +504,24 @@ mod tests {
         assert_eq!(Some(expiration), identity.expiration());
         assert!(identity.property::<PropertyAlpha>().is_some());
         assert!(identity.property::<PropertyBeta>().is_some());
+    }
+
+    #[test]
+    fn ptr_eq_true_for_clone() {
+        // A clone shares the same underlying `data` allocation, so it is `ptr_eq` to the original.
+        let identity = Identity::new("some-identity-data", None);
+        let clone = identity.clone();
+        assert!(identity.ptr_eq(&clone));
+        assert!(clone.ptr_eq(&identity)); // symmetric
+        assert!(identity.ptr_eq(&identity)); // reflexive
+    }
+
+    #[test]
+    fn ptr_eq_false_for_independently_built_identities() {
+        // Identities built separately have distinct `data` allocations, so they are not `ptr_eq`
+        // even when their contents are identical.
+        let a = Identity::new("same-data", None);
+        let b = Identity::new("same-data", None);
+        assert!(!a.ptr_eq(&b));
     }
 }

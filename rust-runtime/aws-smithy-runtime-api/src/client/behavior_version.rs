@@ -23,6 +23,7 @@ enum Inner {
     V2025_01_17,
     V2025_08_07,
     V2026_01_12,
+    V2026_08_01,
 }
 
 impl BehaviorVersion {
@@ -35,9 +36,23 @@ impl BehaviorVersion {
     /// If, however, you're writing a service that is very latency sensitive, or that has written
     /// code to tune Rust SDK behaviors, consider pinning to a specific major version.
     ///
-    /// The latest version is currently [`BehaviorVersion::v2026_01_12`]
+    /// The latest version is currently [`BehaviorVersion::v2026_08_01`]
     pub fn latest() -> Self {
-        Self::v2026_01_12()
+        Self::v2026_08_01()
+    }
+
+    /// Behavior version for August 1st, 2026.
+    ///
+    /// This version changes the default identity cache for AWS SDK clients to one that supports
+    /// consistent identity refresh behavior. Generic Smithy clients (non-AWS) continue to use the
+    /// lazy identity cache.
+    ///
+    /// NOTE: the exact release date encoded in `v2026_08_01` is provisional and will be finalized
+    /// at release.
+    pub fn v2026_08_01() -> Self {
+        Self {
+            inner: Inner::V2026_08_01,
+        }
     }
 
     /// Behavior version for January 12th, 2026.
@@ -145,11 +160,14 @@ mod tests {
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_01_17()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2025_08_07()));
         assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2026_01_12()));
+        assert!(BehaviorVersion::latest().is_at_least(BehaviorVersion::v2026_08_01()));
         assert!(!BehaviorVersion::v2023_11_09().is_at_least(BehaviorVersion::v2024_03_28()));
+        assert!(!BehaviorVersion::v2026_01_12().is_at_least(BehaviorVersion::v2026_08_01()));
         assert!(Inner::V2024_03_28 > Inner::V2023_11_09);
         assert!(Inner::V2023_11_09 < Inner::V2024_03_28);
         assert!(Inner::V2024_03_28 < Inner::V2025_01_17);
         assert!(Inner::V2025_01_17 < Inner::V2025_08_07);
         assert!(Inner::V2025_08_07 < Inner::V2026_01_12);
+        assert!(Inner::V2026_01_12 < Inner::V2026_08_01);
     }
 }
