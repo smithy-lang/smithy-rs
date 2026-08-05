@@ -53,12 +53,19 @@ export GROUP_ID
 export GRADLE_CACHE_PATH="${START_PATH}/gradle"
 
 # Cargo registry cache. On a cold cache the host dir is empty; seed it from the image's baked-in
-# registry first, otherwise the bind mount would hide it and force a full re-download.
+# registry first, otherwise the bind mount would hide it and force a full re-download. Run the seed
+# as the invoking user so the copied files stay readable on the host for the cache upload, and let a
+# copy failure surface rather than leaving a half-seeded registry behind.
 export CARGO_REGISTRY_PATH="${START_PATH}/cargo-registry"
 mkdir -p "${CARGO_REGISTRY_PATH}"
 if [[ -z "$(ls -A "${CARGO_REGISTRY_PATH}" 2>/dev/null)" ]]; then
-    docker run --rm --entrypoint sh -v "${CARGO_REGISTRY_PATH}:/seed" smithy-rs-build-image:latest \
-        -c 'cp -a /opt/cargo/registry/. /seed/ 2>/dev/null || true'
+    if ! docker run --rm --entrypoint sh --user "${USER_ID}:${GROUP_ID}" \
+        -v "${CARGO_REGISTRY_PATH}:/seed" smithy-rs-build-image:latest \
+        -c 'cp -a /opt/cargo/registry/. /seed/'; then
+        echo "failed to seed the cargo registry cache; starting from an empty one"
+        rm -rf "${CARGO_REGISTRY_PATH}"
+        mkdir -p "${CARGO_REGISTRY_PATH}"
+    fi
 fi
 
 docker compose -f build.docker-compose.yml up -d

@@ -61,7 +61,11 @@ jobs:
           }
           // Runtime jobs only exercise the runtime crates, so skip when every changed file is inert
           // (docs, changelog, CI config, design). Default to running on any error.
-          const inert = /^(design\/|\.github\/|\.changelog\/|CHANGELOG|.*\.md$)/;
+          //
+          // Markdown only counts as inert outside the runtime crates: files under rust-runtime/ and
+          // aws/rust-runtime/ can be pulled into crate docs with `#[doc = include_str!(...)]`, so
+          // editing them can break `cargo doc -D warnings` and must still run the checks.
+          const inert = /^(design\/|docs\/|\.github\/|\.changelog\/|CHANGELOG\.md$|[^/]+\.md$)/;
           try {
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
