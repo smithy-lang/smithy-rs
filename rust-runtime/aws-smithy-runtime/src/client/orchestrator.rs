@@ -52,6 +52,11 @@ pub mod operation;
 
 /// Config-bag marker requesting that the identity resolved for the current attempt be invalidated
 /// after the target service rejected it with an authentication failure.
+///
+/// Read (and consumed) at the end of `try_attempt`, while the resolved identity is still in
+/// scope, so it must be set no later than the `read_after_deserialization` interceptor hook.
+/// Setting it from `read_after_attempt` is too late: that hook runs afterward in `finally_attempt`,
+/// so the flag would be missed on the final (retries-exhausted) attempt.
 #[doc(hidden)]
 #[derive(Clone, Debug)]
 pub struct InvalidateResolvedIdentity;
