@@ -451,7 +451,7 @@ class RequestSerializerGenerator(
                 val memberName = symbolProvider.toMemberName(httpPayloadMember!!)
                 val bodyExpr =
                     when {
-                        isBlobPayload -> "payload.into_inner()"
+                        isBlobPayload -> "payload.into_bytes()"
                         isEnumPayload -> "payload.as_str().as_bytes().to_vec()"
                         else -> "payload.into_bytes()"
                     }
