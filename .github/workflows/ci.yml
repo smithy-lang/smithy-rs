@@ -279,7 +279,16 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
+        # Split by phase into parallel legs: doc/clippy (+ integration-test check) and
+        # udeps/external-types. The phases use different toolchains and don't share compiled
+        # artifacts, so this adds no extra compilation.
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          action-arguments: docs
+          label: check-aws-sdk-smoketest-docs
+          runner: smithy_ubuntu-latest_16-core
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          action-arguments: types
+          label: check-aws-sdk-smoketest-types
           runner: smithy_ubuntu-latest_16-core
         - action: check-aws-sdk-smoketest-unit-tests
           runner: smithy_ubuntu-latest_8-core
