@@ -15,6 +15,7 @@ use auth::{resolve_identity, sign_request};
 use aws_smithy_async::rt::sleep::AsyncSleep;
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
+use aws_smithy_runtime_api::client::identity::ResolveCachedIdentity;
 use aws_smithy_runtime_api::client::interceptors::context::{
     Error, Input, InterceptorContext, Output, RewindResult,
 };
@@ -30,7 +31,7 @@ use aws_smithy_runtime_api::client::ser_de::{
 };
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::byte_stream::ByteStream;
-use aws_smithy_types::config_bag::ConfigBag;
+use aws_smithy_types::config_bag::{ConfigBag, Storable, StoreReplace};
 use aws_smithy_types::retry::{MergeRetryConfig, RetryConfig, RetrySpec};
 use aws_smithy_types::timeout::{MergeTimeoutConfig, TimeoutConfig};
 use endpoints::apply_endpoint;
@@ -48,6 +49,16 @@ mod http;
 
 /// Utility for making one-off unmodeled requests with the orchestrator.
 pub mod operation;
+
+/// Config-bag marker requesting that the identity resolved for the current attempt be invalidated
+/// after the target service rejected it with an authentication failure.
+#[doc(hidden)]
+#[derive(Clone, Debug)]
+pub struct InvalidateResolvedIdentity;
+
+impl Storable for InvalidateResolvedIdentity {
+    type Storer = StoreReplace<Self>;
+}
 
 macro_rules! halt {
     ([$ctx:ident] => $err:expr) => {{
@@ -543,6 +554,16 @@ async fn try_attempt(
 
     ctx.enter_after_deserialization_phase();
     run_interceptors!(halt_on_err: read_after_deserialization(ctx, runtime_components, cfg));
+
+    // An interceptor may flag (via `InvalidateResolvedIdentity`) that the service rejected the
+    // resolved identity. Honor it with the in-scope signing identity, then consume the marker so a
+    // stale flag can't affect the next attempt. `invalidate` is a trait-default no-op for caches
+    // that don't override it.
+    if cfg.load::<InvalidateResolvedIdentity>().is_some() {
+        runtime_components.identity_cache().invalidate(&identity);
+        cfg.interceptor_state()
+            .unset::<InvalidateResolvedIdentity>();
+    }
 }
 
 async fn finally_attempt(
