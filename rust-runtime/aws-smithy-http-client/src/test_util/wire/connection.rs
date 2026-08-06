@@ -321,7 +321,8 @@ pub struct GateWaiter {
 }
 
 impl GateWaiter {
-    async fn arrive_and_wait(&self) -> Result<(), HarnessError> {
+    /// Records this waiter's arrival and waits until its gate is released.
+    pub async fn wait(&self) -> Result<(), HarnessError> {
         let mut snapshot = self.state.snapshot.subscribe();
         self.state
             .snapshot
@@ -1428,7 +1429,7 @@ impl ScriptExecutor<'_> {
                         .await
                         .map_err(|err| HarnessError::new(format!("failed to write: {err}")))?;
                 }
-                Action::Wait(gate) => gate.arrive_and_wait().await?,
+                Action::Wait(gate) => gate.wait().await?,
                 Action::Delay(duration) => tokio::time::sleep(*duration).await,
                 Action::ShutdownWrite => {
                     self.stream

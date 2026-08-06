@@ -3,11 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-//! Client construction and request helpers shared by connection behavior tests.
+//! Client configuration and request helpers shared by connection behavior tests.
 
 use aws_smithy_async::rt::sleep::{SharedAsyncSleep, TokioSleep};
 use aws_smithy_async::time::SystemTimeSource;
-use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::http::{
     HttpClient, HttpConnector, HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
 };
@@ -26,25 +25,11 @@ pub(crate) struct BackendConfig {
     pub(crate) pool_idle_timeout: Option<Duration>,
 }
 
-pub(crate) trait HttpClientBackend {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient;
-}
-
 /// Hyper 1.x through `hyper_util::client::legacy::Client`.
 ///
 /// "Legacy" is Hyper Util's module name and does not refer to smithy-rs's `hyper-014` feature.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct HyperUtilLegacyPool;
-
-impl HttpClientBackend for HyperUtilLegacyPool {
-    fn build(&self, config: BackendConfig) -> SharedHttpClient {
-        let mut builder = Builder::new();
-        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
-            builder = builder.pool_idle_timeout(pool_idle_timeout);
-        }
-        builder.build_http()
-    }
-}
 
 pub(crate) fn runtime_components() -> RuntimeComponents {
     RuntimeComponentsBuilder::for_tests()

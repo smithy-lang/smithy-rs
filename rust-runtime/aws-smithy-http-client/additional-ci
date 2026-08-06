@@ -8,11 +8,8 @@
 
 set -e
 
-echo "### Testing the connection-level wire harness"
-cargo test --features wire-mock,default-client --test connection_harness_test
-
-echo "### Testing HTTP/1.1 connection behavior"
-cargo test --features wire-mock,default-client --test h1_connection_behavior_test
+echo "### Testing with the wire harness, Rustls/AWS-LC, and s2n-tls"
+cargo test --features wire-mock,rustls-aws-lc,s2n-tls
 
 echo "### Checking HTTP proxy tests without a TLS provider"
 cargo test --no-default-features --features default-client --test proxy_tests --no-run

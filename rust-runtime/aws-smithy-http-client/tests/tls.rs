@@ -5,7 +5,9 @@
 
 #![cfg(any(feature = "__rustls", feature = "s2n-tls",))]
 
-mod common;
+mod common {
+    pub(crate) mod tls;
+}
 
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http_client::tls;

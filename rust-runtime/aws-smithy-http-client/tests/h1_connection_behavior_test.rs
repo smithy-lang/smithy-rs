@@ -10,29 +10,46 @@
 
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
-mod common;
+mod common {
+    pub(crate) mod client;
+}
 
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionId, ConnectionScript,
     ConnectionTestHarness, EndpointPlan, Http1Response, Http1Script, ManualGate, SocketScript,
 };
+use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
 use aws_smithy_runtime_api::client::http::{
-    HttpClient, HttpConnectorSettings, SharedHttpConnector,
+    HttpClient, HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_types::body::SdkBody;
 use aws_smithy_types::retry::ErrorKind;
 use common::client as test_client;
-use common::client::{BackendConfig, HttpClientBackend, HyperUtilLegacyPool};
+use common::client::{BackendConfig, HyperUtilLegacyPool};
 use http_body_util::BodyExt;
 use std::borrow::Cow;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
 const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
+
+trait HttpClientBackend {
+    fn build(&self, config: BackendConfig) -> SharedHttpClient;
+}
+
+impl HttpClientBackend for HyperUtilLegacyPool {
+    fn build(&self, config: BackendConfig) -> SharedHttpClient {
+        let mut builder = Builder::new();
+        if let Some(pool_idle_timeout) = config.pool_idle_timeout {
+            builder = builder.pool_idle_timeout(pool_idle_timeout);
+        }
+        builder.build_http()
+    }
+}
 
 fn request_with_body(url: &str, body: &[u8]) -> HttpRequest {
     let mut request = HttpRequest::new(SdkBody::from(body.to_vec()));
