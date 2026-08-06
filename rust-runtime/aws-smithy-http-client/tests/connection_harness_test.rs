@@ -109,10 +109,11 @@ async fn assert_reset_or_eof(stream: &mut TcpStream) {
 
 #[tokio::test]
 async fn multi_ip_endpoints_share_a_port() {
-    if !is_bindable(IP2).await {
-        eprintln!("skipping test: 127.0.0.2 is not bindable");
-        return;
-    }
+    assert!(
+        is_bindable(IP2).await,
+        "127.0.0.2 is not bindable; multi-address loopback tests require this address \
+         (see the setup instructions in README.md)"
+    );
 
     let harness = ConnectionTestHarness::builder()
         .endpoint(

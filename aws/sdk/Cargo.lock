@@ -1377,7 +1377,7 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-http-client"
-version = "1.2.0"
+version = "1.2.1"
 dependencies = [
  "aws-smithy-async",
  "aws-smithy-protocol-test",
