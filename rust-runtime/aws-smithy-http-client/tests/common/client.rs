@@ -39,15 +39,15 @@ pub(crate) fn runtime_components() -> RuntimeComponents {
         .expect("valid runtime components")
 }
 
-pub(crate) fn connector(
+pub(crate) fn connector_with_settings(
     client: &SharedHttpClient,
     settings: HttpConnectorSettings,
 ) -> SharedHttpConnector {
     client.http_connector(&settings, &runtime_components())
 }
 
-pub(crate) fn default_connector(client: &SharedHttpClient) -> SharedHttpConnector {
-    connector(client, HttpConnectorSettings::builder().build())
+pub(crate) fn connector(client: &SharedHttpClient) -> SharedHttpConnector {
+    connector_with_settings(client, HttpConnectorSettings::builder().build())
 }
 
 pub(crate) async fn send_request(

@@ -89,6 +89,7 @@ fn http1_request_connection_ids(harness: &ConnectionTestHarness) -> Vec<Connecti
 mod reuse_and_lifecycle {
     use super::*;
 
+    /// Fully consuming a response returns its H1 connection to the origin pool for reuse.
     async fn fully_consumed_responses_reuse_connection(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -103,7 +104,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         for expected in [b"first".as_slice(), b"second", b"third"] {
             let (status, body) =
@@ -132,6 +133,7 @@ mod reuse_and_lifecycle {
         fully_consumed_responses_reuse_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// An idle pooled connection is closed after its configured timeout and then replaced.
     async fn idle_connection_is_evicted_after_timeout(backend: &dyn HttpClientBackend) {
         let idle_timeout = Duration::from_millis(100);
         let harness = ConnectionTestHarness::builder()
@@ -148,7 +150,7 @@ mod reuse_and_lifecycle {
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
         });
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) =
             test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
@@ -189,6 +191,7 @@ mod reuse_and_lifecycle {
         idle_connection_is_evicted_after_timeout(&HyperUtilLegacyPool).await;
     }
 
+    /// Idle eviction does not interrupt a response body that is still being consumed.
     async fn active_response_body_survives_idle_timeout(backend: &dyn HttpClientBackend) {
         let idle_timeout = Duration::from_millis(100);
         let body_gate = ManualGate::new();
@@ -210,7 +213,7 @@ mod reuse_and_lifecycle {
         let client = backend.build(BackendConfig {
             pool_idle_timeout: Some(idle_timeout),
         });
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let first_response = test_client::send_request(
             &connector,
@@ -218,6 +221,7 @@ mod reuse_and_lifecycle {
         )
         .await
         .expect("first request should return response headers");
+
         body_gate
             .wait_until_reached(test_client::WAIT)
             .await
@@ -250,6 +254,7 @@ mod reuse_and_lifecycle {
         active_response_body_survives_idle_timeout(&HyperUtilLegacyPool).await;
     }
 
+    /// A held H1 response keeps its connection checked out, so another request opens a second.
     async fn held_response_body_allows_second_connection(backend: &dyn HttpClientBackend) {
         let body_gate = ManualGate::new();
         let harness = ConnectionTestHarness::builder()
@@ -265,7 +270,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let first_response = test_client::send_request(
             &connector,
@@ -273,6 +278,7 @@ mod reuse_and_lifecycle {
         )
         .await
         .expect("first request should return response headers");
+
         body_gate
             .wait_until_reached(test_client::WAIT)
             .await
@@ -303,6 +309,7 @@ mod reuse_and_lifecycle {
         held_response_body_allows_second_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// Dropping a body with its terminator buffered permits draining and connection reuse.
     async fn dropping_buffered_chunk_terminator_allows_reuse(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -333,7 +340,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let mut first_response = test_client::send_request(
             &connector,
@@ -377,6 +384,8 @@ mod reuse_and_lifecycle {
         dropping_buffered_chunk_terminator_allows_reuse(&HyperUtilLegacyPool).await;
     }
 
+    /// Dropping a response whose declared remainder is unavailable retires the connection
+    /// instead of returning it to the pool.
     async fn dropping_unavailable_response_remainder_retires_connection(
         backend: &dyn HttpClientBackend,
     ) {
@@ -405,7 +414,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let mut first_response = test_client::send_request(
             &connector,
@@ -464,6 +473,7 @@ mod reuse_and_lifecycle {
         dropping_unavailable_response_remainder_retires_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// A server-closed idle keep-alive connection is replaced before the next request.
     async fn stale_idle_connection_is_replaced(backend: &dyn HttpClientBackend) {
         let close_gate = ManualGate::new();
         let harness = ConnectionTestHarness::builder()
@@ -492,7 +502,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) =
             test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
@@ -538,6 +548,7 @@ mod reuse_and_lifecycle {
         stale_idle_connection_is_replaced(&HyperUtilLegacyPool).await;
     }
 
+    /// A response carrying `Connection: close` prevents subsequent reuse of its connection.
     async fn connection_close_response_is_not_reused(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -564,7 +575,7 @@ mod reuse_and_lifecycle {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) =
             test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
@@ -609,6 +620,7 @@ mod reuse_and_lifecycle {
 mod routing_and_status {
     use super::*;
 
+    /// A direct request uses origin-form for its target and sends the URI authority in `Host`.
     async fn direct_request_uses_origin_form_and_host_header(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -619,7 +631,7 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
         let url = format!(
             "{}/some/path?key=value",
             harness.endpoint_url().trim_end_matches('/')
@@ -644,6 +656,7 @@ mod routing_and_status {
         direct_request_uses_origin_form_and_host_header(&HyperUtilLegacyPool).await;
     }
 
+    /// Connections are pooled by origin authority even when two origins reach the same endpoint.
     async fn different_origins_do_not_share_connections(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -663,7 +676,7 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
         let ip_url = harness.endpoint_url();
         let localhost_url = format!("http://localhost:{}/", harness.port());
 
@@ -713,6 +726,7 @@ mod routing_and_status {
         different_origins_do_not_share_connections(&HyperUtilLegacyPool).await;
     }
 
+    /// An HTTP server-error status does not by itself make the underlying connection unusable.
     async fn raw_server_error_response_does_not_poison_connection(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -726,7 +740,7 @@ mod routing_and_status {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) =
             test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
@@ -759,6 +773,8 @@ mod routing_and_status {
 mod connection_metadata {
     use super::*;
 
+    /// Captured metadata reports the socket addresses, and poisoning it prevents connection
+    /// reuse.
     async fn captured_connection_addresses_and_poison_prevent_reuse(
         backend: &dyn HttpClientBackend,
     ) {
@@ -774,7 +790,7 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body, metadata) =
             get_and_collect_with_capture(&connector, &harness.endpoint_url()).await;
@@ -813,6 +829,7 @@ mod connection_metadata {
         captured_connection_addresses_and_poison_prevent_reuse(&HyperUtilLegacyPool).await;
     }
 
+    /// Poisoning an active connection lets its current body complete but prevents later reuse.
     async fn poisoning_active_connection_allows_body_completion_and_prevents_reuse(
         backend: &dyn HttpClientBackend,
     ) {
@@ -831,7 +848,7 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
         let capture = CaptureSmithyConnection::new();
         let mut request = HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request");
         request.add_extension(capture.clone());
@@ -839,6 +856,7 @@ mod connection_metadata {
         let first_response = test_client::send_request(&connector, request)
             .await
             .expect("first request should return response headers");
+
         body_gate
             .wait_until_reached(test_client::WAIT)
             .await
@@ -887,6 +905,7 @@ mod connection_metadata {
             .await;
     }
 
+    /// Capturing and dropping connection metadata without poisoning it does not affect reuse.
     async fn captured_connection_without_poison_is_reused(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -900,7 +919,7 @@ mod connection_metadata {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body, metadata) =
             get_and_collect_with_capture(&connector, &harness.endpoint_url()).await;
@@ -929,6 +948,7 @@ mod connection_metadata {
         captured_connection_without_poison_is_reused(&HyperUtilLegacyPool).await;
     }
 
+    /// Connector metadata identifies the Hyper 1.x transport used by this backend.
     fn connector_metadata_identifies_hyper_1x(backend: &dyn HttpClientBackend) {
         let client = backend.build(BackendConfig::default());
         let metadata = client
@@ -948,6 +968,7 @@ mod connection_metadata {
 mod failures_and_timeouts {
     use super::*;
 
+    /// A TCP reset immediately after accept is reported as an I/O connector error.
     async fn reset_on_accept_is_io_error(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(IP1, SocketScript::new().reset())
@@ -955,7 +976,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let error = test_client::send_request(
             &connector,
@@ -975,6 +996,7 @@ mod failures_and_timeouts {
         reset_on_accept_is_io_error(&HyperUtilLegacyPool).await;
     }
 
+    /// A reset after the complete request but before response headers is an I/O connector error.
     async fn reset_after_complete_request_is_io_error(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(IP1, SocketScript::new().read_http1_request().reset())
@@ -982,7 +1004,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
         let request_body = b"complete request body";
 
         let error = test_client::send_request(
@@ -1012,6 +1034,7 @@ mod failures_and_timeouts {
         reset_after_complete_request_is_io_error(&HyperUtilLegacyPool).await;
     }
 
+    /// A reset after response headers preserves the response and fails only its body.
     async fn reset_during_response_body_fails_body_only(backend: &dyn HttpClientBackend) {
         let reset_gate = ManualGate::new();
         let harness = ConnectionTestHarness::builder()
@@ -1033,7 +1056,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let mut response = test_client::send_request(
             &connector,
@@ -1075,6 +1098,7 @@ mod failures_and_timeouts {
         reset_during_response_body_fails_body_only(&HyperUtilLegacyPool).await;
     }
 
+    /// A clean EOF before response headers is classified as a transient non-I/O error.
     async fn clean_eof_before_response_is_transient_other(backend: &dyn HttpClientBackend) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
@@ -1088,7 +1112,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let error = test_client::send_request(
             &connector,
@@ -1112,6 +1136,7 @@ mod failures_and_timeouts {
         clean_eof_before_response_is_transient_other(&HyperUtilLegacyPool).await;
     }
 
+    /// Exceeding the configured response-read deadline is reported as a timeout.
     async fn read_timeout_is_timeout_error(backend: &dyn HttpClientBackend) {
         let read_timeout = Duration::from_millis(250);
         let silent_gate = ManualGate::new();
@@ -1126,7 +1151,7 @@ mod failures_and_timeouts {
             .await
             .expect("harness should start");
         let client = backend.build(BackendConfig::default());
-        let connector = test_client::connector(
+        let connector = test_client::connector_with_settings(
             &client,
             HttpConnectorSettings::builder()
                 .read_timeout(read_timeout)

@@ -127,6 +127,7 @@ fn h2_error_reason(error: &(dyn Error + 'static)) -> Option<Reason> {
 mod reuse_and_multiplexing {
     use super::*;
 
+    /// Sequential streams for one origin reuse an established H2 connection.
     async fn sequential_requests_reuse_connection(backend: &dyn HttpsClientBackend) {
         let server = H2TestServer::builder()
             .connections(H2ConnectionPlan::queue([H2ConnectionScript::new()
@@ -135,7 +136,7 @@ mod reuse_and_multiplexing {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         for request_number in 1..=5 {
             let (status, body) = test_client::get_and_collect(&connector, &server.url("/")).await;
@@ -156,6 +157,7 @@ mod reuse_and_multiplexing {
         sequential_requests_reuse_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// Concurrent requests multiplex as independent streams on a warmed H2 connection.
     async fn concurrent_requests_multiplex_on_warmed_connection(backend: &dyn HttpsClientBackend) {
         let body_gate = ManualGate::new();
         let script = H2ConnectionScript::new()
@@ -172,7 +174,7 @@ mod reuse_and_multiplexing {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) = test_client::get_and_collect(&connector, &server.url("/warm")).await;
         assert_eq!((status, body.as_slice()), (200, b"warm".as_slice()));
@@ -207,6 +209,8 @@ mod reuse_and_multiplexing {
         concurrent_requests_multiplex_on_warmed_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// Concurrent cold-start requests converge on one established H2 connection even when
+    /// connection attempts race.
     async fn concurrent_cold_start_converges_on_one_h2_connection(
         backend: &dyn HttpsClientBackend,
     ) {
@@ -226,7 +230,7 @@ mod reuse_and_multiplexing {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
         let mut requests = tokio::task::JoinSet::new();
 
         for _ in 0..4 {
@@ -281,6 +285,7 @@ mod reuse_and_multiplexing {
 mod connection_metadata {
     use super::*;
 
+    /// Poisoning captured H2 connection metadata moves later streams to a new connection.
     async fn poisoned_connection_is_not_reused(backend: &dyn HttpsClientBackend) {
         let script =
             H2ConnectionScript::new().fallback(H2StreamScript::respond(H2Response::ok("ok")));
@@ -290,7 +295,7 @@ mod connection_metadata {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body, metadata) =
             get_and_collect_with_capture(&connector, &server.url("/first")).await;
@@ -320,6 +325,7 @@ mod connection_metadata {
 mod stream_failures {
     use super::*;
 
+    /// A peer reset fails only its H2 stream and leaves the connection available for reuse.
     async fn stream_reset_does_not_retire_connection(backend: &dyn HttpsClientBackend) {
         let reset_gate = ManualGate::new();
         let script = H2ConnectionScript::new()
@@ -336,7 +342,7 @@ mod stream_failures {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let response = test_client::send_request(
             &connector,
@@ -394,6 +400,7 @@ mod stream_failures {
         stream_reset_does_not_retire_connection(&HyperUtilLegacyPool).await;
     }
 
+    /// Dropping an incomplete response body cancels only that stream and permits reuse.
     async fn dropping_response_body_cancels_only_stream(backend: &dyn HttpsClientBackend) {
         let script = H2ConnectionScript::new()
             .route(
@@ -410,7 +417,7 @@ mod stream_failures {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let response = test_client::send_request(
             &connector,
@@ -466,6 +473,8 @@ mod stream_failures {
 mod goaway_and_replacement {
     use super::*;
 
+    /// Graceful GOAWAY drains an eligible in-flight stream while later streams use a
+    /// replacement connection.
     async fn graceful_goaway_preserves_in_flight_stream_and_replaces_connection(
         backend: &dyn HttpsClientBackend,
     ) {
@@ -487,7 +496,7 @@ mod goaway_and_replacement {
             .await
             .expect("H2 server should start");
         let client = h2_client(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let held_response = test_client::send_request(
             &connector,
@@ -495,6 +504,7 @@ mod goaway_and_replacement {
         )
         .await
         .expect("held response headers should succeed");
+
         held_body_gate
             .wait_until_reached(test_client::WAIT)
             .await
@@ -566,6 +576,7 @@ mod goaway_and_replacement {
 mod protocol_negotiation {
     use super::*;
 
+    /// The s2n-tls provider negotiates `h2` with ALPN and reuses that connection.
     async fn s2n_negotiates_h2_and_reuses_connection(backend: &dyn HttpsClientBackend) {
         let server = H2TestServer::builder()
             .connections(H2ConnectionPlan::queue([H2ConnectionScript::new()
@@ -574,7 +585,7 @@ mod protocol_negotiation {
             .await
             .expect("H2 server should start");
         let client = h2_client_with_provider(backend, tls::Provider::S2nTls);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         for request_number in 1..=3 {
             let (status, body) = test_client::get_and_collect(&connector, &server.url("/")).await;
@@ -621,6 +632,7 @@ mod idle_timeout {
         )
     }
 
+    /// An idle H2 connection is closed after its configured timeout and then replaced.
     async fn idle_connection_is_evicted_after_timeout(backend: &dyn HttpsClientBackend) {
         let script =
             H2ConnectionScript::new().fallback(H2StreamScript::respond(H2Response::ok("ok")));
@@ -630,7 +642,7 @@ mod idle_timeout {
             .await
             .expect("H2 server should start");
         let client = client_with_idle_timeout(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let (status, body) = test_client::get_and_collect(&connector, &server.url("/first")).await;
         assert_eq!((status, body.as_slice()), (200, b"ok".as_slice()));
@@ -663,6 +675,8 @@ mod idle_timeout {
         idle_connection_is_evicted_after_timeout(&HyperUtilLegacyPool).await;
     }
 
+    /// An active stream survives the idle deadline, but the connection is replaced after the
+    /// stream completes.
     async fn active_stream_survives_idle_timeout_but_later_request_uses_replacement(
         backend: &dyn HttpsClientBackend,
     ) {
@@ -681,7 +695,7 @@ mod idle_timeout {
             .await
             .expect("H2 server should start");
         let client = client_with_idle_timeout(backend);
-        let connector = test_client::default_connector(&client);
+        let connector = test_client::connector(&client);
 
         let held_response = test_client::send_request(
             &connector,
@@ -689,6 +703,7 @@ mod idle_timeout {
         )
         .await
         .expect("held response headers should succeed");
+
         held_body_gate
             .wait_until_reached(test_client::WAIT)
             .await

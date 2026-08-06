@@ -3,11 +3,32 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#![warn(missing_docs)]
+
 //! A deterministic harness for testing connection-level client behavior.
 //!
-//! Endpoints assign one complete [`ConnectionScript`] to each accepted
-//! connection. This keeps connection allocation independent from the requests
-//! served on an existing keep-alive connection.
+//! Each endpoint assigns one complete [`ConnectionScript`] to each accepted
+//! connection. An [`Http1Script`] parses requests and emits typed responses,
+//! while a [`SocketScript`] runs ordered byte-level actions for malformed
+//! framing, partial I/O, resets, and other transport behavior.
+//!
+//! [`ManualGate`] synchronizes a test with a script without relying on elapsed
+//! time. Reaching a gate records an arrival and blocks the script until the
+//! gate is released. Release is permanent, so current and future waiters all
+//! pass.
+//!
+//! The harness records DNS lookups, accepted connections, parsed HTTP/1
+//! requests, and connection closure. Its wait methods observe those events and
+//! also surface failures from endpoint and connection tasks. Call
+//! [`ConnectionTestHarness::shutdown`] at the end of a test to join those tasks
+//! and report any background failure; dropping the harness only aborts them.
+//!
+//! # Script ownership
+//!
+//! Scripts describe connections, not requests. A queued endpoint plan moves
+//! one script to each connection in order. Repeated plans clone a complete
+//! script for each connection. Requests served over one keep-alive connection
+//! remain within that connection's script.
 
 use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
 use std::collections::{HashMap, VecDeque};
@@ -127,6 +148,8 @@ struct RecordedState {
     generation: u64,
 }
 
+// Mutations advance a generation and notify watchers after releasing the
+// mutex. This lets event waits sleep without holding the recorded state.
 #[derive(Debug)]
 struct SharedState {
     recorded: Mutex<RecordedState>,
@@ -228,7 +251,10 @@ impl SharedState {
     }
 }
 
-/// A one-shot broadcast gate used to synchronize scripts with tests.
+/// A one-shot broadcast gate used to synchronize a test with one or more scripts.
+///
+/// Each script-side wait records an arrival. [`ManualGate::release`] is
+/// idempotent and lets both current and future waiters proceed.
 #[derive(Clone, Debug)]
 pub struct ManualGate {
     state: Arc<GateState>,
@@ -257,24 +283,26 @@ impl ManualGate {
         }
     }
 
-    /// Returns a waiter that can be installed in one or more scripts.
+    /// Returns a script-side waiter that shares this gate's state.
     pub fn waiter(&self) -> GateWaiter {
         GateWaiter {
             state: self.state.clone(),
         }
     }
 
-    /// Returns the number of waiters that have reached the gate.
+    /// Returns the number of calls to [`GateWaiter::wait`] that have reached the gate.
+    ///
+    /// Calling `wait` more than once on the same waiter records each arrival.
     pub fn arrivals(&self) -> usize {
         self.state.snapshot.borrow().arrivals
     }
 
-    /// Waits until at least one script has reached the gate.
+    /// Waits up to `timeout` for at least one script to reach the gate.
     pub async fn wait_until_reached(&self, timeout: Duration) -> Result<(), HarnessError> {
         self.wait_for_arrivals(1, timeout).await
     }
 
-    /// Waits until at least `expected` scripts have reached the gate.
+    /// Waits up to `timeout` for at least `expected` script-side waits to arrive.
     pub async fn wait_for_arrivals(
         &self,
         expected: usize,
@@ -300,7 +328,7 @@ impl ManualGate {
         })?
     }
 
-    /// Releases every current and future waiter.
+    /// Permanently releases every current and future waiter.
     pub fn release(&self) {
         self.state
             .snapshot
@@ -314,14 +342,21 @@ impl Default for ManualGate {
     }
 }
 
-/// The script-side handle for a [`ManualGate`].
+/// A script-side handle for a [`ManualGate`].
+///
+/// A waiter owns the shared gate state, so dropping the [`ManualGate`]
+/// controller does not cancel an outstanding wait.
 #[derive(Clone, Debug)]
 pub struct GateWaiter {
     state: Arc<GateState>,
 }
 
 impl GateWaiter {
-    /// Records this waiter's arrival and waits until its gate is released.
+    /// Records one arrival and waits until the gate is released.
+    ///
+    /// This wait has no timeout. The controlling test should use
+    /// [`ManualGate::wait_until_reached`] or [`ManualGate::wait_for_arrivals`]
+    /// with a timeout before releasing the gate.
     pub async fn wait(&self) -> Result<(), HarnessError> {
         let mut snapshot = self.state.snapshot.subscribe();
         self.state
@@ -352,7 +387,11 @@ pub enum Finish {
     Reset,
 }
 
-/// A complete or gated HTTP response body.
+/// A complete HTTP/1 response body, optionally paused at a gate.
+///
+/// A gated body advertises the combined byte length of its parts. The script
+/// writes the bytes before the gate, records an arrival, waits for release,
+/// and then writes the remaining bytes.
 #[derive(Clone, Debug)]
 pub struct BodyPlan {
     parts: Vec<BodyPart>,
@@ -375,7 +414,7 @@ impl BodyPlan {
         }
     }
 
-    /// Creates a body split around a manual gate.
+    /// Creates a body that pauses after `before` and resumes with `after`.
     pub fn split_at_gate(
         before: impl AsRef<[u8]>,
         gate: GateWaiter,
@@ -529,7 +568,13 @@ fn reason_phrase(status: u16) -> &'static str {
     }
 }
 
-/// A high-level HTTP/1 connection script.
+/// A typed HTTP/1 script for one connection.
+///
+/// Each response consumes and records one complete request before it is sent.
+/// Request parsing supports fixed bodies framed by `Content-Length`; use
+/// [`SocketScript`] when testing transfer encoding or custom framing. Request
+/// headers are limited to 64 fields and 64 KiB, and bodies are limited to 8 MiB,
+/// so malformed input cannot grow the harness without bound.
 #[derive(Clone, Debug)]
 pub struct Http1Script {
     responses: Http1Responses,
@@ -543,7 +588,10 @@ enum Http1Responses {
 }
 
 impl Http1Script {
-    /// Creates an empty finite response script.
+    /// Creates a finite script with no responses.
+    ///
+    /// Unless a different [`Finish`] is selected, the script waits for the
+    /// client to close without sending a request.
     pub fn new() -> Self {
         Self {
             responses: Http1Responses::Finite(Vec::new()),
@@ -551,7 +599,9 @@ impl Http1Script {
         }
     }
 
-    /// Creates a finite ordered response sequence.
+    /// Creates a finite sequence that serves one response per request.
+    ///
+    /// Responses are emitted in iteration order.
     pub fn responses<I>(responses: I) -> Self
     where
         I: IntoIterator<Item = Http1Response>,
@@ -562,7 +612,7 @@ impl Http1Script {
         }
     }
 
-    /// Repeats one response until the client closes.
+    /// Serves the same response for every request until the client closes.
     pub fn serve(response: Http1Response) -> Self {
         Self {
             responses: Http1Responses::Repeated(response),
@@ -624,7 +674,12 @@ impl Default for Http1Script {
     }
 }
 
-/// A deterministic low-level socket script.
+/// An ordered sequence of low-level socket actions for one connection.
+///
+/// Actions execute in insertion order. [`SocketScript::await_client_close`],
+/// [`SocketScript::close`], and [`SocketScript::reset`] are terminal and must
+/// be the final action. Reaching the end without a terminal action completes
+/// the script and closes the socket normally.
 #[derive(Clone, Debug, Default)]
 pub struct SocketScript {
     actions: Vec<Action>,
@@ -636,13 +691,18 @@ impl SocketScript {
         Self::default()
     }
 
-    /// Reads and records one complete HTTP/1 request.
+    /// Reads and records one complete fixed-length HTTP/1 request.
+    ///
+    /// This uses the same bounded, `Content-Length`-only parser as
+    /// [`Http1Script`].
     pub fn read_http1_request(mut self) -> Self {
         self.actions.push(Action::ReadHttp1Request);
         self
     }
 
-    /// Reads through `delimiter`, failing if more than `limit` bytes are needed.
+    /// Reads and discards through `delimiter`.
+    ///
+    /// The action fails if the delimiter is not found within `limit` bytes.
     pub fn read_until(mut self, delimiter: impl AsRef<[u8]>, limit: usize) -> Self {
         self.actions.push(Action::ReadUntil {
             delimiter: delimiter.as_ref().to_vec(),
@@ -651,13 +711,13 @@ impl SocketScript {
         self
     }
 
-    /// Reads and discards exactly `length` bytes.
+    /// Reads and discards exactly `length` bytes, including any buffered bytes.
     pub fn read_exact(mut self, length: usize) -> Self {
         self.actions.push(Action::ReadExact(length));
         self
     }
 
-    /// Reads exactly the given bytes and compares them.
+    /// Reads exactly `expected` and fails if the bytes differ.
     pub fn expect_bytes(mut self, expected: impl AsRef<[u8]>) -> Self {
         self.actions
             .push(Action::ExpectBytes(expected.as_ref().to_vec()));
@@ -670,13 +730,15 @@ impl SocketScript {
         self
     }
 
-    /// Arrives at a manual gate and waits for release.
+    /// Records an arrival at `gate` and waits without a timeout for release.
     pub fn wait(mut self, gate: GateWaiter) -> Self {
         self.actions.push(Action::Wait(gate));
         self
     }
 
-    /// Delays the script. Prefer [`ManualGate`] when elapsed time is not under test.
+    /// Delays the next action by `duration`.
+    ///
+    /// Prefer [`ManualGate`] when elapsed time is not itself under test.
     pub fn delay(mut self, duration: Duration) -> Self {
         self.actions.push(Action::Delay(duration));
         self
@@ -691,18 +753,20 @@ impl SocketScript {
     /// Waits for the client to close and fails if it sends more bytes.
     ///
     /// This is a terminal action.
+    ///
+    /// Bytes already buffered by a preceding read also cause this action to fail.
     pub fn await_client_close(mut self) -> Self {
         self.actions.push(Action::AwaitClientClose);
         self
     }
 
-    /// Closes the connection normally.
+    /// Closes the connection normally as the script's terminal action.
     pub fn close(mut self) -> Self {
         self.actions.push(Action::Close);
         self
     }
 
-    /// Resets the connection using `SO_LINGER=0`.
+    /// Resets the connection using `SO_LINGER=0` as the script's terminal action.
     pub fn reset(mut self) -> Self {
         self.actions.push(Action::Reset);
         self
@@ -752,7 +816,10 @@ enum Action {
     Reset,
 }
 
-/// A complete script assigned to one accepted connection.
+/// A complete high-level or byte-level script for one accepted connection.
+///
+/// Convert an [`Http1Script`] or [`SocketScript`] directly when no explicit
+/// distinction is needed at the call site.
 #[derive(Clone, Debug)]
 pub struct ConnectionScript {
     kind: ConnectionScriptKind,
@@ -799,7 +866,12 @@ impl From<SocketScript> for ConnectionScript {
     }
 }
 
-/// How an endpoint assigns scripts to accepted connections.
+/// Assigns a complete [`ConnectionScript`] to each accepted connection.
+///
+/// Queue plans consume scripts in order, while repeated plans clone a script
+/// for each connection. Accepting more connections than a finite plan provides
+/// is a harness failure: the extra connection is closed, and the failure is
+/// returned by event waits and [`ConnectionTestHarness::shutdown`].
 #[derive(Clone, Debug)]
 pub struct EndpointPlan {
     kind: EndpointPlanKind,
@@ -815,7 +887,7 @@ enum EndpointPlanKind {
 }
 
 impl EndpointPlan {
-    /// Assigns the given scripts to accepted connections in order.
+    /// Assigns one complete script to each accepted connection in iteration order.
     pub fn queue<I, S>(scripts: I) -> Self
     where
         I: IntoIterator<Item = S>,
@@ -826,7 +898,7 @@ impl EndpointPlan {
         }
     }
 
-    /// Assigns the same script to exactly `accepts` connections.
+    /// Assigns a clone of `script` to exactly `accepts` connections.
     pub fn repeat_n(accepts: usize, script: impl Into<ConnectionScript>) -> Self {
         Self {
             kind: EndpointPlanKind::Repeat {
@@ -836,7 +908,7 @@ impl EndpointPlan {
         }
     }
 
-    /// Assigns the same script to every accepted connection.
+    /// Assigns a clone of `script` to every accepted connection.
     pub fn unbounded(script: impl Into<ConnectionScript>) -> Self {
         Self {
             kind: EndpointPlanKind::Repeat {
@@ -920,6 +992,9 @@ impl TestEndpoint {
 }
 
 /// A DNS resolver backed by entries configured on the harness.
+///
+/// Every lookup records a [`ConnectionEvent::DnsLookup`]. Names without a
+/// configured entry resolve successfully to an empty address list.
 #[derive(Clone, Debug)]
 pub struct MockDnsResolver {
     entries: Arc<HashMap<String, Vec<IpAddr>>>,
@@ -935,7 +1010,10 @@ impl ResolveDns for MockDnsResolver {
     }
 }
 
-/// Builder for a [`ConnectionTestHarness`].
+/// Configures endpoints and DNS entries for a [`ConnectionTestHarness`].
+///
+/// Endpoints bind in configuration order. The first endpoint chooses an
+/// ephemeral port, and every later endpoint binds that same port.
 #[derive(Debug, Default)]
 pub struct HarnessBuilder {
     endpoints: Vec<EndpointConfig>,
@@ -955,7 +1033,9 @@ enum DnsConfig {
 }
 
 impl HarnessBuilder {
-    /// Adds an endpoint at `ip`.
+    /// Adds a scripted TCP endpoint at `ip`.
+    ///
+    /// The endpoint receives the next script from `plan` for each connection.
     pub fn endpoint(mut self, ip: IpAddr, plan: impl Into<EndpointPlan>) -> Self {
         self.endpoints.push(EndpointConfig {
             ip,
@@ -964,7 +1044,7 @@ impl HarnessBuilder {
         self
     }
 
-    /// Adds a DNS entry with an explicit address list.
+    /// Maps `hostname` to the given addresses in iteration order.
     pub fn dns<I>(mut self, hostname: impl Into<String>, ips: I) -> Self
     where
         I: IntoIterator<Item = IpAddr>,
@@ -976,13 +1056,13 @@ impl HarnessBuilder {
         self
     }
 
-    /// Adds a DNS entry containing every configured endpoint address.
+    /// Maps `hostname` to every configured endpoint address in endpoint order.
     pub fn dns_all(mut self, hostname: impl Into<String>) -> Self {
         self.dns.push(DnsConfig::All(hostname.into()));
         self
     }
 
-    /// Binds endpoints and starts the harness.
+    /// Binds all endpoints and starts their background tasks.
     pub async fn build(self) -> Result<ConnectionTestHarness, HarnessError> {
         if self.endpoints.is_empty() {
             return Err(HarnessError::new(
@@ -1053,7 +1133,12 @@ impl HarnessBuilder {
     }
 }
 
-/// A set of loopback endpoints, scripts, recorded events, and DNS entries.
+/// Running scripted endpoints with recorded connection events and mock DNS.
+///
+/// Endpoint tasks own all accepted connection tasks. Use
+/// [`ConnectionTestHarness::shutdown`] to stop and join them and to surface
+/// script failures. Dropping the harness requests shutdown and aborts endpoint
+/// tasks without waiting for their result.
 #[derive(Debug)]
 pub struct ConnectionTestHarness {
     endpoints: Vec<TestEndpoint>,
@@ -1094,7 +1179,9 @@ impl ConnectionTestHarness {
         self.dns_resolver.clone()
     }
 
-    /// Returns a snapshot of all recorded events.
+    /// Returns a snapshot of all events recorded so far.
+    ///
+    /// Events remain ordered by when they were recorded across all endpoints.
     pub fn events(&self) -> Vec<ConnectionEvent> {
         self.state.events()
     }
@@ -1140,7 +1227,9 @@ impl ConnectionTestHarness {
             .collect()
     }
 
-    /// Waits for at least `expected` accepted TCP connections.
+    /// Waits up to `timeout` for at least `expected` accepted TCP connections.
+    ///
+    /// A background harness failure is returned immediately.
     pub async fn wait_for_tcp_accepts(
         &self,
         expected: usize,
@@ -1157,7 +1246,9 @@ impl ConnectionTestHarness {
             .await
     }
 
-    /// Waits for at least `expected` complete HTTP/1 requests.
+    /// Waits up to `timeout` for at least `expected` complete HTTP/1 requests.
+    ///
+    /// A background harness failure is returned immediately.
     pub async fn wait_for_http_requests(
         &self,
         expected: usize,
@@ -1174,7 +1265,9 @@ impl ConnectionTestHarness {
             .await
     }
 
-    /// Waits until an event matches `predicate`.
+    /// Waits up to `timeout` until an event matches `predicate`.
+    ///
+    /// A background harness failure is returned immediately.
     pub async fn wait_for_event<F>(
         &self,
         timeout: Duration,
@@ -1190,7 +1283,10 @@ impl ConnectionTestHarness {
             .await
     }
 
-    /// Stops and joins every endpoint and connection task.
+    /// Requests shutdown, joins every endpoint and connection task, and reports failures.
+    ///
+    /// Failures recorded before or during shutdown are combined into the
+    /// returned [`HarnessError`].
     pub async fn shutdown(mut self) -> Result<(), HarnessError> {
         self.shutdown.send_replace(true);
         for task in self.endpoint_tasks.drain(..) {
@@ -1224,6 +1320,8 @@ async fn run_endpoint(
     next_connection_id: Arc<AtomicU64>,
     mut shutdown: watch::Receiver<bool>,
 ) {
+    // The endpoint owns every connection task and drains the set before
+    // returning, including during harness shutdown.
     let mut connections = JoinSet::new();
     loop {
         tokio::select! {
