@@ -63,6 +63,8 @@ object EventStreamMarshallTestCases {
         unitTest("message_with_blob") {
             rustTemplate(
                 """
+                let payload = ::bytes::Bytes::from_static(b"hello, world!");
+                let payload_ptr = payload.as_ptr();
                 let event = TestStream::MessageWithBlob(
                     MessageWithBlob::builder().data(#{BlobInput:W}).build()
                 );
@@ -74,8 +76,9 @@ object EventStreamMarshallTestCases {
                 assert_eq!(&str_header("MessageWithBlob"), *headers.get(":event-type").unwrap());
                 assert_eq!(&str_header("application/octet-stream"), *headers.get(":content-type").unwrap());
                 assert_eq!(&b"hello, world!"[..], message.payload());
+                assert_eq!(payload_ptr, message.payload().as_ptr());
                 """,
-                "BlobInput" to builderInput("Blob::new(&b\"hello, world!\"[..])"),
+                "BlobInput" to builderInput("Blob::from_maybe_shared(payload)"),
             )
         }
 
@@ -160,6 +163,8 @@ object EventStreamMarshallTestCases {
         unitTest("message_with_headers") {
             rustTemplate(
                 """
+                let blob = ::bytes::Bytes::from_static(b"test");
+                let blob_ptr = blob.as_ptr();
                 let event = TestStream::MessageWithHeaders(MessageWithHeaders::builder()
                     .blob(#{BlobInput})
                     .boolean(#{BooleanInput})
@@ -186,8 +191,11 @@ object EventStreamMarshallTestCases {
                     .add_header(Header::new("string", HeaderValue::String("test".into())))
                     .add_header(Header::new("timestamp", HeaderValue::Timestamp(DateTime::from_secs(5))));
                 assert_eq!(expected_message, actual_message);
+                let headers = headers_to_map(actual_message.headers());
+                let actual_blob = headers.get("blob").unwrap().as_byte_array().unwrap();
+                assert_eq!(blob_ptr, actual_blob.as_ptr());
                 """,
-                "BlobInput" to builderInput("Blob::new(&b\"test\"[..])"),
+                "BlobInput" to builderInput("Blob::from_maybe_shared(blob)"),
                 "BooleanInput" to builderInput("true"),
                 "ByteInput" to builderInput("55i8"),
                 "IntInput" to builderInput("100_000i32"),
