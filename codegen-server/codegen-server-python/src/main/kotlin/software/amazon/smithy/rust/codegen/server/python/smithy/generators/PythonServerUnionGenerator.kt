@@ -52,6 +52,7 @@ class PythonServerUnionGenerator(
         renderPyUnionStruct()
         renderPyUnionImpl()
         renderPyObjectConverters()
+        writer.renderPyBoxTraits(unionSymbol.name)
     }
 
     private fun renderPyUnionStruct() {
