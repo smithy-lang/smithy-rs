@@ -92,20 +92,10 @@ def main(skip_generation=False):
     run_semver_checks_in_parallel(crates_to_check)
 
 
-# The registry that ships in the build image (index, downloaded `.crate` files, and their unpacked
-# `src/`) lives at CARGO_HOME=/opt/cargo/registry. A previous attempt to parallelize this loop only
-# gave each worker its own CARGO_TARGET_DIR and left CARGO_HOME shared; concurrent `cargo` processes
-# then raced to unpack the same crate sources into the one shared `registry/src`, blowing up with
-# "failed to unpack ... File exists (os error 17)". (cargo's `.package-cache` lock, which normally
-# serializes unpacking, is ineffective here because the container runs as the host uid against a
-# `build`-owned CARGO_HOME.)
-#
-# The fix is to give each worker a fully private CARGO_HOME so no two workers ever touch the same
-# mutable path — for both the head and baseline dependency sets. The large, read-only pieces (the
-# registry index, the downloaded `.crate` cache, and the git db) are symlinked in so nothing is
-# copied; only the per-worker mutable dirs (`registry/src` where crates get unpacked, and
-# `.package-cache`) are private and writable. A worker's home is reused across the crates it checks,
-# so incremental compilation still benefits.
+# Each worker needs a fully private CARGO_HOME, not just its own CARGO_TARGET_DIR: with a shared
+# CARGO_HOME, concurrent cargo processes race to unpack crate sources into `registry/src` and fail
+# with "File exists (os error 17)". The read-only index/cache/git are symlinked (no copy); only the
+# mutated dirs (`registry/src`, `.package-cache`) are private. Homes are reused per worker.
 SEMVER_MAX_WORKERS = min(4, os.cpu_count() or 4)
 _worker_local = threading.local()
 

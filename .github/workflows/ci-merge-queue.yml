@@ -1,26 +1,15 @@
 # Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 # SPDX-License-Identifier: Apache-2.0
 
-# This workflow runs CI for GitHub merge queue entries.
-#
-# Why this is a separate workflow rather than another trigger on `ci-pr.yml`: every job in
-# `ci-pr.yml` is gated on `github.event.pull_request.head.repo.full_name`, and a `merge_group`
-# event carries no `pull_request` object at all, so all of those jobs would silently skip. The
-# jobs here are the same shape as `ci-pr.yml`'s, minus the ones that only make sense on a real
-# pull request (the PR bot and the canary, which post PR comments and need an issue number).
-#
-# A merge-queue entry is a temporary `gh-readonly-queue/<base>/...` branch owned by this repo
-# containing `main` + the already-queued PRs + this one, so unlike a fork PR it can read repo
-# secrets and pull the build image from ECR.
+# Runs CI for GitHub merge queue entries. This is separate from `ci-pr.yml` because a `merge_group`
+# event carries no `pull_request` object, so ci-pr.yml's jobs (gated on the PR's repo name) would
+# all skip. The queue branch is repo-owned, so unlike a fork PR it can read secrets and pull ECR.
 name: CI (merge queue)
 on:
   merge_group:
-    # `checks_requested` is the only useful activity type: it fires when GitHub has created the
-    # merge-queue branch and wants status checks reported against it.
     types: [checks_requested]
 
-# Each queue entry is a distinct commit that must be tested on its own, so entries must not
-# cancel each other. Key on the merge-group ref rather than the base branch.
+# Each queue entry is a distinct commit and must be tested on its own, so entries don't cancel
 concurrency:
   group: ci-merge-queue-${{ github.event.merge_group.head_ref || github.ref }}
   cancel-in-progress: false
@@ -92,12 +81,8 @@ jobs:
         IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
         ./smithy-rs/.github/scripts/upload-build-image.sh $IMAGE_TAG
 
-  # NOTE: `run_canary` is deliberately left at its default (true). It is tempting to pass `false`
-  # here — the canary is already covered on the PR and on `main` after merge — but in `ci.yml`
-  # `run_canary: false` is the *fork* signal: it enables the
-  # `ask-maintainer-to-run-pr-bot-and-canary` job, which unconditionally `exit 1`s to tell fork
-  # authors to ask a maintainer. Passing `false` here would therefore fail every queue entry.
-  # Decoupling "skip the canary" from "this is a fork" is a separate change to `ci.yml`.
+  # Leave `run_canary` at its default: in `ci.yml`, `run_canary: false` is the fork signal that
+  # enables `ask-maintainer-to-run-pr-bot-and-canary` (which exits 1), so it would fail every entry.
   ci:
     needs:
     - save-docker-login-token
@@ -109,14 +94,9 @@ jobs:
       CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
       CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
 
-  # `ci-pr.yml` reads the base revision from `github.event.pull_request.base.sha`, which does not
-  # exist for a merge-group event. The equivalent here is `github.event.merge_group.base_sha`: the
-  # commit the queue branch was built on top of (`main` plus any earlier entries), which is the
-  # right baseline — a queue entry must be semver-compatible with what it will actually merge into.
-  #
-  # The `breaking-change` label lives on the pull request, and a merge-group event doesn't name
-  # one, so it's looked up from the commits in the queue branch. If any queued PR carries the
-  # label, failures are downgraded to warnings for the whole entry, matching the PR behavior.
+  # Uses `merge_group.base_sha` as the baseline (ci-pr.yml's `pull_request.base.sha` doesn't exist
+  # here); it's what the entry merges into, so the right thing to check semver against. The
+  # `breaking-change` label is resolved from the PRs in the queue branch, since the event names none.
   semver-checks:
     name: Check PR semver compliance
     permissions:

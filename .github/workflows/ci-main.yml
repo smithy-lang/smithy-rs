@@ -64,14 +64,9 @@ jobs:
         pwd
         IMAGE_TAG="ci-$(./.github/scripts/docker-image-hash)"
         ./.github/scripts/upload-build-image.sh $IMAGE_TAG
-    # Mirror the image to public GHCR so fork PRs (which can't authenticate to ECR) can pull it
-    # anonymously instead of rebuilding it from scratch. Uses the built-in GITHUB_TOKEN.
-    #
-    # `continue-on-error` because this job is a required check and ECR (the path every
-    # non-fork build depends on) has already succeeded by this point. The mirror is a
-    # best-effort optimization for forks: if it fails, forks fall back to building the image
-    # locally, which is slow but correct. Letting it fail the job would take main's CI down
-    # for a fork-only speedup — the exact tradeoff this step is not worth.
+    # Mirror the image to public GHCR so fork PRs, which can't authenticate to ECR, can pull it
+    # instead of rebuilding it. continue-on-error since ECR (the path every non-fork build needs)
+    # already succeeded here; a mirror failure just leaves forks on the slower local build.
     - name: Mirror image to public GHCR
       continue-on-error: true
       env:
@@ -83,19 +78,10 @@ jobs:
         GHCR_IMAGE="ghcr.io/smithy-lang/smithy-rs-build-image:${IMAGE_TAG}"
         docker tag "smithy-rs-base-image:${IMAGE_TAG}" "${GHCR_IMAGE}"
         docker push "${GHCR_IMAGE}"
-        # A newly-created GHCR package is PRIVATE by default, and there is no REST endpoint to
-        # change package visibility — it has to be done once, by hand, in the org's package
-        # settings. Until that happens the anonymous pull on the fork path gets a 403 and
-        # silently falls back to a local build, so check it here rather than letting a green
-        # run imply fork PRs are fixed.
-        #
-        # Note this has to go through the registry's token endpoint: GHCR's /v2/ API answers
-        # 401 without a token even for public packages, so an unauthenticated request can't
-        # distinguish public from private. An *anonymous* token, however, is only granted pull
-        # scope on a public package, so 200-vs-403 with that token is the real signal.
+        # A new GHCR package is private by default and has to be made public by hand once (no API).
+        # Check it via the registry token endpoint: /v2/ returns 401 without a token even when
+        # public, but an anonymous token is only granted pull scope when the package is public.
         GHCR_REPO="${{ github.repository_owner }}/smithy-rs-build-image"
-        # The token endpoint answers 403 for a private or absent package, so tolerate a failed
-        # request and an empty body here; the `if` below treats an empty token as "not public".
         ANON_TOKEN="$(
           curl -fsSL "https://ghcr.io/token?scope=repository:${GHCR_REPO}:pull&service=ghcr.io" 2>/dev/null \
             | sed -n 's/.*"token":"\([^"]*\)".*/\1/p' || true

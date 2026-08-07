@@ -6,12 +6,8 @@
 
 set -eux
 
-# Optional arg selects a phase so this job can fan out across parallel legs. The phases use
-# different toolchains/flags and don't share compiled artifacts, so splitting them adds no
-# extra compilation:
-#   docs  - cargo doc + clippy on the smoketest, plus the integration-test check
-#   types - cargo hack udeps + the per-crate check-external-types loop
-#   all   - both (default; local dev and any non-matrix caller)
+# Optional arg selects a phase (docs | types | all) so this can fan out across parallel legs.
+# The phases use different toolchains and don't share artifacts, so splitting adds no compilation.
 phase="${1:-all}"
 run_phase() { [[ "${phase}" == "$1" || "${phase}" == "all" ]]; }
 

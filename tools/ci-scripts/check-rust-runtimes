@@ -16,18 +16,14 @@ set -eux
 
 : "$RUST_NIGHTLY_VERSION"
 
-# Optional 1st arg selects one runtime workspace so CI can run rust-runtime and aws/rust-runtime as
-# parallel legs; with no arg both are checked (local dev and any non-matrix caller).
+# Optional 1st arg picks one runtime workspace so CI can run the two as parallel legs; no arg = both
 if [[ $# -gt 0 ]]; then
     runtime_paths=("$1")
 else
     runtime_paths=("rust-runtime" "aws/rust-runtime")
 fi
 
-# Optional 2nd arg selects a phase so the heavy rust-runtime workspace can fan out across legs:
-#   workspace  - clippy/nextest/doc/minimal-versions + per-crate MSRV & external-types checks
-#   additional - the per-crate `additional-ci` feature-combination tests (the slow phase)
-#   all        - both (default; local dev and any non-matrix caller)
+# Optional 2nd arg selects a phase (workspace | additional | all) so the slow workspace can fan out
 phase="${2:-all}"
 run_phase() { [[ "${phase}" == "$1" || "${phase}" == "all" ]]; }
 
