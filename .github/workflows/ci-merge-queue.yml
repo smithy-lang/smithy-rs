@@ -1,0 +1,210 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs CI for GitHub merge queue entries. This is separate from `ci-pr.yml` because a `merge_group`
+# event carries no `pull_request` object, so ci-pr.yml's jobs (gated on the PR's repo name) would
+# all skip. The queue branch is repo-owned, so unlike a fork PR it can read secrets and pull ECR.
+name: CI (merge queue)
+on:
+  merge_group:
+    types: [checks_requested]
+
+# Each queue entry is a distinct commit and must be tested on its own, so entries don't cancel
+concurrency:
+  group: ci-merge-queue-${{ github.event.merge_group.head_ref || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+  id-token: write
+
+jobs:
+  # Mirrors `ci-pr.yml`'s job of the same name: stash an ECR login password so the containerized
+  # jobs in `ci.yml` can pull the build image.
+  save-docker-login-token:
+    name: Save a docker login token
+    timeout-minutes: 10
+    outputs:
+      docker-login-password: ${{ steps.set-token.outputs.docker-login-password }}
+    permissions:
+      id-token: write
+      contents: read
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Attempt to load a docker login password
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Save the docker login password to the output
+      id: set-token
+      run: |
+        ENCRYPTED_PAYLOAD=$(
+          gpg --symmetric --batch --passphrase "${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}" --output - <(aws ecr get-login-password --region us-west-2) | base64 -w0
+        )
+        echo "docker-login-password=$ENCRYPTED_PAYLOAD" >> $GITHUB_OUTPUT
+
+  acquire-base-image:
+    name: Acquire Base Image
+    timeout-minutes: 90
+    needs: save-docker-login-token
+    runs-on: smithy_ubuntu-latest_8-core
+    env:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+    - uses: ./smithy-rs/.github/actions/free-disk-space
+    - name: Acquire base image
+      id: acquire
+      env:
+        DOCKER_BUILDKIT: 1
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Acquire credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.SMITHY_RS_ECR_PUSH_ROLE_ARN }}
+        role-session-name: GitHubActions
+        aws-region: us-west-2
+    - name: Upload image
+      run: |
+        IMAGE_TAG="ci-$(./smithy-rs/.github/scripts/docker-image-hash)"
+        ./smithy-rs/.github/scripts/upload-build-image.sh $IMAGE_TAG
+
+  # Leave `run_canary` at its default: in `ci.yml`, `run_canary: false` is the fork signal that
+  # enables `ask-maintainer-to-run-pr-bot-and-canary` (which exits 1), so it would fail every entry.
+  ci:
+    needs:
+    - save-docker-login-token
+    - acquire-base-image
+    uses: ./.github/workflows/ci.yml
+    secrets:
+      ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+      DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      CANARY_GITHUB_ACTIONS_ROLE_ARN: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+      CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }}
+
+  # Uses `merge_group.base_sha` as the baseline (ci-pr.yml's `pull_request.base.sha` doesn't exist
+  # here); it's what the entry merges into, so the right thing to check semver against. The
+  # `breaking-change` label is resolved from the PRs in the queue branch, since the event names none.
+  semver-checks:
+    name: Check PR semver compliance
+    permissions:
+      pull-requests: read
+      contents: read
+    runs-on: smithy_ubuntu-latest_8-core
+    timeout-minutes: 30
+    needs:
+    - save-docker-login-token
+    - acquire-base-image
+    if: |
+      always() &&
+      !contains(needs.*.result, 'failure') &&
+      !contains(needs.*.result, 'cancelled')
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        fetch-depth: 0
+    - name: Get merge queue info
+      id: check-breaking-label
+      uses: actions/github-script@v7
+      with:
+        script: |
+          // `base_sha` is the merge group's parent commit and `head_sha` is the merge group
+          // itself; both are required fields of the `merge_group` payload. `base_sha` is the
+          // right semver baseline: a queue entry must be compatible with what it will actually
+          // merge into, which is `main` plus any entries queued ahead of it — not the base
+          // branch as it looked when the pull request was opened.
+          const mg = context.payload.merge_group;
+          const baseSha = mg.base_sha;
+          const headSha = mg.head_sha;
+          // Guard anyway: passing an empty baseline through to `check-semver` would compare
+          // against the wrong tree and could pass silently, so fail loudly instead.
+          if (!baseSha || !headSha) {
+            core.setFailed(`merge_group payload missing base_sha/head_sha: ${JSON.stringify(mg)}`);
+            return;
+          }
+          // Find the pull requests bundled into this queue entry so their labels and changed
+          // files can be inspected. Default to running the check (and to not downgrading
+          // failures) if anything here is unavailable.
+          let isBreaking = false;
+          let runSemver = true;
+          try {
+            const commits = await github.paginate(github.rest.repos.compareCommitsWithBasehead, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              basehead: `${baseSha}...${headSha}`,
+            }, (response) => response.data.commits ?? []);
+            const prNumbers = new Set();
+            for (const commit of commits) {
+              const associated = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                commit_sha: commit.sha,
+              });
+              for (const pr of associated.data) {
+                prNumbers.add(pr.number);
+              }
+            }
+            // Semver can only change if the generated SDK's public API can: runtime crates
+            // (copied into the SDK) or codegen sources. Skip the check only when every changed
+            // file across every queued PR is inert (docs, changelog, CI config).
+            //
+            // Markdown only counts as inert outside the runtime crates: files under
+            // rust-runtime/ and aws/rust-runtime/ can be pulled into crate docs with
+            // `#[doc = include_str!(...)]`, which is part of the public API surface
+            // `cargo-semver-checks` inspects.
+            const inert = /^(design\/|docs\/|\.github\/|\.changelog\/|CHANGELOG\.md$|[^/]+\.md$)/;
+            const labels = [];
+            let sawNonInert = false;
+            for (const number of prNumbers) {
+              const pr = await github.rest.pulls.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+              labels.push(...pr.data.labels.map(l => l.name));
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: number,
+              });
+              if (files.some(f => !inert.test(f.filename))) {
+                sawNonInert = true;
+              }
+            }
+            isBreaking = labels.includes("breaking-change");
+            // Only skip when at least one PR was actually inspected; an empty set means the
+            // lookup found nothing and the check should still run.
+            runSemver = prNumbers.size === 0 ? true : sawNonInert;
+          } catch (e) {
+            core.warning(`merge queue lookup failed, running semver checks anyway: ${e}`);
+          }
+          const data = { baseSha, isBreaking, runSemver };
+          console.log("data:", data);
+          return data;
+    - name: Run semver check
+      # Only run when the queue entry touches something that could change a crate's public API
+      if: fromJSON(steps.check-breaking-label.outputs.result).runSemver
+      env:
+        ENCRYPTED_DOCKER_PASSWORD: ${{ needs.save-docker-login-token.outputs.docker-login-password }}
+        DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: check-semver
+        action-arguments: ${{ fromJSON(steps.check-breaking-label.outputs.result).baseSha }} ${{ fromJSON(steps.check-breaking-label.outputs.result).isBreaking }}
+    - name: Print help message
+      if: failure()
+      run: echo "::error::This pull request either contains breaking changes, or has cross-crate changes that may be backwards compatible, but that cargo-semver-checks cannot verify. Please scrutinize the change for backwards compatibility."
