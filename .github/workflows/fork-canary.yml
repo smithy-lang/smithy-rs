@@ -1,0 +1,155 @@
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+# Runs the canary on an external contributor's fork PR once a maintainer has reviewed the diff and
+# added the `safe-to-run-canary` label. Fork PRs can't reach the canary secrets from a normal
+# `pull_request` run, so today a maintainer has to dispatch `manual-canary.yml` by hand; this makes
+# it a label instead.
+#
+# SECURITY: this uses `pull_request_target`, which runs from the base repo with access to secrets
+# while checking out the PR's (untrusted) code. The label is the trust gate -- a maintainer is
+# attesting the diff is safe to run with the canary credentials. The guards that make that safe:
+#   - runs only when the `safe-to-run-canary` label is present AND the PR is from a fork
+#   - checks out the exact reviewed commit by SHA, never a branch ref
+#   - the label is removed on every new push (see `revoke-on-push`), so new commits need re-review
+#   - no PR-controlled text (title, body, branch name) is ever interpolated into a `run:` block
+name: Fork canary
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+
+# One canary per PR; a new push supersedes an in-flight run for the same PR.
+concurrency:
+  group: fork-canary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+# Default to no permissions; each job opts in to only what it needs.
+permissions: {}
+
+jobs:
+  # A new push invalidates the maintainer's review, so drop the label and stop. Re-adding it after
+  # re-reviewing the new commits is what re-triggers the canary. This runs with only `pull-requests:
+  # write` and never checks out fork code, so it can't be subverted by the push it's reacting to.
+  revoke-on-push:
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          try {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              name: 'safe-to-run-canary',
+            });
+            core.notice('New commits pushed; removed safe-to-run-canary. Re-add it after reviewing the new commits to run the canary again.');
+          } catch (e) {
+            // 404 just means the label wasn't set; anything else is non-fatal here.
+            core.info(`no label to remove: ${e.message}`);
+          }
+
+  # Everything below runs only when a maintainer has labeled a fork PR. `head.repo.full_name`
+  # excludes same-repo PRs (they already run the canary through ci-pr.yml).
+  get-pr-info:
+    if: >
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'safe-to-run-canary' &&
+      github.event.pull_request.head.repo.full_name != 'smithy-lang/smithy-rs'
+    name: Get PR info
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      commit_sha: ${{ steps.get.outputs.result }}
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - name: Resolve the reviewed head SHA
+      id: get
+      uses: actions/github-script@v7
+      with:
+        # Re-read the PR head SHA from the API rather than trusting a value derived from the event,
+        # and pin every checkout below to it so the code that runs is the code that was reviewed.
+        result-encoding: string
+        script: |
+          const pr = await github.rest.pulls.get({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: context.payload.pull_request.number,
+          });
+          return pr.data.head.sha;
+
+  acquire-base-image:
+    name: Acquire Base Image
+    needs: get-pr-info
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
+        fetch-depth: 0
+    - uses: ./smithy-rs/.github/actions/free-disk-space
+    - name: Acquire base image
+      id: acquire
+      run: ./smithy-rs/.github/scripts/acquire-build-image
+    - name: Upload base image
+      uses: actions/upload-artifact@v4
+      with:
+        name: smithy-rs-base-image
+        path: smithy-rs-base-image
+        retention-days: 1
+
+  generate:
+    name: Generate
+    needs:
+    - get-pr-info
+    - acquire-base-image
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      contents: read
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
+    - name: Generate a subset of SDKs for the canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-aws-sdk-for-canary
+
+  canary:
+    name: Canary
+    needs:
+    - get-pr-info
+    - generate
+    runs-on: smithy_ubuntu-latest_8-core
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ needs.get-pr-info.outputs.commit_sha }}
+    - name: Configure credentials
+      id: creds
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-region: us-west-2
+        role-to-assume: ${{ secrets.CANARY_GITHUB_ACTIONS_ROLE_ARN }}
+        output-credentials: true
+    - name: Run canary
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: run-canary
+        action-arguments: ${{ secrets.CANARY_STACK_CDK_OUTPUTS_BUCKET_NAME }} ${{ steps.creds.outputs.aws-access-key-id }} ${{ steps.creds.outputs.aws-secret-access-key }} ${{ steps.creds.outputs.aws-session-token }} x86_64
