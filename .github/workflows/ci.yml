@@ -39,8 +39,49 @@ env:
   DOCKER_LOGIN_TOKEN_PASSPHRASE: ${{ secrets.DOCKER_LOGIN_TOKEN_PASSPHRASE }}
 
 jobs:
-  # The `generate` job runs scripts that produce artifacts that are required by the `test` job,
-  # and also runs some checks/lints so that those are run sooner rather than later.
+  # Detects whether a pull request changes anything that could affect the runtime crates, so the
+  # runtime-only jobs (Windows, exotic platforms) can skip their expensive steps on PRs that only
+  # touch docs/CI/changelog. Outputs `rust=true` for any non-PR event (push, schedule) and on any
+  # error, so those cases always run the full checks.
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      rust: ${{ steps.detect.outputs.rust }}
+    steps:
+    - name: Detect Rust changes
+      id: detect
+      uses: actions/github-script@v7
+      with:
+        script: |
+          if (context.eventName !== 'pull_request') {
+            core.setOutput('rust', 'true');
+            return;
+          }
+          // Runtime jobs only exercise the runtime crates, so skip when every changed file is inert
+          // (docs, changelog, CI config, design). Default to running on any error.
+          //
+          // Markdown only counts as inert outside the runtime crates: files under rust-runtime/ and
+          // aws/rust-runtime/ can be pulled into crate docs with `#[doc = include_str!(...)]`, so
+          // editing them can break `cargo doc -D warnings` and must still run the checks.
+          const inert = /^(design\/|docs\/|\.github\/|\.changelog\/|CHANGELOG\.md$|[^/]+\.md$)/;
+          try {
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            });
+            const rust = files.some(f => !inert.test(f.filename));
+            core.setOutput('rust', rust ? 'true' : 'false');
+          } catch (e) {
+            core.warning(`change detection failed, running checks anyway: ${e}`);
+            core.setOutput('rust', 'true');
+          }
+
+  # Generates the artifacts most test-sdk legs need: the ~23-service smoketest SDK and the release
+  # bundle. The full ~300-service SDK is generated separately in `generate-full` so that the legs
+  # that only need the smoketest SDK don't wait on it.
   generate:
     name: Generate
     timeout-minutes: 30
@@ -52,7 +93,6 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         actions:
-        - action: generate-aws-sdk
         - action: generate-aws-sdk-smoketest
         - action: generate-smithy-rs-release
     steps:
@@ -74,10 +114,34 @@ jobs:
       with:
         action: ${{ matrix.actions.action }}
 
+  # Generates the full ~300-service SDK, which is slower than the smoketest SDK and only consumed by
+  # the `test-sdk-full` legs (check-only-aws-sdk-services, check-aws-sdk-cargo-deny) and canary. Kept
+  # off the critical path of the smoketest-only test legs.
+  generate-full:
+    name: Generate / full-sdk
+    timeout-minutes: 30
+    runs-on: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    # The models from aws-sdk-rust are needed to generate the full SDK for CI
+    - uses: actions/checkout@v4
+      with:
+        repository: awslabs/aws-sdk-rust
+        path: aws-sdk-rust
+    - name: Run generate-aws-sdk
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: generate-aws-sdk
+
   # Test the code generator and other parts (styles and lints) that don't require
   # code to have already been generated in order to run.
   test-codegen:
-    name: Test Codegen
+    # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
+    name: Test Codegen / ${{ matrix.test.label || matrix.test.action }}
     runs-on: ${{ matrix.test.runner }}
     timeout-minutes: 35
     # To avoid repeating setup boilerplate, we have the actual test commands
@@ -95,7 +159,22 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-core-codegen-unit-tests
           runner: smithy_ubuntu-latest_8-core
+        # The rust-runtime workspace is split by phase: the whole-workspace passes (clippy, nextest,
+        # doc, minimal-versions) and the slower per-crate `additional-ci` feature-combination tests
+        # run as parallel legs. aws/rust-runtime is small enough to stay a single leg.
         - action: check-rust-runtimes
+          action-arguments: rust-runtime workspace
+          label: check-rust-runtimes-smithy
+          runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
+        - action: check-rust-runtimes
+          action-arguments: rust-runtime additional
+          label: check-rust-runtimes-smithy-additional
+          runner: smithy_ubuntu-latest_8-core
+          fetch-depth: 0
+        - action: check-rust-runtimes
+          action-arguments: aws/rust-runtime
+          label: check-rust-runtimes-aws
           runner: smithy_ubuntu-latest_8-core
           fetch-depth: 0
         - action: check-sdk-codegen-unit-tests
@@ -126,6 +205,9 @@ jobs:
           runner: smithy_ubuntu-latest_8-core
         - action: check-codegen-version
           runner: smithy_ubuntu-latest_8-core
+        # Guards that the check-aws-config --partition legs cover the whole powerset (cheap; no SDK)
+        - action: check-aws-config-partition-coverage
+          runner: smithy_ubuntu-latest_8-core
     steps:
     - uses: GitHubSecurityLab/actions-permissions/monitor@v1
     - uses: actions/checkout@v4
@@ -138,6 +220,8 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
 
   # Separate from the main checks above because it uses aws-sdk-rust from GitHub
   check-semver-hazards:
@@ -163,7 +247,8 @@ jobs:
   # Test all the things that require generated code. Note: the Rust runtimes require codegen
   # to be checked since `aws-config` depends on the generated STS client.
   test-sdk:
-    name: Test the SDK
+    # `label || action` keeps matrix leg names readable instead of GitHub's auto-generated tuple
+    name: Test the SDK / ${{ matrix.test.label || matrix.test.action }}
     needs: generate
     runs-on: ${{ matrix.test.runner }}
     timeout-minutes: 45
@@ -174,15 +259,40 @@ jobs:
       matrix:
         # These correspond to scripts in tools/ci-scripts that will be run in the Docker build image
         test:
+        # check-aws-config split into a `base` leg + 4 `--partition` featureset legs; the union
+        # runs the same checks as the old single leg, but in parallel. See ci-scripts/check-aws-config.
         - action: check-aws-config
+          action-arguments: base
+          label: check-aws-config-base
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 1/4
+          label: check-aws-config-featureset-1
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 2/4
+          label: check-aws-config-featureset-2
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 3/4
+          label: check-aws-config-featureset-3
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-config
+          action-arguments: featureset 4/4
+          label: check-aws-config-featureset-4
           runner: smithy_ubuntu-latest_8-core
         - action: check-aws-sdk-canary
           runner: smithy_ubuntu-latest_8-core
-        - action: check-aws-sdk-cargo-deny
-          runner: smithy_ubuntu-latest_8-core
-        - action: check-only-aws-sdk-services
-          runner: smithy_ubuntu-latest_8-core
+        # Split by phase into parallel legs: doc/clippy (+ integration-test check) and
+        # udeps/external-types. The phases use different toolchains and don't share compiled
+        # artifacts, so this adds no extra compilation.
         - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          action-arguments: docs
+          label: check-aws-sdk-smoketest-docs
+          runner: smithy_ubuntu-latest_16-core
+        - action: check-aws-sdk-smoketest-docs-clippy-udeps
+          action-arguments: types
+          label: check-aws-sdk-smoketest-types
           runner: smithy_ubuntu-latest_16-core
         - action: check-aws-sdk-smoketest-unit-tests
           runner: smithy_ubuntu-latest_8-core
@@ -200,9 +310,52 @@ jobs:
       uses: ./smithy-rs/.github/actions/docker-build
       with:
         action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
+
+  # The SDK checks that consume the full ~300-service SDK, split out so they wait on `generate-full`
+  # while the smoketest-only legs above start as soon as the faster `generate` finishes.
+  test-sdk-full:
+    name: Test the SDK / ${{ matrix.test.label || matrix.test.action }}
+    needs: generate-full
+    runs-on: ${{ matrix.test.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+        # check-only-aws-sdk-services `cargo check`s ~300 service crates; shard it across parallel
+        # legs. See ci-scripts/check-only-aws-sdk-services.
+        - action: check-only-aws-sdk-services
+          action-arguments: 1/3
+          label: check-only-aws-sdk-services-1
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-only-aws-sdk-services
+          action-arguments: 2/3
+          label: check-only-aws-sdk-services-2
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-only-aws-sdk-services
+          action-arguments: 3/3
+          label: check-only-aws-sdk-services-3
+          runner: smithy_ubuntu-latest_8-core
+        - action: check-aws-sdk-cargo-deny
+          runner: smithy_ubuntu-latest_8-core
+    steps:
+    - uses: GitHubSecurityLab/actions-permissions/monitor@v1
+    - uses: actions/checkout@v4
+      with:
+        path: smithy-rs
+        ref: ${{ inputs.git_ref }}
+    - name: Run ${{ matrix.test.action }}
+      uses: ./smithy-rs/.github/actions/docker-build
+      with:
+        action: ${{ matrix.test.action }}
+        action-arguments: ${{ matrix.test.action-arguments }}
+        label: ${{ matrix.test.label }}
 
   test-rust-windows:
     name: Rust Tests on Windows
+    needs: detect-changes
     runs-on: windows-latest
     timeout-minutes: 30
     env:
@@ -210,25 +363,44 @@ jobs:
       CARGO_INCREMENTAL: 0
       RUSTDOCFLAGS: -D warnings
       RUSTFLAGS: -D warnings
+      # Point vcpkg's binary cache at a stable path we can persist across runs. Without this it
+      # defaults to the runner's ephemeral home dir, so the OpenSSL build (~6 min) repeats every run.
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
     steps:
     - uses: actions/checkout@v4
       with:
         ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.7.3
     - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
         workspaces: |
           .
           tools
     - uses: dtolnay/rust-toolchain@master
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
       # To fix OpenSSL not found on Windows: https://github.com/sfackler/rust-openssl/issues/1542
-    - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-    - run: vcpkg install openssl:x64-windows-static-md
+    # Restore the prebuilt OpenSSL binary so `vcpkg install` below is a cache hit instead of a
+    # ~6 min from-source build. Keyed on the package spec so a version bump busts the cache.
+    - name: Cache vcpkg OpenSSL
+      if: needs.detect-changes.outputs.rust == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}\vcpkg-cache
+        key: ${{ runner.os }}-vcpkg-openssl-x64-windows-static-md
+    - if: needs.detect-changes.outputs.rust == 'true'
+      run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
+    - if: needs.detect-changes.outputs.rust == 'true'
+      # vcpkg requires the binary cache directory to exist before it will write to it
+      run: New-Item -ItemType Directory -Force -Path $env:VCPKG_DEFAULT_BINARY_CACHE
+    - if: needs.detect-changes.outputs.rust == 'true'
+      run: vcpkg install openssl:x64-windows-static-md
     - name: Run tests
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: tools/ci-scripts/test-windows.sh
 
@@ -238,6 +410,7 @@ jobs:
   # complicated setup involving architecture emulation.
   test-exotic-platform-support:
     name: Exotic platform support
+    needs: detect-changes
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -281,12 +454,14 @@ jobs:
         ref: ${{ inputs.git_ref }}
       # Pinned to the commit hash of v2.7.3
     - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}-${{ matrix.target }}
         workspaces: |
           .
           tools
     - uses: dtolnay/rust-toolchain@master
+      if: needs.detect-changes.outputs.rust == 'true'
       with:
         toolchain: ${{ env.rust_version }}
         components: ${{ env.rust_toolchain_components }}
@@ -295,13 +470,14 @@ jobs:
       run: |
         echo "OPENSSL_LIB_DIR=/usr/lib/i386-linux-gnu" >> $GITHUB_ENV
         echo "OPENSSL_INCLUDE_DIR=/usr/include/i386-linux-gnu" >> $GITHUB_ENV
-      if: matrix.target == 'i686-unknown-linux-gnu'
+      if: needs.detect-changes.outputs.rust == 'true' && matrix.target == 'i686-unknown-linux-gnu'
     - name: Sets OpenSSL env vars on ppc and ppc64
       run: |
         echo "OPENSSL_DIR=/openssl" >> $GITHUB_ENV
-      if: matrix.target != 'i686-unknown-linux-gnu'
+      if: needs.detect-changes.outputs.rust == 'true' && matrix.target != 'i686-unknown-linux-gnu'
     - name: Configure cross
       shell: bash
+      if: needs.detect-changes.outputs.rust == 'true'
       # configure and cross compile openssl locally on ppc and ppc64 to be able to run aws-smithy-client tests.
       # since cross dropped support for openssl, we use the build script from version 0.16.
       run: |
@@ -325,15 +501,19 @@ jobs:
         passthrough = ["OPENSSL_DIR"]
         EOF
     - name: Build Smithy-rs rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross build -vv --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.build_smithy_rs_exclude }} --workspace ${{ matrix.build_smithy_rs_features }}
     - name: Build AWS rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross build -vv --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.build_aws_exclude }} --workspace
     - name: Test Smithy-rs rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "rust-runtime/Cargo.toml" ${{ matrix.test_smithy_rs_exclude }} --workspace ${{ matrix.test_smithy_rs_features }}
     - name: Test AWS rust-runtime crates
+      if: needs.detect-changes.outputs.rust == 'true'
       shell: bash
       run: cross test --target ${{ matrix.target }} --manifest-path "aws/rust-runtime/Cargo.toml" ${{ matrix.test_aws_exclude }} --workspace ${{ matrix.test_aws_features }}
 
@@ -346,7 +526,7 @@ jobs:
   canary:
     name: Canary
     if: ${{ inputs.run_canary }}
-    needs: generate
+    needs: generate-full
     runs-on: smithy_ubuntu-latest_8-core
     timeout-minutes: 30
     permissions:
@@ -376,7 +556,7 @@ jobs:
   canary-arm:
     name: Canary (aarch64)
     if: ${{ inputs.run_canary }}
-    needs: generate
+    needs: generate-full
     runs-on: ubuntu-24.04-arm
     timeout-minutes: 30
     permissions:
@@ -437,10 +617,13 @@ jobs:
   # the myriad of test matrix combinations into GitHub's protected branch rules
   require-all:
     needs:
+    - detect-changes
     - generate
+    - generate-full
     - test-codegen
     - check-semver-hazards
     - test-sdk
+    - test-sdk-full
     - test-rust-windows
     - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
