@@ -5,29 +5,29 @@
 
 #![cfg(any(feature = "__rustls", feature = "s2n-tls",))]
 
+mod common {
+    pub(crate) mod tls;
+}
+
 use aws_smithy_async::time::SystemTimeSource;
 use aws_smithy_http_client::tls;
-use aws_smithy_http_client::tls::{TlsContext, TrustStore};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::http::{HttpClient, HttpConnector, HttpConnectorSettings};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_runtime_api::client::runtime_components::RuntimeComponentsBuilder;
 use aws_smithy_types::byte_stream::ByteStream;
+use common::tls as test_tls;
 use http_1x::{Method, Request, Response, StatusCode};
 use http_body_util::{BodyExt, Full};
 use hyper::body::{Bytes, Incoming};
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
-use rustls::ServerConfig;
-use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fs, io};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
-use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error};
 
 struct TestServer {
@@ -48,28 +48,12 @@ impl TestServer {
 }
 
 async fn server() -> Result<TestServer, BoxError> {
-    // Set process wide crypto provider
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
-
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
-    // load public certificate.
-    let certs = load_certs("tests/server.pem")?;
-
-    // load private key.
-    let key = load_private_key("tests/server.rsa")?;
-
     debug!("Starting to serve on https://{}", addr);
 
-    // TLS config
-    let mut server_config = ServerConfig::builder()
-        .with_no_client_auth()
-        .with_single_cert(certs, key)
-        .map_err(|e| error(e.to_string()))?;
-
-    server_config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec(), b"http/1.0".to_vec()];
-    let tls_acceptor = TlsAcceptor::from(Arc::new(server_config));
+    let tls_acceptor = test_tls::server_tls_acceptor(&[b"h2", b"http/1.1", b"http/1.0"])?;
     let service = service_fn(echo);
 
     let conn_count = Arc::new(());
@@ -131,38 +115,6 @@ async fn echo(req: Request<Incoming>) -> Result<Response<Full<Bytes>>, hyper::Er
     Ok(response)
 }
 
-fn error(err: String) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, err)
-}
-
-// Load public certificate from file.
-fn load_certs(filename: &str) -> io::Result<Vec<CertificateDer<'static>>> {
-    let certfile = fs::File::open(filename)
-        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
-    let mut reader = io::BufReader::new(certfile);
-    rustls_pemfile::certs(&mut reader).collect()
-}
-
-// Load private key from file.
-fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
-    // Open keyfile.
-    let keyfile = fs::File::open(filename)
-        .map_err(|e| error(format!("failed to open {}: {}", filename, e)))?;
-    let mut reader = io::BufReader::new(keyfile);
-
-    // Load and return a single private key.
-    rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
-}
-
-fn tls_context_from_pem(filename: &str) -> TlsContext {
-    let pem_contents = fs::read(filename).unwrap();
-    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
-    TlsContext::builder()
-        .with_trust_store(trust_store)
-        .build()
-        .unwrap()
-}
-
 #[cfg(feature = "rustls-aws-lc")]
 #[should_panic(expected = "InvalidCertificate(UnknownIssuer)")]
 #[tokio::test]
@@ -183,7 +135,7 @@ async fn test_rustls_aws_lc_custom_ca() {
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
 
     run_tls_test(&client).await.unwrap()
@@ -199,7 +151,7 @@ async fn test_rustls_aws_lc_custom_ca_with_timeout() {
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLc,
         ))
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
 
     run_tls_test_with_idle_timeout(&client, Some(TIMEOUT))
@@ -227,7 +179,7 @@ async fn test_rustls_aws_lc_fips_custom_ca() {
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::AwsLcFips,
         ))
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
 
     run_tls_test(&client).await.unwrap()
@@ -253,7 +205,7 @@ async fn test_rustls_ring_custom_ca() {
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Ring,
         ))
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
 
     run_tls_test(&client).await.unwrap()
@@ -281,7 +233,7 @@ async fn test_rustls_custom_provider_custom_ca() {
         .tls_provider(tls::Provider::Rustls(
             tls::rustls_provider::CryptoMode::Custom(ring_provider),
         ))
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
     run_tls_test(&client).await.unwrap()
 }
@@ -302,7 +254,7 @@ async fn test_s2n_native_ca() {
 async fn test_s2n_tls_custom_ca() {
     let client = aws_smithy_http_client::Builder::new()
         .tls_provider(tls::Provider::S2nTls)
-        .tls_context(tls_context_from_pem("tests/server.pem"))
+        .tls_context(test_tls::server_tls_context())
         .build_https();
     run_tls_test(&client).await.unwrap()
 }

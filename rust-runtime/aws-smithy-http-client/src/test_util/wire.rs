@@ -39,6 +39,8 @@
 
 #![allow(missing_docs)]
 
+pub mod connection;
+
 use aws_smithy_async::future::never::Never;
 use aws_smithy_async::future::BoxFuture;
 use aws_smithy_runtime_api::client::http::SharedHttpClient;
