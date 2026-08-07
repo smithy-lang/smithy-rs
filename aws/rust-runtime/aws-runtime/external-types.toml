@@ -2,6 +2,7 @@ allowed_external_types = [
     "aws_sigv4::*",
     "aws_smithy_types::*",
     "aws_smithy_runtime_api::*",
+    "aws_smithy_async::*",
     "aws_types::*",
     "bytes::bytes::Bytes",
 

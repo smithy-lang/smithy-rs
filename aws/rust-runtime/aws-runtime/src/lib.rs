@@ -50,3 +50,6 @@ pub mod fs_util;
 /// Supporting code for parsing AWS config values set in a user's environment or
 /// in a shared config file.
 pub mod env_config;
+
+/// Static-stability credentials caching and auth-failure invalidation for AWS clients.
+pub mod static_stability;
