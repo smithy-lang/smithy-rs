@@ -58,6 +58,7 @@ class EventStreamErrorMarshallerGenerator(
     private val errorsShape = unionShape.expectTrait<SyntheticEventStreamUnionTrait>()
     private val codegenScope =
         arrayOf(
+            "Bytes" to RuntimeType.Bytes,
             "MarshallMessage" to smithyEventStream.resolve("frame::MarshallMessage"),
             "Message" to smithyTypes.resolve("event_stream::Message"),
             "Header" to smithyTypes.resolve("event_stream::Header"),
@@ -129,7 +130,7 @@ class EventStreamErrorMarshallerGenerator(
                 rust("let mut headers = Vec::new();")
                 addStringHeader(":message-type", """"exception".into()""")
                 if (errorsShape.errorMembers.isEmpty()) {
-                    rust("let payload = Vec::new();")
+                    rustTemplate("let payload = #{Bytes}::new();", *codegenScope)
                 } else {
                     rustBlock("let payload = match _input") {
                         errorsShape.errorMembers.forEach { error ->
@@ -179,7 +180,7 @@ class EventStreamErrorMarshallerGenerator(
             val serializerFn = serializerGenerator.serverErrorSerializer(unionMember.target.toShapeId())
             renderMarshallEventPayload("inner", unionMember, eventStruct, serializerFn)
         } else {
-            rust("Vec::new()")
+            rustTemplate("#{Bytes}::new()", *codegenScope)
         }
     }
 

@@ -19,7 +19,7 @@ import software.amazon.smithy.rustsdk.customize.RemoveDefaultsDecorator
 import software.amazon.smithy.rustsdk.customize.Sigv4aAuthTraitBackfillDecorator
 import software.amazon.smithy.rustsdk.customize.apigateway.ApiGatewayDecorator
 import software.amazon.smithy.rustsdk.customize.applyDecorators
-import software.amazon.smithy.rustsdk.customize.applyExceptFor
+import software.amazon.smithy.rustsdk.customize.applyExceptForNamespaces
 import software.amazon.smithy.rustsdk.customize.dsql.DsqlDecorator
 import software.amazon.smithy.rustsdk.customize.dynamodb.DynamoDbDecorator
 import software.amazon.smithy.rustsdk.customize.ec2.Ec2Decorator
@@ -82,11 +82,15 @@ val DECORATORS: List<ClientCodegenDecorator> =
             // TODO(https://github.com/smithy-lang/smithy-rs/issues/3863): Comment in once the issue has been resolved
             // SmokeTestsDecorator(),
         ),
-        // S3 needs `AwsErrorCodeClassifier` to handle an `InternalError` as a transient error. We need to customize
-        // that behavior for S3 in a way that does not conflict with the globally applied `RetryClassifierDecorator`.
-        // Therefore, that decorator is applied to all but S3, and S3 customizes the creation of `AwsErrorCodeClassifier`
-        // accordingly (see https://github.com/smithy-lang/smithy-rs/pull/3699).
-        RetryClassifierDecorator().applyExceptFor("com.amazonaws.s3#AmazonS3"),
+        // S3 and STS both customize `AwsErrorCodeClassifier` (S3 to treat `InternalError` as a
+        // transient error, STS to treat `IDPCommunicationError` as one for all operations). We need
+        // to customize that behavior in a way that does not conflict with the globally applied
+        // `RetryClassifierDecorator`. Therefore, that decorator is applied to all but S3 and STS,
+        // and each customizes the creation of `AwsErrorCodeClassifier` accordingly.
+        RetryClassifierDecorator().applyExceptForNamespaces(
+            "com.amazonaws.s3",
+            "com.amazonaws.sts",
+        ),
         // Service specific decorators
         ApiGatewayDecorator().onlyApplyTo("com.amazonaws.apigateway#BackplaneControlService"),
         DsqlDecorator().onlyApplyTo("com.amazonaws.dsql#DSQL"),
@@ -106,7 +110,7 @@ val DECORATORS: List<ClientCodegenDecorator> =
             AwsChunkedContentEncodingDecorator(),
         ),
         S3ControlDecorator().onlyApplyTo("com.amazonaws.s3control#AWSS3ControlServiceV20180820"),
-        STSDecorator().onlyApplyTo("com.amazonaws.sts#AWSSecurityTokenServiceV20110615"),
+        STSDecorator().onlyApplyToNamespace("com.amazonaws.sts"),
         SSODecorator().onlyApplyTo("com.amazonaws.sso#SWBPortalService"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamwrite#Timestream_20181101"),
         TimestreamDecorator().onlyApplyTo("com.amazonaws.timestreamquery#Timestream_20181101"),
