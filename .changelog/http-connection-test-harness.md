@@ -3,7 +3,8 @@ applies_to:
 - client
 authors:
 - aajtodd
-references: []
+references:
+- smithy-rs#4767
 breaking: false
 new_feature: true
 bug_fix: false
