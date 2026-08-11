@@ -986,8 +986,7 @@ impl TestEndpoint {
 /// A DNS resolver backed by entries configured on the harness.
 ///
 /// Every lookup records a [`ConnectionEvent::DnsLookup`] regardless of
-/// outcome. Names without a configured entry return a
-/// [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
+/// outcome. Names without a configured entry return a [`ResolveDnsError`]
 /// so that hostname typos in tests surface immediately rather than
 /// manifesting as confusing downstream connect failures.
 #[derive(Clone, Debug)]
@@ -1046,8 +1045,7 @@ impl HarnessBuilder {
 
     /// Maps `hostname` to the given addresses in iteration order.
     ///
-    /// Unregistered names produce a [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
-    /// at resolution time.
+    /// Unregistered names produce a [`ResolveDnsError`] at resolution time.
     pub fn dns<I>(mut self, hostname: impl Into<String>, ips: I) -> Self
     where
         I: IntoIterator<Item = IpAddr>,
@@ -1061,8 +1059,7 @@ impl HarnessBuilder {
 
     /// Maps `hostname` to every configured endpoint address in endpoint order.
     ///
-    /// Unregistered names produce a [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
-    /// at resolution time.
+    /// Unregistered names produce a [`ResolveDnsError`] at resolution time.
     pub fn dns_all(mut self, hostname: impl Into<String>) -> Self {
         self.dns.push(DnsConfig::All(hostname.into()));
         self
