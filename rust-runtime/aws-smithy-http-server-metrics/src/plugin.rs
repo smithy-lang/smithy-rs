@@ -30,7 +30,7 @@ use crate::types::aws_smithy_http_server::plugin::HttpMarker;
 use crate::types::aws_smithy_http_server::plugin::Plugin;
 use crate::types::aws_smithy_http_server::request::request_id::ServerRequestId;
 use crate::types::aws_smithy_http_server::service::ServiceShape;
-use crate::types::HttpRequest;
+use crate::types::GenericHttpRequest;
 use crate::types::HttpResponse;
 
 pin_project! {
@@ -201,15 +201,15 @@ where
         }
     }
 }
-impl<Ser> DefaultMetricsPluginService<Ser>
-where
-    Ser: Service<HttpRequest, Response = HttpResponse>,
-    Ser::Future: Send + 'static,
-{
+impl<Ser> DefaultMetricsPluginService<Ser> {
     /// Gets the default request metrics that can be retrieved from the request object directly
     ///
     /// Assigns None to those that need information from the outer metrics layer to be set
-    fn get_default_request_metrics(&self, req: &HttpRequest) -> DefaultRequestMetrics {
+    ///
+    /// Generic over the request body `B`: the plugin only reads request
+    /// *extensions* (never the body), so it composes with any body type,
+    /// including the `BoxBodySync` produced by `LambdaHandler`.
+    fn get_default_request_metrics<B>(&self, req: &GenericHttpRequest<B>) -> DefaultRequestMetrics {
         DefaultRequestMetrics {
             service: Some(self.service.to_string()),
             service_version: self.service_version.map(|n| n.to_string()),
@@ -223,16 +223,16 @@ where
     }
 }
 
-impl<Ser> Service<HttpRequest> for DefaultMetricsPluginService<Ser>
+impl<Ser, B> Service<GenericHttpRequest<B>> for DefaultMetricsPluginService<Ser>
 where
-    Ser: Service<HttpRequest, Response = HttpResponse>,
+    Ser: Service<GenericHttpRequest<B>, Response = HttpResponse>,
     Ser::Future: Send + 'static,
 {
     type Response = Ser::Response;
     type Error = Ser::Error;
     type Future = DefaultMetricsFuture<Ser::Future>;
 
-    fn call(&mut self, mut req: HttpRequest) -> Self::Future {
+    fn call(&mut self, mut req: GenericHttpRequest<B>) -> Self::Future {
         let mut stopwatch = Stopwatch::new();
         let operation_timer_guard = stopwatch.start_owned();
 
