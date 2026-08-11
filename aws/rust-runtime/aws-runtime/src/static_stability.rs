@@ -51,8 +51,9 @@ const BACKOFF_JITTER_SECS: u64 = 300;
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(3100);
 
-// NOTE: `pessimistic_load_timeout` below is deliberately duplicated from `aws-smithy-runtime`'s
-// `LazyCache` rather than imported, to avoid the one-way `pub` API exposure.
+// NOTE: `pessimistic_load_timeout` below is deliberately duplicated from
+// `aws_smithy_runtime::client::identity::cache::lazy::pessimistic_load_timeout` rather than
+// imported, to avoid the one-way `pub` API exposure.
 //
 // Derive a pessimistic load timeout from the configured retry/timeout so the source's own retries
 // can finish before the cache kills the future.
