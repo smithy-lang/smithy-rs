@@ -19,6 +19,19 @@ use aws_smithy_runtime_api::client::identity::Identity;
 use crate::attributes::AccountId;
 use crate::credential_feature::AwsCredentialFeature;
 
+/// Marks credentials (or a token) as produced by a **built-in AWS provider that is eligible for
+/// static-stability caching** — i.e. the AWS `StaticStabilityCache` may keep serving them past
+/// expiration on a failed refresh (subject to backoff).
+///
+/// Built-in providers (IMDS, ECS/EKS container, STS AssumeRole[WithWebIdentity], SSO, Login,
+/// Cognito) stamp this on the `Credentials` they produce; the `From<Credentials> for Identity`
+/// conversion lifts it to an `Identity`-level property, and the cache reads it back generically via
+/// `Identity::property::<StaticStabilityEligible>()`. Custom/process providers stamp nothing and
+/// therefore get caching-only behavior.
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StaticStabilityEligible;
+
 /// AWS SDK Credentials
 ///
 /// An opaque struct representing credentials that may be used in an AWS SDK, modeled on
@@ -410,6 +423,12 @@ impl From<Credentials> for Identity {
                 layer.store_append(AwsCredentialFeature::ResolvedAccountId);
             }
             builder.set_property(layer.freeze());
+        }
+
+        // Lift the static-stability eligibility marker (stamped by built-in providers) from the
+        // Credentials onto the generic Identity, so the cache reads it without a downcast.
+        if val.get_property::<StaticStabilityEligible>().is_some() {
+            builder.set_property(StaticStabilityEligible);
         }
 
         builder.data(val).build().expect("set required fields")
