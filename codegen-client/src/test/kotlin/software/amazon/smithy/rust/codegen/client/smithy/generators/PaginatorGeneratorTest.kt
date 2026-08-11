@@ -5,6 +5,8 @@
 
 package software.amazon.smithy.rust.codegen.client.smithy.generators
 
+import io.kotest.matchers.string.shouldContain
+import io.kotest.matchers.string.shouldNotContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -16,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
 import software.amazon.smithy.rust.codegen.core.testutil.integrationTest
 import software.amazon.smithy.rust.codegen.core.util.letIf
+import kotlin.io.path.readText
 
 internal class PaginatorGeneratorTest {
     private val model =
@@ -78,12 +81,16 @@ internal class PaginatorGeneratorTest {
 
     @Test
     fun `generate paginators that compile`() {
-        clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
-            rustCrate.integrationTest("paginators_generated") {
-                Attribute.AllowUnusedImports.render(this)
-                rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")
+        val testDir =
+            clientIntegrationTest(model) { clientCodegenContext, rustCrate ->
+                rustCrate.integrationTest("paginators_generated") {
+                    Attribute.AllowUnusedImports.render(this)
+                    rust("use ${clientCodegenContext.moduleUseName()}::operation::paginated_list::paginator::PaginatedListPaginator;")
+                }
             }
-        }
+        val lens = testDir.resolve("src/lens.rs").readText()
+        lens shouldContain "let input = input.inner.as_ref()?;"
+        lens shouldNotContain "let input = match &input.inner"
     }
 
     // Regression: when a @paginated operation's top-level outputToken targets a @required member,

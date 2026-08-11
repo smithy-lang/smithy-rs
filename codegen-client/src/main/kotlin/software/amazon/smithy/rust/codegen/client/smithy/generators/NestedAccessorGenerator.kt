@@ -86,15 +86,7 @@ class NestedAccessorGenerator(private val codegenContext: CodegenContext) {
                 val head = path.first()
                 if (symbolProvider.toSymbol(head).isOptional()) {
                     if (reference) {
-                        rustTemplate(
-                            """
-                            let input = match &input.${symbolProvider.toMemberName(head)} {
-                                #{None} => return #{None},
-                                #{Some}(t) => t
-                            };
-                            """,
-                            *preludeScope,
-                        )
+                        rust("let input = input.${symbolProvider.toMemberName(head)}.as_ref()?;")
                     } else {
                         rustTemplate(
                             """

@@ -5,6 +5,7 @@
 
 package software.amazon.smithy.rust.codegen.core.smithy.generators.error
 
+import io.kotest.matchers.string.shouldContain
 import org.junit.jupiter.api.Test
 import software.amazon.smithy.model.shapes.ShapeId
 import software.amazon.smithy.model.shapes.StructureShape
@@ -42,6 +43,40 @@ class ErrorImplGeneratorTest {
                 """
                 let err = MyError::builder().build();
                 assert_eq!(err.retryable_error_kind(), aws_smithy_types::retry::ErrorKind::ServerError);
+                assert_eq!(err.to_string(), "MyError");
+
+                let err = MyError::builder().message("message").build();
+                assert_eq!(err.to_string(), "MyError: message");
+                """,
+            )
+        }
+    }
+
+    @Test
+    fun `required error messages format without redundant borrows`() {
+        val requiredMessageModel =
+            """
+            namespace com.test
+
+            @error("server")
+            structure RequiredMessageError {
+                @required
+                message: String
+            }
+            """.asSmithyModel()
+        val provider = testSymbolProvider(requiredMessageModel)
+        val project = TestWorkspace.testProject(provider)
+        val errorShape = requiredMessageModel.expectShape(ShapeId.from("com.test#RequiredMessageError")) as StructureShape
+        errorShape.renderWithModelBuilder(requiredMessageModel, provider, project)
+        project.moduleFor(errorShape) {
+            val errorTrait = errorShape.getTrait<ErrorTrait>()!!
+            ErrorImplGenerator(requiredMessageModel, provider, this, errorShape, errorTrait, emptyList()).render(CodegenTarget.CLIENT)
+
+            toString() shouldContain """::std::write!(f, ": {}", self.message)?;"""
+            compileAndTest(
+                """
+                let err = RequiredMessageError::builder().message("message").build().unwrap();
+                assert_eq!(err.to_string(), "RequiredMessageError: message");
                 """,
             )
         }
