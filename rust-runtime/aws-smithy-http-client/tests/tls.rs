@@ -19,7 +19,6 @@ use hyper::body::{Bytes, Incoming};
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
-use rustls::ServerConfig;
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -27,6 +26,7 @@ use std::time::Duration;
 use std::{fs, io};
 use tokio::net::TcpListener;
 use tokio::task::JoinHandle;
+use tokio_rustls::rustls::ServerConfig;
 use tokio_rustls::TlsAcceptor;
 use tracing::{debug, error};
 
@@ -49,7 +49,7 @@ impl TestServer {
 
 async fn server() -> Result<TestServer, BoxError> {
     // Set process wide crypto provider
-    let _ = rustls::crypto::aws_lc_rs::default_provider().install_default();
+    let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
 
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -447,7 +447,7 @@ async fn run_tls_test_with_idle_timeout(
 /// The test cert's SANs only include "localhost" and "sdktest.com", so
 /// connecting by IP will fail hostname verification unless additional
 /// server names are configured.
-#[cfg(feature = "rustls-aws-lc")]
+#[cfg(any(feature = "rustls-aws-lc", feature = "s2n-tls"))]
 async fn run_tls_test_to_ip(client: &dyn HttpClient) -> Result<(), BoxError> {
     let server = server().await?;
     let endpoint = format!("https://127.0.0.1:{}/", server.listen_addr.port());
@@ -465,4 +465,96 @@ async fn run_tls_test_to_ip(client: &dyn HttpClient) -> Result<(), BoxError> {
     let resp_bytes = body_stream.collect().await?.into_bytes();
     assert_eq!(b"Hello TLS!", &resp_bytes[..]);
     Ok(())
+}
+
+// Test: connecting to 127.0.0.1 fails with s2n-tls (cert SANs only contain "localhost" and "sdktest.com")
+#[cfg(feature = "s2n-tls")]
+#[should_panic(expected = "Certificate is not valid for the supplied hostname")]
+#[tokio::test]
+async fn test_s2n_additional_server_names_ip_without_alt_names_fails() {
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to 127.0.0.1 with a non-matching additional server name fails with s2n-tls
+#[cfg(feature = "s2n-tls")]
+#[should_panic(expected = "Certificate is not valid for the supplied hostname")]
+#[tokio::test]
+async fn test_s2n_additional_server_names_with_wrong_alt_name_fails() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![
+            ServerName::try_from("wrong.example.com".to_string()).unwrap()
+        ])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to 127.0.0.1 succeeds with s2n-tls when "localhost" is configured as an additional server name
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_s2n_additional_server_names_with_matching_alt_name_succeeds() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![ServerName::try_from("localhost".to_string()).unwrap()])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .tls_context(tls_context)
+        .build_https();
+
+    run_tls_test_to_ip(&client).await.unwrap()
+}
+
+// Test: connecting to localhost (which matches the cert) still works with s2n-tls when additional server names are configured
+#[cfg(feature = "s2n-tls")]
+#[tokio::test]
+async fn test_s2n_additional_server_names_primary_name_still_works() {
+    use aws_smithy_http_client::tls::ServerName;
+
+    let pem_contents = fs::read("tests/server.pem").unwrap();
+    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
+    let tls_context = TlsContext::builder()
+        .with_trust_store(trust_store)
+        .with_additional_server_names(vec![
+            ServerName::try_from("sdktest.com".to_string()).unwrap()
+        ])
+        .build()
+        .unwrap();
+
+    let client = aws_smithy_http_client::Builder::new()
+        .tls_provider(tls::Provider::S2nTls)
+        .tls_context(tls_context)
+        .build_https();
+
+    // Connect via localhost — primary name verification should pass without needing the fallback
+    run_tls_test(&client).await.unwrap()
 }
