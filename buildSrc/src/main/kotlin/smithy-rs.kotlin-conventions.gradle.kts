@@ -9,6 +9,17 @@ plugins {
 // Workaround per: https://github.com/gradle/gradle/issues/15383
 val Project.libs get() = the<org.gradle.accessors.dm.LibrariesForLibs>()
 
+// Ensure Kotlin stdlib dependencies have explicit versions in published POMs
+configurations.all {
+    resolutionStrategy {
+        eachDependency {
+            if (requested.group == "org.jetbrains.kotlin" && requested.name.startsWith("kotlin-stdlib")) {
+                useVersion(libs.versions.kotlin.version.get())
+            }
+        }
+    }
+}
+
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
