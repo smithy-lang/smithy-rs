@@ -4,10 +4,14 @@
  */
 
 //! Scripted HTTP/2 server support for connection behavior tests.
+//!
+//! This fixture is intentionally test-local. The project keeps its TLS setup surface
+//! out of the public API while still testing HTTP/2 connection-pool behavior against
+//! a real TLS+h2 server.
 
 use super::client::WAIT;
 use super::tls;
-use aws_smithy_http_client::test_util::wire::connection::GateWaiter;
+use aws_smithy_http_client::test_util::wire::connection::{ConnectionCloseReason, GateWaiter};
 use bytes::Bytes;
 use h2::server::SendResponse;
 use h2::Reason;
@@ -32,8 +36,11 @@ use tokio_rustls::TlsAcceptor;
 const H2_FRAME_HEADER_LENGTH: usize = 9;
 const GOAWAY_FRAME_TYPE: u8 = 0x7;
 const GOAWAY_PAYLOAD_LENGTH: usize = 8;
-pub(crate) const INITIAL_GOAWAY_LAST_STREAM_ID: u32 = 0x7fff_ffff;
+/// Mask for the 31-bit stream identifier in a GOAWAY payload; the high bit is reserved.
+const GOAWAY_LAST_STREAM_ID_MASK: u32 = 0x7fff_ffff;
 
+/// Test-local error for the H2 fixture. Structurally identical to the public
+/// `HarnessError` but kept local because `HarnessError::new` is not public.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct H2HarnessError {
     message: Arc<str>,
@@ -106,6 +113,7 @@ pub(crate) enum H2Event {
     },
     ConnectionClosed {
         connection_id: H2ConnectionId,
+        reason: ConnectionCloseReason,
     },
 }
 
@@ -640,8 +648,15 @@ async fn run_connection(
     )
     .await;
     state.remove_control(connection_id);
-    state.record_event(H2Event::ConnectionClosed { connection_id });
-    result
+    let reason = match &result {
+        Ok(reason) => *reason,
+        Err(_) => ConnectionCloseReason::ScriptFailed,
+    };
+    state.record_event(H2Event::ConnectionClosed {
+        connection_id,
+        reason,
+    });
+    result.map(|_| ())
 }
 
 async fn drive_connection(
@@ -652,7 +667,7 @@ async fn drive_connection(
     state: Arc<SharedState>,
     mut shutdown: watch::Receiver<bool>,
     mut control: mpsc::UnboundedReceiver<ConnectionCommand>,
-) -> Result<(), H2HarnessError> {
+) -> Result<ConnectionCloseReason, H2HarnessError> {
     let tls_stream = match tokio::time::timeout(WAIT, tls_acceptor.accept(tcp_stream)).await {
         Err(_) => return Err(H2HarnessError::new("timed out waiting for TLS handshake")),
         Ok(Ok(tls_stream)) => tls_stream,
@@ -661,7 +676,7 @@ async fn drive_connection(
                 connection_id,
                 error: err.to_string(),
             });
-            return Ok(());
+            return Ok(ConnectionCloseReason::ClientClosed);
         }
         Ok(Err(err)) => return Err(H2HarnessError::new(format!("TLS handshake failed: {err}"))),
     };
@@ -690,7 +705,7 @@ async fn drive_connection(
                     connection_id,
                     error: err.to_string(),
                 });
-                return Ok(());
+                return Ok(ConnectionCloseReason::ClientClosed);
             }
             Ok(Err(err)) => return Err(H2HarnessError::new(format!("H2 handshake failed: {err}"))),
         };
@@ -700,6 +715,9 @@ async fn drive_connection(
     let mut shutting_down = false;
     let mut graceful_shutdown = false;
     let mut control_open = true;
+    // Tracks whether the connection ended because the client closed it (accept returned None)
+    // vs. a scripted GOAWAY completing.
+    let mut client_initiated_close = false;
 
     loop {
         tokio::select! {
@@ -756,7 +774,10 @@ async fn drive_connection(
                             "H2 connection {connection_id:?} failed while accepting a stream: {err}"
                         )));
                     }
-                    None => break,
+                    None => {
+                        client_initiated_close = true;
+                        break;
+                    }
                 }
             }
             completed = stream_tasks.join_next(), if !stream_tasks.is_empty() => {
@@ -768,6 +789,7 @@ async fn drive_connection(
     if shutting_down {
         stream_tasks.abort_all();
         while stream_tasks.join_next().await.is_some() {}
+        Ok(ConnectionCloseReason::HarnessShutdown)
     } else {
         let drain = async {
             while let Some(completed) = stream_tasks.join_next().await {
@@ -781,8 +803,12 @@ async fn drive_connection(
             stream_tasks.abort_all();
             while stream_tasks.join_next().await.is_some() {}
         }
+        if client_initiated_close {
+            Ok(ConnectionCloseReason::ClientClosed)
+        } else {
+            Ok(ConnectionCloseReason::ScriptCompleted)
+        }
     }
-    Ok(())
 }
 
 fn record_stream_task_result(
@@ -1008,7 +1034,7 @@ impl FrameObserver {
                     let payload = &self.pending[H2_FRAME_HEADER_LENGTH..frame_length];
                     let last_stream_id =
                         u32::from_be_bytes(payload[0..4].try_into().expect("four bytes"))
-                            & INITIAL_GOAWAY_LAST_STREAM_ID;
+                            & GOAWAY_LAST_STREAM_ID_MASK;
                     let reason = Reason::from(u32::from_be_bytes(
                         payload[4..8].try_into().expect("four bytes"),
                     ));

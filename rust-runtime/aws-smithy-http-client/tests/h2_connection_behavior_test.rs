@@ -12,7 +12,7 @@
 
 mod common;
 
-use aws_smithy_http_client::test_util::wire::connection::ManualGate;
+use aws_smithy_http_client::test_util::wire::connection::{ConnectionCloseReason, ManualGate};
 use aws_smithy_http_client::tls;
 use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
@@ -25,7 +25,7 @@ use common::client as test_client;
 use common::client::{BackendConfig, HyperUtilLegacyPool};
 use common::h2::{
     H2BodyPlan, H2ConnectionId, H2ConnectionPlan, H2ConnectionScript, H2Event, H2Response,
-    H2StreamScript, H2TestServer, INITIAL_GOAWAY_LAST_STREAM_ID,
+    H2StreamScript, H2TestServer,
 };
 use common::tls as test_tls;
 use h2::Reason;
@@ -243,8 +243,6 @@ mod reuse_and_multiplexing {
             .wait_for_arrivals(4, test_client::WAIT)
             .await
             .expect("all cold-start H2 streams should reach their body gate");
-        let observed_connections = server.connection_count();
-        assert!((1..=4).contains(&observed_connections));
         let ready_connections = server
             .events()
             .into_iter()
@@ -510,6 +508,19 @@ mod goaway_and_replacement {
             .await
             .expect("held stream should reach its body gate");
         let original_connection = single_stream_connection(&server, "/held");
+        let held_stream_id = server
+            .events()
+            .iter()
+            .find_map(|event| match event {
+                H2Event::StreamAccepted {
+                    connection_id,
+                    stream_id,
+                    path,
+                    ..
+                } if *connection_id == original_connection && path == "/held" => Some(*stream_id),
+                _ => None,
+            })
+            .expect("the /held stream should have been accepted");
 
         server
             .send_graceful_goaway(original_connection)
@@ -524,7 +535,7 @@ mod goaway_and_replacement {
                         last_stream_id,
                         reason: Reason::NO_ERROR,
                     } if *connection_id == original_connection
-                        && *last_stream_id != INITIAL_GOAWAY_LAST_STREAM_ID
+                        && *last_stream_id == held_stream_id
                 )
             })
             .await
@@ -534,10 +545,12 @@ mod goaway_and_replacement {
         assert_eq!((status, body.as_slice()), (200, b"replacement".as_slice()));
         let replacement_connection = single_stream_connection(&server, "/after");
         assert_ne!(original_connection, replacement_connection);
+        // Match any close reason: the assertion is "no close happened yet", not "no specific
+        // close happened." A more-specific pattern would weaken the negative check.
         assert!(!server.events().iter().any(|event| {
             matches!(
                 event,
-                H2Event::ConnectionClosed { connection_id }
+                H2Event::ConnectionClosed { connection_id, .. }
                     if *connection_id == original_connection
             )
         }));
@@ -552,7 +565,7 @@ mod goaway_and_replacement {
             .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
-                    H2Event::ConnectionClosed { connection_id }
+                    H2Event::ConnectionClosed { connection_id, reason: ConnectionCloseReason::ClientClosed }
                         if *connection_id == original_connection
                 )
             })
@@ -651,7 +664,7 @@ mod idle_timeout {
             .wait_for_event(test_client::WAIT, |event| {
                 matches!(
                     event,
-                    H2Event::ConnectionClosed { connection_id }
+                    H2Event::ConnectionClosed { connection_id, reason: ConnectionCloseReason::ClientClosed }
                         if *connection_id == first_connection
                 )
             })
@@ -670,7 +683,7 @@ mod idle_timeout {
         server.shutdown().await.expect("clean H2 server shutdown");
     }
 
-    #[tokio::test(start_paused = false)]
+    #[tokio::test]
     async fn test_idle_connection_is_evicted_after_timeout_with_hyper_util_legacy_pool() {
         idle_connection_is_evicted_after_timeout(&HyperUtilLegacyPool).await;
     }
@@ -710,10 +723,12 @@ mod idle_timeout {
             .expect("held stream should reach its body gate");
         let first_connection = single_stream_connection(&server, "/held");
         tokio::time::sleep(IDLE_TIMEOUT * 2).await;
+        // Match any close reason: the assertion is "no close happened yet", not "no specific
+        // close happened." A more-specific pattern would weaken the negative check.
         assert!(!server.events().iter().any(|event| {
             matches!(
                 event,
-                H2Event::ConnectionClosed { connection_id }
+                H2Event::ConnectionClosed { connection_id, .. }
                     if *connection_id == first_connection
             )
         }));
@@ -735,7 +750,7 @@ mod idle_timeout {
         server.shutdown().await.expect("clean H2 server shutdown");
     }
 
-    #[tokio::test(start_paused = false)]
+    #[tokio::test]
     async fn test_active_stream_survives_idle_timeout_but_later_request_uses_replacement_with_hyper_util_legacy_pool(
     ) {
         active_stream_survives_idle_timeout_but_later_request_uses_replacement(

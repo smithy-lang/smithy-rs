@@ -23,7 +23,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio::time::Instant;
 
-const IP1: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));
+const IP1: IpAddr = IpAddr::V4(Ipv4Addr::LOCALHOST);
 const IP2: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 2));
 const WAIT: Duration = Duration::from_secs(5);
 
@@ -148,7 +148,7 @@ async fn multi_ip_endpoints_share_a_port() {
 }
 
 #[tokio::test]
-async fn dns_entries_record_explicit_all_and_unknown_lookups() {
+async fn dns_entries_record_lookups_and_unregistered_names_fail() {
     let harness = ConnectionTestHarness::builder()
         .endpoint(IP1, SocketScript::new().close())
         .dns("explicit.test", [IP1])
@@ -160,11 +160,14 @@ async fn dns_entries_record_explicit_all_and_unknown_lookups() {
 
     assert_eq!(resolver.resolve_dns("explicit.test").await.unwrap(), [IP1]);
     assert_eq!(resolver.resolve_dns("all.test").await.unwrap(), [IP1]);
-    assert!(resolver
+    let err = resolver
         .resolve_dns("unknown.test")
         .await
-        .unwrap()
-        .is_empty());
+        .expect_err("unregistered hostname should return a DNS resolution error");
+    assert!(
+        err.to_string().contains("failed to perform DNS lookup"),
+        "unexpected error message: {err}"
+    );
     assert_eq!(harness.dns_lookup_count(), 3);
     assert!(matches!(
         &harness.events()[2],
@@ -605,4 +608,17 @@ async fn explicit_shutdown_cancels_connections_blocked_at_a_gate() {
         .expect("harness shutdown timed out")
         .expect("harness shutdown failed");
     assert_reset_or_eof(&mut stream).await;
+}
+
+#[test]
+#[should_panic(expected = "cannot append a response")]
+fn respond_on_repeating_script_panics() {
+    let _ = Http1Script::serve(Http1Response::ok().body("ok"))
+        .respond(Http1Response::ok().body("extra"));
+}
+
+#[test]
+#[should_panic(expected = "cannot set a finite finish policy")]
+fn finish_on_repeating_script_panics() {
+    let _ = Http1Script::serve(Http1Response::ok().body("ok")).finish(Finish::Close);
 }

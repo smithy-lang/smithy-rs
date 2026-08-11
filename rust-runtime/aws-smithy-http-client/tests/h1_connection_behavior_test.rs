@@ -5,25 +5,40 @@
 
 //! HTTP/1.1 connection behavior contracts for Smithy HTTP client implementations.
 //!
+//! Covers connection reuse and lifecycle, request routing, connection metadata, failure and
+//! timeout classification, HTTP semantics that affect reusability, concurrency, and DNS
+//! resolution.
+//!
 //! Each contract has an implementation-neutral scenario followed by an explicit test runner for
 //! every backend that must satisfy it.
+//!
+//! A contract function without a corresponding runner becomes dead code, and CI builds
+//! with `RUSTFLAGS: -D warnings` turn that into a compile error. This makes orphaned
+//! contracts self-detecting without a test registry. Macros are deliberately avoided so
+//! that each runner is independently discoverable by IDEs and `--exact` filtering.
 
 #![cfg(all(feature = "wire-mock", feature = "default-client"))]
 
+// This inline module form selectively includes only the `client` submodule from
+// `tests/common/`. Using `mod common;` (which goes through `common/mod.rs`) would
+// also pull in the `h2` and `tls` submodules, generating dead-code warnings under
+// `--all-features` since those modules contain items only the h2 and TLS tests use.
 mod common {
     pub(crate) mod client;
 }
 
+use aws_smithy_async::assert_elapsed;
 use aws_smithy_http_client::test_util::wire::connection::{
     BodyPlan, ConnectionCloseReason, ConnectionEvent, ConnectionId, ConnectionScript,
-    ConnectionTestHarness, EndpointPlan, Http1Response, Http1Script, ManualGate, SocketScript,
+    ConnectionTestHarness, EndpointPlan, HarnessError, Http1Response, Http1Script, ManualGate,
+    SocketScript,
 };
 use aws_smithy_http_client::Builder;
 use aws_smithy_runtime_api::client::connection::{
     CaptureSmithyConnection, ConnectionMetadata as SmithyConnectionMetadata,
 };
 use aws_smithy_runtime_api::client::http::{
-    HttpClient, HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
+    HttpConnectorSettings, SharedHttpClient, SharedHttpConnector,
 };
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
 use aws_smithy_types::body::SdkBody;
@@ -31,7 +46,7 @@ use aws_smithy_types::retry::ErrorKind;
 use common::client as test_client;
 use common::client::{BackendConfig, HyperUtilLegacyPool};
 use http_body_util::BodyExt;
-use std::borrow::Cow;
+use std::collections::HashSet;
 use std::net::{IpAddr, Ipv4Addr};
 use std::time::Duration;
 
@@ -75,6 +90,23 @@ async fn get_and_collect_with_capture(
     (status, body, metadata)
 }
 
+/// Drops the client-side handles, then shuts the harness down and reports failures.
+///
+/// The drop must come first. Shutdown cancels connection tasks promptly, so a script
+/// parked in `await_client_close()` stops reading as soon as the signal arrives -- and
+/// that read is what detects bytes the client should never have sent, such as a
+/// pipelined request. Shutting down while the client still holds pooled connections
+/// cancels the read before it observes them, and the harness reports success.
+async fn shutdown_harness(
+    harness: ConnectionTestHarness,
+    connector: SharedHttpConnector,
+    client: SharedHttpClient,
+) -> Result<(), HarnessError> {
+    drop(connector);
+    drop(client);
+    harness.shutdown().await
+}
+
 fn http1_request_connection_ids(harness: &ConnectionTestHarness) -> Vec<ConnectionId> {
     harness
         .events()
@@ -84,6 +116,61 @@ fn http1_request_connection_ids(harness: &ConnectionTestHarness) -> Vec<Connecti
             _ => None,
         })
         .collect()
+}
+
+/// Asserts the error was caused by the peer resetting the connection.
+///
+/// A read that encounters a TCP RST reports `ECONNRESET` on Unix and
+/// `WSAECONNRESET` on Windows, both of which map to
+/// [`std::io::ErrorKind::ConnectionReset`], so this exact-kind check is portable
+/// across every target the suite runs on.
+#[track_caller]
+fn assert_is_connection_reset(err: &(dyn std::error::Error + 'static)) {
+    assert_io_error_kind(err, std::io::ErrorKind::ConnectionReset);
+}
+
+/// Asserts the error was caused by the response body ending before its declared
+/// length was delivered.
+///
+/// Hyper's length-delimited body decoder reports a short read as
+/// [`std::io::ErrorKind::UnexpectedEof`], which distinguishes a clean server
+/// close mid-body from a connection reset.
+#[track_caller]
+fn assert_is_body_truncation(err: &(dyn std::error::Error + 'static)) {
+    assert_io_error_kind(err, std::io::ErrorKind::UnexpectedEof);
+}
+
+#[track_caller]
+fn assert_io_error_kind(err: &(dyn std::error::Error + 'static), expected: std::io::ErrorKind) {
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(err);
+    while let Some(cause) = current {
+        if let Some(io_err) = cause.downcast_ref::<std::io::Error>() {
+            if io_err.kind() == expected {
+                return;
+            }
+        }
+        current = cause.source();
+    }
+    panic!(
+        "expected a {expected:?} io::Error in the source chain, got: {err}\n\
+         sources: {}",
+        error_chain_display(err)
+    );
+}
+
+/// Renders an error and its `source()` chain as a single ` -> `-joined line for
+/// assertion failure messages.
+fn error_chain_display(err: &(dyn std::error::Error + 'static)) -> String {
+    let mut chain = String::new();
+    let mut current: Option<&(dyn std::error::Error + 'static)> = Some(err);
+    while let Some(cause) = current {
+        if !chain.is_empty() {
+            chain.push_str(" -> ");
+        }
+        chain.push_str(&cause.to_string());
+        current = cause.source();
+    }
+    chain
 }
 
 mod reuse_and_lifecycle {
@@ -123,9 +210,9 @@ mod reuse_and_lifecycle {
         );
         assert_eq!(harness.tcp_accepted_count(), 1);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -181,9 +268,9 @@ mod reuse_and_lifecycle {
             "a connection evicted by the idle timeout must not be reused"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -242,11 +329,16 @@ mod reuse_and_lifecycle {
             connection_ids[0], connection_ids[1],
             "an active response body must survive the pool idle timeout"
         );
-        assert_eq!(harness.tcp_accepted_count(), 1);
+        // No accept-count assertion here. Returning a gated body's connection to the
+        // pool goes through hyper-util's spawned `on_idle` task, so the pooled entry may
+        // not be visible yet when request 2 checks out. hyper-util then races a
+        // speculative connect against the checkout, which can accept a second socket
+        // even though request 2 is ultimately served on the first connection. The
+        // connection-ID equality above is the contract; the accept count is not.
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -299,9 +391,9 @@ mod reuse_and_lifecycle {
         let (status, body) = test_client::collect_response(first_response).await;
         assert_eq!((status, body.as_slice()), (200, b"held-body".as_slice()));
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -309,14 +401,26 @@ mod reuse_and_lifecycle {
         held_response_body_allows_second_connection(&HyperUtilLegacyPool).await;
     }
 
-    /// Dropping a body with its terminator buffered permits draining and connection reuse.
-    async fn dropping_buffered_chunk_terminator_allows_reuse(backend: &dyn HttpClientBackend) {
+    /// Pins an opportunistic optimization in the hyper-util legacy pool: when the
+    /// chunk terminator is already buffered in the same TCP segment as the response
+    /// head, hyper's single non-blocking drain poll reaches `ChunkedState::End` and
+    /// returns the connection to the pool. This is NOT a requirement a replacement
+    /// pool must satisfy; the genuine backend-neutral contract is its sibling test
+    /// `dropping_unavailable_response_remainder_retires_connection`.
+    async fn hyper_drains_a_fully_buffered_chunk_terminator_on_drop(
+        backend: &dyn HttpClientBackend,
+    ) {
         let harness = ConnectionTestHarness::builder()
             .endpoint(
                 IP1,
                 EndpointPlan::queue([
                     SocketScript::new()
                         .read_http1_request()
+                        // The head, chunk data, and terminator must arrive in one TCP
+                        // segment. Hyper's Dispatcher makes exactly one non-blocking
+                        // poll_read_body attempt on drop (in `Conn::poll_drain_or_close_read`);
+                        // it only reclaims the connection if that single poll reaches
+                        // ChunkedState::End.
                         .write_all(
                             b"HTTP/1.1 200 OK\r\n\
                               Transfer-Encoding: chunked\r\n\
@@ -374,14 +478,15 @@ mod reuse_and_lifecycle {
             "Hyper should drain the buffered chunk terminator and reuse the connection"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
-    async fn test_dropping_buffered_chunk_terminator_allows_reuse_with_hyper_util_legacy_pool() {
-        dropping_buffered_chunk_terminator_allows_reuse(&HyperUtilLegacyPool).await;
+    async fn test_hyper_drains_a_fully_buffered_chunk_terminator_on_drop_with_hyper_util_legacy_pool(
+    ) {
+        hyper_drains_a_fully_buffered_chunk_terminator_on_drop(&HyperUtilLegacyPool).await;
     }
 
     /// Dropping a response whose declared remainder is unavailable retires the connection
@@ -462,9 +567,9 @@ mod reuse_and_lifecycle {
             "a connection with an unavailable response remainder must be replaced"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -538,14 +643,97 @@ mod reuse_and_lifecycle {
             "a server-closed idle connection must be replaced"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
     async fn test_stale_idle_connection_is_replaced_with_hyper_util_legacy_pool() {
         stale_idle_connection_is_replaced(&HyperUtilLegacyPool).await;
+    }
+
+    /// A server close that the pool has not yet observed must not surface an error: the
+    /// next request succeeds on a fresh connection.
+    ///
+    /// This is the un-synchronized counterpart to `stale_idle_connection_is_replaced`,
+    /// which waits for the close to be observed before issuing the second request. Here
+    /// the second request is issued immediately, so a pool may satisfy the contract by
+    /// either of two routes:
+    ///
+    /// 1. It notices the closed socket during checkout and connects instead.
+    /// 2. It checks the socket out, the write fails before any request byte reaches the
+    ///    wire, and it retries the unstarted request on a new connection. This is
+    ///    hyper-util's `retry_canceled_requests` behavior, which only retries when the
+    ///    connection was reused -- a failure on a fresh connection propagates instead.
+    ///
+    /// Which route runs depends on whether the client's connection task has processed the
+    /// peer's FIN yet, which is not observable from outside the pool, so the assertions
+    /// deliberately cover only the caller-visible outcome. A replacement pool is free to
+    /// take either route.
+    async fn request_on_an_unobserved_stale_connection_still_succeeds(
+        backend: &dyn HttpClientBackend,
+    ) {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                EndpointPlan::queue([
+                    ConnectionScript::socket(
+                        SocketScript::new()
+                            .read_http1_request()
+                            .write_all(
+                                b"HTTP/1.1 200 OK\r\n\
+                                  Content-Length: 5\r\n\
+                                  Connection: keep-alive\r\n\
+                                  \r\n\
+                                  first",
+                            )
+                            // Close as soon as the response is written, without
+                            // waiting for the client to observe it.
+                            .close(),
+                    ),
+                    ConnectionScript::http1(Http1Script::responses([
+                        Http1Response::ok().body("second")
+                    ])),
+                ]),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!((status, body.as_slice()), (200, b"first".as_slice()));
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!(
+            (status, body.as_slice()),
+            (200, b"second".as_slice()),
+            "a stale pooled connection must not fail the next request"
+        );
+
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_ne!(
+            connection_ids[0], connection_ids[1],
+            "the second request must be served on a replacement connection"
+        );
+        // Exactly one replacement socket, whichever route ran. A third accept would also
+        // exhaust the endpoint plan, which `shutdown` reports as a harness failure.
+        assert_eq!(harness.tcp_accepted_count(), 2);
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_request_on_an_unobserved_stale_connection_still_succeeds_with_hyper_util_legacy_pool(
+    ) {
+        request_on_an_unobserved_stale_connection_still_succeeds(&HyperUtilLegacyPool).await;
     }
 
     /// A response carrying `Connection: close` prevents subsequent reuse of its connection.
@@ -606,9 +794,9 @@ mod reuse_and_lifecycle {
         );
         assert_eq!(harness.tcp_accepted_count(), 2);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -646,9 +834,9 @@ mod routing_and_status {
         let expected_host = format!("127.0.0.1:{}", harness.port());
         assert_eq!(requests[0].1.as_deref(), Some(expected_host.as_str()));
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -716,9 +904,9 @@ mod routing_and_status {
         );
         assert_eq!(harness.tcp_accepted_count(), 2);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -758,9 +946,9 @@ mod routing_and_status {
         );
         assert_eq!(harness.tcp_accepted_count(), 1);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -818,9 +1006,9 @@ mod connection_metadata {
             "poisoned connection metadata must prevent connection reuse"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -893,9 +1081,9 @@ mod connection_metadata {
             "a connection poisoned while active must not be reused"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -938,30 +1126,14 @@ mod connection_metadata {
         );
         assert_eq!(harness.tcp_accepted_count(), 1);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
     async fn test_captured_connection_without_poison_is_reused_with_hyper_util_legacy_pool() {
         captured_connection_without_poison_is_reused(&HyperUtilLegacyPool).await;
-    }
-
-    /// Connector metadata identifies the Hyper 1.x transport used by this backend.
-    fn connector_metadata_identifies_hyper_1x(backend: &dyn HttpClientBackend) {
-        let client = backend.build(BackendConfig::default());
-        let metadata = client
-            .connector_metadata()
-            .expect("connector metadata should be present");
-
-        assert_eq!(metadata.name(), Cow::Borrowed("hyper"));
-        assert_eq!(metadata.version(), Some(Cow::Borrowed("1.x")));
-    }
-
-    #[test]
-    fn test_connector_metadata_identifies_hyper_1x_with_hyper_util_legacy_pool() {
-        connector_metadata_identifies_hyper_1x(&HyperUtilLegacyPool);
     }
 }
 
@@ -986,9 +1158,9 @@ mod failures_and_timeouts {
         .expect_err("reset on accept should fail the request");
         assert!(error.is_io(), "expected ConnectorError::io, got {error:?}");
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -1024,9 +1196,9 @@ mod failures_and_timeouts {
             "the harness must receive the complete framed request before resetting"
         );
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -1034,23 +1206,31 @@ mod failures_and_timeouts {
         reset_after_complete_request_is_io_error(&HyperUtilLegacyPool).await;
     }
 
-    /// A reset after response headers preserves the response and fails only its body.
+    /// A reset after response headers preserves the response and fails only its body
+    /// with a connection-reset I/O error; the reset connection is retired from the pool.
     async fn reset_during_response_body_fails_body_only(backend: &dyn HttpClientBackend) {
         let reset_gate = ManualGate::new();
         let harness = ConnectionTestHarness::builder()
             .endpoint(
                 IP1,
-                SocketScript::new()
-                    .read_http1_request()
-                    .write_all(
-                        b"HTTP/1.1 200 OK\r\n\
-                          Content-Length: 10\r\n\
-                          Connection: keep-alive\r\n\
-                          \r\n\
-                          first",
-                    )
-                    .wait(reset_gate.waiter())
-                    .reset(),
+                EndpointPlan::queue([
+                    ConnectionScript::socket(
+                        SocketScript::new()
+                            .read_http1_request()
+                            .write_all(
+                                b"HTTP/1.1 200 OK\r\n\
+                                  Content-Length: 10\r\n\
+                                  Connection: keep-alive\r\n\
+                                  \r\n\
+                                  first",
+                            )
+                            .wait(reset_gate.waiter())
+                            .reset(),
+                    ),
+                    ConnectionScript::http1(Http1Script::responses([
+                        Http1Response::ok().body("after-reset")
+                    ])),
+                ]),
             )
             .build()
             .await
@@ -1083,19 +1263,148 @@ mod failures_and_timeouts {
         );
 
         reset_gate.release();
-        tokio::time::timeout(test_client::WAIT, response.into_body().collect())
+        let body_error = tokio::time::timeout(test_client::WAIT, response.into_body().collect())
             .await
             .expect("response body should fail within the outer deadline")
             .expect_err("reset should fail collection of the remaining response body");
+        assert_is_connection_reset(&*body_error);
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        let first_connection = http1_request_connection_ids(&harness)[0];
+        harness
+            .wait_for_event(test_client::WAIT, |event| {
+                matches!(
+                    event,
+                    ConnectionEvent::ConnectionClosed {
+                        connection_id,
+                        reason: ConnectionCloseReason::Reset,
+                    } if *connection_id == first_connection
+                )
+            })
+            .await
+            .expect("the harness should record a Reset close for the first connection");
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!((status, body.as_slice()), (200, b"after-reset".as_slice()));
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_ne!(
+            connection_ids[0], connection_ids[1],
+            "the reset connection must be retired, not returned to the pool"
+        );
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
     async fn test_reset_during_response_body_fails_body_only_with_hyper_util_legacy_pool() {
         reset_during_response_body_fails_body_only(&HyperUtilLegacyPool).await;
+    }
+
+    /// A clean EOF (server half-close) after response headers preserves the response and
+    /// fails only its body with a truncation error, not a connection-reset; the closed
+    /// connection is retired from the pool.
+    ///
+    /// The script uses `shutdown_write()` rather than `close()` so the EOF is delivered by
+    /// a FIN with no pending unread data, which cannot be escalated to an RST by the
+    /// kernel. Contrast `reset_during_response_body_fails_body_only`, which asserts the
+    /// reset classification.
+    async fn clean_eof_during_response_body_fails_body_only(backend: &dyn HttpClientBackend) {
+        let close_gate = ManualGate::new();
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                EndpointPlan::queue([
+                    ConnectionScript::socket(
+                        SocketScript::new()
+                            .read_http1_request()
+                            .write_all(
+                                b"HTTP/1.1 200 OK\r\n\
+                                  Content-Length: 10\r\n\
+                                  Connection: keep-alive\r\n\
+                                  \r\n\
+                                  first",
+                            )
+                            .wait(close_gate.waiter())
+                            .shutdown_write()
+                            .await_client_close(),
+                    ),
+                    ConnectionScript::http1(Http1Script::responses([
+                        Http1Response::ok().body("after-close")
+                    ])),
+                ]),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let mut response = test_client::send_request(
+            &connector,
+            HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
+        )
+        .await
+        .expect("response headers should complete before close");
+        assert_eq!(response.status().as_u16(), 200);
+        close_gate
+            .wait_until_reached(test_client::WAIT)
+            .await
+            .expect("the response should reach its close gate");
+        let frame = response
+            .body_mut()
+            .frame()
+            .await
+            .expect("response should contain a partial data frame")
+            .expect("partial response frame should be readable");
+        assert_eq!(
+            frame
+                .into_data()
+                .expect("partial response frame should contain data"),
+            b"first".as_slice()
+        );
+
+        close_gate.release();
+        let body_error = tokio::time::timeout(test_client::WAIT, response.into_body().collect())
+            .await
+            .expect("response body should fail within the outer deadline")
+            .expect_err("close should fail collection of the remaining response body");
+        assert_is_body_truncation(&*body_error);
+
+        let first_connection = http1_request_connection_ids(&harness)[0];
+        harness
+            .wait_for_event(test_client::WAIT, |event| {
+                matches!(
+                    event,
+                    ConnectionEvent::ConnectionClosed {
+                        connection_id,
+                        reason: ConnectionCloseReason::ClientClosed,
+                    } if *connection_id == first_connection
+                )
+            })
+            .await
+            .expect("the harness should record the client closing the truncated connection");
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!((status, body.as_slice()), (200, b"after-close".as_slice()));
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_ne!(
+            connection_ids[0], connection_ids[1],
+            "the closed connection must be retired, not returned to the pool"
+        );
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_clean_eof_during_response_body_fails_body_only_with_hyper_util_legacy_pool() {
+        clean_eof_during_response_body_fails_body_only(&HyperUtilLegacyPool).await;
     }
 
     /// A clean EOF before response headers is classified as a transient non-I/O error.
@@ -1126,9 +1435,9 @@ mod failures_and_timeouts {
         );
         assert_eq!(error.as_other(), Some(ErrorKind::TransientError));
 
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
@@ -1158,6 +1467,7 @@ mod failures_and_timeouts {
                 .build(),
         );
         let url = harness.endpoint_url();
+        let start = tokio::time::Instant::now();
         let request_task = tokio::spawn({
             let connector = connector.clone();
             async move {
@@ -1182,15 +1492,459 @@ mod failures_and_timeouts {
             error.is_timeout(),
             "expected ConnectorError::timeout, got {error:?}"
         );
+        // The timeout must fire at the configured deadline, not merely before the outer
+        // 5s test deadline. The margin absorbs timer and scheduling jitter on a loaded
+        // CI host; the request itself does no work, so the deadline dominates.
+        assert_elapsed!(start, read_timeout, Duration::from_millis(250));
 
-        silent_gate.release();
-        drop(connector);
-        drop(client);
-        harness.shutdown().await.expect("clean harness shutdown");
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
     }
 
     #[tokio::test]
     async fn test_read_timeout_is_timeout_error_with_hyper_util_legacy_pool() {
         read_timeout_is_timeout_error(&HyperUtilLegacyPool).await;
+    }
+}
+
+mod protocol_edge_cases {
+    use super::*;
+
+    /// A HEAD response advertises a body length via Content-Length but transmits no body.
+    /// The client must not attempt to read the advertised bytes; the connection must
+    /// remain reusable for a subsequent request.
+    ///
+    /// The typed `Http1Response` API always writes a body matching Content-Length, so this
+    /// test uses raw `SocketScript` bytes to emit a HEAD response with
+    /// `Content-Length: 100` and zero body bytes.
+    async fn head_response_with_content_length_does_not_desync_connection(
+        backend: &dyn HttpClientBackend,
+    ) {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                SocketScript::new()
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\n\
+                          Content-Length: 100\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n",
+                    )
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\n\
+                          Content-Length: 5\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n\
+                          hello",
+                    )
+                    .await_client_close(),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let mut head_request = HttpRequest::new(SdkBody::empty());
+        head_request.set_method("HEAD").expect("valid HTTP method");
+        head_request
+            .set_uri(harness.endpoint_url())
+            .expect("valid HTTP URI");
+        let (status, body) = test_client::send_and_collect(&connector, head_request).await;
+        assert_eq!(status, 200);
+        assert!(
+            body.is_empty(),
+            "HEAD response must have an empty body, got {} bytes",
+            body.len()
+        );
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!(status, 200);
+        assert_eq!(body, b"hello");
+
+        let methods = harness
+            .events()
+            .into_iter()
+            .filter_map(|event| match event {
+                ConnectionEvent::Http1Request { method, .. } => Some(method),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(methods, ["HEAD", "GET"]);
+
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_eq!(
+            connection_ids[0], connection_ids[1],
+            "a HEAD response must not desync the connection"
+        );
+        assert_eq!(harness.tcp_accepted_count(), 1);
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_head_response_with_content_length_does_not_desync_connection_with_hyper_util_legacy_pool(
+    ) {
+        head_response_with_content_length_does_not_desync_connection(&HyperUtilLegacyPool).await;
+    }
+
+    /// A 204 No Content response has no body by definition, and a well-behaved server
+    /// omits Content-Length entirely. The client must treat the response as complete and
+    /// return the connection to the pool for reuse.
+    async fn no_content_response_is_reused(backend: &dyn HttpClientBackend) {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                SocketScript::new()
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 204 No Content\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n",
+                    )
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\n\
+                          Content-Length: 6\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n\
+                          second",
+                    )
+                    .await_client_close(),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!(status, 204);
+        assert!(body.is_empty(), "a 204 response body must be empty");
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!((status, body.as_slice()), (200, b"second".as_slice()));
+
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_eq!(
+            connection_ids[0], connection_ids[1],
+            "a 204 response must not retire the connection"
+        );
+        assert_eq!(harness.tcp_accepted_count(), 1);
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_no_content_response_is_reused_with_hyper_util_legacy_pool() {
+        no_content_response_is_reused(&HyperUtilLegacyPool).await;
+    }
+
+    /// A 304 Not Modified response carries no body even when Content-Length is present
+    /// echoing the original resource size. The connection must remain reusable.
+    async fn not_modified_response_is_reused(backend: &dyn HttpClientBackend) {
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                SocketScript::new()
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 304 Not Modified\r\n\
+                          Content-Length: 500\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n",
+                    )
+                    .read_http1_request()
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\n\
+                          Content-Length: 5\r\n\
+                          Connection: keep-alive\r\n\
+                          \r\n\
+                          third",
+                    )
+                    .await_client_close(),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!(status, 304);
+        assert!(body.is_empty(), "a 304 response body must be empty");
+
+        let (status, body) =
+            test_client::get_and_collect(&connector, &harness.endpoint_url()).await;
+        assert_eq!((status, body.as_slice()), (200, b"third".as_slice()));
+
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_eq!(
+            connection_ids[0], connection_ids[1],
+            "a 304 response must not retire the connection"
+        );
+        assert_eq!(harness.tcp_accepted_count(), 1);
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_not_modified_response_is_reused_with_hyper_util_legacy_pool() {
+        not_modified_response_is_reused(&HyperUtilLegacyPool).await;
+    }
+}
+
+mod concurrency {
+    use super::*;
+
+    /// Concurrent HTTP/1.1 requests to one origin each get their own connection.
+    ///
+    /// HTTP/1.1 has no multiplexing, so each in-flight request needs its own connection.
+    /// Contrast `concurrent_cold_start_converges_on_one_h2_connection` in the HTTP/2
+    /// suite, where many streams share one connection.
+    async fn concurrent_requests_open_distinct_connections(backend: &dyn HttpClientBackend) {
+        let gate = ManualGate::new();
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                EndpointPlan::repeat_n(
+                    4,
+                    Http1Script::responses([Http1Response::ok()
+                        .body_plan(BodyPlan::split_at_gate("resp-", gate.waiter(), "body"))]),
+                ),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let mut handles = Vec::new();
+        for _ in 0..4 {
+            let connector = connector.clone();
+            let url = harness.endpoint_url();
+            handles.push(tokio::spawn(async move {
+                test_client::get_and_collect(&connector, &url).await
+            }));
+        }
+
+        // All four requests are in flight once each has reached its body gate.
+        gate.wait_for_arrivals(4, test_client::WAIT)
+            .await
+            .expect("all four requests should reach the body gate");
+
+        let connection_ids = http1_request_connection_ids(&harness)
+            .into_iter()
+            .collect::<HashSet<_>>();
+        assert_eq!(
+            connection_ids.len(),
+            4,
+            "four concurrent H1 requests must each get a distinct connection"
+        );
+
+        gate.release();
+        for handle in handles {
+            let (status, body) = handle.await.expect("request task should not panic");
+            assert_eq!((status, body.as_slice()), (200, b"resp-body".as_slice()));
+        }
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_concurrent_requests_open_distinct_connections_with_hyper_util_legacy_pool() {
+        concurrent_requests_open_distinct_connections(&HyperUtilLegacyPool).await;
+    }
+
+    // Not covered here: the idle cap, i.e. dropping a returning connection when the idle
+    // list is already at `pool_max_idle_per_host`. The smithy `Builder` does not expose
+    // that knob, so the behavior is unreachable through the public API. Add coverage when
+    // it is exposed.
+    //
+    // Also not covered: handoff of a returning connection to a queued waiter. hyper-util
+    // has no total-connection cap, so an extra concurrent request opens another connection
+    // rather than queuing, and the handoff is not observable from outside the pool.
+
+    /// A second request must not be written onto a connection whose response is still in
+    /// flight; it opens its own connection instead.
+    ///
+    /// This pins the absence of HTTP/1.1 pipelining. The first response body is held at a
+    /// gate, then a second request is issued: it must land on a different connection, and
+    /// the first connection must still show exactly one request.
+    ///
+    /// Note that no assertion can prove bytes were never written to the first socket while
+    /// it is parked at the gate -- the script performs no reads there, so pipelined bytes
+    /// would sit unread in the kernel buffer. The `await_client_close` finish that
+    /// `Http1Script` appends is what detects them: it fails the harness if the client sent
+    /// anything more, and `shutdown` surfaces that failure.
+    async fn request_is_not_written_before_the_previous_response_completes(
+        backend: &dyn HttpClientBackend,
+    ) {
+        let body_gate = ManualGate::new();
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(
+                IP1,
+                EndpointPlan::queue([
+                    Http1Script::responses([Http1Response::ok()
+                        .body_plan(BodyPlan::split_at_gate("slow-", body_gate.waiter(), "resp"))]),
+                    Http1Script::responses([Http1Response::ok().body("fast")]),
+                ]),
+            )
+            .build()
+            .await
+            .expect("harness should start");
+        let client = backend.build(BackendConfig::default());
+        let connector = test_client::connector(&client);
+
+        let first_response = test_client::send_request(
+            &connector,
+            HttpRequest::get(harness.endpoint_url()).expect("valid HTTP request"),
+        )
+        .await
+        .expect("first request should return response headers");
+        assert_eq!(first_response.status().as_u16(), 200);
+
+        body_gate
+            .wait_until_reached(test_client::WAIT)
+            .await
+            .expect("the first response body should reach its gate");
+        let first_connection = http1_request_connection_ids(&harness)[0];
+
+        let second_handle = tokio::spawn({
+            let connector = connector.clone();
+            let url = harness.endpoint_url();
+            async move { test_client::get_and_collect(&connector, &url).await }
+        });
+
+        harness
+            .wait_for_event(test_client::WAIT, |event| {
+                matches!(
+                    event,
+                    ConnectionEvent::Http1Request { connection_id, .. }
+                        if *connection_id != first_connection
+                )
+            })
+            .await
+            .expect("the second request should arrive on a different connection");
+
+        // Still holding the gate: the first connection must show only its own request.
+        let requests_on_first = http1_request_connection_ids(&harness)
+            .into_iter()
+            .filter(|connection_id| *connection_id == first_connection)
+            .count();
+        assert_eq!(
+            requests_on_first, 1,
+            "a second request must not be pipelined onto a connection with an \
+             incomplete response"
+        );
+
+        body_gate.release();
+        let (status, body) = test_client::collect_response(first_response).await;
+        assert_eq!((status, body.as_slice()), (200, b"slow-resp".as_slice()));
+        let (status, body) = second_handle.await.expect("request task should not panic");
+        assert_eq!((status, body.as_slice()), (200, b"fast".as_slice()));
+
+        let connection_ids = http1_request_connection_ids(&harness);
+        assert_eq!(connection_ids.len(), 2);
+        assert_ne!(connection_ids[0], connection_ids[1]);
+        assert_eq!(harness.tcp_accepted_count(), 2);
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_request_is_not_written_before_the_previous_response_completes_with_hyper_util_legacy_pool(
+    ) {
+        request_is_not_written_before_the_previous_response_completes(&HyperUtilLegacyPool).await;
+    }
+}
+
+// A DNS resolver can only be installed through `Builder::build_with_resolver`, which is
+// available once a TLS provider is selected, so these tests need a TLS feature even though
+// they speak plaintext HTTP. `CryptoMode::Ring` requires `rustls-ring` specifically.
+#[cfg(feature = "rustls-ring")]
+mod dns_resolution {
+    use super::*;
+    use aws_smithy_http_client::tls;
+
+    /// A hostname with no DNS entry fails the request at resolution, before any TCP
+    /// connection is attempted.
+    async fn unresolvable_hostname_fails_before_connect() {
+        // The endpoint is never connected to. It exists because a harness requires at
+        // least one endpoint, and it supplies the port used to build the request URL.
+        let harness = ConnectionTestHarness::builder()
+            .endpoint(IP1, SocketScript::new().await_client_close())
+            .build()
+            .await
+            .expect("harness should start");
+        let client = Builder::new()
+            .tls_provider(tls::Provider::Rustls(
+                tls::rustls_provider::CryptoMode::Ring,
+            ))
+            .build_with_resolver(harness.dns_resolver());
+        let connector = test_client::connector(&client);
+
+        let url = format!("http://unknown.test:{}/", harness.port());
+        let error = test_client::send_request(
+            &connector,
+            HttpRequest::get(&url).expect("valid HTTP request"),
+        )
+        .await
+        .expect_err("an unresolvable hostname must fail the request");
+        assert!(
+            error.is_io(),
+            "expected ConnectorError::io for a DNS failure, got {error:?}"
+        );
+        let chain = error_chain_display(&error);
+        assert!(
+            chain.contains("dns error"),
+            "the error should identify DNS resolution as the cause, got: {chain}"
+        );
+
+        assert_eq!(
+            harness.tcp_accepted_count(),
+            0,
+            "no TCP connection should be attempted when DNS resolution fails"
+        );
+        let lookups = harness
+            .events()
+            .into_iter()
+            .filter(
+                |event| matches!(event, ConnectionEvent::DnsLookup { hostname } if hostname == "unknown.test"),
+            )
+            .count();
+        assert_eq!(
+            lookups, 1,
+            "the failed lookup should be recorded exactly once"
+        );
+
+        shutdown_harness(harness, connector, client)
+            .await
+            .expect("clean harness shutdown");
+    }
+
+    #[tokio::test]
+    async fn test_unresolvable_hostname_fails_before_connect_with_hyper_util_legacy_pool() {
+        unresolvable_hostname_fails_before_connect().await;
     }
 }

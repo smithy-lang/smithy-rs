@@ -18,6 +18,7 @@ use aws_smithy_runtime_api::client::runtime_components::{
 use http_body_util::BodyExt;
 use std::time::Duration;
 
+/// Default timeout for test waits and deadline assertions.
 pub(crate) const WAIT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Copy, Debug, Default)]

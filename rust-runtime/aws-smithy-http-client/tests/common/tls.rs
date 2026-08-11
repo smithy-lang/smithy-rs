@@ -34,12 +34,13 @@ pub(crate) fn server_tls_acceptor(alpn_protocols: &[&[u8]]) -> io::Result<TlsAcc
 }
 
 pub(crate) fn server_tls_context() -> TlsContext {
-    let pem_contents = fs::read(SERVER_CERT_PATH).unwrap();
+    let pem_contents =
+        fs::read(SERVER_CERT_PATH).expect("failed to read server certificate for test TLS context");
     let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
     TlsContext::builder()
         .with_trust_store(trust_store)
         .build()
-        .unwrap()
+        .expect("failed to build TlsContext with test server certificate")
 }
 
 fn error(err: String) -> io::Error {
@@ -58,5 +59,6 @@ fn load_private_key(filename: &str) -> io::Result<PrivateKeyDer<'static>> {
         .map_err(|err| error(format!("failed to open {filename}: {err}")))?;
     let mut reader = io::BufReader::new(keyfile);
 
-    rustls_pemfile::private_key(&mut reader).map(|key| key.unwrap())
+    rustls_pemfile::private_key(&mut reader)
+        .map(|key| key.expect("no private key found in PEM file"))
 }

@@ -29,8 +29,14 @@
 //! one script to each connection in order. Repeated plans clone a complete
 //! script for each connection. Requests served over one keep-alive connection
 //! remain within that connection's script.
+//!
+//! # Extension via `SocketScript`
+//!
+//! [`SocketScript`] is the extension point for framing the typed API does not
+//! model; interim 1xx exchanges, for example, are expressible by adding
+//! byte-level actions without changing existing scripts.
 
-use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns};
+use aws_smithy_runtime_api::client::dns::{DnsFuture, ResolveDns, ResolveDnsError};
 use std::collections::{HashMap, VecDeque};
 use std::error::Error;
 use std::fmt;
@@ -489,12 +495,8 @@ impl Http1Response {
     }
 
     fn validate(&self) -> Result<(), HarnessError> {
-        if !(100..=999).contains(&self.status) {
-            return Err(HarnessError::new(format!(
-                "invalid HTTP status {}",
-                self.status
-            )));
-        }
+        http_1x::StatusCode::from_u16(self.status)
+            .map_err(|_| HarnessError::new(format!("invalid HTTP status {}", self.status)))?;
         for (name, value) in &self.headers {
             if name.is_empty() || name.contains(['\r', '\n', ':']) || value.contains(['\r', '\n']) {
                 return Err(HarnessError::new(format!(
@@ -513,12 +515,16 @@ impl Http1Response {
     }
 
     fn actions(&self) -> Vec<Action> {
+        let reason = http_1x::StatusCode::from_u16(self.status)
+            .ok()
+            .and_then(|code| code.canonical_reason())
+            .unwrap_or("Response");
         let mut head = String::new();
         let _ = write!(
             head,
             "HTTP/1.1 {} {}\r\nContent-Length: {}\r\nConnection: {}\r\n",
             self.status,
-            reason_phrase(self.status),
+            reason,
             self.body.length,
             if self.close { "close" } else { "keep-alive" }
         );
@@ -541,30 +547,6 @@ impl Http1Response {
             actions.push(Action::Close);
         }
         actions
-    }
-}
-
-fn reason_phrase(status: u16) -> &'static str {
-    match status {
-        100 => "Continue",
-        200 => "OK",
-        201 => "Created",
-        202 => "Accepted",
-        204 => "No Content",
-        301 => "Moved Permanently",
-        302 => "Found",
-        304 => "Not Modified",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        408 => "Request Timeout",
-        429 => "Too Many Requests",
-        500 => "Internal Server Error",
-        502 => "Bad Gateway",
-        503 => "Service Unavailable",
-        504 => "Gateway Timeout",
-        _ => "Response",
     }
 }
 
@@ -621,21 +603,31 @@ impl Http1Script {
     }
 
     /// Appends one response to a finite script.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called on a repeating script created with [`Http1Script::serve`],
+    /// which already answers every request.
     pub fn respond(mut self, response: Http1Response) -> Self {
         match &mut self.responses {
             Http1Responses::Finite(responses) => responses.push(response),
-            Http1Responses::Repeated(_) => {
-                panic!("cannot append a response to Http1Script::serve")
-            }
+            Http1Responses::Repeated(_) => panic!(
+                "cannot append a response to a repeating Http1Script (created with Http1Script::serve)"
+            ),
         }
         self
     }
 
     /// Selects what happens after the final finite response.
+    ///
+    /// # Panics
+    ///
+    /// Panics if called on a repeating script created with [`Http1Script::serve`],
+    /// which runs until the client closes and so has no final response.
     pub fn finish(mut self, finish: Finish) -> Self {
         assert!(
             !matches!(&self.responses, Http1Responses::Repeated(_)),
-            "cannot set a finite finish policy on Http1Script::serve"
+            "cannot set a finite finish policy on a repeating Http1Script (created with Http1Script::serve)"
         );
         self.finish = finish;
         self
@@ -993,8 +985,11 @@ impl TestEndpoint {
 
 /// A DNS resolver backed by entries configured on the harness.
 ///
-/// Every lookup records a [`ConnectionEvent::DnsLookup`]. Names without a
-/// configured entry resolve successfully to an empty address list.
+/// Every lookup records a [`ConnectionEvent::DnsLookup`] regardless of
+/// outcome. Names without a configured entry return a
+/// [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
+/// so that hostname typos in tests surface immediately rather than
+/// manifesting as confusing downstream connect failures.
 #[derive(Clone, Debug)]
 pub struct MockDnsResolver {
     entries: Arc<HashMap<String, Vec<IpAddr>>>,
@@ -1006,7 +1001,12 @@ impl ResolveDns for MockDnsResolver {
         self.state.record_event(ConnectionEvent::DnsLookup {
             hostname: name.to_owned(),
         });
-        DnsFuture::ready(Ok(self.entries.get(name).cloned().unwrap_or_default()))
+        match self.entries.get(name) {
+            Some(addrs) => DnsFuture::ready(Ok(addrs.clone())),
+            None => DnsFuture::ready(Err(ResolveDnsError::new(std::io::Error::other(format!(
+                "no DNS entry configured for {name:?}"
+            ))))),
+        }
     }
 }
 
@@ -1045,6 +1045,9 @@ impl HarnessBuilder {
     }
 
     /// Maps `hostname` to the given addresses in iteration order.
+    ///
+    /// Unregistered names produce a [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
+    /// at resolution time.
     pub fn dns<I>(mut self, hostname: impl Into<String>, ips: I) -> Self
     where
         I: IntoIterator<Item = IpAddr>,
@@ -1057,6 +1060,9 @@ impl HarnessBuilder {
     }
 
     /// Maps `hostname` to every configured endpoint address in endpoint order.
+    ///
+    /// Unregistered names produce a [`ResolveDnsError`](aws_smithy_runtime_api::client::dns::ResolveDnsError)
+    /// at resolution time.
     pub fn dns_all(mut self, hostname: impl Into<String>) -> Self {
         self.dns.push(DnsConfig::All(hostname.into()));
         self
@@ -1287,6 +1293,12 @@ impl ConnectionTestHarness {
     ///
     /// Failures recorded before or during shutdown are combined into the
     /// returned [`HarnessError`].
+    ///
+    /// Drop any client holding connections to this harness *before* calling this.
+    /// Shutdown cancels connection tasks promptly, including one parked in
+    /// [`SocketScript::await_client_close`]; a script waiting there can only
+    /// observe bytes the client should not have sent while the connection is
+    /// still live, so shutting down with the client alive can mask that failure.
     pub async fn shutdown(mut self) -> Result<(), HarnessError> {
         self.shutdown.send_replace(true);
         for task in self.endpoint_tasks.drain(..) {
@@ -1305,6 +1317,16 @@ impl ConnectionTestHarness {
 
 impl Drop for ConnectionTestHarness {
     fn drop(&mut self) {
+        // A test that panics never reaches its `shutdown()` call, so a recorded
+        // background failure would otherwise be lost -- and that failure is often
+        // the actual explanation for the panic.
+        if std::thread::panicking() {
+            if let Some(failure) = self.state.failure() {
+                eprintln!(
+                    "\n[ConnectionTestHarness] background failure during panic:\n  {failure}\n"
+                );
+            }
+        }
         self.shutdown.send_replace(true);
         for task in &self.endpoint_tasks {
             task.abort();
