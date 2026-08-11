@@ -102,7 +102,6 @@ type NonRecoverablePredicate = Arc<dyn Fn(&BoxError) -> bool + Send + Sync>;
 pub struct StaticStabilityCache {
     partitions: RwLock<HashMap<IdentityCachePartition, Arc<Partition>>>,
     load_timeout: Option<Duration>,
-    mandatory_window: Duration,
     non_recoverable: Option<NonRecoverablePredicate>,
     // Tests only, `None` in production (jittered 300..=600s backoff).
     backoff_override: Option<Duration>,
@@ -114,7 +113,6 @@ impl fmt::Debug for StaticStabilityCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("StaticStabilityCache")
             .field("load_timeout", &self.load_timeout)
-            .field("mandatory_window", &self.mandatory_window)
             .field(
                 "non_recoverable",
                 &self.non_recoverable.as_ref().map(|_| "<predicate>"),
@@ -129,20 +127,26 @@ impl StaticStabilityCache {
         StaticStabilityCacheBuilder::default()
     }
 
-    fn new(
-        load_timeout: Option<Duration>,
-        mandatory_window: Duration,
-        backoff_override: Option<Duration>,
-        advisory_window_override: Option<Duration>,
-    ) -> Self {
+    fn new(load_timeout: Option<Duration>) -> Self {
         Self {
             partitions: RwLock::new(HashMap::new()),
             load_timeout,
-            mandatory_window,
             non_recoverable: Some(Arc::new(aws_non_recoverable)),
-            backoff_override,
-            advisory_window_override,
+            backoff_override: None,
+            advisory_window_override: None,
         }
+    }
+
+    // Test-only overrides for the otherwise non-configurable refresh backoff and advisory window.
+    #[cfg(test)]
+    fn with_overrides(
+        mut self,
+        backoff_override: Option<Duration>,
+        advisory_window_override: Option<Duration>,
+    ) -> Self {
+        self.backoff_override = backoff_override;
+        self.advisory_window_override = advisory_window_override;
+        self
     }
 
     // Get-or-create the per-source partition.
@@ -227,7 +231,7 @@ impl StaticStabilityCache {
                                 .advisory_window_override
                                 .unwrap_or_else(|| advisory_window_for(lifetime(expiry, now)));
                             st.advisory_at = Some(sub(expiry, advisory_window));
-                            st.mandatory_at = Some(sub(expiry, self.mandatory_window));
+                            st.mandatory_at = Some(sub(expiry, DEFAULT_MANDATORY_WINDOW));
                         } else {
                             // Ineligible (custom/process): a single caching-only window at expiry.
                             let at = sub(expiry, CACHING_ONLY_BUFFER_TIME);
@@ -482,7 +486,6 @@ fn validate(has_time_source: bool, has_sleep_impl: bool) -> Result<(), BoxError>
 #[derive(Clone, Debug, Default)]
 pub struct StaticStabilityCacheBuilder {
     load_timeout: Option<Duration>,
-    mandatory_window: Option<Duration>,
 }
 
 impl StaticStabilityCacheBuilder {
@@ -495,13 +498,7 @@ impl StaticStabilityCacheBuilder {
 
     /// Builds a [`SharedIdentityCache`] wrapping the configured [`StaticStabilityCache`].
     pub fn build(self) -> SharedIdentityCache {
-        StaticStabilityCache::new(
-            self.load_timeout,
-            self.mandatory_window.unwrap_or(DEFAULT_MANDATORY_WINDOW),
-            None,
-            None,
-        )
-        .into_shared()
+        StaticStabilityCache::new(self.load_timeout).into_shared()
     }
 }
 
@@ -659,9 +656,7 @@ mod tests {
             results: Mutex::new(queue),
             contacts: contacts.clone(),
         });
-        let cache = StaticStabilityCache::new(
-            None,
-            DEFAULT_MANDATORY_WINDOW,
+        let cache = StaticStabilityCache::new(None).with_overrides(
             s.given.refresh_backoff_seconds.map(Duration::from_secs),
             s.given
                 .configured_advisory_window_seconds
