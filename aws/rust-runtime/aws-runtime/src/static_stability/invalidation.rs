@@ -16,9 +16,15 @@ use std::error::Error as StdError;
 use std::fmt;
 use std::marker::PhantomData;
 
-/// Detects a credential/token auth failure (`ExpiredToken` / `InvalidToken`) on the operation
-/// response and signals the orchestrator — via the data-free [`InvalidateResolvedIdentity`] config
-/// marker — to invalidate the resolved identity.
+/// AWS error codes indicating the request's credentials are no longer valid, so the resolved
+/// identity must be invalidated. Both spellings are listed because AWS services are inconsistent.
+/// `AccessDenied` is intentionally excluded: that is authorization, not credential validity.
+const CREDENTIAL_AUTH_FAILURE_ERRORS: &[&str] =
+    &["ExpiredToken", "ExpiredTokenException", "InvalidToken"];
+
+/// Detects a credential/token auth failure (`ExpiredToken`, `ExpiredTokenException`, or
+/// `InvalidToken`) on the operation response and signals the orchestrator — via the data-free
+/// [`InvalidateResolvedIdentity`] config marker — to invalidate the resolved identity.
 ///
 /// This is **detection only**: the interceptor has no identity (the signed request is already gone
 /// post-transmit), so the orchestrator makes the actual `invalidate` call with the in-scope signing
@@ -68,8 +74,7 @@ where
             .and_then(|err| err.as_operation_error())
             .and_then(|err| err.downcast_ref::<E>())
             .and_then(|err| err.code())
-            // NOT AccessDenied — that's authorization, not credential validity.
-            .is_some_and(|code| matches!(code, "ExpiredToken" | "InvalidToken"));
+            .is_some_and(|code| CREDENTIAL_AUTH_FAILURE_ERRORS.contains(&code));
         if is_auth_failure {
             cfg.interceptor_state()
                 .store_put(InvalidateResolvedIdentity);
@@ -136,6 +141,10 @@ mod tests {
         assert!(
             sets_invalidate_marker("ExpiredToken"),
             "ExpiredToken must trigger invalidation"
+        );
+        assert!(
+            sets_invalidate_marker("ExpiredTokenException"),
+            "STS/SSO-OIDC ExpiredTokenException must trigger invalidation"
         );
         assert!(
             sets_invalidate_marker("InvalidToken"),
