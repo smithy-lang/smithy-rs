@@ -21,7 +21,6 @@ use aws_credential_types::provider::error::CredentialsError;
 use aws_credential_types::StaticStabilityEligible;
 use aws_smithy_async::future::timeout::Timeout;
 use aws_smithy_async::rt::sleep::AsyncSleep;
-use aws_smithy_async::time::{SharedTimeSource, TimeSource};
 use aws_smithy_runtime_api::box_error::BoxError;
 use aws_smithy_runtime_api::client::identity::{
     Identity, IdentityCachePartition, IdentityFuture, ResolveCachedIdentity, ResolveIdentity,
@@ -102,8 +101,6 @@ type NonRecoverablePredicate = Arc<dyn Fn(&BoxError) -> bool + Send + Sync>;
 /// See the [module docs](self). Build one with [`StaticStabilityCache::builder`].
 pub struct StaticStabilityCache {
     partitions: RwLock<HashMap<IdentityCachePartition, Arc<Partition>>>,
-    // Used by `invalidate`.
-    time_source: SharedTimeSource,
     load_timeout: Option<Duration>,
     mandatory_window: Duration,
     non_recoverable: Option<NonRecoverablePredicate>,
@@ -133,7 +130,6 @@ impl StaticStabilityCache {
     }
 
     fn new(
-        time_source: SharedTimeSource,
         load_timeout: Option<Duration>,
         mandatory_window: Duration,
         backoff_override: Option<Duration>,
@@ -141,7 +137,6 @@ impl StaticStabilityCache {
     ) -> Self {
         Self {
             partitions: RwLock::new(HashMap::new()),
-            time_source,
             load_timeout,
             mandatory_window,
             non_recoverable: Some(Arc::new(aws_non_recoverable)),
@@ -180,7 +175,6 @@ impl StaticStabilityCache {
         resolver: &SharedIdentityResolver,
         runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
-        now: SystemTime,
     ) -> Result<Identity, BoxError> {
         let prev = part.state.lock().unwrap().cached.clone();
 
@@ -189,21 +183,14 @@ impl StaticStabilityCache {
             .load_timeout
             .unwrap_or_else(|| pessimistic_load_timeout(config_bag));
         let timeout_future = sleep_impl.sleep(load_timeout);
-        let refreshed: Result<Identity, BoxError> = async move {
+        let resolved: Result<Identity, BoxError> = async move {
             match Timeout::new(
                 resolver.resolve_identity(runtime_components, config_bag),
                 timeout_future,
             )
             .await
             {
-                // Success with fresh credentials.
-                Ok(Ok(id)) if !expired(id.expiration(), now) => Ok(id),
-                // An `Ok` response with expiration <= now is treated as a failed refresh
-                // (retain + back off).
-                Ok(Ok(_stale)) => {
-                    Err("credential source returned already-expired credentials".into())
-                }
-                Ok(Err(e)) => Err(e),
+                Ok(result) => result,
                 // Timeout: converts a *hung* source into a serve-cached decision (recoverable).
                 Err(_elapsed) => {
                     Err(format!("credential resolution timed out after {:?}", load_timeout).into())
@@ -212,6 +199,20 @@ impl StaticStabilityCache {
         }
         .instrument(tracing::debug_span!("load_identity"))
         .await;
+
+        // The source call may have taken a while (up to the load timeout), so read `now` fresh from
+        // the (validated) runtime time source rather than a pre-await value.
+        let now = runtime_components.time_source().expect("validated").now();
+
+        // An `Ok` response already expired by `now` is treated as a failed refresh (retain + back
+        // off), not cached as fresh.
+        let refreshed = resolved.and_then(|id| {
+            if expired(id.expiration(), now) {
+                Err("credential source returned already-expired credentials".into())
+            } else {
+                Ok(id)
+            }
+        });
 
         match refreshed {
             Ok(id) => {
@@ -303,10 +304,7 @@ impl ResolveCachedIdentity for StaticStabilityCache {
         config_bag: &'a ConfigBag,
     ) -> IdentityFuture<'a> {
         IdentityFuture::new(async move {
-            let now = runtime_components
-                .time_source()
-                .map(|ts| ts.now())
-                .unwrap_or_else(|| self.time_source.now());
+            let now = runtime_components.time_source().expect("validated").now();
             let part = self.partition(resolver.cache_partition());
 
             // 1) snapshot + classify under the SYNC lock — no `.await` held
@@ -318,7 +316,7 @@ impl ResolveCachedIdentity for StaticStabilityCache {
                 // Advisory: refresh only if we win the gate, else serve cached now.
                 Decision::Advisory(cached) => match part.refresh_gate.try_lock() {
                     Ok(_permit) => {
-                        self.refresh(&part, &resolver, runtime_components, config_bag, now)
+                        self.refresh(&part, &resolver, runtime_components, config_bag)
                             .await
                     }
                     Err(_) => Ok(cached),
@@ -331,7 +329,7 @@ impl ResolveCachedIdentity for StaticStabilityCache {
                         return Ok(id);
                     }
                     // No rate-limiting during initial-fetch.
-                    self.refresh(&part, &resolver, runtime_components, config_bag, now)
+                    self.refresh(&part, &resolver, runtime_components, config_bag)
                         .await
                 }
             }
@@ -339,17 +337,16 @@ impl ResolveCachedIdentity for StaticStabilityCache {
     }
 
     fn invalidate(&self, rejected: &Identity) {
-        let now = self.time_source.now();
         for part in self.snapshot_partitions() {
             let mut st = part.state.lock().unwrap();
             if st.cached.as_ref().is_some_and(|c| c.ptr_eq(rejected)) {
                 // Route the next resolution through the mandatory path. classify() keys off
-                // advisory_at/mandatory_at (not expiration), so collapse both to `now`.
-                // Deliberately leave next_refresh_allowed_at (backoff) and cached
-                // (static stability) untouched.
-                st.expiration = Some(now);
-                st.advisory_at = Some(now);
-                st.mandatory_at = Some(now);
+                // advisory_at/mandatory_at, so collapse them to the epoch (a definitely-past time)
+                // — no time source needed here. Deliberately leave next_refresh_allowed_at
+                // (backoff) and cached (static stability) untouched.
+                st.expiration = Some(SystemTime::UNIX_EPOCH);
+                st.advisory_at = Some(SystemTime::UNIX_EPOCH);
+                st.mandatory_at = Some(SystemTime::UNIX_EPOCH);
                 break; // an identity is cached in exactly one partition
             }
         }
@@ -484,21 +481,11 @@ fn validate(has_time_source: bool, has_sleep_impl: bool) -> Result<(), BoxError>
 /// Builder for [`StaticStabilityCache`].
 #[derive(Clone, Debug, Default)]
 pub struct StaticStabilityCacheBuilder {
-    time_source: Option<SharedTimeSource>,
     load_timeout: Option<Duration>,
     mandatory_window: Option<Duration>,
 }
 
 impl StaticStabilityCacheBuilder {
-    /// Sets the time source used by `invalidate` (which receives no runtime components).
-    ///
-    /// `resolve_cached_identity` prefers the time source from `RuntimeComponents`; this only
-    /// backstops `invalidate`.
-    pub fn time_source(mut self, time_source: impl TimeSource + 'static) -> Self {
-        self.time_source = Some(SharedTimeSource::new(time_source));
-        self
-    }
-
     /// Sets the timeout bounding a single credential-source resolution. When unset, a default
     /// timeout is derived from the configured retry/timeout.
     pub fn load_timeout(mut self, load_timeout: Duration) -> Self {
@@ -509,7 +496,6 @@ impl StaticStabilityCacheBuilder {
     /// Builds a [`SharedIdentityCache`] wrapping the configured [`StaticStabilityCache`].
     pub fn build(self) -> SharedIdentityCache {
         StaticStabilityCache::new(
-            self.time_source.unwrap_or_default(),
             self.load_timeout,
             self.mandatory_window.unwrap_or(DEFAULT_MANDATORY_WINDOW),
             None,
@@ -674,7 +660,6 @@ mod tests {
             contacts: contacts.clone(),
         });
         let cache = StaticStabilityCache::new(
-            SharedTimeSource::new(time.clone()),
             None,
             DEFAULT_MANDATORY_WINDOW,
             s.given.refresh_backoff_seconds.map(Duration::from_secs),
@@ -841,9 +826,7 @@ mod tests {
                 contacts: contacts.clone(),
             });
             Self {
-                cache: StaticStabilityCache::builder()
-                    .time_source(time.clone())
-                    .build(),
+                cache: StaticStabilityCache::builder().build(),
                 resolver,
                 components,
                 config_bag: ConfigBag::base(),
@@ -1048,9 +1031,7 @@ mod tests {
                 Ok(identity(2, 7200, true)),
             ]),
         });
-        let cache = StaticStabilityCache::builder()
-            .time_source(time.clone())
-            .build();
+        let cache = StaticStabilityCache::builder().build();
 
         // Seed the initial fetch: permit exactly one source resolution.
         gate.notify_one();
@@ -1108,9 +1089,7 @@ mod tests {
                 Ok(identity(2, 10_000, true)),
             ]),
         });
-        let cache = StaticStabilityCache::builder()
-            .time_source(time.clone())
-            .build();
+        let cache = StaticStabilityCache::builder().build();
 
         gate.notify_one();
         let seed = cache
