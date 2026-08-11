@@ -35,6 +35,7 @@ use aws_smithy_types::config_bag::ConfigBag;
 use aws_smithy_types::retry::RetryConfig;
 use aws_smithy_types::timeout::TimeoutConfig;
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, SystemTime};
@@ -451,11 +452,21 @@ fn jittered_backoff() -> Duration {
     Duration::from_secs(BACKOFF_MIN_SECS + fastrand::u64(0..=BACKOFF_JITTER_SECS))
 }
 
-// Default non-recoverable predicate injected into the cache by the AWS layer:
-// a terminal `CredentialsError::Unrecoverable` bypasses backoff and static stability.
+// Default non-recoverable predicate injected into the cache by the AWS layer: a terminal
+// `CredentialsError::Unrecoverable` anywhere in the source chain bypasses backoff and static
+// stability. Providers such as `ChainProvider` wrap the base-provider error, so walk the chain
+// rather than inspecting only the outermost error.
 fn aws_non_recoverable(err: &BoxError) -> bool {
-    err.downcast_ref::<CredentialsError>()
-        .is_some_and(CredentialsError::is_unrecoverable)
+    let mut source: Option<&(dyn Error + 'static)> = Some(&**err);
+    while let Some(e) = source {
+        if e.downcast_ref::<CredentialsError>()
+            .is_some_and(CredentialsError::is_unrecoverable)
+        {
+            return true;
+        }
+        source = e.source();
+    }
+    false
 }
 
 fn validate(has_time_source: bool, has_sleep_impl: bool) -> Result<(), BoxError> {
@@ -869,6 +880,25 @@ mod tests {
         assert_eq!(advisory_window_for(m(89)), m(15));
         assert_eq!(advisory_window_for(m(90)), m(60)); // boundary
         assert_eq!(advisory_window_for(m(6 * 60)), m(60));
+    }
+
+    // A non-recoverable error wrapped by an outer provider error (as `ChainProvider` produces) is
+    // still detected by walking the source chain, not just the outermost error.
+    #[test]
+    fn non_recoverable_walks_source_chain() {
+        let wrapped: BoxError =
+            CredentialsError::provider_error(CredentialsError::unrecoverable("expired SSO token"))
+                .into();
+        assert!(
+            aws_non_recoverable(&wrapped),
+            "a nested Unrecoverable must be detected"
+        );
+
+        let recoverable: BoxError = CredentialsError::provider_error("STS 503").into();
+        assert!(
+            !aws_non_recoverable(&recoverable),
+            "no Unrecoverable anywhere in the chain"
+        );
     }
 
     // Ineligible (custom/process) identity: no serve-stale.
