@@ -977,6 +977,67 @@ mod tests {
         assert!(contacted);
     }
 
+    // Two partitions, rejected identity in a non-sole partition: `invalidate` must find the
+    // matching slot by identity (ptr_eq) and collapse only it, leaving the other untouched.
+    // Partition iteration order is unspecified (HashMap), so this covers the walk-past-a-
+    // non-match path regardless of order.
+    #[tokio::test]
+    async fn invalidate_targets_only_the_matching_partition() {
+        let time = ManualTimeSource::new(epoch(0));
+        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let cache = StaticStabilityCache::new(None);
+
+        // Two sources -> two distinct cache partitions.
+        let contacts_a = Arc::new(AtomicUsize::new(0));
+        let resolver_a = SharedIdentityResolver::new(MockSource {
+            results: Mutex::new(vec![Ok(identity(1, 3600, true))]),
+            contacts: contacts_a.clone(),
+        });
+        let contacts_b = Arc::new(AtomicUsize::new(0));
+        let resolver_b = SharedIdentityResolver::new(MockSource {
+            results: Mutex::new(vec![
+                Ok(identity(2, 3600, true)),
+                Ok(identity(3, 3600, true)),
+            ]),
+            contacts: contacts_b.clone(),
+        });
+
+        // Seed both partitions.
+        let (a1, _) = source_get(&cache, &resolver_a, &components, &cfg, &contacts_a).await;
+        assert_eq!(id_of(&a1.unwrap()), 1);
+        let (b1, _) = source_get(&cache, &resolver_b, &components, &cfg, &contacts_b).await;
+        let served_b = b1.unwrap();
+        assert_eq!(id_of(&served_b), 2);
+
+        // Reject the identity living in the second source's partition.
+        cache.invalidate(&served_b);
+
+        // That partition refreshes on the next resolve (mandatory path; source contacted).
+        let (b2, contacted_b) =
+            source_get(&cache, &resolver_b, &components, &cfg, &contacts_b).await;
+        assert_eq!(id_of(&b2.unwrap()), 3, "rejected partition must refresh");
+        assert!(contacted_b, "invalidated partition must contact the source");
+
+        // The other partition is untouched: still served from cache, no source contact.
+        let (a2, contacted_a) =
+            source_get(&cache, &resolver_a, &components, &cfg, &contacts_a).await;
+        assert_eq!(
+            id_of(&a2.unwrap()),
+            1,
+            "non-matching partition must be unaffected"
+        );
+        assert!(
+            !contacted_a,
+            "invalidate must not touch a non-matching partition"
+        );
+    }
+
     // A source whose resolution blocks on a gate until released — for concurrency tests.
     #[derive(Debug)]
     struct GatedSource {
