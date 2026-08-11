@@ -137,3 +137,5 @@ The generated SDK will be placed in `aws/sdk/build/aws-sdk`.
 
 ### MSRV Policy
 The MSRV (**M**inimum **S**upported **R**ust **V**ersion) for the crates in this project is `stable-2`, i.e. the current `stable` Rust version and the prior two versions. Older versions may work. In rare circumstances our MSRV may exceed `stable-2` for security purposes (ex: to update a dependency for a security fix that requires an MSRV bump).
+
+Increasing the MSRV is not treated as a semver-breaking change, consistent with the convention used across the broader Rust ecosystem ([discussion](https://users.rust-lang.org/t/is-changing-the-msrv-a-non-breaking-change-since-the-rust-2024-edition/138416/2)). The MSRV is not increased automatically; when we do increase it, each affected published crate is versioned as follows: `1.x` crates are increased with a minor release (e.g. `1.4.2` → `1.5.0`), and `0.x` crates are increased with a patch release (e.g. `0.62.1` → `0.62.2`).
