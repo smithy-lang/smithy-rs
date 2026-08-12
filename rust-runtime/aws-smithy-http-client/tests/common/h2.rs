@@ -755,6 +755,18 @@ async fn drive_connection(
                                 "connection {connection_id:?} received unscripted H2 path {path:?}"
                             )));
                         };
+                        // Scripts cover the response side only, so the request body is
+                        // never read. Dropping the `RecvStream` marks the stream as no
+                        // longer receiving: h2 then discards incoming DATA without
+                        // charging the stream window and releases the connection
+                        // capacity, so a client streaming a request body runs to
+                        // completion. Holding it instead would charge the window on
+                        // every DATA frame and never refund it, stalling the client
+                        // once the send window is exhausted.
+                        //
+                        // TODO(test-utils): to script request bodies, pass
+                        // `request.into_body()` into `run_stream` and drive it there,
+                        // calling `release_capacity()` as chunks are consumed.
                         drop(request);
                         stream_tasks.spawn(run_stream(
                             connection_id,
