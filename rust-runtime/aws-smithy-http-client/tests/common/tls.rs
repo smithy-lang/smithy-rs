@@ -34,13 +34,17 @@ pub(crate) fn server_tls_acceptor(alpn_protocols: &[&[u8]]) -> io::Result<TlsAcc
 }
 
 pub(crate) fn server_tls_context() -> TlsContext {
-    let pem_contents =
-        fs::read(SERVER_CERT_PATH).expect("failed to read server certificate for test TLS context");
-    let trust_store = TrustStore::empty().with_pem_certificate(pem_contents);
     TlsContext::builder()
-        .with_trust_store(trust_store)
+        .with_trust_store(server_trust_store())
         .build()
         .expect("failed to build TlsContext with test server certificate")
+}
+
+/// A [`TrustStore`] containing only the test server certificate.
+pub(crate) fn server_trust_store() -> TrustStore {
+    let pem_contents =
+        fs::read(SERVER_CERT_PATH).expect("failed to read server certificate for test TLS context");
+    TrustStore::empty().with_pem_certificate(pem_contents)
 }
 
 fn error(err: String) -> io::Error {
