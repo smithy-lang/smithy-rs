@@ -48,6 +48,9 @@ const CACHING_ONLY_BUFFER_TIME: Duration = Duration::from_secs(10);
 const BACKOFF_MIN_SECS: u64 = 300;
 // Uniform backoff jitter span (300..=600s total).
 const BACKOFF_JITTER_SECS: u64 = 300;
+// Non-recoverable error cache floor + jitter span (1..=5s total).
+const ERROR_CACHE_MIN_SECS: u64 = 1;
+const ERROR_CACHE_JITTER_SECS: u64 = 4;
 
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(3100);
 
@@ -181,6 +184,18 @@ impl StaticStabilityCache {
         runtime_components: &RuntimeComponents,
         config_bag: &ConfigBag,
     ) -> Result<Identity, BoxError> {
+        // Non-recoverable error cache: if a terminal failure is still cached, re-raise it without
+        // contacting the source, so a caller looping on the error cannot hammer the source. Checked
+        // here — the caller already holds the refresh gate — before any source call.
+        {
+            let st = part.state.lock().unwrap();
+            if let (Some(err), Some(expires_at)) = (&st.cached_error, st.cached_error_expires_at) {
+                if runtime_components.time_source().expect("validated").now() < expires_at {
+                    return Err(err.clone().into());
+                }
+            }
+        }
+
         let prev = part.state.lock().unwrap().cached.clone();
 
         let sleep_impl = runtime_components.sleep_impl().expect("validated");
@@ -250,13 +265,23 @@ impl StaticStabilityCache {
                     }
                 }
                 st.next_refresh_allowed_at = None; // clear backoff
+                st.cached_error = None; // a success clears any cached terminal error
+                st.cached_error_expires_at = None;
                 Ok(id)
             }
             Err(err) => {
-                // A non-recoverable error raises immediately — before backoff and
-                // before serve-cached. The cache holds only a predicate, naming no error types.
+                // A non-recoverable error raises immediately — before backoff and before
+                // serve-cached. The cache holds only a predicate, naming no error types.
                 if self.non_recoverable.as_ref().is_some_and(|p| p(&err)) {
-                    return Err(err);
+                    // Cache the terminal error for a short, jittered window so repeat callers are
+                    // served it without another source call; still raise it to this caller now.
+                    let cached = CachedNonRecoverableError(Arc::from(err));
+                    {
+                        let mut st = part.state.lock().unwrap();
+                        st.cached_error = Some(cached.clone());
+                        st.cached_error_expires_at = Some(now + jittered_error_cache());
+                    }
+                    return Err(cached.into());
                 }
                 let mut st = part.state.lock().unwrap();
                 // Backoff AND serve-stale are BOTH static stability — gated on eligibility.
@@ -389,6 +414,9 @@ struct CachedState {
     mandatory_at: Option<SystemTime>,
     // Backoff gate after a failed refresh.
     next_refresh_allowed_at: Option<SystemTime>,
+    // Short-lived, jittered cache of a non-recoverable error, re-raised to repeat callers.
+    cached_error: Option<CachedNonRecoverableError>,
+    cached_error_expires_at: Option<SystemTime>,
 }
 
 enum Decision {
@@ -452,6 +480,28 @@ fn advisory_window_for(lifetime: Duration) -> Duration {
 
 fn jittered_backoff() -> Duration {
     Duration::from_secs(BACKOFF_MIN_SECS + fastrand::u64(0..=BACKOFF_JITTER_SECS))
+}
+
+fn jittered_error_cache() -> Duration {
+    Duration::from_secs(ERROR_CACHE_MIN_SECS + fastrand::u64(0..=ERROR_CACHE_JITTER_SECS))
+}
+
+// A `Clone` wrapper so a cached non-recoverable error can be re-raised to multiple callers
+// (`BoxError` is not `Clone`). The underlying error is exposed through `source`, matching how
+// `Arc`-wrapped errors elsewhere in the runtime surface their cause.
+#[derive(Clone, Debug)]
+struct CachedNonRecoverableError(Arc<dyn Error + Send + Sync>);
+
+impl fmt::Display for CachedNonRecoverableError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.0, f)
+    }
+}
+
+impl Error for CachedNonRecoverableError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.0.as_ref())
+    }
 }
 
 // Default non-recoverable predicate injected into the cache by the AWS layer: a terminal
@@ -717,11 +767,9 @@ mod tests {
                             let Err(e) = r else {
                                 panic!("{doc}: expected nonRecoverableError");
                             };
-                            assert!(
-                                e.downcast_ref::<CredentialsError>()
-                                    .is_some_and(CredentialsError::is_unrecoverable),
-                                "{doc}: nonRecoverableError"
-                            );
+                            // The error may be the cache's `CachedNonRecoverableError` wrapper, so
+                            // check the source chain (the same detection the cache uses).
+                            assert!(aws_non_recoverable(&e), "{doc}: nonRecoverableError");
                         }
                         other => panic!("{doc}: unknown result {other:?}"),
                     }
@@ -740,7 +788,7 @@ mod tests {
     #[tokio::test]
     async fn test_suite() {
         let scenarios: Vec<Scenario> = serde_json::from_str(SUITE).expect("valid suite json");
-        assert_eq!(scenarios.len(), 23, "expected the full modeled suite");
+        assert_eq!(scenarios.len(), 24, "expected the full modeled suite");
         for s in &scenarios {
             run_scenario(s).await;
         }
@@ -859,6 +907,19 @@ mod tests {
         assert_eq!(advisory_window_for(m(89)), m(15));
         assert_eq!(advisory_window_for(m(90)), m(60)); // boundary
         assert_eq!(advisory_window_for(m(6 * 60)), m(60));
+    }
+
+    // The JSON suite's determinism relies on this window staying strictly within (0s, 6s): an
+    // immediate retry (0s elapsed) must still be cached, and a 6s advance must always clear it.
+    #[test]
+    fn jittered_error_cache_bounds() {
+        for _ in 0..1000 {
+            let d = jittered_error_cache();
+            assert!(
+                (Duration::from_secs(1)..=Duration::from_secs(5)).contains(&d),
+                "error-cache window {d:?} out of 1..=5s"
+            );
+        }
     }
 
     // A non-recoverable error wrapped by an outer provider error (as `ChainProvider` produces) is
@@ -1176,6 +1237,68 @@ mod tests {
             contacts.load(Ordering::SeqCst),
             2,
             "one refresh shared by all waiters"
+        );
+    }
+
+    // Concurrency + non-recoverable: the one caller that refreshes fails non-recoverably and
+    // caches the error; the waiters reuse the cached error instead of each re-contacting the
+    // source.
+    #[tokio::test]
+    async fn mandatory_concurrent_non_recoverable_reuses_cached_error() {
+        let time = ManualTimeSource::new(epoch(0));
+        let (_tick, sleep) = tick_advance_time_and_sleep();
+        let components = RuntimeComponentsBuilder::for_tests()
+            .with_time_source(Some(time.clone()))
+            .with_sleep_impl(Some(sleep))
+            .build()
+            .unwrap();
+        let cfg = ConfigBag::base();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let contacts = Arc::new(AtomicUsize::new(0));
+        let resolver = SharedIdentityResolver::new(GatedSource {
+            gate: gate.clone(),
+            contacts: contacts.clone(),
+            results: Mutex::new(vec![
+                Ok(identity(1, 3600, true)),
+                Err(CredentialsError::unrecoverable("terminal").into()),
+            ]),
+        });
+        let cache = StaticStabilityCache::builder().build();
+
+        gate.notify_one();
+        let seed = cache
+            .resolve_cached_identity(resolver.clone(), &components, &cfg)
+            .await
+            .unwrap();
+        assert_eq!(id_of(&seed), 1);
+        assert_eq!(contacts.load(Ordering::SeqCst), 1);
+
+        time.set_time(epoch(3700)); // expired -> mandatory path
+
+        // Three concurrent callers + a driver that releases the single in-flight refresh.
+        let get1 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get2 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let get3 = cache.resolve_cached_identity(resolver.clone(), &components, &cfg);
+        let driver = async {
+            tokio::task::yield_now().await;
+            gate.notify_one();
+        };
+        let (r1, r2, r3, ()) = tokio::join!(get1, get2, get3, driver);
+
+        // Every caller receives the non-recoverable error; only one contacted the source.
+        for r in [r1, r2, r3] {
+            let Err(e) = r else {
+                panic!("expected a non-recoverable error");
+            };
+            assert!(
+                aws_non_recoverable(&e),
+                "each waiter gets the non-recoverable error"
+            );
+        }
+        assert_eq!(
+            contacts.load(Ordering::SeqCst),
+            2,
+            "one refresh failed for all callers; the cache suppressed re-contacts"
         );
     }
 }
