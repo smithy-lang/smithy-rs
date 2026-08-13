@@ -4,6 +4,7 @@
 #  SPDX-License-Identifier: Apache-2.0
 import sys
 import os
+import time
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from diff_lib import get_cmd_output, get_cmd_status, eprint, run, run_git_commit_as_github_action, running_in_docker_build
@@ -98,6 +99,20 @@ def main(skip_generation=False):
 # mutated dirs (`registry/src`, `.package-cache`) are private. Homes are reused per worker.
 SEMVER_MAX_WORKERS = min(4, os.cpu_count() or 4)
 _worker_local = threading.local()
+_worker_id_lock = threading.Lock()
+_next_worker_id = [0]
+
+
+def _worker_id():
+    """Return this thread's stable 1..N worker id (assigned on first call)."""
+    wid = getattr(_worker_local, 'worker_id', None)
+    if wid is not None:
+        return wid
+    with _worker_id_lock:
+        _next_worker_id[0] += 1
+        wid = _next_worker_id[0]
+    _worker_local.worker_id = wid
+    return wid
 
 
 def _worker_env():
@@ -141,6 +156,11 @@ def _worker_env():
 
 def _check_crate(item):
     path, pkgid, abs_path = item
+    wid = _worker_id()
+    # Emit a `start` line and an `end` line per crate so interleaving is visible in the raw
+    # log — a single sequential summary from `as_completed` can't show whether work overlapped.
+    eprint(f'[worker {wid}] start {path}')
+    started = time.monotonic()
     manifest = os.path.join(abs_path, 'Cargo.toml')
     (status, out, err) = get_cmd_output(
         f'cargo semver-checks check-release '
@@ -153,19 +173,23 @@ def _check_crate(item):
         f'--all-features '
         f'--release-type minor',
         check=False, quiet=True, env=_worker_env())
-    return (path, status, out, err)
+    elapsed = time.monotonic() - started
+    result = 'ok' if status == 0 else 'failed'
+    eprint(f'[worker {wid}] end   {path} in {elapsed:.1f}s ({result})')
+    return (path, wid, elapsed, status, out, err)
 
 
 def run_semver_checks_in_parallel(crates_to_check):
+    eprint(f'running semver checks with {SEMVER_MAX_WORKERS} workers over {len(crates_to_check)} crates')
     failures = []
     with ThreadPoolExecutor(max_workers=SEMVER_MAX_WORKERS) as executor:
         futures = {executor.submit(_check_crate, c): c for c in crates_to_check}
         for future in as_completed(futures):
-            path, status, out, err = future.result()
+            path, wid, elapsed, status, out, err = future.result()
             if status == 0:
-                eprint(f'checking {path}...ok!')
+                eprint(f'checking {path}...ok! (worker {wid}, {elapsed:.1f}s)')
             else:
-                eprint(f'checking {path}...failed!')
+                eprint(f'checking {path}...failed! (worker {wid}, {elapsed:.1f}s)')
                 if out:
                     eprint(out)
                 eprint(err)
