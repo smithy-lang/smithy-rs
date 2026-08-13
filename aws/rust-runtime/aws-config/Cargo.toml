@@ -1,6 +1,6 @@
 [package]
 name = "aws-config"
-version = "1.10.1"
+version = "1.11.0"
 authors = [
     "AWS Rust SDK Team <aws-sdk-rust@amazon.com>",
     "Russell Cohen <rcoh@amazon.com>",
@@ -24,6 +24,7 @@ rt-tokio = ["aws-smithy-async/rt-tokio", "aws-smithy-runtime/rt-tokio", "tokio/r
 client-hyper = ["aws-smithy-runtime/default-https-client"]
 rustls = ["client-hyper"]
 default-https-client = ["aws-smithy-runtime/default-https-client"]
+legacy-client = ["aws-smithy-runtime/tls-rustls"]
 sso = ["dep:aws-sdk-sso", "dep:aws-sdk-ssooidc", "dep:sha1", "dep:hex", "dep:zeroize", "aws-smithy-runtime-api/http-auth"]
 credentials-login = [
     "dep:aws-sdk-signin",
