@@ -1434,4 +1434,15 @@ mod test {
             s2n_tls_hyper::error::Error::InvalidScheme
         ));
     }
+
+    /// The default HTTP client reports "hyper" / "1.x" as its connector metadata.
+    #[test]
+    fn connector_metadata_identifies_hyper_1x() {
+        let client = crate::Builder::new().build_http();
+        let metadata = client
+            .connector_metadata()
+            .expect("connector metadata should be present");
+        assert_eq!(metadata.name(), Cow::Borrowed("hyper"));
+        assert_eq!(metadata.version(), Some(Cow::Borrowed("1.x")));
+    }
 }
