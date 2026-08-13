@@ -9,6 +9,7 @@ use aws_credential_types::credential_feature::AwsCredentialFeature;
 use aws_credential_types::provider::{
     self, error::CredentialsError, future, ProvideCredentials, SharedCredentialsProvider,
 };
+use aws_credential_types::StaticStabilityEligible;
 use aws_sdk_sts::operation::assume_role::builders::AssumeRoleFluentBuilder;
 use aws_sdk_sts::operation::assume_role::AssumeRoleError;
 use aws_sdk_sts::types::{PolicyDescriptorType, Tag};
@@ -348,6 +349,7 @@ impl Inner {
             creds
                 .get_property_mut_or_default::<Vec<AwsCredentialFeature>>()
                 .push(AwsCredentialFeature::CredentialsStsAssumeRole);
+            creds.set_property(StaticStabilityEligible);
             creds
         })
     }
