@@ -232,6 +232,52 @@ jobs:
       shell: bash
       run: tools/ci-scripts/test-windows.sh
 
+  # aws-config is not part of the `aws/rust-runtime` workspace and depends on
+  # generated SDK crates (STS, SSO, ...), so `test-rust-windows` (which tests the
+  # runtime workspaces from a bare checkout) cannot cover it. This job supplies
+  # the generated SDK from the `generate` job's smoketest artifact and runs the
+  # aws-config tests natively on Windows. It runs in parallel with the other
+  # jobs that depend on `generate` (e.g. `test-sdk`).
+  test-rust-windows-aws-config:
+    name: aws-config Tests on Windows
+    needs: generate
+    runs-on: windows-latest
+    timeout-minutes: 30
+    env:
+      # Disable incremental compilation to reduce disk space use
+      CARGO_INCREMENTAL: 0
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.git_ref }}
+      # Pinned to the commit hash of v2.7.3
+    - uses: Swatinem/rust-cache@23bce251a8cd2ffc3c1075eaa2367cf899916d84
+      with:
+        shared-key: ${{ runner.os }}-${{ env.rust_version }}-${{ github.job }}
+        workspaces: aws/rust-runtime/aws-config
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ env.rust_version }}
+        components: ${{ env.rust_toolchain_components }}
+    # aws-config builds against the generated SDK produced by the `generate` job.
+    # We can't use the Linux Docker build image here, so download the smoketest
+    # SDK artifact directly and place it where aws-config's path dependencies
+    # expect it (mirrors the `mv` in the Linux `check-aws-config` script).
+    - name: Download generated SDK (smoketest) artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: artifacts-generate-aws-sdk-smoketest
+        path: artifacts-generate-aws-sdk-smoketest
+    - name: Extract generated SDK to aws/sdk/build/aws-sdk
+      shell: bash
+      run: |
+        tar xfz artifacts-generate-aws-sdk-smoketest/artifacts-generate-aws-sdk-smoketest.tar.gz
+        mkdir -p aws/sdk/build
+        mv aws-sdk-smoketest aws/sdk/build/aws-sdk
+    - name: Run aws-config tests
+      shell: bash
+      run: tools/ci-scripts/test-windows-aws-config.sh
+
   # We make sure that smithy-rs can be compiled on platforms that are not
   # natively supported by GitHub actions. We run as many tests as we can on
   # those platforms, but not all of them, because they require a more
@@ -442,6 +488,7 @@ jobs:
     - check-semver-hazards
     - test-sdk
     - test-rust-windows
+    - test-rust-windows-aws-config
     - test-exotic-platform-support
     # Run this job even if its dependency jobs fail
     if: always()
