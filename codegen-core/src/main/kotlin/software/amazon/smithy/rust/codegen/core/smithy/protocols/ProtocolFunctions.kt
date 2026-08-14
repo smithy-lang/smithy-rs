@@ -37,6 +37,7 @@ typealias ProtocolFnWritable = RustWriter.(String) -> Unit
  */
 class ProtocolFunctions(
     private val codegenContext: CodegenContext,
+    private val module: RustModule.LeafModule = codegenContext.protocolSerdeModule,
 ) {
     companion object {
         val serDeModule = RustModule.pubCrate("protocol_serde")
@@ -44,8 +45,15 @@ class ProtocolFunctions(
         fun crossOperationFn(
             fnName: String,
             block: ProtocolFnWritable,
+        ): RuntimeType = crossOperationFn(serDeModule, fnName, block)
+
+        /** Generates a cross-operation function in the requested module. */
+        fun crossOperationFn(
+            module: RustModule.LeafModule,
+            fnName: String,
+            block: ProtocolFnWritable,
         ): RuntimeType =
-            RuntimeType.forInlineFun(fnName, serDeModule) {
+            RuntimeType.forInlineFun(fnName, module) {
                 block(fnName)
             }
     }
@@ -72,7 +80,7 @@ class ProtocolFunctions(
         shape: Shape,
         fnNameSuffix: String? = null,
         block: ProtocolFnWritable,
-    ): RuntimeType = serDeFn(FnType.Serialize, shape, serDeModule, block, fnNameSuffix)
+    ): RuntimeType = serDeFn(FnType.Serialize, shape, module, block, fnNameSuffix)
 
     /**
      * Generate a deserialize function for a protocol, and return a runtime type that references it
@@ -91,7 +99,7 @@ class ProtocolFunctions(
         shape: Shape,
         fnNameSuffix: String? = null,
         block: ProtocolFnWritable,
-    ): RuntimeType = serDeFn(FnType.Deserialize, shape, serDeModule, block, fnNameSuffix)
+    ): RuntimeType = serDeFn(FnType.Deserialize, shape, module, block, fnNameSuffix)
 
     private fun serDeFn(
         fnType: FnType,

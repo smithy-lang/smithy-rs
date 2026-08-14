@@ -7,7 +7,9 @@ package software.amazon.smithy.rust.codegen.core.smithy.protocols
 
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
+import software.amazon.smithy.rust.codegen.core.rustlang.RustModule
 import software.amazon.smithy.rust.codegen.core.testutil.asSmithyModel
+import software.amazon.smithy.rust.codegen.core.testutil.testCodegenContext
 import software.amazon.smithy.rust.codegen.core.testutil.testSymbolProvider
 import software.amazon.smithy.rust.codegen.core.util.lookup
 
@@ -81,6 +83,19 @@ class ProtocolFunctionsTest {
             input: Op1Input,
         }
         """.asSmithyModel()
+
+    @Test
+    fun `protocol functions can use an arbitrary module`() {
+        val module = RustModule.private("wire")
+        val codegenContext = testCodegenContext(testModel, protocolSerdeModule = module)
+
+        ProtocolFunctions(codegenContext)
+            .serializeFn(testModel.lookup("test#SomeStruct1")) {}
+            .render() shouldBe "crate::wire::shape_some_struct1::ser_some_struct1"
+        RestJson(codegenContext)
+            .parseHttpErrorMetadata(testModel.lookup("test#Op1"))
+            .render() shouldBe "crate::wire::parse_http_error_metadata"
+    }
 
     @Test
     fun `generates function names for shapes`() {
