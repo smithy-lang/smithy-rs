@@ -18,6 +18,7 @@ import software.amazon.smithy.rust.codegen.core.smithy.generators.BuilderInstant
 import software.amazon.smithy.rust.codegen.core.smithy.generators.Instantiator
 import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorCustomization
 import software.amazon.smithy.rust.codegen.core.smithy.generators.InstantiatorSection
+import software.amazon.smithy.rust.codegen.core.smithy.generators.setterName
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
 import software.amazon.smithy.rust.codegen.core.smithy.protocols.parse.ReturnSymbolToParse
 import software.amazon.smithy.rust.codegen.server.smithy.ServerCodegenContext
@@ -116,6 +117,10 @@ class ServerBuilderInstantiator(
         } else {
             setFieldWithSetter(builder, value, field)
         }
+    }
+
+    override fun setterProvider(field: MemberShape): String {
+        return field.setterName(symbolProvider)
     }
 
     override fun finalizeBuilder(
