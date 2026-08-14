@@ -85,11 +85,26 @@ impl CredentialProcessProvider {
         // Security: command arguments must be redacted at debug level
         tracing::debug!(command = %self.command, "loading credentials from external process");
 
-        let command = if cfg!(windows) {
+        // On Windows, the command runs through `cmd.exe /C`. The command string
+        // is appended with `raw_arg` rather than as a normal argument so that
+        // Rust does not apply its own C runtime style escaping (which `cmd.exe`
+        // does not understand), and the whole command is wrapped in an extra
+        // pair of quotes as `cmd.exe` requires. This preserves a quoted first
+        // token containing spaces. Ex: for an executable installed under
+        // `C:\Program Files\...`, such as AppStream 2.0's machine-role provider.
+        // Previously the entire string was passed as a single normal argument,
+        // whose escaping combined with `cmd.exe`'s quote-stripping to mangle
+        // such paths.
+        #[cfg(windows)]
+        let command = {
+            use std::os::windows::process::CommandExt;
             let mut command = Command::new("cmd.exe");
-            command.args(["/C", self.command.unredacted()]);
+            command.arg("/C");
+            command.raw_arg(format!("\"{}\"", self.command.unredacted()));
             command
-        } else {
+        };
+        #[cfg(not(windows))]
+        let command = {
             let mut command = Command::new("sh");
             command.args(["-c", self.command.unredacted()]);
             command
@@ -354,5 +369,89 @@ mod test {
             &vec![AwsCredentialFeature::CredentialsProcess],
             creds.get_property::<Vec<AwsCredentialFeature>>().unwrap()
         );
+    }
+}
+
+// Integration tests that actually spawn a process from a path containing a
+// space. These run only on Windows: they are the regression tests for the
+// `credential_process` quoting bug (internal: P491659165). The pre-existing
+// `credential_process` tests above use the Unix `echo` builtin and are
+// skipped on Windows.
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use crate::credential_process::CredentialProcessProvider;
+    use aws_credential_types::provider::ProvideCredentials;
+    use std::path::{Path, PathBuf};
+
+    const CREDS_JSON: &str = "{\"Version\":1,\"AccessKeyId\":\"ASIARTESTID\",\"SecretAccessKey\":\"TESTSECRETKEY\",\"SessionToken\":\"TESTSESSIONTOKEN\",\"Expiration\":\"2035-01-01T00:00:00Z\"}";
+
+    // Write a `.cmd` provider that prints valid credential JSON to stdout into
+    // `dir`, returning the path to the script. `@echo off` keeps stdout clean so
+    // the only thing emitted is the JSON document.
+    fn write_provider(dir: &Path) -> PathBuf {
+        std::fs::create_dir_all(dir).unwrap();
+        let script = dir.join("provider.cmd");
+        std::fs::write(&script, format!("@echo off\r\necho {CREDS_JSON}\r\n")).unwrap();
+        script
+    }
+
+    #[tokio::test]
+    async fn spaced_path_with_argument_resolves() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let script = write_provider(&tmp.path().join("Program Space"));
+        assert!(
+            script.to_string_lossy().contains(' '),
+            "test fixture path must contain a space: {}",
+            script.display()
+        );
+
+        // Quote the path as a real config would, and pass an argument — exactly
+        // the AppStream shape: `"...PhotonRoleCredentialProvider.exe" --role=Machine`.
+        let command = format!("\"{}\" --role=Machine", script.display());
+        let provider = CredentialProcessProvider::new(command);
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("credentials should resolve from a quoted spaced path with an argument");
+        assert_eq!(creds.access_key_id(), "ASIARTESTID");
+        assert_eq!(creds.secret_access_key(), "TESTSECRETKEY");
+        assert_eq!(creds.session_token(), Some("TESTSESSIONTOKEN"));
+    }
+
+    #[tokio::test]
+    async fn spaced_path_without_argument_resolves() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let script = write_provider(&tmp.path().join("Program Space"));
+
+        let command = format!("\"{}\"", script.display());
+        let provider = CredentialProcessProvider::new(command);
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("credentials should resolve from a quoted spaced path with no argument");
+        assert_eq!(creds.access_key_id(), "ASIARTESTID");
+    }
+
+    #[tokio::test]
+    async fn unquoted_unspaced_path_still_resolves() {
+        // Control: an unquoted path with no spaces continues to work.
+        let tmp = tempfile::TempDir::new().unwrap();
+        let script = write_provider(&tmp.path().join("nospace"));
+        // Only meaningful if no path component (including the temp root) has a
+        // space; otherwise the unquoted form is not a valid no-space control.
+        if script.to_string_lossy().contains(' ') {
+            return;
+        }
+
+        let command = script.display().to_string();
+        let provider = CredentialProcessProvider::new(command);
+
+        let creds = provider
+            .provide_credentials()
+            .await
+            .expect("control (unquoted, no spaces) should resolve");
+        assert_eq!(creds.access_key_id(), "ASIARTESTID");
     }
 }
