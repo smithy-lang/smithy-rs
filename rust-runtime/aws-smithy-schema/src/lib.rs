@@ -50,6 +50,14 @@
 //! the schema itself; the borrow checker enforces this. See
 //! [`Schema::new_struct`] for a worked example.
 //!
+//! Wire-format trait values follow the same rule and may borrow from storage
+//! the caller owns, such as an arena holding the parsed model text — with one
+//! exception. [`Schema::with_http_header`] requires `&'static str`, because the
+//! HTTP binder passes header names to an API that needs
+//! `Cow<'static, str>`. Use [`intern_header_name`] to obtain a suitable
+//! `&'static str` from a runtime string; it deduplicates, so the cost is
+//! bounded by the number of distinct header names in the model.
+//!
 //! # Trait maps and the `LazyLock` discipline
 //!
 //! The serde traits a schema cares about ([`@jsonName`][traits::JsonNameTrait],
@@ -65,7 +73,8 @@
 //!
 //! # Variance
 //!
-//! `Schema<'a>` and `ShapeId<'a>` are covariant in `'a`. Covariance is what
+//! `Schema<'a>`, `ShapeId<'a>`, and the typed trait wrappers are covariant in
+//! `'a`. Covariance is what
 //! lets a `&'static Schema<'static>` (the codegen form) coerce implicitly
 //! into a `&Schema<'_>` argument at any call site, with no annotation needed
 //! at the call site. Compile-time assertion functions in this crate enforce
@@ -95,6 +104,73 @@ pub use schema::shape_type::ShapeType;
 pub use schema::trait_map::TraitMap;
 pub use schema::trait_type::Trait;
 pub use schema::trait_type::{AnnotationTrait, DocumentTrait, StringTrait};
+
+/// Interns a header name so it can be attached to a runtime-materialized schema.
+///
+/// [`Schema::with_http_header`] is the one trait setter that requires
+/// `&'static str` rather than `&'a str`, because the HTTP binder hands header
+/// names to `Headers::insert`, which needs a `Cow<'static, str>`. Every other
+/// wire-format trait can borrow from storage the caller owns — an arena holding
+/// the parsed model text, for instance — and be dropped freely.
+///
+/// This function bridges that gap: it takes a runtime string and returns a
+/// `&'static str` suitable for [`Schema::with_http_header`], keeping the
+/// binder's zero-allocation fast path intact
+/// (`HttpHeaderTrait::value_static` returns `Some` for interned names).
+///
+/// # This leaks, deliberately
+///
+/// The returned `&'static str` is never freed. Interning is deduplicated, so a
+/// given name leaks at most once no matter how many times it is interned; the
+/// total is bounded by the number of *distinct* header names passed in, not by
+/// the number of calls. Re-materializing the same model repeatedly does not
+/// grow memory. For reference, the whole of Amazon S3 uses 158 distinct header
+/// names, about 4.4 KiB once.
+///
+/// Prefer this over a hand-rolled `Box::leak`, which leaks on every call and so
+/// grows without bound when placed in a loop.
+///
+/// # When this is the wrong tool
+///
+/// Because the memory is never reclaimed, the bound is "every distinct header
+/// name this process has ever seen". That is fine for a client that loads its
+/// models at startup. It is *not* fine for a long-lived process that keeps
+/// ingesting new models, where the total grows without limit and cannot be
+/// reclaimed. Such callers should not intern; they need `@httpHeader` names
+/// borrowed from their own storage, which is an additive relaxation of
+/// [`Schema::with_http_header`] rather than something an interner can provide.
+///
+/// # Examples
+///
+/// ```
+/// use aws_smithy_schema::intern_header_name;
+///
+/// // A header name that only exists at runtime.
+/// let parsed = String::from("x-amz-request-id");
+/// let name: &'static str = intern_header_name(&parsed);
+/// assert_eq!(name, "x-amz-request-id");
+///
+/// // Interning the same name again returns the identical pointer, not a copy.
+/// assert!(std::ptr::eq(name, intern_header_name("x-amz-request-id")));
+/// ```
+pub fn intern_header_name(name: &str) -> &'static str {
+    static INTERNED: std::sync::LazyLock<
+        std::sync::Mutex<std::collections::HashSet<&'static str>>,
+    > = std::sync::LazyLock::new(|| std::sync::Mutex::new(std::collections::HashSet::new()));
+
+    // The guarded section cannot panic, so a poisoned lock is not reachable in
+    // practice; recover rather than propagate a panic if it somehow happens.
+    let mut table = INTERNED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+
+    if let Some(&existing) = table.get(name) {
+        return existing;
+    }
+    let leaked: &'static str = Box::leak(name.to_owned().into_boxed_str());
+    table.insert(leaked);
+    leaked
+}
 
 /// Schemas for the Smithy prelude shapes (`smithy.api#String`,
 /// `smithy.api#Integer`, and so on).
@@ -191,9 +267,9 @@ pub struct Schema<'a> {
     // `knownTraitSetter` in `SchemaGenerator.kt`. If a new known trait is added
     // here, a corresponding entry must be added in the codegen.
     sensitive: Option<trait_types::SensitiveTrait>,
-    json_name: Option<trait_types::JsonNameTrait>,
+    json_name: Option<trait_types::JsonNameTrait<'a>>,
     timestamp_format: Option<trait_types::TimestampFormatTrait>,
-    xml_name: Option<trait_types::XmlNameTrait>,
+    xml_name: Option<trait_types::XmlNameTrait<'a>>,
     xml_attribute: Option<trait_types::XmlAttributeTrait>,
     xml_flattened: Option<trait_types::XmlFlattenedTrait>,
     /// Marks an operation output struct whose XML wire format omits the
@@ -216,22 +292,41 @@ pub struct Schema<'a> {
     /// happens, and the body bytes are never collected (they'd be discarded
     /// anyway). Saves ~15-20% on header-heavy SER cases like S3 PutObject.
     has_body_members: bool,
-    xml_namespace: Option<trait_types::XmlNamespaceTrait>,
-    http_header: Option<trait_types::HttpHeaderTrait>,
+    xml_namespace: Option<trait_types::XmlNamespaceTrait<'a>>,
+    /// Deliberately pinned to `'static` while the other seven trait values
+    /// carry `'a`. `Headers::insert` takes `impl AsHeaderComponent`, whose
+    /// zero-allocation impl is for `&'static str`
+    /// (`aws-smithy-runtime-api`'s `MaybeStatic = Cow<'static, str>`), and the
+    /// HTTP binder receives member schemas through `ShapeSerializer` methods
+    /// whose `&Schema<'_>` lifetime is unrelated to the binder's.
+    ///
+    /// The field carries `'a` like every other trait, and the `'static`
+    /// requirement lives on the *constructor* instead:
+    /// [`with_http_header`](Schema::with_http_header) takes `&'static str`, and
+    /// `HttpHeaderTrait::value_static` recovers it for the binder. Keeping the
+    /// restriction at the constructor rather than in the type means relaxing it
+    /// later is additive rather than a breaking signature change, and it avoids
+    /// pinning `ClientProtocol::serialize_request` — which would force every
+    /// protocol to take a `'static` schema.
+    ///
+    /// So: runtime-materialized schemas currently set header names from
+    /// interned/leaked strings, while every other wire-format trait already
+    /// accepts an arbitrary lifetime.
+    http_header: Option<trait_types::HttpHeaderTrait<'a>>,
     http_label: Option<trait_types::HttpLabelTrait>,
     http_payload: Option<trait_types::HttpPayloadTrait>,
-    http_prefix_headers: Option<trait_types::HttpPrefixHeadersTrait>,
-    http_query: Option<trait_types::HttpQueryTrait>,
+    http_prefix_headers: Option<trait_types::HttpPrefixHeadersTrait<'a>>,
+    http_query: Option<trait_types::HttpQueryTrait<'a>>,
     http_query_params: Option<trait_types::HttpQueryParamsTrait>,
     http_response_code: Option<trait_types::HttpResponseCodeTrait>,
     /// The `@http` trait — an operation-level trait included on the input schema
     /// for convenience so the protocol serializer can construct the request URI.
-    http: Option<trait_types::HttpTrait>,
+    http: Option<trait_types::HttpTrait<'a>>,
     streaming: Option<trait_types::StreamingTrait>,
     event_header: Option<trait_types::EventHeaderTrait>,
     event_payload: Option<trait_types::EventPayloadTrait>,
     host_label: Option<trait_types::HostLabelTrait>,
-    media_type: Option<trait_types::MediaTypeTrait>,
+    media_type: Option<trait_types::MediaTypeTrait<'a>>,
 
     /// Fallback for unknown/custom traits. `None` in const contexts (no allocation).
     traits: Option<&'a std::sync::LazyLock<TraitMap>>,
@@ -255,12 +350,13 @@ enum SchemaMembers<'a> {
 
 // ---------- Variance assertions ----------
 //
-// `Schema<'a>` and `ShapeId<'a>` must remain **covariant** in `'a`. Covariance
+// `Schema<'a>`, `ShapeId<'a>`, and the eight trait-value wrappers must remain
+// **covariant** in `'a`. Covariance
 // is what lets `&'static Schema<'static>` (the codegen-emitted form) coerce
 // implicitly into `&Schema<'_>` at call sites — without it, every call would
 // need an explicit lifetime annotation.
 //
-// Today both types are covariant by construction: every field is of the form
+// Today all of them are covariant by construction: every field is of the form
 // `&'a T` or contains another covariant `'a`-parameterized type. There is no
 // `&'a mut T`, no `fn(&'a T)`, and no interior mutability tying `'a` invariantly.
 //
@@ -281,6 +377,33 @@ fn _assert_schema_covariant<'a, 'b: 'a>(s: &'b Schema<'b>) -> &'a Schema<'a> {
 fn _assert_shape_id_covariant<'a, 'b: 'a>(id: ShapeId<'b>) -> ShapeId<'a> {
     id
 }
+
+// The eight trait-value wrappers carry `'a` too, and the same reasoning
+// applies: a codegen-emitted `JsonNameTrait<'static>` has to be usable
+// wherever a `JsonNameTrait<'_>` is expected. `HttpHeaderTrait` is included
+// even though its only public constructor takes `&'static str` — its private
+// `HeaderName<'a>` enum has a `Borrowed(&'a str)` arm, and this assertion is
+// what keeps that arm covariant if it ever becomes constructible.
+macro_rules! assert_wrapper_covariant {
+    ($fn_name:ident, $wrapper:ident) => {
+        #[allow(dead_code)]
+        fn $fn_name<'a, 'b: 'a>(t: trait_types::$wrapper<'b>) -> trait_types::$wrapper<'a> {
+            t
+        }
+    };
+}
+
+assert_wrapper_covariant!(_assert_json_name_covariant, JsonNameTrait);
+assert_wrapper_covariant!(_assert_xml_name_covariant, XmlNameTrait);
+assert_wrapper_covariant!(_assert_media_type_covariant, MediaTypeTrait);
+assert_wrapper_covariant!(_assert_http_query_covariant, HttpQueryTrait);
+assert_wrapper_covariant!(
+    _assert_http_prefix_headers_covariant,
+    HttpPrefixHeadersTrait
+);
+assert_wrapper_covariant!(_assert_http_header_covariant, HttpHeaderTrait);
+assert_wrapper_covariant!(_assert_xml_namespace_covariant, XmlNamespaceTrait);
+assert_wrapper_covariant!(_assert_http_covariant, HttpTrait);
 
 impl<'a> Schema<'a> {
     /// Default values for all trait fields (should only be used by constructors as a spread source).
@@ -436,7 +559,7 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the `@jsonName` value if present.
-    pub fn json_name(&self) -> Option<&trait_types::JsonNameTrait> {
+    pub fn json_name(&self) -> Option<&trait_types::JsonNameTrait<'a>> {
         self.json_name.as_ref()
     }
 
@@ -446,12 +569,12 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the `@xmlName` value if present.
-    pub fn xml_name(&self) -> Option<&trait_types::XmlNameTrait> {
+    pub fn xml_name(&self) -> Option<&trait_types::XmlNameTrait<'a>> {
         self.xml_name.as_ref()
     }
 
     /// Returns the `@xmlNamespace` value if present.
-    pub fn xml_namespace(&self) -> Option<&trait_types::XmlNamespaceTrait> {
+    pub fn xml_namespace(&self) -> Option<&trait_types::XmlNamespaceTrait<'a>> {
         self.xml_namespace.as_ref()
     }
 
@@ -487,12 +610,16 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the `@httpHeader` value if present.
-    pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait> {
+    ///
+    /// Use [`HttpHeaderTrait::value_static`](trait_types::HttpHeaderTrait::value_static)
+    /// rather than `value()` when inserting into `Headers`, which needs a
+    /// `'static` name; see the field's comment for why.
+    pub fn http_header(&self) -> Option<&trait_types::HttpHeaderTrait<'a>> {
         self.http_header.as_ref()
     }
 
     /// Returns the `@httpQuery` value if present.
-    pub fn http_query(&self) -> Option<&trait_types::HttpQueryTrait> {
+    pub fn http_query(&self) -> Option<&trait_types::HttpQueryTrait<'a>> {
         self.http_query.as_ref()
     }
 
@@ -507,12 +634,12 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the `@httpPrefixHeaders` value if present.
-    pub fn http_prefix_headers(&self) -> Option<&trait_types::HttpPrefixHeadersTrait> {
+    pub fn http_prefix_headers(&self) -> Option<&trait_types::HttpPrefixHeadersTrait<'a>> {
         self.http_prefix_headers.as_ref()
     }
 
     /// Returns the `@mediaType` trait if present.
-    pub fn media_type(&self) -> Option<&trait_types::MediaTypeTrait> {
+    pub fn media_type(&self) -> Option<&trait_types::MediaTypeTrait<'a>> {
         self.media_type.as_ref()
     }
 
@@ -530,7 +657,7 @@ impl<'a> Schema<'a> {
     ///
     /// This is an operation-level trait included on the input schema for
     /// convenience so the protocol serializer can construct the request URI.
-    pub fn http(&self) -> Option<&trait_types::HttpTrait> {
+    pub fn http(&self) -> Option<&trait_types::HttpTrait<'a>> {
         self.http.as_ref()
     }
 
@@ -565,22 +692,41 @@ impl<'a> Schema<'a> {
     // -- Trait-wrapper setters --
     //
     // The setters below construct typed trait wrappers (`JsonNameTrait`,
-    // `XmlNameTrait`, `HttpHeaderTrait`, etc.) and so take `&'static str`
-    // for their string parameters. The trait wrappers themselves are pinned
-    // to `&'static str` to preserve the zero-allocation `Headers::insert`
-    // fast path in the HTTP binder; see design doc §10.6 for the full
-    // analysis. Runtime-built schemas can still attach `'static`
-    // codegen-emitted trait wrappers via these setters; only direct
-    // construction with non-`'static` strings is unavailable.
+    // `XmlNameTrait`, `HttpTrait`, etc.). All of them take `&'a str` — the
+    // schema's data lifetime — so a schema materialized at runtime can carry
+    // wire-format traits borrowed from storage the caller owns, such as an
+    // arena holding the parsed model text. Codegen-emitted schemas pass string
+    // literals, so for them `'a` is `'static` and nothing changes.
     //
-    // TODO(schema-lifetime): if a future use case demands runtime-string
-    // trait wrappers, follow one of the three restoration paths in
-    // design doc §10.6 (pinning the binder, parallel `value_static()`
-    // accessor, or packed `HttpBindingKind` enum) and relax these setters
-    // to take `&'a str`.
+    // `with_http_header` is the one exception and takes `&'static str`; see its
+    // own doc comment and the `http_header` field comment for why, and note the
+    // restriction is at the constructor rather than in the type, so relaxing it
+    // later is additive.
+    //
+    // INVARIANT — do not introduce a trait field that needs drop.
+    //
+    // Every `with_*` setter is a `const fn`, and assigning to a field drops the
+    // field's previous value. `Schema::new_*` likewise drops the remainder of
+    // the base value via `..Self::empty_traits()`. A `const fn` body cannot run
+    // destructors, so a single field with drop glue makes *every* setter and
+    // *every* constructor illegal in const context (E0493). That matters
+    // because generated schemas are const-initialized statics:
+    //
+    //     static FOO_SCHEMA: Schema<'static> =
+    //         Schema::new_member(..).with_http_header("x-amz-...");
+    //
+    // and a const initializer cannot allocate. So trait values are `&'a str`
+    // and must stay borrow-only: `Cow<'static, str>`, `String`, or any enum
+    // with an owning arm are all ruled out, however convenient they look. A
+    // borrowed-only enum is fine — `HttpHeaderTrait` uses one — because
+    // references have no drop glue.
+    //
+    // Keeping the fields borrow-only also preserves the niche optimization
+    // that makes `Option<JsonNameTrait<'a>>` 16 bytes rather than 24, which at
+    // SDK scale is thousands of schemas per crate.
 
     /// Sets the `@jsonName` trait.
-    pub const fn with_json_name(mut self, value: &'static str) -> Self {
+    pub const fn with_json_name(mut self, value: &'a str) -> Self {
         self.json_name = Some(trait_types::JsonNameTrait::new(value));
         self
     }
@@ -592,7 +738,7 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the `@xmlName` trait.
-    pub const fn with_xml_name(mut self, value: &'static str) -> Self {
+    pub const fn with_xml_name(mut self, value: &'a str) -> Self {
         self.xml_name = Some(trait_types::XmlNameTrait::new(value));
         self
     }
@@ -623,6 +769,13 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the `@httpHeader` trait.
+    ///
+    /// Takes `&'static str`, unlike the other wire-format setters, so the
+    /// binder's `Headers::insert` fast path stays allocation-free. A schema
+    /// built at runtime must supply an interned or leaked header name.
+    ///
+    /// Relaxing this is additive: a `with_http_header_borrowed(&'a str)`
+    /// companion can be added without changing this signature or the getter's.
     pub const fn with_http_header(mut self, value: &'static str) -> Self {
         self.http_header = Some(trait_types::HttpHeaderTrait::new(value));
         self
@@ -641,13 +794,13 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the `@httpPrefixHeaders` trait.
-    pub const fn with_http_prefix_headers(mut self, value: &'static str) -> Self {
+    pub const fn with_http_prefix_headers(mut self, value: &'a str) -> Self {
         self.http_prefix_headers = Some(trait_types::HttpPrefixHeadersTrait::new(value));
         self
     }
 
     /// Sets the `@httpQuery` trait.
-    pub const fn with_http_query(mut self, value: &'static str) -> Self {
+    pub const fn with_http_query(mut self, value: &'a str) -> Self {
         self.http_query = Some(trait_types::HttpQueryTrait::new(value));
         self
     }
@@ -665,7 +818,7 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the `@http` trait (operation-level, included on input schema for convenience).
-    pub const fn with_http(mut self, http: trait_types::HttpTrait) -> Self {
+    pub const fn with_http(mut self, http: trait_types::HttpTrait<'a>) -> Self {
         self.http = Some(http);
         self
     }
@@ -695,7 +848,7 @@ impl<'a> Schema<'a> {
     }
 
     /// Sets the `@mediaType` trait.
-    pub const fn with_media_type(mut self, value: &'static str) -> Self {
+    pub const fn with_media_type(mut self, value: &'a str) -> Self {
         self.media_type = Some(trait_types::MediaTypeTrait::new(value));
         self
     }
@@ -705,11 +858,7 @@ impl<'a> Schema<'a> {
     /// `uri` is the namespace URI; `prefix` optionally declares the
     /// `xmlns:prefix` form. Pass `None` for the default (unprefixed)
     /// `xmlns="uri"` declaration.
-    pub const fn with_xml_namespace(
-        mut self,
-        uri: &'static str,
-        prefix: Option<&'static str>,
-    ) -> Self {
+    pub const fn with_xml_namespace(mut self, uri: &'a str, prefix: Option<&'a str>) -> Self {
         self.xml_namespace = Some(trait_types::XmlNamespaceTrait::new(uri, prefix));
         self
     }
@@ -991,5 +1140,136 @@ mod test {
         assert!(schema.member_name().is_none());
         assert!(schema.member_schema("test").is_none());
         assert!(schema.member_schema_by_index(0).is_none());
+    }
+
+    /// The gap this test exists to close: `shape_id.rs` already covers runtime
+    /// `ShapeId`s, but nothing covered runtime *trait values*, so a `Schema`
+    /// could be given the right shape and then not be given a wire format.
+    ///
+    /// Every string here is owned by a local `Vec<String>` — an arena the
+    /// caller controls. Nothing is `'static` and nothing is leaked, which is
+    /// the property that makes runtime-materialized schemas practical.
+    #[test]
+    fn runtime_trait_values_from_an_arena() {
+        let arena: Vec<String> = vec![
+            String::from("ns#Foo"),              // 0 fqn
+            String::from("ns"),                  // 1 namespace
+            String::from("Foo"),                 // 2 shape name
+            String::from("fieldName"),           // 3 member name
+            String::from("WireName"),            // 4 @jsonName
+            String::from("wire-elem"),           // 5 @xmlName
+            String::from("application/json"),    // 6 @mediaType
+            String::from("qparam"),              // 7 @httpQuery
+            String::from("http://ns.example/x"), // 8 @xmlNamespace uri
+            String::from("px"),                  // 9 @xmlNamespace prefix
+        ];
+
+        let member: Schema<'_> = Schema::new_member(
+            ShapeId::from_parts(&arena[0], &arena[1], &arena[2]),
+            ShapeType::String,
+            &arena[3],
+            0,
+        )
+        .with_json_name(&arena[4])
+        .with_xml_name(&arena[5])
+        .with_media_type(&arena[6])
+        .with_http_query(&arena[7])
+        .with_xml_namespace(&arena[8], Some(&arena[9]));
+
+        // Read every wire-format trait back off the runtime schema.
+        assert_eq!(member.json_name().unwrap().value(), "WireName");
+        assert_eq!(member.xml_name().unwrap().value(), "wire-elem");
+        assert_eq!(member.media_type().unwrap().value(), "application/json");
+        assert_eq!(member.http_query().unwrap().value(), "qparam");
+        let ns = member.xml_namespace().unwrap();
+        assert_eq!(ns.uri(), "http://ns.example/x");
+        assert_eq!(ns.prefix(), Some("px"));
+        assert_eq!(member.member_name(), Some("fieldName"));
+
+        // And it composes into a struct schema whose members are readable.
+        let members = [&member];
+        let schema = Schema::new_struct(
+            ShapeId::from_parts(&arena[0], &arena[1], &arena[2]),
+            ShapeType::Structure,
+            &members,
+        );
+        assert_eq!(
+            schema
+                .member_schema("fieldName")
+                .unwrap()
+                .json_name()
+                .unwrap()
+                .value(),
+            "WireName"
+        );
+    }
+
+    /// `@http` carries the method and URI, so without runtime support a
+    /// dynamically-built operation has no request line at all.
+    #[test]
+    fn runtime_http_trait_from_an_arena() {
+        let method = String::from("PATCH");
+        let uri = String::from("/things/{id}");
+
+        let schema = Schema::new(shape_id!("ns", "Op"), ShapeType::Structure)
+            .with_http(crate::traits::HttpTrait::new(&method, &uri, Some(204)));
+
+        let http = schema.http().unwrap();
+        assert_eq!(http.method(), "PATCH");
+        assert_eq!(http.uri(), "/things/{id}");
+        assert_eq!(http.code(), 204);
+    }
+
+    /// A trait value read off a `Schema<'static>` is still `&'static str`, so
+    /// the relaxation costs codegen-emitted schemas nothing. This is a
+    /// compile-time assertion: the annotation is the test.
+    #[test]
+    fn static_schema_still_yields_static_trait_values() {
+        static S: Schema<'static> =
+            Schema::new(shape_id!("ns", "Foo"), ShapeType::String).with_json_name("WireName");
+
+        let value: &'static str = S.json_name().unwrap().value();
+        assert_eq!(value, "WireName");
+    }
+
+    /// Interning is deduplicated: the same name yields the identical pointer,
+    /// so a repeated call leaks nothing further. This is the property that
+    /// makes `intern_header_name` safe where a bare `Box::leak` is not.
+    #[test]
+    fn intern_header_name_dedups_by_pointer() {
+        let from_runtime = String::from("x-dedup-probe");
+
+        let a = crate::intern_header_name(&from_runtime);
+        let b = crate::intern_header_name("x-dedup-probe");
+        let c = crate::intern_header_name(&String::from("x-dedup-probe"));
+
+        assert_eq!(a, "x-dedup-probe");
+        assert!(std::ptr::eq(a, b), "second intern must reuse the first");
+        assert!(std::ptr::eq(a, c), "third intern must reuse the first");
+
+        // Distinct names are distinct allocations with correct contents.
+        let other = crate::intern_header_name("x-dedup-other");
+        assert!(!std::ptr::eq(a, other));
+        assert_eq!(other, "x-dedup-other");
+    }
+
+    /// The point of interning: a header name that only exists at runtime can be
+    /// attached to a schema, and the binder still sees a `'static` name, so the
+    /// zero-allocation insert path is preserved rather than falling back to an
+    /// owned copy.
+    #[test]
+    fn interned_header_name_preserves_the_binder_fast_path() {
+        let arena: Vec<String> = vec![String::from("memberName"), String::from("x-runtime-hdr")];
+
+        let member: Schema<'_> =
+            Schema::new_member(shape_id!("ns", "Foo"), ShapeType::String, &arena[0], 0)
+                .with_http_header(crate::intern_header_name(&arena[1]));
+
+        // `Some` is what the binder needs; `None` would force an allocation.
+        assert_eq!(
+            member.http_header().unwrap().value_static(),
+            Some("x-runtime-hdr")
+        );
+        assert_eq!(member.http_header().unwrap().value(), "x-runtime-hdr");
     }
 }

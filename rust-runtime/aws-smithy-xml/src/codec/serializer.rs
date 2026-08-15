@@ -1099,6 +1099,46 @@ mod tests {
         assert_eq!(out, "<Person><FullName>v</FullName></Person>");
     }
 
+    /// The same override, driven by a schema materialized at runtime. XML is
+    /// the largest consumer of trait-value accessors, so this covers the bulk
+    /// of the read surface for runtime-built schemas in one test. Also asserts
+    /// `@xmlNamespace`, whose wrapper carries two runtime strings.
+    #[test]
+    fn xml_name_and_namespace_from_a_runtime_schema() {
+        // Arena the caller owns; nothing here is 'static.
+        let arena: Vec<String> = vec![
+            String::from("name"),                // member name
+            String::from("RuntimeFullName"),     // @xmlName
+            String::from("https://ns.example/"), // @xmlNamespace uri
+        ];
+
+        let member: Schema<'_> = Schema::new_member(
+            shape_id!("test", "Person$name"),
+            ShapeType::String,
+            &arena[0],
+            0,
+        )
+        .with_xml_name(&arena[1]);
+
+        let members = [&member];
+        let person: Schema<'_> =
+            Schema::new_struct(shape_id!("test", "Person"), ShapeType::Structure, &members)
+                .with_xml_namespace(&arena[2], None);
+
+        struct P<'a>(&'a Schema<'a>);
+        impl SerializableStruct for P<'_> {
+            fn serialize_members(&self, ser: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                ser.write_string(self.0, "v")
+            }
+        }
+
+        let out = serialize(|ser| ser.write_struct(&person, &P(&member)));
+        assert_eq!(
+            out,
+            "<Person xmlns=\"https://ns.example/\"><RuntimeFullName>v</RuntimeFullName></Person>"
+        );
+    }
+
     #[test]
     fn original_name_overrides_id_for_synthetic_root() {
         // Synthetic shapes have id name "OperationInput" but original_name is

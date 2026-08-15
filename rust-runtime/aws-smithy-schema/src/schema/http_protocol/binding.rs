@@ -565,6 +565,44 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
         }
         None
     }
+
+    /// The `@httpQuery` parameter name for a member, as a `Cow<'a, str>` so it
+    /// can be pushed into `query_params` without allocating.
+    ///
+    /// `@httpQuery` values carry the schema's data lifetime, and the schema
+    /// arriving through a `ShapeSerializer` method has an anonymous lifetime
+    /// unrelated to the binder's `'a`. Resolving the member through
+    /// `input_schema` recovers a value that lives for `'a`; when that fails
+    /// (no `input_schema`, or the member is not found there) the name is
+    /// copied. Mirrors the `@httpLabel` handling in [`Self::add_binding`].
+    fn query_param_name(
+        &self,
+        schema: &Schema<'_>,
+        query: &crate::traits::HttpQueryTrait<'_>,
+    ) -> Cow<'a, str> {
+        match self
+            .resolve_to_input_schema(schema)
+            .and_then(|resolved| resolved.http_query())
+        {
+            Some(resolved_query) => Cow::Borrowed(resolved_query.value()),
+            None => Cow::Owned(query.value().to_string()),
+        }
+    }
+}
+
+/// Resolves an `@httpHeader` name into the `Cow<'static, str>` that
+/// `Headers::insert` requires.
+///
+/// `value_static()` is `Some` for every schema that can be built today — the
+/// only `@httpHeader` constructor takes `&'static str` — so this is a
+/// zero-allocation borrow in practice. The owned arm exists so that relaxing
+/// `@httpHeader` to accept arena-borrowed names stays an additive change
+/// instead of breaking this call site.
+fn header_name(header: &crate::traits::HttpHeaderTrait<'_>) -> Cow<'static, str> {
+    match header.value_static() {
+        Some(name) => Cow::Borrowed(name),
+        None => Cow::Owned(header.value().to_string()),
+    }
 }
 
 impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
@@ -664,7 +702,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 })
                 .collect::<Vec<_>>()
                 .join(", ");
-            self.headers.insert(header.value(), header_val);
+            self.headers.insert(header_name(header), header_val);
             return Ok(());
         }
         // @httpQuery on a list: add each element as a separate query param
@@ -674,8 +712,14 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             }
             let mut collector = ListElementCollector::for_query();
             write_elements(&mut collector)?;
+            // Prefer the `'a`-lifetime member from `input_schema` so the pushed
+            // `Cow<'a, str>` can be `Borrowed` (zero-alloc). The trait method's
+            // `&Schema<'_>` has an anonymous lifetime unrelated to `'a`, and
+            // `@httpQuery` values carry the schema's data lifetime, so we fall
+            // back to allocating when the member cannot be resolved.
+            let name = self.query_param_name(schema, query);
             for val in collector.values {
-                self.query_params.push((Cow::Borrowed(query.value()), val));
+                self.query_params.push((name.clone(), val));
             }
             return Ok(());
         }
@@ -849,7 +893,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
             }
             let encoded = aws_smithy_types::base64::encode(value);
             self.headers
-                .insert(schema.http_header().unwrap().value(), encoded);
+                .insert(header_name(schema.http_header().unwrap()), encoded);
             return Ok(());
         }
         if schema.http_payload().is_some() {
@@ -894,7 +938,7 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
                 }
             } else {
                 match binding {
-                    HttpBinding::Header(_) => aws_smithy_types::date_time::Format::HttpDate,
+                    HttpBinding::Header => aws_smithy_types::date_time::Format::HttpDate,
                     _ => aws_smithy_types::date_time::Format::DateTime,
                 }
             };
@@ -920,19 +964,23 @@ impl<'a, S: ShapeSerializer> ShapeSerializer for HttpBindingSerializer<'a, S> {
 }
 
 /// Which HTTP location a member is bound to.
+///
+/// Carries no name: every caller passes the same member schema to
+/// [`HttpBindingSerializer::add_binding`], which resolves the name there. That
+/// keeps `@httpQuery`'s schema-lifetime value out of a `'static` slot.
 enum HttpBinding {
-    Header(&'static str),
-    Query(&'static str),
+    Header,
+    Query,
     Label,
 }
 
 /// Determine the HTTP binding for a member schema, if any.
 fn http_string_binding(schema: &Schema<'_>) -> Option<HttpBinding> {
-    if let Some(h) = schema.http_header() {
-        return Some(HttpBinding::Header(h.value()));
+    if schema.http_header().is_some() {
+        return Some(HttpBinding::Header);
     }
-    if let Some(q) = schema.http_query() {
-        return Some(HttpBinding::Query(q.value()));
+    if schema.http_query().is_some() {
+        return Some(HttpBinding::Query);
     }
     if schema.http_label().is_some() {
         return Some(HttpBinding::Label);
@@ -954,12 +1002,19 @@ impl<'a, S> HttpBindingSerializer<'a, S> {
             return Ok(());
         }
         match binding {
-            HttpBinding::Header(name) => {
-                self.headers.insert(name, value.to_string());
+            HttpBinding::Header => {
+                // `Headers::insert` needs a `'static` name; `header_name`
+                // recovers one from the trait, which is a zero-allocation
+                // borrow for every schema constructible today.
+                if let Some(header) = schema.http_header() {
+                    self.headers.insert(header_name(header), value.to_string());
+                }
             }
-            HttpBinding::Query(name) => {
-                self.query_params
-                    .push((Cow::Borrowed(name), value.to_string()));
+            HttpBinding::Query => {
+                if let Some(query) = schema.http_query() {
+                    let name = self.query_param_name(schema, query);
+                    self.query_params.push((name, value.to_string()));
+                }
             }
             HttpBinding::Label => {
                 // Prefer the `'a`-lifetime member from `input_schema` so the
@@ -1968,6 +2023,68 @@ mod tests {
             )
             .unwrap();
         assert_eq!(request.headers().get("X-Token").unwrap(), "my-token-value");
+    }
+
+    /// Header binding for a schema built at *runtime*: the structural strings
+    /// are borrowed from a local arena (so `'a` is a function-body lifetime,
+    /// not `'static`), while the header name itself is `'static` — standing in
+    /// for a name a dynamic client would intern once at model-load time.
+    ///
+    /// This is what the `@httpHeader` constructor pin costs and what it still
+    /// permits: a non-`'static` schema binds headers fine, and the insert stays
+    /// allocation-free because `value_static()` is `Some`.
+    #[test]
+    fn http_header_on_a_runtime_built_schema() {
+        // Structural strings: owned locally, dropped at end of scope. The
+        // header name is interned, which is how a real runtime-built schema
+        // satisfies the `'static` bound on `with_http_header`.
+        let arena: Vec<String> = vec![
+            String::from("token"),
+            String::from("runtime-value"),
+            String::from("X-Interned-Token"),
+        ];
+
+        let member: Schema<'_> = Schema::new_member(
+            crate::shape_id!("test", "S"),
+            ShapeType::String,
+            &arena[0],
+            0,
+        )
+        .with_http_header(crate::intern_header_name(&arena[2]));
+
+        // The binder's fast path is available for this runtime schema.
+        assert_eq!(
+            member.http_header().unwrap().value_static(),
+            Some("X-Interned-Token")
+        );
+
+        let members = [&member];
+        let schema = Schema::new_struct(
+            crate::shape_id!("test", "S"),
+            ShapeType::Structure,
+            &members,
+        );
+
+        struct RuntimeStruct<'a>(&'a Schema<'a>, &'a str);
+        impl SerializableStruct for RuntimeStruct<'_> {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_string(self.0, self.1)
+            }
+        }
+
+        let request = make_protocol()
+            .serialize_request(
+                &RuntimeStruct(&member, &arena[1]),
+                &schema,
+                "https://example.com",
+                &ConfigBag::base(),
+            )
+            .unwrap();
+
+        assert_eq!(
+            request.headers().get("X-Interned-Token").unwrap(),
+            "runtime-value"
+        );
     }
 
     static INT_HEADER_MEMBER: Schema<'static> = Schema::new_member(

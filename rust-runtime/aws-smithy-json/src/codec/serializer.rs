@@ -908,6 +908,58 @@ mod tests {
         assert_eq!(output, r#"{"foo":"hello","bar":42}"#);
     }
 
+    /// The same `@jsonName` behaviour, but driven by a schema materialized at
+    /// runtime from strings a local arena owns rather than by codegen-emitted
+    /// `'static` literals. This is the property the Serialization and Schema
+    /// Decoupling SEP requires: schema-driven serde must work identically
+    /// regardless of where the schema came from.
+    #[test]
+    fn test_json_name_serialization_from_runtime_schema() {
+        use aws_smithy_schema::serde::SerializableStruct;
+
+        // Arena the caller owns. Nothing is 'static; nothing is leaked.
+        let arena: Vec<String> = vec![
+            String::from("bar"),        // member name
+            String::from("RuntimeBaz"), // @jsonName
+        ];
+
+        let bar_member: Schema<'_> = Schema::new_member(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Integer,
+            &arena[0],
+            0,
+        )
+        .with_json_name(&arena[1]);
+
+        struct RuntimeStruct<'a>(&'a Schema<'a>);
+        impl SerializableStruct for RuntimeStruct<'_> {
+            fn serialize_members(&self, s: &mut dyn ShapeSerializer) -> Result<(), SerdeError> {
+                s.write_integer(self.0, 42)
+            }
+        }
+
+        let struct_schema = Schema::new(
+            aws_smithy_schema::shape_id!("test", "MyStruct"),
+            aws_smithy_schema::ShapeType::Structure,
+        );
+
+        // The runtime @jsonName must win over the runtime member name.
+        let mut ser = JsonSerializer::new(Arc::new(JsonCodecSettings::default()));
+        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"RuntimeBaz":42}"#);
+
+        // And the opt-out still falls back to the runtime member name.
+        let mut ser = JsonSerializer::new(Arc::new(
+            JsonCodecSettings::builder().use_json_name(false).build(),
+        ));
+        ser.write_struct(&struct_schema, &RuntimeStruct(&bar_member))
+            .unwrap();
+        let output = String::from_utf8(ser.finish()).unwrap();
+        assert_eq!(output, r#"{"bar":42}"#);
+    }
+
     #[test]
     fn struct_inside_map_serializes_member_names_correctly() {
         // Regression test: when a struct is a map value, the map's expecting_map_key

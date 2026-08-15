@@ -15,11 +15,17 @@ pub trait Trait: Any + Send + Sync + fmt::Debug {
     /// Returns the Shape ID of this trait.
     ///
     /// Returns `&ShapeId<'static>` rather than `&ShapeId<'_>` because the
-    /// `Any` supertrait forces all `Trait` implementors to be `'static`.
-    /// The cosmetic relaxation to `&ShapeId<'_>` proposed in design doc §6.3
-    /// is not viable as long as `Any` is required (which it is, for the
-    /// `Schema::with_traits(LazyLock<TraitMap>)` downcast fallback). See
-    /// design doc §10.6 for the full analysis.
+    /// `Any` supertrait forces all `Trait` implementors to be `'static`, and
+    /// `Any` is required for the `Schema::with_traits(LazyLock<TraitMap>)`
+    /// downcast fallback.
+    ///
+    /// The practical consequence: the typed trait wrappers are generic over
+    /// `'a` and so usable on runtime-materialized schemas, but they can only
+    /// `impl Trait` for their `'static` instantiation. Custom and unknown
+    /// traits, which reach a schema through the `dyn Trait` map rather than a
+    /// typed accessor, therefore remain `'static`-only. Lifting that means
+    /// replacing `Any`-based downcasting with an explicit tagged
+    /// representation — a larger change, deliberately out of scope here.
     fn trait_id(&self) -> &ShapeId<'static>;
 
     /// Returns this trait as `&dyn Any` for downcasting.
