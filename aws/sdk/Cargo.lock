@@ -1342,7 +1342,6 @@ dependencies = [
 [[package]]
 name = "aws-smithy-eventstream"
 version = "0.61.2"
-version = "0.61.2"
 dependencies = [
  "arbitrary",
  "aws-smithy-types",
@@ -1593,7 +1592,6 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.2"
 version = "1.6.2"
 dependencies = [
  "base64 0.13.1",

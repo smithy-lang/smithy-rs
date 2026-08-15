@@ -231,7 +231,6 @@ dependencies = [
 [[package]]
 name = "aws-smithy-eventstream"
 version = "0.61.2"
-version = "0.61.2"
 dependencies = [
  "aws-smithy-types",
  "bytes",
@@ -361,7 +360,6 @@ dependencies = [
 
 [[package]]
 name = "aws-smithy-types"
-version = "1.6.2"
 version = "1.6.2"
 dependencies = [
  "base64-simd",
