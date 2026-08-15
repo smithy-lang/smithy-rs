@@ -289,12 +289,34 @@ mod test {
     use time::OffsetDateTime;
     use tokio::time::timeout;
 
-    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
+    /// Builds a shell command that prints `json` to stdout, quoted correctly for
+    /// the shell the provider will use on this platform.
+    ///
+    /// The provider runs the command through `sh -c` on Unix and `cmd.exe /C` on
+    /// Windows, and the two disagree about quoting:
+    ///
+    /// * `sh` needs the JSON wrapped in single quotes so the double quotes inside
+    ///   it survive word splitting.
+    /// * `cmd.exe` has no notion of single quotes. It would pass them through
+    ///   literally, yielding output like `'{"Version":1}'`, which is not valid
+    ///   JSON. Its `echo` emits the remainder of the line verbatim, so the double
+    ///   quotes survive with no quoting at all.
+    ///
+    /// A runtime `cfg!` is fine here because both branches compile everywhere;
+    /// contrast with `credentials()` above, which needs `#[cfg(windows)]` because
+    /// `raw_arg` only exists on Windows.
+    fn echo_json(json: &str) -> String {
+        if cfg!(windows) {
+            format!("echo {json}")
+        } else {
+            format!("echo '{json}'")
+        }
+    }
+
     #[tokio::test]
-    #[cfg_attr(windows, ignore)]
     async fn test_credential_process() {
-        let provider = CredentialProcessProvider::new(String::from(
-            r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "SessionToken": "TESTSESSIONTOKEN", "AccountId": "123456789001", "Expiration": "2022-05-02T18:36:00+00:00" }'"#,
+        let provider = CredentialProcessProvider::new(echo_json(
+            r#"{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "SessionToken": "TESTSESSIONTOKEN", "AccountId": "123456789001", "Expiration": "2022-05-02T18:36:00+00:00" }"#,
         ));
         let creds = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds.access_key_id(), "ASIARTESTID");
@@ -310,12 +332,10 @@ mod test {
         );
     }
 
-    // TODO(https://github.com/awslabs/aws-sdk-rust/issues/1117) This test is ignored on Windows because it uses Unix-style paths
     #[tokio::test]
-    #[cfg_attr(windows, ignore)]
     async fn test_credential_process_no_expiry() {
-        let provider = CredentialProcessProvider::new(String::from(
-            r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY" }'"#,
+        let provider = CredentialProcessProvider::new(echo_json(
+            r#"{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY" }"#,
         ));
         let creds = provider.provide_credentials().await.expect("valid creds");
         assert_eq!(creds.access_key_id(), "ASIARTESTID");
@@ -326,7 +346,13 @@ mod test {
 
     #[tokio::test]
     async fn credentials_process_timeouts() {
-        let provider = CredentialProcessProvider::new(String::from("sleep 1000"));
+        // Keep this sleep short. The 1ms timeout below fires long before it
+        // elapses, but the spawned process is not killed when the timed-out
+        // future is dropped, and on Windows the test is not reported as finished
+        // until that child exits, stalling the whole test binary for the
+        // duration. `sleep` still has to outlast the 1ms timeout by a wide
+        // margin for the assertion to hold.
+        let provider = CredentialProcessProvider::new(String::from("sleep 1"));
         let _creds = timeout(Duration::from_millis(1), provider.provide_credentials())
             .await
             .expect_err("timeout forced");
@@ -335,8 +361,8 @@ mod test {
     #[tokio::test]
     async fn credentials_with_fallback_account_id() {
         let provider = CredentialProcessProvider::builder()
-            .command(CommandWithSensitiveArgs::new(String::from(
-                r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY" }'"#,
+            .command(CommandWithSensitiveArgs::new(echo_json(
+                r#"{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY" }"#,
             )))
             .account_id("012345678901")
             .build();
@@ -347,8 +373,8 @@ mod test {
     #[tokio::test]
     async fn fallback_account_id_shadowed_by_account_id_in_process_output() {
         let provider = CredentialProcessProvider::builder()
-            .command(CommandWithSensitiveArgs::new(String::from(
-                r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "AccountId": "111122223333" }'"#,
+            .command(CommandWithSensitiveArgs::new(echo_json(
+                r#"{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "AccountId": "111122223333" }"#,
             )))
             .account_id("012345678901")
             .build();
@@ -359,8 +385,8 @@ mod test {
     #[tokio::test]
     async fn credential_feature() {
         let provider = CredentialProcessProvider::builder()
-            .command(CommandWithSensitiveArgs::new(String::from(
-                r#"echo '{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "AccountId": "111122223333" }'"#,
+            .command(CommandWithSensitiveArgs::new(echo_json(
+                r#"{ "Version": 1, "AccessKeyId": "ASIARTESTID", "SecretAccessKey": "TESTSECRETKEY", "AccountId": "111122223333" }"#,
             )))
             .account_id("012345678901")
             .build();
