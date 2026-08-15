@@ -16,6 +16,7 @@ import software.amazon.smithy.rust.codegen.core.rustlang.rust
 import software.amazon.smithy.rust.codegen.core.rustlang.rustTemplate
 import software.amazon.smithy.rust.codegen.core.rustlang.writable
 import software.amazon.smithy.rust.codegen.core.smithy.CodegenContext
+import software.amazon.smithy.rust.codegen.core.smithy.HttpVersion
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeConfig
 import software.amazon.smithy.rust.codegen.core.smithy.RuntimeType
 import software.amazon.smithy.rust.codegen.core.smithy.isOptional
@@ -192,10 +193,27 @@ class ServerAwsJsonProtocol(
         serviceName: String,
         requestSpecModule: RuntimeType,
     ) = writable {
-        rust(""""$serviceName.$operationName"""")
+        val routeKey = "$serviceName.$operationName"
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            rustTemplate(
+                "#{RequestSpec}::new(${routeKey.dq()})",
+                "RequestSpec" to awsJsonRequestSpecType(),
+            )
+        } else {
+            rust(routeKey.dq())
+        }
     }
 
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
+    private fun awsJsonRequestSpecType(): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::aws_json::router::AwsJsonRequestSpec")
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            awsJsonRequestSpecType()
+        } else {
+            RuntimeType.StaticStr
+        }
 
     override fun serverRouterRuntimeConstructor() =
         when (version) {
@@ -374,9 +392,7 @@ class ServerRpcV2CborProtocol(
         operationName: String,
         serviceName: String,
         requestSpecModule: RuntimeType,
-    ) = writable {
-        rust("$serviceName.${operationShape.id.name}".dq())
-    }
+    ): Writable = rpcV2CborRequestSpec("$serviceName.${operationShape.id.name}")
 
     /**
      * Returns any additional router keys under which this operation should also be registered.
@@ -406,10 +422,31 @@ class ServerRpcV2CborProtocol(
         if (verbatimOperationName == capitalizedOperationName) {
             return emptyList()
         }
-        return listOf(writable { rust("$serviceName.$capitalizedOperationName".dq()) })
+        return listOf(rpcV2CborRequestSpec("$serviceName.$capitalizedOperationName"))
     }
 
-    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType = RuntimeType.StaticStr
+    private fun rpcV2CborRequestSpec(routeKey: String): Writable =
+        writable {
+            if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+                rustTemplate(
+                    "#{RequestSpec}::new(${routeKey.dq()})",
+                    "RequestSpec" to rpcV2CborRequestSpecType(),
+                )
+            } else {
+                rust(routeKey.dq())
+            }
+        }
+
+    private fun rpcV2CborRequestSpecType(): RuntimeType =
+        ServerCargoDependency.smithyHttpServer(runtimeConfig).toType()
+            .resolve("protocol::rpc_v2_cbor::router::RpcV2CborRequestSpec")
+
+    override fun serverRouterRequestSpecType(requestSpecModule: RuntimeType): RuntimeType =
+        if (runtimeConfig.httpVersion == HttpVersion.Http1x) {
+            rpcV2CborRequestSpecType()
+        } else {
+            RuntimeType.StaticStr
+        }
 
     override fun serverRouterRuntimeConstructor() = "rpc_v2_router"
 

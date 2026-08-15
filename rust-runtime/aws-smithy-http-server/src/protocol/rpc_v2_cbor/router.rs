@@ -20,6 +20,7 @@ use crate::extension::RuntimeErrorExtension;
 use crate::protocol::aws_json_11::router::ROUTE_CUTOFF;
 use crate::response::IntoResponse;
 use crate::routing::tiny_map::TinyMap;
+use crate::routing::PathPrefix;
 use crate::routing::Route;
 use crate::routing::Router;
 use crate::routing::{method_disallowed, UNKNOWN_OPERATION_EXCEPTION};
@@ -46,12 +47,41 @@ pub enum Error {
     NotFound,
 }
 
+/// Routing configuration for an RPC v2 CBOR operation.
+#[derive(Debug, Clone)]
+pub struct RpcV2CborRequestSpec {
+    route_key: &'static str,
+    path_prefix: Option<PathPrefix>,
+}
+
+impl RpcV2CborRequestSpec {
+    /// Creates routing configuration for an operation target.
+    pub const fn new(route_key: &'static str) -> Self {
+        Self {
+            route_key,
+            path_prefix: None,
+        }
+    }
+
+    /// Configures operation-local path prefixes for this request specification.
+    pub fn with_path_prefix(mut self, path_prefix: PathPrefix) -> Self {
+        self.path_prefix = Some(path_prefix);
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RouteEntry<S> {
+    inner: S,
+    path_prefix: Option<PathPrefix>,
+}
+
 /// A [`Router`] supporting the [Smithy RPC v2 CBOR] protocol.
 ///
 /// [Smithy RPC v2 CBOR]: https://smithy.io/2.0/additional-specs/protocols/smithy-rpc-v2.html
 #[derive(Debug, Clone)]
 pub struct RpcV2CborRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<&'static str, RouteEntry<S>, ROUTE_CUTOFF>,
 }
 
 /// Requests for the `rpcv2Cbor` protocol MUST NOT contain an `x-amz-target` or `x-amzn-target`
@@ -107,7 +137,19 @@ impl<S> RpcV2CborRouter<S> {
         S::Future: Send + 'static,
     {
         RpcV2CborRouter {
-            routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(key, route)| {
+                    (
+                        key,
+                        RouteEntry {
+                            inner: Route::new(route.inner),
+                            path_prefix: route.path_prefix,
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 
@@ -120,7 +162,15 @@ impl<S> RpcV2CborRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(key, route)| (key, layer.layer(route)))
+                .map(|(key, route)| {
+                    (
+                        key,
+                        RouteEntry {
+                            inner: layer.layer(route.inner),
+                            path_prefix: route.path_prefix,
+                        },
+                    )
+                })
                 .collect(),
         }
     }
@@ -236,15 +286,36 @@ impl<S: Clone, B> Router<B> for RpcV2CborRouter<S> {
             .routes
             .get((format!("{service}.{operation}")).as_str())
             .ok_or(Error::NotFound)?;
-        Ok(route.clone())
+
+        if let Some(path_prefix) = &route.path_prefix {
+            let route_path = path_prefix.match_uri_path(request.uri()).ok_or(Error::NotFound)?;
+            let route_match = regex.find(route_path).filter(|matched| matched.start() == 0);
+            if route_match.is_none() {
+                path_prefix.log_rejection(request.uri());
+                return Err(Error::NotFound);
+            }
+        }
+
+        Ok(route.inner.clone())
     }
 }
 
-impl<S> FromIterator<(&'static str, S)> for RpcV2CborRouter<S> {
+impl<S> FromIterator<(RpcV2CborRequestSpec, S)> for RpcV2CborRouter<S> {
     #[inline]
-    fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
+    fn from_iter<T: IntoIterator<Item = (RpcV2CborRequestSpec, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter
+                .into_iter()
+                .map(|(spec, inner)| {
+                    (
+                        spec.route_key,
+                        RouteEntry {
+                            inner,
+                            path_prefix: spec.path_prefix,
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -256,7 +327,8 @@ mod tests {
 
     use crate::protocol::test_helpers::req;
 
-    use super::{Error, Router, RpcV2CborRouter};
+    use super::{Error, Router, RpcV2CborRequestSpec, RpcV2CborRouter};
+    use crate::routing::PathPrefix;
 
     fn identifier_regex() -> Regex {
         Regex::new(&format!("^{}$", super::IDENTIFIER_PATTERN)).unwrap()
@@ -354,7 +426,10 @@ mod tests {
 
     #[test]
     fn simple_routing() {
-        let router: RpcV2CborRouter<_> = ["Service.Operation"].into_iter().map(|op| (op, ())).collect();
+        let router: RpcV2CborRouter<_> = ["Service.Operation"]
+            .into_iter()
+            .map(|op| (RpcV2CborRequestSpec::new(op), ()))
+            .collect();
         let good_uri = "/prefix/service/Service/operation/Operation";
 
         // The request should match.
@@ -401,6 +476,39 @@ mod tests {
                 router.match_route(invalid_request),
                 Err(Error::InvalidWireFormatHeader(_))
             ));
+        }
+    }
+    #[test]
+    fn operation_local_path_prefixes() {
+        let router: RpcV2CborRouter<_> = [
+            (
+                RpcV2CborRequestSpec::new("Service.First").with_path_prefix(PathPrefix::new(&["v1"], false)),
+                "first",
+            ),
+            (
+                RpcV2CborRequestSpec::new("Service.Second").with_path_prefix(PathPrefix::new(&["internal"], true)),
+                "second",
+            ),
+        ]
+        .into_iter()
+        .collect();
+
+        for (uri, expected) in [
+            ("/v1/service/Service/operation/First", "first"),
+            ("/internal/service/Service/operation/Second", "second"),
+            ("/service/Service/operation/Second", "second"),
+        ] {
+            let request = req(&Method::POST, uri, Some(headers()));
+            assert_eq!(router.match_route(&request).unwrap(), expected);
+        }
+
+        for uri in [
+            "/service/Service/operation/First",
+            "/internal/service/Service/operation/First",
+            "/unknown/service/Service/operation/Second",
+        ] {
+            let request = req(&Method::POST, uri, Some(headers()));
+            assert!(matches!(router.match_route(&request), Err(Error::NotFound)));
         }
     }
 }

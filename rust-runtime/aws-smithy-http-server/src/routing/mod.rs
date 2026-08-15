@@ -12,6 +12,7 @@ mod into_make_service_with_connect_info;
 #[cfg(feature = "aws-lambda")]
 #[cfg_attr(docsrs, doc(cfg(feature = "aws-lambda")))]
 mod lambda_handler;
+mod path_prefix;
 
 #[doc(hidden)]
 pub mod request_spec;
@@ -52,6 +53,7 @@ pub use self::lambda_handler::LambdaHandler;
 pub use self::{
     into_make_service::IntoMakeService,
     into_make_service_with_connect_info::{Connected, IntoMakeServiceWithConnectInfo},
+    path_prefix::PathPrefix,
     route::Route,
 };
 

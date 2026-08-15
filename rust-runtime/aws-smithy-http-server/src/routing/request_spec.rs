@@ -8,6 +8,8 @@ use std::borrow::Cow;
 use http::Request;
 use regex::Regex;
 
+pub use super::PathPrefix;
+
 #[derive(Debug, Clone)]
 pub enum PathSegment {
     Literal(String),
@@ -63,6 +65,7 @@ impl PathAndQuerySpec {
 #[derive(Debug, Clone)]
 pub struct UriSpec {
     host_prefix: Option<Vec<HostPrefixSegment>>,
+    path_prefix: Option<PathPrefix>,
     path_and_query: PathAndQuerySpec,
 }
 
@@ -72,6 +75,15 @@ impl UriSpec {
     pub fn new(path_and_query: PathAndQuerySpec) -> Self {
         UriSpec {
             host_prefix: None,
+            path_prefix: None,
+            path_and_query,
+        }
+    }
+
+    pub fn new_with_path_prefix(path_prefix: PathPrefix, path_and_query: PathAndQuerySpec) -> Self {
+        UriSpec {
+            host_prefix: None,
+            path_prefix: Some(path_prefix),
             path_and_query,
         }
     }
@@ -129,6 +141,12 @@ impl RequestSpec {
         }
     }
 
+    /// Configures operation-local path prefixes for this request specification.
+    pub fn with_path_prefix(mut self, path_prefix: PathPrefix) -> Self {
+        self.uri_spec.path_prefix = Some(path_prefix);
+        self
+    }
+
     /// A measure of how "important" a `RequestSpec` is. The more specific a `RequestSpec` is, the
     /// higher it ranks in importance. Specificity is measured by the number of segments plus the
     /// number of query string literals in its URI pattern, so `/{Bucket}/{Key}?query` is more
@@ -166,7 +184,17 @@ impl RequestSpec {
             todo!("Look at host prefix");
         }
 
-        if !self.uri_path_regex.is_match(req.uri().path()) {
+        let uri_path = match &self.uri_spec.path_prefix {
+            Some(path_prefix) => {
+                let Some(uri_path) = path_prefix.match_uri_path(req.uri()) else {
+                    return Match::No;
+                };
+                uri_path
+            }
+            None => req.uri().path(),
+        };
+
+        if !self.uri_path_regex.is_match(uri_path) {
             return Match::No;
         }
 
@@ -238,6 +266,7 @@ impl RequestSpec {
             method,
             UriSpec {
                 host_prefix: None,
+                path_prefix: None,
                 path_and_query: PathAndQuerySpec {
                     path_segments: PathSpec::from_vector_unchecked(path_segments),
                     query_segments: QuerySpec::from_vector_unchecked(query_segments),
@@ -294,6 +323,83 @@ mod tests {
         let misses = vec![(Method::GET, "/beta/path"), (Method::GET, "/multiple/stages/in/path")];
         for (method, uri) in &misses {
             assert_eq!(Match::No, spec.matches(&req(method, uri, None)));
+        }
+    }
+
+    fn request_spec_with_path_prefix(
+        path_segments: Vec<PathSegment>,
+        query_segments: Vec<QuerySegment>,
+        path_prefix: PathPrefix,
+    ) -> RequestSpec {
+        RequestSpec::new(
+            Method::GET,
+            UriSpec::new_with_path_prefix(
+                path_prefix,
+                PathAndQuerySpec::new(
+                    PathSpec::from_vector_unchecked(path_segments),
+                    QuerySpec::from_vector_unchecked(query_segments),
+                ),
+            ),
+        )
+    }
+
+    #[test]
+    fn configured_path_prefixes_are_removed_before_path_matching() {
+        let spec = request_spec_with_path_prefix(
+            vec![PathSegment::Literal(String::from("widgets")), PathSegment::Label],
+            Vec::new(),
+            PathPrefix::new(&["v1", "internal"], false),
+        );
+
+        for uri in ["/v1/widgets/123", "/internal/widgets/123"] {
+            assert_eq!(Match::Yes, spec.matches(&req(&Method::GET, uri, None)));
+        }
+        for uri in ["/widgets/123", "/unknown/widgets/123", "/v10/widgets/123"] {
+            assert_eq!(Match::No, spec.matches(&req(&Method::GET, uri, None)));
+        }
+        assert_eq!(
+            Match::MethodNotAllowed,
+            spec.matches(&req(&Method::POST, "/v1/widgets/123", None))
+        );
+    }
+
+    #[test]
+    fn unprefixed_paths_are_not_modified() {
+        let spec = request_spec_with_path_prefix(
+            vec![PathSegment::Literal(String::from("widgets")), PathSegment::Label],
+            Vec::new(),
+            PathPrefix::new(&["v1"], true),
+        );
+
+        for uri in ["/v1/widgets/123", "/widgets/123"] {
+            assert_eq!(Match::Yes, spec.matches(&req(&Method::GET, uri, None)));
+        }
+        assert_eq!(
+            Match::No,
+            spec.matches(&req(&Method::GET, "/unknown/widgets/123", None))
+        );
+    }
+
+    #[test]
+    fn prefixes_are_operation_local() {
+        let spec = request_spec_with_path_prefix(
+            vec![
+                PathSegment::Literal(String::from("internal")),
+                PathSegment::Literal(String::from("widgets")),
+            ],
+            Vec::new(),
+            PathPrefix::new(&["v1"], true),
+        );
+
+        assert_eq!(Match::Yes, spec.matches(&req(&Method::GET, "/internal/widgets", None)));
+    }
+
+    #[test]
+    fn a_prefix_without_a_suffix_matches_the_root_route() {
+        let spec = request_spec_with_path_prefix(Vec::new(), Vec::new(), PathPrefix::new(&["v1"], false));
+
+        for uri in ["/v1", "/v1/"] {
+            assert_eq!(Match::Yes, spec.matches(&req(&Method::GET, uri, None)));
         }
     }
 

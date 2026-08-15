@@ -10,6 +10,7 @@ use tower::Service;
 
 use crate::body::BoxBody;
 use crate::routing::tiny_map::TinyMap;
+use crate::routing::PathPrefix;
 use crate::routing::Route;
 use crate::routing::Router;
 
@@ -41,13 +42,42 @@ pub enum Error {
 // https://github.com/smithy-lang/smithy-rs/pull/1429#issuecomment-1147516546
 pub(crate) const ROUTE_CUTOFF: usize = 15;
 
+/// Routing configuration for an AWS JSON operation.
+#[derive(Debug, Clone)]
+pub struct AwsJsonRequestSpec {
+    route_key: &'static str,
+    path_prefix: Option<PathPrefix>,
+}
+
+impl AwsJsonRequestSpec {
+    /// Creates routing configuration for an operation target.
+    pub const fn new(route_key: &'static str) -> Self {
+        Self {
+            route_key,
+            path_prefix: None,
+        }
+    }
+
+    /// Configures operation-local path prefixes for this request specification.
+    pub fn with_path_prefix(mut self, path_prefix: PathPrefix) -> Self {
+        self.path_prefix = Some(path_prefix);
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+struct RouteEntry<S> {
+    inner: S,
+    path_prefix: Option<PathPrefix>,
+}
+
 /// A [`Router`] supporting [AWS JSON 1.0] and [AWS JSON 1.1] protocols.
 ///
 /// [AWS JSON 1.0]: https://smithy.io/2.0/aws/protocols/aws-json-1_0-protocol.html
 /// [AWS JSON 1.1]: https://smithy.io/2.0/aws/protocols/aws-json-1_1-protocol.html
 #[derive(Debug, Clone)]
 pub struct AwsJsonRouter<S> {
-    routes: TinyMap<&'static str, S, ROUTE_CUTOFF>,
+    routes: TinyMap<&'static str, RouteEntry<S>, ROUTE_CUTOFF>,
 }
 
 impl<S> AwsJsonRouter<S> {
@@ -60,7 +90,15 @@ impl<S> AwsJsonRouter<S> {
             routes: self
                 .routes
                 .into_iter()
-                .map(|(key, route)| (key, layer.layer(route)))
+                .map(|(key, route)| {
+                    (
+                        key,
+                        RouteEntry {
+                            inner: layer.layer(route.inner),
+                            path_prefix: route.path_prefix,
+                        },
+                    )
+                })
                 .collect(),
         }
     }
@@ -73,7 +111,19 @@ impl<S> AwsJsonRouter<S> {
         S::Future: Send + 'static,
     {
         AwsJsonRouter {
-            routes: self.routes.into_iter().map(|(key, s)| (key, Route::new(s))).collect(),
+            routes: self
+                .routes
+                .into_iter()
+                .map(|(key, route)| {
+                    (
+                        key,
+                        RouteEntry {
+                            inner: Route::new(route.inner),
+                            path_prefix: route.path_prefix,
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -86,11 +136,6 @@ where
     type Error = Error;
 
     fn match_route(&self, request: &http::Request<B>) -> Result<S, Self::Error> {
-        // The URI must be root,
-        if request.uri() != "/" {
-            return Err(Error::NotRootUrl);
-        }
-
         // Only `Method::POST` is allowed.
         if request.method() != http::Method::POST {
             return Err(Error::MethodNotAllowed);
@@ -102,7 +147,41 @@ where
 
         // Lookup in the `TinyMap` for a route for the target.
         let route = self.routes.get(target).ok_or(Error::NotFound)?;
-        Ok(route.clone())
+
+        match &route.path_prefix {
+            // Preserve the existing root-only behavior for services without modeled prefixes.
+            None if request.uri() != "/" => return Err(Error::NotRootUrl),
+            None => {}
+            Some(path_prefix) => {
+                let route_path = path_prefix.match_uri_path(request.uri()).ok_or(Error::NotRootUrl)?;
+                if route_path != "/" || request.uri().query().is_some() {
+                    path_prefix.log_rejection(request.uri());
+                    return Err(Error::NotRootUrl);
+                }
+            }
+        }
+
+        Ok(route.inner.clone())
+    }
+}
+
+impl<S> FromIterator<(AwsJsonRequestSpec, S)> for AwsJsonRouter<S> {
+    #[inline]
+    fn from_iter<T: IntoIterator<Item = (AwsJsonRequestSpec, S)>>(iter: T) -> Self {
+        Self {
+            routes: iter
+                .into_iter()
+                .map(|(spec, inner)| {
+                    (
+                        spec.route_key,
+                        RouteEntry {
+                            inner,
+                            path_prefix: spec.path_prefix,
+                        },
+                    )
+                })
+                .collect(),
+        }
     }
 }
 
@@ -110,7 +189,18 @@ impl<S> FromIterator<(&'static str, S)> for AwsJsonRouter<S> {
     #[inline]
     fn from_iter<T: IntoIterator<Item = (&'static str, S)>>(iter: T) -> Self {
         Self {
-            routes: iter.into_iter().collect(),
+            routes: iter
+                .into_iter()
+                .map(|(route_key, inner)| {
+                    (
+                        route_key,
+                        RouteEntry {
+                            inner,
+                            path_prefix: None,
+                        },
+                    )
+                })
+                .collect(),
         }
     }
 }
@@ -123,13 +213,16 @@ mod tests {
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
 
+    fn headers(target: &'static str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-amz-target", HeaderValue::from_static(target));
+        headers
+    }
+
     #[tokio::test]
     async fn simple_routing() {
-        let routes = vec![("Service.Operation")];
-        let router: AwsJsonRouter<_> = routes.clone().into_iter().map(|operation| (operation, ())).collect();
-
-        let mut headers = HeaderMap::new();
-        headers.insert("x-amz-target", HeaderValue::from_static("Service.Operation"));
+        let router: AwsJsonRouter<_> = [("Service.Operation", ())].into_iter().collect();
+        let headers = headers("Service.Operation");
 
         // Valid request, should match.
         router
@@ -147,5 +240,46 @@ mod tests {
         // Wrong URI, should return `NotRootUrl`.
         let res = router.match_route(&req(&Method::POST, "/something", Some(headers)));
         assert_eq!(res.unwrap_err().to_string(), Error::NotRootUrl.to_string());
+    }
+
+    #[test]
+    fn operation_local_path_prefixes() {
+        let router: AwsJsonRouter<_> = [
+            (
+                AwsJsonRequestSpec::new("Service.First").with_path_prefix(PathPrefix::new(&["v1", "internal"], false)),
+                "first",
+            ),
+            (
+                AwsJsonRequestSpec::new("Service.Second").with_path_prefix(PathPrefix::new(&["write"], true)),
+                "second",
+            ),
+            (AwsJsonRequestSpec::new("Service.Original"), "original"),
+        ]
+        .into_iter()
+        .collect();
+
+        for (target, uri, expected) in [
+            ("Service.First", "/v1", "first"),
+            ("Service.First", "/internal/", "first"),
+            ("Service.Second", "/write", "second"),
+            ("Service.Second", "/", "second"),
+            ("Service.Original", "/", "original"),
+        ] {
+            let request = req(&Method::POST, uri, Some(headers(target)));
+            assert_eq!(router.match_route(&request).unwrap(), expected);
+        }
+
+        for (target, uri) in [
+            ("Service.First", "/"),
+            ("Service.First", "/write"),
+            ("Service.Second", "/v1"),
+            ("Service.Second", "/unknown"),
+            ("Service.Second", "/write/extra"),
+            ("Service.Second", "/write?query=value"),
+            ("Service.Original", "/arbitrary"),
+        ] {
+            let request = req(&Method::POST, uri, Some(headers(target)));
+            assert!(matches!(router.match_route(&request), Err(Error::NotRootUrl)));
+        }
     }
 }
