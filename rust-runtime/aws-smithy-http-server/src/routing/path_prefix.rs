@@ -19,8 +19,7 @@ impl PathPrefix {
         }
     }
 
-    #[doc(hidden)]
-    pub fn match_path<'a>(&self, path: &'a str) -> Option<&'a str> {
+    fn match_path<'a>(&self, path: &'a str) -> Option<&'a str> {
         let without_leading_slash = path.strip_prefix('/').expect("HTTP URI paths must begin with a slash");
         let first_segment = without_leading_slash.split('/').next().unwrap_or_default();
 

@@ -80,7 +80,8 @@ impl UriSpec {
         }
     }
 
-    pub fn new_with_path_prefix(path_prefix: PathPrefix, path_and_query: PathAndQuerySpec) -> Self {
+    #[cfg(test)]
+    fn new_with_path_prefix(path_prefix: PathPrefix, path_and_query: PathAndQuerySpec) -> Self {
         UriSpec {
             host_prefix: None,
             path_prefix: Some(path_prefix),

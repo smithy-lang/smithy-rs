@@ -213,7 +213,7 @@ mod tests {
     use http::{HeaderMap, HeaderValue, Method};
     use pretty_assertions::assert_eq;
 
-    fn headers(target: &'static str) -> HeaderMap {
+    fn headers_with_amz_target(target: &'static str) -> HeaderMap {
         let mut headers = HeaderMap::new();
         headers.insert("x-amz-target", HeaderValue::from_static(target));
         headers
@@ -222,7 +222,7 @@ mod tests {
     #[tokio::test]
     async fn simple_routing() {
         let router: AwsJsonRouter<_> = [("Service.Operation", ())].into_iter().collect();
-        let headers = headers("Service.Operation");
+        let headers = headers_with_amz_target("Service.Operation");
 
         // Valid request, should match.
         router
@@ -265,7 +265,7 @@ mod tests {
             ("Service.Second", "/", "second"),
             ("Service.Original", "/", "original"),
         ] {
-            let request = req(&Method::POST, uri, Some(headers(target)));
+            let request = req(&Method::POST, uri, Some(headers_with_amz_target(target)));
             assert_eq!(router.match_route(&request).unwrap(), expected);
         }
 
@@ -278,7 +278,7 @@ mod tests {
             ("Service.Second", "/write?query=value"),
             ("Service.Original", "/arbitrary"),
         ] {
-            let request = req(&Method::POST, uri, Some(headers(target)));
+            let request = req(&Method::POST, uri, Some(headers_with_amz_target(target)));
             assert!(matches!(router.match_route(&request), Err(Error::NotRootUrl)));
         }
     }
